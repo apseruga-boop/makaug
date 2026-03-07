@@ -40,7 +40,7 @@ git push -u origin main
    - `JWT_SECRET=<long random secret>`
    - `ADMIN_API_KEY=<long random secret>`
    - `SUPPORT_PHONE=+256770646879`
-   - `SUPPORT_EMAIL=hello@makayug.com`
+   - `SUPPORT_EMAIL=info@makaug.com`
 5. (If Render shows **Pre-Deploy Command**, set it to `npm run migrate`.)
 6. Deploy.
 
