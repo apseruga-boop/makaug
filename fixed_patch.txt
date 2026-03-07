@@ -1,0 +1,143 @@
+Apply these fixes in your HTML file.
+
+1) Add this helper near your state/constants section:
+
+```js
+const normalizeType = (t) => (t === 'students' ? 'student' : t);
+```
+
+2) Replace `renderAll()` with:
+
+```js
+function renderAll(){
+  renderGrid('home-grid', PROPERTIES.filter(p=>p.featured).slice(0,6));
+  renderGrid('sale-grid', PROPERTIES.filter(p=>normalizeType(p.type)==='sale'));
+  renderGrid('rent-grid', PROPERTIES.filter(p=>normalizeType(p.type)==='rent'));
+  renderGrid('student-grid', PROPERTIES.filter(p=>normalizeType(p.type)==='student'));
+  renderGrid('commercial-grid', PROPERTIES.filter(p=>normalizeType(p.type)==='commercial'));
+  renderGrid('land-grid', PROPERTIES.filter(p=>normalizeType(p.type)==='land'));
+  document.getElementById('sale-count').textContent=PROPERTIES.filter(p=>normalizeType(p.type)==='sale').length;
+  document.getElementById('rent-count').textContent=PROPERTIES.filter(p=>normalizeType(p.type)==='rent').length;
+  renderBrokers('home-brokers', BROKERS.slice(0,4));
+  renderBrokers('brokers-grid', BROKERS);
+  renderSaved();
+}
+```
+
+3) Replace `badgeColor()` and `badgeLabel()` with:
+
+```js
+function badgeColor(type){
+  const t=normalizeType(type);
+  return {sale:'bg-green-700',rent:'bg-blue-700',commercial:'bg-amber-600',student:'bg-purple-700',land:'bg-emerald-700'}[t]||'bg-gray-600';
+}
+function badgeLabel(type){
+  const t=normalizeType(type);
+  return {sale:'For Sale',rent:'To Rent',commercial:'Commercial',student:'Student',land:'Land'}[t]||t;
+}
+```
+
+4) Replace `doSearch()` with:
+
+```js
+function doSearch(){
+  const q=(document.getElementById('hero-q')?.value||'').toLowerCase().trim();
+  const d=document.getElementById('hero-district')?.value||'';
+  const typePageMap={sale:'sale',rent:'rent',students:'students',commercial:'commercial',land:'land'};
+  const pg=typePageMap[currentTab]||'sale';
+  showPage(pg);
+
+  const targetType = currentTab === 'students' ? 'student' : currentTab;
+  let filtered=PROPERTIES.filter(p=>{
+    const pType = normalizeType(p.type);
+    const matchT=!currentTab||pType===targetType;
+    const matchQ=!q||(p.title+p.area+p.district+p.desc).toLowerCase().includes(q);
+    const matchD=!d||p.district===d;
+    return matchT&&matchQ&&matchD;
+  });
+
+  const gridMap={sale:'sale-grid',rent:'rent-grid',students:'student-grid',commercial:'commercial-grid',land:'land-grid'};
+  renderGrid(gridMap[currentTab]||'sale-grid',filtered);
+  const countEl=document.getElementById(currentTab+'-count');
+  if(countEl) countEl.textContent=filtered.length;
+  toast(`🔍 ${filtered.length} properties found`);
+}
+```
+
+5) In `sortProps()`, update the filter line to use normalized type:
+
+```js
+let props=PROPERTIES.filter(p=>normalizeType(p.type)===(typeMap[page]||page));
+```
+
+6) Add saved-page rendering:
+
+```js
+function renderSaved(){
+  const el=document.getElementById('saved-content');
+  if(!el) return;
+
+  const savedProps=PROPERTIES.filter(p=>savedIds.has(p.id));
+  if(!savedProps.length){
+    el.innerHTML = `
+      <i class="fas fa-heart text-4xl text-green-300 mb-3"></i>
+      <p class="text-gray-600 font-medium">No saved properties yet</p>
+      <p class="text-gray-500 text-sm mt-1">Tap the heart icon on any listing to save it.</p>
+      <button onclick="showPage('sale')" class="mt-4 bg-green-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold hover:bg-green-600">Browse Properties</button>
+    `;
+    return;
+  }
+
+  el.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">${savedProps.map(p=>propCard(p)).join('')}</div>`;
+}
+```
+
+7) In `toggleSave()`, add `renderSaved();` at the end:
+
+```js
+function toggleSave(id,btn){
+  if(savedIds.has(id)){savedIds.delete(id);toast('Property removed from saved');}
+  else{savedIds.add(id);toast('❤️ Property saved!');}
+  document.querySelectorAll(`[onclick*="toggleSave(${id}"]`).forEach(el=>{
+    const icon=el.querySelector('i');
+    if(icon){icon.className=savedIds.has(id)?'fas fa-heart text-red-500':'far fa-heart text-gray-400';}
+    if(el.id==='detail-save-btn'){
+      const label = el.childNodes[el.childNodes.length-1];
+      if(label && label.nodeType===Node.TEXT_NODE) label.textContent=` ${savedIds.has(id)?'Saved':'Save'}`;
+    }
+  });
+  renderSaved();
+}
+```
+
+8) Critical syntax fix inside `openDetail()`:
+
+Find this broken line:
+```js
+${p.type==="students"?'<button onclick="dTab(this,'dt-rules')" class="dt-btn ...
+```
+
+Replace with:
+```js
+${normalizeType(p.type)==="student"?'<button onclick="dTab(this,\\'dt-rules\\')" class="dt-btn px-4 py-2.5 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:text-green-700 whitespace-nowrap">Community Rules</button>':""}
+```
+
+Also change this condition later in the same function:
+```js
+${p.type==="students"?`...`:""}
+```
+to:
+```js
+${normalizeType(p.type)==="student"?`...`:""}
+```
+
+9) Optional quality fix for tab switching (prevents auth tabs losing active state):
+
+```js
+function setTab(el,type){
+  const group=el.parentElement;
+  group.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  currentTab=type;
+}
+```

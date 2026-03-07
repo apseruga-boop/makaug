@@ -1,0 +1,326 @@
+const express = require('express');
+
+const db = require('../config/database');
+const { requireAdminApiKey } = require('../middleware/auth');
+const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/validation');
+
+const router = express.Router();
+
+const FALLBACK_MORTGAGE_PROVIDERS = [
+  {
+    key: 'stanbic',
+    name: 'Stanbic Bank Uganda',
+    residentialRate: 16.5,
+    commercialRate: 16.5,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'Stanbic mortgage rates page',
+    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/vehicle-and-asset-finance/oli-in-charge'
+  },
+  {
+    key: 'hfb',
+    name: 'Housing Finance Bank',
+    residentialRate: 16.0,
+    commercialRate: 18.0,
+    landRate: 18.0,
+    minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
+    maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'Housing Finance mortgage FAQs',
+    sourceUrl: 'https://housingfinance.co.ug/mortgages-faqs/'
+  },
+  {
+    key: 'dfcu',
+    name: 'dfcu Bank',
+    residentialRate: 16.0,
+    commercialRate: 16.0,
+    landRate: 16.5,
+    minDepositPct: { residential: 40, commercial: 40, land: 40, default: 40 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: 2.0,
+    sourceLabel: 'dfcu Dream Home campaign',
+    sourceUrl: 'https://www.dfcugroup.com/personal-banking/campaigns/personal-banking/dream-home/'
+  },
+  {
+    key: 'kcb',
+    name: 'KCB Bank Uganda',
+    residentialRate: 17.5,
+    commercialRate: 17.5,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'KCB mortgage overview',
+    sourceUrl: 'https://ug.kcbgroup.com/for-me/loans/mortgage'
+  },
+  {
+    key: 'baroda',
+    name: 'Bank of Baroda Uganda',
+    residentialRate: 18.0,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'Housing loan (2% below PLR, PLR schedule)',
+    sourceUrl: 'https://www.bankofbaroda.ug/personal-banking/retail-loans/housing-loans'
+  },
+  {
+    key: 'absa',
+    name: 'Absa Bank Uganda',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'Absa home loan page (LTV up to 85%)',
+    sourceUrl: 'https://www.absabank.co.ug/personal/borrow/home-loans/'
+  }
+];
+
+function normalizeProvider(row) {
+  return {
+    key: cleanText(row.provider_key || row.key).toLowerCase(),
+    name: cleanText(row.provider_name || row.name),
+    residentialRate: toNullableFloat(row.residential_rate ?? row.residentialRate),
+    commercialRate: toNullableFloat(row.commercial_rate ?? row.commercialRate),
+    landRate: toNullableFloat(row.land_rate ?? row.landRate),
+    minDepositPct: {
+      residential: toNullableFloat(row.min_deposit_residential ?? row.minDepositResidential) ?? 20,
+      commercial: toNullableFloat(row.min_deposit_commercial ?? row.minDepositCommercial) ?? 20,
+      land: toNullableFloat(row.min_deposit_land ?? row.minDepositLand) ?? 20
+    },
+    maxYears: {
+      residential: toNullableInt(row.max_years_residential ?? row.maxYearsResidential) ?? 20,
+      commercial: toNullableInt(row.max_years_commercial ?? row.maxYearsCommercial) ?? 20,
+      land: toNullableInt(row.max_years_land ?? row.maxYearsLand) ?? 20
+    },
+    arrangementFeePct: toNullableFloat(row.arrangement_fee_pct ?? row.arrangementFeePct) ?? 1.5,
+    sourceLabel: cleanText(row.source_label || row.sourceLabel),
+    sourceUrl: cleanText(row.source_url || row.sourceUrl)
+  };
+}
+
+function withDefaultKeys(provider) {
+  return {
+    ...provider,
+    minDepositPct: {
+      residential: provider.minDepositPct?.residential ?? 20,
+      commercial: provider.minDepositPct?.commercial ?? 20,
+      land: provider.minDepositPct?.land ?? 20,
+      default: provider.minDepositPct?.default ?? provider.minDepositPct?.residential ?? 20
+    },
+    maxYears: {
+      residential: provider.maxYears?.residential ?? 20,
+      commercial: provider.maxYears?.commercial ?? 20,
+      land: provider.maxYears?.land ?? 20,
+      default: provider.maxYears?.default ?? provider.maxYears?.residential ?? 20
+    }
+  };
+}
+
+async function hasMortgageTable() {
+  const exists = await db.query(`SELECT to_regclass('public.mortgage_providers') AS table_name`);
+  return Boolean(exists.rows[0]?.table_name);
+}
+
+async function readMortgageProviders() {
+  if (!(await hasMortgageTable())) {
+    return {
+      providers: FALLBACK_MORTGAGE_PROVIDERS.map(withDefaultKeys),
+      updatedAt: null,
+      source: 'fallback'
+    };
+  }
+
+  const result = await db.query(
+    `SELECT
+      provider_key,
+      provider_name,
+      residential_rate,
+      commercial_rate,
+      land_rate,
+      min_deposit_residential,
+      min_deposit_commercial,
+      min_deposit_land,
+      max_years_residential,
+      max_years_commercial,
+      max_years_land,
+      arrangement_fee_pct,
+      source_label,
+      source_url,
+      updated_at
+     FROM mortgage_providers
+     WHERE is_active = TRUE
+     ORDER BY provider_name ASC`
+  );
+
+  if (!result.rows.length) {
+    return {
+      providers: FALLBACK_MORTGAGE_PROVIDERS.map(withDefaultKeys),
+      updatedAt: null,
+      source: 'fallback'
+    };
+  }
+
+  const providers = result.rows.map((row) => withDefaultKeys(normalizeProvider(row)));
+  const latest = result.rows
+    .map((row) => row.updated_at)
+    .filter(Boolean)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+
+  return {
+    providers,
+    updatedAt: latest,
+    source: 'database'
+  };
+}
+
+router.get('/', async (req, res, next) => {
+  try {
+    const payload = await readMortgageProviders();
+    return res.json({
+      ok: true,
+      data: {
+        updatedAt: payload.updatedAt,
+        source: payload.source,
+        providers: payload.providers
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/', requireAdminApiKey, async (req, res, next) => {
+  const body = req.body || {};
+  const providers = Array.isArray(body.providers) ? body.providers : [];
+
+  if (!providers.length) {
+    return res.status(400).json({
+      ok: false,
+      error: 'providers array is required'
+    });
+  }
+
+  try {
+    if (!(await hasMortgageTable())) {
+      return res.status(500).json({
+        ok: false,
+        error: 'mortgage_providers table is missing. Run migrations first.'
+      });
+    }
+
+    const normalized = [];
+    const seen = new Set();
+
+    for (const raw of providers) {
+      const item = normalizeProvider(raw || {});
+      if (!item.key || !item.name) {
+        return res.status(400).json({
+          ok: false,
+          error: 'Each provider must include key and name'
+        });
+      }
+      if (seen.has(item.key)) {
+        return res.status(400).json({
+          ok: false,
+          error: `Duplicate provider key: ${item.key}`
+        });
+      }
+      seen.add(item.key);
+      normalized.push(withDefaultKeys(item));
+    }
+
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const keys = normalized.map((x) => x.key);
+      await client.query(
+        `UPDATE mortgage_providers
+         SET is_active = FALSE, updated_at = NOW()
+         WHERE provider_key <> ALL($1::text[])`,
+        [keys]
+      );
+
+      for (const p of normalized) {
+        await client.query(
+          `INSERT INTO mortgage_providers (
+            provider_key,
+            provider_name,
+            residential_rate,
+            commercial_rate,
+            land_rate,
+            min_deposit_residential,
+            min_deposit_commercial,
+            min_deposit_land,
+            max_years_residential,
+            max_years_commercial,
+            max_years_land,
+            arrangement_fee_pct,
+            source_label,
+            source_url,
+            is_active
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,TRUE
+          )
+          ON CONFLICT (provider_key) DO UPDATE SET
+            provider_name = EXCLUDED.provider_name,
+            residential_rate = EXCLUDED.residential_rate,
+            commercial_rate = EXCLUDED.commercial_rate,
+            land_rate = EXCLUDED.land_rate,
+            min_deposit_residential = EXCLUDED.min_deposit_residential,
+            min_deposit_commercial = EXCLUDED.min_deposit_commercial,
+            min_deposit_land = EXCLUDED.min_deposit_land,
+            max_years_residential = EXCLUDED.max_years_residential,
+            max_years_commercial = EXCLUDED.max_years_commercial,
+            max_years_land = EXCLUDED.max_years_land,
+            arrangement_fee_pct = EXCLUDED.arrangement_fee_pct,
+            source_label = EXCLUDED.source_label,
+            source_url = EXCLUDED.source_url,
+            is_active = TRUE,
+            updated_at = NOW()`,
+          [
+            p.key,
+            p.name,
+            p.residentialRate,
+            p.commercialRate,
+            p.landRate,
+            p.minDepositPct.residential,
+            p.minDepositPct.commercial,
+            p.minDepositPct.land,
+            p.maxYears.residential,
+            p.maxYears.commercial,
+            p.maxYears.land,
+            p.arrangementFeePct,
+            p.sourceLabel || null,
+            p.sourceUrl || null
+          ]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    const payload = await readMortgageProviders();
+    return res.json({
+      ok: true,
+      data: {
+        updatedAt: payload.updatedAt,
+        source: payload.source,
+        providers: payload.providers
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+module.exports = router;
