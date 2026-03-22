@@ -19,6 +19,8 @@ const mortgageRoutes = require('./routes/mortgage');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
+// Required on Render so rate limiting uses the forwarded client IP correctly.
+app.set('trust proxy', 1);
 
 const corsOrigins = (process.env.CORS_ORIGINS || '')
   .split(',')
@@ -80,5 +82,5 @@ app.use(errorHandler);
 const port = parseInt(process.env.PORT || '8080', 10);
 
 app.listen(port, () => {
-  logger.info(`MakayUg backend running on http://localhost:${port}`);
+  logger.info(`MakaUg backend running on http://localhost:${port}`);
 });
