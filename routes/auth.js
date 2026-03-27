@@ -5,12 +5,17 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
+const { sendSupportEmail } = require('../services/emailService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 
 const router = express.Router();
 
 function normalizePhone(phone) {
   return cleanText(phone).replace(/\s+/g, '');
+}
+
+function normalizeEmail(email) {
+  return cleanText(email).toLowerCase();
 }
 
 function publicUser(row) {
@@ -60,20 +65,38 @@ function getAuthUserIdFromRequest(req) {
   }
 }
 
-async function issueOtp(phone, purpose) {
+async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) {
+  const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
+  const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizePhone(phone);
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
+
+  if (!identifier) {
+    throw new Error('Missing OTP identifier');
+  }
 
   await db.query(
     `INSERT INTO otps (phone, code, purpose, expires_at)
      VALUES ($1, $2, $3, NOW() + ($4::text || ' minutes')::interval)`,
-    [phone, otp, purpose, String(expiresMinutes)]
+    [identifier, otp, purpose, String(expiresMinutes)]
   );
 
-  try {
-    await smsService.sendSMS(phone, `MakayUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
-  } catch (error) {
-    logger.error('Failed to send OTP SMS', error.message);
+  if (resolvedChannel === 'email') {
+    try {
+      await sendSupportEmail({
+        to: identifier,
+        subject: 'MakaUg verification code',
+        text: `Your MakaUg verification code is ${otp}. It expires in ${expiresMinutes} minutes.`
+      });
+    } catch (error) {
+      logger.error('Failed to send OTP email', error.message);
+    }
+  } else {
+    try {
+      await smsService.sendSMS(identifier, `MakaUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
+    } catch (error) {
+      logger.error('Failed to send OTP SMS', error.message);
+    }
   }
 
   return otp;
@@ -84,9 +107,11 @@ router.post('/register', async (req, res, next) => {
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name);
     const phone = normalizePhone(req.body.phone);
-    const email = cleanText(req.body.email).toLowerCase() || null;
+    const email = normalizeEmail(req.body.email) || null;
     const roleInput = cleanText(req.body.role).toLowerCase();
     const password = cleanText(req.body.password);
+    const otpChannelInput = cleanText(req.body.otp_channel).toLowerCase();
+    const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -99,7 +124,9 @@ router.post('/register', async (req, res, next) => {
       'agent / broker': 'agent_broker',
       agent: 'agent_broker',
       broker: 'agent_broker',
-      agent_broker: 'agent_broker'
+      agent_broker: 'agent_broker',
+      'field agent': 'field_agent',
+      field_agent: 'field_agent'
     };
 
     const role = roleMap[roleInput] || 'buyer_renter';
@@ -111,6 +138,7 @@ router.post('/register', async (req, res, next) => {
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
+    if (otpChannel === 'email' && !email) errors.push('email is required when otp_channel is email');
 
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
@@ -134,7 +162,12 @@ router.post('/register', async (req, res, next) => {
     );
 
     const user = result.rows[0];
-    const otp = await issueOtp(phone, 'signup');
+    await issueOtp({
+      purpose: 'signup',
+      channel: otpChannel === 'email' && email ? 'email' : 'phone',
+      phone,
+      email
+    });
 
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
 
@@ -143,8 +176,7 @@ router.post('/register', async (req, res, next) => {
       data: {
         user: publicUser(user),
         requires_otp: true,
-        message: 'Verification OTP sent to phone',
-        dev_otp: process.env.NODE_ENV === 'production' ? undefined : otp
+        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent to phone'
       }
     });
   } catch (error) {
@@ -158,13 +190,21 @@ router.post('/register', async (req, res, next) => {
 router.post('/login', async (req, res, next) => {
   try {
     const phone = normalizePhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
     const password = cleanText(req.body.password);
 
-    if (!phone || !password) {
-      return res.status(400).json({ ok: false, error: 'phone and password are required' });
+    if ((!phone && !email) || !password) {
+      return res.status(400).json({ ok: false, error: 'phone/email and password are required' });
     }
 
-    const result = await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    if (email && !isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'email is invalid' });
+    }
+
+    const result = phone
+      ? await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active'])
+      : await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
+
     if (!result.rows.length) {
       return res.status(401).json({ ok: false, error: 'Invalid credentials' });
     }
@@ -190,26 +230,44 @@ router.post('/login', async (req, res, next) => {
 
 router.post('/request-otp', async (req, res, next) => {
   try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
     const phone = normalizePhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
     const purposeRaw = cleanText(req.body.purpose).toLowerCase();
     const purpose = ['signup', 'login', 'reset_password'].includes(purposeRaw) ? purposeRaw : 'login';
+    let exists = null;
 
-    if (!phone || !isValidPhone(phone)) {
-      return res.status(400).json({ ok: false, error: 'Valid phone is required' });
+    if (channel === 'email') {
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ ok: false, error: 'Valid email is required' });
+      }
+      exists = await db.query('SELECT id FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
+      if (!exists.rows.length) {
+        return res.status(404).json({ ok: false, error: 'No account found with that email' });
+      }
+    } else {
+      if (!phone || !isValidPhone(phone)) {
+        return res.status(400).json({ ok: false, error: 'Valid phone is required' });
+      }
+      exists = await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+      if (!exists.rows.length) {
+        return res.status(404).json({ ok: false, error: 'No account found with that phone' });
+      }
     }
 
-    const exists = await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
-    if (!exists.rows.length) {
-      return res.status(404).json({ ok: false, error: 'No account found with that phone' });
-    }
-
-    const otp = await issueOtp(phone, purpose);
+    await issueOtp({
+      purpose,
+      channel,
+      phone,
+      email
+    });
 
     return res.json({
       ok: true,
       data: {
-        message: 'OTP sent',
-        dev_otp: process.env.NODE_ENV === 'production' ? undefined : otp
+        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent',
+        channel
       }
     });
   } catch (error) {
@@ -230,13 +288,16 @@ router.post('/request-password-reset', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'No account found with that phone' });
     }
 
-    const otp = await issueOtp(phone, 'reset_password');
+    await issueOtp({
+      purpose: 'reset_password',
+      channel: 'phone',
+      phone
+    });
 
     return res.json({
       ok: true,
       data: {
-        message: 'Password reset OTP sent',
-        dev_otp: process.env.NODE_ENV === 'production' ? undefined : otp
+        message: 'Password reset OTP sent'
       }
     });
   } catch (error) {
@@ -292,13 +353,23 @@ router.post('/reset-password', async (req, res, next) => {
 
 router.post('/verify-otp', async (req, res, next) => {
   try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
     const phone = normalizePhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
     const code = cleanText(req.body.code);
     const purposeRaw = cleanText(req.body.purpose).toLowerCase();
     const purpose = purposeRaw === 'signup' ? 'signup' : 'login';
+    const identifier = channel === 'email' ? email : phone;
 
-    if (!phone || !code) {
-      return res.status(400).json({ ok: false, error: 'phone and code are required' });
+    if (!identifier || !code) {
+      return res.status(400).json({ ok: false, error: `${channel} and code are required` });
+    }
+    if (channel === 'email' && !isValidEmail(identifier)) {
+      return res.status(400).json({ ok: false, error: 'email is invalid' });
+    }
+    if (channel === 'phone' && !isValidPhone(identifier)) {
+      return res.status(400).json({ ok: false, error: 'phone is invalid' });
     }
 
     const otp = await db.query(
@@ -311,7 +382,7 @@ router.post('/verify-otp', async (req, res, next) => {
          AND expires_at > NOW()
        ORDER BY created_at DESC
        LIMIT 1`,
-      [phone, code, purpose]
+      [identifier, code, purpose]
     );
 
     if (!otp.rows.length) {
@@ -319,9 +390,15 @@ router.post('/verify-otp', async (req, res, next) => {
     }
 
     await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otp.rows[0].id]);
-    await db.query('UPDATE users SET phone_verified = TRUE WHERE phone = $1', [phone]);
+    if (channel === 'phone') {
+      await db.query('UPDATE users SET phone_verified = TRUE WHERE phone = $1', [identifier]);
+    } else {
+      await db.query('UPDATE users SET phone_verified = TRUE WHERE LOWER(email) = $1', [identifier]);
+    }
 
-    const userResult = await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    const userResult = channel === 'phone'
+      ? await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [identifier, 'active'])
+      : await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [identifier, 'active']);
     if (!userResult.rows.length) {
       return res.status(404).json({ ok: false, error: 'Account not found' });
     }
@@ -383,7 +460,10 @@ router.patch('/me', async (req, res, next) => {
       'agent / broker': 'agent_broker',
       agent: 'agent_broker',
       broker: 'agent_broker',
-      agent_broker: 'agent_broker'
+      agent_broker: 'agent_broker',
+      'field agent': 'field_agent',
+      field_agent: 'field_agent',
+      admin: 'admin'
     };
     const role = roleMap[roleInput] || user.role;
 

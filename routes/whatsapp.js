@@ -3,6 +3,7 @@ const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { DISTRICTS } = require('../utils/constants');
+const { classifyWhatsappIntent, transcribeAudioFromUrl } = require('../services/aiService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -10,7 +11,7 @@ const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/
 // Language Translations
 const T = {
   en: {
-    welcome: "🏠 Welcome to *MakayUg* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3",
+    welcome: "🏠 Welcome to *MakaUg* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am a registered agent',
@@ -20,12 +21,12 @@ const T = {
     askPrice: '💰 What is your asking price in Uganda Shillings? (numbers only, e.g. 250000000)',
     askBedrooms: '🛏 How many bedrooms does the property have? (Enter a number, or 0 if N/A)',
     askDescription: '📝 Describe your property in a few sentences (location, features, condition...)',
-    askPhotos: '📸 Please send your property photos one by one. When done, type *DONE*\n\n📌 Include: front of building, sitting room, bedroom(s), kitchen, bathroom',
+    askPhotos: '📸 Please send exactly *5* photos, one by one. When done, type *DONE*\n\n📌 Required: front of building, sitting room, bedroom, kitchen, bathroom',
     askIDNumber: '🪪 For security, we need your National ID Number (NIN). This is required to prevent fraud and will not be publicly shown.\n\nPlease type your NIN:',
     askSelfie: '🤳 Please take a clear selfie (photo of yourself) holding your National ID card and send it here. This verifies you are real and reduces fraud.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
-    listingSubmitted: "🎉 *Your listing has been submitted!*\n\nOur team will review it and make it live within 24 hours.\n\n🔗 You'll receive a link to your listing once approved.\n\nReference: #{ref}\n\nThank you for using MakayUg! 🏠🇺🇬",
+    listingSubmitted: "🎉 *Your listing has been submitted!*\n\nOur team will review it and make it live within 24 hours.\n\n🔗 You'll receive a link to your listing once approved.\n\nReference: #{ref}\n\n✅ Next step: set up your profile to track listing views, saves, and enquiries.\n\nThank you for using MakaUg! 🏠🇺🇬",
     invalidInput: "❓ Sorry, I didn't understand that. Please reply with one of the options above.",
     verifyOTP: 'Please type the 6-digit code we sent via SMS:',
     otpSuccess: '✅ Phone verified!',
@@ -35,7 +36,10 @@ const T = {
     askUniversity: '🎓 Which is the nearest university? (e.g. Makerere, Kyambogo, UCU...)',
     askDistance: '🚶 How far is the property from the university (in km)? (e.g. 0.5, 1, 2)',
     askSearchType: '🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Ezikodizibwa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw\'abayiizi\n5️⃣ Ebyobusuubuzi\n6️⃣ Byonna',
-    askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso):',
+    askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso), oba share location yo ku WhatsApp:',
+    locationSharedReceived: '📍 Location received. Searching nearby properties...',
+    searchNoNearbyResults: 'No approved listings found within 5 miles. Showing the nearest available options.',
+    kmAway: 'km away',
     searchNoResults: 'Tewali listings ezikkiriziddwa ezifaanana n\'onoonyezza wo kati.',
     askAgentArea: '👔 Weetaaga agent mu district oba kitundu ki? (nga Kampala, Wakiso, Mbarara)',
     noAgentsFound: 'Tefunye ba agent abakakasiddwa mu kitundu ekyo kati.',
@@ -47,9 +51,10 @@ const T = {
     titleTooShort: 'Title is too short. Please give a descriptive title.',
     invalidPrice: '❌ Please enter a valid price in UGX (numbers only, e.g. 250000000)',
     descriptionTooShort: 'Please write a longer description (at least 10 characters).',
-    needAtLeastOnePhoto: '❌ Please send at least 1 photo before typing DONE.',
-    photosUploaded: "📸 You've uploaded {count} photos. Type *DONE* to continue.",
-    photoReceived: '✅ Photo {count} received! Send more photos or type *DONE* when finished.',
+    needAtLeastOnePhoto: '❌ Please send all 5 required photos before typing DONE.',
+    needExactlyFivePhotos: '❌ Please upload exactly 5 photos: front, sitting room, bedroom, kitchen, bathroom.',
+    photosUploaded: "📸 You've uploaded {count}/5 photos. Type *DONE* to continue once you reach 5.",
+    photoReceived: '✅ Photo {count}/5 received! Send the next required photo.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
     sendSelfiePhotoOnly: '❌ Please send a photo (selfie) - not text.',
     invalidPhone: '❌ Invalid phone format. Try: +256 770 646 879',
@@ -72,7 +77,7 @@ const T = {
     genericWebhookError: 'Sorry, something went wrong. Please try again or visit {url}'
   },
   lg: {
-    welcome: "🏠 Tukusuubiza ku *MakayUg* - eyitwa wangu ya property mu Uganda!\n\nOyagala kukola ki?\n1️⃣ Okwetayirira eby'ensi byange\n2️⃣ Okunoonyereza ensi\n3️⃣ Okunoonya musomesa\n\nSuula 1, 2 oba 3",
+    welcome: "🏠 Tukusuubiza ku *MakaUg* - eyitwa wangu ya property mu Uganda!\n\nOyagala kukola ki?\n1️⃣ Okwetayirira eby'ensi byange\n2️⃣ Okunoonyereza ensi\n3️⃣ Okunoonya musomesa\n\nSuula 1, 2 oba 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
@@ -82,12 +87,12 @@ const T = {
     askPrice: '💰 Ebbeeyi yayo mu Shillingi za Uganda bwoba nyo? (ennamba zokka)',
     askBedrooms: "🛏 Eddiini ezingaana? (Okwandika ennamba, oba 0 bw'etaba)",
     askDescription: '📝 Teeka ennukuta ntono ku ensi eno (otuutu, ebintu, embeera...)',
-    askPhotos: "📸 Tuma amawanika go buli kimu buli kimu. Bw'osaaze, wandika *DONE*",
+    askPhotos: "📸 Weereza ebifaananyi 5 byokka, ekimu ku kimu. Bw'omala, wandiike *DONE*\n\n📌 Ebyetaagisa: front, sitting room, bedroom, kitchen, bathroom",
     askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number). Ejja kutuzikirira bukyamu.',
     askSelfie: "🤳 Weereza selfie (ekifaananyi kyo) ng'oyita NIN yo.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
     otpSent: '📲 Tukusindise koodi ku simu yo nga SMS. Wandika koodi eyo eri wano:',
-    listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekedwa mu saawa 24.\n\nReference: #{ref}\n\nWebale okozesa MakayUg! 🏠🇺🇬",
+    listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: #{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa MakaUg! 🏠🇺🇬",
     invalidInput: "❓ Simanyi. Ddamu n'okusooka okwandika.",
     otpSuccess: '✅ Simu kakasibwa!',
     otpFailed: '❌ Koodi si yo. Gezaayo oba wandika RESEND.',
@@ -96,7 +101,10 @@ const T = {
     askUniversity: '🎓 Yunivasite eyegenderako gye?',
     askDistance: '🚶 Mulenda gwa emiita mingaana ukola nga oyebase? (km)',
     askSearchType: '🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Ezikodizibwa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw\'abayiizi\n5️⃣ Ebyobusuubuzi\n6️⃣ Byonna',
-    askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso):',
+    askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso), oba share location yo ku WhatsApp:',
+    locationSharedReceived: '📍 Location yo efuniddwa. Tunoonya listings eziri okumpi naawe...',
+    searchNoNearbyResults: 'Tewali listings ezikkiriziddwa munda wa miles 5. Tukulaga eziri okumpi eziriwo.',
+    kmAway: 'km okuva awo',
     searchNoResults: 'Tewali listings ezikkiriziddwa ezifaanana n\'onoonyezza wo kati.',
     askAgentArea: '👔 Weetaaga agent mu district oba kitundu ki? (nga Kampala, Wakiso, Mbarara)',
     noAgentsFound: 'Tefunye ba agent abakakasiddwa mu kitundu ekyo kati.',
@@ -108,9 +116,10 @@ const T = {
     titleTooShort: 'Omutwe mumpi nnyo. Wandiika omutwe ogutegeerekeka bulungi.',
     invalidPrice: '❌ Teeka ebbeeyi entuufu mu UGX (ennamba zokka, ex: 250000000).',
     descriptionTooShort: 'Wandiika ennyinyonnyola empanvu katono (waakiri ennukuta 10).',
-    needAtLeastOnePhoto: '❌ Weereza waakiri ekifaananyi kimu nga tonnawandiika DONE.',
-    photosUploaded: '📸 Ofunye ebifaananyi {count}. Wandiika *DONE* okweyongerayo.',
-    photoReceived: '✅ Ekifaananyi {count} kifuniddwa! Weereza ebirala oba wandiike *DONE*.',
+    needAtLeastOnePhoto: '❌ Weereza ebifaananyi 5 byonna ebyetaagisa nga tonnawandiika DONE.',
+    needExactlyFivePhotos: '❌ Teeka ebifaananyi 5 byokka: front, sitting room, bedroom, kitchen, bathroom.',
+    photosUploaded: '📸 Ofunye ebifaananyi {count}/5. Wandiika *DONE* nga omaze okutuusa ku 5.',
+    photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
     invalidNin: '❌ NIN gyotadde si ntuufu. Gezaako nate.',
     sendSelfiePhotoOnly: '❌ Weereza ekifaananyi (selfie), si bubaka bwa nnukuta.',
     invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: +256 770 646 879',
@@ -133,20 +142,23 @@ const T = {
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
   },
   sw: {
-    welcome: '🏠 Karibu *MakayUg* - Jukwaa la bure la mali Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
+    welcome: '🏠 Karibu *MakaUg* - Jukwaa la bure la mali Uganda!\n\nUnataka kufanya nini?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta mali\n3️⃣ Pata wakala\n\nJibu 1, 2 au 3',
     askListingType: '🏠 Unaorodhesha nini?\n1️⃣ Nyumba/Mali ya KUUZA\n2️⃣ Nyumba/Mali ya KUKODISHA\n3️⃣ Ardhi/Kiwanja\n4️⃣ Malazi ya wanafunzi\n5️⃣ Mali ya biashara',
     askTitle: '✏️ Toa kichwa kifupi cha mali yako:',
     askDistrict: '📍 Wilaya ipi? (mf. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Mtaa au eneo gani?',
     askPrice: '💰 Bei gani kwa Shilingi za Uganda? (nambari tu)',
-    askPhotos: '📸 Tuma picha za mali yako moja moja. Ukimaliza, andika *DONE*',
-    listingSubmitted: '🎉 *Mali yako imewasilishwa!*\n\nRef: #{ref}\n\nAsante kwa kutumia MakayUg! 🏠🇺🇬',
+    askPhotos: '📸 Tuma picha 5 kamili, moja baada ya nyingine. Ukimaliza andika *DONE*\n\n📌 Inahitajika: mbele ya jengo, sebuleni, chumba cha kulala, jikoni, bafu',
+    listingSubmitted: '🎉 *Mali yako imewasilishwa!*\n\nRef: #{ref}\n\n✅ Hatua inayofuata: weka profile yako ili kufuatilia views, saves na enquiries za tangazo lako.\n\nAsante kwa kutumia MakaUg! 🏠🇺🇬',
     invalidInput: '❓ Sijaelewa. Tafadhali jibu kwa mojawapo ya chaguo.',
     otpSent: '📲 Tumetuma nambari ya siri kwa SMS yako. Andika hapa:',
     otpSuccess: '✅ Nambari ya simu imethibitishwa!',
     otpFailed: '❌ Nambari si sahihi. Jaribu tena.',
     askSearchType: '🔎 Unatafuta nini?\n1️⃣ Ya kuuza\n2️⃣ Ya kupangisha\n3️⃣ Ardhi\n4️⃣ Makazi ya wanafunzi\n5️⃣ Biashara\n6️⃣ Mali yoyote',
-    askSearchArea: '📍 Andika eneo, wilaya au mahali unapotafuta (mf. Ntinda, Kampala, Wakiso):',
+    askSearchArea: '📍 Andika eneo, wilaya au mahali unapotafuta (mf. Ntinda, Kampala, Wakiso), au tuma location yako kwenye WhatsApp:',
+    locationSharedReceived: '📍 Location yako imepokelewa. Tunatafuta mali zilizo karibu nawe...',
+    searchNoNearbyResults: 'Hakuna mali zilizoidhinishwa ndani ya maili 5. Tunaonyesha chaguo za karibu zilizopo.',
+    kmAway: 'km kutoka hapo',
     searchNoResults: 'Hakuna mali iliyoidhinishwa inayolingana na utafutaji wako sasa.',
     askAgentArea: '👔 Unahitaji wakala katika wilaya/eneo gani? (mf. Kampala, Wakiso, Mbarara)',
     noAgentsFound: 'Hakuna mawakala waliothibitishwa waliopatikana eneo hilo kwa sasa.',
@@ -158,9 +170,10 @@ const T = {
     titleTooShort: 'Kichwa ni kifupi sana. Tafadhali andika kichwa kinachoeleweka.',
     invalidPrice: '❌ Tafadhali weka bei sahihi ya UGX (nambari pekee, mfano 250000000).',
     descriptionTooShort: 'Tafadhali andika maelezo marefu kidogo (angalau herufi 10).',
-    needAtLeastOnePhoto: '❌ Tafadhali tuma angalau picha 1 kabla ya kuandika DONE.',
-    photosUploaded: '📸 Umepakia picha {count}. Andika *DONE* kuendelea.',
-    photoReceived: '✅ Picha {count} imepokelewa! Tuma nyingine au andika *DONE*.',
+    needAtLeastOnePhoto: '❌ Tafadhali tuma picha 5 zote zinazohitajika kabla ya kuandika DONE.',
+    needExactlyFivePhotos: '❌ Tafadhali pakia picha 5 kamili: mbele, sebuleni, chumba cha kulala, jikoni, bafu.',
+    photosUploaded: '📸 Umepakia picha {count}/5. Andika *DONE* ukifika 5.',
+    photoReceived: '✅ Picha {count}/5 imepokelewa! Tuma picha inayofuata.',
     invalidNin: '❌ Tafadhali andika NIN sahihi.',
     sendSelfiePhotoOnly: '❌ Tafadhali tuma picha (selfie), si maandishi.',
     invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: +256 770 646 879',
@@ -183,28 +196,28 @@ const T = {
     genericWebhookError: 'Samahani, hitilafu imetokea. Jaribu tena au tembelea {url}'
   },
   ac: {
-    welcome: "🏠 Itye ber i *MakayUg* — kabedo me free property i Uganda!\n\nIn mito timo ngo?\n1️⃣ Keto ot megi\n2️⃣ Yeny ot\n3️⃣ Nong agent\n\nDwog 1, 2 onyo 3",
+    welcome: "🏠 Itye ber i *MakaUg* — kabedo me free property i Uganda!\n\nIn mito timo ngo?\n1️⃣ Keto ot megi\n2️⃣ Yeny ot\n3️⃣ Nong agent\n\nDwog 1, 2 onyo 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     invalidInput: '❓ Pe atamo. Tim ber idwog ki namba me ayero.',
     languageUpdated: '✅ Dhok ma idiyo olokke.',
     restarted: '🔄 Session ocake manyen.'
   },
   ny: {
-    welcome: "🏠 Kaza omu *MakayUg* — ahari free property platform ya Uganda!\n\nNoyenda kukora ki?\n1️⃣ Kuteeka property yangye\n2️⃣ Kushangisa property\n3️⃣ Kushanga agent\n\nGarukamu 1, 2 nari 3",
+    welcome: "🏠 Kaza omu *MakaUg* — ahari free property platform ya Uganda!\n\nNoyenda kukora ki?\n1️⃣ Kuteeka property yangye\n2️⃣ Kushangisa property\n3️⃣ Kushanga agent\n\nGarukamu 1, 2 nari 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     invalidInput: '❓ Tinkyetegire. Garukamu namba emwe omu zirikurondorwa.',
     languageUpdated: '✅ Orurimi ruhindukire.',
     restarted: '🔄 Session etandikire bupya.'
   },
   rn: {
-    welcome: "🏠 Kaze kuri *MakayUg* — urubuga rw'ubuntu rw'imitungo muri Uganda!\n\nUshaka gukora iki?\n1️⃣ Kwandikisha umutungo\n2️⃣ Gushaka umutungo\n3️⃣ Gushaka agent\n\nSubiza 1, 2 canke 3",
+    welcome: "🏠 Kaze kuri *MakaUg* — urubuga rw'ubuntu rw'imitungo muri Uganda!\n\nUshaka gukora iki?\n1️⃣ Kwandikisha umutungo\n2️⃣ Gushaka umutungo\n3️⃣ Gushaka agent\n\nSubiza 1, 2 canke 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     invalidInput: '❓ Sinabitahura. Subiza nimero iri hejuru.',
     languageUpdated: '✅ Ururimi rwahinduwe.',
     restarted: '🔄 Session yatanguye bundi bushya.'
   },
   sm: {
-    welcome: "🏠 Mirembe ku *MakayUg* — urubuga rwa property olwa bwerere mu Uganda!\n\nOyagala okukola ki?\n1️⃣ Okuteeka property yange\n2️⃣ Okunoonya property\n3️⃣ Okunoonya agent\n\nDdamu 1, 2 oba 3",
+    welcome: "🏠 Mirembe ku *MakaUg* — urubuga rwa property olwa bwerere mu Uganda!\n\nOyagala okukola ki?\n1️⃣ Okuteeka property yange\n2️⃣ Okunoonya property\n3️⃣ Okunoonya agent\n\nDdamu 1, 2 oba 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     invalidInput: '❓ Tebinnyonnyodde bulungi. Ddamu namba emu ku ziri waggulu.',
     languageUpdated: '✅ Olulimi luhinduddwa.',
@@ -296,6 +309,156 @@ function formatPrice(price, period) {
   return `USh ${v.toLocaleString()}${period ? `/${period}` : ''}`;
 }
 
+function toNum(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos((lat1 * Math.PI) / 180)
+    * Math.cos((lat2 * Math.PI) / 180)
+    * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function parseInboundLocation(payload = {}) {
+  const lat = toNum(payload.Latitude ?? payload.latitude ?? payload.lat);
+  const lng = toNum(payload.Longitude ?? payload.longitude ?? payload.lng ?? payload.lon);
+  if (lat == null || lng == null) return null;
+  const label = normalizeInput(payload.Label ?? payload.label);
+  const address = normalizeInput(payload.Address ?? payload.address);
+  return {
+    lat,
+    lng,
+    label: label || null,
+    address: address || null
+  };
+}
+
+function normalizeOptKeyword(value) {
+  return normalizeInput(value).toUpperCase().replace(/\s+/g, '');
+}
+
+async function upsertWhatsappUserProfile(phone, updates = {}) {
+  const preferredLanguage = normalizeInput(updates.preferredLanguage);
+  const optInSource = normalizeInput(updates.optInSource);
+  const hasOptIn = typeof updates.marketingOptIn === 'boolean';
+
+  await db.query(
+    `INSERT INTO whatsapp_user_profiles (
+      phone,
+      preferred_language,
+      marketing_opt_in,
+      marketing_opt_in_at,
+      marketing_opt_out_at,
+      opt_in_source,
+      metadata,
+      last_seen_at
+    ) VALUES (
+      $1,
+      COALESCE(NULLIF($2, ''), 'en'),
+      COALESCE($3, FALSE),
+      CASE WHEN $3 = TRUE THEN NOW() ELSE NULL END,
+      CASE WHEN $3 = FALSE THEN NOW() ELSE NULL END,
+      NULLIF($4, ''),
+      COALESCE($5::jsonb, '{}'::jsonb),
+      NOW()
+    )
+    ON CONFLICT (phone) DO UPDATE
+    SET preferred_language = COALESCE(NULLIF($2, ''), whatsapp_user_profiles.preferred_language),
+        marketing_opt_in = CASE
+          WHEN $3 IS NULL THEN whatsapp_user_profiles.marketing_opt_in
+          ELSE $3
+        END,
+        marketing_opt_in_at = CASE
+          WHEN $3 = TRUE THEN NOW()
+          ELSE whatsapp_user_profiles.marketing_opt_in_at
+        END,
+        marketing_opt_out_at = CASE
+          WHEN $3 = FALSE THEN NOW()
+          ELSE whatsapp_user_profiles.marketing_opt_out_at
+        END,
+        opt_in_source = COALESCE(NULLIF($4, ''), whatsapp_user_profiles.opt_in_source),
+        metadata = whatsapp_user_profiles.metadata || COALESCE($5::jsonb, '{}'::jsonb),
+        last_seen_at = NOW(),
+        updated_at = NOW()`,
+    [
+      phone,
+      preferredLanguage || null,
+      hasOptIn ? updates.marketingOptIn : null,
+      optInSource || null,
+      JSON.stringify(updates.metadata || {})
+    ]
+  );
+}
+
+async function logWhatsappMessage({
+  userPhone,
+  waMessageId = null,
+  direction = 'inbound',
+  messageType = 'text',
+  payload = {}
+}) {
+  await db.query(
+    `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload)
+     VALUES ($1, NULLIF($2, ''), $3, $4, $5::jsonb)
+     ON CONFLICT (wa_message_id) DO NOTHING`,
+    [userPhone, waMessageId || null, direction, messageType, JSON.stringify(payload || {})]
+  );
+}
+
+async function logIntent({
+  userPhone,
+  waMessageId = null,
+  detectedIntent = 'unknown',
+  confidence = 0,
+  language = 'en',
+  currentStep = '',
+  rawText = '',
+  transcript = '',
+  entities = {},
+  modelUsed = ''
+}) {
+  await db.query(
+    `INSERT INTO whatsapp_intent_logs (
+      user_phone, wa_message_id, detected_intent, confidence, language, current_step,
+      raw_text, transcript, entities, model_used
+    ) VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
+    [
+      userPhone,
+      waMessageId || null,
+      detectedIntent || 'unknown',
+      Number.isFinite(Number(confidence)) ? Number(confidence) : null,
+      language || 'en',
+      currentStep || null,
+      rawText || null,
+      transcript || null,
+      JSON.stringify(entities || {}),
+      modelUsed || null
+    ]
+  );
+}
+
+async function saveTranscription({
+  userPhone,
+  waMessageId = null,
+  transcript,
+  detectedLanguage = '',
+  mediaUrl = '',
+  confidence = null
+}) {
+  if (!transcript) return;
+  await db.query(
+    `INSERT INTO transcriptions (user_phone, wa_message_id, transcript, confidence, detected_language, media_url)
+     VALUES ($1, NULLIF($2, ''), $3, $4, $5, $6)`,
+    [userPhone, waMessageId || null, transcript, confidence, detectedLanguage || null, mediaUrl || null]
+  );
+}
+
 async function issueOtp(phone) {
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -310,7 +473,7 @@ async function issueOtp(phone) {
   );
 
   try {
-    await smsService.sendSMS(phone, `MakayUg listing verification: ${otp}. Valid 10 mins. Do not share.`);
+    await smsService.sendSMS(phone, `MakaUg listing verification: ${otp}. Valid 10 mins. Do not share.`);
   } catch (e) {
     logger.error('OTP SMS failed:', e.message);
   }
@@ -392,6 +555,45 @@ async function findPropertiesForWhatsapp(searchType, location) {
   return result.rows;
 }
 
+async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
+  const values = ['approved'];
+  let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
+
+  if (searchType && searchType !== 'any') {
+    values.push(searchType);
+    where += ` AND listing_type = $${values.length}`;
+  }
+
+  const result = await db.query(
+    `SELECT id, title, listing_type, district, area, price, price_period, latitude, longitude
+     FROM properties
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT 200`,
+    values
+  );
+
+  const sourceLat = Number(sharedLocation.lat);
+  const sourceLng = Number(sharedLocation.lng);
+  const rowsWithDistance = result.rows
+    .map((row) => {
+      const lat = toNum(row.latitude);
+      const lng = toNum(row.longitude);
+      if (lat == null || lng == null) return null;
+      const distanceKm = haversineKm(sourceLat, sourceLng, lat, lng);
+      return { ...row, distance_km: distanceKm };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance_km - b.distance_km);
+
+  const withinFiveMilesKm = 8.04672;
+  const nearby = rowsWithDistance.filter((row) => row.distance_km <= withinFiveMilesKm);
+  return {
+    rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
+    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0
+  };
+}
+
 async function findAgentsForWhatsapp(location) {
   const q = `%${location}%`;
   const result = await db.query(
@@ -413,6 +615,72 @@ async function findAgentsForWhatsapp(location) {
   return result.rows;
 }
 
+async function logPropertySearchRequest({
+  userPhone,
+  searchType = 'any',
+  queryText = '',
+  location = null,
+  resultRows = [],
+  usedNearestFallback = false
+}) {
+  const payload = {
+    search_type: searchType,
+    query: queryText || null,
+    location: location || null,
+    used_nearest_fallback: !!usedNearestFallback,
+    result_count: Array.isArray(resultRows) ? resultRows.length : 0
+  };
+
+  const inserted = await db.query(
+    `INSERT INTO property_search_requests (user_phone, payload)
+     VALUES ($1, $2::jsonb)
+     RETURNING id`,
+    [userPhone, JSON.stringify(payload)]
+  );
+
+  const requestId = inserted.rows[0]?.id;
+  if (requestId) {
+    const compactResults = (resultRows || []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      listing_type: row.listing_type,
+      district: row.district,
+      area: row.area,
+      price: row.price,
+      price_period: row.price_period,
+      distance_km: Number.isFinite(Number(row.distance_km)) ? Number(row.distance_km) : null
+    }));
+    await db.query(
+      `INSERT INTO search_results_cache (search_request_id, results_json)
+       VALUES ($1, $2::jsonb)`,
+      [requestId, JSON.stringify(compactResults)]
+    );
+  }
+}
+
+async function createNoMatchLead({
+  userPhone,
+  searchType = 'any',
+  preferredArea = '',
+  notes = ''
+}) {
+  await db.query(
+    `INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload)
+     VALUES ($1, $2, 'search', $3, $4, $5::jsonb)`,
+    [
+      userPhone,
+      preferredArea || null,
+      searchType || 'any',
+      notes || 'Auto-captured from WhatsApp no-match search.',
+      JSON.stringify({
+        source: 'whatsapp',
+        search_type: searchType || 'any',
+        preferred_area: preferredArea || null
+      })
+    ]
+  );
+}
+
 function formatPropertySearchMessage(lang, rows, location, searchType) {
   const lines = [];
   lines.push(`🔎 *${t(lang, 'searchHeader')}* (${typeLabel(searchType, lang)} • ${location})`);
@@ -421,6 +689,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     lines.push(`${idx + 1}. *${r.title}*`);
     lines.push(`   ${typeLabel(r.listing_type, lang)} • ${r.area}, ${r.district}`);
     lines.push(`   ${formatPrice(r.price, r.price_period)}`);
+    if (Number.isFinite(Number(r.distance_km))) {
+      lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
+    }
     lines.push(`   ${HOME_URL}/property/${r.id}`);
     lines.push('');
   });
@@ -448,6 +719,19 @@ function formatAgentSearchMessage(lang, rows, location) {
   return lines.join('\n');
 }
 
+function intentMenuRoute(intent) {
+  const key = normalizeInput(intent).toLowerCase();
+  if (key === 'property_listing') return 'listing_type';
+  if (key === 'property_search' || key === 'looking_for_property_lead') return 'search_type';
+  if (key === 'agent_search') return 'agent_area';
+  if (key === 'agent_registration') return 'agent_registration';
+  if (key === 'mortgage_help') return 'mortgage_help';
+  if (key === 'account_help' || key === 'saved_properties') return 'account_help';
+  if (key === 'report_listing') return 'report_listing';
+  if (key === 'support') return 'support';
+  return '';
+}
+
 // Step machine
 const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'title', 'district',
@@ -457,14 +741,16 @@ const STEPS = [
   'verify_otp', 'submitted'
 ];
 
-async function processMessage(phone, body, mediaUrl) {
+async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
   const session = await getSession(phone);
   const lang = session.language || 'en';
   const step = session.current_step;
   const draft = session.listing_draft || {};
   const sessionData = session.session_data || {};
+  const intentResult = runtime.intent || null;
   const cleanBody = normalizeInput(body);
   const bodyUpper = normUpper(body);
+  const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
 
@@ -473,13 +759,31 @@ async function processMessage(phone, body, mediaUrl) {
     return respond(t(lang, 'chooseLanguage'), 'choose_language');
   }
 
-  if (bodyUpper === 'RESET' || bodyUpper === 'START') {
+  if (bodyUpper === 'RESET' || bodyUpper === 'RESTART') {
     await clearSessionData(phone);
     return respond(`${t(lang, 'restarted')}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
   if (bodyUpper === 'LANG' || bodyUpper === 'LANGUAGE') {
     return respond(`${t(lang, 'languageUpdated')}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
+  }
+
+  if (['STOP', 'UNSUBSCRIBE', 'OPTOUT', 'OPT-OUT'].includes(compactUpper)) {
+    await upsertWhatsappUserProfile(phone, {
+      preferredLanguage: lang,
+      marketingOptIn: false,
+      optInSource: 'whatsapp_keyword_stop'
+    });
+    return respond('✅ You are unsubscribed from marketing updates. You will still receive listing/verification messages for active requests. Reply START anytime to opt in again.', 'main_menu');
+  }
+
+  if (['START', 'OPTIN', 'SUBSCRIBE'].includes(compactUpper)) {
+    await upsertWhatsappUserProfile(phone, {
+      preferredLanguage: lang,
+      marketingOptIn: true,
+      optInSource: 'whatsapp_keyword_start'
+    });
+    return respond('✅ You are now subscribed for MakaUg updates. Reply MENU to continue.', 'main_menu');
   }
 
   if (bodyUpper === 'MENU' || bodyUpper === 'HOME') {
@@ -506,6 +810,25 @@ async function processMessage(phone, body, mediaUrl) {
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
+    const inferredRoute = intentMenuRoute(intentResult?.intent);
+    if (inferredRoute === 'listing_type') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (inferredRoute === 'search_type') return respond(t(lang, 'askSearchType'), 'search_type');
+    if (inferredRoute === 'agent_area') return respond(t(lang, 'askAgentArea'), 'agent_area');
+    if (inferredRoute === 'agent_registration') {
+      return respond(`📝 Register as an agent here: ${HOME_URL}/#page-brokers\n\n${t(lang, 'menuHint')}`, 'main_menu');
+    }
+    if (inferredRoute === 'mortgage_help') {
+      return respond(`🏦 Use Mortgage Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, 'main_menu');
+    }
+    if (inferredRoute === 'account_help') {
+      return respond(`👤 Account help: ${HOME_URL}/#page-account\n❤️ Saved properties: ${HOME_URL}/#page-saved\n\n${t(lang, 'menuHint')}`, 'main_menu');
+    }
+    if (inferredRoute === 'report_listing') {
+      return respond(`🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256770646879'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`, 'main_menu');
+    }
+    if (inferredRoute === 'support') {
+      return respond(`👋 Human support: ${process.env.SUPPORT_PHONE || '+256770646879'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`, 'main_menu');
+    }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'welcome'), 'main_menu');
   }
 
@@ -519,12 +842,65 @@ async function processMessage(phone, body, mediaUrl) {
 
   // SEARCH AREA
   if (step === 'search_area') {
-    if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
-
     const searchType = sessionData.search_type || 'any';
+    if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
+      await patchSessionData(phone, {
+        search_lat: Number(sharedLocation.lat),
+        search_lng: Number(sharedLocation.lng),
+        search_location_label: sharedLocation.address || sharedLocation.label || null
+      });
+
+      const locationText = sharedLocation.address
+        || sharedLocation.label
+        || `${Number(sharedLocation.lat).toFixed(4)}, ${Number(sharedLocation.lng).toFixed(4)}`;
+      const near = await findPropertiesNearWhatsapp(searchType, sharedLocation);
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType,
+        queryText: '',
+        location: {
+          lat: Number(sharedLocation.lat),
+          lng: Number(sharedLocation.lng),
+          label: locationText
+        },
+        resultRows: near.rows,
+        usedNearestFallback: near.usedNearestFallback
+      });
+      if (!near.rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType,
+          preferredArea: locationText,
+          notes: 'No approved listings found from shared location search.'
+        });
+        return respond(
+          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
+          'main_menu'
+        );
+      }
+
+      const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
+      return respond(`${t(lang, 'locationSharedReceived')}${extra}\n${formatPropertySearchMessage(lang, near.rows, locationText, searchType)}`, 'main_menu');
+    }
+
+    if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
     const rows = await findPropertiesForWhatsapp(searchType, cleanBody);
+    await logPropertySearchRequest({
+      userPhone: phone,
+      searchType,
+      queryText: cleanBody,
+      location: null,
+      resultRows: rows,
+      usedNearestFallback: false
+    });
 
     if (!rows.length) {
+      await createNoMatchLead({
+        userPhone: phone,
+        searchType,
+        preferredArea: cleanBody,
+        notes: 'No approved listings found from typed area search.'
+      });
       return respond(
         `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
         'main_menu'
@@ -641,15 +1017,18 @@ async function processMessage(phone, body, mediaUrl) {
   if (step === 'photos') {
     if (bodyUpper === 'DONE' && !mediaUrl) {
       const currentPhotos = draft.photos || [];
-      if (!currentPhotos.length) return respond(t(lang, 'needAtLeastOnePhoto'), 'photos');
+      if (currentPhotos.length < 5) return respond(t(lang, 'needExactlyFivePhotos'), 'photos');
       return respond(t(lang, 'askIDNumber'), 'ask_id_number');
     }
     if (mediaUrl) {
       const photos = draft.photos || [];
+      if (photos.length >= 5) {
+        return respond(tt(lang, 'photosUploaded', { count: photos.length }), 'photos');
+      }
       photos.push(mediaUrl);
       await patchDraft(phone, { photos });
       const count = photos.length;
-      if (count >= 20) return respond(tt(lang, 'photosUploaded', { count }), 'photos');
+      if (count >= 5) return respond(tt(lang, 'photosUploaded', { count }), 'photos');
       return respond(tt(lang, 'photoReceived', { count }), 'photos');
     }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askPhotos'), 'photos');
@@ -725,10 +1104,11 @@ async function processMessage(phone, body, mediaUrl) {
       const refCode = String(propertyId).substring(0, 8).toUpperCase();
 
       if (d.photos && d.photos.length) {
-        for (let i = 0; i < d.photos.length; i += 1) {
+        const photos = d.photos.slice(0, 5);
+        for (let i = 0; i < photos.length; i += 1) {
           await db.query(
             'INSERT INTO property_images (property_id, url, is_primary, sort_order) VALUES ($1, $2, $3, $4)',
-            [propertyId, d.photos[i], i === 0, i]
+            [propertyId, photos[i], i === 0, i]
           );
         }
       }
@@ -758,25 +1138,115 @@ async function processMessage(phone, body, mediaUrl) {
 // POST /api/whatsapp/webhook
 // Twilio WhatsApp webhook
 router.post('/webhook', async (req, res) => {
-  const { From, Body, MediaUrl0, NumMedia } = req.body;
+  const { From, Body, MediaUrl0, MediaContentType0, NumMedia, MessageSid, SmsSid } = req.body;
 
   if (!From) return res.status(400).send('Missing From');
 
   const phone = From.replace('whatsapp:', '');
+  const inboundMessageId = MessageSid || SmsSid || null;
   const body = (Body || '').trim();
   const mediaUrl = NumMedia && parseInt(NumMedia, 10) > 0 ? MediaUrl0 : null;
+  const mediaType = mediaUrl ? String(MediaContentType0 || '').toLowerCase() : '';
+  const isAudioNote = mediaUrl && mediaType.startsWith('audio/');
+  const sharedLocation = parseInboundLocation(req.body);
 
-  logger.info(`WhatsApp message from ${phone}: "${body.substring(0, 50)}"${mediaUrl ? ' [media]' : ''}`);
+  logger.info(`WhatsApp message from ${phone}: "${body.substring(0, 50)}"${mediaUrl ? ' [media]' : ''}${sharedLocation ? ' [location]' : ''}`);
 
   try {
-    await getSession(phone);
-    const { message, nextStep } = await processMessage(phone, body, mediaUrl);
+    const session = await getSession(phone);
+    const sessionLang = session.language || 'en';
+    const sessionStep = session.current_step || 'greeting';
 
-    await updateSession(phone, { current_step: nextStep });
+    let effectiveBody = body;
+    let transcriptRecord = null;
+    if (isAudioNote) {
+      transcriptRecord = await transcribeAudioFromUrl(mediaUrl, mediaType || 'audio/ogg');
+      if (transcriptRecord?.text) {
+        effectiveBody = transcriptRecord.text;
+      }
+    }
+
+    const messageType = sharedLocation
+      ? 'location'
+      : (isAudioNote ? 'voice' : (mediaUrl ? 'media' : 'text'));
+
+    await logWhatsappMessage({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      direction: 'inbound',
+      messageType,
+      payload: {
+        body,
+        effectiveBody,
+        mediaUrl,
+        mediaType,
+        sharedLocation
+      }
+    });
+
+    if (transcriptRecord?.text) {
+      await saveTranscription({
+        userPhone: phone,
+        waMessageId: inboundMessageId,
+        transcript: transcriptRecord.text,
+        detectedLanguage: transcriptRecord.language || null,
+        mediaUrl
+      });
+    }
+
+    const intentResult = await classifyWhatsappIntent({
+      text: effectiveBody,
+      language: sessionLang,
+      step: sessionStep,
+      sessionData: session.session_data || {}
+    });
+
+    await logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: intentResult.intent,
+      confidence: intentResult.confidence,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: body,
+      transcript: transcriptRecord?.text || null,
+      entities: intentResult.entities || {},
+      modelUsed: intentResult.model || null
+    });
+
+    const { message, nextStep } = await processMessage(
+      phone,
+      effectiveBody,
+      mediaUrl,
+      sharedLocation,
+      { intent: intentResult, mediaType, transcript: transcriptRecord?.text || null }
+    );
+
+    await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
+
+    const refreshedSession = await getSession(phone);
+    await upsertWhatsappUserProfile(phone, {
+      preferredLanguage: refreshedSession.language || sessionLang,
+      metadata: {
+        last_intent: intentResult.intent || 'unknown',
+        last_step: nextStep
+      }
+    });
 
     const MessagingResponse = require('twilio').twiml.MessagingResponse;
     const twiml = new MessagingResponse();
     twiml.message(message);
+
+    await logWhatsappMessage({
+      userPhone: phone,
+      waMessageId: null,
+      direction: 'outbound',
+      messageType: 'text',
+      payload: {
+        reply: message,
+        nextStep
+      }
+    });
 
     res.type('text/xml');
     return res.send(twiml.toString());
@@ -795,17 +1265,25 @@ router.post('/webhook', async (req, res) => {
 router.post('/test', async (req, res) => {
   if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
 
-  const { phone = '+256770646879', body = '1', mediaUrl } = req.body;
+  const { phone = '+256770646879', body = '1', mediaUrl, mediaType = '' } = req.body;
+  const sharedLocation = parseInboundLocation(req.body.location || req.body);
 
-  await getSession(phone);
-  const result = await processMessage(phone, body, mediaUrl);
-  await updateSession(phone, { current_step: result.nextStep });
-  const session = await db.query('SELECT * FROM whatsapp_sessions WHERE phone = $1', [phone]);
+  const session = await getSession(phone);
+  const intent = await classifyWhatsappIntent({
+    text: body,
+    language: session.language || 'en',
+    step: session.current_step || 'greeting',
+    sessionData: session.session_data || {}
+  });
+  const result = await processMessage(phone, body, mediaUrl, sharedLocation, { intent, mediaType });
+  await updateSession(phone, { current_step: result.nextStep, current_intent: intent.intent || null });
+  const refreshedSession = await db.query('SELECT * FROM whatsapp_sessions WHERE phone = $1', [phone]);
 
   return res.json({
     botResponse: result.message,
     nextStep: result.nextStep,
-    session: session.rows[0]
+    intent,
+    session: refreshedSession.rows[0]
   });
 });
 

@@ -1,0 +1,410 @@
+{
+  "info": {
+    "_postman_id": "b41f3d8e-8d2f-4588-a8f2-0ad6b4e41f66",
+    "name": "MakaUg - Go Live QA",
+    "description": "End-to-end smoke tests for MakaUg production APIs.\n\nBefore running:\n1) Import the environment file in this same folder.\n2) Set admin_api_key + super_admin_key.\n3) Set listing_otp_code with the real OTP you receive.\n\nRun order recommendation: 01 -> 10.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Health - GET /api/health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('Health ok=true', function () { pm.expect(body.ok).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 AI Model Card - GET /api/ai/model-card",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/api/ai/model-card"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('AI card returns capabilities', function () { pm.expect(body.ok).to.eql(true); pm.expect(body.data.capabilities.length).to.be.above(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 AI Rewrite Description - POST /api/ai/rewrite-description",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"listing_type\": \"sale\",\n  \"title\": \"Luxury Villa in Kololo\",\n  \"description\": \"nice house with good space\",\n  \"district\": \"Kampala\",\n  \"area\": \"Kololo\",\n  \"price\": 950000000,\n  \"bedrooms\": 5,\n  \"bathrooms\": 4,\n  \"property_type\": \"villa\",\n  \"amenities\": [\"Parking\", \"Security\", \"WiFi\"],\n  \"target_language\": \"en\"\n}"
+        },
+        "url": "{{base_url}}/api/ai/rewrite-description"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+              "const body = pm.response.json();",
+              "pm.test('Rewrite returned', function () { pm.expect(body.ok).to.eql(true); pm.expect(body.data.rewritten_description).to.be.a('string'); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Listing Workflow",
+      "item": [
+        {
+          "name": "4.1 Request Submit OTP - POST /api/properties/request-submit-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"phone\",\n  \"phone\": \"{{otp_phone}}\"\n}"
+            },
+            "url": "{{base_url}}/api/properties/request-submit-otp"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OTP request accepted', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json();",
+                  "pm.test('OTP response ok', function () { pm.expect(body.ok).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Verify Submit OTP - POST /api/properties/verify-submit-otp",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"phone\",\n  \"phone\": \"{{otp_phone}}\",\n  \"code\": \"{{listing_otp_code}}\"\n}"
+            },
+            "url": "{{base_url}}/api/properties/verify-submit-otp"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('OTP verify status is 200', function () { pm.response.to.have.status(200); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Has listing OTP token', function () { pm.expect(body.data.listing_otp_token).to.be.a('string'); });",
+                  "pm.environment.set('listing_otp_token', body.data.listing_otp_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 Create Property (pending) - POST /api/properties",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listing_type\": \"sale\",\n  \"title\": \"QA Test Villa Kampala\",\n  \"district\": \"Kampala\",\n  \"area\": \"Kololo\",\n  \"description\": \"5-bedroom test listing for launch QA.\",\n  \"price\": 950000000,\n  \"listed_via\": \"website\",\n  \"lister_phone\": \"{{otp_phone}}\",\n  \"lister_email\": \"info@makaug.com\",\n  \"listing_otp_token\": \"{{listing_otp_token}}\",\n  \"verification_terms_accepted\": true,\n  \"images\": [\n    \"https://images.unsplash.com/photo-1568605114967-8130f3a36994\",\n    \"https://images.unsplash.com/photo-1570129477492-45c003edd2be\",\n    \"https://images.unsplash.com/photo-1494526585095-c41746248156\",\n    \"https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd\",\n    \"https://images.unsplash.com/photo-1505693416388-ac5ce068fe85\"\n  ]\n}"
+            },
+            "url": "{{base_url}}/api/properties"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Create property status 201/200', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json();",
+                  "pm.test('Property created', function () { pm.expect(body.ok).to.eql(true); pm.expect(body.data.id).to.exist; });",
+                  "pm.environment.set('property_id', body.data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.4 Get Property by ID - GET /api/properties/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/properties/{{property_id}}"
+          }
+        },
+        {
+          "name": "4.5 Approve Property - PATCH /api/properties/:id/status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"reason\": \"QA approved\"\n}"
+            },
+            "url": "{{base_url}}/api/properties/{{property_id}}/status"
+          }
+        },
+        {
+          "name": "4.6 Confirm Approved Property - GET /api/properties/:id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/properties/{{property_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Agent Registration - POST /api/agents/register",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"full_name\": \"QA Agent\",\n  \"registration_status\": \"registered\",\n  \"licence_number\": \"AREA/2026/QA001\",\n  \"phone\": \"+256770000111\",\n  \"email\": \"qa.agent@makaug.com\",\n  \"districts_covered\": \"Kampala,Wakiso\",\n  \"specializations\": \"sale,rent\"\n}"
+        },
+        "url": "{{base_url}}/api/agents/register"
+      }
+    },
+    {
+      "name": "06 Mortgage Enquiry - POST /api/mortgage-rates/enquiry",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"QA User\",\n  \"phone\": \"+256770000222\",\n  \"email\": \"qa.user@makaug.com\",\n  \"contact_method\": \"phone\",\n  \"amount_to_borrow\": 250000000,\n  \"property_purpose\": \"residential\",\n  \"deposit_percent\": 20,\n  \"term_years\": 20\n}"
+        },
+        "url": "{{base_url}}/api/mortgage-rates/enquiry"
+      }
+    },
+    {
+      "name": "07 Report Listing - POST /api/contact/report-listing",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"property_reference\": \"{{base_url}}/property/{{property_id}}\",\n  \"reason\": \"QA fraud report test\",\n  \"details\": \"Testing report workflow\",\n  \"reporter_contact\": \"+256770000333\"\n}"
+        },
+        "url": "{{base_url}}/api/contact/report-listing"
+      }
+    },
+    {
+      "name": "08 AI Motherboard",
+      "item": [
+        {
+          "name": "8.1 Run All Enabled Agents - POST /api/admin/ai-agents/run",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_code\": \"all\",\n  \"trigger_source\": \"manual_admin\",\n  \"created_by\": \"postman_qa\",\n  \"limit\": 20\n}"
+            },
+            "url": "{{base_url}}/api/admin/ai-agents/run"
+          }
+        },
+        {
+          "name": "8.2 List Open Findings - GET /api/admin/ai-agents/findings",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "url": "{{base_url}}/api/admin/ai-agents/findings?status=open&limit=50"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data && body.data.length > 0) {",
+                  "    pm.environment.set('finding_id', body.data[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8.3 Decide Finding - POST /api/admin/ai-agents/findings/:id/decision",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"accepted\",\n  \"actor_id\": \"postman_admin\",\n  \"notes\": \"QA accepted\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/ai-agents/findings/{{finding_id}}/decision"
+          }
+        },
+        {
+          "name": "8.4 List Recommended Actions - GET /api/admin/ai-agents/actions",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "url": "{{base_url}}/api/admin/ai-agents/actions?status=recommended&limit=50"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.data && body.data.length > 0) {",
+                  "    pm.environment.set('action_id', body.data[0].id);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8.5 Approve Action - POST /api/admin/ai-agents/actions/:id/approve",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{admin_api_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor_id\": \"postman_admin\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/ai-agents/actions/{{action_id}}/approve"
+          }
+        },
+        {
+          "name": "8.6 Execute Action (Super Admin) - POST /api/admin/ai-agents/actions/:id/execute",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-api-key", "value": "{{admin_api_key}}" },
+              { "key": "x-super-admin-key", "value": "{{super_admin_key}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actor_id\": \"postman_super_admin\"\n}"
+            },
+            "url": "{{base_url}}/api/admin/ai-agents/actions/{{action_id}}/execute"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Admin Summary - GET /api/admin/summary",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "x-api-key", "value": "{{admin_api_key}}" }
+        ],
+        "url": "{{base_url}}/api/admin/summary"
+      }
+    },
+    {
+      "name": "10 WhatsApp Webhook Smoke - POST /api/whatsapp/webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+        ],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            { "key": "From", "value": "whatsapp:+256770646879", "type": "text" },
+            { "key": "Body", "value": "Hello", "type": "text" },
+            { "key": "NumMedia", "value": "0", "type": "text" }
+          ]
+        },
+        "url": "{{base_url}}/api/whatsapp/webhook"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Webhook returns XML TwiML', function () {",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/xml');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "https://makaug.com" },
+    { "key": "admin_api_key", "value": "" },
+    { "key": "super_admin_key", "value": "" },
+    { "key": "otp_phone", "value": "+256770646879" },
+    { "key": "listing_otp_code", "value": "123456" },
+    { "key": "listing_otp_token", "value": "" },
+    { "key": "property_id", "value": "" },
+    { "key": "finding_id", "value": "" },
+    { "key": "action_id", "value": "" }
+  ]
+}

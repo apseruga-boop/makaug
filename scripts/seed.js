@@ -1,4 +1,5 @@
 require('dotenv').config();
+const bcrypt = require('bcryptjs');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -177,6 +178,70 @@ async function seedAgents() {
   logger.info('Seeded initial agents');
 }
 
+async function seedDemoUsers() {
+  const enabled = /^(1|true|yes)$/i.test(String(process.env.SEED_DEMO_USERS || '').trim());
+  if (!enabled) {
+    logger.info('Demo users seed disabled (set SEED_DEMO_USERS=true to enable)');
+    return;
+  }
+
+  if (!(await tableExists('public.users'))) {
+    logger.info('Users table missing, skipping demo users seed');
+    return;
+  }
+
+  const finderPassword = String(process.env.SEED_DEMO_FINDER_PASSWORD || '').trim();
+  const agentPassword = String(process.env.SEED_DEMO_AGENT_PASSWORD || '').trim();
+  if (!finderPassword || !agentPassword) {
+    logger.warn('Demo user seed skipped: missing SEED_DEMO_FINDER_PASSWORD or SEED_DEMO_AGENT_PASSWORD');
+    return;
+  }
+
+  const demoUsers = [
+    {
+      first_name: 'Demo',
+      last_name: 'Finder',
+      phone: '+256770100111',
+      email: 'demo.finder@makaug.com',
+      role: 'buyer_renter',
+      password: finderPassword
+    },
+    {
+      first_name: 'Demo',
+      last_name: 'Agent',
+      phone: '+256772100001',
+      email: 'demo.agent@makaug.com',
+      role: 'agent_broker',
+      password: agentPassword
+    }
+  ];
+
+  for (const u of demoUsers) {
+    const existing = await db.query(
+      'SELECT id FROM users WHERE phone = $1 OR LOWER(email) = LOWER($2) LIMIT 1',
+      [u.phone, u.email]
+    );
+    if (existing.rows.length) continue;
+
+    const passwordHash = await bcrypt.hash(u.password, 10);
+    await db.query(
+      `INSERT INTO users (
+        first_name,
+        last_name,
+        phone,
+        email,
+        role,
+        password_hash,
+        phone_verified,
+        status
+      ) VALUES ($1,$2,$3,$4,$5,$6,TRUE,'active')`,
+      [u.first_name, u.last_name, u.phone, u.email, u.role, passwordHash]
+    );
+  }
+
+  logger.info('Seeded demo login users');
+}
+
 async function seedProperties() {
   const existing = await db.query('SELECT COUNT(*)::int AS c FROM properties');
   if (existing.rows[0].c > 0) {
@@ -295,6 +360,7 @@ async function seedMortgageProviders() {
 }
 
 async function run() {
+  await seedDemoUsers();
   await seedAgents();
   await seedProperties();
   await seedMortgageProviders();

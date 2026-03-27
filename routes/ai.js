@@ -1,0 +1,173 @@
+const express = require('express');
+
+const { requireAdminApiKey } = require('../middleware/auth');
+const { asArray, cleanText, toNullableInt, toNullableFloat } = require('../middleware/validation');
+const {
+  SUPPORTED_AI_LANGUAGES,
+  generateListingIntelligence,
+  suggestWhatsappAssistantReply,
+  recordAiFeedback,
+  normalizeLanguageCode
+} = require('../services/aiService');
+
+const router = express.Router();
+
+function parseBooleanLike(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return fallback;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
+  return fallback;
+}
+
+router.get('/model-card', (req, res) => {
+  return res.json({
+    ok: true,
+    data: {
+      name: 'MakaUg Property AI Model',
+      version: process.env.AI_MODEL_VERSION || '2026.03.27',
+      focus: 'Uganda property search, listing quality, multilingual WhatsApp assistance, and campaign optimization',
+      languages: SUPPORTED_AI_LANGUAGES,
+      capabilities: [
+        'intent_classification',
+        'voice_transcription',
+        'listing_rewrite',
+        'area_highlights_generation',
+        'multilingual_listing_text',
+        'assistant_reply_suggestions',
+        'campaign_copy_generation',
+        'ai_event_logging',
+        'feedback_loop_training'
+      ],
+      public_base_url: (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '')
+    }
+  });
+});
+
+router.post('/listing-intelligence', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const listing = {
+      listing_type: cleanText(body.listing_type || body.type).toLowerCase(),
+      title: cleanText(body.title),
+      description: cleanText(body.description),
+      district: cleanText(body.district),
+      area: cleanText(body.area),
+      price: toNullableInt(body.price),
+      price_period: cleanText(body.price_period),
+      bedrooms: toNullableInt(body.bedrooms),
+      bathrooms: toNullableInt(body.bathrooms),
+      property_type: cleanText(body.property_type),
+      amenities: asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean),
+      nearest_university: cleanText(body.nearest_university),
+      commercial_intent: cleanText(body.commercial_intent),
+      land_size_value: toNullableFloat(body.land_size_value),
+      land_size_unit: cleanText(body.land_size_unit)
+    };
+
+    if (!listing.title || !listing.district || !listing.area) {
+      return res.status(400).json({ ok: false, error: 'title, district, and area are required' });
+    }
+
+    const targetLanguage = normalizeLanguageCode(body.target_language || body.language || 'en');
+    const includeAllLanguages = parseBooleanLike(body.include_all_languages, false);
+
+    const intelligence = await generateListingIntelligence({
+      listing,
+      targetLanguage,
+      includeAllLanguages,
+      source: 'api_listing_intelligence'
+    });
+
+    return res.json({ ok: true, data: intelligence });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/rewrite-description', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+
+    const listing = {
+      listing_type: cleanText(body.listing_type || body.type).toLowerCase(),
+      title: cleanText(body.title),
+      description: cleanText(body.description),
+      district: cleanText(body.district),
+      area: cleanText(body.area),
+      price: toNullableInt(body.price),
+      bedrooms: toNullableInt(body.bedrooms),
+      bathrooms: toNullableInt(body.bathrooms),
+      property_type: cleanText(body.property_type),
+      amenities: asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean)
+    };
+
+    if (!listing.title || !listing.description || !listing.district || !listing.area) {
+      return res.status(400).json({ ok: false, error: 'title, description, district, and area are required' });
+    }
+
+    const targetLanguage = normalizeLanguageCode(body.target_language || body.language || 'en');
+    const intelligence = await generateListingIntelligence({
+      listing,
+      targetLanguage,
+      includeAllLanguages: false,
+      source: 'api_rewrite_description'
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        event_id: intelligence.event_id || null,
+        model: intelligence.model,
+        language: targetLanguage,
+        rewritten_description: intelligence.canonical?.rewritten_description || listing.description,
+        area_highlights: intelligence.canonical?.area_highlights || ''
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/assistant-reply', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const userMessage = cleanText(body.message, 1200);
+    if (!userMessage) {
+      return res.status(400).json({ ok: false, error: 'message is required' });
+    }
+
+    const response = await suggestWhatsappAssistantReply({
+      userMessage,
+      intent: cleanText(body.intent).toLowerCase() || 'unknown',
+      language: normalizeLanguageCode(body.language || 'en'),
+      context: body.context && typeof body.context === 'object' ? body.context : {},
+      source: 'api_assistant_reply'
+    });
+
+    return res.json({ ok: true, data: response });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/feedback', requireAdminApiKey, async (req, res, next) => {
+  try {
+    const body = req.body || {};
+
+    const feedback = await recordAiFeedback({
+      eventId: cleanText(body.event_id) || null,
+      rating: body.rating,
+      label: cleanText(body.label),
+      notes: cleanText(body.notes, 1000),
+      actorId: cleanText(body.actor_id) || 'admin_api_key'
+    });
+
+    return res.status(201).json({ ok: true, data: feedback });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+module.exports = router;

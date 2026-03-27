@@ -127,6 +127,28 @@ async function hasMortgageTable() {
   return Boolean(exists.rows[0]?.table_name);
 }
 
+async function ensureMortgageEnquiriesTable() {
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS mortgage_enquiries (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_phone TEXT,
+      property_price NUMERIC,
+      property_purpose TEXT,
+      deposit_percent NUMERIC,
+      term_years INTEGER,
+      household_income NUMERIC,
+      payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+function buildMortgageLeadRef() {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `MF-${ts}-${rand}`;
+}
+
 async function readMortgageProviders() {
   if (!(await hasMortgageTable())) {
     return {
@@ -188,6 +210,74 @@ router.get('/', async (req, res, next) => {
         updatedAt: payload.updatedAt,
         source: payload.source,
         providers: payload.providers
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/enquiry', async (req, res, next) => {
+  const body = req.body || {};
+  const name = cleanText(body.name);
+  const phone = cleanText(body.phone);
+  const email = cleanText(body.email).toLowerCase();
+  const contactMethod = cleanText(body.contact_method || body.contactMethod || 'phone').toLowerCase();
+  const amountToBorrow = toNullableFloat(body.amount_to_borrow ?? body.amountToBorrow);
+  const propertyPrice = toNullableFloat(body.property_price ?? body.propertyPrice) ?? amountToBorrow;
+  const propertyPurpose = cleanText(body.property_purpose || body.propertyPurpose || 'residential').toLowerCase();
+  const depositPercent = toNullableFloat(body.deposit_percent ?? body.depositPercent);
+  const termYears = toNullableInt(body.term_years ?? body.termYears ?? body.preferred_term_years ?? body.preferredTermYears);
+  const householdIncome = toNullableFloat(body.household_income ?? body.householdIncome);
+
+  if (!name) {
+    return res.status(400).json({ ok: false, error: 'name is required' });
+  }
+  if (!phone || !(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
+    return res.status(400).json({ ok: false, error: 'valid Uganda phone is required' });
+  }
+  if (!amountToBorrow || amountToBorrow <= 0) {
+    return res.status(400).json({ ok: false, error: 'amount_to_borrow is required' });
+  }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: 'email format is invalid' });
+  }
+
+  try {
+    await ensureMortgageEnquiriesTable();
+    const fallbackRef = buildMortgageLeadRef();
+    const payload = {
+      name,
+      email: email || null,
+      contactMethod: ['phone', 'whatsapp', 'email'].includes(contactMethod) ? contactMethod : 'phone',
+      amountToBorrow,
+      preferredTermYears: toNullableInt(body.preferred_term_years ?? body.preferredTermYears),
+      source: 'website_mortgage_finder',
+      submittedAt: new Date().toISOString()
+    };
+
+    const saved = await db.query(
+      `INSERT INTO mortgage_enquiries (
+        user_phone, property_price, property_purpose, deposit_percent, term_years, household_income, payload
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
+      RETURNING id`,
+      [
+        phone,
+        propertyPrice,
+        propertyPurpose || null,
+        depositPercent,
+        termYears,
+        householdIncome,
+        JSON.stringify(payload)
+      ]
+    );
+    const id = String(saved.rows[0]?.id || "");
+    const reference = id ? `MF-${id.slice(0, 8).toUpperCase()}` : fallbackRef;
+
+    return res.json({
+      ok: true,
+      data: {
+        reference
       }
     });
   } catch (error) {

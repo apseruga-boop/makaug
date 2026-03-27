@@ -62,7 +62,7 @@ const UNIVERSITIES = [
 ];
 
 const LISTING_TYPES = ['sale', 'rent', 'land', 'commercial', 'student', 'students'];
-const PROPERTY_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'archived'];
+const PROPERTY_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'hidden', 'deleted', 'archived'];
 
 module.exports = {
   DISTRICTS,

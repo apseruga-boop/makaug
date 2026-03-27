@@ -1,0 +1,28 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "WABA_ID",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "contacts": [{ "profile": { "name": "Arthur" }, "wa_id": "256770000000" }],
+            "messages": [
+              {
+                "from": "256770000000",
+                "id": "wamid.audio.001",
+                "timestamp": "1710000200",
+                "type": "audio",
+                "audio": {
+                  "id": "media-audio-id",
+                  "mime_type": "audio/ogg"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

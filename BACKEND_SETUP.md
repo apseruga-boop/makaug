@@ -1,4 +1,4 @@
-# MakayUg Backend Setup
+# MakaUg Backend Setup
 
 This backend is now scaffolded for same-day launch support.
 

@@ -55,6 +55,8 @@ router.get('/', async (req, res, next) => {
         a.phone,
         a.whatsapp,
         a.email,
+        a.registration_status,
+        a.listing_limit,
         a.bio,
         a.profile_photo_url,
         a.licence_number,
@@ -134,13 +136,19 @@ router.post('/register', async (req, res, next) => {
 
     const fullName = cleanText(body.full_name);
     const licenceNumber = cleanText(body.licence_number);
+    const registrationStatusInput = cleanText(body.registration_status || 'registered').toLowerCase();
+    const registrationStatus = registrationStatusInput === 'not_registered' ? 'not_registered' : 'registered';
+    const listingLimit = registrationStatus === 'registered' ? 20 : 5;
+    const resolvedLicence = registrationStatus === 'registered'
+      ? licenceNumber
+      : (licenceNumber || `UNREG-${Date.now()}`);
     const phone = cleanText(body.phone);
     const email = cleanText(body.email);
 
     const errors = [];
 
     if (!fullName) errors.push('full_name is required');
-    if (!licenceNumber) errors.push('licence_number is required');
+    if (registrationStatus === 'registered' && !resolvedLicence) errors.push('licence_number is required for registered agents');
     if (!phone) errors.push('phone is required');
 
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
@@ -158,6 +166,8 @@ router.post('/register', async (req, res, next) => {
         full_name,
         company_name,
         licence_number,
+        registration_status,
+        listing_limit,
         phone,
         whatsapp,
         email,
@@ -168,12 +178,14 @@ router.post('/register', async (req, res, next) => {
         profile_photo_url,
         bio,
         status
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'pending')
       RETURNING id, status, created_at`,
       [
         fullName,
         cleanText(body.company_name) || null,
-        licenceNumber,
+        resolvedLicence,
+        registrationStatus,
+        listingLimit,
         phone,
         cleanText(body.whatsapp) || null,
         email || null,

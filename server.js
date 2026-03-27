@@ -16,6 +16,8 @@ const analyticsRoutes = require('./routes/analytics');
 const adminRoutes = require('./routes/admin');
 const whatsappRoutes = require('./routes/whatsapp');
 const mortgageRoutes = require('./routes/mortgage');
+const aiRoutes = require('./routes/ai');
+const adminAiAgentsRoutes = require('./routes/admin-agents');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -67,6 +69,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/mortgage-rates', mortgageRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 
 const staticRoot = __dirname;
 app.use(express.static(staticRoot, { extensions: ['html'] }));

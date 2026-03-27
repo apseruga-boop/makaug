@@ -1,6 +1,14 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
+const logger = require('../config/logger');
+const smsService = require('../models/smsService');
+const {
+  sendPropertySubmissionNotification,
+  sendSupportEmail,
+  sendListingModerationNotification
+} = require('../services/emailService');
 const { requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -28,6 +36,127 @@ function normalizeListingType(type) {
   const t = cleanText(type).toLowerCase();
   if (t === 'students') return 'student';
   return t;
+}
+
+function normalizePhone(phone) {
+  return cleanText(phone).replace(/\s+/g, '');
+}
+
+function normalizeEmail(email) {
+  return cleanText(email).toLowerCase();
+}
+
+function normalizeUgPhone(phone) {
+  const value = normalizePhone(phone);
+  if (/^0\d{9}$/.test(value)) return `+256${value.slice(1)}`;
+  if (/^256\d{9}$/.test(value)) return `+${value}`;
+  return value;
+}
+
+function isValidUgPhone(phone) {
+  return /^\+256\d{9}$/.test(phone);
+}
+
+async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '' }) {
+  const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
+  const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
+
+  await db.query(
+    "UPDATE otps SET used = TRUE WHERE phone = $1 AND purpose = 'listing_submit' AND used = FALSE",
+    [identifier]
+  );
+
+  await db.query(
+    `INSERT INTO otps (phone, code, purpose, expires_at)
+     VALUES ($1, $2, 'listing_submit', NOW() + ($3::text || ' minutes')::interval)`,
+    [identifier, otp, String(expiresMinutes)]
+  );
+
+  if (resolvedChannel === 'email') {
+    try {
+      await sendSupportEmail({
+        to: identifier,
+        subject: 'MakaUg listing OTP code',
+        text: `Your MakaUg listing OTP is ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
+      });
+    } catch (error) {
+      logger.error('Listing OTP email failed:', error.message);
+    }
+  } else {
+    try {
+      await smsService.sendSMS(
+        identifier,
+        `MakaUg listing OTP: ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
+      );
+    } catch (error) {
+      logger.error('Listing OTP SMS failed:', error.message);
+    }
+  }
+
+  return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+}
+
+function createListingSubmitToken({ channel = 'phone', phone = '', email = '' }) {
+  const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
+  const normalizedPhone = normalizeUgPhone(phone);
+  const normalizedEmail = normalizeEmail(email);
+  const identifier = resolvedChannel === 'email' ? normalizedEmail : normalizedPhone;
+  const secret = process.env.LISTING_OTP_JWT_SECRET
+    || process.env.JWT_SECRET
+    || (process.env.NODE_ENV === 'production' ? '' : 'dev-listing-otp-secret');
+  if (!secret) {
+    throw new Error('JWT secret missing for listing OTP token generation');
+  }
+
+  return jwt.sign(
+    {
+      purpose: 'listing_submit',
+      channel: resolvedChannel,
+      identifier,
+      phone: normalizedPhone || null,
+      email: normalizedEmail || null
+    },
+    secret,
+    { expiresIn: process.env.LISTING_OTP_EXPIRES_IN || '30m' }
+  );
+}
+
+function verifyListingSubmitToken(token) {
+  const secret = process.env.LISTING_OTP_JWT_SECRET
+    || process.env.JWT_SECRET
+    || (process.env.NODE_ENV === 'production' ? '' : 'dev-listing-otp-secret');
+  if (!secret) return { ok: false, error: 'missing_jwt_secret' };
+
+  try {
+    const decoded = jwt.verify(token, secret);
+    const channel = String(decoded?.channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
+    const identifier = channel === 'email'
+      ? normalizeEmail(decoded?.email || decoded?.identifier)
+      : normalizeUgPhone(decoded?.phone || decoded?.identifier);
+    if (decoded?.purpose !== 'listing_submit' || !identifier) {
+      return { ok: false, error: 'invalid_purpose' };
+    }
+    return {
+      ok: true,
+      channel,
+      identifier,
+      phone: normalizeUgPhone(decoded?.phone),
+      email: normalizeEmail(decoded?.email)
+    };
+  } catch (error) {
+    return { ok: false, error: 'invalid_or_expired' };
+  }
+}
+
+function parseBooleanLike(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  const text = cleanText(value).toLowerCase();
+  if (!text) return fallback;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
+  return fallback;
 }
 
 router.get('/suggestions', async (req, res, next) => {
@@ -96,6 +225,7 @@ router.get('/', async (req, res, next) => {
     const values = [];
 
     const listingType = normalizeListingType(req.query.listing_type);
+    const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search);
     const status = cleanText(req.query.status || 'approved').toLowerCase();
@@ -105,7 +235,9 @@ router.get('/', async (req, res, next) => {
     const maxBeds = toNullableInt(req.query.max_beds);
     const propertyType = cleanText(req.query.property_type);
 
-    if (listingType && LISTING_TYPES.includes(listingType)) {
+    if (studentPortal) {
+      addFilter(filters, values, "(p.listing_type = ? OR p.students_welcome = ?)", 'student', true);
+    } else if (listingType && LISTING_TYPES.includes(listingType)) {
       addFilter(filters, values, 'p.listing_type = ?', listingType);
     }
 
@@ -117,7 +249,13 @@ router.get('/', async (req, res, next) => {
       addFilter(
         filters,
         values,
-        '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ?)',
+        '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ? OR COALESCE(p.address, \'\') ILIKE ? OR COALESCE(p.description, \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'city\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'neighborhood\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'region\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'resolved_location_label\', \'\') ILIKE ?)',
+        `%${area}%`,
+        `%${area}%`,
+        `%${area}%`,
+        `%${area}%`,
+        `%${area}%`,
+        `%${area}%`,
         `%${area}%`,
         `%${area}%`,
         `%${area}%`
@@ -166,13 +304,24 @@ router.get('/', async (req, res, next) => {
         p.title_type,
         p.status,
         p.created_at,
+        p.latitude,
+        p.longitude,
+        p.students_welcome,
+        p.new_until,
+        p.inquiry_reference,
         p.amenities,
         img.url AS primary_image_url,
         CASE
           WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
           ELSE 'private'
-        END AS listed_by
+        END AS listed_by,
+        CASE
+          WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'registered')
+          WHEN p.lister_type = 'agent' THEN 'not_registered'
+          ELSE 'not_registered'
+        END AS registration_status
       FROM properties p
+      LEFT JOIN agents a ON a.id = p.agent_id
       LEFT JOIN LATERAL (
         SELECT i.url
         FROM property_images i
@@ -211,7 +360,9 @@ router.get('/:id', async (req, res, next) => {
         a.company_name AS agent_company,
         a.phone AS agent_phone,
         a.whatsapp AS agent_whatsapp,
-        a.email AS agent_email
+        a.email AS agent_email,
+        a.registration_status AS agent_registration_status,
+        a.listing_limit AS agent_listing_limit
       FROM properties p
       LEFT JOIN agents a ON a.id = p.agent_id
       WHERE p.id = $1`,
@@ -235,6 +386,96 @@ router.get('/:id', async (req, res, next) => {
       data: {
         ...property.rows[0],
         images: images.rows
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/request-submit-otp', async (req, res, next) => {
+  try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
+    const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
+
+    if (channel === 'email') {
+      if (!email || !isValidEmail(email)) {
+        return res.status(400).json({ ok: false, error: 'Valid email is required' });
+      }
+    } else if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+    }
+
+    const { expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email });
+
+    return res.json({
+      ok: true,
+      data: {
+        channel,
+        identifier,
+        phone: channel === 'phone' ? phone : undefined,
+        email: channel === 'email' ? email : undefined,
+        expires_minutes: expiresMinutes,
+        message: 'OTP sent'
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/verify-submit-otp', async (req, res, next) => {
+  try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
+    const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
+    const code = cleanText(req.body.code);
+    const identifier = channel === 'email' ? email : phone;
+
+    if (!identifier || !code) {
+      return res.status(400).json({ ok: false, error: `${channel} and code are required` });
+    }
+    if (channel === 'phone' && (!isValidPhone(phone) || !isValidUgPhone(phone))) {
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+    }
+    if (channel === 'email' && !isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Valid email is required' });
+    }
+
+    const otpResult = await db.query(
+      `SELECT *
+       FROM otps
+       WHERE phone = $1
+         AND code = $2
+         AND purpose = 'listing_submit'
+         AND used = FALSE
+         AND expires_at > NOW()
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [identifier, code]
+    );
+
+    if (!otpResult.rows.length) {
+      return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+    }
+
+    if (otpResult.rows.length) {
+      await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
+    }
+    const listingOtpToken = createListingSubmitToken({ channel, phone, email });
+
+    return res.json({
+      ok: true,
+      data: {
+        channel,
+        identifier,
+        phone: channel === 'phone' ? phone : undefined,
+        email: channel === 'email' ? email : undefined,
+        listing_otp_token: listingOtpToken,
+        expires_in: process.env.LISTING_OTP_EXPIRES_IN || '30m'
       }
     });
   } catch (error) {
@@ -267,15 +508,61 @@ router.post('/', async (req, res, next) => {
     }
 
     const listerEmail = cleanText(body.lister_email);
-    const listerPhone = cleanText(body.lister_phone);
+    const listerEmailNormalized = normalizeEmail(listerEmail);
+    const listerPhone = normalizeUgPhone(body.lister_phone);
+    const listingOtpToken = cleanText(body.listing_otp_token);
+    const otpChannelInput = cleanText(body.otp_channel || body.extra_fields?.verify?.otp_channel || 'phone').toLowerCase();
+    const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
+    const latitude = toNullableFloat(body.latitude);
+    const longitude = toNullableFloat(body.longitude);
+    const studentsWelcome = parseBooleanLike(body.students_welcome, false);
+    const verificationTermsAccepted = parseBooleanLike(body.verification_terms_accepted, false);
+    const inquiryReference = cleanText(body.inquiry_reference) || null;
+    const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
+    const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
 
     if (listerEmail && !isValidEmail(listerEmail)) errors.push('lister_email is invalid');
     if (listerPhone && !isValidPhone(listerPhone)) errors.push('lister_phone is invalid');
+    if (listerPhone && !isValidUgPhone(listerPhone)) errors.push('lister_phone must be a valid Uganda phone (+256XXXXXXXXX)');
+    if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
+    if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
 
-    const status = cleanText(body.status || 'pending').toLowerCase();
-    if (!PROPERTY_STATUSES.includes(status)) {
-      errors.push('status is invalid');
+    const listedVia = cleanText(body.listed_via || 'website').toLowerCase();
+    const enforceOtp = listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop';
+    const submittedImages = asArray(body.images)
+      .map((item) => (typeof item === 'string' ? item : item?.url))
+      .map((url) => cleanText(url))
+      .filter(Boolean);
+
+    if (enforceOtp) {
+      if (otpChannel === 'email') {
+        if (!listerEmailNormalized || !isValidEmail(listerEmailNormalized)) {
+          errors.push('lister_email is required for email OTP verification');
+        }
+      } else if (!listerPhone) {
+        errors.push('lister_phone is required for OTP verification');
+      }
+      if (submittedImages.length !== 5) {
+        errors.push('Exactly 5 property images are required for website submissions');
+      }
+      if (!listingOtpToken) {
+        errors.push('listing_otp_token is required. Verify OTP before submit');
+      } else {
+        const verified = verifyListingSubmitToken(listingOtpToken);
+        if (!verified.ok) {
+          errors.push('listing_otp_token is invalid or expired');
+        } else if (verified.channel === 'email') {
+          if (!listerEmailNormalized || verified.identifier !== listerEmailNormalized) {
+            errors.push('listing_otp_token does not match lister_email');
+          }
+        } else if (!listerPhone || verified.identifier !== listerPhone) {
+          errors.push('listing_otp_token does not match lister_phone');
+        }
+      }
     }
+
+    // All public submissions are forced to pending review.
+    const status = 'pending';
 
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
@@ -312,6 +599,14 @@ router.post('/', async (req, res, next) => {
         room_type,
         room_arrangement,
         commercial_intent,
+        latitude,
+        longitude,
+        students_welcome,
+        verification_terms_accepted,
+        inquiry_reference,
+        id_number,
+        id_document_name,
+        new_until,
         amenities,
         extra_fields,
         lister_name,
@@ -326,7 +621,8 @@ router.post('/', async (req, res, next) => {
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
-        $31,$32,$33,$34,$35,$36
+        $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
+        $41,$42,$43,$44
       ) RETURNING id`,
       [
         listingType,
@@ -355,13 +651,21 @@ router.post('/', async (req, res, next) => {
         cleanText(body.room_type) || null,
         cleanText(body.room_arrangement) || null,
         cleanText(body.commercial_intent) || null,
+        latitude,
+        longitude,
+        listingType === 'student' ? true : studentsWelcome,
+        verificationTermsAccepted,
+        inquiryReference,
+        cleanText(body.id_number) || null,
+        cleanText(body.id_document_name) || null,
+        newUntil,
         JSON.stringify(amenities),
         JSON.stringify(extraFields),
         cleanText(body.lister_name) || null,
         listerPhone || null,
-        listerEmail || null,
+        listerEmailNormalized || null,
         cleanText(body.lister_type) || 'owner',
-        cleanText(body.listed_via) || 'website',
+        listedVia || 'website',
         cleanText(body.source) || 'website',
         status,
         body.expires_at ? new Date(body.expires_at) : null
@@ -370,11 +674,7 @@ router.post('/', async (req, res, next) => {
 
     const propertyId = insertResult.rows[0].id;
 
-    const imageUrls = asArray(body.images)
-      .map((item) => (typeof item === 'string' ? item : item?.url))
-      .map((url) => cleanText(url))
-      .filter(Boolean)
-      .slice(0, 20);
+    const imageUrls = submittedImages.slice(0, enforceOtp ? 5 : 20);
 
     for (let i = 0; i < imageUrls.length; i += 1) {
       await db.query(
@@ -384,12 +684,36 @@ router.post('/', async (req, res, next) => {
       );
     }
 
+    let supportEmailNotification = { sent: false, mocked: true };
+    try {
+      supportEmailNotification = await sendPropertySubmissionNotification({
+        propertyId,
+        payload: {
+          ...body,
+          lister_phone: listerPhone,
+          lister_email: listerEmailNormalized || null,
+          listing_type: listingType,
+          district,
+          area,
+          title,
+          inquiry_reference: inquiryReference
+        },
+        imageCount: imageUrls.length
+      });
+    } catch (error) {
+      logger.error('Property submission support email failed:', error.message);
+    }
+
     return res.status(201).json({
       ok: true,
       data: {
         id: propertyId,
         status,
-        imagesUploaded: imageUrls.length
+        imagesUploaded: imageUrls.length,
+        inquiry_reference: inquiryReference,
+        new_until: newUntil,
+        support_notified: !!supportEmailNotification.sent,
+        support_email: process.env.SUPPORT_EMAIL || 'info@makaug.com'
       }
     });
   } catch (error) {
@@ -445,10 +769,10 @@ router.post('/:id/inquiries', async (req, res, next) => {
     return next(error);
   }
 });
-
 router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
+    const moderationReason = cleanText(req.body.reason) || null;
 
     if (!PROPERTY_STATUSES.includes(nextStatus)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
@@ -456,17 +780,46 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
 
     const result = await db.query(
       `UPDATE properties
-       SET status = $2, reviewed_at = NOW(), updated_at = NOW()
+       SET
+         status = $2,
+         reviewed_at = NOW(),
+         updated_at = NOW(),
+         extra_fields = CASE
+           WHEN $3::text IS NULL OR trim($3::text) = '' THEN extra_fields
+           ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
+         END
        WHERE id = $1
-       RETURNING id, status, reviewed_at`,
-      [req.params.id, nextStatus]
+       RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_email, status, reviewed_at, extra_fields`,
+      [req.params.id, nextStatus, moderationReason]
     );
 
     if (!result.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    return res.json({ ok: true, data: result.rows[0] });
+    const listing = result.rows[0];
+    let notification = { sent: false, reason: 'no_lister_email' };
+    if (listing?.lister_email) {
+      try {
+        notification = await sendListingModerationNotification({
+          to: listing.lister_email,
+          listing,
+          status: nextStatus,
+          reason: moderationReason
+        });
+      } catch (_e) {
+        notification = { sent: false, reason: 'email_failed' };
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...listing,
+        moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
+        lister_notified: !!notification.sent
+      }
+    });
   } catch (error) {
     return next(error);
   }
