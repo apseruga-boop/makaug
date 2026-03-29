@@ -374,7 +374,7 @@
         "body": {
           "mode": "urlencoded",
           "urlencoded": [
-            { "key": "From", "value": "whatsapp:+256770646879", "type": "text" },
+            { "key": "From", "value": "whatsapp:+256760112587", "type": "text" },
             { "key": "Body", "value": "Hello", "type": "text" },
             { "key": "NumMedia", "value": "0", "type": "text" }
           ]
@@ -400,7 +400,7 @@
     { "key": "base_url", "value": "https://makaug.com" },
     { "key": "admin_api_key", "value": "" },
     { "key": "super_admin_key", "value": "" },
-    { "key": "otp_phone", "value": "+256770646879" },
+    { "key": "otp_phone", "value": "+256760112587" },
     { "key": "listing_otp_code", "value": "123456" },
     { "key": "listing_otp_token", "value": "" },
     { "key": "property_id", "value": "" },

@@ -311,5 +311,5 @@ To plug live data:
 
 ## Support
 
-- Phone: +256 770 646 879
+- Phone: 0760112587
 - Email: info@makaug.com

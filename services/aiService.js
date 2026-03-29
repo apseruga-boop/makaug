@@ -573,7 +573,7 @@ async function suggestWhatsappAssistantReply({
   const fallbackText = [
     'I can help with property search, listing, agent support, mortgage guidance, and account help.',
     `Open: ${link}`,
-    'If you need human support, call +256 770 646 879 or email info@makaug.com.'
+    'If you need human support, call 0760112587 or email info@makaug.com.'
   ].join(' ');
 
   const client = getClient();

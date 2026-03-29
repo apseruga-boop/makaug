@@ -57,7 +57,7 @@ const T = {
     photoReceived: '✅ Photo {count}/5 received! Send the next required photo.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
     sendSelfiePhotoOnly: '❌ Please send a photo (selfie) - not text.',
-    invalidPhone: '❌ Invalid phone format. Try: +256 770 646 879',
+    invalidPhone: '❌ Invalid phone format. Try: 0760112587',
     visitMoreListings: 'Visit {url} for more listings.',
     seeAllAgents: 'See all agents: {url}',
     replySearchAgain: 'Reply 2 to search again.',
@@ -122,7 +122,7 @@ const T = {
     photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
     invalidNin: '❌ NIN gyotadde si ntuufu. Gezaako nate.',
     sendSelfiePhotoOnly: '❌ Weereza ekifaananyi (selfie), si bubaka bwa nnukuta.',
-    invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: +256 770 646 879',
+    invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: 0760112587',
     visitMoreListings: 'Laba ebisingawo ku {url}.',
     seeAllAgents: 'Laba ba agent bonna: {url}',
     replySearchAgain: 'Ddamu 2 okunoonya nate.',
@@ -176,7 +176,7 @@ const T = {
     photoReceived: '✅ Picha {count}/5 imepokelewa! Tuma picha inayofuata.',
     invalidNin: '❌ Tafadhali andika NIN sahihi.',
     sendSelfiePhotoOnly: '❌ Tafadhali tuma picha (selfie), si maandishi.',
-    invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: +256 770 646 879',
+    invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: 0760112587',
     visitMoreListings: 'Tembelea {url} kuona mali zaidi.',
     seeAllAgents: 'Tazama mawakala wote: {url}',
     replySearchAgain: 'Jibu 2 kutafuta tena.',
@@ -824,10 +824,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(`👤 Account help: ${HOME_URL}/#page-account\n❤️ Saved properties: ${HOME_URL}/#page-saved\n\n${t(lang, 'menuHint')}`, 'main_menu');
     }
     if (inferredRoute === 'report_listing') {
-      return respond(`🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256770646879'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`, 'main_menu');
+      return respond(`🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256760112587'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`, 'main_menu');
     }
     if (inferredRoute === 'support') {
-      return respond(`👋 Human support: ${process.env.SUPPORT_PHONE || '+256770646879'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`, 'main_menu');
+      return respond(`👋 Human support: ${process.env.SUPPORT_PHONE || '+256760112587'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`, 'main_menu');
     }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'welcome'), 'main_menu');
   }
@@ -1265,7 +1265,7 @@ router.post('/webhook', async (req, res) => {
 router.post('/test', async (req, res) => {
   if (process.env.NODE_ENV === 'production') return res.status(404).json({ error: 'Not found' });
 
-  const { phone = '+256770646879', body = '1', mediaUrl, mediaType = '' } = req.body;
+  const { phone = '+256760112587', body = '1', mediaUrl, mediaType = '' } = req.body;
   const sharedLocation = parseInboundLocation(req.body.location || req.body);
 
   const session = await getSession(phone);
