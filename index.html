@@ -516,7 +516,7 @@
   <div class="bg-green-900 text-white text-sm py-2">
     <div class="max-w-7xl mx-auto px-4 flex justify-between gap-3 flex-wrap">
       <div class="topbar-left flex items-center gap-4">
-        <a href="tel:+256760112587" class="hover:text-green-200"><i class="fas fa-phone-alt text-green-300"></i> 0760112587</a>
+        <a href="https://wa.me/256760112587" target="_blank" class="hover:text-green-200"><i class="fab fa-whatsapp text-green-300"></i> WhatsApp 0760112587</a>
         <a href="mailto:info@makaug.com" class="hover:text-green-200 hidden sm:block"><i class="fas fa-envelope text-green-300"></i> info@makaug.com</a>
       </div>
       <div class="topbar-actions flex items-center gap-2 flex-wrap">
@@ -2425,9 +2425,9 @@
             Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
-            <a href="tel:+256760112587" class="block hover:text-white">📞 0760112587</a>
+            <a href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">📲 WhatsApp: 0760112587</a>
             <a href="mailto:info@makaug.com" class="block hover:text-white">📧 info@makaug.com</a>
-            <a href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">📲 WhatsApp Us</a>
+            <a href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">💬 Chat on WhatsApp</a>
             <span class="block">📍 Kampala, Uganda</span>
           </div>
         </div>
@@ -4358,7 +4358,10 @@
     }
 
     function normalizePhoneInput(value) {
-      return String(value || "").replace(/\s+/g, "").trim();
+      const raw = String(value || "").replace(/\s+/g, "").trim();
+      if (/^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
+      if (/^256\d{9}$/.test(raw)) return `+${raw}`;
+      return raw;
     }
 
     function normalizeDigits(value) {

@@ -14,6 +14,17 @@ function normalizePhone(phone) {
   return cleanText(phone).replace(/\s+/g, '');
 }
 
+function normalizeUgPhone(phone) {
+  const value = normalizePhone(phone);
+  if (/^0\d{9}$/.test(value)) return `+256${value.slice(1)}`;
+  if (/^256\d{9}$/.test(value)) return `+${value}`;
+  return value;
+}
+
+function isValidUgPhone(phone) {
+  return /^\+256\d{9}$/.test(phone);
+}
+
 function normalizeEmail(email) {
   return cleanText(email).toLowerCase();
 }
@@ -67,7 +78,7 @@ function getAuthUserIdFromRequest(req) {
 
 async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
-  const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizePhone(phone);
+  const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
 
@@ -82,31 +93,54 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
   );
 
   if (resolvedChannel === 'email') {
+    let delivery = null;
     try {
-      await sendSupportEmail({
+      delivery = await sendSupportEmail({
         to: identifier,
         subject: 'MakaUg verification code',
         text: `Your MakaUg verification code is ${otp}. It expires in ${expiresMinutes} minutes.`
       });
     } catch (error) {
       logger.error('Failed to send OTP email', error.message);
+      const sendError = new Error('Failed to send OTP email');
+      sendError.status = 400;
+      throw sendError;
+    }
+    if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
+      const configError = new Error('Email OTP delivery provider is not configured');
+      configError.status = 400;
+      throw configError;
     }
   } else {
+    let delivery = null;
     try {
-      await smsService.sendSMS(identifier, `MakaUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
+      delivery = await smsService.sendSMS(identifier, `MakaUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
     } catch (error) {
       logger.error('Failed to send OTP SMS', error.message);
+      const sendError = new Error('Failed to send OTP SMS');
+      sendError.status = 400;
+      throw sendError;
+    }
+    if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+      const configError = new Error('Phone OTP delivery provider is not configured');
+      configError.status = 400;
+      throw configError;
     }
   }
 
-  return otp;
+  return {
+    otp,
+    channel: resolvedChannel,
+    identifier,
+    expiresMinutes
+  };
 }
 
 router.post('/register', async (req, res, next) => {
   try {
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name);
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email) || null;
     const roleInput = cleanText(req.body.role).toLowerCase();
     const password = cleanText(req.body.password);
@@ -137,6 +171,7 @@ router.post('/register', async (req, res, next) => {
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
+    if (phone && !isValidUgPhone(phone)) errors.push('phone must be a valid Uganda number');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
     if (otpChannel === 'email' && !email) errors.push('email is required when otp_channel is email');
 
@@ -162,7 +197,7 @@ router.post('/register', async (req, res, next) => {
     );
 
     const user = result.rows[0];
-    await issueOtp({
+    const otpIssue = await issueOtp({
       purpose: 'signup',
       channel: otpChannel === 'email' && email ? 'email' : 'phone',
       phone,
@@ -176,7 +211,8 @@ router.post('/register', async (req, res, next) => {
       data: {
         user: publicUser(user),
         requires_otp: true,
-        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent to phone'
+        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent to phone',
+        ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
   } catch (error) {
@@ -189,7 +225,7 @@ router.post('/register', async (req, res, next) => {
 
 router.post('/login', async (req, res, next) => {
   try {
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
     const password = cleanText(req.body.password);
 
@@ -232,7 +268,7 @@ router.post('/request-otp', async (req, res, next) => {
   try {
     const channelInput = cleanText(req.body.channel).toLowerCase();
     const channel = channelInput === 'email' ? 'email' : 'phone';
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
     const purposeRaw = cleanText(req.body.purpose).toLowerCase();
     const purpose = ['signup', 'login', 'reset_password'].includes(purposeRaw) ? purposeRaw : 'login';
@@ -247,7 +283,7 @@ router.post('/request-otp', async (req, res, next) => {
         return res.status(404).json({ ok: false, error: 'No account found with that email' });
       }
     } else {
-      if (!phone || !isValidPhone(phone)) {
+      if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
         return res.status(400).json({ ok: false, error: 'Valid phone is required' });
       }
       exists = await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
@@ -256,7 +292,7 @@ router.post('/request-otp', async (req, res, next) => {
       }
     }
 
-    await issueOtp({
+    const otpIssue = await issueOtp({
       purpose,
       channel,
       phone,
@@ -267,7 +303,8 @@ router.post('/request-otp', async (req, res, next) => {
       ok: true,
       data: {
         message: channel === 'email' ? 'OTP sent to email' : 'OTP sent',
-        channel
+        channel,
+        ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
   } catch (error) {
@@ -277,9 +314,9 @@ router.post('/request-otp', async (req, res, next) => {
 
 router.post('/request-password-reset', async (req, res, next) => {
   try {
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
 
-    if (!phone || !isValidPhone(phone)) {
+    if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
       return res.status(400).json({ ok: false, error: 'Valid phone is required' });
     }
 
@@ -288,7 +325,7 @@ router.post('/request-password-reset', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'No account found with that phone' });
     }
 
-    await issueOtp({
+    const otpIssue = await issueOtp({
       purpose: 'reset_password',
       channel: 'phone',
       phone
@@ -297,7 +334,8 @@ router.post('/request-password-reset', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        message: 'Password reset OTP sent'
+        message: 'Password reset OTP sent',
+        ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
   } catch (error) {
@@ -307,7 +345,7 @@ router.post('/request-password-reset', async (req, res, next) => {
 
 router.post('/reset-password', async (req, res, next) => {
   try {
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
     const code = cleanText(req.body.code);
     const newPassword = cleanText(req.body.new_password);
 
@@ -355,7 +393,7 @@ router.post('/verify-otp', async (req, res, next) => {
   try {
     const channelInput = cleanText(req.body.channel).toLowerCase();
     const channel = channelInput === 'email' ? 'email' : 'phone';
-    const phone = normalizePhone(req.body.phone);
+    const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
     const code = cleanText(req.body.code);
     const purposeRaw = cleanText(req.body.purpose).toLowerCase();
@@ -368,7 +406,7 @@ router.post('/verify-otp', async (req, res, next) => {
     if (channel === 'email' && !isValidEmail(identifier)) {
       return res.status(400).json({ ok: false, error: 'email is invalid' });
     }
-    if (channel === 'phone' && !isValidPhone(identifier)) {
+    if (channel === 'phone' && (!isValidPhone(identifier) || !isValidUgPhone(identifier))) {
       return res.status(400).json({ ok: false, error: 'phone is invalid' });
     }
 

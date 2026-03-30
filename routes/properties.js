@@ -62,6 +62,9 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
+  if (!identifier) {
+    throw new Error('Missing OTP identifier');
+  }
 
   await db.query(
     "UPDATE otps SET used = TRUE WHERE phone = $1 AND purpose = 'listing_submit' AND used = FALSE",
@@ -75,23 +78,41 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
   );
 
   if (resolvedChannel === 'email') {
+    let delivery = null;
     try {
-      await sendSupportEmail({
+      delivery = await sendSupportEmail({
         to: identifier,
         subject: 'MakaUg listing OTP code',
         text: `Your MakaUg listing OTP is ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
       });
     } catch (error) {
       logger.error('Listing OTP email failed:', error.message);
+      const sendError = new Error('Failed to send OTP email');
+      sendError.status = 400;
+      throw sendError;
+    }
+    if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
+      const configError = new Error('Email OTP delivery provider is not configured');
+      configError.status = 400;
+      throw configError;
     }
   } else {
+    let delivery = null;
     try {
-      await smsService.sendSMS(
+      delivery = await smsService.sendSMS(
         identifier,
         `MakaUg listing OTP: ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
       );
     } catch (error) {
       logger.error('Listing OTP SMS failed:', error.message);
+      const sendError = new Error('Failed to send OTP SMS');
+      sendError.status = 400;
+      throw sendError;
+    }
+    if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+      const configError = new Error('Phone OTP delivery provider is not configured');
+      configError.status = 400;
+      throw configError;
     }
   }
 
@@ -408,7 +429,7 @@ router.post('/request-submit-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
     }
 
-    const { expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email });
+    const { otp, expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email });
 
     return res.json({
       ok: true,
@@ -418,7 +439,8 @@ router.post('/request-submit-otp', async (req, res, next) => {
         phone: channel === 'phone' ? phone : undefined,
         email: channel === 'email' ? email : undefined,
         expires_minutes: expiresMinutes,
-        message: 'OTP sent'
+        message: 'OTP sent',
+        ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otp })
       }
     });
   } catch (error) {
