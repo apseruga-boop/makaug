@@ -201,7 +201,16 @@ Return strict JSON only:
 {
   "intent": one of ${JSON.stringify(INTENTS)},
   "confidence": number between 0 and 1,
-  "entities": object with optional keys like listing_type, area, district, budget, bedrooms, language
+  "entities": object with optional keys:
+    - listing_type: sale | rent | student | commercial | land | any
+    - area: string
+    - district: string
+    - budget: number
+    - budget_max: number
+    - period: month | week | year | semester
+    - bedrooms: number
+    - property_type: house | villa | apartment | townhouse | bungalow | studio | office | warehouse | retail shop | hostel
+    - language: en | lg | sw | ac | ny | rn | sm
 }`
         },
         {

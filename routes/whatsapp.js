@@ -275,11 +275,23 @@ function mapSearchTypeInput(input) {
     '6': 'any',
     any: 'any',
     all: 'any',
+    buy: 'sale',
+    buying: 'sale',
     sale: 'sale',
+    selling: 'sale',
+    'for sale': 'sale',
     rent: 'rent',
+    rental: 'rent',
+    renting: 'rent',
+    'to rent': 'rent',
+    sale: 'sale',
     land: 'land',
+    plot: 'land',
+    plots: 'land',
     student: 'student',
     students: 'student',
+    hostel: 'student',
+    hostels: 'student',
     commercial: 'commercial'
   };
   return map[key] || null;
@@ -337,6 +349,240 @@ function parseInboundLocation(payload = {}) {
     label: label || null,
     address: address || null
   };
+}
+
+const SEARCH_TYPE_KEYWORDS = [
+  { type: 'rent', re: /\b(rent|rental|to rent|monthly|per month|a month|\/month|lease)\b/i },
+  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
+  { type: 'student', re: /\b(student|students|hostel|dorm|dormitory|campus|university)\b/i },
+  { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business premises)\b/i },
+  { type: 'land', re: /\b(land|plot|acre|acres|farm land|agricultural)\b/i }
+];
+
+const PROPERTY_TYPE_KEYWORDS = [
+  { value: 'house', re: /\b(house|home)\b/i },
+  { value: 'villa', re: /\b(villa)\b/i },
+  { value: 'apartment', re: /\b(apartment|flat)\b/i },
+  { value: 'townhouse', re: /\b(townhouse)\b/i },
+  { value: 'bungalow', re: /\b(bungalow)\b/i },
+  { value: 'studio', re: /\b(studio)\b/i },
+  { value: 'duplex', re: /\b(duplex)\b/i },
+  { value: 'hostel', re: /\b(hostel|dorm|dormitory)\b/i },
+  { value: 'office', re: /\b(office)\b/i },
+  { value: 'warehouse', re: /\b(warehouse)\b/i },
+  { value: 'retail shop', re: /\b(retail|shop|storefront)\b/i }
+];
+
+const WORD_NUMBERS = {
+  one: 1, two: 2, three: 3, four: 4, five: 5,
+  six: 6, seven: 7, eight: 8, nine: 9, ten: 10
+};
+
+const AREA_ALIASES = {
+  uyenga: 'Muyenga',
+  muyenga: 'Muyenga'
+};
+
+function normalizeListingType(value) {
+  const mapped = mapSearchTypeInput(value);
+  return mapped || 'any';
+}
+
+function parseBedCount(text) {
+  const clean = normalizeInput(text).toLowerCase();
+  let m = clean.match(/\b(\d+)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
+  if (m) return Number(m[1]);
+  m = clean.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
+  if (m) return WORD_NUMBERS[m[1]] || null;
+  m = clean.match(/\b(?:bed|beds|bedroom|bedrooms)\s*(\d+)\b/i);
+  if (m) return Number(m[1]);
+  return null;
+}
+
+function parseBudget(text) {
+  const raw = normalizeInput(text);
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  const seg =
+    (lower.match(/(?:for|under|max(?:imum)?|budget(?: of)?|up to)\s+([^,.;\n]+)/i) || [])[1]
+    || lower;
+
+  const m = seg.match(/(usd|\$|ugx|ush|shs)?\s*(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/i);
+  if (!m) return null;
+
+  const curA = (m[1] || '').toLowerCase();
+  const curB = (m[4] || '').toLowerCase();
+  const suffix = (m[3] || '').toLowerCase();
+  const currency = curA || curB || (seg.includes('$') ? 'usd' : 'ugx');
+
+  let amount = Number(String(m[2]).replace(/[, ]+/g, ''));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  if (suffix === 'k') amount *= 1_000;
+  if (suffix === 'm') amount *= 1_000_000;
+  if (suffix === 'b') amount *= 1_000_000_000;
+
+  const rate = Number(process.env.USD_TO_UGX_RATE || 3800);
+  const ugxAmount = currency === 'usd' || currency === '$'
+    ? Math.round(amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
+    : Math.round(amount);
+
+  let period = null;
+  if (/\b(per\s*month|a month|monthly|\/month|pm)\b/i.test(lower)) period = 'month';
+  else if (/\b(per\s*week|weekly|\/week)\b/i.test(lower)) period = 'week';
+  else if (/\b(per\s*year|yearly|annually|\/year)\b/i.test(lower)) period = 'year';
+  else if (/\b(semester|\/sem|per\s*semester)\b/i.test(lower)) period = 'semester';
+
+  return {
+    originalAmount: amount,
+    currency: currency === '$' ? 'usd' : currency,
+    maxBudgetUgx: ugxAmount,
+    period,
+    convertedFromUsd: currency === 'usd' || currency === '$'
+  };
+}
+
+function parsePropertyType(text) {
+  const clean = normalizeInput(text);
+  for (const rule of PROPERTY_TYPE_KEYWORDS) {
+    if (rule.re.test(clean)) return rule.value;
+  }
+  return null;
+}
+
+function parseSearchType(text) {
+  const clean = normalizeInput(text);
+  const mapped = mapSearchTypeInput(clean);
+  if (mapped) return mapped;
+  for (const rule of SEARCH_TYPE_KEYWORDS) {
+    if (rule.re.test(clean)) return rule.type;
+  }
+  return null;
+}
+
+function parseAreaFromText(text) {
+  const clean = normalizeInput(text);
+  if (!clean) return null;
+  const lower = clean.toLowerCase();
+
+  const inMatch = lower.match(/\bin\s+([a-z][a-z\s'-]{2,})/i);
+  if (inMatch && inMatch[1]) {
+    let candidate = inMatch[1]
+      .split(/\b(for|under|max|with|near|within|around|budget|at|monthly|per|a month)\b/i)[0]
+      .trim();
+    candidate = candidate.replace(/[^a-z\s'-]/gi, '').trim();
+    if (candidate && candidate !== 'uganda') {
+      const alias = AREA_ALIASES[candidate];
+      if (alias) return alias;
+      return candidate
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    }
+  }
+
+  const districtHit = DISTRICTS.find((d) => lower.includes(d.toLowerCase()));
+  if (districtHit) return districtHit;
+
+  return null;
+}
+
+function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any') {
+  const clean = normalizeInput(text);
+  const e = entities && typeof entities === 'object' ? entities : {};
+
+  const searchType = normalizeListingType(
+    e.listing_type || e.listingType || parseSearchType(clean) || fallbackType || 'any'
+  );
+  const area = normalizeInput(e.area || e.location || e.district || parseAreaFromText(clean)) || null;
+  const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
+  const propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
+  const budgetParsed = parseBudget(clean);
+  const maxBudgetUgx = Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0;
+  const budgetPeriod = normalizeInput(e.period || budgetParsed?.period) || null;
+
+  const hasSignal = Boolean(
+    area
+    || bedsMin > 0
+    || propertyType
+    || maxBudgetUgx > 0
+    || (searchType && searchType !== 'any')
+  );
+
+  return {
+    hasSignal,
+    searchType,
+    area,
+    bedsMin,
+    propertyType,
+    maxBudgetUgx,
+    budgetPeriod,
+    convertedFromUsd: Boolean(budgetParsed?.convertedFromUsd),
+    sourceText: clean
+  };
+}
+
+function describeNaturalFilters(filters = {}) {
+  const chips = [];
+  if (filters.searchType && filters.searchType !== 'any') chips.push(typeLabel(filters.searchType, 'en'));
+  if (filters.bedsMin > 0) chips.push(`${filters.bedsMin}+ bed`);
+  if (filters.propertyType) chips.push(filters.propertyType);
+  if (filters.maxBudgetUgx > 0) chips.push(`max ${formatPrice(filters.maxBudgetUgx, filters.budgetPeriod || '')}`);
+  return chips.join(' • ');
+}
+
+async function findPropertiesByNaturalFilters(filters = {}) {
+  const values = ['approved'];
+  let where = 'WHERE status = $1';
+
+  const listingType = normalizeListingType(filters.searchType || 'any');
+  if (listingType !== 'any') {
+    values.push(listingType);
+    where += ` AND listing_type = $${values.length}`;
+  }
+
+  const area = normalizeInput(filters.area);
+  if (area) {
+    values.push(`%${area}%`);
+    const qIdx = values.length;
+    where += ` AND (
+      district ILIKE $${qIdx}
+      OR area ILIKE $${qIdx}
+      OR title ILIKE $${qIdx}
+      OR COALESCE(address, '') ILIKE $${qIdx}
+    )`;
+  }
+
+  if (Number.isFinite(Number(filters.maxBudgetUgx)) && Number(filters.maxBudgetUgx) > 0) {
+    values.push(Number(filters.maxBudgetUgx));
+    where += ` AND price IS NOT NULL AND price <= $${values.length}`;
+  }
+
+  if (Number.isFinite(Number(filters.bedsMin)) && Number(filters.bedsMin) > 0) {
+    values.push(Number(filters.bedsMin));
+    where += ` AND COALESCE(bedrooms, 0) >= $${values.length}`;
+  }
+
+  const propertyType = normalizeInput(filters.propertyType);
+  if (propertyType) {
+    values.push(`%${propertyType}%`);
+    const typeIdx = values.length;
+    where += ` AND (
+      COALESCE(property_type, '') ILIKE $${typeIdx}
+      OR title ILIKE $${typeIdx}
+      OR description ILIKE $${typeIdx}
+    )`;
+  }
+
+  const result = await db.query(
+    `SELECT id, title, listing_type, district, area, price, price_period, bedrooms, bathrooms, property_type
+     FROM properties
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT 5`,
+    values
+  );
+
+  return result.rows;
 }
 
 function normalizeOptKeyword(value) {
@@ -810,6 +1056,54 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
+
+    const naturalFilters = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, 'any');
+    const likelyPropertySearchIntent = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent);
+    if (likelyPropertySearchIntent || naturalFilters.hasSignal) {
+      if (!naturalFilters.area) {
+        await patchSessionData(phone, {
+          search_type: naturalFilters.searchType || 'any',
+          pending_search_filters: naturalFilters,
+          natural_query_text: cleanBody
+        });
+        return respond(
+          `🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+          'search_area'
+        );
+      }
+
+      const rows = await findPropertiesByNaturalFilters(naturalFilters);
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: naturalFilters.searchType || 'any',
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType: naturalFilters.searchType || 'any',
+          preferredArea: naturalFilters.area,
+          notes: `No approved listings found for natural query: ${cleanBody}`
+        });
+        return respond(
+          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
+          'main_menu'
+        );
+      }
+
+      const fxNote = naturalFilters.convertedFromUsd
+        ? '\n(Using approx FX: 1 USD = 3,800 UGX for matching.)\n'
+        : '\n';
+      return respond(
+        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}${fxNote}` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        'main_menu'
+      );
+    }
+
     const inferredRoute = intentMenuRoute(intentResult?.intent);
     if (inferredRoute === 'listing_type') return respond(t(lang, 'askListingType'), 'listing_type');
     if (inferredRoute === 'search_type') return respond(t(lang, 'askSearchType'), 'search_type');
@@ -835,19 +1129,67 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // SEARCH TYPE
   if (step === 'search_type') {
     const searchType = mapSearchTypeInput(cleanBody);
-    if (!searchType) return respond(`${t(lang, 'invalidInput')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
-    await patchSessionData(phone, { search_type: searchType });
-    return respond(t(lang, 'askSearchArea'), 'search_area');
+    if (searchType) {
+      await patchSessionData(phone, { search_type: searchType });
+      return respond(t(lang, 'askSearchArea'), 'search_area');
+    }
+
+    const naturalFilters = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, 'any');
+    if (!naturalFilters.hasSignal) return respond(`${t(lang, 'invalidInput')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
+
+    if (!naturalFilters.area) {
+      await patchSessionData(phone, {
+        search_type: naturalFilters.searchType || 'any',
+        pending_search_filters: naturalFilters,
+        natural_query_text: cleanBody
+      });
+      return respond(
+        `🔎 Got it.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}${t(lang, 'askSearchArea')}`,
+        'search_area'
+      );
+    }
+
+    const rows = await findPropertiesByNaturalFilters(naturalFilters);
+    await logPropertySearchRequest({
+      userPhone: phone,
+      searchType: naturalFilters.searchType || 'any',
+      queryText: cleanBody,
+      location: null,
+      resultRows: rows,
+      usedNearestFallback: false
+    });
+
+    if (!rows.length) {
+      await createNoMatchLead({
+        userPhone: phone,
+        searchType: naturalFilters.searchType || 'any',
+        preferredArea: naturalFilters.area,
+        notes: `No approved listings found for natural query: ${cleanBody}`
+      });
+      return respond(
+        `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
+        'main_menu'
+      );
+    }
+
+    return respond(
+      `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+      'main_menu'
+    );
   }
 
   // SEARCH AREA
   if (step === 'search_area') {
     const searchType = sessionData.search_type || 'any';
+    const pendingFilters = sessionData.pending_search_filters && typeof sessionData.pending_search_filters === 'object'
+      ? sessionData.pending_search_filters
+      : null;
     if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
       await patchSessionData(phone, {
         search_lat: Number(sharedLocation.lat),
         search_lng: Number(sharedLocation.lng),
-        search_location_label: sharedLocation.address || sharedLocation.label || null
+        search_location_label: sharedLocation.address || sharedLocation.label || null,
+        pending_search_filters: null
       });
 
       const locationText = sharedLocation.address
@@ -881,6 +1223,45 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
       const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
       return respond(`${t(lang, 'locationSharedReceived')}${extra}\n${formatPropertySearchMessage(lang, near.rows, locationText, searchType)}`, 'main_menu');
+    }
+
+    let naturalFilters = null;
+    if (pendingFilters) {
+      naturalFilters = { ...pendingFilters };
+      if (!naturalFilters.area && cleanBody.length >= 2) naturalFilters.area = cleanBody;
+      naturalFilters.searchType = naturalFilters.searchType || searchType || 'any';
+    } else {
+      const parsed = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, searchType || 'any');
+      if (parsed.hasSignal) naturalFilters = parsed;
+    }
+
+    if (naturalFilters && naturalFilters.area) {
+      const rows = await findPropertiesByNaturalFilters(naturalFilters);
+      await patchSessionData(phone, { pending_search_filters: null });
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: naturalFilters.searchType || 'any',
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType: naturalFilters.searchType || 'any',
+          preferredArea: naturalFilters.area,
+          notes: `No approved listings found for natural query in search_area: ${cleanBody}`
+        });
+        return respond(
+          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
+          'main_menu'
+        );
+      }
+      return respond(
+        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
+        'main_menu'
+      );
     }
 
     if (cleanBody.length < 2) return respond(t(lang, 'askSearchArea'), 'search_area');
