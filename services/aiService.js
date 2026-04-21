@@ -1,7 +1,14 @@
-const OpenAI = require('openai');
-
 const logger = require('../config/logger');
 const db = require('../config/database');
+const { DISTRICTS } = require('../utils/constants');
+const {
+  getProviderClient,
+  getProviderName,
+  getTaskModel,
+  isLlmEnabled,
+  getProviderMeta,
+  toProviderFile
+} = require('./llmProvider');
 
 const INTENTS = [
   'property_search',
@@ -30,9 +37,7 @@ const SUPPORTED_AI_LANGUAGES = {
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 
 function getClient() {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-  return new OpenAI({ apiKey });
+  return getProviderClient();
 }
 
 function normalizeIntent(value) {
@@ -56,12 +61,159 @@ function cleanText(value, max = 1200) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
-function safeJsonParse(text, fallback = {}) {
-  try {
-    return JSON.parse(text);
-  } catch (_error) {
-    return fallback;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function classifyLlmError(error) {
+  const msg = String(error?.message || '').toLowerCase();
+  if (!msg) return 'unknown';
+  if (msg.includes('context') && msg.includes('long')) return 'context_too_long';
+  if (msg.includes('rate limit') || msg.includes('429')) return 'rate_limit';
+  if (msg.includes('500') || msg.includes('502') || msg.includes('503') || msg.includes('internal server error')) {
+    return 'server_error';
   }
+  if (
+    msg.includes('response_format')
+    || msg.includes('json_object')
+    || (msg.includes('json') && msg.includes('schema'))
+    || (msg.includes('unsupported') && msg.includes('format'))
+  ) {
+    return 'json_format_unsupported';
+  }
+  return 'unknown';
+}
+
+function stripCodeFence(text) {
+  const raw = String(text || '').trim();
+  const block = raw.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return block && block[1] ? block[1].trim() : raw;
+}
+
+function extractBalancedJsonSnippet(text) {
+  const raw = String(text || '');
+  if (!raw) return null;
+
+  const opener = raw.search(/[\{\[]/);
+  if (opener < 0) return null;
+
+  const stack = [];
+  let inString = false;
+  let escaped = false;
+  const startChar = raw[opener];
+  const expectedClose = startChar === '{' ? '}' : ']';
+
+  for (let i = opener; i < raw.length; i += 1) {
+    const ch = raw[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === '{' || ch === '[') {
+      stack.push(ch);
+      continue;
+    }
+
+    if (ch === '}' || ch === ']') {
+      const open = stack.pop();
+      if (!open) return null;
+      const validPair = (open === '{' && ch === '}') || (open === '[' && ch === ']');
+      if (!validPair) return null;
+      if (!stack.length) {
+        const snippet = raw.slice(opener, i + 1).trim();
+        if (!snippet.endsWith(expectedClose)) return null;
+        return snippet;
+      }
+    }
+  }
+
+  return null;
+}
+
+function safeJsonParse(text, fallback = {}) {
+  if (text && typeof text === 'object') return text;
+
+  const raw = String(text || '').trim();
+  if (!raw) return fallback;
+
+  const candidates = [
+    raw,
+    stripCodeFence(raw),
+    extractBalancedJsonSnippet(raw)
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (_error) {
+      // Try next candidate
+    }
+  }
+
+  return fallback;
+}
+
+async function createChatCompletionResilient(client, payload, { preferJson = false } = {}) {
+  const basePayload = { ...payload };
+  const requestVariants = [];
+
+  if (preferJson) {
+    requestVariants.push({
+      ...basePayload,
+      response_format: { type: 'json_object' }
+    });
+  }
+  requestVariants.push(basePayload);
+
+  const providerMeta = getProviderMeta();
+  const provider = providerMeta?.provider || getProviderName() || 'none';
+
+  let lastError = null;
+  for (let v = 0; v < requestVariants.length; v += 1) {
+    const req = requestVariants[v];
+    let retries = 0;
+
+    while (retries <= 2) {
+      try {
+        return await client.chat.completions.create(req);
+      } catch (error) {
+        lastError = error;
+        const kind = classifyLlmError(error);
+        const hasFallbackVariant = requestVariants.length > 1 && v < requestVariants.length - 1;
+
+        if (kind === 'json_format_unsupported' && hasFallbackVariant) {
+          break;
+        }
+
+        if ((kind === 'rate_limit' || kind === 'server_error') && retries < 2) {
+          await sleep(250 * (2 ** retries));
+          retries += 1;
+          continue;
+        }
+
+        if (kind === 'unknown' && hasFallbackVariant && provider !== 'openai') {
+          break;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error('LLM completion failed');
 }
 
 function toArray(value) {
@@ -176,6 +328,382 @@ function heuristicIntent(text) {
   return { intent: 'unknown', confidence: 0.2, entities: {} };
 }
 
+const QUERY_SEARCH_TYPE_RULES = [
+  { type: 'rent', re: /\b(rent|rental|to rent|lease|monthly|per month|\/month)\b/i },
+  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
+  { type: 'student', re: /\b(student|students|hostel|dorm|campus|university)\b/i },
+  { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business)\b/i },
+  { type: 'land', re: /\b(land|plot|acre|acres|farm)\b/i }
+];
+
+const QUERY_PROPERTY_TYPE_RULES = [
+  { value: 'house', re: /\b(house|home)\b/i },
+  { value: 'villa', re: /\b(villa)\b/i },
+  { value: 'apartment', re: /\b(apartment|flat)\b/i },
+  { value: 'townhouse', re: /\b(townhouse)\b/i },
+  { value: 'bungalow', re: /\b(bungalow)\b/i },
+  { value: 'studio', re: /\b(studio)\b/i },
+  { value: 'hostel', re: /\b(hostel|dorm|dormitory)\b/i },
+  { value: 'office', re: /\b(office)\b/i },
+  { value: 'warehouse', re: /\b(warehouse)\b/i },
+  { value: 'retail shop', re: /\b(retail|shop|storefront)\b/i }
+];
+
+const QUERY_WORD_NUMBERS = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10
+};
+
+const QUERY_NEAR_ME_RULES = [
+  /\bnear\s+me\b/i,
+  /\baround\s+me\b/i,
+  /\bnearby\b/i,
+  /\bmy\s+location\b/i,
+  /\bclose\s+to\s+me\b/i,
+  /\bwithin\s+\d+(?:\.\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|mi|mile|miles)\b/i
+];
+
+function clamp(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.min(max, Math.max(min, n));
+}
+
+function normalizeSearchType(value, fallback = 'any') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['sale', 'rent', 'student', 'commercial', 'land', 'any'].includes(raw)) return raw;
+  return fallback;
+}
+
+function normalizeBudgetPeriod(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['month', 'week', 'year', 'semester'].includes(raw)) return raw;
+  return null;
+}
+
+function normalizeBool(value) {
+  if (typeof value === 'boolean') return value;
+  const raw = String(value || '').trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y'].includes(raw)) return true;
+  if (['0', 'false', 'no', 'n'].includes(raw)) return false;
+  return false;
+}
+
+function parseAmountWithSuffix(rawNumber, suffix) {
+  let amount = Number(String(rawNumber || '').replace(/[, ]+/g, ''));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const tail = String(suffix || '').toLowerCase();
+  if (tail === 'k') amount *= 1_000;
+  if (tail === 'm') amount *= 1_000_000;
+  if (tail === 'b') amount *= 1_000_000_000;
+  return amount;
+}
+
+function parseBedsHeuristic(text) {
+  const clean = cleanText(text, 500).toLowerCase();
+  let m = clean.match(/\b(\d+)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
+  if (m) return Number(m[1]);
+  m = clean.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten)\s*[- ]?(?:bed|beds|bedroom|bedrooms|br)\b/i);
+  if (m) return QUERY_WORD_NUMBERS[m[1]] || 0;
+  m = clean.match(/\b(?:bed|beds|bedroom|bedrooms)\s*(\d+)\b/i);
+  if (m) return Number(m[1]);
+  return 0;
+}
+
+function parseSearchTypeHeuristic(text, fallback = 'any') {
+  const clean = cleanText(text, 600);
+  for (const rule of QUERY_SEARCH_TYPE_RULES) {
+    if (rule.re.test(clean)) return rule.type;
+  }
+  return normalizeSearchType(fallback, 'any');
+}
+
+function parsePropertyTypeHeuristic(text) {
+  const clean = cleanText(text, 600);
+  for (const rule of QUERY_PROPERTY_TYPE_RULES) {
+    if (rule.re.test(clean)) return rule.value;
+  }
+  return null;
+}
+
+function parseAreaHeuristic(text) {
+  const clean = cleanText(text, 700);
+  if (!clean) return null;
+  const lower = clean.toLowerCase();
+
+  const districtHit = DISTRICTS.find((d) => lower.includes(String(d || '').toLowerCase()));
+  if (districtHit) return districtHit;
+
+  const areaRe = /\b(?:in|at|around|near|within|from)\s+([a-z][a-z\s'-]{2,})/i;
+  const m = lower.match(areaRe);
+  if (!m || !m[1]) return null;
+
+  const candidate = m[1]
+    .split(/\b(for|under|max|with|within|around|budget|monthly|per|a month|near me|my location|phone|call|rent|sale|buy)\b/i)[0]
+    .replace(/[^a-z\s'-]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!candidate || candidate === 'uganda') return null;
+
+  return candidate
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function parseBudgetHeuristic(text) {
+  const raw = cleanText(text, 1200);
+  if (!raw) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
+
+  const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
+  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/gi;
+  const candidates = [];
+
+  let m;
+  while ((m = rx.exec(lower)) !== null) {
+    const curA = (m[1] || '').toLowerCase();
+    const curB = (m[4] || '').toLowerCase();
+    const amount = parseAmountWithSuffix(m[2], m[3]);
+    if (!amount) continue;
+
+    const currency = curA || curB || (m[0].includes('$') ? 'usd' : 'ugx');
+    const start = Math.max(0, (m.index || 0) - 28);
+    const end = Math.min(lower.length, (m.index || 0) + m[0].length + 28);
+    const context = lower.slice(start, end);
+    const before = lower.slice(Math.max(0, (m.index || 0) - 24), m.index || 0);
+
+    let score = 0;
+    if (/\b(for|under|max(?:imum)?|budget(?:\s+of)?|up to|around|about|at)\b/i.test(before)) score += 4;
+    if (/\b(per\s*month|a month|monthly|\/month|pm|per\s*week|weekly|\/week|per\s*year|yearly|annually|\/year|semester|\/sem)\b/i.test(context)) score += 2;
+    if (curA || curB || m[0].includes('$')) score += 2;
+    if (m[3]) score += 1;
+    if (amount >= 100_000) score += 1;
+    if (amount < 10_000 && !(curA || curB || m[0].includes('$'))) score -= 3;
+    if (/\b(bed|beds|bedroom|bedrooms|bath|bathroom|toilet|room)\b/i.test(context)) score -= 6;
+    if (/\b(acre|acres|sq\s?m|sqm|sqft|hectare|plot|plots)\b/i.test(context)) score -= 3;
+
+    candidates.push({ amount, currency, score });
+  }
+
+  if (!candidates.length) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  if (best.score < -1) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
+
+  const rate = Number(process.env.USD_TO_UGX_RATE || 3800);
+  const maxBudgetUgx = best.currency === 'usd' || best.currency === '$'
+    ? Math.round(best.amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
+    : Math.round(best.amount);
+
+  let budgetPeriod = null;
+  if (/\b(per\s*month|a month|monthly|\/month|pm)\b/i.test(lower)) budgetPeriod = 'month';
+  else if (/\b(per\s*week|weekly|\/week)\b/i.test(lower)) budgetPeriod = 'week';
+  else if (/\b(per\s*year|yearly|annually|\/year)\b/i.test(lower)) budgetPeriod = 'year';
+  else if (/\b(semester|\/sem|per\s*semester)\b/i.test(lower)) budgetPeriod = 'semester';
+
+  return {
+    maxBudgetUgx,
+    budgetPeriod,
+    convertedFromUsd: best.currency === 'usd' || best.currency === '$'
+  };
+}
+
+function isNearMeHeuristic(text) {
+  const clean = cleanText(text, 600);
+  if (!clean) return false;
+  return QUERY_NEAR_ME_RULES.some((rule) => rule.test(clean));
+}
+
+function normalizeNaturalQueryPayload(payload = {}, fallbackType = 'any') {
+  const searchType = normalizeSearchType(payload.searchType || payload.search_type, fallbackType);
+  const areaRaw = cleanText(payload.area || payload.location || payload.area_name || payload.district || '', 120);
+  const districtRaw = cleanText(payload.district || '', 120);
+  const area = areaRaw || null;
+  const district = districtRaw || null;
+  const bedsMin = Math.max(0, parseInt(payload.bedsMin ?? payload.bedrooms ?? payload.beds ?? 0, 10) || 0);
+  const propertyType = cleanText(payload.propertyType || payload.property_type || '', 60) || null;
+  const maxBudgetUgx = Math.max(0, Math.round(Number(payload.maxBudgetUgx ?? payload.budget ?? payload.budget_max ?? 0) || 0));
+  const budgetPeriod = normalizeBudgetPeriod(payload.budgetPeriod || payload.period);
+  const useSharedLocation = normalizeBool(payload.useSharedLocation ?? payload.use_shared_location ?? payload.near_me);
+  const confidence = clamp(payload.confidence ?? 0.72, 0, 1);
+
+  const hasSignal = Boolean(
+    area
+    || district
+    || bedsMin > 0
+    || propertyType
+    || maxBudgetUgx > 0
+    || useSharedLocation
+    || (searchType && searchType !== 'any')
+  );
+
+  return {
+    hasSignal,
+    searchType,
+    area,
+    district,
+    bedsMin,
+    propertyType,
+    maxBudgetUgx,
+    budgetPeriod,
+    useSharedLocation,
+    convertedFromUsd: Boolean(payload.convertedFromUsd || payload.converted_from_usd),
+    confidence,
+    raw: payload
+  };
+}
+
+function mergeNaturalQueryPayloads(primary = {}, secondary = {}, fallbackType = 'any') {
+  const p = primary && typeof primary === 'object' ? primary : {};
+  const s = secondary && typeof secondary === 'object' ? secondary : {};
+
+  const merged = normalizeNaturalQueryPayload(
+    {
+      searchType: (p.searchType && p.searchType !== 'any') ? p.searchType : (s.searchType || fallbackType),
+      area: p.area || s.area || '',
+      district: p.district || s.district || '',
+      bedsMin: Number(p.bedsMin || 0) > 0 ? p.bedsMin : (s.bedsMin || 0),
+      propertyType: p.propertyType || s.propertyType || '',
+      maxBudgetUgx: Number(p.maxBudgetUgx || 0) > 0 ? p.maxBudgetUgx : (s.maxBudgetUgx || 0),
+      budgetPeriod: p.budgetPeriod || s.budgetPeriod || null,
+      convertedFromUsd: Boolean(p.convertedFromUsd || s.convertedFromUsd),
+      useSharedLocation: Boolean(p.useSharedLocation || s.useSharedLocation),
+      confidence: clamp(Math.max(Number(p.confidence || 0), Number(s.confidence || 0)), 0, 1)
+    },
+    fallbackType
+  );
+
+  merged.raw = {
+    primary: p.raw || p,
+    fallback: s.raw || s
+  };
+
+  return merged;
+}
+
+function heuristicNaturalPropertyQuery({ text = '', fallbackType = 'any' } = {}) {
+  const clean = cleanText(text, 1200);
+  const budget = parseBudgetHeuristic(clean);
+  return normalizeNaturalQueryPayload(
+    {
+      searchType: parseSearchTypeHeuristic(clean, fallbackType),
+      area: parseAreaHeuristic(clean),
+      bedsMin: parseBedsHeuristic(clean),
+      propertyType: parsePropertyTypeHeuristic(clean),
+      maxBudgetUgx: budget.maxBudgetUgx,
+      budgetPeriod: budget.budgetPeriod,
+      convertedFromUsd: budget.convertedFromUsd,
+      useSharedLocation: isNearMeHeuristic(clean),
+      confidence: 0.65
+    },
+    fallbackType
+  );
+}
+
+async function extractNaturalPropertyQuery({ text = '', language = 'en', sessionData = {}, fallbackType = 'any' } = {}) {
+  const fallback = heuristicNaturalPropertyQuery({ text, fallbackType });
+  const client = getClient();
+  const languageCode = normalizeLanguageCode(language);
+  if (!client) {
+    return {
+      ...fallback,
+      model: 'heuristic'
+    };
+  }
+
+  const model = getTaskModel(
+    'extract',
+    process.env.OPENAI_EXTRACT_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini'
+  );
+
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: `Extract structured real-estate search filters for MakaUg WhatsApp assistant.
+Return strict JSON only:
+{
+  "searchType": "sale|rent|student|commercial|land|any",
+  "area": "string or empty",
+  "district": "string or empty",
+  "bedsMin": number,
+  "propertyType": "string or empty",
+  "maxBudgetUgx": number,
+  "budgetPeriod": "month|week|year|semester|null",
+  "convertedFromUsd": boolean,
+  "useSharedLocation": boolean,
+  "confidence": number 0..1
+}
+Rules:
+- Detect natural queries like "2 bed in Muyenga under $20k per month".
+- Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
+- Never invent impossible numbers.
+- If uncertain, set low confidence and leave field empty rather than hallucinating.`
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            text: cleanText(text, 1200),
+            language: languageCode,
+            sessionData,
+            fallbackType: normalizeSearchType(fallbackType, 'any')
+          })
+        }
+      ]
+    }, { preferJson: true });
+
+    const raw = completion?.choices?.[0]?.message?.content || '{}';
+    const parsed = safeJsonParse(raw, {});
+    const normalized = mergeNaturalQueryPayloads(
+      normalizeNaturalQueryPayload(parsed, fallbackType),
+      fallback,
+      fallbackType
+    );
+
+    await logAiModelEvent({
+      eventType: 'natural_query_extraction',
+      source: 'whatsapp',
+      inputPayload: { text: cleanText(text, 1200), language: languageCode, fallbackType },
+      outputPayload: normalized,
+      modelName: model,
+      language: languageCode,
+      qualityScore: normalized.confidence
+    });
+
+    return {
+      ...normalized,
+      model
+    };
+  } catch (error) {
+    logger.warn('Natural query extraction failed, using heuristics.', error.message);
+    await logAiModelEvent({
+      eventType: 'natural_query_extraction_error',
+      source: 'whatsapp',
+      inputPayload: { text: cleanText(text, 1200), language: languageCode, fallbackType },
+      outputPayload: fallback,
+      modelName: model,
+      language: languageCode,
+      qualityScore: fallback.confidence,
+      errorMessage: error.message
+    });
+    return {
+      ...fallback,
+      model: 'heuristic_fallback'
+    };
+  }
+}
+
 async function classifyWhatsappIntent({ text, language = 'en', step = '', sessionData = {} }) {
   const fallback = heuristicIntent(text);
   const client = getClient();
@@ -186,13 +714,12 @@ async function classifyWhatsappIntent({ text, language = 'en', step = '', sessio
     };
   }
 
-  let model = process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini';
+  let model = getTaskModel('intent', process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini');
 
   try {
-    const completion = await client.chat.completions.create({
+    const completion = await createChatCompletionResilient(client, {
       model,
       temperature: 0,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -223,13 +750,25 @@ Return strict JSON only:
           })
         }
       ]
-    });
+    }, { preferJson: true });
 
     const raw = completion?.choices?.[0]?.message?.content || '{}';
     const parsed = safeJsonParse(raw, {});
-    const intent = normalizeIntent(parsed.intent);
-    const confidence = Math.max(0, Math.min(1, Number(parsed.confidence) || 0));
-    const entities = parsed.entities && typeof parsed.entities === 'object' ? parsed.entities : {};
+    const aiIntent = normalizeIntent(parsed.intent);
+    const aiConfidence = clamp(parsed.confidence || 0, 0, 1);
+    const aiEntities = parsed.entities && typeof parsed.entities === 'object' ? parsed.entities : {};
+    const fallbackIntent = normalizeIntent(fallback.intent);
+    const fallbackConfidence = clamp(fallback.confidence || 0, 0, 1);
+
+    const shouldUseFallbackIntent = aiIntent === 'unknown' || aiConfidence < 0.45;
+    const intent = shouldUseFallbackIntent ? fallbackIntent : aiIntent;
+    const confidence = shouldUseFallbackIntent
+      ? Math.max(fallbackConfidence, aiConfidence)
+      : aiConfidence;
+    const entities = {
+      ...(fallback.entities || {}),
+      ...aiEntities
+    };
 
     return {
       intent,
@@ -260,13 +799,15 @@ async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
   const client = getClient();
   if (!client) return null;
 
-  let model = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe';
+  let model = getTaskModel('transcribe', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
 
   try {
     const headers = {};
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
       const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
       headers.Authorization = `Basic ${auth}`;
+    } else if (process.env.WHATSAPP_ACCESS_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`;
     }
 
     const resp = await fetch(mediaUrl, { headers });
@@ -279,7 +820,7 @@ async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
     const ext = String(mediaType || '').includes('mpeg') ? 'mp3' : (String(mediaType || '').includes('wav') ? 'wav' : 'ogg');
     const fileName = `voice-note.${ext}`;
 
-    const file = await OpenAI.toFile(buffer, fileName, { type: mediaType || 'audio/ogg' });
+    const file = await toProviderFile(buffer, fileName, { type: mediaType || 'audio/ogg' });
 
     const tx = await client.audio.transcriptions.create({
       model,
@@ -366,7 +907,7 @@ function buildFallbackListingIntelligence({ listing = {}, targetLanguage = 'en',
       seo_title: title,
       seo_keywords: [typeLabel, district, area, propertyType].filter(Boolean),
       tags: [typeLabel.toLowerCase(), propertyType.toLowerCase(), district.toLowerCase()].filter(Boolean),
-      quality_notes: ['Template intelligence fallback used because OPENAI_API_KEY is not configured or model response failed.']
+      quality_notes: ['Template intelligence fallback used because LLM provider is not configured or model response failed.']
     },
     translations
   };
@@ -421,13 +962,12 @@ async function generateListingIntelligence({
     ? Object.keys(SUPPORTED_AI_LANGUAGES)
     : [normalizedTargetLanguage];
 
-  const model = process.env.OPENAI_LISTING_MODEL || 'gpt-4.1-mini';
+  const model = getTaskModel('listing', process.env.OPENAI_LISTING_MODEL || 'gpt-4.1-mini');
 
   try {
-    const completion = await client.chat.completions.create({
+    const completion = await createChatCompletionResilient(client, {
       model,
       temperature: 0.35,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -472,7 +1012,7 @@ Rules:
           })
         }
       ]
-    });
+    }, { preferJson: true });
 
     const raw = completion?.choices?.[0]?.message?.content || '{}';
     const parsed = safeJsonParse(raw, {});
@@ -599,13 +1139,12 @@ async function suggestWhatsappAssistantReply({
     return { text: fallbackText, model: 'template' };
   }
 
-  const model = process.env.OPENAI_REPLY_MODEL || 'gpt-4.1-mini';
+  const model = getTaskModel('reply', process.env.OPENAI_REPLY_MODEL || 'gpt-4.1-mini');
 
   try {
-    const completion = await client.chat.completions.create({
+    const completion = await createChatCompletionResilient(client, {
       model,
       temperature: 0.4,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -628,7 +1167,7 @@ Return strict JSON: {"text":"..."}`
           })
         }
       ]
-    });
+    }, { preferJson: true });
 
     const raw = completion?.choices?.[0]?.message?.content || '{}';
     const parsed = safeJsonParse(raw, {});
@@ -696,13 +1235,12 @@ async function generateCampaignCopy({
     };
   }
 
-  const model = process.env.OPENAI_CAMPAIGN_MODEL || 'gpt-4.1-mini';
+  const model = getTaskModel('campaign', process.env.OPENAI_CAMPAIGN_MODEL || 'gpt-4.1-mini');
 
   try {
-    const completion = await client.chat.completions.create({
+    const completion = await createChatCompletionResilient(client, {
       model,
       temperature: 0.4,
-      response_format: { type: 'json_object' },
       messages: [
         {
           role: 'system',
@@ -713,7 +1251,7 @@ async function generateCampaignCopy({
           content: JSON.stringify({ objective, audience, language, channel })
         }
       ]
-    });
+    }, { preferJson: true });
 
     const parsed = safeJsonParse(completion?.choices?.[0]?.message?.content || '{}', {});
     const text = cleanText(parsed.text || parsed.message || '', 1000) || fallback;
@@ -754,6 +1292,7 @@ module.exports = {
   INTENTS,
   SUPPORTED_AI_LANGUAGES,
   classifyWhatsappIntent,
+  extractNaturalPropertyQuery,
   transcribeAudioFromUrl,
   generateCampaignCopy,
   generateListingIntelligence,

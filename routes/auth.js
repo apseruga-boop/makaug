@@ -7,6 +7,14 @@ const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { sendSupportEmail } = require('../services/emailService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
+const {
+  parseBooleanLike,
+  normalizeEmail,
+  normalizeUgPhone,
+  getAdminOtpOverrideCode,
+  canUseAdminOtpOverride,
+  isAdminOtpOverrideMatch
+} = require('../utils/adminOtpOverride');
 
 const router = express.Router();
 
@@ -25,8 +33,8 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
-function normalizeEmail(email) {
-  return cleanText(email).toLowerCase();
+function isAdminOtpOverrideEnabled() {
+  return parseBooleanLike(process.env.ADMIN_OTP_OVERRIDE_ENABLED, false);
 }
 
 function publicUser(row) {
@@ -79,6 +87,7 @@ function getAuthUserIdFromRequest(req) {
 async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
+  const overrideAllowed = canUseAdminOtpOverride({ channel: resolvedChannel, identifier });
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
 
@@ -102,12 +111,26 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
       });
     } catch (error) {
       logger.error('Failed to send OTP email', error.message);
+      if (overrideAllowed) {
+        logger.warn('OTP email send failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+      }
       const sendError = new Error('Failed to send OTP email');
       sendError.status = 400;
       throw sendError;
     }
     if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
-      const configError = new Error('Email OTP delivery provider is not configured');
+      logger.warn('Email OTP delivery unavailable', { channel: resolvedChannel, delivery });
+      if (overrideAllowed) {
+        logger.warn('Email OTP delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+      }
+      const reason = String(delivery?.error || delivery?.reason || '').toLowerCase();
+      const configError = new Error(
+        (reason.includes('smtpclientauthentication') || reason.includes('5.7.139'))
+          ? 'Email OTP is blocked by Microsoft 365 tenant policy. Enable Authenticated SMTP or configure Microsoft Graph mail delivery.'
+          : 'Email OTP delivery provider is not configured'
+      );
       configError.status = 400;
       throw configError;
     }
@@ -117,11 +140,19 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
       delivery = await smsService.sendSMS(identifier, `MakaUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
     } catch (error) {
       logger.error('Failed to send OTP SMS', error.message);
+      if (overrideAllowed) {
+        logger.warn('OTP SMS send failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+      }
       const sendError = new Error('Failed to send OTP SMS');
       sendError.status = 400;
       throw sendError;
     }
     if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+      if (overrideAllowed) {
+        logger.warn('OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
+      }
       const configError = new Error('Phone OTP delivery provider is not configured');
       configError.status = 400;
       throw configError;
@@ -356,21 +387,33 @@ router.post('/reset-password', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'new_password must be at least 8 characters' });
     }
 
-    const otp = await db.query(
-      `SELECT *
-       FROM otps
-       WHERE phone = $1
-         AND code = $2
-         AND purpose = 'reset_password'
-         AND used = FALSE
-         AND expires_at > NOW()
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [phone, code]
-    );
+    const usedOverride = isAdminOtpOverrideMatch({
+      code,
+      channel: 'phone',
+      identifier: phone
+    });
 
-    if (!otp.rows.length) {
-      return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+    let matchedOtp = null;
+    if (!usedOverride) {
+      const otp = await db.query(
+        `SELECT *
+         FROM otps
+         WHERE phone = $1
+           AND code = $2
+           AND purpose = 'reset_password'
+           AND used = FALSE
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [phone, code]
+      );
+
+      if (!otp.rows.length) {
+        return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+      }
+      matchedOtp = otp.rows[0];
+    } else {
+      logger.warn('Password reset OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', { phone });
     }
 
     const userResult = await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
@@ -380,7 +423,9 @@ router.post('/reset-password', async (req, res, next) => {
 
     const newHash = await bcrypt.hash(newPassword, 10);
 
-    await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otp.rows[0].id]);
+    if (matchedOtp?.id) {
+      await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [matchedOtp.id]);
+    }
     await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE phone = $1', [phone, newHash]);
 
     return res.json({ ok: true, data: { reset: true } });
@@ -410,24 +455,38 @@ router.post('/verify-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'phone is invalid' });
     }
 
-    const otp = await db.query(
-      `SELECT *
-       FROM otps
-       WHERE phone = $1
-         AND code = $2
-         AND purpose = $3
-         AND used = FALSE
-         AND expires_at > NOW()
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [identifier, code, purpose]
-    );
+    const usedOverride = isAdminOtpOverrideMatch({
+      code,
+      channel,
+      identifier
+    });
 
-    if (!otp.rows.length) {
-      return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+    if (!usedOverride) {
+      const otp = await db.query(
+        `SELECT *
+         FROM otps
+         WHERE phone = $1
+           AND code = $2
+           AND purpose = $3
+           AND used = FALSE
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [identifier, code, purpose]
+      );
+
+      if (!otp.rows.length) {
+        return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+      }
+
+      await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otp.rows[0].id]);
+    } else {
+      logger.warn('Auth OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', {
+        channel,
+        purpose,
+        identifier
+      });
     }
-
-    await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otp.rows[0].id]);
     if (channel === 'phone') {
       await db.query('UPDATE users SET phone_verified = TRUE WHERE phone = $1', [identifier]);
     } else {

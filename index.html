@@ -217,6 +217,29 @@
       background: #f0fdf4;
       transform: translateY(-1px);
     }
+    .social-auth-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid #dbe6dc;
+      background: #ffffff;
+      color: #374151;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      transition: all .18s ease;
+    }
+    .social-auth-btn:hover {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #14532d;
+      transform: translateY(-1px);
+    }
+    .social-auth-btn i {
+      font-size: 15px;
+    }
     #page-brokers .listing-map-shell .map-h {
       height: min(56vh, 350px);
     }
@@ -554,15 +577,16 @@
           <div id="brand-subtitle" class="text-xs text-gray-400 -mt-1">UGANDA PROPERTY</div>
         </div>
       </a>
-      <div class="hidden lg:flex items-center gap-1">
-        <a id="nav-sale" onclick="showPage('sale')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
-        <a id="nav-rent" onclick="showPage('rent')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
-        <a id="nav-students" onclick="showPage('students')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
-        <a id="nav-commercial" onclick="showPage('commercial')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
-        <a id="nav-land" onclick="showPage('land')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
-        <a id="nav-brokers" onclick="showPage('brokers')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
-        <a id="nav-mortgage" onclick="showPage('mortgage')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
-        <a id="nav-ai" onclick="showPage('ai-chatbot')" class="nav-item px-3 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
+      <div class="hidden lg:flex items-center gap-0.5">
+        <a id="nav-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
+        <a id="nav-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
+        <a id="nav-students" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
+        <a id="nav-commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
+        <a id="nav-land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
+        <a id="nav-brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
+        <a id="nav-mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
+        <a id="nav-ai" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
+        <a id="nav-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
       </div>
       <div class="flex items-center gap-2">
         <button id="nav-list-btn" onclick="openListPropertyOptions()" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</button>
@@ -578,6 +602,7 @@
       <a id="mnav-brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-ai" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
+      <a id="mnav-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
     </div>
   </nav>
 
@@ -1175,8 +1200,8 @@
   <div id="page-brokers" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-7xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Find your perfect agent</h1>
-        <p class="text-green-200 mt-2 text-sm md:text-base">All agents are certified by the Association of Real Estate Agents Uganda (AREA)</p>
+        <h1 class="text-3xl font-black serif">Find your perfect broker</h1>
+        <p class="text-green-200 mt-2 text-sm md:text-base">All brokers are certified by the Association of Real Estate Agents Uganda (AREA)</p>
       </div>
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8">
@@ -1199,7 +1224,7 @@
               <option value="not_registered">Not Registered</option>
             </select>
             <button onclick="openModal('broker-reg-modal')" class="md:ml-auto shrink-0 bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
-              + Register as Agent
+              + Register as Broker
             </button>
           </div>
           <div id="brokers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
@@ -1384,7 +1409,7 @@
     <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-800 py-10 text-white">
       <div class="max-w-7xl mx-auto px-4">
         <h1 id="ai-page-title" class="text-3xl md:text-4xl font-black serif">Discover our AI Chatbot</h1>
-        <p id="ai-page-sub" class="text-green-100 mt-2 max-w-3xl">Use WhatsApp to list property, search by area, request agent contacts, and receive instant property links in your preferred Ugandan language.</p>
+        <p id="ai-page-sub" class="text-green-100 mt-2 max-w-3xl">Use WhatsApp to list property, search by area, request broker contacts, and receive instant property links in your preferred Ugandan language.</p>
       </div>
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
@@ -1401,7 +1426,7 @@
         </div>
         <div class="bg-white border border-green-100 rounded-2xl p-5">
           <div class="text-3xl mb-2">🧑‍💼</div>
-          <h3 id="ai-card-3-title" class="text-lg font-bold text-gray-900">Find a Verified Agent</h3>
+          <h3 id="ai-card-3-title" class="text-lg font-bold text-gray-900">Find a Verified Broker</h3>
           <p id="ai-card-3-sub" class="text-sm text-gray-600 mt-1">Ask for broker contacts by district, speciality, or language and get options instantly.</p>
         </div>
       </div>
@@ -1415,7 +1440,7 @@
               <span class="text-green-200 text-xs">● online</span>
             </div>
             <div class="chatbot-bubble-wrap">
-              <div class="chatbot-bubble bot"><span id="ai-flow-1">Welcome to makaug. Reply 1 to list, 2 to search, 3 to find an agent.</span><span class="chatbot-time">09:01</span></div>
+              <div class="chatbot-bubble bot"><span id="ai-flow-1">Welcome to makaug. Reply 1 to list, 2 to search, 3 to find a broker.</span><span class="chatbot-time">09:01</span></div>
               <div class="chatbot-bubble user"><span id="ai-flow-2">2 - Search near my location</span><span class="chatbot-time">09:01 ✓✓</span></div>
               <div class="chatbot-bubble bot"><span id="ai-flow-3">Share location and budget. I will send matching listings with links.</span><span class="chatbot-time">09:02</span></div>
               <div class="chatbot-bubble user"><span id="ai-flow-4">Location shared + budget USh 1.5M rent</span><span class="chatbot-time">09:02 ✓✓</span></div>
@@ -1428,12 +1453,84 @@
           <ul class="space-y-3 text-sm text-gray-700">
             <li id="ai-benefit-1" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>List a property with guided prompts and photo checklist.</span></li>
             <li id="ai-benefit-2" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Search properties by district, area, budget, beds, and purpose.</span></li>
-            <li id="ai-benefit-3" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Get direct WhatsApp and call contacts for matching agents.</span></li>
+            <li id="ai-benefit-3" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Get direct WhatsApp and call contacts for matching brokers.</span></li>
             <li id="ai-benefit-4" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Use the chatbot in 7 Ugandan languages with fast replies.</span></li>
           </ul>
           <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold">
             <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
           </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-fraud" class="page">
+    <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-800 py-10 text-white">
+      <div class="max-w-7xl mx-auto px-4">
+        <h1 id="fraud-page-title" class="text-3xl md:text-4xl font-black serif">Fraud Prevention</h1>
+        <p id="fraud-page-sub" class="text-green-100 mt-2 max-w-3xl">
+          We use layered verification, AI checks, and manual moderation to keep makaug safer for buyers, renters, brokers, and property listers.
+        </p>
+      </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="text-3xl mb-2">🪪</div>
+          <h3 id="fraud-card-1-title" class="text-lg font-bold text-gray-900">Identity Verification</h3>
+          <p id="fraud-card-1-sub" class="text-sm text-gray-600 mt-1">OTP + National ID checks before listing submission and publishing review.</p>
+        </div>
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="text-3xl mb-2">🤖</div>
+          <h3 id="fraud-card-2-title" class="text-lg font-bold text-gray-900">AI Fraud Signals</h3>
+          <p id="fraud-card-2-sub" class="text-sm text-gray-600 mt-1">Image duplication checks, suspicious listing patterns, and document anomaly checks.</p>
+        </div>
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="text-3xl mb-2">👀</div>
+          <h3 id="fraud-card-3-title" class="text-lg font-bold text-gray-900">Manual Moderation</h3>
+          <p id="fraud-card-3-sub" class="text-sm text-gray-600 mt-1">Every new listing is reviewed before going live. High-risk entries are escalated.</p>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-6">
+        <div class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 id="fraud-flow-title" class="text-2xl font-bold text-gray-900 mb-4">How our review flow works</h2>
+          <ol class="space-y-3 text-sm text-gray-700">
+            <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">1</span><span id="fraud-flow-step-1"><strong>Submit:</strong> Listing details, photos, contact info, and verification data are captured.</span></li>
+            <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">2</span><span id="fraud-flow-step-2"><strong>Automated checks:</strong> We run OTP checks, format checks, risk scoring, and duplication detection.</span></li>
+            <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">3</span><span id="fraud-flow-step-3"><strong>Team moderation:</strong> High-confidence listings are approved; suspicious ones are held or rejected.</span></li>
+            <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">4</span><span id="fraud-flow-step-4"><strong>Decision + notify:</strong> Lister receives status and reason. Approved listings publish to public pages.</span></li>
+          </ol>
+          <div id="fraud-law-note" class="mt-4 p-3 rounded-xl bg-green-50 border border-green-100 text-xs text-green-900">
+            We cooperate with lawful authority requests under Ugandan law where fraud, forgery, or impersonation is suspected.
+          </div>
+        </div>
+
+        <div class="bg-white border border-green-100 rounded-2xl p-6">
+          <h2 id="fraud-tips-title" class="text-2xl font-bold text-gray-900 mb-4">Safety tips for users</h2>
+          <ul class="space-y-3 text-sm text-gray-700">
+            <li class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span id="fraud-tip-1">Never pay before viewing a property physically.</span></li>
+            <li class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span id="fraud-tip-2">Verify ownership/title details before any deposit.</span></li>
+            <li class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span id="fraud-tip-3">Use registered brokers for high-value transactions.</span></li>
+            <li class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span id="fraud-tip-4">Report suspicious listings immediately with screenshots.</span></li>
+          </ul>
+          <div class="grid sm:grid-cols-2 gap-3 mt-5">
+            <button id="fraud-report-btn" onclick="openModal('report-modal')" class="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-lg text-sm font-semibold">Report a Listing</button>
+            <a id="fraud-wa-btn" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+report+a+suspicious+listing" target="_blank" class="w-full inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold">
+              <i class="fab fa-whatsapp"></i> WhatsApp Fraud Team
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-green-100 rounded-2xl p-6">
+        <h2 id="fraud-monitor-title" class="text-2xl font-bold text-gray-900 mb-4">What we monitor continuously</h2>
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+          <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-1-title" class="text-gray-900">Listing quality</strong><p id="fraud-monitor-1-sub" class="text-gray-600 mt-1">Misleading titles, fake pricing, copied descriptions.</p></div>
+          <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-2-title" class="text-gray-900">Media checks</strong><p id="fraud-monitor-2-sub" class="text-gray-600 mt-1">Stolen images, repeated images, poor or suspicious uploads.</p></div>
+          <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-3-title" class="text-gray-900">Identity integrity</strong><p id="fraud-monitor-3-sub" class="text-gray-600 mt-1">NIN format mismatch, OTP mismatch, impossible contact patterns.</p></div>
+          <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-4-title" class="text-gray-900">Behavior risk</strong><p id="fraud-monitor-4-sub" class="text-gray-600 mt-1">Bulk spam, repeated complaint signals, repeat fraud patterns.</p></div>
         </div>
       </div>
     </div>
@@ -1697,10 +1794,15 @@
             <label id="lp-upload-label" class="block text-sm font-semibold text-gray-700 mb-2">Upload Photos (min 5, max 20) *</label>
             <label id="lp-photo-dropzone" class="block border-2 border-dashed border-green-100 rounded-2xl p-8 text-center cursor-pointer hover:bg-green-50 transition-colors">
               <input id="lp-photo-files" type="file" accept="image/*" multiple class="hidden" onchange="handleLpPhotoSelection(event)">
+              <input id="lp-photo-file-single" type="file" accept="image/*" class="hidden" onchange="handleLpPhotoSelection(event)">
               <div class="text-4xl mb-3">📷</div>
               <p class="text-xl md:text-2xl font-bold text-gray-800">Drag & Drop Photos or Click to Browse</p>
               <p class="text-sm text-gray-500 mt-1">JPG, PNG or WEBP - up to 10MB each</p>
             </label>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" onclick="triggerLpSinglePhotoPicker()" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Add one photo</button>
+              <button type="button" onclick="document.getElementById('lp-photo-files')?.click()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Add multiple photos</button>
+            </div>
           </div>
 
           <div id="lp-photo-file-list" class="mt-4 text-sm text-gray-700"></div>
@@ -1744,7 +1846,7 @@
                 <input id="lp-verify-otp-code" class="flex-1 border border-green-100 rounded-lg px-3 py-2 text-sm" placeholder="Enter 6-digit OTP">
                 <button id="lp-verify-otp-btn" type="button" onclick="verifyListingOtp()" class="bg-green-700 text-white hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold">Verify OTP</button>
               </div>
-              <p id="lp-otp-status" class="text-xs text-gray-500 mt-1">Phone OTP not verified yet.</p>
+              <p id="lp-otp-status" class="text-xs text-gray-500 mt-1">Phone OTP pending verification.</p>
             </div>
             <div>
               <label id="lp-contact-pref-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Best Contact Method *</label>
@@ -1760,7 +1862,7 @@
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
-              <p class="text-xs text-gray-500 mt-1">A field agent is someone who helped you fill this form.</p>
+              <p class="text-xs text-gray-500 mt-1">A Field Agent is someone who helped you fill this form.</p>
             </div>
             <div>
               <label id="lp-verify-email-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Email *</label>
@@ -1770,7 +1872,7 @@
             <div id="lp-field-agent-id-wrap" class="hidden">
               <label class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
               <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-1042">
-              <p class="text-xs text-gray-500 mt-1">Only fill this if a field agent assisted you.</p>
+              <p class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
             </div>
             <div>
               <label id="lp-verify-nin-label" class="block text-sm font-semibold text-gray-700 mb-1.5">National ID Number (NIN) *</label>
@@ -1929,7 +2031,7 @@
               <select id="account-role" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
                 <option value="buyer_renter">Buyer / Renter</option>
                 <option value="property_owner">Property Owner</option>
-                <option value="agent_broker">Agent / Broker</option>
+                <option value="agent_broker">Broker</option>
               </select>
             </div>
             <div>
@@ -2018,23 +2120,23 @@
   <div id="page-agent-dashboard" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Agent Dashboard</h1>
+        <h1 class="text-3xl font-black serif">Broker Dashboard</h1>
         <p class="text-green-200 mt-1">Manage listings and monitor engagement performance</p>
       </div>
     </div>
     <div class="max-w-6xl mx-auto px-4 py-8">
       <div id="agent-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
         <div class="text-4xl mb-3">🧑‍💼</div>
-        <h2 class="text-xl font-bold text-gray-800 mb-2">Agent sign in required</h2>
-        <p class="text-sm text-gray-500 mb-5">Sign in as an agent to access listing tools and analytics.</p>
-        <button onclick="openAuthSignIn('agent')" class="bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Agent</button>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Broker sign in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Sign in as a broker to access listing tools and analytics.</p>
+        <button onclick="openAuthSignIn('agent')" class="bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Broker</button>
       </div>
 
       <div id="agent-body" class="hidden space-y-6">
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-center gap-4 flex-wrap">
             <div>
-              <h2 id="agent-dashboard-name" class="text-2xl font-black text-gray-900">Agent Profile</h2>
+              <h2 id="agent-dashboard-name" class="text-2xl font-black text-gray-900">Broker Profile</h2>
               <p id="agent-dashboard-status" class="text-sm text-gray-500 mt-1">Status information</p>
             </div>
             <div class="flex gap-2">
@@ -2075,15 +2177,15 @@
   <div id="page-field-dashboard" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Field Agent Dashboard</h1>
+        <h1 class="text-3xl font-black serif">Field Broker Dashboard</h1>
         <p class="text-green-200 mt-1">Track sourced listings, approvals, rejections, and weekly payout status</p>
       </div>
     </div>
     <div class="max-w-6xl mx-auto px-4 py-8">
       <div id="field-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
         <div class="text-4xl mb-3">🧭</div>
-        <h2 class="text-xl font-bold text-gray-800 mb-2">Field agent sign in required</h2>
-        <p class="text-sm text-gray-500 mb-5">Sign in as a field agent to track onboarding and listing conversion performance.</p>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Field Agent sign-in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Sign in as a Field Agent to track onboarding and listing conversion performance.</p>
         <button onclick="openAuthSignIn('field_agent')" class="bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Field Agent</button>
       </div>
 
@@ -2091,7 +2193,7 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-center gap-4 flex-wrap">
             <div>
-              <h2 id="field-dashboard-name" class="text-2xl font-black text-gray-900">Field Agent Profile</h2>
+              <h2 id="field-dashboard-name" class="text-2xl font-black text-gray-900">Field Broker Profile</h2>
               <p id="field-dashboard-status" class="text-sm text-gray-500 mt-1">Status information</p>
             </div>
             <div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
@@ -2221,7 +2323,7 @@
             <div id="admin-stat-deleted" class="text-3xl font-black text-gray-700 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Agents / Brokers</div>
+            <div class="text-sm text-gray-500">Brokers</div>
             <div id="admin-stat-agents" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -2245,7 +2347,7 @@
             <div id="admin-stat-private" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Agent Listings</div>
+            <div class="text-sm text-gray-500">Broker Listings</div>
             <div id="admin-stat-agent-listings" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -2269,11 +2371,11 @@
             <div id="admin-stat-save-view-ratio" class="text-3xl font-black text-gray-900 mt-1">0%</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Registered Agents</div>
+            <div class="text-sm text-gray-500">Registered Brokers</div>
             <div id="admin-stat-registered-agents" class="text-3xl font-black text-green-700 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Not Registered Agents</div>
+            <div class="text-sm text-gray-500">Not Registered Brokers</div>
             <div id="admin-stat-not-registered-agents" class="text-3xl font-black text-amber-600 mt-1">0</div>
           </div>
         </div>
@@ -2313,7 +2415,7 @@
             <div id="admin-recent-users" class="space-y-2 text-sm text-gray-700"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Agents</h3>
+            <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Brokers</h3>
             <div id="admin-recent-agents" class="space-y-2 text-sm text-gray-700"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -2344,7 +2446,7 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="text-sm text-gray-500 mb-1">Model</div>
           <div class="text-2xl font-black text-gray-900">100% Free Listing</div>
-          <p class="text-sm text-gray-600 mt-2">Owners and agents can publish without listing fees.</p>
+          <p class="text-sm text-gray-600 mt-2">Owners and brokers can publish without listing fees.</p>
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="text-sm text-gray-500 mb-1">Access</div>
@@ -2357,7 +2459,7 @@
         <h2 class="text-2xl font-bold text-gray-900 mb-3 serif">Our Mission</h2>
         <p class="mb-3">
           makaug.com exists to modernize Uganda's property marketplace by improving listing quality, reducing fraud risk, and
-          making verified property information easier to access for buyers, renters, investors, and agents.
+          making verified property information easier to access for buyers, renters, investors, and brokers.
         </p>
         <p class="mb-3">
           We combine local market knowledge with practical digital tools: map-based search, district-level filters, and
@@ -2373,8 +2475,8 @@
           <h3 class="text-xl font-bold text-gray-900 mb-3">What We Provide</h3>
           <ul class="list-disc pl-5 space-y-2 text-sm leading-relaxed">
             <li>Property discovery for sale, rent, student housing, commercial units, and land.</li>
-            <li>Direct contact with owners or AREA-verified agents.</li>
-            <li>Clear listing status indicators (private listing vs agent listing).</li>
+            <li>Direct contact with owners or AREA-verified brokers.</li>
+            <li>Clear listing status indicators (private listing vs broker listing).</li>
             <li>Structured listing forms designed around Ugandan market realities.</li>
             <li>Support channels via phone, email, and WhatsApp.</li>
           </ul>
@@ -2451,8 +2553,8 @@
           <div class="space-y-2 text-sm text-green-200">
             <a onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
             <a onclick="openPageMod('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
-            <a onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find an Agent</a>
-            <a onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Agent</a>
+            <a onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
+            <a onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
             <a onclick="openPageMod('advertise')" class="block cursor-pointer hover:text-white">Advertise with Us</a>
             <a onclick="openPageMod('careers')" class="block cursor-pointer hover:text-white">Careers</a>
           </div>
@@ -2579,8 +2681,8 @@
         <label class="block text-sm font-medium text-gray-800 mb-2">Sign in as</label>
         <div class="bg-gray-100 rounded-xl p-1 flex gap-1 mb-4">
           <button id="auth-audience-finder" title="Property Finder: someone searching for properties to buy or rent." type="button" onclick="setAuthSignInAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
-          <button id="auth-audience-agent" title="Agent: a property professional who lists and manages properties." type="button" onclick="setAuthSignInAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Agent</button>
-          <button id="auth-audience-field" title="Field Agent: signs up owners/agents/properties and tracks approved output." type="button" onclick="setAuthSignInAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-audience-agent" title="Broker: a property professional who lists and manages properties." type="button" onclick="setAuthSignInAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
+          <button id="auth-audience-field" title="Field Agent: signs up owners/brokers/properties and tracks approved output." type="button" onclick="setAuthSignInAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
           <button id="auth-audience-admin" data-private-admin="1" title="Admin: internal control access for approvals, moderation, and platform operations." type="button" onclick="setAuthSignInAudience('admin')" class="hidden flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Admin</button>
         </div>
         <p id="auth-audience-help" class="text-xs text-gray-500 mb-4">
@@ -2596,7 +2698,7 @@
             <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. EMP001">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-800 mb-2">Agent Number</label>
+            <label class="block text-sm font-medium text-gray-800 mb-2">Broker Number</label>
             <input id="auth-field-agent-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-101">
           </div>
         </div>
@@ -2611,19 +2713,16 @@
 
         <button id="auth-signin-btn" onclick="submitAuthSignIn()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold mb-5">Sign In</button>
 
-        <div class="grid sm:grid-cols-[1fr,140px] gap-2 mb-4">
-          <input id="auth-otp-identifier" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="+256 7XX XXX XXX or your@email.com">
-          <select id="auth-otp-channel" onchange="setAuthOtpChannel(this.value)" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white">
-            <option value="phone">OTP via Phone</option>
-            <option value="email">OTP via Email</option>
-          </select>
-        </div>
-        <button id="auth-otp-btn" onclick="submitAuthOtpStart()" class="w-full border border-green-300 text-green-800 hover:bg-green-50 py-2.5 rounded-xl font-semibold text-sm mb-4">📱 Sign in with OTP</button>
-
         <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Google</button>
-          <button onclick="startSocialAuth('facebook')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Facebook</button>
-          <button onclick="startSocialAuth('apple')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Apple</button>
+          <button onclick="startSocialAuth('google')" class="social-auth-btn">
+            <i class="fab fa-google text-red-500"></i><span>Google</span>
+          </button>
+          <button onclick="startSocialAuth('facebook')" class="social-auth-btn">
+            <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
+          </button>
+          <button onclick="startSocialAuth('apple')" class="social-auth-btn">
+            <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
+          </button>
         </div>
         <button id="auth-forgot-btn" onclick="startForgotPasswordFlow()" class="w-full mt-3 text-sm text-green-700 hover:text-green-800 font-semibold">Forgot password?</button>
       </div>
@@ -2632,8 +2731,8 @@
         <label class="block text-sm font-medium text-gray-800 mb-2">Create account as</label>
         <div class="bg-gray-100 rounded-xl p-1 flex gap-1 mb-3">
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
-          <button id="auth-signup-audience-agent" title="Create account to list properties as an agent." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Agent</button>
-          <button id="auth-signup-audience-field" title="Field agents are onboarded manually by operations." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
+          <button id="auth-signup-audience-field" title="Field Agents are onboarded manually by operations." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
         </div>
         <p id="auth-signup-help" class="text-xs text-gray-500 mb-4">
           Property Finder: create an account to save properties, get alerts, and track searches.
@@ -2641,9 +2740,15 @@
         <input id="auth-signup-role" type="hidden" value="Buyer / Renter">
 
         <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Continue with Google</button>
-          <button onclick="startSocialAuth('facebook')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Continue with Facebook</button>
-          <button onclick="startSocialAuth('apple')" class="border border-green-100 text-gray-700 py-2.5 rounded-xl text-sm font-medium bg-white hover:bg-green-50">Continue with Apple</button>
+          <button onclick="startSocialAuth('google')" class="social-auth-btn">
+            <i class="fab fa-google text-red-500"></i><span>Google</span>
+          </button>
+          <button onclick="startSocialAuth('facebook')" class="social-auth-btn">
+            <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
+          </button>
+          <button onclick="startSocialAuth('apple')" class="social-auth-btn">
+            <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
+          </button>
         </div>
 
         <div id="auth-field-signup-note" class="hidden mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
@@ -2656,18 +2761,18 @@
 
         <div id="auth-signup-form-wrap">
           <div id="auth-signup-agent-registration-wrap" class="hidden mb-4 rounded-xl border border-green-100 bg-green-50 p-3">
-            <label class="block text-sm font-semibold text-gray-800 mb-2">Agent registration status *</label>
+            <label class="block text-sm font-semibold text-gray-800 mb-2">Broker registration status *</label>
             <div class="grid sm:grid-cols-2 gap-2">
               <label class="border border-green-200 rounded-lg px-3 py-2 bg-white text-sm flex items-start gap-2 cursor-pointer">
                 <input type="radio" name="auth-agent-registration-status" value="registered" checked onchange="syncAuthAgentSignupForm()">
-                <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">Up to 20 listings</span></span>
+                <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">AREA verified profile</span></span>
               </label>
               <label class="border border-green-200 rounded-lg px-3 py-2 bg-white text-sm flex items-start gap-2 cursor-pointer">
                 <input type="radio" name="auth-agent-registration-status" value="not_registered" onchange="syncAuthAgentSignupForm()">
-                <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Up to 5 listings</span></span>
+                <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Can be reviewed and upgraded later</span></span>
               </label>
             </div>
-            <div id="auth-signup-agent-note" class="mt-2 text-xs text-green-700">Registered agents can show as Registered and list up to 20 properties.</div>
+            <div id="auth-signup-agent-note" class="mt-2 text-xs text-green-700">Registered profiles appear as Registered after AREA checks are complete.</div>
             <div id="auth-signup-agent-licence-wrap" class="mt-3">
               <label class="block text-sm font-medium text-gray-800 mb-1.5">AREA Licence Number</label>
               <input id="auth-signup-agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="e.g. AREA/2024/XXXX">
@@ -2755,31 +2860,31 @@
   <div id="broker-reg-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:640px">
       <button onclick="closeModal('broker-reg-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
-      <h2 class="text-2xl font-bold text-gray-800 serif">Register as an Agent</h2>
+      <h2 class="text-2xl font-bold text-gray-800 serif">Register as a Broker</h2>
       <p class="text-sm text-gray-500 mt-1 mb-5">Choose your registration path below. The form changes based on whether you are already registered with <strong>AREA Uganda</strong>.</p>
 
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-800 mb-2">Agent Registration Status *</label>
+          <label class="block text-sm font-medium text-gray-800 mb-2">Broker Registration Status *</label>
           <div class="grid sm:grid-cols-2 gap-2">
             <label class="border border-green-100 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 cursor-pointer">
               <input type="radio" name="agent-registration-status" value="registered" checked onchange="syncAgentRegistrationForm()">
-              <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">Limit: up to 20 listings</span></span>
+              <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">AREA verified profile</span></span>
             </label>
             <label class="border border-green-100 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 cursor-pointer">
               <input type="radio" name="agent-registration-status" value="not_registered" onchange="syncAgentRegistrationForm()">
-              <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Limit: up to 5 listings</span></span>
+              <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Can be reviewed and upgraded later</span></span>
             </label>
           </div>
-          <p id="agent-limit-note" class="text-xs text-green-700 mt-2">This account will be tagged as Registered and can list up to 20 properties.</p>
+          <p id="agent-status-note" class="text-xs text-green-700 mt-2">This broker profile will be reviewed before approval.</p>
         </div>
 
         <div id="agent-registered-note" class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ Registered agents must provide a valid AREA licence and certificate. Registered profiles can list up to <strong>20 properties</strong> and appear as <strong>Registered</strong>.
+          ⚠️ Registered brokers must provide a valid AREA licence and certificate. Approved profiles appear as <strong>Registered</strong>.
         </div>
 
         <div id="agent-not-registered-note" class="hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
-          ℹ️ You can continue without AREA documents for now. Not registered profiles can list up to <strong>5 properties</strong> and appear as <strong>Not Registered</strong>. You can upgrade to Registered later.
+          ℹ️ You can continue without AREA documents for now. Profiles appear as <strong>Not Registered</strong> until verification is completed. You can upgrade to Registered later.
         </div>
 
         <div>
@@ -2800,7 +2905,8 @@
         <div class="grid sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-gray-800 mb-2">Phone Number *</label>
-            <input id="agent-phone" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+            <input id="agent-phone" oninput="onAgentPhoneInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+            <p id="agent-phone-msg" class="text-xs text-gray-500 mt-1">Use Uganda format e.g. +256770123456</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-800 mb-2">WhatsApp Number</label>
@@ -2810,7 +2916,27 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-800 mb-2">Email Address *</label>
-          <input id="agent-email" type="email" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="your@email.com">
+          <input id="agent-email" type="email" oninput="onAgentEmailInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="your@email.com">
+          <p id="agent-email-msg" class="text-xs text-gray-500 mt-1">Enter a valid email address for OTP and updates.</p>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-800 mb-2">Receive OTP via *</label>
+            <select id="agent-otp-channel" onchange="setAgentOtpChannel(this.value)" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+              <option value="phone">Phone</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm font-medium text-gray-800 mb-2">Verify Contact OTP *</label>
+            <div class="flex gap-2">
+              <button id="agent-send-otp-btn" type="button" onclick="requestAgentOtp()" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Send OTP</button>
+              <input id="agent-otp-code" class="flex-1 border border-green-100 rounded-lg px-3 py-2 text-sm" placeholder="Enter 6-digit OTP">
+              <button id="agent-verify-otp-btn" type="button" onclick="verifyAgentOtp()" class="bg-green-700 text-white hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold">Verify OTP</button>
+            </div>
+            <p id="agent-otp-status" class="text-xs text-gray-500 mt-1">Phone OTP pending verification.</p>
+          </div>
         </div>
 
         <div>
@@ -2824,7 +2950,7 @@
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
-          <p class="text-xs text-gray-500 mt-1">If a field agent helped with this registration, choose Yes and enter their ID.</p>
+          <p class="text-xs text-gray-500 mt-1">If a Field Agent helped with this registration, choose Yes and enter their ID.</p>
           <div id="agent-field-id-wrap" class="hidden mt-2">
             <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-1042)">
           </div>
@@ -2841,7 +2967,8 @@
 
         <div>
           <label class="block text-sm font-medium text-gray-800 mb-2">National ID Number *</label>
-          <input id="agent-nin" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="NIN — e.g. CM9XXXXXXXXXXX">
+          <input id="agent-nin" oninput="onAgentNinInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="NIN — e.g. CMXXXXXXXXXXXX">
+          <p id="agent-nin-msg" class="text-xs text-gray-500 mt-1">Format check enabled for Uganda NIN style (CM/CF...).</p>
         </div>
 
         <button id="agent-submit-btn" onclick="submitAgentApplication()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Application</button>
@@ -2977,7 +3104,6 @@
         sales: 47,
         emoji: "👔",
         registration_status: "registered",
-        listing_limit: 20,
         experience: "10 years",
         licence: "AREA/UG/2024/0051",
         languages: ["English", "Luganda"],
@@ -2997,7 +3123,6 @@
         sales: 31,
         emoji: "👩",
         registration_status: "registered",
-        listing_limit: 20,
         experience: "8 years",
         licence: "AREA/UG/2024/0084",
         languages: ["English", "Luganda", "Swahili"],
@@ -3017,7 +3142,6 @@
         sales: 22,
         emoji: "👨",
         registration_status: "not_registered",
-        listing_limit: 5,
         experience: "9 years",
         licence: "AREA/UG/2024/0102",
         languages: ["English", "Acholi"],
@@ -3037,7 +3161,6 @@
         sales: 29,
         emoji: "👱‍♀️",
         registration_status: "registered",
-        listing_limit: 20,
         experience: "7 years",
         licence: "AREA/UG/2024/0118",
         languages: ["English", "Runyankole"],
@@ -3141,7 +3264,6 @@
     let authState = { token: null, user: null };
     let authSignInAudience = "finder";
     let authSignUpAudience = "finder";
-    let authOtpChannel = "phone";
     let authSignUpOtpChannel = "phone";
     let adminApiKey = "";
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -3172,6 +3294,10 @@
     let lpListingOtpVerifiedPhone = "";
     let lpListingOtpVerifiedEmail = "";
     let lpListingOtpChannel = "phone";
+    let agentRegistrationOtpToken = "";
+    let agentOtpVerifiedPhone = "";
+    let agentOtpVerifiedEmail = "";
+    let agentOtpChannel = "phone";
     let lpLastHierarchySignature = "";
     let lpLastAddressValue = "";
     let lpAreaManualOverride = false;
@@ -3189,7 +3315,7 @@
       sale: {
         inputPlaceholder: "City, area",
         options: [
-          { value: "", label: "Beds & Baths" },
+          { value: "", label: "Bedrooms" },
           { value: "1", label: "1+ Bed" },
           { value: "2", label: "2+ Beds" },
           { value: "3", label: "3+ Beds" },
@@ -3200,7 +3326,7 @@
       rent: {
         inputPlaceholder: "Area",
         options: [
-          { value: "", label: "Beds & Baths" },
+          { value: "", label: "Bedrooms" },
           { value: "1", label: "1+ Bed" },
           { value: "2", label: "2+ Beds" },
           { value: "3", label: "3+ Beds" },
@@ -3260,6 +3386,7 @@
         navBrokers: "Find Brokers",
         navMortgage: "Mortgage Finder",
         navAI: "Discover AI Chatbot",
+        navFraud: "Fraud",
         heroBadge: "Uganda's #1 Free Property Platform",
         heroTitleHtml: "Discover your perfect <span class=\"text-green-300\">maka</span>",
         heroSubtitle: "Your home search starts here. Find properties to rent, buy or invest.",
@@ -3278,7 +3405,7 @@
         pageStudents: "Find your perfect student accommodation",
         pageCommercial: "Find your perfect commercial property",
         pageLand: "Find your perfect land opportunity",
-        pageBrokers: "Find your perfect agent",
+        pageBrokers: "Find your perfect broker",
         pageMortgage: "Mortgage Finder",
         pageAI: "Discover our AI Chatbot",
         pageList: "List Your Property - Free",
@@ -3298,7 +3425,7 @@
         phStudents: "University area",
         phCommercial: "Area",
         phLand: "Area",
-        ctxBedsBaths: "Beds & Baths",
+        ctxBedrooms: "Bedrooms",
         ctx1Bed: "1+ Bed",
         ctx2Beds: "2+ Beds",
         ctx3Beds: "3+ Beds",
@@ -3322,7 +3449,7 @@
         badgeStudent: "Student",
         badgeCommercial: "Commercial",
         badgeLand: "Land",
-        listingAgent: "Agent Listed",
+        listingAgent: "Broker Listed",
         listingPrivate: "Private Listed",
         listingRegistered: "Registered",
         listingNotRegistered: "Not Registered",
@@ -3340,9 +3467,10 @@
         navStudents: "Abayizi",
         navCommercial: "Byobusuubuzi",
         navLand: "Ettaka",
-        navBrokers: "Noonya Agent",
+        navBrokers: "Noonya Broker",
         navMortgage: "Noonya Mortgage",
         navAI: "Noonya AI Chatbot",
+        navFraud: "Fraud",
         heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
         heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
         heroSubtitle: "Wano we watandikira okunoonya ennyumba y'oyagala.",
@@ -3355,13 +3483,13 @@
         heroSearch: "Noonya",
         homeFeatured: "Property Ezitwaliridde",
         homeMap: "Noonya ku Maapu",
-        homeBrokers: "Agent Abalondedwa",
+        homeBrokers: "Broker Abalondedwa",
         pageSale: "Property Ezitundibwa",
         pageRent: "Property Ezibapangisibwa",
         pageStudents: "Noonya obulamu bw'abayizi obutuufu",
         pageCommercial: "Property z'Obusuubuzi",
         pageLand: "Ettaka Eritundibwa oba Okupangisibwa",
-        pageBrokers: "Agent Abakakasiddwa",
+        pageBrokers: "Broker Abakakasiddwa",
         pageMortgage: "Noonya Mortgage",
         pageAI: "Noonya AI Chatbot yaffe",
         pageList: "Teka Property Yo - Bwereere",
@@ -3382,7 +3510,7 @@
         badgeStudent: "Muyizi",
         badgeCommercial: "Busuubuzi",
         badgeLand: "Ettaka",
-        listingAgent: "Eteekeddwako Agent",
+        listingAgent: "Eteekeddwako Broker",
         listingPrivate: "Eteekeddwako Nnyiniyo",
         listingRegistered: "Akwatiddwa",
         listingNotRegistered: "Tannakwatiddwa",
@@ -3403,6 +3531,7 @@
         navBrokers: "Tafuta Wakala",
         navMortgage: "Tafuta Rehani",
         navAI: "Gundua AI Chatbot",
+        navFraud: "Fraud",
         heroBadge: "Jukwaa la bure la mali Uganda",
         heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
         heroSubtitle: "Utafutaji wako wa nyumba unaanzia hapa.",
@@ -3442,24 +3571,424 @@
         badgeStudent: "Mwanafunzi",
         badgeCommercial: "Biashara",
         badgeLand: "Ardhi",
-        listingAgent: "Imeorodheshwa na Wakala",
+        listingAgent: "Imeorodheshwa na Broker",
         listingPrivate: "Imeorodheshwa na Mmiliki",
         listingRegistered: "Amesajiliwa",
         listingNotRegistered: "Hajasajiliwa",
         footerGrowth: "Google Ads iko tayari na SEO indexing imewezeshwa kwa ukuaji.",
         languageSet: "Lugha imewekwa"
       },
-      ac: { navSale: "Tuco", navRent: "Gero", navStudents: "Jo-Yot", navCommercial: "Cwercwiny", navLand: "Lobo", navMortgage: "Mortgage", navAI: "AI Chatbot", pageMortgage: "Mortgage", pageAI: "AI Chatbot", signIn: "Dony", heroSearch: "Yeny", areaOnly: "Kabedo manok", anyUniversity: "Yunivasiti weng", phSale: "Kibuga, kabedo", phRent: "Kabedo", phStudents: "Kabedo pa yunivasiti", phCommercial: "Kabedo", phLand: "Kabedo", listingAgent: "Agent omako", listingPrivate: "Lac ma pe agent", listingRegistered: "Akwannye", listingNotRegistered: "Pe akwannye", languageSet: "Dhok oketo" },
-      ny: { navSale: "Kutunda", navRent: "Kupangisa", navStudents: "Abanyeshomesa", navCommercial: "By'obusuubuzi", navLand: "Eitaka", navMortgage: "Mortgage", navAI: "AI Chatbot", pageMortgage: "Mortgage", pageAI: "AI Chatbot", signIn: "Ingira", heroSearch: "Shanga", areaOnly: "Aho honyine", anyUniversity: "Yunivasite yona", phSale: "Ekibuga, ekitundu", phRent: "Ekitundu", phStudents: "Ekitundu kya yunivasite", phCommercial: "Ekitundu", phLand: "Ekitundu", listingAgent: "Bya agent", listingPrivate: "Bya nnyiniyo", listingRegistered: "Ari omwandikisi", listingNotRegistered: "Tari mwandikisi", languageSet: "Orurimi rwahinduka" },
-      rn: { navSale: "Kugurisha", navRent: "Kupangisha", navStudents: "Abanyeshuri", navCommercial: "By'ubucuruzi", navLand: "Itaka", navMortgage: "Mortgage", navAI: "AI Chatbot", pageMortgage: "Mortgage", pageAI: "AI Chatbot", signIn: "Injira", heroSearch: "Shaka", areaOnly: "Akarere aka gusa", anyUniversity: "Kaminuza yose", phSale: "Umujyi, akarere", phRent: "Akarere", phStudents: "Akarere ka kaminuza", phCommercial: "Akarere", phLand: "Akarere", listingAgent: "Byashyizweho na agent", listingPrivate: "Byashyizweho na nyirabyo", listingRegistered: "Yiyandikishije", listingNotRegistered: "Ntiyiyandikishije", languageSet: "Ururimi rwahinduwe" },
-      sm: { navSale: "Gutunda", navRent: "Kupangisa", navStudents: "Abayizi", navCommercial: "Byobusuubuzi", navLand: "Ettaka", navMortgage: "Mortgage", navAI: "AI Chatbot", pageMortgage: "Mortgage", pageAI: "AI Chatbot", signIn: "Yingira", heroSearch: "Noonya", areaOnly: "Ekitundu kino kyoka", anyUniversity: "Yunivasite yonna", phSale: "Ekibuga, ekitundu", phRent: "Ekitundu", phStudents: "Ekitundu kya yunivasite", phCommercial: "Ekitundu", phLand: "Ekitundu", listingAgent: "Bya agent", listingPrivate: "Bya nnyini", listingRegistered: "Awandiikiddwa", listingNotRegistered: "Tawandiikiddwa", languageSet: "Olulimi lulondeddwa" }
+      ac: {
+        navSale: "Tuco",
+        navRent: "Gero",
+        navStudents: "Jo-Yot",
+        navCommercial: "Cwercwiny",
+        navLand: "Lobo",
+        navBrokers: "Nong Broker",
+        navMortgage: "Mortgage",
+        navAI: "AI Chatbot",
+        navFraud: "Fraud",
+        pageBrokers: "Nong broker ma ber",
+        pageMortgage: "Mortgage",
+        pageAI: "AI Chatbot",
+        signIn: "Dony",
+        heroBadge: "Uganda's #1 free property platform",
+        heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
+        heroSubtitle: "Ka i cako nongo gang ma imito ka.",
+        heroSearch: "Yeny",
+        langBanner: "Tii ki makaug i lok 7 me Uganda",
+        areaOnly: "Kabedo manok",
+        anyUniversity: "Yunivasiti weng",
+        phSale: "Kibuga, kabedo",
+        phRent: "Kabedo",
+        phStudents: "Kabedo pa yunivasiti",
+        phCommercial: "Kabedo",
+        phLand: "Kabedo",
+        listingAgent: "Broker omako",
+        listingPrivate: "Lac ma pe broker",
+        listingRegistered: "Akwannye",
+        listingNotRegistered: "Pe akwannye",
+        languageSet: "Dhok oketo"
+      },
+      ny: {
+        navSale: "Kutunda",
+        navRent: "Kupangisa",
+        navStudents: "Abanyeshomesa",
+        navCommercial: "By'obusuubuzi",
+        navLand: "Eitaka",
+        navBrokers: "Shanga Broker",
+        navMortgage: "Mortgage",
+        navAI: "AI Chatbot",
+        navFraud: "Fraud",
+        pageBrokers: "Shanga broker orikuhika",
+        pageMortgage: "Mortgage",
+        pageAI: "AI Chatbot",
+        signIn: "Ingira",
+        heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
+        heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
+        heroSubtitle: "Aha niho otondikirira kunoonya enju y'oyenda.",
+        heroSearch: "Shanga",
+        langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
+        areaOnly: "Aho honyine",
+        anyUniversity: "Yunivasite yona",
+        phSale: "Ekibuga, ekitundu",
+        phRent: "Ekitundu",
+        phStudents: "Ekitundu kya yunivasite",
+        phCommercial: "Ekitundu",
+        phLand: "Ekitundu",
+        listingAgent: "Bya broker",
+        listingPrivate: "Bya nnyiniyo",
+        listingRegistered: "Ari omwandikisi",
+        listingNotRegistered: "Tari mwandikisi",
+        languageSet: "Orurimi rwahinduka"
+      },
+      rn: {
+        navSale: "Kugurisha",
+        navRent: "Kupangisha",
+        navStudents: "Abanyeshuri",
+        navCommercial: "By'ubucuruzi",
+        navLand: "Itaka",
+        navBrokers: "Shaka Broker",
+        navMortgage: "Mortgage",
+        navAI: "AI Chatbot",
+        navFraud: "Fraud",
+        pageBrokers: "Shaka broker yawe erikuhika",
+        pageMortgage: "Mortgage",
+        pageAI: "AI Chatbot",
+        signIn: "Injira",
+        heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
+        heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
+        heroSubtitle: "Okuhondera enju yawe kutandikira hanu.",
+        heroSearch: "Shaka",
+        langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
+        areaOnly: "Akarere aka gusa",
+        anyUniversity: "Kaminuza yose",
+        phSale: "Omujyi, akarere",
+        phRent: "Akarere",
+        phStudents: "Akarere ka kaminuza",
+        phCommercial: "Akarere",
+        phLand: "Akarere",
+        listingAgent: "Byashyizweho na broker",
+        listingPrivate: "Byashyizweho na nyirabyo",
+        listingRegistered: "Yiyandikishije",
+        listingNotRegistered: "Ntiyiyandikishije",
+        languageSet: "Orurimi rwahindurwa"
+      },
+      sm: {
+        navSale: "Kutunda",
+        navRent: "Kukodesa",
+        navStudents: "Abaisomesa",
+        navCommercial: "Bya busubuzi",
+        navLand: "Itaka",
+        navBrokers: "Noonia Broker",
+        navMortgage: "Mortgage",
+        navAI: "AI Chatbot",
+        navFraud: "Fraud",
+        pageBrokers: "Noonia broker yo atuufu",
+        pageMortgage: "Mortgage",
+        pageAI: "AI Chatbot",
+        signIn: "Yingira",
+        heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
+        heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
+        heroSubtitle: "Wano niwo otandikira okunoonia enyumba gy'oyagala.",
+        heroSearch: "Noonia",
+        langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
+        areaOnly: "Ekitundu kino kyonka",
+        anyUniversity: "Yunivasite yonna",
+        phSale: "Ekibuga, ekitundu",
+        phRent: "Ekitundu",
+        phStudents: "Ekitundu kya yunivasite",
+        phCommercial: "Ekitundu",
+        phLand: "Ekitundu",
+        listingAgent: "Byateekebwawo na broker",
+        listingPrivate: "Byateekebwawo na nnyini",
+        listingRegistered: "Awandiikiddwa",
+        listingNotRegistered: "Tawandiikiddwa",
+        languageSet: "Olulimi luhindukiddwa"
+      }
     };
 
+    const I18N_UI_HARDENING = {
+      lg: {
+        withinLabel: "Mu",
+        mileUnitSingular: "mailo",
+        mileUnitPlural: "mailo",
+        university: "Yunivasite",
+        ctxBedrooms: "Obisenge",
+        ctx1Bed: "Ekisenge 1+",
+        ctx2Beds: "Ebisenge 2+",
+        ctx3Beds: "Ebisenge 3+",
+        ctx4Beds: "Ebisenge 4+",
+        ctxPropertyType: "Ekika kya Property",
+        ctxOffice: "Ofiisi",
+        ctxRetail: "Dduuka",
+        ctxWarehouse: "Sitowa",
+        ctxShop: "Kiyumba",
+        ctxRoomType: "Ekika ky’Ekisenge",
+        ctxHostel: "Hostel",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Egisangibwa awamu",
+        ctxStudio: "Studio",
+        ctxLandType: "Ekika ky’Ettaka",
+        ctxResidentialPlot: "Plot y’Okubeeramu",
+        ctxCommercialPlot: "Plot y’Obusuubuzi",
+        ctxAgricultural: "Ettaka ly’Obulimi"
+      },
+      sw: {
+        withinLabel: "Ndani ya",
+        mileUnitSingular: "maili",
+        mileUnitPlural: "maili",
+        university: "Chuo Kikuu",
+        ctxBedrooms: "Vyumba vya kulala",
+        ctx1Bed: "Chumba 1+",
+        ctx2Beds: "Vyumba 2+",
+        ctx3Beds: "Vyumba 3+",
+        ctx4Beds: "Vyumba 4+",
+        ctxPropertyType: "Aina ya Mali",
+        ctxOffice: "Ofisi",
+        ctxRetail: "Duka la reja reja",
+        ctxWarehouse: "Ghala",
+        ctxShop: "Duka",
+        ctxRoomType: "Aina ya Chumba",
+        ctxHostel: "Hosteli",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Chumba cha kushirikiana",
+        ctxStudio: "Studio",
+        ctxLandType: "Aina ya Ardhi",
+        ctxResidentialPlot: "Kiwanja cha Makazi",
+        ctxCommercialPlot: "Kiwanja cha Biashara",
+        ctxAgricultural: "Ardhi ya Kilimo"
+      },
+      ac: {
+        siteTitle: "makaug.com | Jami me gangi i Uganda",
+        brandSubtitle: "GANGI ME UGANDA",
+        saved: "Ma iketo",
+        advertiseProperty: "Tito gang",
+        heroRent: "Gero",
+        heroBuy: "Nywola",
+        heroCommercial: "Curu",
+        heroStudents: "Jo yot",
+        heroLand: "Lobo",
+        heroListFree: "Ket gang i nono",
+        homeFeatured: "Gangi ma oyero",
+        homeMap: "Yeny i mapa",
+        homeBrokers: "Broker ma oyero",
+        pageSale: "Gangi me cato",
+        pageRent: "Gangi me gero",
+        pageStudents: "Gang pa jo yot",
+        pageCommercial: "Gang me curu",
+        pageLand: "Lobo me cato onyo gero",
+        pageList: "Ket Gang Meni - Nono",
+        pageAbout: "Lok ikom makaug.com",
+        pageSaved: "Gangi ma iketo",
+        pageAccount: "Akaunti na",
+        langLabel: "Dhok",
+        withinLabel: "I kine",
+        mileUnitSingular: "mile",
+        mileUnitPlural: "miles",
+        university: "Yunivasiti",
+        ctxBedrooms: "Bur ot idwogi",
+        ctx1Bed: "Bur 1+",
+        ctx2Beds: "Bur 2+",
+        ctx3Beds: "Bur 3+",
+        ctx4Beds: "Bur 4+",
+        ctxPropertyType: "Kit me gang",
+        ctxOffice: "Ofi",
+        ctxRetail: "Dukan matidi",
+        ctxWarehouse: "Gala",
+        ctxShop: "Dukan",
+        ctxRoomType: "Kit me oda",
+        ctxHostel: "Hostel",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Oda ma kitiyo kwede kany",
+        ctxStudio: "Studio",
+        ctxLandType: "Kit me lobo",
+        ctxResidentialPlot: "Plot me bedo",
+        ctxCommercialPlot: "Plot me curu",
+        ctxAgricultural: "Lobo me pur",
+        badgeSale: "Tuco",
+        badgeRent: "Gero",
+        badgeStudent: "Joyot",
+        badgeCommercial: "Curu",
+        badgeLand: "Lobo",
+        footerGrowth: "Google Ads ki SEO indexing tye ayera me yubo dong."
+      },
+      ny: {
+        siteTitle: "makaug.com | Pulatifoomu ya Property omu Uganda",
+        brandSubtitle: "PROPERTY ZA UGANDA",
+        saved: "Ebiwatirweho",
+        advertiseProperty: "Tangaza Property",
+        heroRent: "Kupangisa",
+        heroBuy: "Kugura",
+        heroCommercial: "Obusuubuzi",
+        heroStudents: "Abanyeshomesa",
+        heroLand: "Eitaka",
+        heroListFree: "Teka property yawe busha",
+        homeFeatured: "Property z’ahaiguru",
+        homeMap: "Noonya aha Maapu",
+        homeBrokers: "Brokers abakundwa",
+        pageSale: "Property ez’okutunda",
+        pageRent: "Property ez’okupangisa",
+        pageStudents: "Makazi g’abanyeshomesa",
+        pageCommercial: "Property z’obusuubuzi",
+        pageLand: "Eitaka ery’okutunda nari kupangisa",
+        pageList: "Teka Property - Busha",
+        pageAbout: "Ebikwata aha makaug.com",
+        pageSaved: "Property eziwatirweho",
+        pageAccount: "Akaunti yange",
+        langLabel: "Orurimi",
+        withinLabel: "Omu",
+        mileUnitSingular: "mailo",
+        mileUnitPlural: "mailo",
+        university: "Yunivasite",
+        ctxBedrooms: "Ebyumba by’okwebaka",
+        ctx1Bed: "Ekyumba 1+",
+        ctx2Beds: "Ebyumba 2+",
+        ctx3Beds: "Ebyumba 3+",
+        ctx4Beds: "Ebyumba 4+",
+        ctxPropertyType: "Ekika kya Property",
+        ctxOffice: "Ofiisi",
+        ctxRetail: "Duka",
+        ctxWarehouse: "Sitowa",
+        ctxShop: "Shopu",
+        ctxRoomType: "Ekika ky’ehumba",
+        ctxHostel: "Hostel",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Ekyumba ky’okugabana",
+        ctxStudio: "Studio",
+        ctxLandType: "Ekika ky’Eitaka",
+        ctxResidentialPlot: "Plot y’okutuuramu",
+        ctxCommercialPlot: "Plot y’obusuubuzi",
+        ctxAgricultural: "Eitaka ry’obuhingi",
+        badgeSale: "Kutunda",
+        badgeRent: "Kupangisa",
+        badgeStudent: "Omunyeshomesa",
+        badgeCommercial: "Obusuubuzi",
+        badgeLand: "Eitaka",
+        footerGrowth: "Google Ads na SEO indexing byetegire kukuzya omutindo."
+      },
+      rn: {
+        siteTitle: "makaug.com | Omukutu gwa Property omuri Uganda",
+        brandSubtitle: "PROPERTY ZA UGANDA",
+        saved: "Ebiwabikiirwe",
+        advertiseProperty: "Tangaza Property",
+        heroRent: "Kupangisa",
+        heroBuy: "Kugura",
+        heroCommercial: "Obushuubuzi",
+        heroStudents: "Abanyeshuuri",
+        heroLand: "Eitaka",
+        heroListFree: "Taho property yawe busha",
+        homeFeatured: "Property ezahimbisibwe",
+        homeMap: "Shaka aha Mapa",
+        homeBrokers: "Brokers abahimbisibwe",
+        pageSale: "Property ez’okugurishwa",
+        pageRent: "Property ez’okupangisibwa",
+        pageStudents: "Obuturo bw’abanyeshuuri",
+        pageCommercial: "Property z’obushuubuzi",
+        pageLand: "Eitaka ery’okugurishwa nari okupangisibwa",
+        pageList: "Taho Property Yawe - Busha",
+        pageAbout: "Aha makaug.com",
+        pageSaved: "Property eziwabikiirwe",
+        pageAccount: "Akaunti yangye",
+        langLabel: "Orurimi",
+        withinLabel: "Omu",
+        mileUnitSingular: "mailo",
+        mileUnitPlural: "mailo",
+        university: "Kaminuza",
+        ctxBedrooms: "Ebyumba by’okwebaka",
+        ctx1Bed: "Ekyumba 1+",
+        ctx2Beds: "Ebyumba 2+",
+        ctx3Beds: "Ebyumba 3+",
+        ctx4Beds: "Ebyumba 4+",
+        ctxPropertyType: "Ekika kya Property",
+        ctxOffice: "Ofiisi",
+        ctxRetail: "Duka",
+        ctxWarehouse: "Sitowa",
+        ctxShop: "Shopu",
+        ctxRoomType: "Ekika ky’ecyumba",
+        ctxHostel: "Hostel",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Ecyumba eky’okugabana",
+        ctxStudio: "Studio",
+        ctxLandType: "Ekika ky’Eitaka",
+        ctxResidentialPlot: "Plot y’okutuuramu",
+        ctxCommercialPlot: "Plot y’obushuubuzi",
+        ctxAgricultural: "Eitaka ry’obuhingi",
+        badgeSale: "Kugurisha",
+        badgeRent: "Kupangisa",
+        badgeStudent: "Omunyeshuuri",
+        badgeCommercial: "Obushuubuzi",
+        badgeLand: "Eitaka",
+        footerGrowth: "Google Ads hamwe na SEO indexing bitegire kukuzya omutindo."
+      },
+      sm: {
+        siteTitle: "makaug.com | Pulatifoomu ya Property mu Uganda",
+        brandSubtitle: "PROPERTY ZA UGANDA",
+        saved: "Ebikuumiddwa",
+        advertiseProperty: "Tangaza Property",
+        heroRent: "Kukodesa",
+        heroBuy: "Kugula",
+        heroCommercial: "Obusuubuzi",
+        heroStudents: "Abaisomesa",
+        heroLand: "Itaka",
+        heroListFree: "Teka property yo busa",
+        homeFeatured: "Property ezirondeddwa",
+        homeMap: "Noonia ku Maapu",
+        homeBrokers: "Brokers abalondeddwa",
+        pageSale: "Property ez’okutunda",
+        pageRent: "Property ez’okukodesa",
+        pageStudents: "Obuturo bw’abaisomesa",
+        pageCommercial: "Property z’obusuubuzi",
+        pageLand: "Itaka ery’okutunda oba okukodesa",
+        pageList: "Teka Property Yo - Busa",
+        pageAbout: "Ebifa ku makaug.com",
+        pageSaved: "Property ezikukuumiddwa",
+        pageAccount: "Akaunti yange",
+        langLabel: "Olulimi",
+        withinLabel: "Munda wa",
+        mileUnitSingular: "mailo",
+        mileUnitPlural: "mailo",
+        university: "Yunivasite",
+        ctxBedrooms: "Ebisenge",
+        ctx1Bed: "Ekisenge 1+",
+        ctx2Beds: "Ebisenge 2+",
+        ctx3Beds: "Ebisenge 3+",
+        ctx4Beds: "Ebisenge 4+",
+        ctxPropertyType: "Ekika kya Property",
+        ctxOffice: "Ofiisi",
+        ctxRetail: "Dduuka",
+        ctxWarehouse: "Sitowa",
+        ctxShop: "Dduuka",
+        ctxRoomType: "Ekika ky’Ekisenge",
+        ctxHostel: "Hostel",
+        ctxApartment: "Apartment",
+        ctxSharedRoom: "Ekisenge eky’okugabana",
+        ctxStudio: "Studio",
+        ctxLandType: "Ekika ky’Itaka",
+        ctxResidentialPlot: "Plot y’okubeeramu",
+        ctxCommercialPlot: "Plot y’obusuubuzi",
+        ctxAgricultural: "Itaka ly’obulimi",
+        badgeSale: "Kutunda",
+        badgeRent: "Kukodesa",
+        badgeStudent: "Muisomesa",
+        badgeCommercial: "Obusuubuzi",
+        badgeLand: "Itaka",
+        footerGrowth: "Google Ads ne SEO indexing bitezeddwa okukuza omutindo."
+      }
+    };
+
+    Object.keys(I18N_UI_HARDENING).forEach((lang) => {
+      I18N_UI[lang] = Object.assign({}, I18N_UI[lang] || {}, I18N_UI_HARDENING[lang]);
+    });
+
     const LANG_FALLBACK = {
-      ac: "lg",
-      ny: "lg",
-      rn: "lg",
-      sm: "lg"
+      en: "en",
+      lg: "en",
+      sw: "en",
+      ac: "sw",
+      ny: "en",
+      rn: "en",
+      sm: "en"
     };
 
     function tr(key) {
@@ -3745,6 +4274,374 @@
         leadValidationAmount: "Weka kiasi unachotaka kukopa.",
         leadSubmitted: "Ombi la rehani limewasilishwa. Mshauri atawasiliana nawe muda mfupi.",
         leadSubmitFail: "Imeshindikana kutuma ombi la rehani sasa."
+      },
+      ac: {
+        pageSub: "Pim mortgage me Uganda, nong cente me mwezi, ci i ngeye cik pa mortgage mapwod i cako kwero.",
+        pill1Title: "Pim Bank Mapiyo",
+        pill1Sub: "Nen cato cente pa bank mapat ki mapiyo.",
+        pill2Title: "Yub ki Sliders",
+        pill2Sub: "Lok deposit ki mwaka me neno cente me dwe i kare-ki-kare.",
+        pill3Title: "Neno Rate Buri Nino",
+        pill3Sub: "Rate pego buri nino me gwoko ngec ma manyen.",
+        calcTitle: "Mortgage Playground",
+        calcTip: "Lok sliders me pimo yoo mapat",
+        labelPrice: "Wel pa gang (UGX)",
+        labelPurpose: "Kit mortgage",
+        labelDeposit: "Deposit (%)",
+        labelYears: "Hik mwaka",
+        labelIncome: "Cente pa gang me dwe (UGX, optional)",
+        incomePlaceholder: "calo 6000000",
+        purposeResidential: "Gang me bedo",
+        purposeCommercial: "Gang me cwercwiny",
+        purposeLand: "Loan pa lobo/plot",
+        resultsTitle: "Yoo maber + Pimo bank",
+        ratesFootnote: "Rate ma i nen tye me yot peko. Diro bank mapwod i kwero.",
+        refresh: "Nwo",
+        whatTitle: "Mortgage gin ngo?",
+        whatBody: "Mortgage en loan me kare malac me cato gang. I cako ki keto deposit, bank omiyo cente ma pud pe otimo, ci i cato dwe ki dwe ki nyinge.",
+        whatDeposit: "<strong>Deposit:</strong> Cente ma i keto me cako.",
+        whatLtv: "<strong>LTV:</strong> Loan-to-Value. LTV ma lacoo nongo twero yubu matek.",
+        whatTerm: "<strong>Term:</strong> Hik mwaka ma i cato loan.",
+        termsTitle: "Ngec pa cik me Mortgage",
+        termInterestTitle: "Interest Rate",
+        termInterestBody: "En nyinge ma bank ocako i loan ma pud tye.",
+        termAmortTitle: "Amortization",
+        termAmortBody: "Yoo ma cato me dwe opye i principal ki nyinge i kare.",
+        termFeeTitle: "Arrangement Fee",
+        termFeeBody: "En cente acel me cako loan.",
+        termEarlyTitle: "Cato mapwod",
+        termEarlyBody: "Bank mukene twero cako fee ka i cato loan mapwod.",
+        dailyTitle: "Nwo ngec buri nino",
+        dailyNote: "Rate bongo ki API ka kange ki nino. Tii ki Refresh me neno ngec manyen.",
+        summaryPrice: "Wel pa gang",
+        summaryDepositLoan: "Deposit / Loan",
+        summaryUpdated: "Rate ma onwo",
+        healthAffordability: "Neno twero me cato",
+        healthSuggestedIncome: "Income ma piny owaco (35% rule)",
+        healthLoanShare: "Dul loan",
+        bestCurrentMatch: "Yoo maber kombedi",
+        bestRateLine: "Rate: {rate}% • Mwaka: {years} • Min deposit: {deposit}%",
+        bestEstimatedMonthly: "Cato me dwe ma ipimo",
+        bestTotalRepayment: "Cato weng ma ipimo: {amount}",
+        fitsIncome: "Rwatte ki income mamegi",
+        highIncomeWarning: "Cato me dwe twero bedo malac",
+        noMatch: "Pe tye bank ma rwatte ki deposit ki term man. Med deposit onyo tim term manok.",
+        statusEligible: "Oyubo",
+        statusDeposit: "Med deposit",
+        statusTerm: "Kny term",
+        statusQuote: "Kwero quote",
+        rate: "Rate",
+        minDeposit: "Deposit matini",
+        maxTerm: "Term ma ladit",
+        monthly: "Me dwe",
+        yearsWord: "mwaka",
+        monthWord: "dwe",
+        quoteRequired: "Kwero quote",
+        totalRepayment: "Cato weng ma ipimo",
+        arrangementFee: "Arrangement fee ma ipimo",
+        bankSourceLabel: "Ka ngec ki i",
+        viewBankSource: "Nen source pa bank",
+        dataRefreshed: "Rate pa mortgage onwo.",
+        dataRefreshFail: "Pe onwongo twero nwo rate kombedi.",
+        leadTitle: "I mito consultant pa mortgage okoni?",
+        leadSub: "Mii ngec mamegi, wabikubedo i consultant pa mortgage me kony.",
+        leadNameLabel: "Nying mamegi weng *",
+        leadPhoneLabel: "Namba pa cim *",
+        leadEmailLabel: "Email",
+        leadContactLabel: "Yoo me kube",
+        leadAmountLabel: "Cente ma imito pooyo (UGX) *",
+        leadTermLabel: "Term ma imito (mwaka)",
+        leadSubmit: "Kwero lwong pa mortgage",
+        leadNote: "Man kwero kony keken, pe aye yubu pa bank. Rate ki yubu bino ki neno pa lender.",
+        leadContactPhone: "Cim",
+        leadContactWhatsapp: "WhatsApp",
+        leadContactEmail: "Email",
+        leadNamePlaceholder: "Nying mamegi",
+        leadPhonePlaceholder: "+256 7XX XXX XXX",
+        leadEmailPlaceholder: "your@email.com",
+        leadAmountPlaceholder: "calo 150000000",
+        leadTermPlaceholder: "calo 20",
+        leadValidationName: "Ket nying mamegi weng.",
+        leadValidationPhone: "Ket namba pa Uganda ma atir.",
+        leadValidationAmount: "Ket cente ma imito pooyo.",
+        leadSubmitted: "Kwero mortgage otyeko. Consultant bino kube kanyi ceng.",
+        leadSubmitFail: "Pe onwongo twero cwalo kwero mortgage kombedi."
+      },
+      ny: {
+        pageSub: "Gerageranya mortgage za Uganda, bala ensasura ya buri kwezi, kandi omanye ebigambo bya mortgage otakayesaba.",
+        pill1Title: "Gerageranya za Bank mangu",
+        pill1Sub: "Reeba enshashura z'okurabira omu bank ezindi mangu.",
+        pill2Title: "Shaba na Sliders",
+        pill2Sub: "Hindura deposit n'emyaka oreebe ensasura ya buri kwezi.",
+        pill3Title: "Okwegyesa Rate buri izooba",
+        pill3Sub: "Rate zireebwa buri izooba kugira data egume nempya.",
+        calcTitle: "Mortgage Playground",
+        calcTip: "Hindura sliders ogerageranye options",
+        labelPrice: "Omuhendo gwa Property (UGX)",
+        labelPurpose: "Ekika kya mortgage",
+        labelDeposit: "Deposit (%)",
+        labelYears: "Emyaka ya loan",
+        labelIncome: "Enfuga y'eka ya buri kwezi (UGX, optional)",
+        incomePlaceholder: "nk 6000000",
+        purposeResidential: "Enju y'okubamu",
+        purposeCommercial: "Property y'obushuubuzi",
+        purposeLand: "Loan y'itaka / plot",
+        resultsTitle: "Ekisinga + Okugerageranya za Bank",
+        ratesFootnote: "Rate zino n'ez'okutwegyesa. Banza okakase na banki otakasabye.",
+        refresh: "Garuramu",
+        whatTitle: "Mortgage ni ki?",
+        whatBody: "Mortgage ni loan y'obwire buraingwa y'okugura property. Obanza n'otamu deposit, bank ekaba ekwikiriza esente ezisigireho, obundi n'osasura buri kwezi n'inyungu.",
+        whatDeposit: "<strong>Deposit:</strong> Esente z'obanza otamu.",
+        whatLtv: "<strong>LTV:</strong> Loan-to-Value. LTV enkuru etera okwetaaga okwikirizibwa kw'amaani.",
+        whatTerm: "<strong>Term:</strong> Emyaka gy'osasuramu loan.",
+        termsTitle: "Amakuru g'ebigambo bya Mortgage",
+        termInterestTitle: "Interest Rate",
+        termInterestBody: "Ni omutindo gw'inyungu bank egumiza ku loan esigireho.",
+        termAmortTitle: "Amortization",
+        termAmortBody: "Engeri ensasura ya buri kwezi egabanyibwamu principal n'inyungu.",
+        termFeeTitle: "Arrangement Fee",
+        termFeeBody: "Amafaranga g'omurundi gumu aga kubanzaa loan.",
+        termEarlyTitle: "Okusasura kare",
+        termEarlyBody: "Bank ezimwe zicaja omutango ku kusinga loan kare.",
+        dailyTitle: "Okutereeza kwa buri izooba",
+        dailyNote: "Rate zituruka omu API kandi zireebwa buri izooba. Nyiga Refresh oreebe ezimpya.",
+        summaryPrice: "Omuhendo gwa Property",
+        summaryDepositLoan: "Deposit / Loan",
+        summaryUpdated: "Rate ezaharirwe",
+        healthAffordability: "Kwegyesa obushoboorozi",
+        healthSuggestedIncome: "Income erikwetegwa (35% rule)",
+        healthLoanShare: "Ekitundu kya loan",
+        bestCurrentMatch: "Ekisinga hati",
+        bestRateLine: "Rate: {rate}% • Emyaka: {years} • Min deposit: {deposit}%",
+        bestEstimatedMonthly: "Okusasura kwa buri kwezi",
+        bestTotalRepayment: "Byona ebirisasurwa: {amount}",
+        fitsIncome: "Birikwisana n'income yawe",
+        highIncomeWarning: "Okusasura kwa buri kwezi nikuba nikuhingura",
+        noMatch: "Tihariho bank erikwisana na deposit n'emyaka egi. Yongera deposit oba kendeeza emyaka.",
+        statusEligible: "Nikikunda",
+        statusDeposit: "Yongera deposit",
+        statusTerm: "Kendeeza term",
+        statusQuote: "Saba quote",
+        rate: "Rate",
+        minDeposit: "Deposit nto",
+        maxTerm: "Term ndai",
+        monthly: "Buri kwezi",
+        yearsWord: "emyaka",
+        monthWord: "kwezi",
+        quoteRequired: "Saba quote",
+        totalRepayment: "Byona ebirisasurwa",
+        arrangementFee: "Arrangement fee egeraganyijwe",
+        bankSourceLabel: "Aho amakuru gaturuka",
+        viewBankSource: "Reeba source ya bank",
+        dataRefreshed: "Rate za mortgage zongyirweho.",
+        dataRefreshFail: "Tizashobokire kuharura rate hati.",
+        leadTitle: "Nooyenda consultant wa mortgage akuhamagare?",
+        leadSub: "Tuhe amakuru gaawe tukugyemu consultant wa mortgage.",
+        leadNameLabel: "Eiziina ryawe ryona *",
+        leadPhoneLabel: "Namba ya simu *",
+        leadEmailLabel: "Email",
+        leadContactLabel: "Enzira y'okukuhika",
+        leadAmountLabel: "Esente ez'orikuyenda kukopa (UGX) *",
+        leadTermLabel: "Eibanga ly'emyaka oyenda",
+        leadSubmit: "Saba okubikubira kuri mortgage",
+        leadNote: "Eri ni sabyo ry'okwegyesebwa, ti kukirizibwa kwa bank. Rate n'okukiriza biri omu kwegyesebwa kwa lender.",
+        leadContactPhone: "Simu",
+        leadContactWhatsapp: "WhatsApp",
+        leadContactEmail: "Email",
+        leadNamePlaceholder: "Eiziina ryawe",
+        leadPhonePlaceholder: "+256 7XX XXX XXX",
+        leadEmailPlaceholder: "your@email.com",
+        leadAmountPlaceholder: "nk 150000000",
+        leadTermPlaceholder: "nk 20",
+        leadValidationName: "Shyamu eiziina ryawe ryona.",
+        leadValidationPhone: "Shyamu namba ya Uganda ehikire.",
+        leadValidationAmount: "Shyamu esente z'oyenda kukopa.",
+        leadSubmitted: "Okuhayo mortgage kwaherize. Consultant naaza kukuhamagara ahonaaho.",
+        leadSubmitFail: "Okuhayo mortgage tikurashoboka hati."
+      },
+      rn: {
+        pageSub: "Gereranya mortgage zo mu Uganda, bara kwishyura buri kwezi, kandi usobanuukirwe amategeko ya mortgage utarasaba.",
+        pill1Title: "Gereranya amabanki vuba",
+        pill1Sub: "Reba ibaruramari ryo kwishyura ku mabanki atandukanye ako kanya.",
+        pill2Title: "Koresha sliders",
+        pill2Sub: "Hindura deposit n'imyaka urebe uko kwishyura kwa buri kwezi guhinduka.",
+        pill3Title: "Isuzuma rya buri munsi",
+        pill3Sub: "Rates zisuzumwa buri munsi kugira amakuru agume ari mashya.",
+        calcTitle: "Mortgage Playground",
+        calcTip: "Hindura sliders ugeregeranye options",
+        labelPrice: "Igiciro cya Property (UGX)",
+        labelPurpose: "Ubwoko bwa mortgage",
+        labelDeposit: "Deposit (%)",
+        labelYears: "Igihe cy'umwenda (imyaka)",
+        labelIncome: "Amikoro y'urugo buri kwezi (UGX, optional)",
+        incomePlaceholder: "nka 6000000",
+        purposeResidential: "Inzu y'okubamo",
+        purposeCommercial: "Property y'ubucuruzi",
+        purposeLand: "Loan y'itaka / plot",
+        resultsTitle: "Icyiza kurusha ibindi + Kugereranya amabanki",
+        ratesFootnote: "Izi rates ni iz'igereranyo. Banza wemeze na banki mbere yo gusaba.",
+        refresh: "Subiramo",
+        whatTitle: "Mortgage ni iki?",
+        whatBody: "Mortgage ni ideni ry'igihe kirekire ryo kugura property. Utangira utanga deposit, banki ikaguha amafaranga asigaye, hanyuma ukishyura buri kwezi hamwe n'inyungu.",
+        whatDeposit: "<strong>Deposit:</strong> Amafaranga y'ibanze utanga.",
+        whatLtv: "<strong>LTV:</strong> Loan-to-Value. LTV nini ishobora gusaba ibisabwa bikomeye.",
+        whatTerm: "<strong>Term:</strong> Imyaka umara wishyura ideni.",
+        termsTitle: "Ibisobanuro by'amagambo ya Mortgage",
+        termInterestTitle: "Interest Rate",
+        termInterestBody: "Ni igipimo cy'inyungu banki ikatisha ku ideni risigaye.",
+        termAmortTitle: "Amortization",
+        termAmortBody: "Uko amafaranga wishyura buri kwezi agabanywa hagati ya principal n'inyungu.",
+        termFeeTitle: "Arrangement Fee",
+        termFeeBody: "Amafaranga yishyurwa rimwe igihe ideni ritangiye.",
+        termEarlyTitle: "Kwishyura kare",
+        termEarlyBody: "Amabanki amwe yishyuza penalty uramutse wishyuye ideni mbere y'igihe.",
+        dailyTitle: "Guhindura amakuru buri munsi",
+        dailyNote: "Rates zituruka kuri API kandi zisuzumwa buri munsi. Kanda Refresh ubone izishya.",
+        summaryPrice: "Igiciro cya Property",
+        summaryDepositLoan: "Deposit / Loan",
+        summaryUpdated: "Rates zasubiwemo",
+        healthAffordability: "Isuzuma ry'ubushobozi",
+        healthSuggestedIncome: "Income isabwa (35% rule)",
+        healthLoanShare: "Umugabane wa loan",
+        bestCurrentMatch: "Icyiza kurusha ibindi ubu",
+        bestRateLine: "Rate: {rate}% • Imyaka: {years} • Min deposit: {deposit}%",
+        bestEstimatedMonthly: "Ibaruramari rya buri kwezi",
+        bestTotalRepayment: "Amafaranga yose azishyurwa: {amount}",
+        fitsIncome: "Bihura n'amikoro yawe",
+        highIncomeWarning: "Kwishyura kwa buri kwezi bishobora kuba byinshi",
+        noMatch: "Nta banki ihura n'iyi deposit n'iyi myaka. Wongere deposit cyangwa ugabanye imyaka.",
+        statusEligible: "Birashoboka",
+        statusDeposit: "Ongera deposit",
+        statusTerm: "Gabanya term",
+        statusQuote: "Saba quote",
+        rate: "Rate",
+        minDeposit: "Deposit nto",
+        maxTerm: "Term nini",
+        monthly: "Buri kwezi",
+        yearsWord: "imyaka",
+        monthWord: "ukwezi",
+        quoteRequired: "Saba quote",
+        totalRepayment: "Amafaranga yose azishyurwa",
+        arrangementFee: "Arrangement fee y'igereranyo",
+        bankSourceLabel: "Aho amakuru yaturutse",
+        viewBankSource: "Reba source ya banki",
+        dataRefreshed: "Rates za mortgage zasubiwemo.",
+        dataRefreshFail: "Byanze gusubiramo rates ubu.",
+        leadTitle: "Ukeneye ko umujyanama wa mortgage aguhamagara?",
+        leadSub: "Duhe amakuru yawe tukugereze ku mujyanama wa mortgage.",
+        leadNameLabel: "Amazina yawe yose *",
+        leadPhoneLabel: "Nimero ya telefoni *",
+        leadEmailLabel: "Email",
+        leadContactLabel: "Uko twakubona neza",
+        leadAmountLabel: "Amafaranga ushaka gukopa (UGX) *",
+        leadTermLabel: "Igihe ushaka (imyaka)",
+        leadSubmit: "Saba guhamagarwa kuri mortgage",
+        leadNote: "Iri ni saba yo guhabwa ubujyanama, si approval ya banki. Rates n'approval biterwa n'isuzuma rya lender.",
+        leadContactPhone: "Telefoni",
+        leadContactWhatsapp: "WhatsApp",
+        leadContactEmail: "Email",
+        leadNamePlaceholder: "Amazina yawe",
+        leadPhonePlaceholder: "+256 7XX XXX XXX",
+        leadEmailPlaceholder: "your@email.com",
+        leadAmountPlaceholder: "nka 150000000",
+        leadTermPlaceholder: "nka 20",
+        leadValidationName: "Shyiramo amazina yawe yose.",
+        leadValidationPhone: "Shyiramo nimero ya Uganda iboneye.",
+        leadValidationAmount: "Shyiramo amafaranga ushaka gukopa.",
+        leadSubmitted: "Saba ya mortgage yakiriwe. Umujyanama arakuvugisha vuba.",
+        leadSubmitFail: "Byanze kohereza saba ya mortgage ubu."
+      },
+      sm: {
+        pageSub: "Gerageranya mortgage za Uganda, bala okusasula buli mwezi, era otegeere ebigambo bya mortgage nga tonnaba kusaba.",
+        pill1Title: "Gerageranya bbanka mangu",
+        pill1Sub: "Laba ensasula ezigerageranyiziddwa mangu.",
+        pill2Title: "Kozesa sliders",
+        pill2Sub: "Kyusa deposit n'emyaka olabe ensasula za buli mwezi.",
+        pill3Title: "Rate zikeberwa buli lunaku",
+        pill3Sub: "Rate zikeberwa buli lunaku okusigaza data nga mpya.",
+        calcTitle: "Mortgage Playground",
+        calcTip: "Kyusa sliders ogerageranye eby'okulondako",
+        labelPrice: "Omuwendo gwa Property (UGX)",
+        labelPurpose: "Ekika kya mortgage",
+        labelDeposit: "Deposit (%)",
+        labelYears: "Ebbanga ly'emyaka",
+        labelIncome: "Enfuna y'eka buli mwezi (UGX, optional)",
+        incomePlaceholder: "nga 6000000",
+        purposeResidential: "Enju y'okubeeramu",
+        purposeCommercial: "Property y'obusuubuzi",
+        purposeLand: "Loan y'ettaka / plot",
+        resultsTitle: "Ekisinga + Okugerageranya bbanka",
+        ratesFootnote: "Rate zino za kugerageranya. Kakasa ne bbanka nga tonnasaba.",
+        refresh: "Ddamu",
+        whatTitle: "Mortgage kye ki?",
+        whatBody: "Mortgage ye loan y'ebanga eriwanvu ey'okugula property. Osooka n'oteka deposit, bbanka n'efuna balance, olwo n'osasula buli mwezi n'amagoba.",
+        whatDeposit: "<strong>Deposit:</strong> Ensimbi z'oteka ku ntandikwa.",
+        whatLtv: "<strong>LTV:</strong> Loan-to-Value. LTV enkulu etera okwetaaga okukakasa okw'amaanyi.",
+        whatTerm: "<strong>Term:</strong> Emyaka gy'osasulamu loan.",
+        termsTitle: "Amakulu g'ebigambo bya Mortgage",
+        termInterestTitle: "Interest Rate",
+        termInterestBody: "Kino kye kipimo ky'amagoba bbanka ky'ekatiriza ku loan esigaddeyo.",
+        termAmortTitle: "Amortization",
+        termAmortBody: "Engeri ensasula yo ey'omwezi gy'egabanyizibwamu principal n'amagoba mu biseera.",
+        termFeeTitle: "Arrangement Fee",
+        termFeeBody: "Ssente ya mulundi gumu ku kutandika loan.",
+        termEarlyTitle: "Okusasula nga bukyali",
+        termEarlyBody: "Bbanka ezimu zisasuliza penalty bw'osasula loan nga ekiseera tekinnaggwa.",
+        dailyTitle: "Okukyusa data buli lunaku",
+        dailyNote: "Rate ziggibwa mu API era zikeberwa buli lunaku. Nyiga Refresh okulaba ezisinga obupya.",
+        summaryPrice: "Omuwendo gwa Property",
+        summaryDepositLoan: "Deposit / Loan",
+        summaryUpdated: "Rate zikyusiddwa",
+        healthAffordability: "Okukebera obusobozi",
+        healthSuggestedIncome: "Income eragiddwa (35% rule)",
+        healthLoanShare: "Ekitundu kya loan",
+        bestCurrentMatch: "Ekisinga kati",
+        bestRateLine: "Rate: {rate}% • Emyaka: {years} • Min deposit: {deposit}%",
+        bestEstimatedMonthly: "Okusasula buli mwezi",
+        bestTotalRepayment: "Okusasula kwonna okutegererwa: {amount}",
+        fitsIncome: "Kikwatagana ne income yo",
+        highIncomeWarning: "Okusasula buli mwezi kuyinza okuba kungi",
+        noMatch: "Tewali bbanka ekwatagana na deposit ne term bino. Yongera deposit oba kendeeza emyaka.",
+        statusEligible: "Kisoboka",
+        statusDeposit: "Yongera deposit",
+        statusTerm: "Kendeeza term",
+        statusQuote: "Saba quote",
+        rate: "Rate",
+        minDeposit: "Deposit etono",
+        maxTerm: "Term ennene",
+        monthly: "Buli mwezi",
+        yearsWord: "emyaka",
+        monthWord: "mwezi",
+        quoteRequired: "Saba quote",
+        totalRepayment: "Okusasula kwonna okutegererwa",
+        arrangementFee: "Arrangement fee etegererwa",
+        bankSourceLabel: "Source ey'olukale",
+        viewBankSource: "Laba source ya bbanka",
+        dataRefreshed: "Rate za mortgage zikyusiddwa.",
+        dataRefreshFail: "Tetusobodde kukyusa rate kati.",
+        leadTitle: "Oyagala consultant wa mortgage akukubire?",
+        leadSub: "Tuweereze details zo tukuyunge ku consultant wa mortgage.",
+        leadNameLabel: "Erinnya Lyo Lijjuvu *",
+        leadPhoneLabel: "Namba y'Essimu *",
+        leadEmailLabel: "Email",
+        leadContactLabel: "Engeri gy'oyagala okukwatibwako",
+        leadAmountLabel: "Ssente z'oyagala okubola (UGX) *",
+        leadTermLabel: "Ebbanga ly'oyagala (emyaka)",
+        leadSubmit: "Saba okukubirwa ku Mortgage",
+        leadNote: "Kuno kusaba kuyamba kwokka, si kukkirizibwa kwa bbanka. Rate n'okukiriza bisinziira ku kwekeneenya kwa lender.",
+        leadContactPhone: "Essimu",
+        leadContactWhatsapp: "WhatsApp",
+        leadContactEmail: "Email",
+        leadNamePlaceholder: "Erinnya lyo",
+        leadPhonePlaceholder: "+256 7XX XXX XXX",
+        leadEmailPlaceholder: "your@email.com",
+        leadAmountPlaceholder: "nga 150000000",
+        leadTermPlaceholder: "nga 20",
+        leadValidationName: "Wandika erinnya lyo lijjuvu.",
+        leadValidationPhone: "Wandika namba ya Uganda entuufu.",
+        leadValidationAmount: "Wandika ssente z'oyagala okubola.",
+        leadSubmitted: "Okusaba mortgage kutuusiddwa. Consultant agenda kukukwatako mangu.",
+        leadSubmitFail: "Tetusobodde kutuusa kusaba kwa mortgage kati."
       }
     };
 
@@ -3760,15 +4657,15 @@
     const AI_CHATBOT_I18N = {
       en: {
         title: "Discover our AI Chatbot",
-        sub: "Use WhatsApp to list property, search by area, request agent contacts, and receive instant property links in your preferred Ugandan language.",
+        sub: "Use WhatsApp to list property, search by area, request broker contacts, and receive instant property links in your preferred Ugandan language.",
         card1Title: "List Property in Minutes",
         card1Sub: "Send property details and photos on WhatsApp, then complete OTP verification in one flow.",
         card2Title: "Search by Shared Location",
         card2Sub: "Share your location and get matched listings for sale or rent nearby with direct links.",
-        card3Title: "Find a Verified Agent",
-        card3Sub: "Ask for agent contacts by district, speciality, or language and get options instantly.",
+        card3Title: "Find a Verified Broker",
+        card3Sub: "Ask for broker contacts by district, speciality, or language and get options instantly.",
         flowTitle: "How the chatbot conversation flows",
-        flow1: "Welcome to makaug. Reply 1 to list, 2 to search, 3 to find an agent.",
+        flow1: "Welcome to makaug. Reply 1 to list, 2 to search, 3 to find a broker.",
         flow2: "2 - Search near my location",
         flow3: "Share location and budget. I will send matching listings with links.",
         flow4: "Location shared + budget USh 1.5M rent",
@@ -3776,21 +4673,21 @@
         benefitsTitle: "What you can do right now",
         benefit1: "List a property with guided prompts and photo checklist.",
         benefit2: "Search properties by district, area, budget, beds, and purpose.",
-        benefit3: "Get direct WhatsApp and call contacts for matching agents.",
+        benefit3: "Get direct WhatsApp and call contacts for matching brokers.",
         benefit4: "Use the chatbot in 7 Ugandan languages with fast replies.",
         cta: "Start Chatbot on WhatsApp"
       },
       lg: {
         title: "Noonya AI Chatbot yaffe",
-        sub: "Kozesa WhatsApp okuteeka property, okunoonya ng’osinziira ku kitundu, okusaba contacts za agent, n’okufuna links mangu mu lulimi lwo.",
+        sub: "Kozesa WhatsApp okuteeka property, okunoonya ng’osinziira ku kitundu, okusaba contacts za broker, n’okufuna links mangu mu lulimi lwo.",
         card1Title: "Teka Property mangu",
         card1Sub: "Weereza details n’ebifaananyi ku WhatsApp, oluvannyuma okakase OTP mu mutendera gumu.",
         card2Title: "Noonya ng’okozesa Location",
         card2Sub: "Gabana location yo ofune listings ezikukwatako mangu mu kitundu kyo.",
-        card3Title: "Noonya Agent Akakasiddwa",
-        card3Sub: "Saba contacts za agent okusinziira ku district, speciality oba lulimi.",
+        card3Title: "Noonya Broker Akakasiddwa",
+        card3Sub: "Saba contacts za broker okusinziira ku district, speciality oba lulimi.",
         flowTitle: "Engeri emboozi ya chatbot gy’etambula",
-        flow1: "Tukwaniriza ku makaug. Ddamu 1 okuteka, 2 okunoonya, 3 okunoonya agent.",
+        flow1: "Tukwaniriza ku makaug. Ddamu 1 okuteka, 2 okunoonya, 3 okunoonya broker.",
         flow2: "2 - Noonya okumpi ne location yange",
         flow3: "Gabana location ne budget. Nja kukuweereza links za property ezikukwatako.",
         flow4: "Location eweereddwa + budget USh 1.5M rent",
@@ -3798,7 +4695,7 @@
         benefitsTitle: "By’osobola okukola kati",
         benefit1: "Teka property ng’oyambibwako prompts n’elist y’ebifaananyi.",
         benefit2: "Noonya property nga osinziira ku district, kitundu, budget n’ebirala.",
-        benefit3: "Funa WhatsApp ne call contacts za agents ezikukwatako.",
+        benefit3: "Funa WhatsApp ne call contacts za brokers ezikukwatako.",
         benefit4: "Kozesa chatbot mu nnimi 7 ez’e Uganda n’okuddamu okw’amangu.",
         cta: "Tandika Chatbot ku WhatsApp"
       },
@@ -3823,6 +4720,94 @@
         benefit3: "Pata namba za WhatsApp na simu za mawakala wanaofaa.",
         benefit4: "Tumia chatbot kwa lugha 7 za Uganda kwa majibu ya haraka.",
         cta: "Anza Chatbot kwa WhatsApp"
+      },
+      ac: {
+        title: "Nong AI Chatbot wa wa",
+        sub: "Tii ki WhatsApp me cako listing pa gang, yenyo ka i kabedo, kwero namba pa broker, ki nongo links ma pyer i dhok ma i yero.",
+        card1Title: "Tera listing i dakika manok",
+        card1Sub: "Cwal ngec pa gang ki cal i WhatsApp, ci i tyek kakac pa OTP i yoo acel.",
+        card2Title: "Yenyo ki location ma i cako",
+        card2Sub: "Pee location mamegi, inongo listing me cato onyo gero ma tye i akina ni ki links atir.",
+        card3Title: "Nong broker ma okac",
+        card3Sub: "Kwero namba pa broker i district, kit ber onyo dhok; inongo lagam mapiyo.",
+        flowTitle: "Yoo me lok ki chatbot",
+        flow1: "Wot maber i makaug. Dwo 1 me listing, 2 me yenyo, 3 me nongo broker.",
+        flow2: "2 - Yenyo ka i akina ki ka anongo",
+        flow3: "Pee location ki budget. Abicwalo links pa listing ma rwatte.",
+        flow4: "Location opee + budget USh 1.5M rent",
+        flow5: "Man listing 5 ma rwatte i kabedo ni. Dii link me neno details.",
+        benefitsTitle: "Gin ma itwero timo kombedi",
+        benefit1: "Tera listing ki prompts ma tye kony ki checklist pa poto.",
+        benefit2: "Yenyo listing ki district, kabedo, budget, beds, ki purpose.",
+        benefit3: "Nong namba me WhatsApp ki cim pa brokers ma rwatte.",
+        benefit4: "Tii ki chatbot i dhok 7 me Uganda ki lagam mapiyo.",
+        cta: "Cak Chatbot i WhatsApp"
+      },
+      ny: {
+        title: "Noonya AI Chatbot yaffe",
+        sub: "Kozesa WhatsApp kuteka property, kunoonya ahantu, kusaba contacts za broker, n'okufuna links mangu omu rurimi orunda.",
+        card1Title: "Teka Property mangu",
+        card1Sub: "Weereza details za property n'ebifaananyi omu WhatsApp, hanyuma otweze OTP omu mutendera gumu.",
+        card2Title: "Noonya na Location",
+        card2Sub: "Shangisa location yawe, ofune listings eziri ahafi ez'okutunda oba okupangisa na links zaazo.",
+        card3Title: "Shanga Broker akakasiibwe",
+        card3Sub: "Saba contacts za broker okuruga omu district, specialization, oba rurimi kandi ofune amagarukiro mangu.",
+        flowTitle: "Engeri emboozi ya chatbot etambura",
+        flow1: "Tukushemererwa ahari makaug. Garuka 1 kuteka, 2 kunoonya, 3 kushanga broker.",
+        flow2: "2 - Noonya ahafi na location yangye",
+        flow3: "Tukwase location na budget. Ninyija kukuweereza links za properties ezikuhika.",
+        flow4: "Location erikushangwa + budget USh 1.5M rent",
+        flow5: "Ezi nizo listings 5 ezikuhika omu kitundu kyawe. Nyiga link kureeba details.",
+        benefitsTitle: "Eby'ori kushobora kukora hati",
+        benefit1: "Teka property n'obufakazi obuyambiremu na checklist y'ebifaananyi.",
+        benefit2: "Noonya properties na district, area, budget, beds, n'ekigendererwa.",
+        benefit3: "Funa WhatsApp na call contacts za brokers abakuhika.",
+        benefit4: "Kozesa chatbot omu ndimi 7 za Uganda n'okugarukamu mangu.",
+        cta: "Tandika Chatbot omu WhatsApp"
+      },
+      rn: {
+        title: "Shaka AI Chatbot yaitwe",
+        sub: "Koresha WhatsApp kutera property, kushaka omu karere, kusaba contacts za broker, no kubona links bwangu omu rurimi rwawe.",
+        card1Title: "Tera Property bwangu",
+        card1Sub: "Ohereze details za property n'ebifaananyi kuri WhatsApp, hanyuma oheze OTP omu mutendera gumwe.",
+        card2Title: "Shaka ukoresheje Location",
+        card2Sub: "Ha location yawe, obone listings z'okugura oba kupangisa eziri hafi hamwe na links zazo.",
+        card3Title: "Shaka broker waakasibwa",
+        card3Sub: "Saba contacts za broker kuruga omu district, obushoboorozi oba rurimi; obone eby'okugarukamu bwangu.",
+        flowTitle: "Engeri omurongo gwa chatbot gutambura",
+        flow1: "Murakaza kurungi kuri makaug. Garuka 1 kutera, 2 kushaka, 3 kubona broker.",
+        flow2: "2 - Shaka hafi na location yangye",
+        flow3: "Ha location na budget. Nza kukohereza links za listing ezihika.",
+        flow4: "Location yahairwe + budget USh 1.5M rent",
+        flow5: "Hano hari listings 5 ezihika omu kitundu kyawe. Kanda link orebe details.",
+        benefitsTitle: "Ebi orikubaasa kukora hati",
+        benefit1: "Tera property n'obuhabuzi obukurangira hamwe na checklist y'ebifaananyi.",
+        benefit2: "Shaka properties ukoresheje district, area, budget, beds, n'ekigyendererwa.",
+        benefit3: "Bona WhatsApp na call contacts za brokers abakuhika.",
+        benefit4: "Koresha chatbot omu ndimi 7 za Uganda n'okugaruka bwangu.",
+        cta: "Tandika Chatbot kuri WhatsApp"
+      },
+      sm: {
+        title: "Noonia AI Chatbot yaife",
+        sub: "Kozesa WhatsApp kuteka property, okunoonia ku kitundu, okusaba contacts za broker, n'okufuna links mangu mu lulimi lwo.",
+        card1Title: "Teka Property mangu",
+        card1Sub: "Weereza details n'ebifaananyi ku WhatsApp, oluvanyuma okakasa OTP mu mutendera gumu.",
+        card2Title: "Noonia nga okozesa Location",
+        card2Sub: "Wana location yo ofune listings ez'okutunda oba okukodesa eziri kumpi n'ama-link gaazo.",
+        card3Title: "Noonia Broker akakasiddwa",
+        card3Sub: "Saba contacts za broker nga osinzira ku district, specialisation oba lulimi, ofune eby'okuddamu mangu.",
+        flowTitle: "Engeri emboozi ya chatbot gy'etambula",
+        flow1: "Tukwaniriza ku makaug. Damu 1 kuteka, 2 kunoonia, 3 kunoonia broker.",
+        flow2: "2 - Noonia kumpi ne location yange",
+        flow3: "Wana location ne budget. Nja kukuweereza links za listings ezikukwataku.",
+        flow4: "Location eweereddwa + budget USh 1.5M rent",
+        flow5: "Bino listings 5 ezikukwataku mu kitundu kyo. Nyiga link olabe details.",
+        benefitsTitle: "By'osobola okukola kaakano",
+        benefit1: "Teka property ng'oyambibwa prompts n'ekipimo ky'ebifaananyi.",
+        benefit2: "Noonia properties nga osinzira ku district, area, budget, beds n'ekigendererwa.",
+        benefit3: "Funa WhatsApp ne call contacts za brokers abakukwataku.",
+        benefit4: "Kozesa chatbot mu nnimi 7 eza Uganda n'okuddamu okwangu.",
+        cta: "Tandika Chatbot ku WhatsApp"
       }
     };
 
@@ -3832,6 +4817,242 @@
       return AI_CHATBOT_I18N[lang]?.[key]
         || AI_CHATBOT_I18N[fallback]?.[key]
         || AI_CHATBOT_I18N.en?.[key]
+        || key;
+    }
+
+    const FRAUD_I18N = {
+      en: {
+        title: "Fraud Prevention",
+        sub: "We use layered verification, AI checks, and manual moderation to keep makaug safer for buyers, renters, brokers, and property listers.",
+        card1Title: "Identity Verification",
+        card1Sub: "OTP + National ID checks before listing submission and publishing review.",
+        card2Title: "AI Fraud Signals",
+        card2Sub: "Image duplication checks, suspicious listing patterns, and document anomaly checks.",
+        card3Title: "Manual Moderation",
+        card3Sub: "Every new listing is reviewed before going live. High-risk entries are escalated.",
+        flowTitle: "How our review flow works",
+        flow1: "Submit: Listing details, photos, contact info, and verification data are captured.",
+        flow2: "Automated checks: We run OTP checks, format checks, risk scoring, and duplication detection.",
+        flow3: "Team moderation: High-confidence listings are approved; suspicious ones are held or rejected.",
+        flow4: "Decision + notify: Lister receives status and reason. Approved listings publish to public pages.",
+        lawNote: "We cooperate with lawful authority requests under Ugandan law where fraud, forgery, or impersonation is suspected.",
+        tipsTitle: "Safety tips for users",
+        tip1: "Never pay before viewing a property physically.",
+        tip2: "Verify ownership/title details before any deposit.",
+        tip3: "Use registered brokers for high-value transactions.",
+        tip4: "Report suspicious listings immediately with screenshots.",
+        reportBtn: "Report a Listing",
+        waBtn: "WhatsApp Fraud Team",
+        monitorTitle: "What we monitor continuously",
+        monitor1Title: "Listing quality",
+        monitor1Sub: "Misleading titles, fake pricing, copied descriptions.",
+        monitor2Title: "Media checks",
+        monitor2Sub: "Stolen images, repeated images, poor or suspicious uploads.",
+        monitor3Title: "Identity integrity",
+        monitor3Sub: "NIN format mismatch, OTP mismatch, impossible contact patterns.",
+        monitor4Title: "Behavior risk",
+        monitor4Sub: "Bulk spam, repeated complaint signals, repeat fraud patterns."
+      },
+      lg: {
+        title: "Okulwanyisa Obubbaanyi",
+        sub: "Tukozesa okukakasa mu bitundu, AI checks, n’okwekeneenya okw’omuntu okusobola okukuuma makaug nga tekirimu bubbaanyi eri abagula, abapangisa, brokers n’abateeka listings.",
+        card1Title: "Okukakasa Obumanyirivu",
+        card1Sub: "Okukakasa OTP + National ID nga listing tennatwalibwa mu kwekenneenya okw’okufulumya.",
+        card2Title: "AI Etegeeza Obubbaanyi",
+        card2Sub: "Okukebera ebifaananyi ebiddiddwamu, patterns eziteeberezebwa, n’ebiwandiiko ebirimu ebitali bya bulijjo.",
+        card3Title: "Okwekeneenya Kw’omuntu",
+        card3Sub: "Buli listing empya ezimbiddwa nga tennafumbibwa ku mukutu. Ezirina obulabe obw’amaanyi zisindikibwa ku mutendera ogw’enjawulo.",
+        flowTitle: "Engeri flow yaffe ey’okwekeneenya gy’ekola",
+        flow1: "Okutuma: Details za listing, ebifaananyi, contact info, n’okukakasa bittiddwa.",
+        flow2: "Okukebera okw’otoma: Tukola OTP checks, format checks, risk scoring, n’okuzuula ebyaddiddwamu.",
+        flow3: "Team moderation: Listings ezirabika obulungi zikakasibwa; eziteeberezebwa zikwatibwa oba zigaanyizibwa.",
+        flow4: "Okusalawo + okumanyisa: Omutiisa afuna status n’ensonga. Ezikakasiddwa zezifulumira ku mikutu gya buli omu.",
+        lawNote: "Tukolagana n’ab’obuyinza mu mateeka ga Uganda bwe wabaawo obubbaanyi, okujja empapula oba okwefaananyiriza.",
+        tipsTitle: "Amagezi g’obukuumi eri abakozesa",
+        tip1: "Totwala ssente nga tonnalaba property n’amaaso.",
+        tip2: "Kakasa ownership/title details nga tonnaba kutwala deposit.",
+        tip3: "Kozesa brokers abakakasiddwa ku transactions ez’amaanyi.",
+        tip4: "Manguwa okutegeeza listings eziteeberezebwa n’ebifaananyi by’obufaananyi.",
+        reportBtn: "Loopa Listing",
+        waBtn: "WhatsApp Team y’Obubbaanyi",
+        monitorTitle: "Bye twekenneenya bulijjo",
+        monitor1Title: "Omutindo gwa listing",
+        monitor1Sub: "Emitwe egy’okubulankanya, emiwendo egy’obulimba, descriptions ezikoppeddwa.",
+        monitor2Title: "Okukebera media",
+        monitor2Sub: "Ebifaananyi ebibbiddwa, ebiddiddwamu, oba eby’okuteebereza.",
+        monitor3Title: "Obwesigwa bw’obumanyirivu",
+        monitor3Sub: "NIN format etakwatagana, OTP etakwatagana, patterns za contacts ezitasoboka.",
+        monitor4Title: "Obulabe bw’enneeyisa",
+        monitor4Sub: "Spam mu bungi, complaints eziddibwamu, n’enneeyisa y’obubbaanyi ezzibwamu."
+      },
+      sw: {
+        title: "Kuzuia Ulaghai",
+        sub: "Tunatumia uthibitishaji wa hatua nyingi, ukaguzi wa AI, na mapitio ya binadamu kufanya makaug kuwa salama kwa wanunuzi, wapangaji, brokers, na waorodheshaji wa mali.",
+        card1Title: "Uthibitishaji wa Utambulisho",
+        card1Sub: "Ukaguzi wa OTP + Kitambulisho cha Taifa kabla ya kuwasilisha listing na mapitio ya uchapishaji.",
+        card2Title: "Ishara za Ulaghai za AI",
+        card2Sub: "Ukaguzi wa picha zilizorudiwa, mifumo ya listing inayotia shaka, na dosari za nyaraka.",
+        card3Title: "Uhakiki wa Binadamu",
+        card3Sub: "Kila listing mpya inakaguliwa kabla ya kwenda hewani. Zenye hatari kubwa hupandishwa kwa uchunguzi zaidi.",
+        flowTitle: "Jinsi mtiririko wetu wa mapitio unavyofanya kazi",
+        flow1: "Wasilisha: Maelezo ya listing, picha, mawasiliano, na data ya uthibitishaji hukusanywa.",
+        flow2: "Ukaguzi wa kiotomatiki: Tunafanya OTP checks, format checks, risk scoring, na ugunduzi wa marudio.",
+        flow3: "Mapitio ya timu: Listings zenye uhakika wa juu zinaidhinishwa; zinazotia shaka hushikiliwa au kukataliwa.",
+        flow4: "Uamuzi + taarifa: Muorodheshaji hupokea status na sababu. Zilizokubaliwa huchapishwa hadharani.",
+        lawNote: "Tunashirikiana na mamlaka halali chini ya sheria za Uganda pale kunaposhukiwa ulaghai, kughushi, au kujifanya mtu mwingine.",
+        tipsTitle: "Vidokezo vya usalama kwa watumiaji",
+        tip1: "Usilipe kabla hujaona mali kwa macho.",
+        tip2: "Thibitisha umiliki/title details kabla ya kuweka deposit yoyote.",
+        tip3: "Tumia brokers waliosajiliwa kwa miamala yenye thamani kubwa.",
+        tip4: "Ripoti listings zinazotia shaka mara moja ukiwa na screenshots.",
+        reportBtn: "Ripoti Listing",
+        waBtn: "Timu ya Ulaghai ya WhatsApp",
+        monitorTitle: "Tunachofuatilia kila wakati",
+        monitor1Title: "Ubora wa listing",
+        monitor1Sub: "Vichwa vya kupotosha, bei za uongo, maelezo yaliyonakiliwa.",
+        monitor2Title: "Ukaguzi wa media",
+        monitor2Sub: "Picha zilizoibwa, zinazojirudia, au uploads zinazotia shaka.",
+        monitor3Title: "Uadilifu wa utambulisho",
+        monitor3Sub: "NIN format kutokulingana, OTP kutokulingana, mifumo ya mawasiliano isiyo ya kawaida.",
+        monitor4Title: "Hatari ya tabia",
+        monitor4Sub: "Spam ya wingi, ishara za malalamiko ya kurudia, na mifumo ya ulaghai wa kurudia."
+      },
+      ac: {
+        title: "Gwokke me Fraud",
+        sub: "Watiyo ki kubeero me nying, AI checks, ki ngec pa dano me kelo makaug bedo ma ber pi jo mugudo, jo gero, brokers, ki jo ma keto listings.",
+        card1Title: "Kubeero me Nying",
+        card1Sub: "OTP + National ID checks pud pe i keto listing i review me bedo live.",
+        card2Title: "AI Fraud Signals",
+        card2Sub: "Neno cal ma rwate, listing patterns ma pe ber, ki checks i documents.",
+        card3Title: "Manual Moderation",
+        card3Sub: "Listing manyen weng oneno dano mapwod. Ma obedo high-risk gi cako neno matut.",
+        flowTitle: "Kit ma review flow wa tye ka timo",
+        flow1: "Submit: Details pa listing, photos, contact info, ki verification data gikubbe.",
+        flow2: "Automated checks: Watimo OTP checks, format checks, risk scoring, ki duplication detection.",
+        flow3: "Team moderation: Listings ma ber giyubo; ma pe yot gikwanyo onyo gikwero.",
+        flow4: "Decision + notify: Lister tyeko nongo status ki reason. Approved listings gitye i public pages.",
+        lawNote: "Watiyo kacel ki authority ma i cik pa Uganda ka fraud, forgery, onyo impersonation onenyo.",
+        tipsTitle: "Safety tips pi users",
+        tip1: "Pe ci kwon ma pud pe i neno property ki wang.",
+        tip2: "Nong rwom me ownership/title details pud pe i cako deposit.",
+        tip3: "Tii ki brokers ma giregistered i transactions ma lacoo dwong.",
+        tip4: "Cito i report listings ma pe ber ki screenshots.",
+        reportBtn: "Report Listing",
+        waBtn: "WhatsApp Fraud Team",
+        monitorTitle: "Gin ma wa monitor kare weng",
+        monitor1Title: "Listing quality",
+        monitor1Sub: "Titles ma pe kakare, prices me goba, descriptions ma kikopied.",
+        monitor2Title: "Media checks",
+        monitor2Sub: "Photos ma kibweko, ma rwate, onyo uploads ma pe angeyo.",
+        monitor3Title: "Identity integrity",
+        monitor3Sub: "NIN format mismatch, OTP mismatch, contact patterns ma pe rwate.",
+        monitor4Title: "Behavior risk",
+        monitor4Sub: "Bulk spam, repeated complaints, ki patterns me fraud ma doki."
+      },
+      ny: {
+        title: "Okutangira Obufura",
+        sub: "Nitukozesa okwehamya kwa mitendera, AI checks hamwe n'okwetegyereza kw'abantu kugira makaug ebe ey'obusinge eri abagura, abapangisa, brokers n'abateeka eby'ebyapa.",
+        card1Title: "Okwehamya Obumanya",
+        card1Sub: "OTP + National ID checks embere y'okutuma listing kandi embere y'okugishyira live.",
+        card2Title: "AI Etebera Obufura",
+        card2Sub: "Okukora ku bifaananyi ebizireemu, listing patterns ez'okushushana n'okwegendereza ku documents.",
+        card3Title: "Okwehurira kw'Abantu",
+        card3Sub: "Buli listing empya erorwa embere y'okuba live. Ezirimu obulabe obwingi ziteekwa mu kucukumbura okundi.",
+        flowTitle: "Engeri review flow yacu ekora",
+        flow1: "Submit: Listing details, photos, contact info n'okwehamya data biterekebwa.",
+        flow2: "Automated checks: Nitukora OTP checks, format checks, risk scoring n'okurora ebyagarukamu.",
+        flow3: "Team moderation: Listings eziriku confidence nyingi zikirizibwa; ezitebarizibwa zikwatibwa oba zigaanywa.",
+        flow4: "Decision + notify: Omuteresi afuna status n'enshonga. Approved listings zija aha public pages.",
+        lawNote: "Nitukora hamwe n'obushoborozi obw'amateeka ga Uganda aho harabirwamu fraud, forgery oba impersonation.",
+        tipsTitle: "Amagezi g'obukuumi eri abakoresi",
+        tip1: "Otahaayo sente otakabonye property n'amaisho.",
+        tip2: "Hamyiriza ownership/title details otaikire aha deposit.",
+        tip3: "Kozesa brokers abawandikisi ku transactions z'omutindo omukuru.",
+        tip4: "Rapota listings ezitebarizibwa mangu n'ebifaananyi bya screenshot.",
+        reportBtn: "Rapota Listing",
+        waBtn: "WhatsApp Team y'Obufura",
+        monitorTitle: "Ebintu ebiturora buri kaire",
+        monitor1Title: "Omutindo gwa listing",
+        monitor1Sub: "Emitwe etarukuhika, emiwendo y'ebishuba, descriptions ezakopiibwe.",
+        monitor2Title: "Okurora media",
+        monitor2Sub: "Photos ezibibiwe, ezigarukiramu, oba uploads ezitebarizibwa.",
+        monitor3Title: "Obwesigwa bw'obumanya",
+        monitor3Sub: "NIN format mismatch, OTP mismatch, contact patterns ezitarikukwatagana.",
+        monitor4Title: "Obulabe bw'eny behavior",
+        monitor4Sub: "Bulk spam, complaints ezigarukiramu, hamwe n'obufura obugarukamu."
+      },
+      rn: {
+        title: "Okuhangana n'Obufura",
+        sub: "Tukozesa okuhamya okw'emitendera, AI checks, n'okureeba kw'abantu kugira makaug ebe enungi kandi etekaine obufura eri abagura, abapangisa, brokers n'abashyiraho listings.",
+        card1Title: "Okuhamya Obumanyiso",
+        card1Sub: "OTP + National ID checks bibanza okukorwa mbere y'okutuma listing kandi mbere y'okugihindura live.",
+        card2Title: "AI Emenya Obufura",
+        card2Sub: "Okukebera ebishushani ebigarukwamu, listing patterns ezitahikire, n'okureeba documents ezitahikire.",
+        card3Title: "Okureeba kw'Abantu",
+        card3Sub: "Buri listing empya ereebwamu mbere y'okuba live. Ezirimu obulabe bwingi zishonsekwa omu kuzegyebwayo okw'amaani.",
+        flowTitle: "Engeri review flow yitwe ekora",
+        flow1: "Submit: Listing details, photos, contact info, n'eby'okuhamya biterekwa.",
+        flow2: "Automated checks: Tukora OTP checks, format checks, risk scoring, n'okumanya ebyagarukwamu.",
+        flow3: "Team moderation: Listings ezirimu confidence nyingi zikirizibwa; ezitebarizibwa zikwatibwe oba ziganwe.",
+        flow4: "Decision + notify: Omuteresi ahabwa status n'enshonga. Approved listings zishyirwa aha public pages.",
+        lawNote: "Tukoragana n'obushoborozi bw'amateeka ga Uganda aho harabikamu obufura, forgery, n'okwegira omuntu ondi.",
+        tipsTitle: "Amagezi g'obukuumi eri abakoresi",
+        tip1: "Otariha sente otaakabonye property n'amaisho.",
+        tip2: "Hamyiriza ownership/title details otaikire aha deposit yona.",
+        tip3: "Kozesa brokers abahandikisi ku transactions z'ensimbi nyingi.",
+        tip4: "Rapoota listings ezitebarizibwa mangu n'ebifaananyi bya screenshot.",
+        reportBtn: "Rapoota Listing",
+        waBtn: "WhatsApp Team y'Obufura",
+        monitorTitle: "Ebitu monitor-a buri kaire",
+        monitor1Title: "Listing quality",
+        monitor1Sub: "Emitwe etahikire, emiwendo y'ebishuba, descriptions ezakopiwa.",
+        monitor2Title: "Media checks",
+        monitor2Sub: "Ebifaananyi ebibiwire, ebigarukiramu, n'uploads ezitebarizibwa.",
+        monitor3Title: "Identity integrity",
+        monitor3Sub: "NIN format mismatch, OTP mismatch, contact patterns ezitahikire.",
+        monitor4Title: "Behavior risk",
+        monitor4Sub: "Bulk spam, complaints ezigarukiramu, n'obufura obugarukamu."
+      },
+      sm: {
+        title: "Okulwanyisa Obubeyi",
+        sub: "Tukozesa okukakasa okw'emitendera, AI checks, n'okukebera kw'abantu okusobola okukuuma makaug eri abagula, abakodesa, brokers n'abateeka listings.",
+        card1Title: "Okukakasa Obumanyirivu",
+        card1Sub: "OTP + National ID checks zikolebwa listing etannatwalibwa mu review era etannaba live.",
+        card2Title: "AI Etegeera Obubeyi",
+        card2Sub: "Okukebera ebifaananyi ebiddibwamu, listing patterns eziteeberezebwa, n'ebiwandiiko ebitali bya bulijjo.",
+        card3Title: "Okukebera Kw'omuntu",
+        card3Sub: "Buli listing empya ekeerwaamu nga tenaba live. Ezirimu obulabe obungi zisindikibwa ku mutendera ogw'amaani.",
+        flowTitle: "Engeri review flow yaife gy'ekola",
+        flow1: "Submit: Listing details, photos, contact info n'eby'okukakasa biterekebwa.",
+        flow2: "Automated checks: Tukola OTP checks, format checks, risk scoring n'okuzuula ebyaddibwamu.",
+        flow3: "Team moderation: Listings ezirimu confidence enkulu zikakasibwa; eziteeberezebwa zikwatibwa oba zigaanyizibwa.",
+        flow4: "Decision + notify: Omuteresi afuna status n'ensonga. Approved listings zifulumira ku public pages.",
+        lawNote: "Tukolagana n'ab'obuyinza mu mateeka ga Uganda bwe wabaawo obubeyi, forgery oba okwefaananyiriza.",
+        tipsTitle: "Amagezi g'obukuumi eri abakozesa",
+        tip1: "Totwala sente nga tonnalaba property n'amaaso.",
+        tip2: "Kakasa ownership/title details nga tonnaba kutwala deposit.",
+        tip3: "Kozesa brokers abakakasiddwa ku transactions ez'amaani.",
+        tip4: "Loopa listings eziteeberezebwa mangu n'ebifaananyi bya screenshot.",
+        reportBtn: "Loopa Listing",
+        waBtn: "WhatsApp Team y'Obubeyi",
+        monitorTitle: "Bye twemonitor-a buli kiseera",
+        monitor1Title: "Omutindo gwa listing",
+        monitor1Sub: "Emitwe egy'obulimba, emiwendo egy'obulimba, descriptions ezikopeddwa.",
+        monitor2Title: "Media checks",
+        monitor2Sub: "Ebifaananyi ebibbiddwa, ebiddibwamu oba uploads eziteeberezebwa.",
+        monitor3Title: "Identity integrity",
+        monitor3Sub: "NIN format etakwatagana, OTP etakwatagana, contact patterns ezitasoboka.",
+        monitor4Title: "Behavior risk",
+        monitor4Sub: "Bulk spam, complaints eziddibwamu n'obubeyi obugarukamu."
+      }
+    };
+
+    function fraudTr(key) {
+      const lang = currentLang || "en";
+      const fallback = LANG_FALLBACK[lang] || "en";
+      return FRAUD_I18N[lang]?.[key]
+        || FRAUD_I18N[fallback]?.[key]
+        || FRAUD_I18N.en?.[key]
         || key;
     }
 
@@ -4129,6 +5350,40 @@
       if (btn) btn.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${aiTr("cta")}`;
     }
 
+    function applyFraudLanguageUI() {
+      setTextById("fraud-page-title", fraudTr("title"));
+      setTextById("fraud-page-sub", fraudTr("sub"));
+      setTextById("fraud-card-1-title", fraudTr("card1Title"));
+      setTextById("fraud-card-1-sub", fraudTr("card1Sub"));
+      setTextById("fraud-card-2-title", fraudTr("card2Title"));
+      setTextById("fraud-card-2-sub", fraudTr("card2Sub"));
+      setTextById("fraud-card-3-title", fraudTr("card3Title"));
+      setTextById("fraud-card-3-sub", fraudTr("card3Sub"));
+      setTextById("fraud-flow-title", fraudTr("flowTitle"));
+      setTextById("fraud-flow-step-1", fraudTr("flow1"));
+      setTextById("fraud-flow-step-2", fraudTr("flow2"));
+      setTextById("fraud-flow-step-3", fraudTr("flow3"));
+      setTextById("fraud-flow-step-4", fraudTr("flow4"));
+      setTextById("fraud-law-note", fraudTr("lawNote"));
+      setTextById("fraud-tips-title", fraudTr("tipsTitle"));
+      setTextById("fraud-tip-1", fraudTr("tip1"));
+      setTextById("fraud-tip-2", fraudTr("tip2"));
+      setTextById("fraud-tip-3", fraudTr("tip3"));
+      setTextById("fraud-tip-4", fraudTr("tip4"));
+      setTextById("fraud-report-btn", fraudTr("reportBtn"));
+      const waBtn = document.getElementById("fraud-wa-btn");
+      if (waBtn) waBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${fraudTr("waBtn")}`;
+      setTextById("fraud-monitor-title", fraudTr("monitorTitle"));
+      setTextById("fraud-monitor-1-title", fraudTr("monitor1Title"));
+      setTextById("fraud-monitor-1-sub", fraudTr("monitor1Sub"));
+      setTextById("fraud-monitor-2-title", fraudTr("monitor2Title"));
+      setTextById("fraud-monitor-2-sub", fraudTr("monitor2Sub"));
+      setTextById("fraud-monitor-3-title", fraudTr("monitor3Title"));
+      setTextById("fraud-monitor-3-sub", fraudTr("monitor3Sub"));
+      setTextById("fraud-monitor-4-title", fraudTr("monitor4Title"));
+      setTextById("fraud-monitor-4-sub", fraudTr("monitor4Sub"));
+    }
+
     function applyLanguageUI() {
       document.title = tr("siteTitle");
       setTextById("brand-subtitle", tr("brandSubtitle"));
@@ -4149,6 +5404,7 @@
       setTextById("nav-brokers", tr("navBrokers"));
       setTextById("nav-mortgage", tr("navMortgage"));
       setTextById("nav-ai", tr("navAI"));
+      setTextById("nav-fraud", tr("navFraud"));
       setTextById("mnav-sale", tr("navSale"));
       setTextById("mnav-rent", tr("navRent"));
       setTextById("mnav-students", tr("navStudents"));
@@ -4157,6 +5413,7 @@
       setTextById("mnav-brokers", tr("navBrokers"));
       setTextById("mnav-mortgage", tr("navMortgage"));
       setTextById("mnav-ai", tr("navAI"));
+      setTextById("mnav-fraud", tr("navFraud"));
       setTextById("nav-list-btn", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
 
@@ -4194,6 +5451,7 @@
       applyListingWizardLanguageUI();
       applyMortgageLanguageUI();
       applyAiChatbotLanguageUI();
+      applyFraudLanguageUI();
     }
 
     function formatCompact(v) {
@@ -4362,6 +5620,16 @@
       if (/^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
       if (/^256\d{9}$/.test(raw)) return `+${raw}`;
       return raw;
+    }
+
+    function normalizeNinInput(value) {
+      return String(value || "").replace(/\s+/g, "").toUpperCase().trim();
+    }
+
+    function isValidUgNin(value) {
+      const nin = normalizeNinInput(value);
+      if (!nin) return false;
+      return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(nin);
     }
 
     function normalizeDigits(value) {
@@ -4557,70 +5825,28 @@
       const fieldWrap = document.getElementById("auth-field-login-wrap");
       const identifierLabel = document.getElementById("auth-signin-identifier-label");
       const identifierInput = document.getElementById("auth-signin-identifier");
-      const otpIdentifierInput = document.getElementById("auth-otp-identifier");
-      const otpChannelSelect = document.getElementById("auth-otp-channel");
-      const otpBtn = document.getElementById("auth-otp-btn");
 
       if (authSignInAudience === "field_agent") {
-        if (audienceHelp) audienceHelp.textContent = "Field Agent: operational user who signs up owners/agents/properties in the field and tracks approved output.";
+        if (audienceHelp) audienceHelp.textContent = "Field Agent: operational user who signs up owners/brokers/properties in the field and tracks approved output.";
         if (standardWrap) standardWrap.classList.add("hidden");
         if (fieldWrap) fieldWrap.classList.remove("hidden");
-        if (otpIdentifierInput) otpIdentifierInput.placeholder = "OTP not available for Field Agent";
-        if (otpIdentifierInput) otpIdentifierInput.disabled = true;
-        if (otpChannelSelect) otpChannelSelect.disabled = true;
-        if (otpBtn) {
-          otpBtn.disabled = true;
-          otpBtn.classList.add("opacity-60", "cursor-not-allowed");
-          otpBtn.textContent = "OTP not available for Field Agent";
-        }
       } else {
         if (fieldWrap) fieldWrap.classList.add("hidden");
         if (standardWrap) standardWrap.classList.remove("hidden");
         if (authSignInAudience === "admin") {
           if (audienceHelp) audienceHelp.textContent = "Admin: internal platform control for moderation, approvals, and operations.";
           if (identifierLabel) identifierLabel.textContent = "Admin Email or Phone";
-          if (identifierInput) identifierInput.placeholder = "admin@makaug.com or +256 7XX XXX XXX";
-          if (otpIdentifierInput) otpIdentifierInput.placeholder = "OTP disabled for Admin sign-in";
-          if (otpIdentifierInput) otpIdentifierInput.disabled = true;
-          if (otpChannelSelect) otpChannelSelect.disabled = true;
-          if (otpBtn) {
-            otpBtn.disabled = true;
-            otpBtn.classList.add("opacity-60", "cursor-not-allowed");
-            otpBtn.textContent = "OTP disabled for Admin sign-in";
-          }
+          if (identifierInput) identifierInput.placeholder = "staff email or +256 7XX XXX XXX";
         } else if (authSignInAudience === "agent") {
-          if (otpIdentifierInput) otpIdentifierInput.disabled = false;
-          if (otpChannelSelect) otpChannelSelect.disabled = false;
-          if (otpBtn) {
-            otpBtn.disabled = false;
-            otpBtn.classList.remove("opacity-60", "cursor-not-allowed");
-            otpBtn.textContent = "📱 Sign in with OTP";
-          }
-          if (audienceHelp) audienceHelp.textContent = "Agent: licensed or active property professional who lists and manages properties.";
+          if (audienceHelp) audienceHelp.textContent = "Broker: licensed or active property professional who lists and manages properties.";
           if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
-          if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or agent@email.com";
-          if (otpIdentifierInput) otpIdentifierInput.placeholder = "+256 7XX XXX XXX or agent@email.com";
+          if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or broker@email.com";
         } else {
-          if (otpIdentifierInput) otpIdentifierInput.disabled = false;
-          if (otpChannelSelect) otpChannelSelect.disabled = false;
-          if (otpBtn) {
-            otpBtn.disabled = false;
-            otpBtn.classList.remove("opacity-60", "cursor-not-allowed");
-            otpBtn.textContent = "📱 Sign in with OTP";
-          }
           if (audienceHelp) audienceHelp.textContent = "Property Finder: for people searching properties to buy or rent.";
           if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
           if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or your@email.com";
-          if (otpIdentifierInput) otpIdentifierInput.placeholder = "+256 7XX XXX XXX or your@email.com";
         }
       }
-    }
-
-    function setAuthOtpChannel(channel) {
-      const next = String(channel || "phone").toLowerCase();
-      authOtpChannel = next === "email" ? "email" : "phone";
-      const el = document.getElementById("auth-otp-channel");
-      if (el && el.value !== authOtpChannel) el.value = authOtpChannel;
     }
 
     function setAuthSignUpOtpChannel(channel) {
@@ -4665,8 +5891,8 @@
       if (!help || !roleInput || !formWrap || !fieldNote) return;
 
       if (authSignUpAudience === "agent") {
-        help.textContent = "Agent: create an account to manage listings, broker profile stats, and inbound enquiries.";
-        roleInput.value = "Agent / Broker";
+        help.textContent = "Broker: create an account to manage listings, broker profile stats, and inbound enquiries.";
+        roleInput.value = "Broker";
         formWrap.classList.remove("hidden");
         fieldNote.classList.add("hidden");
         if (agentRegWrap) agentRegWrap.classList.remove("hidden");
@@ -4694,11 +5920,11 @@
       const licenceWrap = document.getElementById("auth-signup-agent-licence-wrap");
       const licenceInput = document.getElementById("auth-signup-agent-licence");
       if (status === "registered") {
-        if (note) note.textContent = "Registered agents can show as Registered and list up to 20 properties.";
+        if (note) note.textContent = "Registered profiles appear as Registered after AREA checks are complete.";
         if (licenceWrap) licenceWrap.classList.remove("hidden");
         if (licenceInput) licenceInput.placeholder = "e.g. AREA/2024/XXXX";
       } else {
-        if (note) note.textContent = "Not registered agents can list up to 5 properties and are shown as Not Registered.";
+        if (note) note.textContent = "Not registered profiles are shown as Not Registered until verification is complete.";
         if (licenceWrap) licenceWrap.classList.add("hidden");
         if (licenceInput) licenceInput.value = "";
       }
@@ -4834,10 +6060,10 @@
       const gridEl = document.getElementById("agent-listings-grid");
 
       if (!broker) {
-        if (nameEl) nameEl.textContent = `${authState.user.first_name || "Agent"} ${authState.user.last_name || ""}`.trim();
-        if (statusEl) statusEl.textContent = "No broker profile linked yet. Register as an agent to unlock listing analytics.";
+        if (nameEl) nameEl.textContent = `${authState.user.first_name || "Broker"} ${authState.user.last_name || ""}`.trim();
+        if (statusEl) statusEl.textContent = "No broker profile linked yet. Register as a broker to unlock listing analytics.";
         if (gridEl) {
-          gridEl.innerHTML = `<div class="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">No linked agent profile found. Please register through “Register as Agent”.</div>`;
+          gridEl.innerHTML = `<div class="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">No linked broker profile found. Please register through “Register as Broker”.</div>`;
         }
         return;
       }
@@ -4850,7 +6076,7 @@
       if (nameEl) nameEl.textContent = `${broker.name} • ${broker.company}`;
       if (statusEl) {
         const regLabel = broker.registration_status === "registered" ? "Registered" : "Not Registered";
-        statusEl.textContent = `${regLabel} agent • Listing limit: ${broker.listing_limit || (broker.registration_status === "registered" ? 20 : 5)}`;
+        statusEl.textContent = `${regLabel} broker`;
       }
 
       const setText = (id, value) => {
@@ -4953,7 +6179,7 @@
         if (el) el.textContent = String(value);
       };
       setText("field-dashboard-name", `${user.first_name || "Field"} ${user.last_name || "Agent"} • ${user.employee_number || "EMP"}`);
-      setText("field-dashboard-status", `Code: ${user.field_agent_code || "-"} • Agent No: ${user.agent_number || "-"} • Submitted: ${submitted} • Pending: ${pending.length}`);
+      setText("field-dashboard-status", `Code: ${user.field_agent_code || "-"} • Broker No: ${user.agent_number || "-"} • Submitted: ${submitted} • Pending: ${pending.length}`);
       setText("field-stat-submitted", submitted);
       setText("field-stat-approved", approved.length);
       setText("field-stat-rejected", rejected.length);
@@ -5449,7 +6675,7 @@
 
     async function adminSetAgentStatus(agentId, status) {
       if (!adminApiKey) {
-        toast("Set ADMIN_API_KEY first to moderate agent status.");
+        toast("Set ADMIN_API_KEY first to moderate broker status.");
         return;
       }
       try {
@@ -5459,9 +6685,9 @@
           body: { status }
         });
         await renderAdminDashboard();
-        toast(`Agent updated: ${status}.`);
+        toast(`Broker updated: ${status}.`);
       } catch (e) {
-        toast(`Agent update failed: ${e.message || "error"}`);
+        toast(`Broker update failed: ${e.message || "error"}`);
       }
     }
 
@@ -5563,7 +6789,7 @@
       const map = {
         buyer_renter: "Buyer / Renter",
         property_owner: "Property Owner",
-        agent_broker: "Agent / Broker",
+        agent_broker: "Broker",
         field_agent: "Field Agent",
         admin: "Admin"
       };
@@ -5723,11 +6949,11 @@
       const resolvedUser = { ...user, portal_mode: resolvedMode };
       if (preferredAudience === "agent" && user.role !== "agent_broker") {
         resolvedUser.portal_mode = "finder";
-        toast("This account is not marked as an agent. Opening property finder dashboard.");
+        toast("This account is not marked as a broker. Opening property finder dashboard.");
       }
       if (preferredAudience === "field_agent" && user.role !== "field_agent") {
         resolvedUser.portal_mode = "finder";
-        toast("This account is not marked as a field agent. Opening property finder dashboard.");
+        toast("This account is not marked as a Field Agent. Opening Property Finder dashboard.");
       }
       if (preferredAudience === "admin" && user.role !== "admin") {
         resolvedUser.portal_mode = "finder";
@@ -5761,7 +6987,7 @@
       let authIdentifier = identifierRaw;
       if (audience === "field_agent") {
         if (!employeeNumber || !agentNumber) {
-          toast("Enter employee number, agent number, and password.");
+          toast("Enter employee number, broker number, and password.");
           return;
         }
         authIdentifier = `${employeeNumber}|${agentNumber}`;
@@ -5771,7 +6997,7 @@
       }
 
       if (audience === "field_agent") {
-        toast("Field agent accounts are provisioned manually by operations. Contact info@makaug.com for activation.");
+        toast("Field Agent accounts are provisioned manually by operations. Contact info@makaug.com for activation.");
         return;
       }
 
@@ -5795,7 +7021,7 @@
 
     async function submitAuthSignUp() {
       if (authSignUpAudience === "field_agent") {
-        toast("Field agent onboarding is manual. Please email info@makaug.com to receive credentials.");
+        toast("Field Agent onboarding is manual. Please email info@makaug.com to receive credentials.");
         return;
       }
 
@@ -5818,11 +7044,11 @@
         return;
       }
       if (authSignUpAudience === "agent" && !email) {
-        toast("Agent account signup requires an email address.");
+        toast("Broker account signup requires an email address.");
         return;
       }
       if (authSignUpAudience === "agent" && registrationStatus === "registered" && !areaLicenceNumber) {
-        toast("Please enter AREA licence number for registered agent signup.");
+        toast("Please enter AREA licence number for registered broker signup.");
         return;
       }
 
@@ -5864,67 +7090,6 @@
         toast(error.message || "Signup failed.");
       } finally {
         setButtonLoading("auth-signup-btn", false, "Send Verification OTP →");
-      }
-    }
-
-    async function submitAuthOtpStart() {
-      if (authSignInAudience === "field_agent") {
-        toast("OTP is not available for Field Agent sign-in.");
-        return;
-      }
-      if (authSignInAudience === "admin") {
-        toast("OTP is disabled for Admin sign-in. Use password sign-in.");
-        return;
-      }
-      const identifierRaw = (document.getElementById("auth-otp-identifier")?.value || "").trim();
-      const channel = authOtpChannel === "email" ? "email" : "phone";
-      const isEmail = identifierRaw.includes("@");
-      const phone = !isEmail ? normalizePhoneInput(identifierRaw) : "";
-      const email = isEmail ? identifierRaw.toLowerCase() : "";
-      if (!identifierRaw) {
-        toast("Enter phone or email for OTP sign in.");
-        return;
-      }
-      if (channel === "phone" && !phone) {
-        toast("Select OTP via Email or enter a valid phone number.");
-        return;
-      }
-      if (channel === "email" && !email) {
-        toast("Select OTP via Phone or enter a valid email address.");
-        return;
-      }
-
-      setButtonLoading("auth-otp-btn", true);
-      try {
-        const request = await apiRequest("/api/auth/request-otp", {
-          method: "POST",
-          body: {
-            channel,
-            phone: channel === "phone" ? phone : undefined,
-            email: channel === "email" ? email : undefined,
-            purpose: "login"
-          }
-        });
-        const otpCode = askOtpCode();
-        if (!otpCode) {
-          toast("OTP verification cancelled.");
-          return;
-        }
-        const verify = await apiRequest("/api/auth/verify-otp", {
-          method: "POST",
-          body: {
-            channel,
-            phone: channel === "phone" ? phone : undefined,
-            email: channel === "email" ? email : undefined,
-            code: otpCode,
-            purpose: "login"
-          }
-        });
-        await finalizeAuth(verify?.data, "login_otp", authSignInAudience);
-      } catch (error) {
-        toast(error.message || "OTP sign in failed.");
-      } finally {
-        setButtonLoading("auth-otp-btn", false, "📱 Sign in with OTP");
       }
     }
 
@@ -6206,10 +7371,19 @@
 
     function handleLpPhotoSelection(event) {
       const files = Array.from(event?.target?.files || []);
-      lpSelectedPhotos = files.slice(0, LP_MAX_UPLOAD_PHOTOS);
-      if (files.length > LP_MAX_UPLOAD_PHOTOS) {
-        toast(`You selected ${files.length} photos. Only the first ${LP_MAX_UPLOAD_PHOTOS} were kept.`);
+      const existingSig = new Set(lpSelectedPhotos.map((file) => `${file.name}:${file.size}:${file.lastModified}`));
+      const incoming = files.filter((file) => !existingSig.has(`${file.name}:${file.size}:${file.lastModified}`));
+      const beforeCount = lpSelectedPhotos.length;
+      lpSelectedPhotos = lpSelectedPhotos.concat(incoming).slice(0, LP_MAX_UPLOAD_PHOTOS);
+      const duplicateCount = files.length - incoming.length;
+      const overflowCount = beforeCount + incoming.length - lpSelectedPhotos.length;
+      if (duplicateCount > 0) {
+        toast(`${duplicateCount} duplicate photo${duplicateCount === 1 ? "" : "s"} ignored.`);
       }
+      if (overflowCount > 0) {
+        toast(`Maximum ${LP_MAX_UPLOAD_PHOTOS} photos allowed. Extra photo${overflowCount === 1 ? "" : "s"} were skipped.`);
+      }
+      if (event?.target) event.target.value = "";
       if (lpMainPhotoIndex >= lpSelectedPhotos.length) lpMainPhotoIndex = 0;
       const nextAssignments = {};
       lpSelectedPhotos.forEach((file, idx) => {
@@ -6219,6 +7393,10 @@
       renderLpPhotoFeedback();
       evaluateLpPhotoQuality(lpSelectedPhotos);
       renderListReviewSummary();
+    }
+
+    function triggerLpSinglePhotoPicker() {
+      document.getElementById("lp-photo-file-single")?.click();
     }
 
     function handleLpIdentityFile(event) {
@@ -6320,20 +7498,33 @@
     }
 
     function onLpVerifyNinInput() {
-      const nin = lpVal("lp-verify-nin").toUpperCase();
+      const nin = normalizeNinInput(lpVal("lp-verify-nin"));
       if (!nin) {
         const input = document.getElementById("lp-verify-nin");
         const msg = document.getElementById("lp-verify-nin-msg");
         if (input) input.classList.remove("border-green-300", "border-red-300");
         if (msg) {
           msg.className = "text-xs text-gray-500 mt-1";
-          msg.textContent = "Format check enabled for Uganda NIN style.";
+          msg.textContent = "Format check enabled for Uganda NIN style (CM/CF...).";
         }
         return;
       }
-      const ok = /^[A-Z]{2}[A-Z0-9]{10,14}$/.test(nin);
-      setInlineValidation("lp-verify-nin", "lp-verify-nin-msg", ok, "NIN format looks valid.", "Enter a valid NIN format (e.g. CMXXXXXXXXXXXX).");
+      const ok = isValidUgNin(nin);
+      setInlineValidation("lp-verify-nin", "lp-verify-nin-msg", ok, "NIN format looks valid.", "Enter a valid Uganda NIN (e.g. CMXXXXXXXXXXXX).");
       renderListReviewSummary();
+    }
+
+    function formatOtpDeliveryFallbackMessage(message, channel = "phone") {
+      const raw = String(message || "").trim();
+      const lower = raw.toLowerCase();
+      const providerIssue = lower.includes("not configured")
+        || lower.includes("blocked by microsoft 365 tenant policy")
+        || lower.includes("failed to send otp")
+        || lower.includes("failed to send otp email")
+        || lower.includes("failed to send otp sms");
+      if (!providerIssue) return raw || "Could not send OTP right now.";
+      const modeLabel = channel === "email" ? "email" : "phone";
+      return `OTP delivery via ${modeLabel} is temporarily unavailable. For internal testing, use the authorized admin override code.`;
     }
 
     async function requestListingOtp() {
@@ -6372,12 +7563,13 @@
         lpListingOtpVerifiedEmail = "";
         lpListingOtpToken = "";
       } catch (error) {
+        const fallbackMsg = formatOtpDeliveryFallbackMessage(error.message, channel);
         const otpStatus = document.getElementById("lp-otp-status");
         if (otpStatus) {
           otpStatus.className = "text-xs text-red-600 mt-1";
-          otpStatus.textContent = error.message || "Could not send OTP right now.";
+          otpStatus.textContent = fallbackMsg;
         }
-        toast(error.message || "Could not send OTP.");
+        toast(fallbackMsg);
       } finally {
         setButtonLoading("lp-send-otp-btn", false, "Send OTP");
       }
@@ -6941,7 +8133,7 @@
         toast("Please enter a valid email address.");
         return false;
       }
-      if (!/^[A-Z]{2}[A-Z0-9]{10,14}$/i.test(nin)) {
+      if (!isValidUgNin(nin)) {
         markLpFieldError("lp-verify-nin", "Please enter a valid NIN.");
         toast("Please enter a valid NIN.");
         return false;
@@ -7420,29 +8612,229 @@
       }
     }
 
+    function setAgentOtpStatus(tone, message) {
+      const el = document.getElementById("agent-otp-status");
+      if (!el) return;
+      if (tone === "success") {
+        el.className = "text-xs text-green-700 mt-1";
+      } else if (tone === "error") {
+        el.className = "text-xs text-red-600 mt-1";
+      } else if (tone === "warning") {
+        el.className = "text-xs text-amber-700 mt-1";
+      } else {
+        el.className = "text-xs text-gray-500 mt-1";
+      }
+      el.textContent = message;
+    }
+
+    function setAgentOtpChannel(channel) {
+      const next = String(channel || "phone").toLowerCase();
+      agentOtpChannel = next === "email" ? "email" : "phone";
+      agentRegistrationOtpToken = "";
+      agentOtpVerifiedPhone = "";
+      agentOtpVerifiedEmail = "";
+      const otpInput = document.getElementById("agent-otp-code");
+      if (otpInput) otpInput.value = "";
+      setAgentOtpStatus("neutral", agentOtpChannel === "email"
+        ? "Email OTP pending verification."
+        : "Phone OTP pending verification.");
+    }
+
+    function resetAgentRegistrationOtpState() {
+      const channelEl = document.getElementById("agent-otp-channel");
+      if (channelEl) channelEl.value = "phone";
+      setAgentOtpChannel("phone");
+    }
+
+    function onAgentPhoneInput() {
+      const input = document.getElementById("agent-phone");
+      const normalized = normalizePhoneInput(input?.value || "");
+      if (input) input.value = normalized;
+      if (!normalized) {
+        if (input) input.classList.remove("border-green-300", "border-red-300");
+        const msg = document.getElementById("agent-phone-msg");
+        if (msg) {
+          msg.className = "text-xs text-gray-500 mt-1";
+          msg.textContent = "Use Uganda format e.g. +256770123456";
+        }
+        return;
+      }
+      const ok = /^\+2567\d{8}$/.test(normalized) || /^\+256\d{9}$/.test(normalized);
+      setInlineValidation("agent-phone", "agent-phone-msg", ok, "Valid Uganda phone format.", "Use format +2567XXXXXXXX.");
+      if (agentOtpVerifiedPhone && agentOtpVerifiedPhone !== normalized) {
+        agentRegistrationOtpToken = "";
+        agentOtpVerifiedPhone = "";
+        setAgentOtpStatus("warning", "Phone changed. Please verify OTP again.");
+      }
+    }
+
+    function onAgentEmailInput() {
+      const email = String(document.getElementById("agent-email")?.value || "").trim().toLowerCase();
+      if (!email) {
+        const input = document.getElementById("agent-email");
+        if (input) input.classList.remove("border-green-300", "border-red-300");
+        const msg = document.getElementById("agent-email-msg");
+        if (msg) {
+          msg.className = "text-xs text-gray-500 mt-1";
+          msg.textContent = "Enter a valid email address for OTP and updates.";
+        }
+        return;
+      }
+      const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      setInlineValidation("agent-email", "agent-email-msg", ok, "Valid email format.", "Enter a valid email address.");
+      if (agentOtpVerifiedEmail && agentOtpVerifiedEmail !== email) {
+        agentRegistrationOtpToken = "";
+        agentOtpVerifiedEmail = "";
+        setAgentOtpStatus("warning", "Email changed. Please verify OTP again.");
+      }
+    }
+
+    function onAgentNinInput() {
+      const nin = normalizeNinInput(document.getElementById("agent-nin")?.value || "");
+      if (!nin) {
+        const input = document.getElementById("agent-nin");
+        if (input) input.classList.remove("border-green-300", "border-red-300");
+        const msg = document.getElementById("agent-nin-msg");
+        if (msg) {
+          msg.className = "text-xs text-gray-500 mt-1";
+          msg.textContent = "Format check enabled for Uganda NIN style (CM/CF...).";
+        }
+        return;
+      }
+      const ok = isValidUgNin(nin);
+      setInlineValidation("agent-nin", "agent-nin-msg", ok, "NIN format looks valid.", "Enter a valid Uganda NIN (e.g. CMXXXXXXXXXXXX).");
+    }
+
+    async function requestAgentOtp() {
+      const channel = agentOtpChannel === "email" ? "email" : "phone";
+      const phone = normalizePhoneInput(document.getElementById("agent-phone")?.value || "");
+      const email = String(document.getElementById("agent-email")?.value || "").trim().toLowerCase();
+
+      if (channel === "phone") {
+        if (!phone || !(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
+          setAgentOtpStatus("error", "Enter a valid Uganda phone number first.");
+          toast("Enter a valid Uganda phone number first.");
+          return;
+        }
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setAgentOtpStatus("error", "Enter a valid email address first.");
+        toast("Enter a valid email address first.");
+        return;
+      }
+
+      setButtonLoading("agent-send-otp-btn", true);
+      try {
+        await apiRequest("/api/properties/request-submit-otp", {
+          method: "POST",
+          body: {
+            channel,
+            phone: channel === "phone" ? phone : undefined,
+            email: channel === "email" ? email : undefined
+          }
+        });
+        agentRegistrationOtpToken = "";
+        agentOtpVerifiedPhone = "";
+        agentOtpVerifiedEmail = "";
+        setAgentOtpStatus("success", channel === "email" ? "OTP sent to your email." : "OTP sent to your phone.");
+      } catch (error) {
+        const fallbackMsg = formatOtpDeliveryFallbackMessage(error.message, channel);
+        setAgentOtpStatus("error", fallbackMsg);
+        toast(fallbackMsg);
+      } finally {
+        setButtonLoading("agent-send-otp-btn", false, "Send OTP");
+      }
+    }
+
+    async function verifyAgentOtp() {
+      const channel = agentOtpChannel === "email" ? "email" : "phone";
+      const phone = normalizePhoneInput(document.getElementById("agent-phone")?.value || "");
+      const email = String(document.getElementById("agent-email")?.value || "").trim().toLowerCase();
+      const code = String(document.getElementById("agent-otp-code")?.value || "").trim();
+
+      if (!code) {
+        setAgentOtpStatus("error", "Enter the 6-digit OTP code.");
+        toast("Enter the 6-digit OTP code.");
+        return;
+      }
+      if (channel === "phone" && !phone) {
+        setAgentOtpStatus("error", "Enter phone number and OTP code.");
+        toast("Enter phone number and OTP code.");
+        return;
+      }
+      if (channel === "email" && !email) {
+        setAgentOtpStatus("error", "Enter email and OTP code.");
+        toast("Enter email and OTP code.");
+        return;
+      }
+
+      setButtonLoading("agent-verify-otp-btn", true);
+      try {
+        const response = await apiRequest("/api/properties/verify-submit-otp", {
+          method: "POST",
+          body: {
+            channel,
+            phone: channel === "phone" ? phone : undefined,
+            email: channel === "email" ? email : undefined,
+            code
+          }
+        });
+        agentRegistrationOtpToken = response?.data?.listing_otp_token || "";
+        agentOtpVerifiedPhone = channel === "phone" ? phone : "";
+        agentOtpVerifiedEmail = channel === "email" ? email : "";
+        setAgentOtpStatus("success", `${channel === "email" ? "Email" : "Phone"} OTP verified.`);
+      } catch (error) {
+        agentRegistrationOtpToken = "";
+        setAgentOtpStatus("error", error.message || "OTP verification failed.");
+        toast(error.message || "OTP verification failed.");
+      } finally {
+        setButtonLoading("agent-verify-otp-btn", false, "Verify OTP");
+      }
+    }
+
     async function submitAgentApplication() {
       const fullName = (document.getElementById("agent-full-name")?.value || "").trim();
       const licenceNumber = (document.getElementById("agent-licence")?.value || "").trim();
       const companyName = (document.getElementById("agent-company")?.value || "").trim();
-      const phone = (document.getElementById("agent-phone")?.value || "").trim();
-      const whatsapp = (document.getElementById("agent-whatsapp")?.value || "").trim();
+      const phone = normalizePhoneInput(document.getElementById("agent-phone")?.value || "");
+      const whatsapp = normalizePhoneInput(document.getElementById("agent-whatsapp")?.value || "");
       const email = (document.getElementById("agent-email")?.value || "").trim().toLowerCase();
       const districtsCovered = (document.getElementById("agent-areas")?.value || "").trim();
-      const nin = (document.getElementById("agent-nin")?.value || "").trim();
+      const nin = normalizeNinInput((document.getElementById("agent-nin")?.value || "").trim());
       const registrationStatus = document.querySelector('input[name="agent-registration-status"]:checked')?.value || "registered";
       const fieldAgentAssisted = (document.getElementById("agent-field-assisted")?.value || "no") === "yes";
       const fieldAgentId = (document.getElementById("agent-field-id")?.value || "").trim();
-      const listingLimit = registrationStatus === "registered" ? 20 : 5;
+      const otpChannel = agentOtpChannel === "email" ? "email" : "phone";
       const resolvedLicenceNumber = registrationStatus === "registered"
         ? licenceNumber
         : (licenceNumber || `UNREG-${Date.now()}`);
 
       if (!fullName || !phone || !email || !districtsCovered || !nin || (registrationStatus === "registered" && !licenceNumber)) {
-        toast("Please complete all required agent fields.");
+        toast("Please complete all required broker fields.");
         return;
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        toast("Please enter a valid email address for agent registration.");
+        toast("Please enter a valid email address for broker registration.");
+        return;
+      }
+      if (!(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
+        toast("Please enter a valid Uganda phone number.");
+        return;
+      }
+      if (!isValidUgNin(nin)) {
+        toast("Please enter a valid Uganda NIN.");
+        return;
+      }
+      const otpVerified = !!agentRegistrationOtpToken && (
+        (otpChannel === "email" && agentOtpVerifiedEmail === email) ||
+        (otpChannel === "phone" && agentOtpVerifiedPhone === phone)
+      );
+      if (!otpVerified) {
+        setAgentOtpStatus("error", otpChannel === "email"
+          ? "Verify email OTP before submitting."
+          : "Verify phone OTP before submitting.");
+        toast(otpChannel === "email"
+          ? "Please verify email OTP before submitting."
+          : "Please verify phone OTP before submitting.");
         return;
       }
       if (fieldAgentAssisted && !fieldAgentId) {
@@ -7464,12 +8856,13 @@
             districts_covered: districtsCovered,
             nin,
             registration_status: registrationStatus,
-            listing_limit: listingLimit,
-            bio: fieldAgentAssisted ? `Onboarded with field agent ${fieldAgentId}` : undefined
+            otp_channel: otpChannel,
+            listing_otp_token: agentRegistrationOtpToken,
+            bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
           }
         });
         await trackEvent("agent_register_submit", { district_scope: districtsCovered });
-        toast(`Application submitted. ${registrationStatus === "registered" ? "Registered" : "Not registered"} profile set (${listingLimit} listing limit).`);
+        toast(`Application submitted. ${registrationStatus === "registered" ? "Registered" : "Not registered"} profile set.`);
         closeModal("broker-reg-modal");
       } catch (error) {
         toast(error.message || "Could not submit application.");
@@ -7482,7 +8875,6 @@
       const registrationStatus = document.querySelector('input[name="agent-registration-status"]:checked')?.value || "registered";
       const licenceLabel = document.getElementById("agent-licence-label");
       const certificateLabel = document.getElementById("agent-certificate-label");
-      const limitNote = document.getElementById("agent-limit-note");
       const licenceInput = document.getElementById("agent-licence");
       const fullNameInput = document.getElementById("agent-full-name");
       const certificateWrap = document.getElementById("agent-certificate-wrap");
@@ -7494,7 +8886,6 @@
         if (fullNameInput) fullNameInput.placeholder = "As on your AREA certificate";
         if (licenceLabel) licenceLabel.textContent = "AREA Uganda Licence Number *";
         if (certificateLabel) certificateLabel.textContent = "Upload AREA Certificate *";
-        if (limitNote) limitNote.textContent = "This account will be tagged as Registered and can list up to 20 properties.";
         if (licenceInput) licenceInput.placeholder = "e.g. AREA/2024/XXXX";
         if (licenceWrap) licenceWrap.classList.remove("hidden");
         if (certificateWrap) certificateWrap.classList.remove("hidden");
@@ -7505,7 +8896,6 @@
         if (fullNameInput) fullNameInput.placeholder = "As on your legal National ID";
         if (licenceLabel) licenceLabel.textContent = "AREA Uganda Licence Number (optional for now)";
         if (certificateLabel) certificateLabel.textContent = "Upload AREA Certificate (optional for now)";
-        if (limitNote) limitNote.textContent = "This account will be tagged as Not Registered and can list up to 5 properties.";
         if (licenceInput) licenceInput.placeholder = "Leave blank if not registered yet";
         if (licenceWrap) licenceWrap.classList.add("hidden");
         if (certificateWrap) certificateWrap.classList.add("hidden");
@@ -7529,8 +8919,8 @@
       if (otpStatus) {
         otpStatus.className = "text-xs text-gray-500 mt-1";
         otpStatus.textContent = lpListingOtpChannel === "email"
-          ? "Email OTP not verified yet."
-          : "Phone OTP not verified yet.";
+          ? "Email OTP pending verification."
+          : "Phone OTP pending verification.";
       }
       lpListingOtpToken = "";
       lpListingOtpVerifiedPhone = "";
@@ -7596,7 +8986,7 @@
     const PAGE_CONTENT = {
       "how-it-works": `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">How It Works</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-4">
           makaug.com is built around a simple workflow: discover verified listings, connect directly, and complete transactions
           only after full due diligence. Whether you are buying, renting, investing, or listing, the process is structured to reduce risk.
@@ -7607,7 +8997,7 @@
             <ol class="list-decimal pl-5 space-y-1 text-sm">
               <li>Search by district, area, budget, property type, and map.</li>
               <li>Open listing details and review photos, location, and source badge.</li>
-              <li>Contact owner or agent by phone or WhatsApp.</li>
+              <li>Contact owner or broker by phone or WhatsApp.</li>
               <li>Schedule viewing and verify title/tenancy documents before payment.</li>
             </ol>
           </div>
@@ -7621,11 +9011,11 @@
             </ol>
           </div>
           <div class="bg-amber-50 border border-amber-100 rounded-xl p-3">
-            <h3 class="font-bold text-gray-800 mb-2">For Agents</h3>
+            <h3 class="font-bold text-gray-800 mb-2">For Brokers</h3>
             <ol class="list-decimal pl-5 space-y-1 text-sm">
               <li>Submit registration with licence and profile details.</li>
               <li>Pass verification review before public profile goes live.</li>
-              <li>Publish and manage listings under agent identity.</li>
+              <li>Publish and manage listings under broker identity.</li>
               <li>Receive enquiries directly from verified user traffic.</li>
             </ol>
           </div>
@@ -7642,7 +9032,7 @@
         </p>`,
       terms: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Terms & Conditions</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3">
           These Terms govern your use of makaug.com. By using the platform, you agree to comply with these Terms,
           all applicable Ugandan laws, and any listing or safety standards published on the site.
@@ -7693,7 +9083,7 @@
         </p>`,
       privacy: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Privacy Policy</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3 text-sm">
           makaug.com processes personal data in line with the Data Protection and Privacy Act, 2019 and related Ugandan regulations.
           This policy explains what we collect, why we collect it, and how users can exercise privacy rights.
@@ -7736,7 +9126,7 @@
         </p>`,
       cookies: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Cookie Policy</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3 text-sm">
           Cookies and similar technologies help makaug.com run securely, remember your preferences, and improve user experience.
         </p>
@@ -7766,7 +9156,7 @@
         </p>`,
       "anti-fraud": `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Anti-Fraud Policy</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3 text-sm">
           makaug.com applies layered anti-fraud controls to protect users from fake listings, impersonation, and payment scams.
         </p>
@@ -7798,7 +9188,7 @@
         </p>`,
       help: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Help Centre</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <h3 class="font-bold text-gray-800 mb-1">Support Channels</h3>
         <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
           <li>Phone: 0760112587</li>
@@ -7809,7 +9199,7 @@
         <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
           <li>Account access, sign-in issues, and password resets.</li>
           <li>Listing creation, edits, image issues, and publication checks.</li>
-          <li>Search filters, saved listings, and agent profile concerns.</li>
+          <li>Search filters, saved listings, and broker profile concerns.</li>
           <li>Fraud reports and suspicious listing escalation.</li>
         </ul>
         <h3 class="font-bold text-gray-800 mb-1">Recommended Support Workflow</h3>
@@ -7824,7 +9214,7 @@
         </p>`,
       safety: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Safety Tips</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <h3 class="font-bold text-gray-800 mb-1">Before You View Any Property</h3>
         <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
           <li>Confirm the lister identity and keep communication records.</li>
@@ -7846,7 +9236,7 @@
           <li>Confirm taxes, fees, and registration requirements before completion.</li>
           <li>Keep transfer proofs, receipts, and witness records securely.</li>
         </ul>
-        <h3 class="font-bold text-gray-800 mb-1">For Owners and Agents</h3>
+        <h3 class="font-bold text-gray-800 mb-1">For Owners and Brokers</h3>
         <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
           <li>Avoid sharing excessive personal documents in open chat channels.</li>
           <li>Meet prospects in controlled environments for first appointments.</li>
@@ -7857,7 +9247,7 @@
         </p>`,
       advertise: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3 text-sm">
           makaug.com offers performance-focused advertising solutions for developers, agencies, mortgage providers,
           insurers, moving services, and property-adjacent brands.
@@ -7866,7 +9256,7 @@
         <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
           <li>Homepage and category-page sponsored units.</li>
           <li>Contextual placements within sale, rent, land, and student journeys.</li>
-          <li>Featured agent and featured listing visibility products.</li>
+          <li>Featured broker and featured listing visibility products.</li>
           <li>Seasonal campaign opportunities for launches and promotions.</li>
         </ul>
         <h3 class="font-bold text-gray-800 mb-1">Campaign Setup and Reporting</h3>
@@ -7883,7 +9273,7 @@
         <p class="text-sm mt-2">For media kits and pricing, contact info@makaug.com.</p>`,
       careers: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Careers</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 25 February 2026</p>
+        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
         <p class="mb-3 text-sm">
           We are building practical technology for Uganda's real estate ecosystem. Our teams work across product,
           engineering, operations, trust and safety, customer support, and market growth.
@@ -8627,7 +10017,7 @@
 
     function localizeHeroContextOption(type, opt) {
       const t = type || "sale";
-      if ((t === "sale" || t === "rent") && opt.value === "") return tr("ctxBedsBaths");
+      if ((t === "sale" || t === "rent") && opt.value === "") return tr("ctxBedrooms");
       if ((t === "sale" || t === "rent") && opt.value === "1") return tr("ctx1Bed");
       if ((t === "sale" || t === "rent") && opt.value === "2") return tr("ctx2Beds");
       if ((t === "sale" || t === "rent") && opt.value === "3") return tr("ctx3Beds");
@@ -8721,7 +10111,7 @@
     function getBrokerSuggestionPool() {
       const map = new Map();
       BROKERS.forEach((b) => {
-        addSugg(map, b.name, "Agent");
+        addSugg(map, b.name, "Broker");
         addSugg(map, b.company, "Agency");
         addSugg(map, b.area, "Area");
         (b.specialties || []).forEach((s) => addSugg(map, s, "Speciality"));
@@ -9067,7 +10457,7 @@
       const broker = BROKERS.find((item) => item.id === id);
       if (!broker) return;
       const shareUrl = getBrokerShareUrl(broker);
-      const shareText = `Agent Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
+      const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
       try {
         if (channel === "native" && navigator.share) {
           await navigator.share({ title: broker.name, text: shareText, url: shareUrl });
@@ -9082,7 +10472,7 @@
           return;
         }
         const copied = await copyTextToClipboard(shareText);
-        toast(copied ? translateListingLabel("Agent card copied. Share it on WhatsApp.") : translateListingLabel("Unable to copy link right now."));
+        toast(copied ? translateListingLabel("Broker card copied. Share it on WhatsApp.") : translateListingLabel("Unable to copy link right now."));
       } catch (error) {
         toast(translateListingLabel("Unable to share right now."));
       }
@@ -9330,7 +10720,7 @@
             <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">Call</a>
             <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">WhatsApp</a>
           </div>
-          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">Share Agent Card</button>
+          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">Share Broker Card</button>
         </div>`).join("");
     }
 
@@ -10239,7 +11629,7 @@
         "Listing link copied.": "Link ya listing ekopeddwa.",
         "Unable to copy link right now.": "Tetusobodde kukoppa link kati.",
         "Unable to share right now.": "Tetusobodde kugabana kati.",
-        "Agent card copied. Share it on WhatsApp.": "Agent card ekopeddwa. Gigabane ku WhatsApp."
+        "Broker card copied. Share it on WhatsApp.": "Broker card ekopeddwa. Gigabane ku WhatsApp."
       },
       sw: {
         "Property Details": "Maelezo ya Mali",
@@ -10408,7 +11798,315 @@
         "Listing link copied.": "Kiungo cha tangazo kimenakiliwa.",
         "Unable to copy link right now.": "Imeshindikana kunakili kiungo kwa sasa.",
         "Unable to share right now.": "Imeshindikana kushiriki kwa sasa.",
-        "Agent card copied. Share it on WhatsApp.": "Kadi ya wakala imenakiliwa. Shiriki kwenye WhatsApp."
+        "Broker card copied. Share it on WhatsApp.": "Kadi ya broker imenakiliwa. Shiriki kwenye WhatsApp."
+      },
+      ac: {
+        "Property Details": "Ngec pa Property",
+        "Listing Type *": "Kit pa Listing *",
+        "Title *": "Wiye *",
+        "Best Contact Method *": "Yore me ribe ma ber *",
+        "Phone Call": "Cim pa poto",
+        "Phone + WhatsApp": "Poto + WhatsApp",
+        "You can change language any time from the selector at the top bar.": "I twero loko leb kare weng ki selector ma i bar me wic.",
+        "You can change language any time from the language selector in the top green bar.": "I twero loko leb kare weng ki language selector i bar ma labongo ma i wic.",
+        "You can change language any time from the language bar above.": "I twero loko leb kare weng i bar me leb ma i wic.",
+        "Region *": "Region *",
+        "District *": "District *",
+        "City / Town *": "Kibuga / Town *",
+        "Location / Town *": "Kabedo / Town *",
+        "Neighbourhood / Zone *": "Kino ma i but / Zone *",
+        "Altitude (m)": "Altitude (m)",
+        "Select region": "Yer region",
+        "Select district": "Yer district",
+        "Select city / town": "Yer city / town",
+        "Select neighbourhood": "Yer neighbourhood",
+        "Area / Neighbourhood *": "Kabedo / Neighbourhood *",
+        "Full Address": "Address weng",
+        "Property Category *": "Category pa property *",
+        "Price (USh) *": "Ngeyo (USh) *",
+        "Price Period": "Kare pa ngeyo",
+        "Description *": "Lok me nyuto *",
+        "Amenities": "Jami ma tye",
+        "Pin Property Location": "Ket pin pa kabedo pa property",
+        "Location setup (step-by-step)": "Tero kabedo (nyig nyig)",
+        "1. Select region, then district.": "1. Yer region, ka dong district.",
+        "2. Select city/town, then neighbourhood/zone.": "2. Yer city/town, ka dong neighbourhood/zone.",
+        "3. Confirm area and optionally type full street address.": "3. Cik area, ka i mito i ket full street address.",
+        "4. Confirm the map pin matches your property location.": "4. Cik ni pin i map rwate ki kabedo pa property ni.",
+        "Sync map to selected area": "Lok map obed ka area ma i yero",
+        "Continue to Photos →": "Dhi i Cal →",
+        "Photos & Media": "Cal ki Media",
+        "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 5 atir mite pi kabedo mapire tek. Quality maber medo geno ki penyo.",
+        "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Ket cal ma wang. Cal 5 onyo makato mite, i twero ket nyaka 20. Quality maber medo geno ki penyo.",
+        "Upload Photos (exactly 5 required) *": "Ket Cal (cal 5 atir) *",
+        "Upload Photos (min 5, max 20) *": "Ket Cal (matidi 5, madit 20) *",
+        "Verify Identity": "Cik nying",
+        "Review & Submit": "Nen doki ci ket",
+        "Full Name *": "Nying weng *",
+        "Display Name on Website *": "Nying ma bi nen i website *",
+        "Phone Number *": "Namba pa poto *",
+        "Email *": "Email *",
+        "National ID Number (NIN) *": "Namba pa National ID (NIN) *",
+        "Upload National ID Photo *": "Ket cal pa National ID *",
+        "I confirm this pin matches my property location.": "Aciko ni pin man rwate ki kabedo pa property na.",
+        "I confirm the typed NIN matches the uploaded National ID document.": "Aciko ni NIN ma aketo rwate ki document pa National ID ma aketo.",
+        "Required photo coverage": "Cal mapire mite",
+        "After upload, assign each photo to what it shows.": "Ka i keto cal, yero gin ma cal acel acel nyuto.",
+        "Select photo category": "Yer category pa cal",
+        "Additional photo": "Cal mukene",
+        "Auto-filled from district/city/neighbourhood": "Pe iye nongo kene ki district/city/neighbourhood",
+        "Area Highlights": "Jami mapire i area",
+        "Nearby Amenities": "Jami ma i cok",
+        "is a strong location for": "obedo kabedo maber pi",
+        "with convenient access to daily services and key transport links.": "ki yoo ma yot i tic pa nino ki yore me wot mapire.",
+        "with convenient access to schools, daily services, and key transport links.": "ki yoo ma yot i kwan, tic pa nino, ki yore me wot mapire.",
+        "Nearby highlights include": "Jami mapire ma i cok gin",
+        "and": "ki",
+        "This area is popular with serious buyers and tenants looking for value and convenience.": "Area man ogeno ki jo mugudo ki jo gero ma yenyo wel maber ki yot.",
+        "home purchase": "gudo gang",
+        "rental living": "bedo i gero",
+        "student accommodation": "kabedo pa latin kwan",
+        "land investment": "keto cente i lobo",
+        "business use": "tic pa cwercwiny",
+        "property use": "tic pa property",
+        "Added": "Kimedo",
+        "Added today": "Kimedo tin",
+        "Added recently": "Kimedo nono",
+        "Summary reset to auto-generated.": "Summary odok i auto-generated.",
+        "Listing link copied.": "Link pa listing kikopi.",
+        "Unable to copy link right now.": "Pe twero kopi link kombedi.",
+        "Unable to share right now.": "Pe twero gwoko kombedi."
+      },
+      ny: {
+        "Property Details": "Ebikwata aha Property",
+        "Listing Type *": "Ekika kya Listing *",
+        "Title *": "Omutwe *",
+        "Best Contact Method *": "Engeri y'okukutuukaho esingayo *",
+        "Phone Call": "Okukubira essimu",
+        "Phone + WhatsApp": "Essimu + WhatsApp",
+        "You can change language any time from the selector at the top bar.": "Noobaasa kuhindura orurimi obwire bwona omu selector aha bar ya ruguru.",
+        "You can change language any time from the language selector in the top green bar.": "Noobaasa kuhindura orurimi obwire bwona omu language selector aha bar ya ruguru erikuba green.",
+        "You can change language any time from the language bar above.": "Noobaasa kuhindura orurimi obwire bwona aha language bar eri aha ruguru.",
+        "Region *": "Region *",
+        "District *": "Disiturikiti *",
+        "City / Town *": "Ekyibuga / Town *",
+        "Location / Town *": "Eifo / Town *",
+        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Altitude (m)": "Oburaingwa (m)",
+        "Select region": "Londa region",
+        "Select district": "Londa disiturikiti",
+        "Select city / town": "Londa ekyibuga / town",
+        "Select neighbourhood": "Londa ekitundu",
+        "Area / Neighbourhood *": "Akarere / Ekitundu *",
+        "Full Address": "Address yoona",
+        "Property Category *": "Category ya property *",
+        "Price (USh) *": "Omuhendo (USh) *",
+        "Price Period": "Obwire bw'omuhendo",
+        "Description *": "Enyonyora *",
+        "Amenities": "Eby'okorora",
+        "Pin Property Location": "Taho pin y'aho property eri",
+        "Location setup (step-by-step)": "Okuteeka location (step-by-step)",
+        "1. Select region, then district.": "1. Londa region, hanyuma disiturikiti.",
+        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, hanyuma neighbourhood/zone.",
+        "3. Confirm area and optionally type full street address.": "3. Kakasa area kandi noobaasa kwandika full street address.",
+        "4. Confirm the map pin matches your property location.": "4. Kakasa ngu map pin erikwatana n'aho property yaawe eri.",
+        "Sync map to selected area": "Teerana map n'area erirondoorwe",
+        "Continue to Photos →": "Gyenda aha Bifaananyi →",
+        "Photos & Media": "Bifaananyi na Media",
+        "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Quality erungi eyerera obwesige n'okubuuza.",
+        "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 noba okukira nibyetagisa, kandi noobaasa kutaho kugera aha 20. Quality erungi eyerera obwesige n'okubuuza.",
+        "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
+        "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
+        "Verify Identity": "Kakasa Endangamuntu",
+        "Review & Submit": "Reeba kandi Ohereze",
+        "Full Name *": "Eriinya ryona *",
+        "Display Name on Website *": "Eriinya erirabika aha Website *",
+        "Phone Number *": "Namba y'Essimu *",
+        "Email *": "Email *",
+        "National ID Number (NIN) *": "Namba ya National ID (NIN) *",
+        "Upload National ID Photo *": "Taho Ekifaananyi kya National ID *",
+        "I confirm this pin matches my property location.": "Ninkakasa ngu pin enu nekwatana n'aho property yangye eri.",
+        "I confirm the typed NIN matches the uploaded National ID document.": "Ninkakasa ngu NIN ehandikire nekwatana na National ID etahirweho.",
+        "Required photo coverage": "Obwetterane bw'ebifaananyi obwetagisa",
+        "After upload, assign each photo to what it shows.": "Bwanyima y'okutaho, londa buri kifaananyi kyekiraga.",
+        "Select photo category": "Londa category y'ekifaananyi",
+        "Additional photo": "Ekifaananyi ekyongirweho",
+        "Auto-filled from district/city/neighbourhood": "Ejura yoona kuruga district/city/neighbourhood",
+        "Area Highlights": "Ebikuru by'Akarere",
+        "Nearby Amenities": "Eby'okorora ebiri haihi",
+        "is a strong location for": "ni ahantu harungi munonga ahabw'",
+        "with convenient access to daily services and key transport links.": "haina oburaingwa bwangu kuhikayo services za buriizooba n'entambura nkuru.",
+        "with convenient access to schools, daily services, and key transport links.": "haina oburaingwa bwangu kuhikayo amashomero, services za buriizooba, n'entambura nkuru.",
+        "Nearby highlights include": "Ebikuru ebiri haihi birimu",
+        "and": "na",
+        "This area is popular with serious buyers and tenants looking for value and convenience.": "Akarere aka niko kenda n'abagura n'abapangisa abarikushaba value n'obwangu.",
+        "home purchase": "okugura enju",
+        "rental living": "okubaho omu kupangisa",
+        "student accommodation": "obutuuze bw'abanyeshomesa",
+        "land investment": "okutezamu sente omu itaka",
+        "business use": "okukozesa by'obusuubuzi",
+        "property use": "okukozesa property",
+        "Added": "Kyatairweho",
+        "Added today": "Kyatairweho eriizooba",
+        "Added recently": "Kyatairweho obwire bukehingire",
+        "Summary reset to auto-generated.": "Summary eigarurwe aha auto-generated.",
+        "Listing link copied.": "Link ya listing ekopibwe.",
+        "Unable to copy link right now.": "Titwabaasa kukopa link hati.",
+        "Unable to share right now.": "Titwabaasa kugabana hati."
+      },
+      rn: {
+        "Property Details": "Ebikwata aha Property",
+        "Listing Type *": "Ekika kya Listing *",
+        "Title *": "Omutwe *",
+        "Best Contact Method *": "Engeri y'okutuhikaho esingayo *",
+        "Phone Call": "Okukuba essimu",
+        "Phone + WhatsApp": "Essimu + WhatsApp",
+        "You can change language any time from the selector at the top bar.": "Nooshobora kuhindura orurimi obwire bwona kuruga omu selector aha bar y'ahaiguru.",
+        "You can change language any time from the language selector in the top green bar.": "Nooshobora kuhindura orurimi obwire bwona kuruga omu language selector aha bar ya green y'ahaiguru.",
+        "You can change language any time from the language bar above.": "Nooshobora kuhindura orurimi obwire bwona aha language bar eri ahaiguru.",
+        "Region *": "Region *",
+        "District *": "Disiturikiti *",
+        "City / Town *": "Ekyibuga / Town *",
+        "Location / Town *": "Ahantu / Town *",
+        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Altitude (m)": "Oburaingwa (m)",
+        "Select region": "Londa region",
+        "Select district": "Londa disiturikiti",
+        "Select city / town": "Londa ekyibuga / town",
+        "Select neighbourhood": "Londa ekitundu",
+        "Area / Neighbourhood *": "Akarere / Ekitundu *",
+        "Full Address": "Address yoona",
+        "Property Category *": "Category ya property *",
+        "Price (USh) *": "Omuhendo (USh) *",
+        "Price Period": "Obwire bw'omuhendo",
+        "Description *": "Enshoborora *",
+        "Amenities": "Eby'okworora",
+        "Pin Property Location": "Taho pin y'aho property eri",
+        "Location setup (step-by-step)": "Okutegeka ahantu (step-by-step)",
+        "1. Select region, then district.": "1. Londa region, hanyuma disiturikiti.",
+        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, hanyuma neighbourhood/zone.",
+        "3. Confirm area and optionally type full street address.": "3. Kakasa area kandi nooshobora kuhandika full street address.",
+        "4. Confirm the map pin matches your property location.": "4. Kakasa ngu map pin nekwatana n'aho property yawe eri.",
+        "Sync map to selected area": "Tereza map n'area erirondoorwe",
+        "Continue to Photos →": "Gyenda aha Bifaananyi →",
+        "Photos & Media": "Bifaananyi na Media",
+        "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 byonka nibyetagisa kandi birikukwata aha bice bikuru. Omutindo murungi guta obwesige n'okubuuza.",
+        "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Taho bifaananyi ebirungi. Bifaananyi 5 noba okukira nibyetagisa kandi nooshobora kutaho kugera aha 20. Omutindo murungi guta obwesige n'okubuuza.",
+        "Upload Photos (exactly 5 required) *": "Taho Bifaananyi (5 byonka) *",
+        "Upload Photos (min 5, max 20) *": "Taho Bifaananyi (5 min, 20 max) *",
+        "Verify Identity": "Kakasa Endangamuntu",
+        "Review & Submit": "Reeba kandi Ohereze",
+        "Full Name *": "Eriinya ryona *",
+        "Display Name on Website *": "Eriinya eririkureebwa aha Website *",
+        "Phone Number *": "Namba y'Essimu *",
+        "Email *": "Email *",
+        "National ID Number (NIN) *": "Namba ya National ID (NIN) *",
+        "Upload National ID Photo *": "Taho Ekifaananyi kya National ID *",
+        "I confirm this pin matches my property location.": "Ninkakasa ngu pin egi nekwatana n'aho property yangye eri.",
+        "I confirm the typed NIN matches the uploaded National ID document.": "Ninkakasa ngu NIN ehandikire nekwatana na National ID etahirweho.",
+        "Required photo coverage": "Obwetterane bw'ebifaananyi obwetagisa",
+        "After upload, assign each photo to what it shows.": "Bwanyima y'okutaho, londa buri kifaananyi kyekiraga.",
+        "Select photo category": "Londa category y'ekifaananyi",
+        "Additional photo": "Ekifaananyi ekyongirweho",
+        "Auto-filled from district/city/neighbourhood": "Ejura yoona kuruga district/city/neighbourhood",
+        "Area Highlights": "Ebikuru by'Akarere",
+        "Nearby Amenities": "Eby'okworora ebiri haihi",
+        "is a strong location for": "ni ahantu harungi munonga ahabw'",
+        "with convenient access to daily services and key transport links.": "haina obworobi bwangu kuhikayo services za burijooba n'entambura nkuru.",
+        "with convenient access to schools, daily services, and key transport links.": "haina obworobi bwangu kuhikayo amashomero, services za burijooba, n'entambura nkuru.",
+        "Nearby highlights include": "Ebikuru ebiri haihi birimu",
+        "and": "na",
+        "This area is popular with serious buyers and tenants looking for value and convenience.": "Akarere aka niko kenda n'abagura n'abapangisa abarikushaba omuhendo murungi n'obwangu.",
+        "home purchase": "okugura enju",
+        "rental living": "okubaho omu kupangisa",
+        "student accommodation": "obutuuze bw'abanyeshuri",
+        "land investment": "okutezamu sente omu itaka",
+        "business use": "okukozesa by'obucuruzi",
+        "property use": "okukozesa property",
+        "Added": "Kyatairweho",
+        "Added today": "Kyatairweho eriizooba",
+        "Added recently": "Kyatairweho obwire bukehingire",
+        "Summary reset to auto-generated.": "Summary eigarurwe aha auto-generated.",
+        "Listing link copied.": "Link ya listing ekopibwe.",
+        "Unable to copy link right now.": "Titwabaasa kukopa link hati.",
+        "Unable to share right now.": "Titwabaasa kugabana hati."
+      },
+      sm: {
+        "Property Details": "Ebikwata ku Property",
+        "Listing Type *": "Ekika kya Listing *",
+        "Title *": "Omutwe *",
+        "Best Contact Method *": "Engeri y'okukutuukako esinga obulungi *",
+        "Phone Call": "Okukuba essimu",
+        "Phone + WhatsApp": "Essimu + WhatsApp",
+        "You can change language any time from the selector at the top bar.": "Osobola okukyusa olulimi buli kiseera okuva ku selector eri waggulu.",
+        "You can change language any time from the language selector in the top green bar.": "Osobola okukyusa olulimi buli kiseera okuva ku language selector eri ku green bar waggulu.",
+        "You can change language any time from the language bar above.": "Osobola okukyusa olulimi buli kiseera okuva ku language bar eri waggulu.",
+        "Region *": "Region *",
+        "District *": "Disitulikiti *",
+        "City / Town *": "Ekibuga / Town *",
+        "Location / Town *": "Ekifo / Town *",
+        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Altitude (m)": "Obuwanvu (m)",
+        "Select region": "Londa region",
+        "Select district": "Londa disitulikiti",
+        "Select city / town": "Londa ekibuga / town",
+        "Select neighbourhood": "Londa ekitundu",
+        "Area / Neighbourhood *": "Ekitundu / Neighbourhood *",
+        "Full Address": "Address yonna",
+        "Property Category *": "Category ya property *",
+        "Price (USh) *": "Omuwendo (USh) *",
+        "Price Period": "Ebiseera by'omuwendo",
+        "Description *": "Ennyonnyola *",
+        "Amenities": "Ebyetaago by'ekifo",
+        "Pin Property Location": "Teeka pin y'ekifo kya property",
+        "Location setup (step-by-step)": "Okutegeka ekifo (step-by-step)",
+        "1. Select region, then district.": "1. Londa region, oluvannyuma district.",
+        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, oluvannyuma neighbourhood/zone.",
+        "3. Confirm area and optionally type full street address.": "3. Kakasa area era oyinza okuwandiika full street address.",
+        "4. Confirm the map pin matches your property location.": "4. Kakasa nti map pin etuukana n'ekifo kya property yo.",
+        "Sync map to selected area": "Tereeza map ku area olondedde",
+        "Continue to Photos →": "Genda ku Bifaananyi →",
+        "Photos & Media": "Bifaananyi & Media",
+        "Upload clear photos. Exactly 5 photos are required, covering key spaces. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 byokka byetaagisa era birage ebifo ebikulu. Omutindo omulungi gwongera obwesige n'okubuuza.",
+        "Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.": "Teeka bifaananyi ebirungi. Bifaananyi 5 oba okusinga byetaagisa, era osobola okutuusa ku 20. Omutindo omulungi gwongera obwesige n'okubuuza.",
+        "Upload Photos (exactly 5 required) *": "Teeka Bifaananyi (5 byokka) *",
+        "Upload Photos (min 5, max 20) *": "Teeka Bifaananyi (5 min, 20 max) *",
+        "Verify Identity": "Kakasa Endagamuntu",
+        "Review & Submit": "Kebera era Oweze",
+        "Full Name *": "Erinnya Lyo Lyonna *",
+        "Display Name on Website *": "Erinnya erirabika ku Website *",
+        "Phone Number *": "Namba y'Essimu *",
+        "Email *": "Email *",
+        "National ID Number (NIN) *": "Namba ya National ID (NIN) *",
+        "Upload National ID Photo *": "Teeka Ekifaananyi kya National ID *",
+        "I confirm this pin matches my property location.": "Nkakasa nti pin eno etuukana n'ekifo kya property yange.",
+        "I confirm the typed NIN matches the uploaded National ID document.": "Nkakasa nti NIN gyennawandise etuukana ne National ID etekeddwa.",
+        "Required photo coverage": "Bifaananyi ebyetaagisa",
+        "After upload, assign each photo to what it shows.": "Oluvannyuma lw'okuteeka, londa buli kifaananyi kye kiraga.",
+        "Select photo category": "Londa category y'ekifaananyi",
+        "Additional photo": "Ekifaananyi ekirala",
+        "Auto-filled from district/city/neighbourhood": "Ejula yokka okuva ku district/city/neighbourhood",
+        "Area Highlights": "Ebikujjuko by'Ekitundu",
+        "Nearby Amenities": "Ebyetaago ebiri okumpi",
+        "is a strong location for": "kifo kirungi nnyo ku",
+        "with convenient access to daily services and key transport links.": "nga kirina okutuukibwa obulungi ku mpeereza za buli lunaku n'entambula enkulu.",
+        "with convenient access to schools, daily services, and key transport links.": "nga kirina okutuukibwa obulungi ku masomero, mpeereza za buli lunaku, n'entambula enkulu.",
+        "Nearby highlights include": "Ebikulu ebiri okumpi mulimu",
+        "and": "ne",
+        "This area is popular with serious buyers and tenants looking for value and convenience.": "Ekitundu kino kyagalibwa nnyo abagula n'abapangisa abanoonya omuwendo omulungi n'obwangu.",
+        "home purchase": "okugula ennyumba",
+        "rental living": "okubeera mu kupangisa",
+        "student accommodation": "obutuuze bw'abayizi",
+        "land investment": "okusiga ensimbi mu ttaka",
+        "business use": "okukozesa mu bizinensi",
+        "property use": "okukozesa property",
+        "Added": "Kyataddwako",
+        "Added today": "Kyataddwako leero",
+        "Added recently": "Kyataddwako mu biseera eby'okumpi",
+        "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
+        "Listing link copied.": "Link ya listing ekopeddwa.",
+        "Unable to copy link right now.": "Tetusobodde kukoppa link kati.",
+        "Unable to share right now.": "Tetusobodde kugabana kati."
       }
     };
 
@@ -11837,7 +13535,7 @@
                 <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
                 <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call</a>
                 <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp</a>
-                <button onclick="shareBrokerBusinessCard(${broker.id}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Agent Card</button>
+                <button onclick="shareBrokerBusinessCard(${broker.id}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
                 <button onclick="openBrokerProfile(${broker.id})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">View Broker</button>
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
@@ -11940,7 +13638,7 @@
                 <a href="tel:${b.phone}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">📞 Call ${b.name.split(" ")[0]}</a>
                 <a href="https://wa.me/${b.whatsapp}" target="_blank" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">📲 WhatsApp</a>
               </div>
-              <button type="button" onclick="shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Agent Card</button>
+              <button type="button" onclick="shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Broker Card</button>
             </div>
           </div>
         </div>
@@ -12190,13 +13888,19 @@
         setAuthSignInAudience("finder");
         setAuthSignUpAudience("finder");
       }
-      if (id === "broker-reg-modal") syncAgentRegistrationForm();
+      if (id === "broker-reg-modal") {
+        syncAgentRegistrationForm();
+        resetAgentRegistrationOtpState();
+      }
       syncModalOpenState();
     }
 
     function closeModal(id) {
       const el = document.getElementById(id);
       if (el) el.classList.remove("open");
+      if (id === "broker-reg-modal") {
+        resetAgentRegistrationOtpState();
+      }
       syncModalOpenState();
     }
 
@@ -12282,7 +13986,6 @@
         }
       });
       setAuthSignUpAudience(authSignUpAudience);
-      setAuthOtpChannel(authOtpChannel);
       setAuthSignUpOtpChannel(authSignUpOtpChannel);
 
       document.addEventListener("click", (e) => {

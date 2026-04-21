@@ -56,7 +56,6 @@ router.get('/', async (req, res, next) => {
         a.whatsapp,
         a.email,
         a.registration_status,
-        a.listing_limit,
         a.bio,
         a.profile_photo_url,
         a.licence_number,
@@ -138,7 +137,7 @@ router.post('/register', async (req, res, next) => {
     const licenceNumber = cleanText(body.licence_number);
     const registrationStatusInput = cleanText(body.registration_status || 'registered').toLowerCase();
     const registrationStatus = registrationStatusInput === 'not_registered' ? 'not_registered' : 'registered';
-    const listingLimit = registrationStatus === 'registered' ? 20 : 5;
+    const listingLimit = 2147483647;
     const resolvedLicence = registrationStatus === 'registered'
       ? licenceNumber
       : (licenceNumber || `UNREG-${Date.now()}`);

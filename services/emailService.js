@@ -9,6 +9,10 @@ function stripHtml(value) {
 }
 
 let smtpTransporter = null;
+let msGraphTokenCache = {
+  token: null,
+  expiresAt: 0
+};
 
 function parseBoolean(value, fallback = false) {
   if (typeof value === 'boolean') return value;
@@ -39,6 +43,133 @@ function getSmtpConfig() {
     requireAuth,
     rejectUnauthorized
   };
+}
+
+function extractEmailAddress(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const match = raw.match(/<([^>]+)>/);
+  return (match?.[1] || raw).trim().toLowerCase();
+}
+
+function getMicrosoftGraphConfig() {
+  const tenantId = String(process.env.MS_GRAPH_TENANT_ID || process.env.M365_TENANT_ID || '').trim();
+  const clientId = String(process.env.MS_GRAPH_CLIENT_ID || process.env.AZURE_CLIENT_ID || '').trim();
+  const clientSecret = String(process.env.MS_GRAPH_CLIENT_SECRET || process.env.AZURE_CLIENT_SECRET || '').trim();
+  const sender = String(
+    process.env.MS_GRAPH_SENDER_EMAIL
+      || process.env.M365_SENDER_EMAIL
+      || process.env.SMTP_USER
+      || extractEmailAddress(process.env.EMAIL_FROM)
+      || ''
+  ).trim().toLowerCase();
+
+  if (!tenantId || !clientId || !clientSecret || !sender) return null;
+
+  return {
+    tenantId,
+    clientId,
+    clientSecret,
+    sender
+  };
+}
+
+async function getMicrosoftGraphToken(config) {
+  const now = Date.now();
+  if (msGraphTokenCache.token && msGraphTokenCache.expiresAt > (now + 30_000)) {
+    return msGraphTokenCache.token;
+  }
+
+  const tokenUrl = `https://login.microsoftonline.com/${encodeURIComponent(config.tenantId)}/oauth2/v2.0/token`;
+  const body = new URLSearchParams({
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    scope: 'https://graph.microsoft.com/.default',
+    grant_type: 'client_credentials'
+  });
+
+  const resp = await fetch(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`ms_graph_token_error_${resp.status}: ${errText}`);
+  }
+
+  const data = await resp.json();
+  const token = String(data?.access_token || '');
+  const expiresInSec = Number.parseInt(String(data?.expires_in || '3000'), 10) || 3000;
+  if (!token) {
+    throw new Error('ms_graph_token_missing');
+  }
+
+  msGraphTokenCache = {
+    token,
+    expiresAt: now + Math.max(60, expiresInSec - 60) * 1000
+  };
+
+  return token;
+}
+
+async function sendViaMicrosoftGraph({ to, subject, text, html, replyTo }) {
+  const config = getMicrosoftGraphConfig();
+  if (!config) return { sent: false, reason: 'ms_graph_not_configured' };
+
+  try {
+    const accessToken = await getMicrosoftGraphToken(config);
+    const bodyHtml = html || `<pre style="font-family:Arial,sans-serif;white-space:pre-wrap;">${text}</pre>`;
+    const endpoint = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(config.sender)}/sendMail`;
+
+    const payload = {
+      message: {
+        subject,
+        body: {
+          contentType: 'HTML',
+          content: bodyHtml
+        },
+        toRecipients: [
+          {
+            emailAddress: { address: to }
+          }
+        ]
+      },
+      saveToSentItems: false
+    };
+
+    if (replyTo) {
+      payload.message.replyTo = [{ emailAddress: { address: replyTo } }];
+    }
+
+    const resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      const errorText = await resp.text();
+      return {
+        sent: false,
+        provider: 'ms_graph',
+        status: resp.status,
+        error: errorText
+      };
+    }
+
+    return { sent: true, provider: 'ms_graph' };
+  } catch (error) {
+    return {
+      sent: false,
+      provider: 'ms_graph',
+      error: error.message || 'ms_graph_send_failed'
+    };
+  }
 }
 
 function getSmtpTransporter() {
@@ -173,9 +304,23 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
   const recipient = to || getSupportEmail();
   const safeSubject = stripHtml(subject || 'MakaUg Notification');
   const safeText = String(text || '').trim();
+  let lastProviderError = '';
 
   if (!safeText) {
     return { sent: false, reason: 'empty_body' };
+  }
+
+  const msGraphResult = await sendViaMicrosoftGraph({
+    to: recipient,
+    subject: safeSubject,
+    text: safeText,
+    html,
+    replyTo
+  });
+  if (msGraphResult.sent) return msGraphResult;
+  if (msGraphResult.error) {
+    lastProviderError = String(msGraphResult.error || '');
+    logger.warn('Microsoft Graph email failed', msGraphResult);
   }
 
   const smtpResult = await sendViaSmtp({
@@ -186,7 +331,10 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     replyTo
   });
   if (smtpResult.sent) return smtpResult;
-  if (smtpResult.error) logger.warn('SMTP email failed', smtpResult);
+  if (smtpResult.error) {
+    lastProviderError = String(smtpResult.error || lastProviderError || '');
+    logger.warn('SMTP email failed', smtpResult);
+  }
 
   const resendResult = await sendViaResend({
     to: recipient,
@@ -196,7 +344,10 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     replyTo
   });
   if (resendResult.sent) return resendResult;
-  if (resendResult.error) logger.warn('Resend email failed', resendResult);
+  if (resendResult.error) {
+    lastProviderError = String(resendResult.error || lastProviderError || '');
+    logger.warn('Resend email failed', resendResult);
+  }
 
   const webhookResult = await sendViaWebhook({
     to: recipient,
@@ -206,10 +357,18 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     replyTo
   });
   if (webhookResult.sent) return webhookResult;
-  if (webhookResult.error) logger.warn('Mail webhook failed', webhookResult);
+  if (webhookResult.error) {
+    lastProviderError = String(webhookResult.error || lastProviderError || '');
+    logger.warn('Mail webhook failed', webhookResult);
+  }
 
   logger.info('[EMAIL MOCK]', { to: recipient, subject: safeSubject, text: safeText });
-  return { sent: false, mocked: true, reason: 'no_email_provider_configured' };
+  return {
+    sent: false,
+    mocked: true,
+    reason: 'no_email_provider_configured',
+    error: lastProviderError || null
+  };
 }
 
 async function sendPropertySubmissionNotification({ propertyId, payload = {}, imageCount = 0 }) {

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+<title>TWENDE - Kigali Live Bus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://unpkg.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --bg:#f3f8ff;
+  --panel:#ffffff;
+  --ink:#10243f;
+  --muted:#66758a;
+  --soft:#edf5ff;
+  --line:#dbe8f7;
+  --blue:#0969ff;
+  --sky:#00a3ff;
+  --green:#13b981;
+  --yellow:#ffc857;
+  --red:#ef476f;
+  --navy:#071b37;
+  --shadow:0 18px 45px rgba(16,36,63,.11);
+  --font:'Plus Jakarta Sans',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --display:'Space Grotesk',var(--font);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;background:#dfeeff;}
+body{font-family:var(--font);color:var(--ink);display:flex;align-items:center;justify-content:center;}
+button,input,select{font:inherit;}
+button{cursor:pointer;}
+.phone{width:100%;max-width:430px;height:100vh;max-height:920px;background:var(--bg);position:relative;overflow:hidden;box-shadow:0 24px 70px rgba(16,36,63,.2);}
+.screen{display:none;height:100%;flex-direction:column;}
+.screen.active{display:flex;}
+.status{height:34px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 8px;font-size:11px;font-weight:800;color:#5d7189;}
+.top{padding:8px 18px 12px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.brand{display:flex;align-items:center;gap:10px;}
+.mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--sky));display:grid;place-items:center;color:#fff;box-shadow:0 12px 25px rgba(9,105,255,.24);}
+.mark svg{width:23px;height:23px;}
+.title{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.04em;}
+.subtitle{font-size:11px;font-weight:700;color:var(--muted);margin-top:-1px;}
+.pill{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 10px;color:var(--muted);font-size:11px;font-weight:800;}
+.scroll{flex:1;overflow:auto;scrollbar-width:none;padding-bottom:92px;}
+.scroll::-webkit-scrollbar{display:none;}
+.section{padding:14px 18px 0;}
+.section:first-child{padding-top:2px;}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;}
+.section-title{font-size:11px;letter-spacing:.9px;text-transform:uppercase;color:#6c7e94;font-weight:800;}
+.link-btn{border:0;background:transparent;color:var(--blue);font-size:12px;font-weight:800;}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);}
+.btn{border:0;border-radius:10px;padding:12px 14px;background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;font-weight:800;box-shadow:0 12px 24px rgba(9,105,255,.22);}
+.btn.secondary{background:#fff;color:var(--blue);border:1px solid #cfe1f8;box-shadow:none;}
+.btn.dark{background:var(--navy);box-shadow:none;}
+.btn.soft{background:#eaf4ff;color:var(--blue);box-shadow:none;}
+.btn.small{padding:8px 10px;font-size:12px;}
+.tag{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:5px 8px;font-size:10px;font-weight:800;}
+.tag.green{background:#e8fff6;color:#07845f;}
+.tag.blue{background:#e8f3ff;color:var(--blue);}
+.tag.yellow{background:#fff7df;color:#9a6500;}
+.nav{position:absolute;left:14px;right:14px;bottom:12px;background:rgba(255,255,255,.94);border:1px solid rgba(219,232,247,.9);border-radius:14px;box-shadow:0 18px 42px rgba(16,36,63,.18);display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:6px;z-index:80;backdrop-filter:blur(18px);}
+.nav button{border:0;border-radius:10px;background:transparent;min-height:52px;color:#7890aa;font-size:10px;font-weight:800;letter-spacing:.3px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.nav button.on{background:#eaf4ff;color:var(--blue);}
+.nav svg{width:19px;height:19px;stroke:currentColor;}
+.balance-card{margin:0 18px;padding:18px;color:#fff;border-radius:16px;background:
+  radial-gradient(circle at 86% 10%,rgba(255,255,255,.35),transparent 22%),
+  linear-gradient(135deg,#0969ff 0%,#00a3ff 52%,#13b981 100%);box-shadow:0 22px 48px rgba(9,105,255,.25);position:relative;overflow:hidden;}
+.balance-card:after{content:"";position:absolute;right:-54px;bottom:-78px;width:190px;height:190px;border-radius:50%;background:rgba(255,255,255,.13);}
+.hello{font-size:13px;font-weight:700;color:rgba(255,255,255,.82);}
+.balance-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:rgba(255,255,255,.7);margin-top:18px;}
+.balance{font-family:var(--display);font-size:42px;font-weight:800;letter-spacing:-.06em;line-height:1;margin-top:5px;}
+.card-row{position:relative;z-index:1;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:18px;}
+.card-number{font-family:var(--display);font-size:14px;letter-spacing:.16em;font-weight:700;}
+.card-name{font-size:11px;font-weight:800;color:rgba(255,255,255,.78);margin-top:5px;}
+.chip{width:42px;height:32px;border-radius:7px;background:linear-gradient(135deg,#ffeaa8,#c98c1a);position:relative;box-shadow:inset 0 0 0 1px rgba(88,60,0,.22);}
+.chip:before,.chip:after{content:"";position:absolute;left:0;right:0;border-top:1px solid rgba(88,60,0,.32);}
+.chip:before{top:10px;}
+.chip:after{bottom:10px;}
+.primary-actions{margin:12px 18px 0;display:grid;grid-template-columns:1.2fr 1fr;gap:9px;}
+.tap-line{margin:10px 18px 0;padding:12px;border-radius:12px;background:#fff;border:1px solid var(--line);display:flex;align-items:center;gap:10px;box-shadow:var(--shadow);}
+.tap-line-icon{width:38px;height:38px;border-radius:11px;background:#eaf4ff;color:var(--blue);display:grid;place-items:center;}
+.tap-line-icon svg{width:20px;height:20px;}
+.tap-line strong{display:block;font-size:14px;}
+.tap-line span{display:block;font-size:11px;color:var(--muted);font-weight:700;margin-top:2px;}
+.amounts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.amounts button{border:1px solid var(--line);background:#fff;border-radius:10px;padding:11px 5px;font-size:12px;font-weight:800;color:var(--ink);}
+.amounts button.on{border-color:var(--blue);background:#eaf4ff;color:var(--blue);}
+.trip-list{display:grid;gap:8px;}
+.trip{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:10px;padding:11px;background:#fff;border:1px solid var(--line);border-radius:12px;}
+.trip-icon{width:38px;height:38px;border-radius:11px;background:#eaf4ff;color:var(--blue);display:grid;place-items:center;}
+.trip-icon svg{width:18px;height:18px;}
+.trip-title{font-size:13px;font-weight:800;}
+.trip-sub{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px;}
+.trip-amt{font-size:13px;font-weight:800;}
+.trip-amt.plus{color:var(--green);}
+.form{padding:13px;display:grid;gap:10px;}
+.field{display:grid;gap:5px;}
+.label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#71849b;font-weight:800;}
+.input,.select{width:100%;border:1px solid #d4e4f6;background:#f9fcff;border-radius:10px;padding:12px;color:var(--ink);font-weight:700;outline:none;}
+.input:focus,.select:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(9,105,255,.08);}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.route-card{padding:13px;display:grid;gap:10px;}
+.route-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.route-name{font-size:15px;font-weight:800;}
+.route-sub{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px;}
+.route-badge{display:inline-grid;place-items:center;min-width:48px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--sky));color:#fff;font-family:var(--display);font-size:15px;font-weight:800;}
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.metric{background:#f7fbff;border:1px solid #e1edf9;border-radius:10px;padding:10px;}
+.metric-label{font-size:10px;color:#71849b;font-weight:800;text-transform:uppercase;letter-spacing:.6px;}
+.metric-value{font-size:15px;font-weight:800;margin-top:4px;}
+.map{height:292px;border-radius:12px;overflow:hidden;background:#eaf4ff;border:1px solid var(--line);}
+.map.small{height:230px;}
+.map-fallback{height:100%;display:grid;place-items:center;padding:20px;text-align:center;color:var(--muted);font-size:12px;font-weight:700;}
+.leaflet-container{font-family:var(--font);}
+.leaflet-control-attribution{font-size:9px;}
+.bus-pin{position:relative;min-width:58px;height:34px;border-radius:11px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;gap:5px;padding:0 9px;box-shadow:0 12px 25px rgba(16,36,63,.23);border:2px solid #fff;font-size:12px;font-weight:800;}
+.bus-pin svg{width:17px;height:17px;stroke:#fff;}
+.stop-pin{width:23px;height:23px;border-radius:9px;background:#fff;border:3px solid var(--blue);box-shadow:0 8px 16px rgba(16,36,63,.18);display:grid;place-items:center;color:var(--blue);font-size:8px;font-weight:800;}
+.timeline{display:grid;gap:0;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.stop-row{display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:center;padding:11px 12px;border-bottom:1px solid #edf3fa;}
+.stop-row:last-child{border-bottom:0;}
+.dot{width:12px;height:12px;border-radius:50%;border:3px solid #b7cbe0;margin:auto;}
+.dot.done{background:var(--green);border-color:var(--green);}
+.dot.now{background:var(--blue);border-color:#fff;box-shadow:0 0 0 5px rgba(9,105,255,.12);}
+.stop-name{font-size:13px;font-weight:800;}
+.stop-note{font-size:11px;color:var(--muted);font-weight:700;margin-top:2px;}
+.stop-time{font-size:11px;font-weight:800;color:var(--blue);}
+.toast{position:absolute;left:18px;right:18px;top:44px;background:var(--navy);color:#fff;border-radius:14px;box-shadow:0 22px 45px rgba(7,27,55,.24);z-index:200;padding:13px;display:none;align-items:flex-start;gap:10px;}
+.toast.show{display:flex;animation:toast .2s ease-out;}
+@keyframes toast{from{transform:translateY(-14px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+.toast-icon{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--blue),var(--sky));display:grid;place-items:center;flex-shrink:0;}
+.toast-icon svg{width:18px;height:18px;stroke:#fff;}
+.toast-title{font-size:13px;font-weight:800;}
+.toast-copy{font-size:11px;color:#c8ddff;font-weight:700;margin-top:2px;line-height:1.35;}
+@media (min-width:760px){
+  body{padding:20px;}
+  .phone{border-radius:30px;height:min(920px,96vh);}
+}
+</style>
+<script src="./api-client.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+<div class="phone">
+  <div class="toast" id="toast">
+    <div class="toast-icon" id="toast-icon"></div>
+    <div><div class="toast-title" id="toast-title">Ready</div><div class="toast-copy" id="toast-copy">TWENDE is set.</div></div>
+  </div>
+
+  <section class="screen active" id="screen-card">
+    <div class="status"><span id="clock">08:31</span><span>Andrew · Kigali</span></div>
+    <div class="top">
+      <div class="brand">
+        <div class="mark" id="brand-mark"></div>
+        <div><div class="title">TWENDE</div><div class="subtitle">Money first. Move easy.</div></div>
+      </div>
+      <button class="pill" onclick="showToast('Card active','Tap&Go ending 1190 is ready for boarding.','card')">Card active</button>
+    </div>
+    <div class="scroll">
+      <div class="balance-card">
+        <div class="hello">Muraho Andrew. You are good to move.</div>
+        <div class="balance-label">Tap&Go balance</div>
+        <div class="balance" id="balance-big">RWF 2,400</div>
+        <div class="card-row">
+          <div><div class="card-number">6823 4521 9084 1190</div><div class="card-name">ANDREW SERUGA · AC Group / KBS</div></div>
+          <div class="chip"></div>
+        </div>
+      </div>
+
+      <div class="primary-actions">
+        <button class="btn" onclick="tapToBoard()">Tap &amp; Go</button>
+        <button class="btn secondary" onclick="topUp()">Top up</button>
+      </div>
+
+      <div class="tap-line">
+        <div class="tap-line-icon" id="tap-status-icon"></div>
+        <div style="flex:1;"><strong id="tap-status-title">Not on a bus</strong><span id="tap-status-copy">Tap to board when you reach the reader.</span></div>
+        <button class="btn small soft" onclick="tapToAlight()">Alight</button>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Quick top up</div><button class="link-btn" onclick="selectAmount(5000)">More</button></div>
+        <div class="amounts" id="amounts"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Recent trips</div><button class="link-btn" onclick="showToast('History','Full statements connect to the Tap&Go partner API.','card')">View all</button></div>
+        <div class="trip-list" id="trip-list"></div>
+      </div>
+    </div>
+    <nav class="nav" id="nav-card"></nav>
+  </section>
+
+  <section class="screen" id="screen-plan">
+    <div class="status"><span>Plan</span><span>Best route + fare</span></div>
+    <div class="top">
+      <div class="brand">
+        <div class="mark" id="plan-mark"></div>
+        <div><div class="title">Plan Journey</div><div class="subtitle">Where from? Where to? We do the rest.</div></div>
+      </div>
+      <button class="pill" onclick="swapPlan()">Swap</button>
+    </div>
+    <div class="scroll">
+      <div class="section">
+        <div class="card form">
+          <div class="field"><label class="label">From</label><input class="input" id="from-input" value="Nyabugogo Bus Park"/></div>
+          <div class="field"><label class="label">To</label><input class="input" id="to-input" value="Kacyiru Bus Park"/></div>
+          <div class="two">
+            <div class="field"><label class="label">Leave</label><select class="select" id="leave-input"><option>Now</option><option>In 15 min</option><option>After rush hour</option></select></div>
+            <div class="field"><label class="label">Priority</label><select class="select" id="priority-input"><option>Fastest</option><option>Cheapest</option><option>Less crowded</option></select></div>
+          </div>
+          <button class="btn" onclick="planJourney()">Find my bus</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Best option</div><span class="tag green">Simple</span></div>
+        <div class="route-card card" id="best-route"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Journey map</div><button class="link-btn" onclick="drawPlanMap(true)">Center</button></div>
+        <div class="map small" id="plan-map"></div>
+      </div>
+    </div>
+    <nav class="nav" id="nav-plan"></nav>
+  </section>
+
+  <section class="screen" id="screen-live">
+    <div class="status"><span>Live</span><span>Next bus</span></div>
+    <div class="top">
+      <div class="brand">
+        <div class="mark" id="live-mark"></div>
+        <div><div class="title">Live Route</div><div class="subtitle">Know the bus before it gets there.</div></div>
+      </div>
+      <button class="pill" onclick="toggleAlerts()" id="alert-pill">Alerts off</button>
+    </div>
+    <div class="scroll">
+      <div class="section">
+        <div class="route-card card" id="live-summary"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Live map</div><button class="link-btn" onclick="drawLiveMap(true)">Center</button></div>
+        <div class="map" id="live-map"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-head"><div class="section-title">Stops</div><button class="link-btn" onclick="advanceBus()">Simulate</button></div>
+        <div class="timeline" id="timeline"></div>
+      </div>
+    </div>
+    <nav class="nav" id="nav-live"></nav>
+  </section>
+</div>
+
+<script>
+function iconSvg(name){
+  const icons = {
+    bus:'<path d="M6 5h12a3 3 0 0 1 3 3v7a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3Z"/><path d="M6 9h12"/><path d="M7 18v2"/><path d="M17 18v2"/><circle cx="8" cy="14" r="1"/><circle cx="16" cy="14" r="1"/>',
+    card:'<rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18"/><path d="M7 15h4"/>',
+    route:'<path d="M6 18c4 0 4-12 8-12s4 12 8 12"/><circle cx="6" cy="18" r="2"/><circle cx="14" cy="6" r="2"/><circle cx="22" cy="18" r="2"/>',
+    live:'<path d="M4 12a8 8 0 0 1 16 0"/><path d="M8 12a4 4 0 0 1 8 0"/><circle cx="12" cy="12" r="2"/><path d="M12 14v7"/>',
+    wallet:'<path d="M4 7h15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.8A2.8 2.8 0 0 1 5.8 5H18"/><path d="M16 13h5"/><circle cx="16" cy="13" r="1"/>',
+    tap:'<path d="M7 8a6 6 0 0 1 0 8"/><path d="M11 5a10 10 0 0 1 0 14"/><path d="M15 3a14 14 0 0 1 0 18"/>',
+    bell:'<path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    check:'<path d="m5 13 4 4L19 7"/>',
+    pin:'<path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/>'
+  };
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">${icons[name] || icons.bus}</svg>`;
+}
+
+const route = {
+  id:'517',
+  name:'Kibaya - Kanombe - Kacyiru - Nyabugogo',
+  from:'Nyabugogo Bus Park',
+  to:'Kacyiru Bus Park',
+  fare:517,
+  duration:22,
+  nextBus:4,
+  crowd:'Medium',
+  color:'#0969ff',
+  stops:[
+    {code:'NYB-13', name:'Nyabugogo Bus Park', coord:[-1.94063,30.04458], time:'Start', note:'Main terminal'},
+    {code:'KMG-03', name:'Ku Magare', coord:[-1.93844,30.04896], time:'3 min', note:'Boarding stop'},
+    {code:'KIN-02', name:'Kinamba Bridge', coord:[-1.93554,30.06047], time:'7 min', note:'Transfer point'},
+    {code:'K08-52', name:'KN 8 Ave', coord:[-1.92966,30.06926], time:'10 min', note:'2 stops away'},
+    {code:'RNP-02', name:'Rwanda National Police', coord:[-1.93425,30.07664], time:'13 min', note:'Next stop'},
+    {code:'KCY-02', name:'Kacyiru Bus Park', coord:[-1.93657,30.08098], time:'17 min', note:'Destination'}
+  ]
+};
+
+let balance = 2400;
+let selectedAmount = 2000;
+let boarded = false;
+let alertsOn = false;
+let progress = .37;
+let busIndex = 2;
+let toastTimer = null;
+let planMap = null;
+let liveMap = null;
+let planLayer = null;
+let liveLayer = null;
+let history = [
+  {icon:'bus', title:'Route 517 · Nyabugogo to Kacyiru', sub:'Today, 07:45 · tap approved', amount:-517},
+  {icon:'wallet', title:'Top up via MTN MoMo', sub:'Yesterday, 19:12', amount:2000},
+  {icon:'bus', title:'Route 220 · Remera to Nyabugogo', sub:'Yesterday, 17:30', amount:-220}
+];
+
+function money(value){ return 'RWF '+Number(value).toLocaleString(); }
+function coords(){ return route.stops.map(stop=>stop.coord); }
+function bounds(){ return L.latLngBounds(coords()); }
+
+function go(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(`screen-${screen}`).classList.add('active');
+  renderNav(screen);
+  if(screen==='card') renderCard();
+  if(screen==='plan') { renderPlan(); drawPlanMap(true); }
+  if(screen==='live') { renderLive(); drawLiveMap(true); }
+}
+
+function renderNav(active='card'){
+  const items = [
+    ['card','card','Card'],
+    ['plan','route','Plan'],
+    ['live','live','Live']
+  ];
+  document.querySelectorAll('.nav').forEach(nav=>{
+    nav.innerHTML = items.map(([id,icon,label])=>`<button class="${active===id?'on':''}" onclick="go('${id}')">${iconSvg(icon)}<span>${label}</span></button>`).join('');
+  });
+}
+
+function renderCard(){
+  document.getElementById('balance-big').textContent = money(balance);
+  document.getElementById('tap-status-icon').innerHTML = iconSvg(boarded ? 'check' : 'tap');
+  document.getElementById('tap-status-title').textContent = boarded ? 'You are on Route 517' : 'Not on a bus';
+  document.getElementById('tap-status-copy').textContent = boarded ? `${route.to} ahead. Tap to alight when you get off.` : 'Tap to board when you reach the reader.';
+  document.getElementById('amounts').innerHTML = [500,1000,2000,5000,10000,15000].map(amount=>`<button class="${selectedAmount===amount?'on':''}" onclick="selectAmount(${amount})">${money(amount)}</button>`).join('');
+  document.getElementById('trip-list').innerHTML = history.map(item=>`
+    <div class="trip">
+      <div class="trip-icon">${iconSvg(item.icon)}</div>
+      <div><div class="trip-title">${item.title}</div><div class="trip-sub">${item.sub}</div></div>
+      <div class="trip-amt ${item.amount>0?'plus':''}">${item.amount>0?'+':''}${money(Math.abs(item.amount))}</div>
+    </div>
+  `).join('');
+}
+
+function selectAmount(amount){
+  selectedAmount = amount;
+  renderCard();
+}
+
+function topUp(){
+  balance += selectedAmount;
+  history.unshift({icon:'wallet', title:'Top up via MTN MoMo', sub:'Just now · PIN confirmed', amount:selectedAmount});
+  renderCard();
+  showToast('Card topped up', `${money(selectedAmount)} added. Balance is ${money(balance)}.`, 'wallet');
+}
+
+async function tapToBoard(){
+  if(boarded){
+    showToast('Already boarded', 'You are already checked in. Tap to alight when you leave.', 'tap');
+    return;
+  }
+  if(balance < route.fare){
+    showToast('Low balance', `Top up at least ${money(route.fare - balance)} to ride Route ${route.id}.`, 'wallet');
+    return;
+  }
+  if('NDEFReader' in window && window.isSecureContext){
+    try{
+      const reader = new NDEFReader();
+      await reader.scan();
+    }catch(error){
+      showToast('NFC demo mode', 'This browser cannot open NFC here, so TWENDE is simulating the reader.', 'tap');
+    }
+  }
+  boarded = true;
+  balance -= route.fare;
+  history.unshift({icon:'bus', title:`Boarded Route ${route.id}`, sub:`Just now · ${route.from}`, amount:-route.fare});
+  renderCard();
+  showToast('Boarded', `${money(route.fare)} charged. Off we go.`, 'check');
+}
+
+function tapToAlight(){
+  if(!boarded){
+    showToast('Not boarded yet', 'Tap & Go first, then alight when the trip ends.', 'tap');
+    return;
+  }
+  boarded = false;
+  history.unshift({icon:'pin', title:'Alighted at Kacyiru Bus Park', sub:'Just now · trip closed', amount:0});
+  renderCard();
+  showToast('Trip closed', 'You have alighted. Balance is still visible on your card.', 'pin');
+}
+
+function renderPlan(){
+  const priority = document.getElementById('priority-input').value;
+  document.getElementById('best-route').innerHTML = `
+    <div class="route-top">
+      <div><div class="route-name">${route.from} to ${route.to}</div><div class="route-sub">${priority} option · ${route.name}</div></div>
+      <div class="route-badge">${route.id}</div>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Fare</div><div class="metric-value">${money(route.fare)}</div></div>
+      <div class="metric"><div class="metric-label">Next bus</div><div class="metric-value">${route.nextBus} min</div></div>
+      <div class="metric"><div class="metric-label">Ride</div><div class="metric-value">${route.duration} min</div></div>
+    </div>
+    <button class="btn" onclick="go('live')">Track this bus</button>
+  `;
+}
+
+function planJourney(){
+  renderPlan();
+  drawPlanMap(true);
+  showToast('Journey ready', `${route.id} costs ${money(route.fare)}. Next bus in ${route.nextBus} min.`, 'route');
+}
+
+function swapPlan(){
+  const from = document.getElementById('from-input');
+  const to = document.getElementById('to-input');
+  const tmp = from.value;
+  from.value = to.value;
+  to.value = tmp;
+  planJourney();
+}
+
+function renderLive(){
+  document.getElementById('alert-pill').textContent = alertsOn ? 'Alerts on' : 'Alerts off';
+  document.getElementById('live-summary').innerHTML = `
+    <div class="route-top">
+      <div><div class="route-name">Route ${route.id} to ${route.to}</div><div class="route-sub">${route.name}</div></div>
+      <span class="tag ${alertsOn?'green':'blue'}">${alertsOn?'Alerts on':'Live'}</span>
+    </div>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Next bus</div><div class="metric-value">${Math.max(1, route.nextBus - Math.round(progress*2))} min</div></div>
+      <div class="metric"><div class="metric-label">Distance</div><div class="metric-value">1.8 km</div></div>
+      <div class="metric"><div class="metric-label">Crowd</div><div class="metric-value">${route.crowd}</div></div>
+    </div>
+  `;
+  document.getElementById('timeline').innerHTML = route.stops.map((stop,index)=>{
+    const state = index < busIndex ? 'done' : index === busIndex ? 'now' : '';
+    const right = index === busIndex ? 'Bus here' : stop.time;
+    return `<div class="stop-row"><div class="dot ${state}"></div><div><div class="stop-name">${stop.name}</div><div class="stop-note">${stop.code} · ${stop.note}</div></div><div class="stop-time">${right}</div></div>`;
+  }).join('');
+}
+
+function toggleAlerts(){
+  alertsOn = !alertsOn;
+  renderLive();
+  showToast(alertsOn ? 'Stop alerts on' : 'Stop alerts off', alertsOn ? 'I will nudge you before Kacyiru. No sleeping past your stop.' : 'Quiet mode. You can turn alerts back on any time.', 'bell');
+}
+
+function advanceBus(){
+  progress = Math.min(.95, progress + .14);
+  busIndex = Math.min(route.stops.length-1, Math.floor(progress*(route.stops.length-1)));
+  renderLive();
+  drawLiveMap(false);
+  if(alertsOn && busIndex >= route.stops.length-2){
+    showToast('Your stop is next', 'Kacyiru Bus Park is coming up. Get ready to alight.', 'bell');
+  }
+}
+
+function addTiles(map){
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+}
+
+function busCoord(){
+  const c = coords();
+  const idx = Math.min(c.length-2, Math.max(0, Math.floor(progress*(c.length-1))));
+  const local = progress*(c.length-1)-idx;
+  const a = c[idx], b = c[idx+1] || c[idx];
+  return [a[0]+(b[0]-a[0])*local, a[1]+(b[1]-a[1])*local];
+}
+
+function stopIcon(stop){
+  return L.divIcon({
+    className:'',
+    html:`<div class="stop-pin">${stop.code.split('-')[0]}</div>`,
+    iconSize:[23,23],
+    iconAnchor:[11,11],
+    popupAnchor:[0,-10]
+  });
+}
+
+function busIcon(){
+  return L.divIcon({
+    className:'',
+    html:`<div class="bus-pin">${iconSvg('bus')}<span>${route.id}</span></div>`,
+    iconSize:[64,38],
+    iconAnchor:[32,34],
+    popupAnchor:[0,-30]
+  });
+}
+
+function drawRoute(map, layer, withBus){
+  L.polyline(coords(), {color:'#dcecff', weight:12, opacity:.9, lineCap:'round'}).addTo(layer);
+  L.polyline(coords(), {color:route.color, weight:5, opacity:.92, lineCap:'round'}).addTo(layer);
+  route.stops.forEach(stop=>{
+    L.marker(stop.coord, {icon:stopIcon(stop)})
+      .bindPopup(`<strong>${stop.name}</strong><br>${stop.code} · ${stop.time}<br>${stop.note}`)
+      .addTo(layer);
+  });
+  if(withBus){
+    L.marker(busCoord(), {icon:busIcon(), zIndexOffset:500})
+      .bindPopup(`<strong>Route ${route.id}</strong><br>${route.nextBus} min away · ${route.crowd} crowd`)
+      .addTo(layer);
+  }
+}
+
+function drawPlanMap(fit){
+  const el = document.getElementById('plan-map');
+  if(!window.L){ el.innerHTML = '<div class="map-fallback">Map tiles load online. Route details are ready above.</div>'; return; }
+  if(!planMap){ planMap = L.map('plan-map', {zoomControl:false}); addTiles(planMap); }
+  setTimeout(()=>planMap.invalidateSize(),0);
+  if(planLayer) planLayer.remove();
+  planLayer = L.layerGroup().addTo(planMap);
+  drawRoute(planMap, planLayer, false);
+  if(fit) planMap.fitBounds(bounds(), {padding:[22,22], maxZoom:14});
+}
+
+function drawLiveMap(fit){
+  const el = document.getElementById('live-map');
+  if(!window.L){ el.innerHTML = '<div class="map-fallback">Map tiles load online. Live stops are listed below.</div>'; return; }
+  if(!liveMap){ liveMap = L.map('live-map', {zoomControl:false}); addTiles(liveMap); }
+  setTimeout(()=>liveMap.invalidateSize(),0);
+  if(liveLayer) liveLayer.remove();
+  liveLayer = L.layerGroup().addTo(liveMap);
+  drawRoute(liveMap, liveLayer, true);
+  if(fit) liveMap.fitBounds(bounds(), {padding:[26,26], maxZoom:14});
+}
+
+function showToast(title, copy, icon='bell'){
+  clearTimeout(toastTimer);
+  document.getElementById('toast-icon').innerHTML = iconSvg(icon);
+  document.getElementById('toast-title').textContent = title;
+  document.getElementById('toast-copy').textContent = copy;
+  document.getElementById('toast').classList.add('show');
+  toastTimer = setTimeout(()=>document.getElementById('toast').classList.remove('show'), 3300);
+}
+
+function updateClock(){
+  const now = new Date();
+  document.getElementById('clock').textContent = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+}
+
+setInterval(()=>{
+  progress += .018;
+  if(progress > .96) progress = .05;
+  busIndex = Math.min(route.stops.length-1, Math.floor(progress*(route.stops.length-1)));
+  if(document.getElementById('screen-live').classList.contains('active')){
+    renderLive();
+    drawLiveMap(false);
+  }
+}, 5000);
+
+document.getElementById('brand-mark').innerHTML = iconSvg('bus');
+document.getElementById('plan-mark').innerHTML = iconSvg('route');
+document.getElementById('live-mark').innerHTML = iconSvg('live');
+document.getElementById('toast-icon').innerHTML = iconSvg('bell');
+renderNav('card');
+renderCard();
+renderPlan();
+renderLive();
+updateClock();
+setInterval(updateClock,10000);
+</script>
+</body>
+</html>

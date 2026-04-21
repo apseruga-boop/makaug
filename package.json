@@ -16,6 +16,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "ai:export-training": "node scripts/export-ai-training-data.js",
+    "ai:export-foundation": "node scripts/export-llm-foundation-data.js",
     "ai:run-agents": "node scripts/run-ai-agents.js",
     "qa:postman": "bash scripts/run-postman-qa.sh",
     "qa:postman:render": "BASE_URL=https://makaug.onrender.com bash scripts/run-postman-qa.sh",

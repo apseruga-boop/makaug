@@ -1,6 +1,6 @@
 const UGANDA_PHONE_REGEX = /^(?:\+256|256|0)7\d{8}$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const NIN_REGEX = /^[A-Z0-9]{8,16}$/i;
+const NIN_REGEX = /^C[MF][A-Z0-9]{12}$/i;
 
 export class ValidationService {
   sanitize(text: string): string {

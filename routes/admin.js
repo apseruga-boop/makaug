@@ -339,7 +339,6 @@ router.get('/agents', async (req, res, next) => {
         a.email,
         a.licence_number,
         a.registration_status,
-        a.listing_limit,
         a.status,
         a.created_at,
         a.updated_at

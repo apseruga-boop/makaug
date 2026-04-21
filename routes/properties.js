@@ -18,6 +18,10 @@ const {
   isValidEmail,
   isValidPhone
 } = require('../middleware/validation');
+const {
+  canUseAdminOtpOverride,
+  isAdminOtpOverrideMatch
+} = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, UNIVERSITIES, LISTING_TYPES, PROPERTY_STATUSES } = require('../utils/constants');
 
@@ -60,6 +64,7 @@ function isValidUgPhone(phone) {
 async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '' }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
+  const overrideAllowed = canUseAdminOtpOverride({ channel: resolvedChannel, identifier });
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
   if (!identifier) {
@@ -87,12 +92,26 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
       });
     } catch (error) {
       logger.error('Listing OTP email failed:', error.message);
+      if (overrideAllowed) {
+        logger.warn('Listing OTP email failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+      }
       const sendError = new Error('Failed to send OTP email');
       sendError.status = 400;
       throw sendError;
     }
     if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
-      const configError = new Error('Email OTP delivery provider is not configured');
+      logger.warn('Listing email OTP delivery unavailable', { channel: resolvedChannel, delivery });
+      if (overrideAllowed) {
+        logger.warn('Listing OTP email delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+      }
+      const reason = String(delivery?.error || delivery?.reason || '').toLowerCase();
+      const configError = new Error(
+        (reason.includes('smtpclientauthentication') || reason.includes('5.7.139'))
+          ? 'Email OTP is blocked by Microsoft 365 tenant policy. Enable Authenticated SMTP or configure Microsoft Graph mail delivery.'
+          : 'Email OTP delivery provider is not configured'
+      );
       configError.status = 400;
       throw configError;
     }
@@ -105,11 +124,19 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
       );
     } catch (error) {
       logger.error('Listing OTP SMS failed:', error.message);
+      if (overrideAllowed) {
+        logger.warn('Listing OTP SMS failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+      }
       const sendError = new Error('Failed to send OTP SMS');
       sendError.status = 400;
       throw sendError;
     }
     if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+      if (overrideAllowed) {
+        logger.warn('Listing OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        return { otp, expiresMinutes, channel: resolvedChannel, identifier };
+      }
       const configError = new Error('Phone OTP delivery provider is not configured');
       configError.status = 400;
       throw configError;
@@ -382,8 +409,7 @@ router.get('/:id', async (req, res, next) => {
         a.phone AS agent_phone,
         a.whatsapp AS agent_whatsapp,
         a.email AS agent_email,
-        a.registration_status AS agent_registration_status,
-        a.listing_limit AS agent_listing_limit
+        a.registration_status AS agent_registration_status
       FROM properties p
       LEFT JOIN agents a ON a.id = p.agent_id
       WHERE p.id = $1`,
@@ -467,25 +493,32 @@ router.post('/verify-submit-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
 
-    const otpResult = await db.query(
-      `SELECT *
-       FROM otps
-       WHERE phone = $1
-         AND code = $2
-         AND purpose = 'listing_submit'
-         AND used = FALSE
-         AND expires_at > NOW()
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [identifier, code]
-    );
+    const usedOverride = isAdminOtpOverrideMatch({ code, channel, identifier });
 
-    if (!otpResult.rows.length) {
-      return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
-    }
+    if (!usedOverride) {
+      const otpResult = await db.query(
+        `SELECT *
+         FROM otps
+         WHERE phone = $1
+           AND code = $2
+           AND purpose = 'listing_submit'
+           AND used = FALSE
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [identifier, code]
+      );
 
-    if (otpResult.rows.length) {
+      if (!otpResult.rows.length) {
+        return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+      }
+
       await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [otpResult.rows[0].id]);
+    } else {
+      logger.warn('Listing OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', {
+        channel,
+        identifier
+      });
     }
     const listingOtpToken = createListingSubmitToken({ channel, phone, email });
 

@@ -3,10 +3,18 @@ const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { DISTRICTS } = require('../utils/constants');
-const { classifyWhatsappIntent, transcribeAudioFromUrl } = require('../services/aiService');
+const {
+  classifyWhatsappIntent,
+  transcribeAudioFromUrl,
+  extractNaturalPropertyQuery
+} = require('../services/aiService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v20.0').trim();
+const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
+const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
+const WHATSAPP_VERIFY_TOKEN = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
 
 // Language Translations
 const T = {
@@ -226,8 +234,22 @@ const T = {
 };
 
 // Get translation (fallback to English)
+function resolveLangCode(lang) {
+  const raw = normalizeInput(lang).toLowerCase();
+  if (!raw) return 'en';
+  if (T[raw]) return raw;
+
+  const normalized = raw.replace(/_/g, '-');
+  if (T[normalized]) return normalized;
+
+  const base = normalized.split('-')[0];
+  if (T[base]) return base;
+  return 'en';
+}
+
 function t(lang, key) {
-  return (T[lang] && T[lang][key]) || T.en[key] || key;
+  const code = resolveLangCode(lang);
+  return (T[code] && T[code][key]) || T.en[key] || key;
 }
 
 function tt(lang, key, vars = {}) {
@@ -351,6 +373,166 @@ function parseInboundLocation(payload = {}) {
   };
 }
 
+function isMetaWebhookPayload(payload = {}) {
+  return payload
+    && payload.object === 'whatsapp_business_account'
+    && Array.isArray(payload.entry);
+}
+
+function normalizePhoneForMeta(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+async function fetchMetaMediaUrl(mediaId) {
+  if (!mediaId || !WHATSAPP_ACCESS_TOKEN) return null;
+  try {
+    const resp = await fetch(`https://graph.facebook.com/${WHATSAPP_API_VERSION}/${mediaId}`, {
+      headers: {
+        Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`
+      }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    return data?.url || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function extractMetaTextBody(message = {}) {
+  const type = String(message.type || '').toLowerCase();
+  if (type === 'text') return normalizeInput(message.text?.body);
+  if (type === 'button') return normalizeInput(message.button?.text || message.button?.payload);
+
+  if (type === 'interactive') {
+    const interactive = message.interactive || {};
+    const iType = String(interactive.type || '').toLowerCase();
+    if (iType === 'button_reply') {
+      return normalizeInput(interactive.button_reply?.title || interactive.button_reply?.id);
+    }
+    if (iType === 'list_reply') {
+      return normalizeInput(interactive.list_reply?.title || interactive.list_reply?.id);
+    }
+  }
+
+  if (type === 'image' || type === 'document' || type === 'video') {
+    return normalizeInput(message[type]?.caption);
+  }
+
+  return '';
+}
+
+async function parseMetaInboundMessages(payload = {}) {
+  const collected = [];
+
+  for (const entry of payload.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change?.value || {};
+      for (const message of value.messages || []) {
+        const msgType = String(message.type || '').toLowerCase();
+        const phone = normalizeInput(message.from);
+        if (!phone) continue;
+
+        let mediaUrl = null;
+        let mediaType = '';
+        let sharedLocation = null;
+
+        if (msgType === 'location' && message.location) {
+          sharedLocation = parseInboundLocation({
+            latitude: message.location.latitude,
+            longitude: message.location.longitude,
+            label: message.location.name,
+            address: message.location.address
+          });
+        }
+
+        if (['image', 'audio', 'video', 'document', 'sticker'].includes(msgType)) {
+          const mediaObj = message[msgType] || {};
+          mediaType = String(mediaObj.mime_type || '');
+          if (mediaObj.id) {
+            mediaUrl = await fetchMetaMediaUrl(mediaObj.id);
+          }
+        }
+
+        collected.push({
+          provider: 'meta',
+          phone,
+          inboundMessageId: normalizeInput(message.id) || null,
+          body: extractMetaTextBody(message),
+          mediaUrl,
+          mediaType,
+          sharedLocation,
+          messageType: msgType || 'text'
+        });
+      }
+    }
+  }
+
+  return collected;
+}
+
+function splitMetaText(text, maxLen = 3600) {
+  const clean = String(text || '').trim();
+  if (!clean) return [];
+  if (clean.length <= maxLen) return [clean];
+
+  const chunks = [];
+  let remaining = clean;
+  while (remaining.length > maxLen) {
+    let cut = remaining.lastIndexOf('\n', maxLen);
+    if (cut < 0 || cut < maxLen * 0.5) cut = remaining.lastIndexOf(' ', maxLen);
+    if (cut < 0) cut = maxLen;
+    chunks.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining) chunks.push(remaining);
+  return chunks;
+}
+
+async function sendMetaTextMessage(phone, message) {
+  if (!WHATSAPP_ACCESS_TOKEN || !WHATSAPP_PHONE_NUMBER_ID) {
+    throw new Error('Meta WhatsApp Cloud API env is missing');
+  }
+
+  const to = normalizePhoneForMeta(phone);
+  if (!to) throw new Error('Invalid destination phone');
+
+  const chunks = splitMetaText(message);
+  if (!chunks.length) return { sent: false, reason: 'empty_message' };
+
+  let sentCount = 0;
+  for (const chunk of chunks) {
+    const resp = await fetch(
+      `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'text',
+          text: {
+            preview_url: false,
+            body: chunk
+          }
+        })
+      }
+    );
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Meta send failed (${resp.status}): ${body}`);
+    }
+    sentCount += 1;
+  }
+
+  return { sent: true, chunks: sentCount };
+}
+
 const SEARCH_TYPE_KEYWORDS = [
   { type: 'rent', re: /\b(rent|rental|to rent|monthly|per month|a month|\/month|lease)\b/i },
   { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
@@ -379,9 +561,64 @@ const WORD_NUMBERS = {
 };
 
 const AREA_ALIASES = {
+  kampala: 'Kampala',
+  wakiso: 'Wakiso',
+  mukono: 'Mukono',
+  kisaasi: 'Kisaasi',
+  kololo: 'Kololo',
+  ntinda: 'Ntinda',
+  bugolobi: 'Bugolobi',
+  nakasero: 'Nakasero',
+  naalya: 'Naalya',
+  kira: 'Kira',
+  kyaliwajjala: 'Kyaliwajjala',
+  kyanja: 'Kyanja',
+  najjera: 'Najjera',
+  bukoto: 'Bukoto',
+  kyambogo: 'Kyambogo',
+  makerere: 'Makerere',
+  muyenga: 'Muyenga',
   uyenga: 'Muyenga',
-  muyenga: 'Muyenga'
+  mbarara: 'Mbarara',
+  mbale: 'Mbale',
+  gulu: 'Gulu',
+  lira: 'Lira',
+  arua: 'Arua',
+  jinja: 'Jinja',
+  entebbe: 'Entebbe',
+  'fort portal': 'Fort Portal',
+  'nansana': 'Nansana',
+  'bweyogerere': 'Bweyogerere',
+  'namugongo': 'Namugongo',
+  rubaga: 'Rubaga',
+  rubagaa: 'Rubaga',
+  lubaga: 'Rubaga'
 };
+
+const NEAR_ME_PATTERNS = [
+  /\bnear\s+me\b/i,
+  /\baround\s+me\b/i,
+  /\bnearby\b/i,
+  /\bmy\s+location\b/i,
+  /\bclose\s+to\s+me\b/i,
+  /\bwithin\s+\d+(?:\.\d+)?\s*(?:km|kms|kilomet(?:er|re)s?|mi|mile|miles)\b/i
+];
+
+function parseNumberToken(rawNumber, suffix) {
+  let amount = Number(String(rawNumber || '').replace(/[, ]+/g, ''));
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const tail = String(suffix || '').toLowerCase();
+  if (tail === 'k') amount *= 1_000;
+  if (tail === 'm') amount *= 1_000_000;
+  if (tail === 'b') amount *= 1_000_000_000;
+  return amount;
+}
+
+function isNearMeQuery(text) {
+  const clean = normalizeInput(text);
+  if (!clean) return false;
+  return NEAR_ME_PATTERNS.some((rule) => rule.test(clean));
+}
 
 function normalizeListingType(value) {
   const mapped = mapSearchTypeInput(value);
@@ -402,29 +639,47 @@ function parseBedCount(text) {
 function parseBudget(text) {
   const raw = normalizeInput(text);
   if (!raw) return null;
-  const lower = raw.toLowerCase();
-  const seg =
-    (lower.match(/(?:for|under|max(?:imum)?|budget(?: of)?|up to)\s+([^,.;\n]+)/i) || [])[1]
-    || lower;
+  const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
+  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/gi;
+  const candidates = [];
 
-  const m = seg.match(/(usd|\$|ugx|ush|shs)?\s*(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/i);
-  if (!m) return null;
+  let m;
+  while ((m = rx.exec(lower)) !== null) {
+    const curA = (m[1] || '').toLowerCase();
+    const curB = (m[4] || '').toLowerCase();
+    const suffix = (m[3] || '').toLowerCase();
+    const amount = parseNumberToken(m[2], suffix);
+    if (!amount) continue;
 
-  const curA = (m[1] || '').toLowerCase();
-  const curB = (m[4] || '').toLowerCase();
-  const suffix = (m[3] || '').toLowerCase();
-  const currency = curA || curB || (seg.includes('$') ? 'usd' : 'ugx');
+    const currency = curA || curB || (m[0].includes('$') ? 'usd' : 'ugx');
+    const start = Math.max(0, (m.index || 0) - 28);
+    const end = Math.min(lower.length, (m.index || 0) + m[0].length + 28);
+    const context = lower.slice(start, end);
+    const before = lower.slice(Math.max(0, (m.index || 0) - 24), m.index || 0);
 
-  let amount = Number(String(m[2]).replace(/[, ]+/g, ''));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
-  if (suffix === 'k') amount *= 1_000;
-  if (suffix === 'm') amount *= 1_000_000;
-  if (suffix === 'b') amount *= 1_000_000_000;
+    let score = 0;
+    if (/\b(for|under|max(?:imum)?|budget(?:\s+of)?|up to|around|about|at)\b/i.test(before)) score += 4;
+    if (/\b(per\s*month|a month|monthly|\/month|pm|per\s*week|weekly|\/week|per\s*year|yearly|annually|\/year|semester|\/sem)\b/i.test(context)) score += 2;
+    if (curA || curB || m[0].includes('$')) score += 2;
+    if (suffix) score += 1;
+    if (amount >= 100_000) score += 1;
+    if (amount < 10_000 && !(curA || curB || m[0].includes('$'))) score -= 3;
+    if (/\b(bed|beds|bedroom|bedrooms|bath|bathroom|toilet|room)\b/i.test(context)) score -= 6;
+    if (/\b(acre|acres|sq\s?m|sqm|sqft|hectare|plot|plots)\b/i.test(context)) score -= 3;
+    if (/\b(year built|built in|built)\b/i.test(context)) score -= 4;
+
+    candidates.push({ amount, currency, score, context });
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.score - a.score);
+  const best = candidates[0];
+  if (best.score < -1) return null;
 
   const rate = Number(process.env.USD_TO_UGX_RATE || 3800);
-  const ugxAmount = currency === 'usd' || currency === '$'
-    ? Math.round(amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
-    : Math.round(amount);
+  const ugxAmount = best.currency === 'usd' || best.currency === '$'
+    ? Math.round(best.amount * (Number.isFinite(rate) && rate > 0 ? rate : 3800))
+    : Math.round(best.amount);
 
   let period = null;
   if (/\b(per\s*month|a month|monthly|\/month|pm)\b/i.test(lower)) period = 'month';
@@ -433,11 +688,11 @@ function parseBudget(text) {
   else if (/\b(semester|\/sem|per\s*semester)\b/i.test(lower)) period = 'semester';
 
   return {
-    originalAmount: amount,
-    currency: currency === '$' ? 'usd' : currency,
+    originalAmount: best.amount,
+    currency: best.currency === '$' ? 'usd' : best.currency,
     maxBudgetUgx: ugxAmount,
     period,
-    convertedFromUsd: currency === 'usd' || currency === '$'
+    convertedFromUsd: best.currency === 'usd' || best.currency === '$'
   };
 }
 
@@ -459,19 +714,57 @@ function parseSearchType(text) {
   return null;
 }
 
-function parseAreaFromText(text) {
+function getDynamicAreaAliases(sessionData = {}) {
+  const aliases = {};
+  const source = sessionData && typeof sessionData === 'object'
+    ? sessionData.area_aliases
+    : null;
+
+  if (source && typeof source === 'object' && !Array.isArray(source)) {
+    Object.entries(source).forEach(([alias, canonical]) => {
+      const a = normalizeInput(alias).toLowerCase();
+      const c = normalizeInput(canonical);
+      if (a && c) aliases[a] = c;
+    });
+    return aliases;
+  }
+
+  if (Array.isArray(source)) {
+    source.forEach((row) => {
+      const alias = normalizeInput(row?.alias || row?.key).toLowerCase();
+      const canonical = normalizeInput(row?.canonical || row?.name || row?.value);
+      if (alias && canonical) aliases[alias] = canonical;
+    });
+  }
+
+  return aliases;
+}
+
+function parseAreaFromText(text, sessionData = {}) {
   const clean = normalizeInput(text);
   if (!clean) return null;
   const lower = clean.toLowerCase();
+  const cleanedLower = lower.replace(/[^\w\s'-]/g, ' ');
+  const aliasMap = {
+    ...AREA_ALIASES,
+    ...getDynamicAreaAliases(sessionData)
+  };
 
-  const inMatch = lower.match(/\bin\s+([a-z][a-z\s'-]{2,})/i);
-  if (inMatch && inMatch[1]) {
-    let candidate = inMatch[1]
-      .split(/\b(for|under|max|with|near|within|around|budget|at|monthly|per|a month)\b/i)[0]
+  const directAlias = aliasMap[cleanedLower.trim()];
+  if (directAlias) return directAlias;
+
+  const districtHit = DISTRICTS.find((d) => cleanedLower.includes(d.toLowerCase()));
+  if (districtHit) return districtHit;
+
+  const areaRe = /\b(?:in|at|around|near|within|from)\s+([a-z][a-z\s'-]{2,})/i;
+  const areaMatch = cleanedLower.match(areaRe);
+  if (areaMatch && areaMatch[1]) {
+    let candidate = areaMatch[1]
+      .split(/\b(for|under|max|with|within|around|budget|monthly|per|a month|near me|my location|phone|call|rent|sale|buy)\b/i)[0]
       .trim();
-    candidate = candidate.replace(/[^a-z\s'-]/gi, '').trim();
+    candidate = candidate.replace(/[^a-z\s'-]/gi, '').replace(/\s+/g, ' ').trim();
     if (candidate && candidate !== 'uganda') {
-      const alias = AREA_ALIASES[candidate];
+      const alias = aliasMap[candidate];
       if (alias) return alias;
       return candidate
         .split(/\s+/)
@@ -480,31 +773,35 @@ function parseAreaFromText(text) {
     }
   }
 
-  const districtHit = DISTRICTS.find((d) => lower.includes(d.toLowerCase()));
-  if (districtHit) return districtHit;
-
   return null;
 }
 
-function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any') {
+function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', sessionData = {}) {
   const clean = normalizeInput(text);
   const e = entities && typeof entities === 'object' ? entities : {};
 
   const searchType = normalizeListingType(
     e.listing_type || e.listingType || parseSearchType(clean) || fallbackType || 'any'
   );
-  const area = normalizeInput(e.area || e.location || e.district || parseAreaFromText(clean)) || null;
+  const area = normalizeInput(e.area || e.location || e.district || parseAreaFromText(clean, sessionData)) || null;
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
   const propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
   const budgetParsed = parseBudget(clean);
   const maxBudgetUgx = Number(e.budget_max || e.budget || budgetParsed?.maxBudgetUgx || 0) || 0;
   const budgetPeriod = normalizeInput(e.period || budgetParsed?.period) || null;
+  const useSharedLocation = Boolean(
+    e.near_me === true
+    || e.nearMe === true
+    || e.use_shared_location === true
+    || isNearMeQuery(clean)
+  );
 
   const hasSignal = Boolean(
     area
     || bedsMin > 0
     || propertyType
     || maxBudgetUgx > 0
+    || useSharedLocation
     || (searchType && searchType !== 'any')
   );
 
@@ -516,9 +813,63 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any') 
     propertyType,
     maxBudgetUgx,
     budgetPeriod,
+    useSharedLocation,
     convertedFromUsd: Boolean(budgetParsed?.convertedFromUsd),
     sourceText: clean
   };
+}
+
+function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
+  const p = primary && typeof primary === 'object' ? primary : {};
+  const s = secondary && typeof secondary === 'object' ? secondary : {};
+
+  const merged = {
+    searchType: normalizeListingType(p.searchType || s.searchType || 'any'),
+    area: normalizeInput(p.area || s.area) || null,
+    district: normalizeInput(p.district || s.district) || null,
+    bedsMin: Number(p.bedsMin ?? s.bedsMin ?? 0) || 0,
+    propertyType: normalizeInput(p.propertyType || s.propertyType) || null,
+    maxBudgetUgx: Number(p.maxBudgetUgx ?? s.maxBudgetUgx ?? 0) || 0,
+    budgetPeriod: normalizeInput(p.budgetPeriod || s.budgetPeriod) || null,
+    useSharedLocation: Boolean(p.useSharedLocation || s.useSharedLocation),
+    convertedFromUsd: Boolean(p.convertedFromUsd || s.convertedFromUsd),
+    sourceText: normalizeInput(p.sourceText || s.sourceText || ''),
+    aiConfidence: Number(p.confidence || 0) || 0
+  };
+
+  merged.hasSignal = Boolean(
+    merged.area
+    || merged.district
+    || merged.bedsMin > 0
+    || merged.propertyType
+    || merged.maxBudgetUgx > 0
+    || merged.useSharedLocation
+    || (merged.searchType && merged.searchType !== 'any')
+  );
+
+  return merged;
+}
+
+async function resolveNaturalSearchFilters({
+  text,
+  entities = {},
+  fallbackType = 'any',
+  language = 'en',
+  sessionData = {}
+} = {}) {
+  const deterministic = extractNaturalSearchFilters(text, entities, fallbackType, sessionData);
+  try {
+    const aiExtract = await extractNaturalPropertyQuery({
+      text,
+      language,
+      sessionData,
+      fallbackType
+    });
+    return mergeNaturalSearchFilters(aiExtract, deterministic);
+  } catch (error) {
+    logger.warn('AI natural search extraction failed in route fallback:', error.message);
+    return deterministic;
+  }
 }
 
 function describeNaturalFilters(filters = {}) {
@@ -587,6 +938,24 @@ async function findPropertiesByNaturalFilters(filters = {}) {
 
 function normalizeOptKeyword(value) {
   return normalizeInput(value).toUpperCase().replace(/\s+/g, '');
+}
+
+function isAffirmativeReply(value) {
+  const clean = normalizeInput(value).toLowerCase();
+  const compact = normalizeOptKeyword(value);
+  if (!clean && !compact) return false;
+  if (['1', 'y', 'yes', 'yeah', 'yep', 'ok', 'okay', 'confirm', 'proceed', 'continue', 'sawa'].includes(clean)) return true;
+  if (['YES', 'OK', 'CONFIRM', 'CONTINUE', 'PROCEED', 'Y'].includes(compact)) return true;
+  return /\b(yes|ok|confirm|continue)\b/i.test(clean);
+}
+
+function isNegativeReply(value) {
+  const clean = normalizeInput(value).toLowerCase();
+  const compact = normalizeOptKeyword(value);
+  if (!clean && !compact) return false;
+  if (['2', 'n', 'no', 'nope', 'nah', 'cancel', 'stop', 'menu'].includes(clean)) return true;
+  if (['NO', 'CANCEL', 'STOP'].includes(compact)) return true;
+  return /\b(no|cancel|stop)\b/i.test(clean);
 }
 
 async function upsertWhatsappUserProfile(phone, updates = {}) {
@@ -840,6 +1209,79 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
   };
 }
 
+async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null) {
+  const f = filters && typeof filters === 'object' ? filters : {};
+  const values = ['approved'];
+  let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
+
+  const listingType = normalizeListingType(f.searchType || baseSearchType || 'any');
+  if (listingType && listingType !== 'any') {
+    values.push(listingType);
+    where += ` AND listing_type = $${values.length}`;
+  }
+
+  if (Number.isFinite(Number(f.maxBudgetUgx)) && Number(f.maxBudgetUgx) > 0) {
+    values.push(Number(f.maxBudgetUgx));
+    where += ` AND price IS NOT NULL AND price <= $${values.length}`;
+  }
+
+  if (Number.isFinite(Number(f.bedsMin)) && Number(f.bedsMin) > 0) {
+    values.push(Number(f.bedsMin));
+    where += ` AND COALESCE(bedrooms, 0) >= $${values.length}`;
+  }
+
+  const propertyType = normalizeInput(f.propertyType || '');
+  if (propertyType) {
+    values.push(`%${propertyType}%`);
+    const typeIdx = values.length;
+    where += ` AND (
+      COALESCE(property_type, '') ILIKE $${typeIdx}
+      OR title ILIKE $${typeIdx}
+      OR description ILIKE $${typeIdx}
+    )`;
+  }
+
+  const area = normalizeInput(f.area || '');
+  if (area) {
+    values.push(`%${area}%`);
+    const areaIdx = values.length;
+    where += ` AND (
+      district ILIKE $${areaIdx}
+      OR area ILIKE $${areaIdx}
+      OR title ILIKE $${areaIdx}
+    )`;
+  }
+
+  const result = await db.query(
+    `SELECT id, title, listing_type, district, area, price, price_period, bedrooms, bathrooms, property_type, latitude, longitude
+     FROM properties
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT 250`,
+    values
+  );
+
+  const sourceLat = Number(sharedLocation.lat);
+  const sourceLng = Number(sharedLocation.lng);
+  const rowsWithDistance = result.rows
+    .map((row) => {
+      const lat = toNum(row.latitude);
+      const lng = toNum(row.longitude);
+      if (lat == null || lng == null) return null;
+      const distanceKm = haversineKm(sourceLat, sourceLng, lat, lng);
+      return { ...row, distance_km: distanceKm };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance_km - b.distance_km);
+
+  const withinFiveMilesKm = 8.04672;
+  const nearby = rowsWithDistance.filter((row) => row.distance_km <= withinFiveMilesKm);
+  return {
+    rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
+    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0
+  };
+}
+
 async function findAgentsForWhatsapp(location) {
   const q = `%${location}%`;
   const result = await db.query(
@@ -859,6 +1301,132 @@ async function findAgentsForWhatsapp(location) {
   );
 
   return result.rows;
+}
+
+function extractAgentSearchKeywords(text, sessionData = {}) {
+  const clean = normalizeInput(text);
+  if (!clean) return [];
+
+  const keywords = new Set();
+  const parsedArea = parseAreaFromText(clean, sessionData);
+  if (parsedArea) keywords.add(parsedArea);
+
+  const lower = clean.toLowerCase();
+  DISTRICTS.forEach((district) => {
+    if (lower.includes(String(district).toLowerCase())) keywords.add(district);
+  });
+
+  clean.split(',').map((part) => normalizeInput(part)).filter(Boolean).slice(0, 3).forEach((part) => {
+    if (part.length >= 3) keywords.add(part);
+  });
+
+  if (!keywords.size && clean.length >= 2) keywords.add(clean);
+  return Array.from(keywords).slice(0, 8);
+}
+
+async function inferAgentSearchFromSharedLocation(sharedLocation, sessionData = {}) {
+  const locationLabel = sharedLocation?.address
+    || sharedLocation?.label
+    || `${Number(sharedLocation?.lat || 0).toFixed(4)}, ${Number(sharedLocation?.lng || 0).toFixed(4)}`;
+
+  const keywords = new Set(extractAgentSearchKeywords(locationLabel, sessionData));
+  const preferredAgentIds = new Set();
+
+  const sourceLat = toNum(sharedLocation?.lat);
+  const sourceLng = toNum(sharedLocation?.lng);
+  if (sourceLat == null || sourceLng == null) {
+    return {
+      locationLabel,
+      keywords: Array.from(keywords),
+      preferredAgentIds: []
+    };
+  }
+
+  const nearbyResult = await db.query(
+    `SELECT id, agent_id, district, area, latitude, longitude
+     FROM properties
+     WHERE status = 'approved'
+       AND agent_id IS NOT NULL
+       AND latitude IS NOT NULL
+       AND longitude IS NOT NULL
+     ORDER BY created_at DESC
+     LIMIT 300`
+  );
+
+  const rowsWithDistance = nearbyResult.rows
+    .map((row) => {
+      const lat = toNum(row.latitude);
+      const lng = toNum(row.longitude);
+      if (lat == null || lng == null) return null;
+      return {
+        ...row,
+        distance_km: haversineKm(sourceLat, sourceLng, lat, lng)
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance_km - b.distance_km);
+
+  const withinFiveMilesKm = 8.04672;
+  const nearby = rowsWithDistance.filter((row) => row.distance_km <= withinFiveMilesKm);
+  const seedRows = (nearby.length ? nearby : rowsWithDistance).slice(0, 25);
+
+  seedRows.forEach((row) => {
+    if (row.agent_id) preferredAgentIds.add(String(row.agent_id));
+    if (row.district) keywords.add(String(row.district));
+    if (row.area) keywords.add(String(row.area));
+  });
+
+  return {
+    locationLabel,
+    keywords: Array.from(keywords).slice(0, 10),
+    preferredAgentIds: Array.from(preferredAgentIds).slice(0, 25)
+  };
+}
+
+async function findAgentsForWhatsappKeywords(keywords = [], preferredAgentIds = []) {
+  const ranked = new Map();
+  const keywordList = Array.isArray(keywords)
+    ? keywords.map((k) => normalizeInput(k)).filter(Boolean)
+    : [];
+  const preferredIds = Array.isArray(preferredAgentIds)
+    ? preferredAgentIds.map((id) => normalizeInput(id)).filter(Boolean)
+    : [];
+
+  if (preferredIds.length) {
+    const preferredRows = await db.query(
+      `SELECT id, full_name, company_name, phone, whatsapp, rating, districts_covered
+       FROM agents
+       WHERE status = 'approved'
+         AND id = ANY($1::uuid[])
+       ORDER BY rating DESC NULLS LAST, created_at DESC
+       LIMIT 5`,
+      [preferredIds]
+    );
+
+    preferredRows.rows.forEach((row) => {
+      ranked.set(String(row.id), { ...row, _score: 200 });
+    });
+  }
+
+  for (const keyword of keywordList) {
+    const rows = await findAgentsForWhatsapp(keyword);
+    rows.forEach((row, idx) => {
+      const id = String(row.id);
+      const existing = ranked.get(id);
+      const boost = Math.max(15 - idx * 2, 5);
+      if (!existing) ranked.set(id, { ...row, _score: boost });
+      else ranked.set(id, { ...existing, _score: Number(existing._score || 0) + boost });
+    });
+  }
+
+  return Array.from(ranked.values())
+    .sort((a, b) => {
+      const scoreDiff = Number(b._score || 0) - Number(a._score || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return Number(b.rating || 0) - Number(a.rating || 0);
+    })
+    .slice(0, 5)
+    .map(({ _score, ...row }) => row);
 }
 
 async function logPropertySearchRequest({
@@ -965,6 +1533,48 @@ function formatAgentSearchMessage(lang, rows, location) {
   return lines.join('\n');
 }
 
+function intentRouteLabel(route) {
+  const labels = {
+    listing_type: 'list a property',
+    search_type: 'search for a property',
+    agent_area: 'find a broker',
+    agent_registration: 'register as a broker',
+    mortgage_help: 'open mortgage finder',
+    account_help: 'get account/saved help',
+    report_listing: 'report a listing',
+    support: 'contact support'
+  };
+  return labels[route] || 'continue';
+}
+
+function menuRouteReply(lang, route) {
+  if (route === 'listing_type') return { message: t(lang, 'askListingType'), nextStep: 'listing_type' };
+  if (route === 'search_type') return { message: t(lang, 'askSearchType'), nextStep: 'search_type' };
+  if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
+  if (route === 'agent_registration') {
+    return { message: `📝 Register as a broker here: ${HOME_URL}/#page-brokers\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+  }
+  if (route === 'mortgage_help') {
+    return { message: `🏦 Use Mortgage Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+  }
+  if (route === 'account_help') {
+    return { message: `👤 Account help: ${HOME_URL}/#page-account\n❤️ Saved properties: ${HOME_URL}/#page-saved\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+  }
+  if (route === 'report_listing') {
+    return {
+      message: `🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256760112587'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
+      nextStep: 'main_menu'
+    };
+  }
+  if (route === 'support') {
+    return {
+      message: `👋 Human support: ${process.env.SUPPORT_PHONE || '+256760112587'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`,
+      nextStep: 'main_menu'
+    };
+  }
+  return { message: t(lang, 'welcome'), nextStep: 'main_menu' };
+}
+
 function intentMenuRoute(intent) {
   const key = normalizeInput(intent).toLowerCase();
   if (key === 'property_listing') return 'listing_type';
@@ -1052,14 +1662,54 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // MAIN MENU
   if (step === 'main_menu') {
+    const pendingIntent = sessionData.pending_intent_confirmation
+      && typeof sessionData.pending_intent_confirmation === 'object'
+      ? sessionData.pending_intent_confirmation
+      : null;
+
+    if (pendingIntent && pendingIntent.route) {
+      if (isAffirmativeReply(cleanBody)) {
+        await patchSessionData(phone, { pending_intent_confirmation: null });
+        const next = menuRouteReply(lang, pendingIntent.route);
+        return respond(next.message, next.nextStep);
+      }
+
+      if (isNegativeReply(cleanBody)) {
+        await patchSessionData(phone, { pending_intent_confirmation: null });
+        return respond(`${t(lang, 'welcome')}\n\n${t(lang, 'menuHint')}`, 'main_menu');
+      }
+
+      return respond(
+        `I think you meant: *${intentRouteLabel(pendingIntent.route)}*.\nReply *YES* to continue or *NO* to stay on the main menu.`,
+        'main_menu'
+      );
+    }
+
     if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
-    const naturalFilters = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, 'any');
+    const naturalFilters = await resolveNaturalSearchFilters({
+      text: cleanBody,
+      entities: intentResult?.entities || {},
+      fallbackType: 'any',
+      language: lang,
+      sessionData
+    });
     const likelyPropertySearchIntent = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent);
     if (likelyPropertySearchIntent || naturalFilters.hasSignal) {
+      if (naturalFilters.useSharedLocation) {
+        await patchSessionData(phone, {
+          search_type: naturalFilters.searchType || 'any',
+          pending_search_filters: naturalFilters,
+          natural_query_text: cleanBody
+        });
+        return respond(
+          `📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+          'search_area'
+        );
+      }
       if (!naturalFilters.area) {
         await patchSessionData(phone, {
           search_type: naturalFilters.searchType || 'any',
@@ -1105,24 +1755,34 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     const inferredRoute = intentMenuRoute(intentResult?.intent);
-    if (inferredRoute === 'listing_type') return respond(t(lang, 'askListingType'), 'listing_type');
-    if (inferredRoute === 'search_type') return respond(t(lang, 'askSearchType'), 'search_type');
-    if (inferredRoute === 'agent_area') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    if (inferredRoute === 'agent_registration') {
-      return respond(`📝 Register as an agent here: ${HOME_URL}/#page-brokers\n\n${t(lang, 'menuHint')}`, 'main_menu');
+    const inferredConfidence = Number(intentResult?.confidence || 0);
+    const shouldConfirmIntent = inferredRoute
+      && intentResult?.intent
+      && intentResult.intent !== 'unknown'
+      && inferredConfidence >= 0.45
+      && inferredConfidence < 0.68;
+
+    if (shouldConfirmIntent) {
+      await patchSessionData(phone, {
+        pending_intent_confirmation: {
+          intent: intentResult.intent,
+          route: inferredRoute,
+          confidence: inferredConfidence,
+          text: cleanBody,
+          created_at: new Date().toISOString()
+        }
+      });
+      return respond(
+        `I think you want to *${intentRouteLabel(inferredRoute)}*.\nReply *YES* to continue or *NO* to stay on the main menu.`,
+        'main_menu'
+      );
     }
-    if (inferredRoute === 'mortgage_help') {
-      return respond(`🏦 Use Mortgage Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, 'main_menu');
+
+    if (inferredRoute) {
+      const next = menuRouteReply(lang, inferredRoute);
+      return respond(next.message, next.nextStep);
     }
-    if (inferredRoute === 'account_help') {
-      return respond(`👤 Account help: ${HOME_URL}/#page-account\n❤️ Saved properties: ${HOME_URL}/#page-saved\n\n${t(lang, 'menuHint')}`, 'main_menu');
-    }
-    if (inferredRoute === 'report_listing') {
-      return respond(`🚨 Report a listing: ${HOME_URL}/#page-report\nSupport: ${process.env.SUPPORT_PHONE || '+256760112587'} | ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`, 'main_menu');
-    }
-    if (inferredRoute === 'support') {
-      return respond(`👋 Human support: ${process.env.SUPPORT_PHONE || '+256760112587'}\n📧 ${process.env.SUPPORT_EMAIL || 'info@makaug.com'}\n\n${t(lang, 'menuHint')}`, 'main_menu');
-    }
+
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'welcome'), 'main_menu');
   }
 
@@ -1134,8 +1794,26 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(t(lang, 'askSearchArea'), 'search_area');
     }
 
-    const naturalFilters = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, 'any');
+    const naturalFilters = await resolveNaturalSearchFilters({
+      text: cleanBody,
+      entities: intentResult?.entities || {},
+      fallbackType: 'any',
+      language: lang,
+      sessionData
+    });
     if (!naturalFilters.hasSignal) return respond(`${t(lang, 'invalidInput')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
+
+    if (naturalFilters.useSharedLocation) {
+      await patchSessionData(phone, {
+        search_type: naturalFilters.searchType || 'any',
+        pending_search_filters: naturalFilters,
+        natural_query_text: cleanBody
+      });
+      return respond(
+        `📍 Got it.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+        'search_area'
+      );
+    }
 
     if (!naturalFilters.area) {
       await patchSessionData(phone, {
@@ -1195,10 +1873,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       const locationText = sharedLocation.address
         || sharedLocation.label
         || `${Number(sharedLocation.lat).toFixed(4)}, ${Number(sharedLocation.lng).toFixed(4)}`;
-      const near = await findPropertiesNearWhatsapp(searchType, sharedLocation);
+      const near = pendingFilters
+        ? await findPropertiesNearWhatsappWithFilters(searchType, sharedLocation, pendingFilters)
+        : await findPropertiesNearWhatsapp(searchType, sharedLocation);
       await logPropertySearchRequest({
         userPhone: phone,
-        searchType,
+        searchType: pendingFilters?.searchType || searchType,
         queryText: '',
         location: {
           lat: Number(sharedLocation.lat),
@@ -1211,7 +1891,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (!near.rows.length) {
         await createNoMatchLead({
           userPhone: phone,
-          searchType,
+          searchType: pendingFilters?.searchType || searchType,
           preferredArea: locationText,
           notes: 'No approved listings found from shared location search.'
         });
@@ -1222,7 +1902,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
 
       const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
-      return respond(`${t(lang, 'locationSharedReceived')}${extra}\n${formatPropertySearchMessage(lang, near.rows, locationText, searchType)}`, 'main_menu');
+      return respond(
+        `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${describeNaturalFilters(pendingFilters) ? `Filters: ${describeNaturalFilters(pendingFilters)}\n` : ''}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
+        'main_menu'
+      );
     }
 
     let naturalFilters = null;
@@ -1231,7 +1914,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       if (!naturalFilters.area && cleanBody.length >= 2) naturalFilters.area = cleanBody;
       naturalFilters.searchType = naturalFilters.searchType || searchType || 'any';
     } else {
-      const parsed = extractNaturalSearchFilters(cleanBody, intentResult?.entities || {}, searchType || 'any');
+      const parsed = await resolveNaturalSearchFilters({
+        text: cleanBody,
+        entities: intentResult?.entities || {},
+        fallbackType: searchType || 'any',
+        language: lang,
+        sessionData
+      });
       if (parsed.hasSignal) naturalFilters = parsed;
     }
 
@@ -1293,9 +1982,34 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // AGENT AREA SEARCH
   if (step === 'agent_area') {
-    if (cleanBody.length < 2) return respond(t(lang, 'askAgentArea'), 'agent_area');
+    if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
+      const inferred = await inferAgentSearchFromSharedLocation(sharedLocation, sessionData);
+      const rows = await findAgentsForWhatsappKeywords(inferred.keywords, inferred.preferredAgentIds);
+      if (!rows.length) {
+        return respond(
+          `${t(lang, 'noAgentsFound')}\n\n${tt(lang, 'seeAllAgents', { url: `${HOME_URL}/#page-brokers` })}\n${t(lang, 'menuHint')}`,
+          'main_menu'
+        );
+      }
+      return respond(formatAgentSearchMessage(lang, rows, inferred.locationLabel), 'main_menu');
+    }
 
-    const rows = await findAgentsForWhatsapp(cleanBody);
+    if (isNearMeQuery(cleanBody)) {
+      return respond(
+        `📍 Share your WhatsApp location and I will send brokers near you.\n\n${t(lang, 'menuHint')}`,
+        'agent_area'
+      );
+    }
+
+    if (cleanBody.length < 2) {
+      return respond(
+        `${t(lang, 'askAgentArea')}\n\n📍 Or share your WhatsApp location to find brokers near you.`,
+        'agent_area'
+      );
+    }
+
+    const keywords = extractAgentSearchKeywords(cleanBody, sessionData);
+    const rows = await findAgentsForWhatsappKeywords(keywords);
     if (!rows.length) {
       return respond(
         `${t(lang, 'noAgentsFound')}\n\n${tt(lang, 'seeAllAgents', { url: `${HOME_URL}/#page-brokers` })}\n${t(lang, 'menuHint')}`,
@@ -1303,7 +2017,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
     }
 
-    return respond(formatAgentSearchMessage(lang, rows, cleanBody), 'main_menu');
+    const locationLabel = keywords[0] || cleanBody;
+    return respond(formatAgentSearchMessage(lang, rows, locationLabel), 'main_menu');
   }
 
   // LISTING TYPE
@@ -1516,102 +2231,184 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   return respond(t(lang, 'invalidInput'), step);
 }
 
-// POST /api/whatsapp/webhook
-// Twilio WhatsApp webhook
-router.post('/webhook', async (req, res) => {
-  const { From, Body, MediaUrl0, MediaContentType0, NumMedia, MessageSid, SmsSid } = req.body;
+async function processInboundRuntime({
+  phone,
+  inboundMessageId = null,
+  body = '',
+  mediaUrl = null,
+  mediaType = '',
+  sharedLocation = null,
+  provider = 'whatsapp'
+}) {
+  logger.info(
+    `WhatsApp message from ${phone}: "${String(body || '').substring(0, 50)}"${
+      mediaUrl ? ' [media]' : ''
+    }${sharedLocation ? ' [location]' : ''} [${provider}]`
+  );
 
-  if (!From) return res.status(400).send('Missing From');
+  const session = await getSession(phone);
+  const sessionLang = session.language || 'en';
+  const sessionStep = session.current_step || 'greeting';
 
-  const phone = From.replace('whatsapp:', '');
-  const inboundMessageId = MessageSid || SmsSid || null;
-  const body = (Body || '').trim();
-  const mediaUrl = NumMedia && parseInt(NumMedia, 10) > 0 ? MediaUrl0 : null;
-  const mediaType = mediaUrl ? String(MediaContentType0 || '').toLowerCase() : '';
-  const isAudioNote = mediaUrl && mediaType.startsWith('audio/');
-  const sharedLocation = parseInboundLocation(req.body);
+  let effectiveBody = normalizeInput(body);
+  let transcriptRecord = null;
+  const normalizedMediaType = String(mediaType || '').toLowerCase();
+  const isAudioNote = mediaUrl && normalizedMediaType.startsWith('audio/');
 
-  logger.info(`WhatsApp message from ${phone}: "${body.substring(0, 50)}"${mediaUrl ? ' [media]' : ''}${sharedLocation ? ' [location]' : ''}`);
+  if (isAudioNote) {
+    transcriptRecord = await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg');
+    if (transcriptRecord?.text) effectiveBody = transcriptRecord.text;
+  }
 
-  try {
-    const session = await getSession(phone);
-    const sessionLang = session.language || 'en';
-    const sessionStep = session.current_step || 'greeting';
+  const messageType = sharedLocation
+    ? 'location'
+    : (isAudioNote ? 'voice' : (mediaUrl ? 'media' : 'text'));
 
-    let effectiveBody = body;
-    let transcriptRecord = null;
-    if (isAudioNote) {
-      transcriptRecord = await transcribeAudioFromUrl(mediaUrl, mediaType || 'audio/ogg');
-      if (transcriptRecord?.text) {
-        effectiveBody = transcriptRecord.text;
-      }
-    }
-
-    const messageType = sharedLocation
-      ? 'location'
-      : (isAudioNote ? 'voice' : (mediaUrl ? 'media' : 'text'));
-
-    await logWhatsappMessage({
-      userPhone: phone,
-      waMessageId: inboundMessageId,
-      direction: 'inbound',
-      messageType,
-      payload: {
-        body,
-        effectiveBody,
-        mediaUrl,
-        mediaType,
-        sharedLocation
-      }
-    });
-
-    if (transcriptRecord?.text) {
-      await saveTranscription({
-        userPhone: phone,
-        waMessageId: inboundMessageId,
-        transcript: transcriptRecord.text,
-        detectedLanguage: transcriptRecord.language || null,
-        mediaUrl
-      });
-    }
-
-    const intentResult = await classifyWhatsappIntent({
-      text: effectiveBody,
-      language: sessionLang,
-      step: sessionStep,
-      sessionData: session.session_data || {}
-    });
-
-    await logIntent({
-      userPhone: phone,
-      waMessageId: inboundMessageId,
-      detectedIntent: intentResult.intent,
-      confidence: intentResult.confidence,
-      language: sessionLang,
-      currentStep: sessionStep,
-      rawText: body,
-      transcript: transcriptRecord?.text || null,
-      entities: intentResult.entities || {},
-      modelUsed: intentResult.model || null
-    });
-
-    const { message, nextStep } = await processMessage(
-      phone,
+  await logWhatsappMessage({
+    userPhone: phone,
+    waMessageId: inboundMessageId,
+    direction: 'inbound',
+    messageType,
+    payload: {
+      provider,
+      body,
       effectiveBody,
       mediaUrl,
-      sharedLocation,
-      { intent: intentResult, mediaType, transcript: transcriptRecord?.text || null }
-    );
+      mediaType: normalizedMediaType,
+      sharedLocation
+    }
+  });
 
-    await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
+  if (transcriptRecord?.text) {
+    await saveTranscription({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      transcript: transcriptRecord.text,
+      detectedLanguage: transcriptRecord.language || null,
+      mediaUrl
+    });
+  }
 
-    const refreshedSession = await getSession(phone);
-    await upsertWhatsappUserProfile(phone, {
-      preferredLanguage: refreshedSession.language || sessionLang,
-      metadata: {
-        last_intent: intentResult.intent || 'unknown',
-        last_step: nextStep
+  const intentResult = await classifyWhatsappIntent({
+    text: effectiveBody,
+    language: sessionLang,
+    step: sessionStep,
+    sessionData: session.session_data || {}
+  });
+
+  await logIntent({
+    userPhone: phone,
+    waMessageId: inboundMessageId,
+    detectedIntent: intentResult.intent,
+    confidence: intentResult.confidence,
+    language: sessionLang,
+    currentStep: sessionStep,
+    rawText: body,
+    transcript: transcriptRecord?.text || null,
+    entities: intentResult.entities || {},
+    modelUsed: intentResult.model || null
+  });
+
+  const { message, nextStep } = await processMessage(
+    phone,
+    effectiveBody,
+    mediaUrl,
+    sharedLocation,
+    { intent: intentResult, mediaType: normalizedMediaType, transcript: transcriptRecord?.text || null }
+  );
+
+  await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
+  const refreshedSession = await getSession(phone);
+  await upsertWhatsappUserProfile(phone, {
+    preferredLanguage: refreshedSession.language || sessionLang,
+    metadata: {
+      last_intent: intentResult.intent || 'unknown',
+      last_step: nextStep
+    }
+  });
+
+  return { message, nextStep };
+}
+
+// GET /api/whatsapp/webhook
+// WhatsApp Cloud API verification endpoint
+router.get('/webhook', (req, res) => {
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+
+  if (mode === 'subscribe' && token && String(token) === WHATSAPP_VERIFY_TOKEN) {
+    logger.info('Meta WhatsApp webhook verified successfully');
+    return res.status(200).send(String(challenge || ''));
+  }
+
+  logger.warn('Meta WhatsApp webhook verification failed');
+  return res.sendStatus(403);
+});
+
+// POST /api/whatsapp/webhook
+// Supports BOTH:
+// - Meta WhatsApp Cloud API payload
+// - Twilio webhook payload (legacy fallback)
+router.post('/webhook', async (req, res) => {
+  try {
+    // Meta WhatsApp Cloud API mode
+    if (isMetaWebhookPayload(req.body)) {
+      const inboundMessages = await parseMetaInboundMessages(req.body);
+      if (!inboundMessages.length) return res.status(200).json({ ok: true, ignored: true });
+
+      for (const inbound of inboundMessages) {
+        try {
+          const { message, nextStep } = await processInboundRuntime({
+            phone: inbound.phone,
+            inboundMessageId: inbound.inboundMessageId,
+            body: inbound.body,
+            mediaUrl: inbound.mediaUrl,
+            mediaType: inbound.mediaType,
+            sharedLocation: inbound.sharedLocation,
+            provider: 'meta'
+          });
+
+          await sendMetaTextMessage(inbound.phone, message);
+          await logWhatsappMessage({
+            userPhone: inbound.phone,
+            waMessageId: null,
+            direction: 'outbound',
+            messageType: 'text',
+            payload: {
+              provider: 'meta',
+              reply: message,
+              nextStep
+            }
+          });
+        } catch (err) {
+          logger.error(`Meta inbound processing failed for ${inbound.phone}`, err);
+        }
       }
+
+      // Meta expects a quick 200 ACK.
+      return res.status(200).json({ ok: true });
+    }
+
+    // Twilio fallback mode
+    const { From, Body, MediaUrl0, MediaContentType0, NumMedia, MessageSid, SmsSid } = req.body;
+    if (!From) return res.status(400).send('Missing From');
+
+    const phone = From.replace('whatsapp:', '');
+    const inboundMessageId = MessageSid || SmsSid || null;
+    const body = (Body || '').trim();
+    const mediaUrl = NumMedia && parseInt(NumMedia, 10) > 0 ? MediaUrl0 : null;
+    const mediaType = mediaUrl ? String(MediaContentType0 || '').toLowerCase() : '';
+    const sharedLocation = parseInboundLocation(req.body);
+
+    const { message, nextStep } = await processInboundRuntime({
+      phone,
+      inboundMessageId,
+      body,
+      mediaUrl,
+      mediaType,
+      sharedLocation,
+      provider: 'twilio'
     });
 
     const MessagingResponse = require('twilio').twiml.MessagingResponse;
@@ -1624,6 +2421,7 @@ router.post('/webhook', async (req, res) => {
       direction: 'outbound',
       messageType: 'text',
       payload: {
+        provider: 'twilio',
         reply: message,
         nextStep
       }
@@ -1633,6 +2431,12 @@ router.post('/webhook', async (req, res) => {
     return res.send(twiml.toString());
   } catch (err) {
     logger.error('WhatsApp webhook error:', err);
+
+    if (isMetaWebhookPayload(req.body)) {
+      // Still ACK Meta to avoid perpetual retries on unrecoverable payloads.
+      return res.status(200).json({ ok: false, error: 'processing_failed' });
+    }
+
     const MessagingResponse = require('twilio').twiml.MessagingResponse;
     const twiml = new MessagingResponse();
     twiml.message(tt('en', 'genericWebhookError', { url: HOME_URL }));

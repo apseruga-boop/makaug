@@ -1,0 +1,64 @@
+{
+  "site_code": "makaug-main",
+  "source": "whatsapp",
+  "channel": "whatsapp",
+  "session": {
+    "external_session_id": "wa_256760112587_20260331_001",
+    "external_user_id": "+256760112587",
+    "language": "en",
+    "metadata": {
+      "entry_point": "webhook"
+    }
+  },
+  "events": [
+    {
+      "event_name": "whatsapp.user_message",
+      "schema_version": "1.0",
+      "event_ts": "2026-03-31T08:15:11Z",
+      "dedupe_key": "wa-mid-001",
+      "payload": {
+        "intent": "property_search",
+        "intent_confidence": 0.92,
+        "language": "en",
+        "message": {
+          "text": "I need a 2-bed rental in Muyenga under 2M UGX."
+        },
+        "entities": {
+          "listing_type": "rent",
+          "area": "Muyenga",
+          "bedrooms": 2,
+          "budget_max": 2000000
+        },
+        "attributes": {
+          "channel": "whatsapp",
+          "entry_point": "user_message"
+        },
+        "outcome": "success"
+      }
+    },
+    {
+      "event_name": "whatsapp.assistant_reply",
+      "schema_version": "1.0",
+      "event_ts": "2026-03-31T08:15:12Z",
+      "dedupe_key": "wa-mid-002",
+      "payload": {
+        "intent": "property_search",
+        "intent_confidence": 0.92,
+        "language": "en",
+        "input_text": "I need a 2-bed rental in Muyenga under 2M UGX.",
+        "response": {
+          "text": "I found options for you. View: https://makaug.com/#page-rent"
+        },
+        "entities": {
+          "listing_type": "rent",
+          "area": "Muyenga"
+        },
+        "attributes": {
+          "returned_results": 5
+        },
+        "outcome": "success",
+        "label": "good_response"
+      }
+    }
+  ]
+}

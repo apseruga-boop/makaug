@@ -17,6 +17,7 @@ const adminRoutes = require('./routes/admin');
 const whatsappRoutes = require('./routes/whatsapp');
 const mortgageRoutes = require('./routes/mortgage');
 const aiRoutes = require('./routes/ai');
+const aiCoreRoutes = require('./routes/ai-core');
 const adminAiAgentsRoutes = require('./routes/admin-agents');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 
@@ -70,7 +71,13 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/mortgage-rates', mortgageRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/ai-core', aiCoreRoutes);
 app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
+
+// Never expose local/private operator tools on public host.
+app.use('/private-local', (_req, res) => {
+  return res.status(404).send('Not found');
+});
 
 const staticRoot = __dirname;
 app.use(express.static(staticRoot, { extensions: ['html'] }));
