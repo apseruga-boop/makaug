@@ -22,6 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/config.js"></script>
   <script>
     window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
     window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {
@@ -3406,6 +3407,7 @@
     let lpPreviewPhotoIndex = 0;
     let detailGalleryPhotos = [];
     let detailGalleryPhotoIndex = 0;
+    let activeDetailPropertyId = "";
     let adminAccessUnlocked = false;
     let adminUnlockTapBuffer = [];
     const LISTING_NEW_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
@@ -5603,6 +5605,9 @@
       if (rerender) {
         renderAll();
         resetMaps();
+        if (currentPage === "detail" && activeDetailPropertyId) {
+          openDetail(activeDetailPropertyId);
+        }
       }
       updateListPreview();
       renderListReviewSummary();
@@ -5613,10 +5618,13 @@
     const API_BASE = (window.MAKAUG_API_BASE || "").replace(/\/$/, "");
     const GOOGLE_ADSENSE_CLIENT = (window.MAKAUG_ADSENSE_CLIENT || "").trim();
     const GOOGLE_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || {};
+    const GOOGLE_MAPS_API_KEY = (window.MAKAUG_GOOGLE_MAPS_API_KEY || window.MAKAUG_CONFIG?.googleMapsApiKey || "").trim();
     const ANALYTICS_CLIENT_KEY = "makaug_client_id";
     const AUTH_STORAGE_KEY = "makaug_auth";
     const ADMIN_API_KEY_STORAGE_KEY = "makaug_admin_api_key";
     let gaMeasurementId = null;
+    let googleMapsLoadPromise = null;
+    const mapProviders = {};
 
     function apiUrl(path) {
       const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -11559,10 +11567,21 @@
       return `${translateListingLabel("Added")}: ${formatted}`;
     }
 
+    function listingTimeValue(p) {
+      return parseDateSafe(p?.created_at || p?.createdAt || p?.updated_at || p?.updatedAt)?.getTime() || 0;
+    }
+
+    function sortListingsByNewest(a, b) {
+      const delta = listingTimeValue(b) - listingTimeValue(a);
+      if (delta) return delta;
+      return String(b?.id || "").localeCompare(String(a?.id || ""));
+    }
+
     function getPropertyShareUrl(property) {
       if (!property?.id) return window.location.href;
       const origin = window.location.origin || "https://makaug.com";
-      return `${origin}/property/${property.id}`;
+      const shareId = encodeURIComponent(String(property.backend_id || property.id));
+      return `${origin}/property/${shareId}`;
     }
 
     function getBrokerShareUrl(broker) {
@@ -11595,7 +11614,7 @@
     }
 
     async function sharePropertyListing(id, channel = "native") {
-      const property = PROPERTIES.find((p) => String(p.id) === String(id));
+      const property = findPropertyForUi(id);
       if (!property) return;
       const shareUrl = getPropertyShareUrl(property);
       const shareText = `${property.title} • ${property.area}, ${property.district} • ${fmtP(property.price, property.period)}\n${shareUrl}`;
@@ -11610,6 +11629,10 @@
         }
         if (channel === "facebook") {
           window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
+          return;
+        }
+        if (channel === "linkedin") {
+          window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
           return;
         }
         if (channel === "twitter") {
@@ -11695,6 +11718,7 @@
               <div class="flex items-center gap-1">
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
@@ -11807,6 +11831,7 @@
               <div class="flex items-center gap-1">
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
                 <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
@@ -12014,10 +12039,17 @@
         lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
         inquiry_reference: p?.inquiry_reference || "",
         lister_display_name: p?.lister_name || p?.contact_display_name || "",
+        area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",
+        nearby_places: Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : []),
         images: imageItems,
+        detail_loaded: options.detailLoaded === true || images.length > 0,
         owner_preview_visible: options.ownerPreview === true,
         owner_preview_token: options.token || ""
       };
+    }
+
+    function findPropertyForUi(id) {
+      return PROPERTIES.find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id));
     }
 
     function upsertPropertyForUi(property) {
@@ -12026,11 +12058,46 @@
       mapped.remote_source = mapped.remote_source || "api";
       const idx = PROPERTIES.findIndex((p) => String(p.id) === String(mapped.id) || String(p.backend_id || "") === String(mapped.id));
       if (idx >= 0) {
-        PROPERTIES[idx] = { ...PROPERTIES[idx], ...mapped };
+        const existing = PROPERTIES[idx];
+        const next = { ...existing, ...mapped };
+        if ((!Array.isArray(mapped.images) || mapped.images.length === 0) && Array.isArray(existing.images) && existing.images.length) {
+          next.images = existing.images;
+        }
+        if (existing.detail_loaded === true && mapped.detail_loaded !== true) {
+          next.detail_loaded = true;
+        }
+        if (existing.owner_preview_token && !mapped.owner_preview_token) {
+          next.owner_preview_token = existing.owner_preview_token;
+          next.owner_preview_visible = existing.owner_preview_visible;
+        }
+        PROPERTIES[idx] = next;
+        return PROPERTIES[idx];
       } else {
         PROPERTIES.push(mapped);
       }
       return mapped;
+    }
+
+    async function loadRemotePropertyDetailForUi(id, options = {}) {
+      const listingId = String(id || "").trim();
+      if (!listingId) return null;
+      const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}`);
+      const mapped = mapRemotePropertyForUi(response?.data || {}, { ...options, detailLoaded: true });
+      mapped.remote_source = "api";
+      return upsertPropertyForUi(mapped) || mapped;
+    }
+
+    async function hydratePropertyDetailForUi(property) {
+      if (!property) return null;
+      if (property.detail_loaded || property.owner_preview_visible === true) return property;
+      const listingId = property.backend_id || property.id;
+      if (!listingId || property.remote_source !== "api") return property;
+      try {
+        return await loadRemotePropertyDetailForUi(listingId);
+      } catch (error) {
+        console.warn("Unable to load full listing detail", error);
+        return property;
+      }
     }
 
     async function refreshPublicListingsFromApi({ silent = true } = {}) {
@@ -12062,7 +12129,7 @@
       if (!listingId || !token) return false;
       try {
         const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}/preview?token=${encodeURIComponent(token)}`);
-        const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, token });
+        const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, token, detailLoaded: true });
         upsertPropertyForUi(property);
         openDetail(property.id);
         toast("Private listing preview loaded.");
@@ -12117,10 +12184,37 @@
       }
 
       if (propertyFromPath || propertyFromQuery) {
-        const pid = propertyFromPath || propertyFromQuery;
-        const found = getPublicListings().find((p) => String(p.id) === String(pid));
+        const pid = decodeURIComponent(propertyFromPath || propertyFromQuery || "");
+        const found = getPublicListings().find((p) => String(p.id) === String(pid) || String(p.backend_id || "") === String(pid));
         if (found) {
-          openDetail(found.id);
+          await openDetail(found.id);
+          return true;
+        }
+        try {
+          const loaded = await loadRemotePropertyDetailForUi(pid);
+          if (loaded && isListingPublicVisible(loaded)) {
+            await openDetail(loaded.id);
+            return true;
+          }
+        } catch (error) {
+          console.warn("Unable to open linked property", error);
+        }
+        if (publicListingsApiLoading || !publicListingsFromApiLoaded) {
+          const loaded = await refreshPublicListingsFromApi({ silent: true });
+          const retry = loaded
+            ? getPublicListings().find((p) => String(p.id) === String(pid) || String(p.backend_id || "") === String(pid))
+            : null;
+          if (retry) {
+            await openDetail(retry.id);
+            return true;
+          }
+        }
+      }
+
+      if (path === "/property" && !propertyFromQuery) {
+        const latest = getPublicListings().sort(sortListingsByNewest)[0];
+        if (latest) {
+          await openDetail(latest.id);
           return true;
         }
       }
@@ -12307,7 +12401,7 @@
         });
         if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
         if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
-        if (sort === "newest") list.sort((a, b) => b.id - a.id);
+        if (sort === "newest") list.sort(sortListingsByNewest);
         document.getElementById("rent-count").textContent = list.length;
         renderGrid("rent-grid", list);
         setMapMarkers("map-rent", list);
@@ -12350,7 +12444,7 @@
       if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "distance_asc") list.sort((a, b) => (a.distance_to_uni_km || 999) - (b.distance_to_uni_km || 999));
-      if (sort === "newest") list.sort((a, b) => b.id - a.id);
+      if (sort === "newest") list.sort(sortListingsByNewest);
       renderStudentGrid(list);
       updateStudentHeader(list);
       setMapMarkers("map-students", list);
@@ -14210,7 +14304,7 @@
       if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
-      if (sort === "newest") list.sort((a, b) => b.id - a.id);
+      if (sort === "newest") list.sort(sortListingsByNewest);
       renderGrid("commercial-grid", list);
       setMapMarkers("map-commercial", list);
       return list;
@@ -14241,7 +14335,7 @@
       if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
-      if (sort === "newest") list.sort((a, b) => b.id - a.id);
+      if (sort === "newest") list.sort(sortListingsByNewest);
       renderGrid("land-grid", list);
       setMapMarkers("map-land", list);
       return list;
@@ -14254,11 +14348,7 @@
       if (order === "price_asc") list.sort((a, b) => a.price - b.price);
       if (order === "price_desc") list.sort((a, b) => b.price - a.price);
       if (order === "newest") {
-        list.sort((a, b) => {
-          const ad = parseDateSafe(a.created_at || a.updated_at)?.getTime() || 0;
-          const bd = parseDateSafe(b.created_at || b.updated_at)?.getTime() || 0;
-          return bd - ad;
-        });
+        list.sort(sortListingsByNewest);
       }
       renderGrid(gridMap[page], list);
     }
@@ -14719,9 +14809,12 @@
         </div>`;
     }
 
-    function openDetail(id) {
-      const p = PROPERTIES.find((x) => String(x.id) === String(id) || String(x.backend_id || "") === String(id));
+    async function openDetail(id) {
+      let p = findPropertyForUi(id);
       if (!p) return;
+      p = await hydratePropertyDetailForUi(p);
+      if (!p) return;
+      activeDetailPropertyId = String(p.id || id || "");
       const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
       const isOwnerPreviewViewer = p.owner_preview_visible === true;
       if (!isListingPublicVisible(p) && !isAdminViewer && !isOwnerPreviewViewer) {
@@ -14803,6 +14896,7 @@
                 <div class="mt-3 flex items-center gap-2">
                   <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
                   <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
                   <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
                   <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
                   <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
@@ -15046,19 +15140,131 @@
       return { lat: 0.347596, lng: 32.58252, listingsCount: 0 };
     }
 
+    function ensureGoogleMapsApi() {
+      if (!GOOGLE_MAPS_API_KEY) return Promise.resolve(false);
+      if (window.google?.maps) return Promise.resolve(true);
+      if (googleMapsLoadPromise) return googleMapsLoadPromise;
+
+      googleMapsLoadPromise = new Promise((resolve) => {
+        const scriptId = "makaug-google-maps-script";
+        const existing = document.getElementById(scriptId);
+        if (existing) {
+          existing.addEventListener("load", () => resolve(!!window.google?.maps), { once: true });
+          existing.addEventListener("error", () => resolve(false), { once: true });
+          return;
+        }
+        const script = document.createElement("script");
+        script.id = scriptId;
+        script.async = true;
+        script.defer = true;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`;
+        script.onload = () => resolve(!!window.google?.maps);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      });
+
+      return googleMapsLoadPromise;
+    }
+
+    function clearMapMarkers(mapId) {
+      const provider = mapProviders[mapId] || "leaflet";
+      (markers[mapId] || []).forEach((marker) => {
+        try {
+          if (provider === "google" && marker?.setMap) marker.setMap(null);
+          else if (maps[mapId]?.removeLayer) maps[mapId].removeLayer(marker);
+        } catch (e) {}
+      });
+      markers[mapId] = [];
+    }
+
+    function addGoogleMarkers(mapId, list) {
+      const map = maps[mapId];
+      if (!map || !window.google?.maps) return;
+      const infoWindow = new google.maps.InfoWindow();
+      (list || []).forEach((p) => {
+        if (typeof p.lat !== "number" || typeof p.lng !== "number") return;
+        const marker = new google.maps.Marker({
+          position: { lat: p.lat, lng: p.lng },
+          map,
+          title: p.title || "MakaUg listing"
+        });
+        const idArg = propertyIdArg(p.id);
+        const content = `
+          <div style="min-width:200px">
+            <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
+              ${adminEscape(p.title || "Property")}
+            </button>
+            <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${adminEscape([p.area, p.district].filter(Boolean).join(", "))}</div>
+            <div style="font-weight:700;color:#166534;margin-bottom:8px;">${adminEscape(fmtP(p.price, p.period))}</div>
+            <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+              View Property
+            </button>
+          </div>
+        `;
+        marker.addListener("click", () => {
+          if (mapId === "map-home") {
+            openDetail(p.id);
+            return;
+          }
+          infoWindow.setContent(content);
+          infoWindow.open(map, marker);
+        });
+        markers[mapId].push(marker);
+      });
+    }
+
     function setBrokerMapMarkers(list) {
       const mapId = "map-brokers";
       const map = maps[mapId];
-      if (!map || !window.L) return;
+      if (!map) return;
 
-      (markers[mapId] || []).forEach((m) => {
-        try { map.removeLayer(m); } catch (e) {}
-      });
-      markers[mapId] = [];
+      clearMapMarkers(mapId);
 
       const points = (list || [])
         .map((broker) => ({ broker, point: getBrokerMapPoint(broker) }))
         .filter((item) => item.point && Number.isFinite(item.point.lat) && Number.isFinite(item.point.lng));
+
+      if (mapProviders[mapId] === "google" && window.google?.maps) {
+        const infoWindow = new google.maps.InfoWindow();
+        points.forEach(({ broker, point }) => {
+          const marker = new google.maps.Marker({
+            position: { lat: point.lat, lng: point.lng },
+            map,
+            title: broker.name || "MakaUg broker"
+          });
+          marker.addListener("click", () => {
+            infoWindow.setContent(`
+              <div style="min-width:210px">
+                <div style="font-weight:700;color:#111827;margin-bottom:2px">${adminEscape(broker.name || "Broker")}</div>
+                <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${adminEscape(broker.company || "")}</div>
+                <div style="font-size:12px;color:#374151;margin-bottom:8px">Location: ${adminEscape(broker.area || "")}</div>
+                <button type="button" onclick="openBrokerProfile(${Number(broker.id) || 0}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+                  View Broker
+                </button>
+              </div>
+            `);
+            infoWindow.open(map, marker);
+          });
+          markers[mapId].push(marker);
+        });
+        if (!points.length) {
+          map.setCenter({ lat: 1.3733, lng: 32.2903 });
+          map.setZoom(7);
+        } else if ((list || []).length >= 3) {
+          map.setCenter({ lat: 1.3733, lng: 32.2903 });
+          map.setZoom(7);
+        } else if (points.length === 1) {
+          map.setCenter({ lat: points[0].point.lat, lng: points[0].point.lng });
+          map.setZoom(9);
+        } else {
+          const bounds = new google.maps.LatLngBounds();
+          points.forEach((item) => bounds.extend({ lat: item.point.lat, lng: item.point.lng }));
+          map.fitBounds(bounds);
+        }
+        return;
+      }
+
+      if (!window.L) return;
 
       points.forEach(({ broker, point }) => {
         const marker = L.marker([point.lat, point.lng]).addTo(map);
@@ -15103,8 +15309,7 @@
       if (map.getZoom() < 6) map.setZoom(6);
     }
 
-    function initMaps() {
-      if (!window.L) return;
+    async function initMaps() {
       const mapSpecs = [
         { id: "map-home", filter: () => getPublicListings() },
         { id: "map-sale", filter: () => getPublicListings().filter((p) => normalizeType(p.type) === "sale") },
@@ -15114,6 +15319,42 @@
         { id: "map-land", filter: () => getPublicListings().filter((p) => normalizeType(p.type) === "land") }
       ];
 
+      const useGoogle = await ensureGoogleMapsApi();
+      if (useGoogle && window.google?.maps) {
+        mapSpecs.forEach((spec) => {
+          const el = document.getElementById(spec.id);
+          if (!el) return;
+          const map = new google.maps.Map(el, {
+            center: { lat: 0.347596, lng: 32.58252 },
+            zoom: 9,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true
+          });
+          maps[spec.id] = map;
+          mapProviders[spec.id] = "google";
+          markers[spec.id] = [];
+          addMarkers(spec.id, spec.filter());
+        });
+
+        const brokerMapEl = document.getElementById("map-brokers");
+        if (brokerMapEl) {
+          const brokerMap = new google.maps.Map(brokerMapEl, {
+            center: { lat: 1.3733, lng: 32.2903 },
+            zoom: 7,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: true
+          });
+          maps["map-brokers"] = brokerMap;
+          mapProviders["map-brokers"] = "google";
+          markers["map-brokers"] = [];
+          setBrokerMapMarkers(BROKERS);
+        }
+        return;
+      }
+
+      if (!window.L) return;
       mapSpecs.forEach((spec) => {
         const el = document.getElementById(spec.id);
         if (!el) return;
@@ -15123,6 +15364,7 @@
           maxZoom: 18
         }).addTo(map);
         maps[spec.id] = map;
+        mapProviders[spec.id] = "leaflet";
         markers[spec.id] = [];
         addMarkers(spec.id, spec.filter());
       });
@@ -15135,6 +15377,7 @@
           maxZoom: 18
         }).addTo(brokerMap);
         maps["map-brokers"] = brokerMap;
+        mapProviders["map-brokers"] = "leaflet";
         markers["map-brokers"] = [];
         setBrokerMapMarkers(BROKERS);
       }
@@ -15142,6 +15385,11 @@
 
     function addMarkers(mapId, list) {
       if (!maps[mapId]) return;
+      if (mapProviders[mapId] === "google") {
+        addGoogleMarkers(mapId, list);
+        return;
+      }
+      if (!window.L) return;
       list.forEach((p) => {
         if (typeof p.lat !== "number" || typeof p.lng !== "number") return;
         const marker = L.marker([p.lat, p.lng]).addTo(maps[mapId]);
@@ -15167,10 +15415,7 @@
 
     function setMapMarkers(mapId, list) {
       if (!maps[mapId]) return;
-      (markers[mapId] || []).forEach((m) => {
-        try { maps[mapId].removeLayer(m); } catch (e) {}
-      });
-      markers[mapId] = [];
+      clearMapMarkers(mapId);
       addMarkers(mapId, list || []);
     }
 
@@ -15185,18 +15430,41 @@
       setBrokerMapMarkers(BROKERS);
     }
 
-    function initDetailMap(p) {
+    async function initDetailMap(p) {
       const el = document.getElementById("map-detail");
-      if (!el || !window.L) return;
+      if (!el) return;
+      const useGoogle = await ensureGoogleMapsApi();
+      const lat = Number.isFinite(p.lat) ? p.lat : 0.347596;
+      const lng = Number.isFinite(p.lng) ? p.lng : 32.58252;
+      if (useGoogle && window.google?.maps) {
+        el.innerHTML = "";
+        const map = new google.maps.Map(el, {
+          center: { lat, lng },
+          zoom: 14,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true
+        });
+        const marker = new google.maps.Marker({
+          position: { lat, lng },
+          map,
+          title: p.title || "MakaUg listing"
+        });
+        const info = new google.maps.InfoWindow({ content: `<strong>${adminEscape(p.title || "Property")}</strong>` });
+        info.open(map, marker);
+        marker.addListener("click", () => info.open(map, marker));
+        return;
+      }
+      if (!window.L) return;
       if (el._leaflet_id) {
         try { el._leaflet_id = null; } catch (e) {}
       }
-      const map = L.map("map-detail").setView([p.lat || 0.347596, p.lng || 32.58252], 14);
+      const map = L.map("map-detail").setView([lat, lng], 14);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18
       }).addTo(map);
-      L.marker([p.lat || 0.347596, p.lng || 32.58252]).addTo(map).bindPopup(p.title).openPopup();
+      L.marker([lat, lng]).addTo(map).bindPopup(p.title).openPopup();
       setTimeout(() => map.invalidateSize(), 150);
     }
 

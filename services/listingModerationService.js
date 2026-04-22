@@ -60,7 +60,7 @@ function getListingReference(listing = {}) {
 }
 
 function getPublicListingUrl(listing = {}) {
-  return `${getSiteBaseUrl()}/?property=${encodeURIComponent(listing.id || '')}`;
+  return `${getSiteBaseUrl()}/property/${encodeURIComponent(listing.id || '')}`;
 }
 
 function getOwnerPreviewUrl(listing = {}, token = '') {

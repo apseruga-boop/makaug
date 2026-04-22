@@ -8,6 +8,105 @@ function stripHtml(value) {
   return String(value || '').replace(/<[^>]*>/g, '').trim();
 }
 
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function getPublicSiteUrl() {
+  return String(
+    process.env.PUBLIC_SITE_URL
+      || process.env.PUBLIC_BASE_URL
+      || process.env.APP_BASE_URL
+      || 'https://makaug.com'
+  ).replace(/\/+$/, '');
+}
+
+function getFirstUrlFromText(text) {
+  const match = String(text || '').match(/https?:\/\/[^\s<>"')]+/i);
+  return match ? match[0] : '';
+}
+
+function renderPlainTextAsEmailHtml(text) {
+  return String(text || '')
+    .split(/\n{2,}/)
+    .map((block) => {
+      const lines = block
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (!lines.length) return '';
+      if (lines.length > 1 && lines.every((line) => /^[A-Za-z0-9 /()[\]-]+:/.test(line))) {
+        return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:12px 0;">${lines.map((line) => {
+          const idx = line.indexOf(':');
+          const label = line.slice(0, idx + 1);
+          const value = line.slice(idx + 1).trim();
+          return `<tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:150px;">${escapeHtml(label)}</td><td style="padding:7px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(value || '-')}</td></tr>`;
+        }).join('')}</table>`;
+      }
+      return `<p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.65;">${lines.map(escapeHtml).join('<br>')}</p>`;
+    })
+    .filter(Boolean)
+    .join('');
+}
+
+function buildBrandedEmailHtml({ subject, text }) {
+  const siteUrl = getPublicSiteUrl();
+  const supportEmail = getSupportEmail();
+  const ctaUrl = getFirstUrlFromText(text) || siteUrl;
+  const ctaLabel = ctaUrl === siteUrl ? 'Visit MakaUg' : 'Open link';
+  const safeSubject = escapeHtml(subject || 'MakaUg update');
+  const bodyHtml = renderPlainTextAsEmailHtml(text);
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${safeSubject}</title>
+  </head>
+  <body style="margin:0;background:#f4f7f2;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <div style="display:none;max-height:0;overflow:hidden;color:#f4f7f2;">${safeSubject}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f2;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #dbe7d7;box-shadow:0 12px 30px rgba(15,23,42,0.08);">
+            <tr>
+              <td style="background:#0b3d1f;padding:24px 28px;">
+                <div style="font-size:28px;font-weight:900;letter-spacing:.2px;line-height:1;">
+                  <span style="color:#ffffff;">makaug</span><span style="color:#d6a62a;">.com</span>
+                </div>
+                <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Uganda Property</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <div style="display:inline-block;background:#ecfdf3;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800;margin-bottom:16px;">MakaUg update</div>
+                <h1 style="margin:0 0 16px;color:#111827;font-size:24px;line-height:1.25;font-weight:900;">${safeSubject}</h1>
+                ${bodyHtml}
+                <div style="margin-top:24px;">
+                  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#166534;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:800;">${ctaLabel}</a>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">
+                Need help? Contact <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a>.<br>
+                MakaUg helps property seekers, owners, students, brokers, and land buyers find trusted opportunities in Uganda.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 let smtpTransporter = null;
 let msGraphTokenCache = {
   token: null,
@@ -304,6 +403,7 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
   const recipient = to || getSupportEmail();
   const safeSubject = stripHtml(subject || 'MakaUg Notification');
   const safeText = String(text || '').trim();
+  const safeHtml = html || buildBrandedEmailHtml({ subject: safeSubject, text: safeText });
   let lastProviderError = '';
 
   if (!safeText) {
@@ -314,7 +414,7 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     to: recipient,
     subject: safeSubject,
     text: safeText,
-    html,
+    html: safeHtml,
     replyTo
   });
   if (msGraphResult.sent) return msGraphResult;
@@ -327,7 +427,7 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     to: recipient,
     subject: safeSubject,
     text: safeText,
-    html,
+    html: safeHtml,
     replyTo
   });
   if (smtpResult.sent) return smtpResult;
@@ -340,7 +440,7 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     to: recipient,
     subject: safeSubject,
     text: safeText,
-    html,
+    html: safeHtml,
     replyTo
   });
   if (resendResult.sent) return resendResult;
@@ -353,7 +453,7 @@ async function sendSupportEmail({ to, subject, text, html, replyTo }) {
     to: recipient,
     subject: safeSubject,
     text: safeText,
-    html,
+    html: safeHtml,
     replyTo
   });
   if (webhookResult.sent) return webhookResult;

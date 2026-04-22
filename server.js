@@ -80,6 +80,27 @@ app.use('/private-local', (_req, res) => {
   return res.status(404).send('Not found');
 });
 
+app.get('/config.js', (_req, res) => {
+  const publicConfig = {
+    googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
+    apiBase: process.env.PUBLIC_API_BASE || '',
+    adsenseClient: process.env.GOOGLE_ADSENSE_CLIENT || '',
+    adsenseSlots: {
+      default: process.env.GOOGLE_ADSENSE_SLOT_DEFAULT || ''
+    }
+  };
+
+  res.type('application/javascript');
+  res.set('Cache-Control', 'no-store');
+  return res.send([
+    `window.MAKAUG_CONFIG = ${JSON.stringify(publicConfig)};`,
+    `window.MAKAUG_GOOGLE_MAPS_API_KEY = ${JSON.stringify(publicConfig.googleMapsApiKey)};`,
+    `window.MAKAUG_API_BASE = window.MAKAUG_API_BASE || ${JSON.stringify(publicConfig.apiBase)};`,
+    `window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || ${JSON.stringify(publicConfig.adsenseClient)};`,
+    `window.MAKAUG_ADSENSE_SLOTS = window.MAKAUG_ADSENSE_SLOTS || ${JSON.stringify(publicConfig.adsenseSlots)};`
+  ].join('\n'));
+});
+
 const staticRoot = __dirname;
 app.use(express.static(staticRoot, { extensions: ['html'] }));
 
