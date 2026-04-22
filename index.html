@@ -10449,7 +10449,7 @@
     }
 
     async function sharePropertyListing(id, channel = "native") {
-      const property = PROPERTIES.find((p) => p.id === id);
+      const property = PROPERTIES.find((p) => String(p.id) === String(id));
       if (!property) return;
       const shareUrl = getPropertyShareUrl(property);
       const shareText = `${property.title} • ${property.area}, ${property.district} • ${fmtP(property.price, property.period)}\n${shareUrl}`;
@@ -10836,7 +10836,87 @@
       }
     }
 
-    function parseInitialDeepLink() {
+    function mapRemotePropertyForUi(p, options = {}) {
+      const images = Array.isArray(p?.images) ? p.images : [];
+      const imageItems = images.map((item, index) => ({
+        url: item.url || item,
+        is_main: item.is_primary === true || index === 0,
+        sort_order: item.sort_order ?? index,
+        room_label: item.room_label || `Photo ${index + 1}`,
+        location_label: [p.area, p.district].filter(Boolean).join(", ")
+      })).filter((item) => item.url);
+      const id = String(p?.id || "");
+      return {
+        ...p,
+        id,
+        backend_id: id,
+        title: p?.title || "Untitled listing",
+        type: normalizeType(p?.listing_type || p?.type),
+        subtype: p?.property_type || p?.subtype || "Property",
+        beds: p?.bedrooms,
+        baths: p?.bathrooms,
+        price: Number(p?.price || 0),
+        period: p?.price_period || p?.period || "",
+        img: p?.primary_image_url || p?.img || imageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
+        desc: p?.description || p?.desc || "",
+        lat: Number(p?.latitude),
+        lng: Number(p?.longitude),
+        status: p?.status || "pending",
+        moderation_status: normalizeModerationStatus(p?.status),
+        inquiry_reference: p?.inquiry_reference || "",
+        lister_display_name: p?.lister_name || p?.contact_display_name || "",
+        images: imageItems,
+        owner_preview_visible: options.ownerPreview === true,
+        owner_preview_token: options.token || ""
+      };
+    }
+
+    async function openOwnerListingPreview(listingId, token) {
+      if (!listingId || !token) return false;
+      try {
+        const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}/preview?token=${encodeURIComponent(token)}`);
+        const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, token });
+        const idx = PROPERTIES.findIndex((p) => String(p.id) === String(property.id) || String(p.backend_id || "") === String(property.id));
+        if (idx >= 0) PROPERTIES[idx] = { ...PROPERTIES[idx], ...property };
+        else PROPERTIES.push(property);
+        openDetail(property.id);
+        toast("Private listing preview loaded.");
+        return true;
+      } catch (e) {
+        toast(e.message || "Unable to load listing preview.");
+        return false;
+      }
+    }
+
+    async function openOwnerPreviewEdit(id) {
+      const property = PROPERTIES.find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id));
+      if (!property?.owner_preview_token || !property?.backend_id) {
+        toast("Preview edit token is missing.");
+        return;
+      }
+      const title = window.prompt("Edit listing title:", property.title || "");
+      if (title == null) return;
+      const description = window.prompt("Edit listing description:", property.desc || property.description || "");
+      if (description == null) return;
+      try {
+        const response = await apiRequest(`/api/properties/${encodeURIComponent(property.backend_id)}/preview`, {
+          method: "PATCH",
+          body: {
+            token: property.owner_preview_token,
+            listing: { title, description }
+          }
+        });
+        property.title = response?.data?.title || title;
+        property.desc = response?.data?.description || description;
+        property.description = property.desc;
+        toast("Listing wording updated.");
+        openDetail(property.id);
+      } catch (e) {
+        toast(e.message || "Unable to update listing.");
+      }
+    }
+
+    async function parseInitialDeepLink() {
       const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
       const qs = new URLSearchParams(window.location.search || "");
 
@@ -10844,6 +10924,12 @@
       const agentFromPath = path.match(/^\/agents?\/([^/?#]+)/i)?.[1];
       const propertyFromQuery = qs.get("property") || qs.get("listing");
       const brokerFromQuery = qs.get("broker") || qs.get("agent");
+      const previewToken = qs.get("token") || qs.get("edit_token");
+
+      if (qs.get("listing_preview") && propertyFromQuery && previewToken) {
+        await openOwnerListingPreview(propertyFromQuery, previewToken);
+        return true;
+      }
 
       if (propertyFromPath || propertyFromQuery) {
         const pid = propertyFromPath || propertyFromQuery;
@@ -12987,12 +13073,14 @@
     }
 
     function toggleSave(id) {
-      if (savedIds.has(id)) {
-        savedIds.delete(id);
+      const key = String(id);
+      const existing = Array.from(savedIds).find((value) => String(value) === key);
+      if (existing !== undefined) {
+        savedIds.delete(existing);
         siteMetrics.propertySaves[String(id)] = Math.max(0, (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) - 1);
         toast("Removed from saved");
       } else {
-        savedIds.add(id);
+        savedIds.add(key);
         siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
         toast("Property saved");
       }
@@ -13417,7 +13505,7 @@
     }
 
     function renderDetailMortgageWidget(propertyId) {
-      const p = PROPERTIES.find((item) => item.id === propertyId);
+      const p = PROPERTIES.find((item) => String(item.id) === String(propertyId));
       const target = document.getElementById("detail-mortgage-result");
       const depositInput = document.getElementById("detail-mortgage-deposit");
       const yearsInput = document.getElementById("detail-mortgage-years");
@@ -13444,7 +13532,8 @@
       const p = PROPERTIES.find((x) => x.id === id);
       if (!p) return;
       const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
-      if (!isListingPublicVisible(p) && !isAdminViewer) {
+      const isOwnerPreviewViewer = p.owner_preview_visible === true;
+      if (!isListingPublicVisible(p) && !isAdminViewer && !isOwnerPreviewViewer) {
         toast("This listing is currently not publicly available.");
         return;
       }
@@ -13479,6 +13568,8 @@
       detailGalleryPhotos = detailPhotos.length ? detailPhotos : [primaryPhoto];
       detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
       if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
+      const detailIdArg = JSON.stringify(String(p.id));
+      const detailIsSaved = Array.from(savedIds).some((value) => String(value) === String(p.id));
       document.getElementById("detail-content").innerHTML = `
         <div class="grid lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2">
@@ -13519,12 +13610,19 @@
                   </div>
                 </div>
                 <div class="mt-3 flex items-center gap-2">
-                  <button type="button" onclick="sharePropertyListing(${p.id}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-                  <button type="button" onclick="sharePropertyListing(${p.id}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-                  <button type="button" onclick="sharePropertyListing(${p.id}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-                  <button type="button" onclick="sharePropertyListing(${p.id}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-                  <button type="button" onclick="sharePropertyListing(${p.id}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
+                  <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
                 </div>
+                ${isOwnerPreviewViewer ? `
+                <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                  <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">Private Preview</div>
+                  <p class="text-sm text-gray-700">This listing is not live yet. You can edit the wording while it is pending review.</p>
+                  <button type="button" onclick="openOwnerPreviewEdit(${detailIdArg})" class="mt-2 border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-semibold">Edit Title / Description</button>
+                </div>
+                ` : ""}
                 <div class="mt-4 text-sm text-gray-700">${p.desc}</div>
                 <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
                   <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
@@ -13572,17 +13670,17 @@
                 <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public contact name")}</p>
                 <button class="w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Owner</button>
               `}
-              <button onclick="toggleSave(${p.id})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${savedIds.has(p.id) ? "Remove Saved" : "Save Property"}</button>
+              <button onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
               ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
                 <h4 class="font-bold text-gray-800 text-sm mb-2">Mortgage Estimate</h4>
                 <div class="grid grid-cols-2 gap-2 mb-2">
                   <div>
                     <label class="block text-[11px] text-gray-500 font-semibold mb-1">Deposit %</label>
-                    <input id="detail-mortgage-deposit" type="number" min="0" max="90" value="20" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs" oninput="renderDetailMortgageWidget(${p.id})">
+                    <input id="detail-mortgage-deposit" type="number" min="0" max="90" value="20" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs" oninput="renderDetailMortgageWidget(${detailIdArg})">
                   </div>
                   <div>
                     <label class="block text-[11px] text-gray-500 font-semibold mb-1">Term</label>
-                    <select id="detail-mortgage-years" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs bg-white" onchange="renderDetailMortgageWidget(${p.id})">
+                    <select id="detail-mortgage-years" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs bg-white" onchange="renderDetailMortgageWidget(${detailIdArg})">
                       <option value="10">10 years</option>
                       <option value="15">15 years</option>
                       <option value="20" selected>20 years</option>

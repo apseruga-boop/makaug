@@ -26,20 +26,24 @@ async function isAdminBearerToken(req) {
   }
 }
 
-function requireAdminApiKey(req, res, next) {
-  Promise.resolve(requireAdminAccess(req, res, next)).catch(next);
-}
-
-async function requireAdminAccess(req, res, next) {
+async function hasAdminAccess(req) {
   const headerKey = req.get('x-api-key');
   const expected = process.env.ADMIN_API_KEY;
 
   if (expected && headerKey === expected) {
     req.adminAuth = { type: 'api_key' };
-    return next();
+    return true;
   }
 
-  if (await isAdminBearerToken(req)) {
+  return isAdminBearerToken(req);
+}
+
+function requireAdminApiKey(req, res, next) {
+  Promise.resolve(requireAdminAccess(req, res, next)).catch(next);
+}
+
+async function requireAdminAccess(req, res, next) {
+  if (await hasAdminAccess(req)) {
     return next();
   }
 
@@ -71,6 +75,7 @@ function requireSuperAdminKey(req, res, next) {
 }
 
 module.exports = {
+  hasAdminAccess,
   requireAdminApiKey,
   requireSuperAdminKey
 };

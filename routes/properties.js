@@ -6,10 +6,20 @@ const logger = require('../config/logger');
 const smsService = require('../models/smsService');
 const {
   sendPropertySubmissionNotification,
-  sendSupportEmail,
-  sendListingModerationNotification
+  sendSupportEmail
 } = require('../services/emailService');
-const { requireAdminApiKey } = require('../middleware/auth');
+const {
+  createOwnerEditToken,
+  getMissingApprovalChecks,
+  getOwnerPreviewUrl,
+  hashOwnerEditToken,
+  isOwnerEditTokenValid,
+  normalizeReviewChecklist,
+  ownerEditTokenExpiry,
+  sendOwnerListingStatusNotifications,
+  sendOwnerListingSubmissionNotifications
+} = require('../services/listingModerationService');
+const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
   cleanText,
@@ -59,6 +69,77 @@ function normalizeUgPhone(phone) {
 
 function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
+}
+
+function getOwnerEditTokenFromRequest(req) {
+  return cleanText(
+    req.get('x-listing-edit-token')
+      || req.query.edit_token
+      || req.query.token
+      || req.body?.edit_token
+      || req.body?.token
+  );
+}
+
+function canUseOwnerEditToken(property, token) {
+  if (!property?.owner_edit_token_hash || !token) return false;
+  const expiresAt = property.owner_edit_token_expires_at
+    ? new Date(property.owner_edit_token_expires_at)
+    : null;
+  if (!expiresAt || Number.isNaN(expiresAt.getTime()) || expiresAt <= new Date()) return false;
+  return isOwnerEditTokenValid(token, property.owner_edit_token_hash);
+}
+
+function publicPropertyRow(property, images = []) {
+  const {
+    owner_edit_token_hash: _ownerEditTokenHash,
+    id_number: _idNumber,
+    id_document_name: _idDocumentName,
+    ...safeProperty
+  } = property || {};
+  return {
+    ...safeProperty,
+    id_number_present: !!property?.id_number,
+    id_document_present: !!property?.id_document_name,
+    images
+  };
+}
+
+async function loadPropertyWithImages(propertyId) {
+  const property = await db.query(
+    `SELECT
+      p.*,
+      CASE
+        WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
+        ELSE 'private'
+      END AS listed_by,
+      a.id AS agent_id,
+      a.full_name AS agent_name,
+      a.company_name AS agent_company,
+      a.phone AS agent_phone,
+      a.whatsapp AS agent_whatsapp,
+      a.email AS agent_email,
+      a.registration_status AS agent_registration_status
+     FROM properties p
+     LEFT JOIN agents a ON a.id = p.agent_id
+     WHERE p.id = $1`,
+    [propertyId]
+  );
+
+  if (!property.rows.length) return null;
+
+  const images = await db.query(
+    `SELECT id, url, is_primary, sort_order
+     FROM property_images
+     WHERE property_id = $1
+     ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+    [propertyId]
+  );
+
+  return {
+    property: property.rows[0],
+    images: images.rows
+  };
 }
 
 async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '' }) {
@@ -282,6 +363,14 @@ router.get('/', async (req, res, next) => {
     const minBeds = toNullableInt(req.query.min_beds);
     const maxBeds = toNullableInt(req.query.max_beds);
     const propertyType = cleanText(req.query.property_type);
+    const requestingModerationData = status && status !== 'approved';
+
+    if (requestingModerationData && !(await hasAdminAccess(req))) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Admin access is required to list non-public properties'
+      });
+    }
 
     if (studentPortal) {
       addFilter(filters, values, "(p.listing_type = ? OR p.students_welcome = ?)", 'student', true);
@@ -396,45 +485,161 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const property = await db.query(
-      `SELECT
-        p.*,
-        CASE
-          WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
-          ELSE 'private'
-        END AS listed_by,
-        a.id AS agent_id,
-        a.full_name AS agent_name,
-        a.company_name AS agent_company,
-        a.phone AS agent_phone,
-        a.whatsapp AS agent_whatsapp,
-        a.email AS agent_email,
-        a.registration_status AS agent_registration_status
-      FROM properties p
-      LEFT JOIN agents a ON a.id = p.agent_id
-      WHERE p.id = $1`,
-      [req.params.id]
-    );
+    const loaded = await loadPropertyWithImages(req.params.id);
 
-    if (!property.rows.length) {
+    if (!loaded) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
-    const images = await db.query(
-      `SELECT id, url, is_primary, sort_order
-       FROM property_images
-       WHERE property_id = $1
-       ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
-      [req.params.id]
-    );
+    const { property, images } = loaded;
+    const ownerToken = getOwnerEditTokenFromRequest(req);
+    const canViewNonPublic = property.status === 'approved'
+      || canUseOwnerEditToken(property, ownerToken)
+      || await hasAdminAccess(req);
+
+    if (!canViewNonPublic) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    return res.json({
+      ok: true,
+      data: publicPropertyRow(property, images)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/:id/preview', async (req, res, next) => {
+  try {
+    const loaded = await loadPropertyWithImages(req.params.id);
+    if (!loaded) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const { property, images } = loaded;
+    const token = getOwnerEditTokenFromRequest(req);
+    if (!canUseOwnerEditToken(property, token)) {
+      return res.status(403).json({ ok: false, error: 'Invalid or expired listing preview token' });
+    }
 
     return res.json({
       ok: true,
       data: {
-        ...property.rows[0],
-        images: images.rows
+        ...publicPropertyRow(property, images),
+        owner_can_edit: ['pending', 'rejected'].includes(String(property.status || '').toLowerCase()),
+        moderation_reason: property.moderation_reason || property.extra_fields?.moderation_reason || null
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/:id/preview', async (req, res, next) => {
+  try {
+    const loaded = await loadPropertyWithImages(req.params.id);
+    if (!loaded) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const { property } = loaded;
+    const token = getOwnerEditTokenFromRequest(req);
+    if (!canUseOwnerEditToken(property, token)) {
+      return res.status(403).json({ ok: false, error: 'Invalid or expired listing preview token' });
+    }
+
+    const currentStatus = String(property.status || '').toLowerCase();
+    if (!['pending', 'rejected'].includes(currentStatus)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'This listing can only be edited while pending or rejected'
+      });
+    }
+
+    const patch = req.body?.listing && typeof req.body.listing === 'object' ? req.body.listing : req.body;
+    const fieldMap = {
+      title: { column: 'title', value: cleanText(patch.title), required: true },
+      description: { column: 'description', value: cleanText(patch.description), required: true },
+      area: { column: 'area', value: cleanText(patch.area), required: true },
+      address: { column: 'address', value: cleanText(patch.address) || null },
+      price: { column: 'price', value: toNullableInt(patch.price) },
+      price_period: { column: 'price_period', value: cleanText(patch.price_period) || null },
+      property_type: { column: 'property_type', value: cleanText(patch.property_type) || null },
+      title_type: { column: 'title_type', value: cleanText(patch.title_type) || null },
+      bedrooms: { column: 'bedrooms', value: toNullableInt(patch.bedrooms) },
+      bathrooms: { column: 'bathrooms', value: toNullableInt(patch.bathrooms) }
+    };
+
+    const setParts = [];
+    const values = [req.params.id];
+    let idx = 2;
+    const errors = [];
+
+    Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
+      if (!Object.prototype.hasOwnProperty.call(patch, bodyKey)) return;
+      if (spec.required && !spec.value) errors.push(`${bodyKey} cannot be empty`);
+      setParts.push(`${spec.column} = $${idx}`);
+      values.push(spec.value);
+      idx += 1;
+    });
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'district')) {
+      const district = cleanText(patch.district);
+      if (!DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
+      setParts.push(`district = $${idx}`);
+      values.push(district);
+      idx += 1;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
+      const amenities = asArray(patch.amenities).map((x) => cleanText(x)).filter(Boolean);
+      setParts.push(`amenities = $${idx}::jsonb`);
+      values.push(JSON.stringify(amenities));
+      idx += 1;
+    }
+
+    const resubmit = req.body?.resubmit === true || String(req.body?.resubmit || '').toLowerCase() === 'true';
+    if (resubmit) {
+      setParts.push("status = 'pending'");
+      setParts.push("moderation_stage = 'resubmitted'");
+      setParts.push('moderation_reason = NULL');
+      setParts.push('reviewed_at = NULL');
+    }
+
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+    }
+
+    if (!setParts.length) {
+      return res.status(400).json({ ok: false, error: 'No supported listing fields supplied' });
+    }
+
+    setParts.push('owner_last_edited_at = NOW()');
+    setParts.push('updated_at = NOW()');
+
+    const updated = await db.query(
+      `UPDATE properties
+       SET ${setParts.join(', ')}
+       WHERE id = $1
+       RETURNING id, title, description, district, area, price, price_period, property_type, title_type, status, moderation_stage, owner_last_edited_at`,
+      values
+    );
+
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, notes)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        req.params.id,
+        'listing_owner',
+        resubmit ? 'owner_listing_resubmitted' : 'owner_listing_edited',
+        currentStatus,
+        updated.rows[0]?.status || currentStatus,
+        cleanText(req.body?.edit_note) || null
+      ]
+    );
+
+    return res.json({ ok: true, data: updated.rows[0] });
   } catch (error) {
     return next(error);
   }
@@ -618,6 +823,9 @@ router.post('/', async (req, res, next) => {
 
     // All public submissions are forced to pending review.
     const status = 'pending';
+    const ownerEditToken = createOwnerEditToken();
+    const ownerEditTokenHash = hashOwnerEditToken(ownerEditToken);
+    const ownerEditTokenExpiresAt = ownerEditTokenExpiry();
 
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
@@ -671,13 +879,16 @@ router.post('/', async (req, res, next) => {
         listed_via,
         source,
         status,
+        moderation_stage,
+        owner_edit_token_hash,
+        owner_edit_token_expires_at,
         expires_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44
+        $41,$42,$43,$44,$45,$46,$47
       ) RETURNING id`,
       [
         listingType,
@@ -723,6 +934,9 @@ router.post('/', async (req, res, next) => {
         listedVia || 'website',
         cleanText(body.source) || 'website',
         status,
+        'submitted',
+        ownerEditTokenHash,
+        ownerEditTokenExpiresAt,
         body.expires_at ? new Date(body.expires_at) : null
       ]
     );
@@ -759,6 +973,40 @@ router.post('/', async (req, res, next) => {
       logger.error('Property submission support email failed:', error.message);
     }
 
+    const ownerNotificationListing = {
+      id: propertyId,
+      title,
+      listing_type: listingType,
+      inquiry_reference: inquiryReference,
+      lister_name: cleanText(body.lister_name) || null,
+      lister_phone: listerPhone || null,
+      lister_email: listerEmailNormalized || null
+    };
+
+    let ownerNotification = {
+      email: { sent: false, reason: 'not_attempted' },
+      whatsapp: { sent: false, reason: 'not_attempted' }
+    };
+    try {
+      ownerNotification = await sendOwnerListingSubmissionNotifications({
+        listing: ownerNotificationListing,
+        token: ownerEditToken
+      });
+      await db.query(
+        `INSERT INTO property_moderation_events (property_id, actor_id, action, status_to, delivery)
+         VALUES ($1, $2, $3, $4, $5::jsonb)`,
+        [
+          propertyId,
+          'system',
+          'listing_submitted_for_review',
+          status,
+          JSON.stringify(ownerNotification)
+        ]
+      );
+    } catch (error) {
+      logger.error('Property submission owner notification failed:', error.message);
+    }
+
     return res.status(201).json({
       ok: true,
       data: {
@@ -767,7 +1015,10 @@ router.post('/', async (req, res, next) => {
         imagesUploaded: imageUrls.length,
         inquiry_reference: inquiryReference,
         new_until: newUntil,
+        owner_preview_url: getOwnerPreviewUrl(ownerNotificationListing, ownerEditToken),
+        owner_edit_token_expires_at: ownerEditTokenExpiresAt,
         support_notified: !!supportEmailNotification.sent,
+        owner_notified: !!(ownerNotification.email?.sent || ownerNotification.whatsapp?.sent),
         support_email: process.env.SUPPORT_EMAIL || 'info@makaug.com'
       }
     });
@@ -794,7 +1045,7 @@ router.post('/:id/inquiries', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
-    const exists = await db.query('SELECT id FROM properties WHERE id = $1', [propertyId]);
+    const exists = await db.query('SELECT id FROM properties WHERE id = $1 AND status = $2', [propertyId, 'approved']);
     if (!exists.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
@@ -824,55 +1075,153 @@ router.post('/:id/inquiries', async (req, res, next) => {
     return next(error);
   }
 });
+
 router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
     const moderationReason = cleanText(req.body.reason) || null;
+    const reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
 
     if (!PROPERTY_STATUSES.includes(nextStatus)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
     }
+
+    if (nextStatus === 'rejected' && !moderationReason) {
+      return res.status(400).json({ ok: false, error: 'reason is required when rejecting a listing' });
+    }
+
+    const currentResult = await db.query(
+      `SELECT id, status, moderation_checklist, owner_edit_token_hash
+       FROM properties
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+
+    if (!currentResult.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const current = currentResult.rows[0];
+    const checklistSource = req.body.checklist && typeof req.body.checklist === 'object'
+      ? req.body.checklist
+      : current.moderation_checklist;
+    const checklist = normalizeReviewChecklist(checklistSource);
+    const missingChecks = nextStatus === 'approved' ? getMissingApprovalChecks(checklist) : [];
+
+    if (missingChecks.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Approval checklist is incomplete',
+        details: missingChecks
+      });
+    }
+
+    const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+    const reviewerUserId = req.adminAuth?.userId || null;
+    const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
+    const regeneratedOwnerTokenHash = regeneratedOwnerToken ? hashOwnerEditToken(regeneratedOwnerToken) : null;
+    const regeneratedOwnerTokenExpiresAt = regeneratedOwnerToken ? ownerEditTokenExpiry() : null;
+    const moderationStage = nextStatus === 'approved'
+      ? 'approved'
+      : nextStatus === 'rejected'
+        ? 'rejected'
+        : nextStatus === 'pending'
+          ? 'submitted'
+          : nextStatus;
 
     const result = await db.query(
       `UPDATE properties
        SET
          status = $2,
          reviewed_at = NOW(),
+         reviewed_by = $7,
+         moderation_stage = $8,
+         moderation_checklist = $4::jsonb,
+         moderation_notes = COALESCE($5::text, moderation_notes),
+         moderation_reason = $3::text,
+         approved_at = CASE WHEN $2 = 'approved' THEN NOW() ELSE approved_at END,
+         rejected_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE rejected_at END,
+         owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
+         owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
          updated_at = NOW(),
          extra_fields = CASE
            WHEN $3::text IS NULL OR trim($3::text) = '' THEN extra_fields
            ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
          END
        WHERE id = $1
-       RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_email, status, reviewed_at, extra_fields`,
-      [req.params.id, nextStatus, moderationReason]
+       RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
+      [
+        req.params.id,
+        nextStatus,
+        moderationReason,
+        JSON.stringify(checklist),
+        reviewNotes,
+        actorId,
+        reviewerUserId,
+        moderationStage,
+        regeneratedOwnerTokenHash,
+        regeneratedOwnerTokenExpiresAt
+      ]
     );
 
-    if (!result.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
+    const listing = result.rows[0];
+    let notification = {
+      email: { sent: false, reason: 'not_attempted' },
+      whatsapp: { sent: false, reason: 'not_attempted' }
+    };
+
+    try {
+      notification = await sendOwnerListingStatusNotifications({
+        listing: {
+          ...listing,
+          owner_edit_token: regeneratedOwnerToken
+        },
+        status: nextStatus,
+        reason: moderationReason
+      });
+      if (notification.email?.sent || notification.whatsapp?.sent) {
+        await db.query(
+          'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
+          [listing.id]
+        );
+      }
+    } catch (error) {
+      notification = { sent: false, reason: 'notification_failed', error: error.message || 'send_failed' };
     }
 
-    const listing = result.rows[0];
-    let notification = { sent: false, reason: 'no_lister_email' };
-    if (listing?.lister_email) {
-      try {
-        notification = await sendListingModerationNotification({
-          to: listing.lister_email,
-          listing,
-          status: nextStatus,
-          reason: moderationReason
-        });
-      } catch (_e) {
-        notification = { sent: false, reason: 'email_failed' };
-      }
-    }
+    await db.query(
+      `INSERT INTO property_moderation_events (
+        property_id,
+        actor_id,
+        action,
+        status_from,
+        status_to,
+        checklist,
+        reason,
+        notes,
+        delivery
+      ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+      [
+        listing.id,
+        actorId,
+        'listing_status_changed',
+        current.status,
+        nextStatus,
+        JSON.stringify(checklist),
+        moderationReason,
+        reviewNotes,
+        JSON.stringify(notification)
+      ]
+    );
 
     return res.json({
       ok: true,
       data: {
         ...listing,
         moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
-        lister_notified: !!notification.sent
+        lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent),
+        notification
       }
     });
   } catch (error) {

@@ -2,9 +2,19 @@ const express = require('express');
 
 const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
+const { asArray, cleanText, toNullableInt } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
+const { DISTRICTS } = require('../utils/constants');
 const { processPendingCampaignQueue } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy } = require('../services/aiService');
+const {
+  REVIEW_CHECKS,
+  createOwnerEditToken,
+  getOwnerPreviewUrl,
+  hashOwnerEditToken,
+  normalizeReviewChecklist,
+  ownerEditTokenExpiry
+} = require('../services/listingModerationService');
 
 const router = express.Router();
 
@@ -20,6 +30,195 @@ async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
   } catch (_error) {
     // Avoid failing admin APIs when audit table is temporarily unavailable.
   }
+}
+
+function adminActorId(req) {
+  return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+}
+
+async function loadPropertyReview(propertyId) {
+  const property = await db.query(
+    `SELECT
+      p.*,
+      a.id AS agent_id,
+      a.full_name AS agent_name,
+      a.company_name AS agent_company,
+      a.phone AS agent_phone,
+      a.email AS agent_email,
+      a.licence_number AS agent_licence_number,
+      a.registration_status AS agent_registration_status
+     FROM properties p
+     LEFT JOIN agents a ON a.id = p.agent_id
+     WHERE p.id = $1
+     LIMIT 1`,
+    [propertyId]
+  );
+
+  if (!property.rows.length) return null;
+  const listing = property.rows[0];
+
+  const [
+    images,
+    previousListerListings,
+    likelyDuplicates,
+    reusedImages,
+    events
+  ] = await Promise.all([
+    db.query(
+      `SELECT id, url, is_primary, sort_order, created_at
+       FROM property_images
+       WHERE property_id = $1
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+      [propertyId]
+    ),
+    db.query(
+      `SELECT id, title, listing_type, district, area, price, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND (
+           ($2::text IS NOT NULL AND lister_phone = $2)
+           OR ($3::text IS NOT NULL AND LOWER(COALESCE(lister_email, '')) = LOWER($3))
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [propertyId, listing.lister_phone || null, listing.lister_email || null]
+    ),
+    db.query(
+      `SELECT id, title, listing_type, district, area, address, price, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND (
+           LOWER(title) = LOWER($2)
+           OR (
+             COALESCE(address, '') <> ''
+             AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($3::text, ''))
+           )
+           OR (
+             listing_type = $4
+             AND district = $5
+             AND LOWER(area) = LOWER($6)
+             AND COALESCE(price, 0) = COALESCE($7::bigint, 0)
+           )
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [
+        propertyId,
+        listing.title || '',
+        listing.address || null,
+        listing.listing_type,
+        listing.district,
+        listing.area,
+        listing.price
+      ]
+    ),
+    db.query(
+      `SELECT DISTINCT p.id, p.title, p.status, i.url
+       FROM property_images current_i
+       JOIN property_images i ON i.url = current_i.url AND i.property_id <> current_i.property_id
+       JOIN properties p ON p.id = i.property_id
+       WHERE current_i.property_id = $1
+       ORDER BY p.title ASC
+       LIMIT 20`,
+      [propertyId]
+    ),
+    db.query(
+      `SELECT id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery, created_at
+       FROM property_moderation_events
+       WHERE property_id = $1
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      [propertyId]
+    )
+  ]);
+
+  const checklist = normalizeReviewChecklist(listing.moderation_checklist);
+
+  return {
+    ...listing,
+    owner_edit_token_hash: undefined,
+    images: images.rows,
+    review: {
+      checklist,
+      checklist_items: REVIEW_CHECKS,
+      notes: listing.moderation_notes || '',
+      reason: listing.moderation_reason || listing.extra_fields?.moderation_reason || ''
+    },
+    quality_signals: {
+      previous_lister_listing_count: previousListerListings.rows.length,
+      previous_lister_listings: previousListerListings.rows,
+      likely_duplicate_count: likelyDuplicates.rows.length,
+      likely_duplicates: likelyDuplicates.rows,
+      reused_image_count: reusedImages.rows.length,
+      reused_images: reusedImages.rows,
+      external_duplicate_check: 'manual_required'
+    },
+    events: events.rows
+  };
+}
+
+async function updatePropertyEditableFields({ propertyId, patch = {} }) {
+  const fieldMap = {
+    title: { column: 'title', value: cleanText(patch.title), required: true },
+    description: { column: 'description', value: cleanText(patch.description), required: true },
+    area: { column: 'area', value: cleanText(patch.area), required: true },
+    address: { column: 'address', value: cleanText(patch.address) || null },
+    price: { column: 'price', value: toNullableInt(patch.price) },
+    price_period: { column: 'price_period', value: cleanText(patch.price_period) || null },
+    property_type: { column: 'property_type', value: cleanText(patch.property_type) || null },
+    title_type: { column: 'title_type', value: cleanText(patch.title_type) || null },
+    bedrooms: { column: 'bedrooms', value: toNullableInt(patch.bedrooms) },
+    bathrooms: { column: 'bathrooms', value: toNullableInt(patch.bathrooms) }
+  };
+
+  const setParts = [];
+  const values = [propertyId];
+  const errors = [];
+  let idx = 2;
+
+  Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
+    if (!Object.prototype.hasOwnProperty.call(patch, bodyKey)) return;
+    if (spec.required && !spec.value) errors.push(`${bodyKey} cannot be empty`);
+    setParts.push(`${spec.column} = $${idx}`);
+    values.push(spec.value);
+    idx += 1;
+  });
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'district')) {
+    const district = cleanText(patch.district);
+    if (!DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
+    setParts.push(`district = $${idx}`);
+    values.push(district);
+    idx += 1;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
+    const amenities = asArray(patch.amenities).map((x) => cleanText(x)).filter(Boolean);
+    setParts.push(`amenities = $${idx}::jsonb`);
+    values.push(JSON.stringify(amenities));
+    idx += 1;
+  }
+
+  if (errors.length) {
+    const err = new Error('Validation failed');
+    err.status = 400;
+    err.details = errors;
+    throw err;
+  }
+
+  if (!setParts.length) return null;
+
+  setParts.push('updated_at = NOW()');
+
+  const updated = await db.query(
+    `UPDATE properties
+     SET ${setParts.join(', ')}
+     WHERE id = $1
+     RETURNING id`,
+    values
+  );
+
+  return updated.rows[0] || null;
 }
 
 router.get('/summary', async (req, res, next) => {
@@ -110,6 +309,136 @@ router.get('/recent', async (req, res, next) => {
         recentAgents: recentAgents.rows,
         recentReports: recentReports.rows,
         recentUsers: recentUsers.rows
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/review', async (req, res, next) => {
+  try {
+    const review = await loadPropertyReview(req.params.id);
+    if (!review) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    return res.json({ ok: true, data: review });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/review', async (req, res, next) => {
+  try {
+    const existing = await db.query('SELECT id, status, moderation_checklist FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const listingPatch = req.body?.listing && typeof req.body.listing === 'object' ? req.body.listing : null;
+    if (listingPatch) {
+      await updatePropertyEditableFields({ propertyId: req.params.id, patch: listingPatch });
+    }
+
+    const checklist = req.body.checklist && typeof req.body.checklist === 'object'
+      ? normalizeReviewChecklist(req.body.checklist)
+      : normalizeReviewChecklist(existing.rows[0].moderation_checklist);
+    const notes = cleanText(req.body.notes || req.body.review_notes) || null;
+    const reason = cleanText(req.body.reason) || null;
+    const stage = cleanText(req.body.stage) || 'in_review';
+    const actorId = adminActorId(req);
+    const reviewerUserId = req.adminAuth?.userId || null;
+
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         moderation_stage = $2,
+         moderation_checklist = $3::jsonb,
+         moderation_notes = COALESCE($4::text, moderation_notes),
+         moderation_reason = COALESCE($5::text, moderation_reason),
+         reviewed_by = COALESCE($6::uuid, reviewed_by),
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, reviewed_by, updated_at`,
+      [
+        req.params.id,
+        stage,
+        JSON.stringify(checklist),
+        notes,
+        reason,
+        reviewerUserId
+      ]
+    );
+
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, checklist, reason, notes)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)`,
+      [
+        req.params.id,
+        actorId,
+        listingPatch ? 'listing_review_updated_with_listing_edits' : 'listing_review_updated',
+        JSON.stringify(checklist),
+        reason,
+        notes
+      ]
+    );
+
+    await writeAudit('admin_property_review_updated', {
+      property_id: req.params.id,
+      stage,
+      listing_edited: !!listingPatch
+    }, actorId);
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        details: error.details || undefined
+      });
+    }
+    return next(error);
+  }
+});
+
+router.post('/properties/:id/review-token', async (req, res, next) => {
+  try {
+    const property = await db.query(
+      `SELECT id, title, inquiry_reference, lister_name, lister_phone, lister_email
+       FROM properties
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (!property.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const token = createOwnerEditToken();
+    const expiresAt = ownerEditTokenExpiry();
+    await db.query(
+      `UPDATE properties
+       SET owner_edit_token_hash = $2,
+           owner_edit_token_expires_at = $3,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [req.params.id, hashOwnerEditToken(token), expiresAt]
+    );
+
+    const url = getOwnerPreviewUrl(property.rows[0], token);
+    await writeAudit('admin_property_review_token_created', {
+      property_id: req.params.id,
+      expires_at: expiresAt
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        property_id: req.params.id,
+        owner_preview_url: url,
+        expires_at: expiresAt
       }
     });
   } catch (error) {
