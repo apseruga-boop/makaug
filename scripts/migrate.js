@@ -37,7 +37,7 @@ async function applyMigration(filename, sql) {
   }
 }
 
-async function run() {
+async function runMigrations({ closePool = false } = {}) {
   const migrationsDir = path.join(__dirname, '..', 'db', 'migrations');
   const files = fs
     .readdirSync(migrationsDir)
@@ -58,11 +58,19 @@ async function run() {
   }
 
   logger.info('Migrations complete');
-  await db.pool.end();
+  if (closePool) {
+    await db.pool.end();
+  }
 }
 
-run().catch(async (error) => {
-  logger.error('Migration failed', error);
-  await db.pool.end();
-  process.exit(1);
-});
+if (require.main === module) {
+  runMigrations({ closePool: true }).catch(async (error) => {
+    logger.error('Migration failed', error);
+    await db.pool.end();
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  runMigrations
+};

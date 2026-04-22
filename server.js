@@ -20,6 +20,7 @@ const aiRoutes = require('./routes/ai');
 const aiCoreRoutes = require('./routes/ai-core');
 const adminAiAgentsRoutes = require('./routes/admin-agents');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const { runMigrations } = require('./scripts/migrate');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -92,6 +93,19 @@ app.use(errorHandler);
 
 const port = parseInt(process.env.PORT || '8080', 10);
 
-app.listen(port, () => {
-  logger.info(`MakaUg backend running on http://localhost:${port}`);
+async function start() {
+  if (process.env.DATABASE_URL && process.env.RUN_MIGRATIONS_ON_START !== 'false') {
+    await runMigrations();
+  } else if (!process.env.DATABASE_URL) {
+    logger.warn('Skipping startup migrations because DATABASE_URL is not set');
+  }
+
+  app.listen(port, () => {
+    logger.info(`MakaUg backend running on http://localhost:${port}`);
+  });
+}
+
+start().catch((error) => {
+  logger.error('Startup failed', error);
+  process.exit(1);
 });

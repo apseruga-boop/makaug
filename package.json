@@ -7,7 +7,7 @@
   "type": "commonjs",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node scripts/migrate.js && node server.js",
+    "start": "node server.js",
     "dev:bot": "tsx watch src/server.ts",
     "start:bot": "node dist/server.js",
     "build:bot": "tsc -p tsconfig.json",
