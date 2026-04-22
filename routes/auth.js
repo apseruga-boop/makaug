@@ -18,17 +18,6 @@ const {
 
 const router = express.Router();
 
-function normalizePhone(phone) {
-  return cleanText(phone).replace(/\s+/g, '');
-}
-
-function normalizeUgPhone(phone) {
-  const value = normalizePhone(phone);
-  if (/^0\d{9}$/.test(value)) return `+256${value.slice(1)}`;
-  if (/^256\d{9}$/.test(value)) return `+${value}`;
-  return value;
-}
-
 function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
