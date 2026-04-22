@@ -2397,6 +2397,17 @@
           <div id="admin-pending-table" class="space-y-3"></div>
         </div>
 
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Live Listings Follow-up</h3>
+              <p class="text-xs text-gray-500 mt-1">Approved properties, go-live dates, and 14-day owner follow-up.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Live List</button>
+          </div>
+          <div id="admin-live-listings-table" class="space-y-3"></div>
+        </div>
+
         <div id="admin-review-panel" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
@@ -2631,6 +2642,35 @@
       </div>
       <h2 id="admin-evidence-title" class="text-2xl font-black text-gray-800 serif">Evidence</h2>
       <div id="admin-evidence-body" class="mt-4 text-sm text-gray-700"></div>
+    </div>
+  </div>
+
+  <div id="admin-whatsapp-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:720px">
+      <button onclick="closeModal('admin-whatsapp-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
+      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
+        <i class="fab fa-whatsapp"></i>
+        <span>Owner Notification</span>
+      </div>
+      <h2 id="admin-whatsapp-title" class="text-2xl font-black text-gray-800 serif">Send WhatsApp message</h2>
+      <p id="admin-whatsapp-subtitle" class="text-sm text-gray-500 mt-1">Review the message before opening WhatsApp.</p>
+      <div class="mt-4 grid sm:grid-cols-2 gap-3">
+        <div class="border border-gray-200 rounded-xl p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Phone</div>
+          <div id="admin-whatsapp-phone" class="mt-1 text-sm font-semibold text-gray-900">-</div>
+        </div>
+        <div class="border border-gray-200 rounded-xl p-3 bg-gray-50">
+          <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Listing</div>
+          <div id="admin-whatsapp-listing" class="mt-1 text-sm font-semibold text-gray-900">-</div>
+        </div>
+      </div>
+      <label class="block text-sm font-semibold text-gray-700 mt-4 mb-1">Message</label>
+      <textarea id="admin-whatsapp-message" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[190px]"></textarea>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button onclick="openAdminWhatsAppFromModal()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Open WhatsApp</button>
+        <button onclick="copyAdminWhatsAppMessage()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Copy Message</button>
+        <button onclick="closeModal('admin-whatsapp-modal')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Done</button>
+      </div>
     </div>
   </div>
 
@@ -3299,8 +3339,11 @@
     let authSignUpOtpChannel = "phone";
     let adminApiKey = "";
     let adminRemoteListings = [];
+    let adminLiveListings = [];
     let adminActiveReview = null;
     let adminReviewEvidence = {};
+    let adminWhatsAppDraft = null;
+    let publicListingsApiLoading = false;
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -6401,6 +6444,7 @@
           saveToViewRatio
         },
         pendingListings,
+        liveListings: approvedListings.slice(0, 50),
         allListings,
         recentUsers: users.slice(0, 10),
         recentAgents: BROKERS.slice(0, 10),
@@ -6467,11 +6511,18 @@
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
+      let liveListings = allListings.filter((p) => normalizeModerationStatus(p.status) === "approved");
+      try {
+        const liveRes = await apiRequest("/api/admin/properties/live?limit=100", { headers });
+        liveListings = (liveRes?.data || []).map(normalizeRemoteAdminListing);
+      } catch (e) {}
       adminRemoteListings = allListings;
+      adminLiveListings = liveListings;
       return {
         summary: summaryRes?.data || {},
         recent: recentRes?.data || {},
         pendingListings,
+        liveListings,
         allListings
       };
     }
@@ -6506,6 +6557,62 @@
               <button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
             </div>
         </div>`;
+      }).join("");
+    }
+
+    function adminLiveAtText(p) {
+      return formatListingDate(p.live_at || p.approved_at || p.reviewed_at || p.updated_at || p.created_at);
+    }
+
+    function adminFollowUpText(p) {
+      const due = p.follow_up_due_at || "";
+      if (!due) return "Follow-up date not set";
+      return `${p.follow_up_due ? "Due now" : "Due"} • ${formatListingDate(due)}`;
+    }
+
+    function buildAdminFollowUpWhatsAppMessage(p = {}) {
+      const name = p.lister_name || "there";
+      const ref = p.inquiry_reference || p.id || "-";
+      const title = p.title || "your MakaUg property listing";
+      const liveAt = adminLiveAtText(p);
+      return [
+        `Hello ${name}, this is MakaUg.`,
+        `Your listing is live: ${title}`,
+        `Reference: ${ref}`,
+        `Live since: ${liveAt}`,
+        "",
+        "Has the property sold or rented, or should we keep promoting it for you?"
+      ].join("\n");
+    }
+
+    function renderAdminLiveListingsRows(listings) {
+      const wrap = document.getElementById("admin-live-listings-table");
+      if (!wrap) return;
+      const view = [...(listings || [])].filter((p) => normalizeModerationStatus(p.status) === "approved").slice(0, 50);
+      if (!view.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = view.map((p) => {
+        const id = String(p.backend_id || p.id || "");
+        const idArg = adminListingIdArg(id);
+        const followClass = p.follow_up_due ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-700";
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">Live: ${adminEscape(adminLiveAtText(p))} • Owner: ${adminEscape(p.lister_name || "-")} • ${adminEscape(p.lister_phone || p.lister_email || "-")}</div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 rounded ${followClass}">${adminEscape(adminFollowUpText(p))}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Live Listing</button>
+              <button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Follow-up</button>
+              <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Record</button>
+            </div>
+          </div>`;
       }).join("");
     }
 
@@ -6658,6 +6765,7 @@
       if (sourceEl) sourceEl.textContent = sourceLabel;
 
       renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
+      renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
@@ -6799,6 +6907,77 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    function normalizeWhatsAppRecipient(phone) {
+      const digits = String(phone || "").replace(/\D/g, "");
+      if (!digits) return "";
+      if (digits.startsWith("256") && digits.length === 12) return digits;
+      if (digits.startsWith("0") && digits.length === 10) return `256${digits.slice(1)}`;
+      return digits;
+    }
+
+    function buildWhatsAppUrl(phone, message) {
+      const recipient = normalizeWhatsAppRecipient(phone);
+      if (!recipient) return "";
+      return `https://wa.me/${recipient}?text=${encodeURIComponent(String(message || "").trim())}`;
+    }
+
+    function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listingLabel = "-", phone = "", message = "", manualUrl = "" } = {}) {
+      const resolvedMessage = String(message || "").trim();
+      const resolvedPhone = String(phone || "").trim();
+      adminWhatsAppDraft = {
+        phone: resolvedPhone,
+        manualUrl,
+        message: resolvedMessage
+      };
+      const titleEl = document.getElementById("admin-whatsapp-title");
+      const subEl = document.getElementById("admin-whatsapp-subtitle");
+      const phoneEl = document.getElementById("admin-whatsapp-phone");
+      const listingEl = document.getElementById("admin-whatsapp-listing");
+      const messageEl = document.getElementById("admin-whatsapp-message");
+      if (titleEl) titleEl.textContent = title;
+      if (subEl) subEl.textContent = manualUrl ? "Review the personalized message, then open WhatsApp to send it." : "Review or copy the personalized message.";
+      if (phoneEl) phoneEl.textContent = resolvedPhone || "-";
+      if (listingEl) listingEl.textContent = listingLabel || "-";
+      if (messageEl) messageEl.value = resolvedMessage;
+      openModal("admin-whatsapp-modal");
+    }
+
+    function openAdminWhatsAppFromModal() {
+      const message = document.getElementById("admin-whatsapp-message")?.value || adminWhatsAppDraft?.message || "";
+      const url = buildWhatsAppUrl(adminWhatsAppDraft?.phone || "", message) || adminWhatsAppDraft?.manualUrl || "";
+      if (!url) {
+        toast("No WhatsApp phone number is available.");
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
+    async function copyAdminWhatsAppMessage() {
+      const message = document.getElementById("admin-whatsapp-message")?.value || adminWhatsAppDraft?.message || "";
+      if (!message.trim()) {
+        toast("No message to copy.");
+        return;
+      }
+      const ok = await copyTextToClipboard(message);
+      toast(ok ? "Message copied." : "Copy failed.");
+    }
+
+    function openAdminFollowUpWhatsApp(listingId) {
+      const listing = adminLiveListings.find((p) => String(p.id) === String(listingId) || String(p.backend_id || "") === String(listingId))
+        || adminRemoteListings.find((p) => String(p.id) === String(listingId) || String(p.backend_id || "") === String(listingId))
+        || PROPERTIES.find((p) => String(p.id) === String(listingId) || String(p.backend_id || "") === String(listingId));
+      if (!listing) {
+        toast("Live listing not found in current snapshot.");
+        return;
+      }
+      openAdminWhatsAppMessageModal({
+        title: "Send 14-day follow-up",
+        listingLabel: listing.inquiry_reference || listing.title || listing.id || "-",
+        phone: listing.lister_phone || "",
+        message: buildAdminFollowUpWhatsAppMessage(listing)
+      });
     }
 
     function adminEvidenceDisplayValue(value) {
@@ -7053,7 +7232,10 @@
             <div class="border border-gray-200 rounded-xl p-4">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <h4 class="font-bold text-gray-800">Automated Approval Checks</h4>
-                <span class="text-xs font-semibold px-2 py-1 rounded ${automatedBadge.cls}">${automatedBadge.label}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button onclick="runAdminExternalDuplicateScan(${reviewIdArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-semibold">Run External Scan</button>
+                  <span class="text-xs font-semibold px-2 py-1 rounded ${automatedBadge.cls}">${automatedBadge.label}</span>
+                </div>
               </div>
               <div class="space-y-2">
                 ${checklistItems.map((item, idx) => {
@@ -7132,6 +7314,23 @@
       }
     }
 
+    async function runAdminExternalDuplicateScan(listingId) {
+      if (!listingId || !canUseLiveAdminApi()) return;
+      toast("Running external duplicate scan...");
+      try {
+        const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(listingId)}/external-duplicate-scan`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: { force: true }
+        });
+        const scan = response?.data || {};
+        toast(scan.status === "pass" ? "External scan completed: clear." : `External scan completed: ${scan.status || "review"}.`);
+        await openAdminListingReview(listingId);
+      } catch (e) {
+        toast(`External scan failed: ${e.message || "error"}`);
+      }
+    }
+
     async function saveAdminListingReview() {
       if (!adminActiveReview?.id) return;
       try {
@@ -7166,9 +7365,7 @@
           headers: adminAuthHeaders()
         });
         const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true });
-        const idx = PROPERTIES.findIndex((p) => String(p.id) === String(property.id) || String(p.backend_id || "") === String(property.id));
-        if (idx >= 0) PROPERTIES[idx] = { ...PROPERTIES[idx], ...property };
-        else PROPERTIES.push(property);
+        upsertPropertyForUi(property);
         openDetail(property.id);
       } catch (e) {
         toast(`Preview failed: ${e.message || "error"}`);
@@ -7228,6 +7425,7 @@
         delete listing.deleted_at;
       }
 
+      let statusResponse = null;
       if (backendId) {
         try {
           const response = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {
@@ -7240,9 +7438,33 @@
               checklist
             }
           });
-          const waUrl = response?.data?.notification?.whatsapp?.manual_url;
-          if (waUrl && window.confirm("Open the personalized WhatsApp message for this lister?")) {
-            window.open(waUrl, "_blank", "noopener,noreferrer");
+          statusResponse = response?.data || null;
+          if (statusResponse) {
+            Object.assign(listing, statusResponse, {
+              status: statusResponse.status || normalizedStatus,
+              moderation_status: normalizeModerationStatus(statusResponse.status || normalizedStatus)
+            });
+            const remoteIdx = adminRemoteListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+            if (remoteIdx >= 0) adminRemoteListings[remoteIdx] = { ...adminRemoteListings[remoteIdx], ...listing };
+          }
+          if (normalizedStatus === "approved") {
+            try {
+              const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`, {
+                headers: adminAuthHeaders()
+              });
+              const liveProperty = upsertPropertyForUi(mapRemotePropertyForUi(detail?.data || {}));
+              if (liveProperty) liveProperty.status = "approved";
+            } catch (e) {
+              upsertPropertyForUi({
+                ...listing,
+                id: backendId,
+                status: "approved",
+                remote_source: "api"
+              });
+            }
+          } else if (normalizedStatus !== "approved") {
+            const existingPublic = PROPERTIES.find((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+            if (existingPublic) existingPublic.status = normalizedStatus;
           }
         } catch (e) {
           const details = Array.isArray(e.response?.details)
@@ -7259,7 +7481,17 @@
       if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
         await openAdminListingReview(backendId);
       }
-      toast(`Listing updated: ${normalizedStatus}.`);
+      const waPayload = statusResponse?.notification?.whatsapp || {};
+      if (["approved", "rejected"].includes(normalizedStatus) && (waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) {
+        openAdminWhatsAppMessageModal({
+          title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+          listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
+          phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
+          message: waPayload.message || "",
+          manualUrl: waPayload.manual_url || ""
+        });
+      }
+      toast(normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`);
     }
 
     async function adminSetAgentStatus(agentId, status) {
@@ -11465,7 +11697,6 @@
       renderFinderDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
-      renderAdminDashboard();
     }
 
     function showPage(page) {
@@ -11550,14 +11781,49 @@
       };
     }
 
+    function upsertPropertyForUi(property) {
+      if (!property?.id) return null;
+      const mapped = property.type ? property : mapRemotePropertyForUi(property);
+      mapped.remote_source = mapped.remote_source || "api";
+      const idx = PROPERTIES.findIndex((p) => String(p.id) === String(mapped.id) || String(p.backend_id || "") === String(mapped.id));
+      if (idx >= 0) {
+        PROPERTIES[idx] = { ...PROPERTIES[idx], ...mapped };
+      } else {
+        PROPERTIES.push(mapped);
+      }
+      return mapped;
+    }
+
+    async function refreshPublicListingsFromApi({ silent = true } = {}) {
+      if (publicListingsApiLoading) return false;
+      publicListingsApiLoading = true;
+      try {
+        const response = await apiRequest("/api/properties?status=approved&limit=250");
+        const rows = Array.isArray(response?.data) ? response.data : [];
+        const remoteIds = new Set(rows.map((p) => String(p.id || "")).filter(Boolean));
+        for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
+          const p = PROPERTIES[i];
+          const id = String(p?.backend_id || p?.id || "");
+          if (p?.remote_source === "api" && id && !remoteIds.has(id)) {
+            PROPERTIES.splice(i, 1);
+          }
+        }
+        rows.forEach((p) => upsertPropertyForUi(p));
+        return true;
+      } catch (e) {
+        if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
+        return false;
+      } finally {
+        publicListingsApiLoading = false;
+      }
+    }
+
     async function openOwnerListingPreview(listingId, token) {
       if (!listingId || !token) return false;
       try {
         const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}/preview?token=${encodeURIComponent(token)}`);
         const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, token });
-        const idx = PROPERTIES.findIndex((p) => String(p.id) === String(property.id) || String(p.backend_id || "") === String(property.id));
-        if (idx >= 0) PROPERTIES[idx] = { ...PROPERTIES[idx], ...property };
-        else PROPERTIES.push(property);
+        upsertPropertyForUi(property);
         openDetail(property.id);
         toast("Private listing preview loaded.");
         return true;
@@ -14773,6 +15039,12 @@
       onLpVerifyEmailInput();
       onLpVerifyNinInput();
       renderAll();
+      refreshPublicListingsFromApi({ silent: true }).then((loaded) => {
+        if (loaded) {
+          renderAll();
+          resetMaps();
+        }
+      });
       renderMortgageFinder();
       loadMortgageRates();
       initMaps();

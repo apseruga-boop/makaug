@@ -18,7 +18,7 @@ const {
   sendOwnerListingStatusNotifications,
   sendOwnerListingSubmissionNotifications
 } = require('../services/listingModerationService');
-const { scanAndCacheExternalDuplicates } = require('../services/externalDuplicateScanService');
+const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -242,11 +242,7 @@ async function loadAutomatedReviewForProperty(propertyId) {
     )
   ]);
 
-  const externalDuplicateScan = await scanAndCacheExternalDuplicates({
-    db,
-    listing: property,
-    images
-  });
+  const externalDuplicateScan = getCachedExternalDuplicateScan(property);
 
   return buildAutomatedListingReview({
     listing: property,
@@ -1167,7 +1163,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const currentResult = await db.query(
-      `SELECT id, status
+      `SELECT id, status, moderation_checklist
        FROM properties
        WHERE id = $1
        LIMIT 1`,
@@ -1242,7 +1238,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
              ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
            END
          WHERE id = $1
-         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, approved_at, last_moderation_notification_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
         [
           req.params.id,
           nextStatus,

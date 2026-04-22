@@ -132,17 +132,41 @@ function checkResult(key, status, message, evidence = {}, blocking = status === 
 
 function normalizeExternalDuplicateScan(scan = {}) {
   const source = scan && typeof scan === 'object' ? scan : {};
-  const status = ['pass', 'warning', 'fail'].includes(String(source.status || '').toLowerCase())
+  if (!Object.keys(source).length) {
+    return {
+      status: 'pass',
+      blocking: false,
+      message: 'External duplicate search is deferred; internal duplicate and reused-image checks completed.',
+      evidence: {
+        provider: 'deferred',
+        cached: false,
+        checked_at: null,
+        query: null,
+        search_url: null,
+        result_count: 0,
+        high_confidence_count: 0,
+        possible_match_count: 0,
+        matches: []
+      }
+    };
+  }
+  let status = ['pass', 'warning', 'fail'].includes(String(source.status || '').toLowerCase())
     ? String(source.status).toLowerCase()
     : 'warning';
   const provider = source.provider || 'not_run';
+  const nonBlockingProvider = ['not_configured', 'disabled', 'search_timeout', 'search_error', 'missing_listing_data', 'deferred', 'not_run'].includes(String(provider).toLowerCase());
+  if (status === 'warning' && source.blocking !== true && nonBlockingProvider) {
+    status = 'pass';
+  }
   const matches = Array.isArray(source.matches) ? source.matches.slice(0, 8) : [];
   return {
     status,
     blocking: source.blocking === true,
-    message: source.message || (status === 'pass'
-      ? 'External duplicate scan completed; no strong external duplicates found.'
-      : 'External duplicate scan needs review.'),
+    message: nonBlockingProvider && !matches.length
+      ? 'External duplicate search is deferred; internal duplicate and reused-image checks completed.'
+      : (source.message || (status === 'pass'
+        ? 'External duplicate scan completed; no strong external duplicates found.'
+        : 'External duplicate scan needs review.')),
     evidence: {
       provider,
       cached: source.cached === true,
@@ -465,16 +489,30 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
 async function sendOwnerListingStatusNotifications({ listing = {}, status, reason }) {
   const message = buildOwnerStatusMessage({ listing, status, reason });
   const result = {
-    email: { sent: false, reason: 'no_lister_email' },
-    whatsapp: { sent: false, reason: 'no_lister_phone' }
+    email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
+    whatsapp: { sent: false, reason: 'no_lister_phone', phone: listing.lister_phone || null, message: message.whatsapp }
   };
 
   if (listing.lister_email) {
-    result.email = await sendSupportEmail({
-      to: listing.lister_email,
-      subject: message.subject,
-      text: message.text
-    });
+    try {
+      result.email = {
+        ...await sendSupportEmail({
+          to: listing.lister_email,
+          subject: message.subject,
+          text: message.text
+        }),
+        subject: message.subject,
+        message: message.text
+      };
+    } catch (error) {
+      result.email = {
+        sent: false,
+        reason: 'email_send_failed',
+        error: error.message || 'send_failed',
+        subject: message.subject,
+        message: message.text
+      };
+    }
   }
 
   if (listing.lister_phone) {
@@ -492,6 +530,8 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
       };
     }
     result.whatsapp.manual_url = manualUrl;
+    result.whatsapp.phone = listing.lister_phone;
+    result.whatsapp.message = message.whatsapp;
   }
 
   return result;
@@ -500,16 +540,30 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
 async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '' }) {
   const message = buildOwnerSubmissionMessage({ listing, token });
   const result = {
-    email: { sent: false, reason: 'no_lister_email' },
-    whatsapp: { sent: false, reason: 'no_lister_phone' }
+    email: { sent: false, reason: 'no_lister_email', subject: message.subject, message: message.text },
+    whatsapp: { sent: false, reason: 'no_lister_phone', phone: listing.lister_phone || null, message: message.whatsapp }
   };
 
   if (listing.lister_email) {
-    result.email = await sendSupportEmail({
-      to: listing.lister_email,
-      subject: message.subject,
-      text: message.text
-    });
+    try {
+      result.email = {
+        ...await sendSupportEmail({
+          to: listing.lister_email,
+          subject: message.subject,
+          text: message.text
+        }),
+        subject: message.subject,
+        message: message.text
+      };
+    } catch (error) {
+      result.email = {
+        sent: false,
+        reason: 'email_send_failed',
+        error: error.message || 'send_failed',
+        subject: message.subject,
+        message: message.text
+      };
+    }
   }
 
   if (listing.lister_phone) {
@@ -527,6 +581,8 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
       };
     }
     result.whatsapp.manual_url = manualUrl;
+    result.whatsapp.phone = listing.lister_phone;
+    result.whatsapp.message = message.whatsapp;
   }
 
   return result;

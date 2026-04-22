@@ -17,7 +17,10 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
-const { scanAndCacheExternalDuplicates } = require('../services/externalDuplicateScanService');
+const {
+  getCachedExternalDuplicateScan,
+  scanAndCacheExternalDuplicates
+} = require('../services/externalDuplicateScanService');
 
 const router = express.Router();
 
@@ -156,11 +159,7 @@ async function loadPropertyReview(propertyId) {
     )
   ]);
 
-  const externalDuplicateScan = await scanAndCacheExternalDuplicates({
-    db,
-    listing,
-    images: images.rows
-  });
+  const externalDuplicateScan = getCachedExternalDuplicateScan(listing);
 
   const automatedReview = buildAutomatedListingReview({
     listing,
@@ -273,7 +272,14 @@ router.get('/summary', async (req, res, next) => {
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
           COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
-          COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+          COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+          COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
+          COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
+          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private,
+          COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
+          COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable,
+          COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'approved'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
+          COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'rejected'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS rejection_rate_pct
          FROM properties`
       ),
       db.query(
@@ -360,6 +366,66 @@ router.get('/recent', async (req, res, next) => {
   }
 });
 
+router.get('/properties/live', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const values = [limit, offset];
+
+    const countResult = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM properties p
+       WHERE p.status = 'approved'`
+    );
+    const total = countResult.rows[0]?.total || 0;
+
+    const rows = await db.query(
+      `SELECT
+        p.id,
+        p.title,
+        p.listing_type,
+        p.district,
+        p.area,
+        p.price,
+        p.price_period,
+        p.status,
+        p.inquiry_reference,
+        p.lister_name,
+        p.lister_phone,
+        p.lister_email,
+        p.created_at,
+        p.updated_at,
+        p.reviewed_at,
+        p.approved_at,
+        p.last_moderation_notification_at,
+        COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) AS live_at,
+        COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) + INTERVAL '14 days' AS follow_up_due_at,
+        (NOW() >= COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) + INTERVAL '14 days') AS follow_up_due,
+        img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT i.url
+         FROM property_images i
+         WHERE i.property_id = p.id
+         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+         LIMIT 1
+       ) img ON true
+       WHERE p.status = 'approved'
+       ORDER BY live_at DESC
+       LIMIT $1
+       OFFSET $2`,
+      values
+    );
+
+    return res.json({
+      ok: true,
+      data: rows.rows,
+      pagination: toPagination(total, page, limit)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/:id/review', async (req, res, next) => {
   try {
     const review = await loadPropertyReview(req.params.id);
@@ -368,6 +434,46 @@ router.get('/properties/:id/review', async (req, res, next) => {
     }
 
     return res.json({ ok: true, data: review });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/properties/:id/external-duplicate-scan', async (req, res, next) => {
+  try {
+    const property = await db.query(
+      `SELECT *
+       FROM properties
+       WHERE id = $1
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (!property.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const images = await db.query(
+      `SELECT id, url, is_primary, sort_order, created_at
+       FROM property_images
+       WHERE property_id = $1
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
+      [req.params.id]
+    );
+
+    const scan = await scanAndCacheExternalDuplicates({
+      db,
+      listing: property.rows[0],
+      images: images.rows,
+      force: req.body?.force !== false
+    });
+
+    await writeAudit('admin_property_external_duplicate_scan_run', {
+      property_id: req.params.id,
+      status: scan.status,
+      provider: scan.provider
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: scan });
   } catch (error) {
     return next(error);
   }
