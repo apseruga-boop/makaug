@@ -162,11 +162,20 @@
       max-width: 560px;
       max-height: 90vh;
       overflow-y: auto;
+      overflow-x: hidden;
       border-radius: 16px;
       background: #fff;
       padding: 24px;
       position: relative;
       z-index: 7001;
+    }
+    .admin-evidence-box {
+      max-width: min(920px, calc(100vw - 32px));
+    }
+    .admin-evidence-json {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .leaflet-top, .leaflet-bottom { z-index: 450; }
     .map-h { height: 360px; width: 100%; }
@@ -2614,7 +2623,7 @@
   <div class="toast" id="toast-el"></div>
 
   <div id="admin-evidence-modal" class="modal-overlay">
-    <div class="modal-box" style="max-width:900px">
+    <div class="modal-box admin-evidence-box">
       <button onclick="closeModal('admin-evidence-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
       <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
         <i class="fas fa-shield-check"></i>
@@ -6767,7 +6776,7 @@
       const item = adminReviewEvidence[id] || {};
       const value = field === "json"
         ? JSON.stringify(item.raw || item, null, 2)
-        : String(item[field] || item.text || "");
+        : String(item[field] ?? item.raw?.[field] ?? item.raw?.check?.[field] ?? item.text ?? "");
       if (!value) {
         toast("Nothing to copy.");
         return;
@@ -6790,6 +6799,74 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    function adminEvidenceDisplayValue(value) {
+      if (value === true) return "Yes";
+      if (value === false) return "No";
+      if (value === null || value === undefined || value === "") return "";
+      if (typeof value === "object") return JSON.stringify(value);
+      return String(value);
+    }
+
+    function adminEvidenceStatusPill(status) {
+      const safeStatus = String(status || "info").toLowerCase();
+      const cls = safeStatus === "pass"
+        ? "bg-green-100 text-green-800"
+        : safeStatus === "warning"
+          ? "bg-amber-100 text-amber-800"
+          : safeStatus === "fail" || safeStatus === "error"
+            ? "bg-red-100 text-red-800"
+            : "bg-gray-100 text-gray-700";
+      return `<span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${cls}">${adminEscape(safeStatus)}</span>`;
+    }
+
+    function adminEvidenceKeyLabel(key) {
+      return String(key || "")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function adminEvidenceSummaryHtml(item, id) {
+      const raw = item.raw || {};
+      const check = raw.check || {};
+      const evidence = check.evidence && typeof check.evidence === "object" ? check.evidence : {};
+      const rows = [
+        ["Check", check.label || item.title || check.key],
+        ["Status", check.status],
+        ["Blocking", check.blocking],
+        ["Provider", evidence.provider],
+        ["Listing ID", raw.listing_id],
+        ["Reference", raw.inquiry_reference],
+        ["ID Number", raw.id_number],
+        ["ID Document", raw.id_document_name],
+        ["Document Stored", raw.id_document_url_present]
+      ];
+      Object.entries(evidence).forEach(([key, value]) => {
+        if (key !== "provider") rows.push([adminEvidenceKeyLabel(key), value]);
+      });
+      const cleanRows = rows
+        .map(([label, value]) => [label, adminEvidenceDisplayValue(value)])
+        .filter(([, value]) => value !== "");
+      return `
+        <div class="space-y-4">
+          ${item.message ? `<div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">${adminEscape(item.message)}</div>` : ""}
+          <div class="grid sm:grid-cols-2 gap-3">
+            ${cleanRows.map(([label, value]) => `
+              <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 min-w-0">
+                <div class="text-[11px] uppercase tracking-wide text-gray-500 font-bold">${adminEscape(label)}</div>
+                <div class="mt-1 text-sm font-semibold text-gray-900 break-words">
+                  ${label === "Status" ? adminEvidenceStatusPill(value) : adminEscape(value)}
+                </div>
+              </div>
+            `).join("")}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${raw.id_number ? `<button onclick="copyAdminEvidenceText('${adminAttr(id)}','id_number')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy ID Number</button>` : ""}
+            ${raw.listing_id ? `<button onclick="copyAdminEvidenceText('${adminAttr(id)}','listing_id')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Listing ID</button>` : ""}
+            <button onclick="copyAdminEvidenceText('${adminAttr(id)}','json')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Evidence JSON</button>
+          </div>
+        </div>`;
     }
 
     function openAdminEvidence(id) {
@@ -6838,10 +6915,12 @@
       } else {
         const rawText = JSON.stringify(item.raw || item, null, 2);
         bodyEl.innerHTML = `
-          <div class="space-y-3">
-            ${item.message ? `<p>${adminEscape(item.message)}</p>` : ""}
-            <pre class="bg-gray-950 text-green-100 rounded-xl p-3 max-h-[55vh] overflow-auto text-xs">${adminEscape(rawText)}</pre>
-            <button onclick="copyAdminEvidenceText('${adminAttr(id)}','json')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Evidence JSON</button>
+          <div class="space-y-4">
+            ${adminEvidenceSummaryHtml(item, id)}
+            <details class="rounded-xl border border-gray-200 bg-white">
+              <summary class="cursor-pointer px-4 py-3 text-sm font-bold text-gray-800">Developer evidence JSON</summary>
+              <pre class="admin-evidence-json bg-gray-950 text-green-100 rounded-b-xl p-3 max-h-72 overflow-auto text-xs">${adminEscape(rawText)}</pre>
+            </details>
           </div>`;
       }
       openModal("admin-evidence-modal");
