@@ -7,7 +7,7 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS } = require('../utils/constants');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
-const { processPendingCampaignQueue } = require('../services/whatsappCampaignService');
+const { processPendingCampaignQueue, refreshCampaignStatus } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy } = require('../services/aiService');
 const {
   buildAutomatedListingReview,
@@ -531,7 +531,10 @@ router.get('/users', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim().toLowerCase();
-    const status = String(req.query.status || '').trim().toLowerCase();
+    const rawStatus = String(req.query.status || '').trim().toLowerCase();
+    const status = ['live', 'active', 'published'].includes(rawStatus)
+      ? 'queued'
+      : rawStatus;
     const role = String(req.query.role || '').trim().toLowerCase();
 
     const filters = [];
@@ -1104,6 +1107,124 @@ router.get('/campaigns', async (req, res, next) => {
   }
 });
 
+async function loadCampaign(campaignId) {
+  const campaignResult = await db.query(
+    `SELECT *
+     FROM marketing_campaigns
+     WHERE id = $1
+     LIMIT 1`,
+    [campaignId]
+  );
+  return campaignResult.rows[0] || null;
+}
+
+function getCampaignTargetFilter(campaign = {}) {
+  return campaign.target_filter && typeof campaign.target_filter === 'object'
+    ? campaign.target_filter
+    : {};
+}
+
+async function queueCampaignRecipients({ campaign, limit = 2000 } = {}) {
+  if (!campaign) {
+    const error = new Error('Campaign not found');
+    error.status = 404;
+    throw error;
+  }
+  if (campaign.channel !== 'whatsapp') {
+    const error = new Error('Only whatsapp channel queueing is currently supported');
+    error.status = 400;
+    throw error;
+  }
+  if (campaign.status === 'cancelled') {
+    const error = new Error('Cancelled campaigns cannot be set live');
+    error.status = 400;
+    throw error;
+  }
+  if (!String(campaign.message_template || '').trim()) {
+    const error = new Error('Campaign message is empty');
+    error.status = 400;
+    throw error;
+  }
+
+  const normalizedLimit = Math.max(1, Math.min(parseInt(limit, 10) || 2000, 20000));
+  const filter = getCampaignTargetFilter(campaign);
+  const languageFilter = Array.isArray(filter.languages)
+    ? filter.languages.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const sinceDays = Math.max(0, parseInt(filter.active_within_days, 10) || 0);
+  const minSeenAtClause = sinceDays > 0 ? `AND p.last_seen_at >= NOW() - ($2::text || ' days')::interval` : '';
+
+  const profileValues = [normalizedLimit];
+  if (sinceDays > 0) profileValues.push(String(sinceDays));
+
+  const profiles = await db.query(
+    `SELECT p.phone, p.preferred_language, p.marketing_opt_in
+     FROM whatsapp_user_profiles p
+     WHERE p.marketing_opt_in = TRUE
+     ${minSeenAtClause}
+     ORDER BY p.last_seen_at DESC
+     LIMIT $1`,
+    profileValues
+  );
+
+  let eligibleCount = 0;
+  let insertedCount = 0;
+  let skippedDuplicateCount = 0;
+  for (const profile of profiles.rows) {
+    const preferredLanguage = String(profile.preferred_language || '').toLowerCase();
+    if (languageFilter.length && !languageFilter.includes(preferredLanguage)) {
+      continue;
+    }
+
+    eligibleCount += 1;
+    const inserted = await db.query(
+      `INSERT INTO outbound_message_queue
+        (user_phone, payload, status, attempts, next_attempt_at, campaign_id, channel, user_consent_snapshot, metadata)
+       SELECT $1, $2::jsonb, 'pending', 0, NOW(), $3, 'whatsapp', TRUE, $4::jsonb
+       WHERE NOT EXISTS (
+         SELECT 1
+         FROM outbound_message_queue q
+         WHERE q.campaign_id = $3
+           AND q.user_phone = $1
+           AND q.status IN ('pending','retry','sent')
+       )
+       RETURNING id`,
+      [
+        profile.phone,
+        JSON.stringify({
+          text: campaign.message_template
+        }),
+        campaign.id,
+        JSON.stringify({
+          source: 'admin_campaign_queue',
+          preferred_language: profile.preferred_language || 'en'
+        })
+      ]
+    );
+    if (inserted.rows.length) insertedCount += 1;
+    else skippedDuplicateCount += 1;
+  }
+
+  const updated = await db.query(
+    `UPDATE marketing_campaigns
+     SET status = 'queued',
+         queued_at = COALESCE(queued_at, NOW()),
+         updated_at = NOW()
+     WHERE id = $1
+       AND status <> 'cancelled'
+     RETURNING id, status, queued_at, sent_at, updated_at`,
+    [campaign.id]
+  );
+
+  return {
+    campaign: updated.rows[0] || campaign,
+    eligible_recipients: eligibleCount,
+    queued_recipients: insertedCount,
+    skipped_duplicate_recipients: skippedDuplicateCount,
+    requested_limit: normalizedLimit
+  };
+}
+
 router.post('/campaigns/draft', async (req, res, next) => {
   try {
     const name = String(req.body.name || '').trim();
@@ -1168,81 +1289,17 @@ router.post('/campaigns/:id/queue', async (req, res, next) => {
     const campaignId = req.params.id;
     const limit = Math.max(1, Math.min(parseInt(req.body.limit, 10) || 2000, 20000));
 
-    const campaignResult = await db.query(
-      `SELECT *
-       FROM marketing_campaigns
-       WHERE id = $1
-       LIMIT 1`,
-      [campaignId]
-    );
-    if (!campaignResult.rows.length) {
+    const campaign = await loadCampaign(campaignId);
+    if (!campaign) {
       return res.status(404).json({ ok: false, error: 'Campaign not found' });
     }
-
-    const campaign = campaignResult.rows[0];
-    if (campaign.channel !== 'whatsapp') {
-      return res.status(400).json({ ok: false, error: 'Only whatsapp channel queueing is currently supported' });
-    }
-
-    const filter = campaign.target_filter && typeof campaign.target_filter === 'object'
-      ? campaign.target_filter
-      : {};
-    const languageFilter = Array.isArray(filter.languages)
-      ? filter.languages.map((x) => String(x || '').trim().toLowerCase()).filter(Boolean)
-      : [];
-    const sinceDays = Math.max(0, parseInt(filter.active_within_days, 10) || 0);
-    const minSeenAtClause = sinceDays > 0 ? `AND p.last_seen_at >= NOW() - ($2::text || ' days')::interval` : '';
-
-    const profileValues = [limit];
-    if (sinceDays > 0) profileValues.push(String(sinceDays));
-
-    const profiles = await db.query(
-      `SELECT p.phone, p.preferred_language, p.marketing_opt_in
-       FROM whatsapp_user_profiles p
-       WHERE p.marketing_opt_in = TRUE
-       ${minSeenAtClause}
-       ORDER BY p.last_seen_at DESC
-       LIMIT $1`,
-      profileValues
-    );
-
-    let insertedCount = 0;
-    for (const profile of profiles.rows) {
-      const preferredLanguage = String(profile.preferred_language || '').toLowerCase();
-      if (languageFilter.length && !languageFilter.includes(preferredLanguage)) {
-        continue;
-      }
-
-      await db.query(
-        `INSERT INTO outbound_message_queue
-          (user_phone, payload, status, attempts, next_attempt_at, campaign_id, channel, user_consent_snapshot, metadata)
-         VALUES ($1, $2::jsonb, 'pending', 0, NOW(), $3, 'whatsapp', TRUE, $4::jsonb)`,
-        [
-          profile.phone,
-          JSON.stringify({
-            text: campaign.message_template
-          }),
-          campaign.id,
-          JSON.stringify({
-            source: 'admin_campaign_queue',
-            preferred_language: profile.preferred_language || 'en'
-          })
-        ]
-      );
-      insertedCount += 1;
-    }
-
-    await db.query(
-      `UPDATE marketing_campaigns
-       SET status = CASE WHEN $2 > 0 THEN 'queued' ELSE status END,
-           queued_at = CASE WHEN $2 > 0 THEN NOW() ELSE queued_at END
-       WHERE id = $1`,
-      [campaign.id, insertedCount]
-    );
+    const queued = await queueCampaignRecipients({ campaign, limit });
 
     await writeAudit('campaign_queued', {
       campaign_id: campaign.id,
-      queued_recipients: insertedCount,
+      eligible_recipients: queued.eligible_recipients,
+      queued_recipients: queued.queued_recipients,
+      skipped_duplicate_recipients: queued.skipped_duplicate_recipients,
       requested_limit: limit
     });
 
@@ -1250,11 +1307,148 @@ router.post('/campaigns/:id/queue', async (req, res, next) => {
       ok: true,
       data: {
         campaign_id: campaign.id,
-        queued_recipients: insertedCount,
-        requested_limit: limit
+        status: queued.campaign.status,
+        queued_at: queued.campaign.queued_at,
+        eligible_recipients: queued.eligible_recipients,
+        queued_recipients: queued.queued_recipients,
+        skipped_duplicate_recipients: queued.skipped_duplicate_recipients,
+        requested_limit: queued.requested_limit
       }
     });
   } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ ok: false, error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.post('/campaigns/:id/live', async (req, res, next) => {
+  try {
+    const campaignId = req.params.id;
+    const campaign = await loadCampaign(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ ok: false, error: 'Campaign not found' });
+    }
+
+    const limit = Math.max(1, Math.min(parseInt(req.body.limit, 10) || 2000, 20000));
+    const maxAttempts = Math.max(1, Math.min(parseInt(req.body.max_attempts, 10) || 4, 10));
+    const queued = await queueCampaignRecipients({ campaign, limit });
+    const processLimit = Math.max(1, Math.min(parseInt(req.body.process_limit, 10) || Math.max(queued.queued_recipients, 100), 500));
+    const processing = queued.queued_recipients > 0
+      ? await processPendingCampaignQueue({ limit: processLimit, maxAttempts, campaignId: campaign.id })
+      : { processed: 0, sent: 0, failed: 0, retried: 0, campaigns: [] };
+    const status = await refreshCampaignStatus(campaign.id);
+
+    await writeAudit('campaign_set_live', {
+      campaign_id: campaign.id,
+      eligible_recipients: queued.eligible_recipients,
+      queued_recipients: queued.queued_recipients,
+      skipped_duplicate_recipients: queued.skipped_duplicate_recipients,
+      processing
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        campaign_id: campaign.id,
+        status: status?.status || queued.campaign.status,
+        queued_at: status?.queued_at || queued.campaign.queued_at,
+        sent_at: status?.sent_at || queued.campaign.sent_at || null,
+        eligible_recipients: queued.eligible_recipients,
+        queued_recipients: queued.queued_recipients,
+        skipped_duplicate_recipients: queued.skipped_duplicate_recipients,
+        processing,
+        total_recipients: status?.total_recipients ?? queued.eligible_recipients,
+        pending_count: status?.pending_count ?? 0,
+        sent_count: status?.sent_count ?? 0,
+        failed_count: status?.failed_count ?? 0
+      }
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ ok: false, error: error.message });
+    }
+    return next(error);
+  }
+});
+
+router.patch('/campaigns/:id/status', async (req, res, next) => {
+  try {
+    const campaignId = req.params.id;
+    const requestedStatus = String(req.body.status || '').trim().toLowerCase();
+    const campaign = await loadCampaign(campaignId);
+    if (!campaign) {
+      return res.status(404).json({ ok: false, error: 'Campaign not found' });
+    }
+
+    if (['live', 'active', 'queued'].includes(requestedStatus)) {
+      const limit = Math.max(1, Math.min(parseInt(req.body.limit, 10) || 2000, 20000));
+      const queued = await queueCampaignRecipients({ campaign, limit });
+      await writeAudit('campaign_status_set_live', {
+        campaign_id: campaign.id,
+        requested_status: requestedStatus,
+        eligible_recipients: queued.eligible_recipients,
+        queued_recipients: queued.queued_recipients,
+        skipped_duplicate_recipients: queued.skipped_duplicate_recipients
+      });
+      return res.json({
+        ok: true,
+        data: {
+          campaign_id: campaign.id,
+          status: queued.campaign.status,
+          queued_at: queued.campaign.queued_at,
+          eligible_recipients: queued.eligible_recipients,
+          queued_recipients: queued.queued_recipients,
+          skipped_duplicate_recipients: queued.skipped_duplicate_recipients
+        }
+      });
+    }
+
+    if (requestedStatus === 'cancelled' || requestedStatus === 'canceled') {
+      const updated = await db.query(
+        `UPDATE marketing_campaigns
+         SET status = 'cancelled',
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, status, updated_at`,
+        [campaign.id]
+      );
+      await db.query(
+        `UPDATE outbound_message_queue
+         SET status = 'failed',
+             last_error = 'cancelled_by_admin',
+             updated_at = NOW()
+         WHERE campaign_id = $1
+           AND status IN ('pending','retry')`,
+        [campaign.id]
+      );
+      await writeAudit('campaign_status_cancelled', { campaign_id: campaign.id });
+      return res.json({ ok: true, data: updated.rows[0] });
+    }
+
+    if (!['draft', 'queued', 'sending', 'sent'].includes(requestedStatus)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported campaign status' });
+    }
+
+    const updated = await db.query(
+      `UPDATE marketing_campaigns
+       SET status = $2,
+           updated_at = NOW()
+       WHERE id = $1
+         AND status <> 'cancelled'
+       RETURNING id, status, queued_at, sent_at, updated_at`,
+      [campaign.id, requestedStatus]
+    );
+    await writeAudit('campaign_status_updated', {
+      campaign_id: campaign.id,
+      requested_status: requestedStatus
+    });
+    return res.json({ ok: true, data: updated.rows[0] || null });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({ ok: false, error: error.message });
+    }
     return next(error);
   }
 });
@@ -1285,7 +1479,8 @@ router.post('/campaigns/:id/cancel', async (req, res, next) => {
     const campaignId = req.params.id;
     const updated = await db.query(
       `UPDATE marketing_campaigns
-       SET status = 'cancelled'
+       SET status = 'cancelled',
+           updated_at = NOW()
        WHERE id = $1
        RETURNING id, status, updated_at`,
       [campaignId]
