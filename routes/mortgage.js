@@ -208,6 +208,7 @@ router.get('/', async (req, res, next) => {
       ok: true,
       data: {
         updatedAt: payload.updatedAt,
+        refreshedAt: new Date().toISOString(),
         source: payload.source,
         providers: payload.providers
       }

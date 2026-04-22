@@ -2879,17 +2879,6 @@
 
         <button id="auth-signin-btn" onclick="submitAuthSignIn()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold mb-5">Sign In</button>
 
-        <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="social-auth-btn" data-social-provider="google">
-            <i class="fab fa-google text-red-500"></i><span>Google</span>
-          </button>
-          <button onclick="startSocialAuth('facebook')" class="social-auth-btn" data-social-provider="facebook">
-            <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
-          </button>
-          <button onclick="startSocialAuth('apple')" class="social-auth-btn" data-social-provider="apple">
-            <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
-          </button>
-        </div>
         <button id="auth-forgot-btn" onclick="startForgotPasswordFlow()" class="w-full mt-3 text-sm text-green-700 hover:text-green-800 font-semibold">Forgot password?</button>
         <p class="text-[11px] text-gray-500 mt-1 text-center">Password reset sends an OTP to your phone or email.</p>
       </div>
@@ -2905,18 +2894,6 @@
           Property Finder: create an account to save properties, get alerts, and track searches.
         </p>
         <input id="auth-signup-role" type="hidden" value="Buyer / Renter">
-
-        <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="social-auth-btn" data-social-provider="google">
-            <i class="fab fa-google text-red-500"></i><span>Google</span>
-          </button>
-          <button onclick="startSocialAuth('facebook')" class="social-auth-btn" data-social-provider="facebook">
-            <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
-          </button>
-          <button onclick="startSocialAuth('apple')" class="social-auth-btn" data-social-provider="apple">
-            <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
-          </button>
-        </div>
 
         <div id="auth-field-signup-note" class="hidden mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
           Field Agent onboarding is managed manually.
@@ -3060,6 +3037,27 @@
           <input id="agent-company" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Your company name (if applicable)">
         </div>
 
+        <div>
+          <label class="block text-sm font-medium text-gray-800 mb-2">Broker Profile Photo</label>
+          <div class="grid sm:grid-cols-[120px,1fr] gap-3 items-center border border-green-100 rounded-2xl p-3 bg-green-50/50">
+            <div id="agent-profile-photo-preview" class="w-24 h-24 rounded-full border-2 border-white bg-white shadow-sm overflow-hidden flex items-center justify-center text-green-800 font-bold">
+              Photo
+            </div>
+            <div>
+              <input id="agent-profile-photo-file" type="file" accept="image/*" class="hidden" onchange="handleAgentProfilePhotoSelection(event)">
+              <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="document.getElementById('agent-profile-photo-file')?.click()" class="border border-green-700 text-green-700 hover:bg-white px-3 py-2 rounded-lg text-xs font-semibold">
+                  Upload Photo
+                </button>
+                <button type="button" onclick="removeAgentProfilePhoto()" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-2 rounded-lg text-xs font-semibold">
+                  Remove
+                </button>
+              </div>
+              <p id="agent-profile-photo-help" class="text-xs text-gray-500 mt-2">Square headshot or logo recommended. JPG/PNG, max 5MB before compression.</p>
+            </div>
+          </div>
+        </div>
+
         <div class="grid sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-sm font-medium text-gray-800 mb-2">Phone Number *</label>
@@ -3185,7 +3183,14 @@
     ];
     const UGANDA_REGIONS = ["Central Region","Western Region","Eastern Region","Northern Region","Greater Kampala Metropolitan Area"];
     const LOCATION_HINTS = [
-      "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Kabale","Fort Portal","Soroti","Iganga","Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Gayaza","Lugazi","Njeru","Seeta","Busega","Makindye","Muyenga","Bugolobi","Kololo","Nakasero","Ntinda","Kyaliwajjala","Kisaasi","Bukoto","Najjera","Mutungo","Mbuya","Wandegeya","Kikoni","Kamwokya","Kawempe","Rubaga","Najjanankumbi","Katwe","Kibuli","Lubowa","Buziga","Ggaba","Kansanga","Muyenga Tank Hill","Kampala Road","Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Soroti City","Kabale Town","Fort Portal City","Ntinda","Kyanja","Kyanja Ring Road"
+      "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Kabale","Fort Portal","Soroti","Iganga",
+      "Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Gayaza","Lugazi","Njeru","Seeta","Busega",
+      "Makindye","Muyenga","Bugolobi","Kololo","Nakasero","Ntinda","Kyaliwajjala","Kisaasi","Bukoto","Najjera","Mutungo","Mbuya","Wandegeya","Kikoni",
+      "Kamwokya","Kawempe","Rubaga","Najjanankumbi","Katwe","Kibuli","Lubowa","Buziga","Ggaba","Kansanga","Muyenga Tank Hill","Kampala Road",
+      "Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Kyanja","Kyanja Ring Road","Kiwatule",
+      "Kyebando","Naguru","Makerere","Old Kampala","Mengo","Kasubi","Lungujja","Nateete","Salaama","Bunga","Kabalagala","Muyenga Bukasa",
+      "Kitende","Kajjansi","Seguku","Bwebajja","Kitukutwe","Bulindo","Sonde","Naalya Estate","Namanve","Goma","Bweyogerere Industrial Park",
+      "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Soroti City","Kabale Town","Fort Portal City"
     ];
 
     const PROPERTIES = [
@@ -3335,6 +3340,15 @@
     };
 
     const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
+    const MAP_DEFAULT_CENTER = { lat: 0.347596, lng: 32.58252 };
+    const MAP_DEFAULT_ZOOM = 11;
+    const MAP_CITY_ZOOM = 15;
+    const MAP_NEIGHBORHOOD_ZOOM = 17;
+    const MAP_PROPERTY_ZOOM = 18;
+    const MAP_REGION_ZOOM = 8;
+    const MAP_DISTRICT_ZOOM = 12;
+    const MAP_MULTI_LISTING_MAX_ZOOM = 14;
+    const MAP_BROKER_DEFAULT_ZOOM = 8;
     const DEFAULT_MORTGAGE_PROVIDERS = [
       {
         id: "stanbic",
@@ -3411,6 +3425,7 @@
     ];
     let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
     let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
+    let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
     let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 
     let activeCur = "UGX";
@@ -3473,6 +3488,8 @@
     let agentOtpVerifiedPhone = "";
     let agentOtpVerifiedEmail = "";
     let agentOtpChannel = "phone";
+    let agentProfilePhotoDataUrl = "";
+    let agentProfilePhotoFileName = "";
     let lpLastHierarchySignature = "";
     let lpLastAddressValue = "";
     let lpAreaManualOverride = false;
@@ -5697,6 +5714,7 @@
     const ADMIN_API_KEY_STORAGE_KEY = "makaug_admin_api_key";
     let gaMeasurementId = null;
     let googleMapsLoadPromise = null;
+    let googleGeocoderInstance = null;
     const mapProviders = {};
 
     function apiUrl(path) {
@@ -6499,7 +6517,7 @@
 
     function getFeaturedListings(listings) {
       const source = publicListingsFromApiLoaded
-        ? listings.filter((p) => p.remote_source === "api")
+        ? listings.filter((p) => p.remote_source === "api" || isFeaturedListing(p))
         : listings;
       return source
         .filter((p) => isFeaturedListing(p))
@@ -6909,6 +6927,7 @@
       wrap.innerHTML = view.map((p) => {
         const status = normalizeModerationStatus(p.status);
         const meta = adminStatusBadge(status);
+        const featured = isFeaturedListing(p);
         const localId = String(p.id || "");
         const backendId = String(p.backend_id || p.id || "");
         const reviewId = backendId || localId;
@@ -7973,21 +7992,42 @@
           body: { featured: !!featured }
         });
         const data = response?.data || {};
+        const nextFeatured = data.featured === true || String(data.extra_fields?.featured || "").toLowerCase() === "true" || !!featured;
         const applyFeatured = (item) => {
           if (!item) return item;
-          item.featured = data.featured === true || !!featured;
-          item.featured_at = data.featured_at || data.extra_fields?.featured_at || item.featured_at;
+          item.featured = nextFeatured;
+          item.featured_at = data.featured_at || data.extra_fields?.featured_at || (nextFeatured ? new Date().toISOString() : item.featured_at);
+          item.remote_source = item.remote_source || "api";
           item.extra_fields = {
             ...(item.extra_fields || {}),
             ...(data.extra_fields || {}),
-            featured: data.featured === true || !!featured
+            featured: nextFeatured,
+            ...(nextFeatured && item.featured_at ? { featured_at: item.featured_at } : {})
           };
           return item;
         };
         applyFeatured(PROPERTIES.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
         applyFeatured(adminRemoteListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
         applyFeatured(adminLiveListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
+        try {
+          const detail = await apiRequest(`/api/properties/${encodeURIComponent(id)}`, {
+            headers: adminAuthHeaders()
+          });
+          const publicProperty = mapRemotePropertyForUi(detail?.data || {});
+          publicProperty.featured = nextFeatured;
+          publicProperty.featured_at = data.featured_at || data.extra_fields?.featured_at || publicProperty.featured_at;
+          publicProperty.extra_fields = {
+            ...(publicProperty.extra_fields || {}),
+            ...(data.extra_fields || {}),
+            featured: nextFeatured,
+            ...(publicProperty.featured_at ? { featured_at: publicProperty.featured_at } : {})
+          };
+          upsertPropertyForUi(publicProperty);
+        } catch (detailError) {
+          await refreshPublicListingsFromApi({ silent: true });
+        }
         renderAll();
+        resetMaps();
         await renderAdminDashboard();
         toast(featured ? "Listing added to Featured Properties." : "Listing removed from Featured Properties.");
       } catch (e) {
@@ -8347,43 +8387,20 @@
     }
 
     function socialProviderSetupMessage(provider) {
-      const p = String(provider || "").toLowerCase();
-      const label = p ? p.charAt(0).toUpperCase() + p.slice(1) : "Social";
-      if (p === "google") return `${label} sign-in needs GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Render, with this callback URL allowed: ${socialAuthConfig.providers?.google?.redirect_uri || "/api/auth/oauth/google/callback"}`;
-      if (p === "facebook") return `${label} sign-in needs FACEBOOK_APP_ID and FACEBOOK_APP_SECRET in Render, with this callback URL allowed: ${socialAuthConfig.providers?.facebook?.redirect_uri || "/api/auth/oauth/facebook/callback"}`;
-      return `${label} sign-in needs provider setup before it can be enabled.`;
+      return "Social sign-in is temporarily disabled. Please use phone/email and password.";
     }
 
     function updateSocialAuthButtons() {
-      document.querySelectorAll("[data-social-provider]").forEach((btn) => {
-        const provider = btn.getAttribute("data-social-provider");
-        const cfg = socialAuthConfig.providers?.[provider] || {};
-        const enabled = cfg.enabled === true;
-        btn.title = enabled ? `${provider} sign-in is connected` : socialProviderSetupMessage(provider);
-        btn.classList.toggle("opacity-60", !enabled);
-      });
+      document.querySelectorAll("[data-social-provider]").forEach((btn) => btn.remove());
     }
 
     async function loadSocialAuthConfig() {
-      try {
-        const res = await apiRequest("/api/auth/social/config");
-        socialAuthConfig = res?.data || { providers: {} };
-      } catch (error) {
-        socialAuthConfig = { providers: {} };
-      }
+      socialAuthConfig = { providers: {} };
       updateSocialAuthButtons();
     }
 
     async function startSocialAuth(provider) {
-      const p = String(provider || "").toLowerCase();
-      const cfg = socialAuthConfig.providers?.[p] || {};
-      if (!cfg.enabled) {
-        toast(socialProviderSetupMessage(p));
-        return;
-      }
-      await trackEvent("auth_social_start", { provider: p, audience: authSignUpAudience || authSignInAudience || "finder" });
-      const audience = document.getElementById("auth-panel-signup")?.classList.contains("hidden") ? authSignInAudience : authSignUpAudience;
-      window.location.href = apiUrl(`/api/auth/oauth/${encodeURIComponent(p)}/start?audience=${encodeURIComponent(audience || "finder")}`);
+      toast(socialProviderSetupMessage(provider));
     }
 
     function handleOAuthReturnFromUrl() {
@@ -9229,13 +9246,63 @@
       }, delay);
     }
 
+    async function getGoogleGeocoder() {
+      const ready = await ensureGoogleMapsApi();
+      if (!ready || !window.google?.maps?.Geocoder) return null;
+      if (!googleGeocoderInstance) googleGeocoderInstance = new google.maps.Geocoder();
+      return googleGeocoderInstance;
+    }
+
+    async function geocodeWithGoogle(query) {
+      const geocoder = await getGoogleGeocoder();
+      if (!geocoder || !query) return null;
+      return new Promise((resolve) => {
+        geocoder.geocode({
+          address: query,
+          componentRestrictions: { country: "UG" }
+        }, (results, status) => {
+          if (status !== "OK" || !Array.isArray(results) || !results.length) {
+            resolve(null);
+            return;
+          }
+          const loc = results[0]?.geometry?.location;
+          if (!loc) {
+            resolve(null);
+            return;
+          }
+          resolve({
+            lat: loc.lat(),
+            lng: loc.lng(),
+            label: results[0].formatted_address || query
+          });
+        });
+      });
+    }
+
+    async function reverseGeocodeWithGoogle(lat, lng) {
+      const geocoder = await getGoogleGeocoder();
+      if (!geocoder) return null;
+      return new Promise((resolve) => {
+        geocoder.geocode({
+          location: { lat: Number(lat), lng: Number(lng) }
+        }, (results, status) => {
+          if (status !== "OK" || !Array.isArray(results) || !results.length) {
+            resolve(null);
+            return;
+          }
+          resolve(results[0]?.formatted_address || "");
+        });
+      });
+    }
+
     function initGoogleListPinMap(el) {
       if (!window.google?.maps || !el) return false;
       el.innerHTML = "";
       lpPinMap = new google.maps.Map(el, {
-        center: { lat: 0.347596, lng: 32.58252 },
-        zoom: 9,
-        mapTypeControl: false,
+        center: MAP_DEFAULT_CENTER,
+        zoom: MAP_DEFAULT_ZOOM,
+        mapTypeId: "hybrid",
+        mapTypeControl: true,
         streetViewControl: true,
         fullscreenControl: true,
         clickableIcons: true
@@ -9255,7 +9322,7 @@
         minZoom: 6,
         maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
         maxBoundsViscosity: 0.65
-      }).setView([0.347596, 32.58252], 9);
+      }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18
@@ -9293,9 +9360,10 @@
       if (!window.google?.maps || !el) return false;
       el.innerHTML = "";
       lpPreviewMap = new google.maps.Map(el, {
-        center: { lat: 0.347596, lng: 32.58252 },
-        zoom: 9,
-        mapTypeControl: false,
+        center: MAP_DEFAULT_CENTER,
+        zoom: MAP_DEFAULT_ZOOM,
+        mapTypeId: "hybrid",
+        mapTypeControl: true,
         streetViewControl: true,
         fullscreenControl: true,
         clickableIcons: true
@@ -9311,7 +9379,7 @@
         minZoom: 6,
         maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
         maxBoundsViscosity: 0.65
-      }).setView([0.347596, 32.58252], 9);
+      }).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18
@@ -9347,12 +9415,12 @@
       if (!lpPreviewMap) return;
       let mLat = Number(lat);
       let mLng = Number(lng);
-      let zoom = 15;
+      let zoom = MAP_PROPERTY_ZOOM;
       if (!Number.isFinite(mLat) || !Number.isFinite(mLng)) {
-        const center = getDistrictCenter(district) || { lat: 0.347596, lng: 32.58252 };
+        const center = getDistrictCenter(district) || MAP_DEFAULT_CENTER;
         mLat = center.lat;
         mLng = center.lng;
-        zoom = center ? 12 : 9;
+        zoom = center ? MAP_DISTRICT_ZOOM : MAP_DEFAULT_ZOOM;
       }
       if (lpPreviewMapProvider === "google" && window.google?.maps) {
         const position = { lat: mLat, lng: mLng };
@@ -9432,12 +9500,12 @@
           }
           if (recenter) {
             lpPinMap.setCenter(position);
-            lpPinMap.setZoom(15);
+            lpPinMap.setZoom(MAP_PROPERTY_ZOOM);
           }
         } else if (window.L) {
           if (!lpPinMarker) lpPinMarker = L.marker([nLat, nLng]).addTo(lpPinMap);
           else lpPinMarker.setLatLng([nLat, nLng]);
-          if (recenter) lpPinMap.setView([nLat, nLng], 15);
+          if (recenter) lpPinMap.setView([nLat, nLng], MAP_PROPERTY_ZOOM);
         }
       }
       const confirmEl = document.getElementById("lp-location-confirm");
@@ -9469,6 +9537,11 @@
       if (lpReverseGeoTimer) clearTimeout(lpReverseGeoTimer);
       lpReverseGeoTimer = setTimeout(async () => {
         try {
+          const googleLabel = await reverseGeocodeWithGoogle(lat, lng);
+          if (googleLabel) {
+            setLpResolvedLocationLabel(googleLabel);
+            return;
+          }
           const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=ug`;
           const response = await fetch(url, { headers: { Accept: "application/json" } });
           if (!response.ok) throw new Error(`Reverse geocode failed (${response.status})`);
@@ -9516,7 +9589,13 @@
         const reqSeq = ++lpAddressGeoSeq;
         try {
           const query = [address, neighborhood, city, district, region, "Uganda"].filter(Boolean).join(", ");
+          const googlePoint = await geocodeWithGoogle(query);
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+          if (googlePoint) {
+            if (reqSeq !== lpAddressGeoSeq) return;
+            setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
+            return;
+          }
           const response = await fetch(url, { headers: { Accept: "application/json" } });
           if (!response.ok) throw new Error(`Address geocode failed (${response.status})`);
           const rows = await response.json();
@@ -9546,7 +9625,13 @@
           const areaPart = area && area !== neighborhood ? area : "";
           const query = [neighborhood, areaPart, city, district, region, "Uganda"].filter(Boolean).join(", ");
           if (!query) return;
+          const googlePoint = await geocodeWithGoogle(query);
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+          if (googlePoint) {
+            if (reqSeq !== lpHierarchyGeoSeq) return;
+            setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
+            return;
+          }
           const response = await fetch(url, { headers: { Accept: "application/json" } });
           if (!response.ok) throw new Error(`Hierarchy geocode failed (${response.status})`);
           const rows = await response.json();
@@ -9591,8 +9676,8 @@
       }
       const neighborhoodPoint = getNeighborhoodPoint(district, city, neighborhood);
       const cityPoint = getCityPoint(district, city);
-      const center = neighborhoodPoint || cityPoint || getDistrictCenter(district) || getRegionCenter(region) || { lat: 0.347596, lng: 32.58252 };
-      const zoom = neighborhood ? 16 : city ? 14 : address ? 13 : (district ? 11 : (region ? 8 : (area ? 12 : 9)));
+      const center = neighborhoodPoint || cityPoint || getDistrictCenter(district) || getRegionCenter(region) || MAP_DEFAULT_CENTER;
+      const zoom = neighborhood ? MAP_NEIGHBORHOOD_ZOOM : city ? MAP_CITY_ZOOM : address ? MAP_CITY_ZOOM : (district ? MAP_DISTRICT_ZOOM : (region ? MAP_REGION_ZOOM : (area ? MAP_CITY_ZOOM : MAP_DEFAULT_ZOOM)));
       if (lpPinMapProvider === "google" && window.google?.maps) {
         lpPinMap.setCenter({ lat: center.lat, lng: center.lng });
         lpPinMap.setZoom(zoom);
@@ -10396,6 +10481,56 @@
       setAgentOtpChannel("phone");
     }
 
+    function renderAgentProfilePhotoPreview() {
+      const preview = document.getElementById("agent-profile-photo-preview");
+      const help = document.getElementById("agent-profile-photo-help");
+      if (!preview) return;
+      if (agentProfilePhotoDataUrl) {
+        preview.innerHTML = `<img src="${adminAttr(agentProfilePhotoDataUrl)}" alt="Broker profile photo" class="w-full h-full object-cover">`;
+        if (help) help.textContent = `${agentProfilePhotoFileName || "Profile photo"} is ready for the broker profile.`;
+      } else {
+        preview.textContent = "Photo";
+        if (help) help.textContent = "Square headshot or logo recommended. JPG/PNG, max 5MB before compression.";
+      }
+    }
+
+    function resetAgentProfilePhoto() {
+      agentProfilePhotoDataUrl = "";
+      agentProfilePhotoFileName = "";
+      const fileInput = document.getElementById("agent-profile-photo-file");
+      if (fileInput) fileInput.value = "";
+      renderAgentProfilePhotoPreview();
+    }
+
+    async function handleAgentProfilePhotoSelection(event) {
+      const file = event?.target?.files?.[0];
+      if (!file) return;
+      if (!(file.type || "").startsWith("image/")) {
+        toast("Please choose an image file for the broker photo.");
+        resetAgentProfilePhoto();
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast("Broker profile photo must be under 5MB.");
+        resetAgentProfilePhoto();
+        return;
+      }
+      try {
+        agentProfilePhotoDataUrl = await compressPhotoForSubmission(file, { maxSide: 700, quality: 0.76 });
+        agentProfilePhotoFileName = file.name || "profile-photo.jpg";
+        renderAgentProfilePhotoPreview();
+        toast("Broker profile photo added.");
+      } catch (error) {
+        resetAgentProfilePhoto();
+        toast("Could not prepare broker profile photo.");
+      }
+    }
+
+    function removeAgentProfilePhoto() {
+      resetAgentProfilePhoto();
+      toast("Broker profile photo removed.");
+    }
+
     function onAgentPhoneInput() {
       const input = document.getElementById("agent-phone");
       const normalized = normalizePhoneInput(input?.value || "");
@@ -10607,11 +10742,13 @@
             registration_request: "admin_review",
             otp_channel: otpChannel,
             listing_otp_token: agentRegistrationOtpToken,
+            profile_photo_url: agentProfilePhotoDataUrl || undefined,
             bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
           }
         });
         await trackEvent("agent_register_submit", { district_scope: districtsCovered });
         toast("Application submitted. Broker verification will be reviewed by admin.");
+        resetAgentProfilePhoto();
         closeModal("broker-reg-modal");
       } catch (error) {
         toast(error.message || "Could not submit application.");
@@ -12479,13 +12616,22 @@
       }
     }
 
+    function brokerAvatarHtml(b, classes = "w-14 h-14") {
+      const photo = b?.photo || b?.profile_photo_url || "";
+      const wrapperClass = `${classes} rounded-full bg-green-50 border border-green-100 mx-auto overflow-hidden flex items-center justify-center text-2xl`;
+      if (photo) {
+        return `<div class="${wrapperClass}"><img src="${adminAttr(photo)}" alt="${adminAttr(b?.name || "Broker")}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.textContent='${adminAttr(b?.emoji || "👔")}'"></div>`;
+      }
+      return `<div class="${wrapperClass}">${b?.emoji || "👔"}</div>`;
+    }
+
     function renderBrokers(id, list) {
       const el = document.getElementById(id);
       if (!el) return;
       if (id === "brokers-grid") {
         el.innerHTML = list.map((b) => `
           <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${b.id})">
-            <div class="w-14 h-14 rounded-full bg-green-50 border-4 border-green-100 mx-auto flex items-center justify-center text-2xl mb-2.5">${b.emoji || "👔"}</div>
+            <div class="mb-2.5">${brokerAvatarHtml(b, "w-14 h-14 border-4")}</div>
             <h3 class="text-lg font-bold text-gray-900 text-center leading-tight">${b.name}</h3>
             <p class="text-center text-gray-500 text-sm">${b.company}</p>
             ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
@@ -12521,7 +12667,7 @@
 
       el.innerHTML = list.map((b) => `
         <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md" onclick="openBrokerProfile(${b.id})">
-          <div class="w-14 h-14 rounded-full bg-green-50 border border-green-100 mx-auto flex items-center justify-center text-2xl mb-3">${b.emoji || "👔"}</div>
+          <div class="mb-3">${brokerAvatarHtml(b, "w-14 h-14")}</div>
           <h3 class="font-bold text-gray-800 text-center">${b.name}</h3>
           <p class="text-sm text-gray-500 text-center">${b.company}</p>
           ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
@@ -13126,6 +13272,7 @@
             { name: "Kololo", lat: 0.356, lng: 32.612 },
             { name: "Kampala Road", lat: 0.314, lng: 32.577 },
             { name: "Old Kampala", lat: 0.313, lng: 32.569 },
+            { name: "Makerere", lat: 0.335, lng: 32.568 },
             { name: "Wandegeya", lat: 0.336, lng: 32.57 }
           ]
         },
@@ -13136,6 +13283,8 @@
             { name: "Naguru", lat: 0.338, lng: 32.611 },
             { name: "Bukoto", lat: 0.346, lng: 32.591 },
             { name: "Kisaasi", lat: 0.364, lng: 32.589 },
+            { name: "Kyanja", lat: 0.384, lng: 32.596 },
+            { name: "Kiwatule", lat: 0.372, lng: 32.625 },
             { name: "Bugolobi", lat: 0.317, lng: 32.612 }
           ]
         },
@@ -13146,6 +13295,8 @@
             { name: "Ggaba", lat: 0.274, lng: 32.619 },
             { name: "Kansanga", lat: 0.289, lng: 32.607 },
             { name: "Buziga", lat: 0.277, lng: 32.596 },
+            { name: "Bunga", lat: 0.262, lng: 32.623 },
+            { name: "Kabalagala", lat: 0.298, lng: 32.603 },
             { name: "Makindye", lat: 0.301, lng: 32.586 }
           ]
         },
@@ -13168,7 +13319,10 @@
             { name: "Nakiwogo", lat: 0.061, lng: 32.458 },
             { name: "Bugonga", lat: 0.045, lng: 32.453 },
             { name: "Katabi", lat: 0.071, lng: 32.499 },
-            { name: "Abayita Ababiri", lat: 0.106, lng: 32.525 }
+            { name: "Abayita Ababiri", lat: 0.106, lng: 32.525 },
+            { name: "Kitende", lat: 0.198, lng: 32.533 },
+            { name: "Kajjansi", lat: 0.208, lng: 32.552 },
+            { name: "Bwebajja", lat: 0.179, lng: 32.541 }
           ]
         },
         {
@@ -13177,8 +13331,11 @@
             { name: "Namugongo", lat: 0.363, lng: 32.636 },
             { name: "Kira Town", lat: 0.392, lng: 32.647 },
             { name: "Bweyogerere", lat: 0.351, lng: 32.676 },
+            { name: "Kyaliwajjala", lat: 0.377, lng: 32.639 },
+            { name: "Naalya", lat: 0.366, lng: 32.636 },
             { name: "Najjera", lat: 0.396, lng: 32.615 },
-            { name: "Bulindo", lat: 0.418, lng: 32.633 }
+            { name: "Bulindo", lat: 0.418, lng: 32.633 },
+            { name: "Sonde", lat: 0.378, lng: 32.698 }
           ]
         },
         {
@@ -15000,12 +15157,24 @@
       const dt = new Date(value);
       if (Number.isNaN(dt.getTime())) return String(value);
       const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG" };
-      return dt.toLocaleDateString(localeMap[currentLang] || "en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const hasTime = String(value).includes("T");
+      return dt.toLocaleString(localeMap[currentLang] || "en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        ...(hasTime ? { hour: "2-digit", minute: "2-digit" } : {})
+      });
     }
 
-    function hydrateMortgageProvidersFromApi(data) {
+    function hydrateMortgageProvidersFromApi(data, options = {}) {
+      const checkedAt = data?.refreshedAt || options.checkedAt || new Date().toISOString();
+      MORTGAGE_RATE_LAST_CHECKED_RAW = checkedAt;
       const providers = Array.isArray(data?.providers) ? data.providers : [];
-      if (!providers.length) return false;
+      if (!providers.length) {
+        MORTGAGE_RATE_UPDATED_RAW = data?.updatedAt || MORTGAGE_RATE_UPDATED_RAW || DEFAULT_MORTGAGE_RATE_UPDATED_AT;
+        MORTGAGE_RATE_UPDATED_AT = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW);
+        return false;
+      }
       const normalized = providers.map((provider) => ({
         id: provider.id || provider.key || provider.providerKey || provider.name || "provider",
         name: provider.name || provider.provider_name || "Provider",
@@ -15043,14 +15212,15 @@
 
     async function loadMortgageRates(showToastOnRefresh = false) {
       try {
+        const checkedAt = new Date().toISOString();
         const response = await apiRequest("/api/mortgage-rates");
-        const changed = hydrateMortgageProvidersFromApi(response?.data || {});
-        if (changed) {
-          renderMortgageFinder();
-          if (showToastOnRefresh) toast(mortgageTr("dataRefreshed"));
-        }
+        hydrateMortgageProvidersFromApi(response?.data || {}, { checkedAt });
+        renderMortgageFinder();
+        if (showToastOnRefresh) toast(mortgageTr("dataRefreshed"));
       } catch (error) {
         // Keep static fallback rates when API is unavailable.
+        MORTGAGE_RATE_LAST_CHECKED_RAW = new Date().toISOString();
+        renderMortgageFinder();
         if (showToastOnRefresh) toast(mortgageTr("dataRefreshFail"));
       }
     }
@@ -15297,7 +15467,7 @@
       if (yearsValueEl) yearsValueEl.textContent = `${normalizedYears} ${mortgageTr("yearsWord")}`;
 
       const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
-      const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
+      const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_LAST_CHECKED_RAW || MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
       const income = Math.max(0, Number(incomeEl?.value || 0));
       const monthly = result.best?.monthlyRepayment || 0;
       const suggestedIncome = monthly ? monthly / 0.35 : 0;
@@ -15629,7 +15799,7 @@
       if (!b) return;
       recordBrokerProfileView(id);
       const list = getPublicListings().filter((p) => p.agent === id);
-      const photoSrc = b.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
+      const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
       document.getElementById("broker-profile-content").innerHTML = `
         <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
@@ -15773,7 +15943,7 @@
         };
       }
 
-      return { lat: 0.347596, lng: 32.58252, listingsCount: 0 };
+      return { ...MAP_DEFAULT_CENTER, listingsCount: 0 };
     }
 
     function ensureGoogleMapsApi() {
@@ -15891,17 +16061,20 @@
         });
         if (!points.length) {
           map.setCenter({ lat: 1.3733, lng: 32.2903 });
-          map.setZoom(7);
+          map.setZoom(MAP_BROKER_DEFAULT_ZOOM);
         } else if ((list || []).length >= 3) {
           map.setCenter({ lat: 1.3733, lng: 32.2903 });
-          map.setZoom(7);
+          map.setZoom(MAP_BROKER_DEFAULT_ZOOM);
         } else if (points.length === 1) {
           map.setCenter({ lat: points[0].point.lat, lng: points[0].point.lng });
-          map.setZoom(9);
+          map.setZoom(MAP_DISTRICT_ZOOM);
         } else {
           const bounds = new google.maps.LatLngBounds();
           points.forEach((item) => bounds.extend({ lat: item.point.lat, lng: item.point.lng }));
           map.fitBounds(bounds);
+          google.maps.event.addListenerOnce(map, "idle", () => {
+            if (map.getZoom() > MAP_CITY_ZOOM) map.setZoom(MAP_CITY_ZOOM);
+          });
         }
         return;
       }
@@ -15931,23 +16104,23 @@
       });
 
       if (!points.length) {
-        map.setView([1.3733, 32.2903], 7);
+        map.setView([1.3733, 32.2903], MAP_BROKER_DEFAULT_ZOOM);
         return;
       }
 
       if ((list || []).length >= 3) {
-        map.setView([1.3733, 32.2903], 7);
+        map.setView([1.3733, 32.2903], MAP_BROKER_DEFAULT_ZOOM);
         return;
       }
 
       if (points.length === 1) {
         const one = points[0].point;
-        map.setView([one.lat, one.lng], 9);
+        map.setView([one.lat, one.lng], MAP_DISTRICT_ZOOM);
         return;
       }
 
       const bounds = L.latLngBounds(points.map((item) => [item.point.lat, item.point.lng]));
-      map.fitBounds(bounds.pad(0.25), { maxZoom: 9 });
+      map.fitBounds(bounds.pad(0.25), { maxZoom: MAP_CITY_ZOOM });
       if (map.getZoom() < 6) map.setZoom(6);
     }
 
@@ -15967,24 +16140,26 @@
           const el = document.getElementById(spec.id);
           if (!el) return;
           const map = new google.maps.Map(el, {
-            center: { lat: 0.347596, lng: 32.58252 },
-            zoom: 9,
-            mapTypeControl: false,
+            center: MAP_DEFAULT_CENTER,
+            zoom: MAP_DEFAULT_ZOOM,
+            mapTypeControl: true,
             streetViewControl: true,
             fullscreenControl: true
           });
           maps[spec.id] = map;
           mapProviders[spec.id] = "google";
           markers[spec.id] = [];
-          addMarkers(spec.id, spec.filter());
+          const initialList = spec.filter();
+          addMarkers(spec.id, initialList);
+          fitMapToListings(spec.id, initialList);
         });
 
         const brokerMapEl = document.getElementById("map-brokers");
         if (brokerMapEl) {
           const brokerMap = new google.maps.Map(brokerMapEl, {
             center: { lat: 1.3733, lng: 32.2903 },
-            zoom: 7,
-            mapTypeControl: false,
+            zoom: MAP_BROKER_DEFAULT_ZOOM,
+            mapTypeControl: true,
             streetViewControl: true,
             fullscreenControl: true
           });
@@ -16000,7 +16175,7 @@
       mapSpecs.forEach((spec) => {
         const el = document.getElementById(spec.id);
         if (!el) return;
-        const map = L.map(spec.id).setView([0.347596, 32.58252], 9);
+        const map = L.map(spec.id).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
           maxZoom: 18
@@ -16008,12 +16183,14 @@
         maps[spec.id] = map;
         mapProviders[spec.id] = "leaflet";
         markers[spec.id] = [];
-        addMarkers(spec.id, spec.filter());
+        const initialList = spec.filter();
+        addMarkers(spec.id, initialList);
+        fitMapToListings(spec.id, initialList);
       });
 
       const brokerMapEl = document.getElementById("map-brokers");
       if (brokerMapEl) {
-        const brokerMap = L.map("map-brokers").setView([1.3733, 32.2903], 7);
+        const brokerMap = L.map("map-brokers").setView([1.3733, 32.2903], MAP_BROKER_DEFAULT_ZOOM);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
           maxZoom: 18
@@ -16055,10 +16232,51 @@
       });
     }
 
+    function fitMapToListings(mapId, list) {
+      const map = maps[mapId];
+      if (!map) return;
+      const points = (list || [])
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+        .map((p) => ({ lat: p.lat, lng: p.lng }));
+
+      if (mapProviders[mapId] === "google" && window.google?.maps) {
+        if (!points.length) {
+          map.setCenter(MAP_DEFAULT_CENTER);
+          map.setZoom(MAP_DEFAULT_ZOOM);
+          return;
+        }
+        if (points.length === 1) {
+          map.setCenter(points[0]);
+          map.setZoom(MAP_NEIGHBORHOOD_ZOOM);
+          return;
+        }
+        const bounds = new google.maps.LatLngBounds();
+        points.forEach((point) => bounds.extend(point));
+        map.fitBounds(bounds);
+        google.maps.event.addListenerOnce(map, "idle", () => {
+          if (map.getZoom() > MAP_MULTI_LISTING_MAX_ZOOM) map.setZoom(MAP_MULTI_LISTING_MAX_ZOOM);
+        });
+        return;
+      }
+
+      if (!window.L) return;
+      if (!points.length) {
+        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
+        return;
+      }
+      if (points.length === 1) {
+        map.setView([points[0].lat, points[0].lng], MAP_NEIGHBORHOOD_ZOOM);
+        return;
+      }
+      const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
+      map.fitBounds(bounds.pad(0.2), { maxZoom: MAP_MULTI_LISTING_MAX_ZOOM });
+    }
+
     function setMapMarkers(mapId, list) {
       if (!maps[mapId]) return;
       clearMapMarkers(mapId);
       addMarkers(mapId, list || []);
+      fitMapToListings(mapId, list || []);
     }
 
     function resetMaps() {
@@ -16076,14 +16294,15 @@
       const el = document.getElementById("map-detail");
       if (!el) return;
       const useGoogle = await ensureGoogleMapsApi();
-      const lat = Number.isFinite(p.lat) ? p.lat : 0.347596;
-      const lng = Number.isFinite(p.lng) ? p.lng : 32.58252;
+      const lat = Number.isFinite(p.lat) ? p.lat : MAP_DEFAULT_CENTER.lat;
+      const lng = Number.isFinite(p.lng) ? p.lng : MAP_DEFAULT_CENTER.lng;
       if (useGoogle && window.google?.maps) {
         el.innerHTML = "";
         const map = new google.maps.Map(el, {
           center: { lat, lng },
-          zoom: 14,
-          mapTypeControl: false,
+          zoom: MAP_PROPERTY_ZOOM,
+          mapTypeId: "hybrid",
+          mapTypeControl: true,
           streetViewControl: true,
           fullscreenControl: true
         });
@@ -16102,7 +16321,7 @@
       if (el._leaflet_id) {
         try { el._leaflet_id = null; } catch (e) {}
       }
-      const map = L.map("map-detail").setView([lat, lng], 14);
+      const map = L.map("map-detail").setView([lat, lng], MAP_PROPERTY_ZOOM);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
         maxZoom: 18
@@ -16122,6 +16341,7 @@
       if (id === "broker-reg-modal") {
         syncAgentRegistrationForm();
         resetAgentRegistrationOtpState();
+        resetAgentProfilePhoto();
       }
       syncModalOpenState();
     }
@@ -16131,6 +16351,7 @@
       if (el) el.classList.remove("open");
       if (id === "broker-reg-modal") {
         resetAgentRegistrationOtpState();
+        resetAgentProfilePhoto();
       }
       syncModalOpenState();
     }
@@ -16180,7 +16401,6 @@
       loadDashboardState();
       loadAuthState();
       handleOAuthReturnFromUrl();
-      loadSocialAuthConfig();
       setLang(savedLang || currentLang, true, false);
       initFrontendAnalytics();
       setHeroLocationFilter(currentTab);

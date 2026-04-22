@@ -74,14 +74,16 @@ function getOAuthRedirectUri(req, provider) {
   return `${getBaseUrl(req)}/api/auth/oauth/${provider}/callback`;
 }
 
+const SOCIAL_AUTH_TEMPORARILY_DISABLED = true;
+
 function getSocialProviderConfig(req) {
   return {
     google: {
-      enabled: !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+      enabled: !SOCIAL_AUTH_TEMPORARILY_DISABLED && !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET),
       redirect_uri: getOAuthRedirectUri(req, 'google')
     },
     facebook: {
-      enabled: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
+      enabled: !SOCIAL_AUTH_TEMPORARILY_DISABLED && !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
       redirect_uri: getOAuthRedirectUri(req, 'facebook')
     },
     apple: {
@@ -331,6 +333,12 @@ router.get('/oauth/:provider/start', (req, res) => {
     const providers = getSocialProviderConfig(req);
     if (!['google', 'facebook'].includes(provider)) {
       return res.status(400).json({ ok: false, error: 'Unsupported social provider' });
+    }
+    if (SOCIAL_AUTH_TEMPORARILY_DISABLED) {
+      return res.status(410).json({
+        ok: false,
+        error: 'Social sign-in is temporarily disabled. Please use phone/email and password.'
+      });
     }
     if (!providers[provider]?.enabled) {
       return res.status(503).json({
