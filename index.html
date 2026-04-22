@@ -5997,6 +5997,15 @@
       savedIds = new Set(arr.filter((x) => String(x || "").trim()).map((x) => String(x)));
     }
 
+    function setSavedIdsFromArray(ids = []) {
+      savedIds = new Set(
+        (Array.isArray(ids) ? ids : [])
+          .filter((x) => String(x || "").trim())
+          .map((x) => String(x))
+      );
+      persistSavedIdsForCurrentUser();
+    }
+
     function persistSavedIdsForCurrentUser() {
       const all = getSavedStorageObject();
       const key = getSignedInUserStorageId();
@@ -6007,6 +6016,36 @@
     function isPropertySaved(propertyId) {
       const key = String(propertyId);
       return Array.from(savedIds).some((value) => String(value) === key);
+    }
+
+    async function syncSavedPropertyToServer(propertyId, shouldSave) {
+      if (!authState?.token || !propertyId) return null;
+      return apiRequest(`/api/saved-properties/${encodeURIComponent(propertyId)}`, {
+        method: shouldSave ? "POST" : "DELETE"
+      });
+    }
+
+    function refreshSavedUi(propertyId = "") {
+      persistSavedIdsForCurrentUser();
+      saveDashboardState();
+      renderAll();
+      renderFinderDashboard();
+      renderAgentDashboard();
+      updateDetailSaveButton(propertyId || activeDetailPropertyId);
+    }
+
+    async function refreshSavedPropertiesFromServer({ silent = true } = {}) {
+      if (!authState?.token) return false;
+      try {
+        const response = await apiRequest("/api/saved-properties");
+        const ids = Array.isArray(response?.data?.ids) ? response.data.ids : [];
+        setSavedIdsFromArray(ids);
+        refreshSavedUi(activeDetailPropertyId);
+        return true;
+      } catch (e) {
+        if (!silent) toast(`Saved properties refresh failed: ${e.message || "error"}`);
+        return false;
+      }
     }
 
     function setPendingSavePropertyId(propertyId) {
@@ -6028,11 +6067,11 @@
     }
 
     function applyPendingSaveAfterAuth() {
-      if (!authState?.user) return false;
+      if (!authState?.user) return "";
       const id = popPendingSavePropertyId();
-      if (!id) return false;
+      if (!id) return "";
       const property = findPropertyForUi(id);
-      if (!property) return false;
+      if (!property) return "";
       if (!isPropertySaved(id)) {
         savedIds.add(String(id));
         siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
@@ -6040,7 +6079,19 @@
         saveDashboardState();
         trackEvent("property_save", { property_id: id, source: "post_auth" });
       }
-      return true;
+      return id;
+    }
+
+    async function syncSavedStateAfterAuth(pendingSaveId = "") {
+      if (!authState?.token) return;
+      try {
+        if (pendingSaveId) {
+          await syncSavedPropertyToServer(pendingSaveId, true);
+        }
+        await refreshSavedPropertiesFromServer({ silent: true });
+      } catch (e) {
+        console.warn("Unable to sync saved properties", e);
+      }
     }
 
     function getCurrentUserActivity() {
@@ -8322,6 +8373,7 @@
       loadSavedIdsForCurrentUser();
       applyAuthUi();
       if (authState?.token) {
+        refreshSavedPropertiesFromServer({ silent: true });
         refreshAuthSession();
       }
     }
@@ -8341,13 +8393,14 @@
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
       } catch (e) {}
       loadSavedIdsForCurrentUser();
-      const appliedPendingSave = applyPendingSaveAfterAuth();
+      const pendingSaveId = applyPendingSaveAfterAuth();
       applyAuthUi();
       renderFinderDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
       renderAdminDashboard();
-      if (appliedPendingSave) toast("Property saved to your account.");
+      if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
+      if (pendingSaveId) toast("Property saved to your account.");
     }
 
     function clearAuthState() {
@@ -15377,7 +15430,7 @@
       renderGrid(gridMap[page], list);
     }
 
-    function toggleSave(id) {
+    async function toggleSave(id) {
       const key = String(id);
       if (!authState?.user) {
         setPendingSavePropertyId(key);
@@ -15386,24 +15439,31 @@
         trackEvent("property_save_auth_required", { property_id: id });
         return;
       }
+      const wasSaved = isPropertySaved(key);
       const existing = Array.from(savedIds).find((value) => String(value) === key);
-      if (existing !== undefined) {
+      if (wasSaved && existing !== undefined) {
         savedIds.delete(existing);
         siteMetrics.propertySaves[String(id)] = Math.max(0, (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) - 1);
-        toast("Removed from saved");
-        trackEvent("property_unsave", { property_id: id });
       } else {
         savedIds.add(key);
         siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
-        toast("Property saved");
-        trackEvent("property_save", { property_id: id });
       }
-      persistSavedIdsForCurrentUser();
-      saveDashboardState();
-      renderAll();
-      renderFinderDashboard();
-      renderAgentDashboard();
-      updateDetailSaveButton(id);
+      refreshSavedUi(id);
+
+      try {
+        await syncSavedPropertyToServer(key, !wasSaved);
+        toast(wasSaved ? "Removed from saved" : "Property saved to your account");
+        trackEvent(wasSaved ? "property_unsave" : "property_save", { property_id: id });
+      } catch (e) {
+        if (wasSaved) savedIds.add(key);
+        else savedIds.delete(key);
+        siteMetrics.propertySaves[String(id)] = Math.max(
+          0,
+          (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + (wasSaved ? 1 : -1)
+        );
+        refreshSavedUi(id);
+        toast(`Saved property update failed: ${e.message || "error"}`);
+      }
     }
 
     function updateDetailSaveButton(id) {
