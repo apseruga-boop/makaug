@@ -515,9 +515,9 @@ router.get('/', async (req, res, next) => {
           ELSE 'private'
         END AS listed_by,
         CASE
-          WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'registered')
-          WHEN p.lister_type = 'agent' THEN 'not_registered'
-          ELSE 'not_registered'
+          WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'not_registered')
+          WHEN p.lister_type = 'agent' THEN COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
+          ELSE COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
         END AS registration_status
       FROM properties p
       LEFT JOIN agents a ON a.id = p.agent_id

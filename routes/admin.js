@@ -911,6 +911,76 @@ router.patch('/agents/:id/status', async (req, res, next) => {
   }
 });
 
+router.patch('/agents/:id/registration-status', async (req, res, next) => {
+  try {
+    const registrationStatus = String(req.body.registration_status || '').trim().toLowerCase();
+    const allowedStatuses = ['registered', 'not_registered'];
+
+    if (!allowedStatuses.includes(registrationStatus)) {
+      return res.status(400).json({ ok: false, error: 'Invalid registration_status value' });
+    }
+
+    const updated = await db.query(
+      `UPDATE agents
+       SET registration_status = $2, updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, full_name, company_name, registration_status, updated_at`,
+      [req.params.id, registrationStatus]
+    );
+
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    }
+
+    await writeAudit('admin_agent_registration_status_updated', {
+      agent_id: req.params.id,
+      registration_status: registrationStatus
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/registration-status', async (req, res, next) => {
+  try {
+    const registrationStatus = String(req.body.registration_status || '').trim().toLowerCase();
+    const allowedStatuses = ['registered', 'not_registered'];
+
+    if (!allowedStatuses.includes(registrationStatus)) {
+      return res.status(400).json({ ok: false, error: 'Invalid registration_status value' });
+    }
+
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object(
+             'lister_registration_status', $2::text,
+             'lister_registration_reviewed_at', NOW()::text
+           ),
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, title, extra_fields, updated_at`,
+      [req.params.id, registrationStatus]
+    );
+
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    await writeAudit('admin_property_lister_registration_status_updated', {
+      property_id: req.params.id,
+      registration_status: registrationStatus
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/reports', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);

@@ -160,12 +160,9 @@ router.post('/register', async (req, res, next) => {
 
     const fullName = cleanText(body.full_name);
     const licenceNumber = cleanText(body.licence_number);
-    const registrationStatusInput = cleanText(body.registration_status || 'registered').toLowerCase();
-    const registrationStatus = registrationStatusInput === 'not_registered' ? 'not_registered' : 'registered';
+    const registrationStatus = 'not_registered';
     const listingLimit = 2147483647;
-    const resolvedLicence = registrationStatus === 'registered'
-      ? licenceNumber
-      : (licenceNumber || `UNREG-${Date.now()}`);
+    const resolvedLicence = licenceNumber || `PENDING-${Date.now()}`;
     const phone = cleanText(body.phone);
     const email = cleanText(body.email);
     const listingOtpToken = cleanText(body.listing_otp_token);
@@ -175,7 +172,6 @@ router.post('/register', async (req, res, next) => {
     const errors = [];
 
     if (!fullName) errors.push('full_name is required');
-    if (registrationStatus === 'registered' && !resolvedLicence) errors.push('licence_number is required for registered agents');
     if (!phone) errors.push('phone is required');
 
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');

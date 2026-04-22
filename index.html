@@ -596,6 +596,7 @@
         <a id="nav-mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-ai" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
         <a id="nav-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
+        <a id="nav-africa" onclick="showPage('africa')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Africa Markets</a>
       </div>
       <div class="flex items-center gap-2">
         <button id="nav-list-btn" onclick="openListPropertyOptions()" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</button>
@@ -612,6 +613,7 @@
       <a id="mnav-mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-ai" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
       <a id="mnav-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
+      <a id="mnav-africa" onclick="showPage('africa');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Africa Markets</a>
     </div>
   </nav>
 
@@ -712,6 +714,7 @@
             <div class="bg-green-950/40 border border-green-700/50 rounded-xl p-3 mb-5 text-sm text-green-100">
               <p class="font-semibold text-green-200 mb-1">What you'll need before you start:</p>
               <p>Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
+              <p class="mt-2 text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
             </div>
             <div class="space-y-2.5 text-sm text-green-100 mb-6">
               <div class="flex items-start gap-2"><span class="w-6 h-6 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold mt-0.5">1</span><span><strong class="text-green-200">Start chat:</strong> choose language and listing type (sale, rent, land, commercial, student).</span></div>
@@ -1210,7 +1213,7 @@
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-7xl mx-auto px-4">
         <h1 class="text-3xl font-black serif">Find your perfect broker</h1>
-        <p class="text-green-200 mt-2 text-sm md:text-base">All brokers are certified by the Association of Real Estate Agents Uganda (AREA)</p>
+        <p class="text-green-200 mt-2 text-sm md:text-base">Verified brokers are confirmed by admin review before the public badge is shown.</p>
       </div>
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8">
@@ -1228,9 +1231,9 @@
               <option value="">Any Language</option>
             </select>
             <select id="broker-status-f" onchange="applyBrokerFilters()" class="border border-green-100 rounded-xl px-4 py-3 text-sm bg-white w-full md:w-40">
-              <option value="">Any Status</option>
-              <option value="registered">Registered</option>
-              <option value="not_registered">Not Registered</option>
+              <option value="">Any Verification</option>
+              <option value="registered">AREA Verified</option>
+              <option value="not_registered">Verification pending</option>
             </select>
             <button onclick="openModal('broker-reg-modal')" class="md:ml-auto shrink-0 bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
               + Register as Broker
@@ -1500,6 +1503,11 @@
           <h3 id="fraud-card-3-title" class="text-lg font-bold text-gray-900">Manual Moderation</h3>
           <p id="fraud-card-3-sub" class="text-sm text-gray-600 mt-1">Every new listing is reviewed before going live. High-risk entries are escalated.</p>
         </div>
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="text-3xl mb-2">🏛️</div>
+          <h3 class="text-lg font-bold text-gray-900">Owner Registration Review</h3>
+          <p class="text-sm text-gray-600 mt-1">Verified owner status is added by admin only after follow-up checks, including Ministry of Lands confirmation where needed.</p>
+        </div>
       </div>
 
       <div class="grid lg:grid-cols-2 gap-6">
@@ -1510,6 +1518,7 @@
             <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">2</span><span id="fraud-flow-step-2"><strong>Automated checks:</strong> We run OTP checks, format checks, risk scoring, and duplication detection.</span></li>
             <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">3</span><span id="fraud-flow-step-3"><strong>Team moderation:</strong> High-confidence listings are approved; suspicious ones are held or rejected.</span></li>
             <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">4</span><span id="fraud-flow-step-4"><strong>Decision + notify:</strong> Lister receives status and reason. Approved listings publish to public pages.</span></li>
+            <li class="flex gap-3"><span class="w-7 h-7 rounded-full bg-green-700 text-white font-bold text-xs flex items-center justify-center mt-0.5">5</span><span><strong>Registration review:</strong> MakaUg admin controls owner and broker verification badges after supporting checks are complete.</span></li>
           </ol>
           <div id="fraud-law-note" class="mt-4 p-3 rounded-xl bg-green-50 border border-green-100 text-xs text-green-900">
             We cooperate with lawful authority requests under Ugandan law where fraud, forgery, or impersonation is suspected.
@@ -1541,6 +1550,67 @@
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-3-title" class="text-gray-900">Identity integrity</strong><p id="fraud-monitor-3-sub" class="text-gray-600 mt-1">NIN format mismatch, OTP mismatch, impossible contact patterns.</p></div>
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-4-title" class="text-gray-900">Behavior risk</strong><p id="fraud-monitor-4-sub" class="text-gray-600 mt-1">Bulk spam, repeated complaint signals, repeat fraud patterns.</p></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-africa" class="page">
+    <div class="bg-gradient-to-br from-green-900 via-emerald-800 to-amber-700 py-10 text-white">
+      <div class="max-w-7xl mx-auto px-4">
+        <h1 id="africa-page-title" class="text-3xl md:text-4xl font-black serif">Africa Markets</h1>
+        <p id="africa-page-sub" class="text-green-50 mt-2 max-w-3xl">
+          MakaUg is preparing one trusted property database that can power country-specific sites across Africa while keeping moderation, verification, and broker controls in one place.
+        </p>
+      </div>
+    </div>
+    <div class="max-w-7xl mx-auto px-4 py-10">
+      <div class="grid lg:grid-cols-[1.1fr,0.9fr] gap-6 items-start">
+        <div class="bg-white border border-green-100 rounded-2xl p-6">
+          <div class="text-xs uppercase tracking-wide text-green-700 font-bold mb-2">Expansion Pipeline</div>
+          <h2 class="text-2xl font-black text-gray-900 serif">One platform, country-specific property portals</h2>
+          <p class="text-sm text-gray-600 mt-3 leading-relaxed">
+            Uganda stays the live operating base. The next country pages will share the same moderation logic, owner verification workflow, broker registration controls, and listing database patterns, while each public URL can carry its own market brand.
+          </p>
+          <div class="grid sm:grid-cols-3 gap-3 mt-5 text-sm">
+            <div class="rounded-xl bg-green-50 border border-green-100 p-3">
+              <div class="font-bold text-green-900">Shared Database</div>
+              <p class="text-green-800 mt-1">Listings, brokers, verification history, and fraud signals stay connected.</p>
+            </div>
+            <div class="rounded-xl bg-amber-50 border border-amber-100 p-3">
+              <div class="font-bold text-amber-900">Local URLs</div>
+              <p class="text-amber-800 mt-1">Each country can have its own public site and market language.</p>
+            </div>
+            <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
+              <div class="font-bold text-gray-900">Admin Controlled</div>
+              <p class="text-gray-700 mt-1">Verification and registration remain controlled through the admin workflow.</p>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="text-left bg-white border border-green-100 rounded-2xl p-6 hover:border-green-300 hover:shadow-md transition-all">
+          <div class="rounded-2xl bg-gradient-to-br from-green-50 via-white to-amber-50 border border-green-100 p-5">
+            <svg viewBox="0 0 260 300" role="img" aria-label="Stylized map of Kenya" class="w-full max-w-[260px] mx-auto drop-shadow-sm">
+              <defs>
+                <linearGradient id="kenya-grad" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#166534"></stop>
+                  <stop offset="55%" stop-color="#22c55e"></stop>
+                  <stop offset="100%" stop-color="#d97706"></stop>
+                </linearGradient>
+              </defs>
+              <path d="M134 14 175 33 204 80 197 117 226 166 205 207 166 229 151 273 105 286 75 248 63 204 33 169 46 126 42 82 83 58 105 26Z" fill="url(#kenya-grad)" stroke="#14532d" stroke-width="5" stroke-linejoin="round"></path>
+              <path d="M111 33c12 33 19 66 21 99 2 44-7 86-27 127" fill="none" stroke="#ffffff" stroke-opacity=".72" stroke-width="6" stroke-linecap="round"></path>
+              <circle cx="150" cy="151" r="8" fill="#ffffff"></circle>
+              <text x="162" y="157" font-size="15" font-weight="800" fill="#14532d">Nairobi</text>
+            </svg>
+          </div>
+          <div class="mt-5">
+            <div class="text-xs uppercase tracking-wide text-green-700 font-bold">First Expansion Market</div>
+            <h3 class="text-3xl font-black text-gray-900 serif mt-1">Kenya</h3>
+            <p class="text-sm text-gray-600 mt-2">
+              Placeholder market page ready for the next Kenya-specific HTML build, branding, and URL setup.
+            </p>
+          </div>
+        </button>
       </div>
     </div>
   </div>
@@ -1919,6 +1989,13 @@
             <input id="lp-verify-consent" type="checkbox" class="mt-1 accent-green-700">
             <span id="lp-verify-consent-label">I consent to contact by phone/SMS/email regarding this listing review and verification.</span>
             <span title="makaug may contact you to request missing details, verify ownership, and confirm publishing status within the review window." class="text-xs text-green-700 cursor-help">ⓘ</span>
+          </label>
+          <label class="mt-2 flex items-start gap-2 text-sm text-gray-700 bg-green-50 border border-green-100 rounded-xl p-3">
+            <input id="lp-owner-verification-requested" type="checkbox" class="mt-1 accent-green-700">
+            <span>
+              <strong>Request owner verification / registration review.</strong>
+              <span class="block text-xs text-green-800 mt-1">MakaUg can contact you about the paid Ministry of Lands ownership confirmation process. Public verification is added by admin only after checks are complete.</span>
+            </span>
           </label>
 
           <div class="flex gap-3 mt-6">
@@ -2380,11 +2457,11 @@
             <div id="admin-stat-save-view-ratio" class="text-3xl font-black text-gray-900 mt-1">0%</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Registered Brokers</div>
+            <div class="text-sm text-gray-500">Verified Brokers</div>
             <div id="admin-stat-registered-agents" class="text-3xl font-black text-green-700 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Not Registered Brokers</div>
+            <div class="text-sm text-gray-500">Verification Pending Brokers</div>
             <div id="admin-stat-not-registered-agents" class="text-3xl font-black text-amber-600 mt-1">0</div>
           </div>
         </div>
@@ -2395,6 +2472,16 @@
             <div class="text-xs text-gray-500">Review checklist before approval</div>
           </div>
           <div id="admin-pending-table" class="space-y-3"></div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Recently Actioned Listings</h3>
+              <p class="text-xs text-gray-500 mt-1">Once approved, rejected, hidden, or deleted, listings move out of Pending and appear here.</p>
+            </div>
+          </div>
+          <div id="admin-actioned-table" class="space-y-3"></div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -2833,21 +2920,14 @@
 
         <div id="auth-signup-form-wrap">
           <div id="auth-signup-agent-registration-wrap" class="hidden mb-4 rounded-xl border border-green-100 bg-green-50 p-3">
-            <label class="block text-sm font-semibold text-gray-800 mb-2">Broker registration status *</label>
-            <div class="grid sm:grid-cols-2 gap-2">
-              <label class="border border-green-200 rounded-lg px-3 py-2 bg-white text-sm flex items-start gap-2 cursor-pointer">
-                <input type="radio" name="auth-agent-registration-status" value="registered" checked onchange="syncAuthAgentSignupForm()">
-                <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">AREA verified profile</span></span>
-              </label>
-              <label class="border border-green-200 rounded-lg px-3 py-2 bg-white text-sm flex items-start gap-2 cursor-pointer">
-                <input type="radio" name="auth-agent-registration-status" value="not_registered" onchange="syncAuthAgentSignupForm()">
-                <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Can be reviewed and upgraded later</span></span>
-              </label>
+            <label class="block text-sm font-semibold text-gray-800 mb-2">Broker verification review</label>
+            <div class="rounded-lg border border-green-200 bg-white px-3 py-2 text-sm text-gray-700">
+              Broker verification is approved by MakaUg admin after document and ownership checks. Submit your details now; the team can contact you about AREA or Ministry of Lands verification before a public verified badge is shown.
             </div>
-            <div id="auth-signup-agent-note" class="mt-2 text-xs text-green-700">Registered profiles appear as Registered after AREA checks are complete.</div>
+            <div id="auth-signup-agent-note" class="mt-2 text-xs text-green-700">Public broker verification badges are admin controlled.</div>
             <div id="auth-signup-agent-licence-wrap" class="mt-3">
-              <label class="block text-sm font-medium text-gray-800 mb-1.5">AREA Licence Number</label>
-              <input id="auth-signup-agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="e.g. AREA/2024/XXXX">
+              <label class="block text-sm font-medium text-gray-800 mb-1.5">AREA Licence Number (optional)</label>
+              <input id="auth-signup-agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Add it if you already have one">
             </div>
           </div>
 
@@ -2933,30 +3013,23 @@
     <div class="modal-box" style="max-width:640px">
       <button onclick="closeModal('broker-reg-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
       <h2 class="text-2xl font-bold text-gray-800 serif">Register as a Broker</h2>
-      <p class="text-sm text-gray-500 mt-1 mb-5">Choose your registration path below. The form changes based on whether you are already registered with <strong>AREA Uganda</strong>.</p>
+      <p class="text-sm text-gray-500 mt-1 mb-5">Submit your broker profile for review. MakaUg admin controls public verification after document, AREA, and ownership checks.</p>
 
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-800 mb-2">Broker Registration Status *</label>
-          <div class="grid sm:grid-cols-2 gap-2">
-            <label class="border border-green-100 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="agent-registration-status" value="registered" checked onchange="syncAgentRegistrationForm()">
-              <span><strong>Registered with AREA</strong><br><span class="text-xs text-gray-500">AREA verified profile</span></span>
-            </label>
-            <label class="border border-green-100 rounded-xl px-3 py-2.5 text-sm flex items-center gap-2 cursor-pointer">
-              <input type="radio" name="agent-registration-status" value="not_registered" onchange="syncAgentRegistrationForm()">
-              <span><strong>Not registered yet</strong><br><span class="text-xs text-gray-500">Can be reviewed and upgraded later</span></span>
-            </label>
+          <label class="block text-sm font-medium text-gray-800 mb-2">Verification review</label>
+          <div class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-green-50 text-green-900">
+            Public verification is not self-declared. If you already have AREA documents, add them below; otherwise the team can contact you about the verification process.
           </div>
           <p id="agent-status-note" class="text-xs text-green-700 mt-2">This broker profile will be reviewed before approval.</p>
         </div>
 
         <div id="agent-registered-note" class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          ⚠️ Registered brokers must provide a valid AREA licence and certificate. Approved profiles appear as <strong>Registered</strong>.
+          Verification badges are added by admin after supporting checks are complete.
         </div>
 
         <div id="agent-not-registered-note" class="hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
-          ℹ️ You can continue without AREA documents for now. Profiles appear as <strong>Not Registered</strong> until verification is completed. You can upgrade to Registered later.
+          You can continue without AREA documents for now. The profile will remain in verification review until admin updates it.
         </div>
 
         <div>
@@ -2965,8 +3038,8 @@
         </div>
 
         <div id="agent-licence-wrap">
-          <label id="agent-licence-label" class="block text-sm font-medium text-gray-800 mb-2">AREA Uganda Licence Number *</label>
-          <input id="agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. AREA/2024/XXXX">
+          <label id="agent-licence-label" class="block text-sm font-medium text-gray-800 mb-2">AREA Uganda Licence Number (optional)</label>
+          <input id="agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Add it if available">
         </div>
 
         <div>
@@ -3029,7 +3102,7 @@
         </div>
 
         <div id="agent-certificate-wrap">
-          <label id="agent-certificate-label" class="block text-sm font-medium text-gray-800 mb-2">Upload AREA Certificate *</label>
+          <label id="agent-certificate-label" class="block text-sm font-medium text-gray-800 mb-2">Upload AREA Certificate (optional)</label>
           <button type="button" onclick="toast('Certificate upload coming soon')" class="w-full border-2 border-dashed border-green-100 rounded-2xl py-10 px-4 text-center hover:bg-green-50 transition-all">
             <div class="text-4xl mb-2 text-gray-400">📎</div>
             <div class="font-semibold text-gray-700">Upload your AREA Uganda Certificate</div>
@@ -3467,6 +3540,7 @@
         navMortgage: "Mortgage Finder",
         navAI: "Discover AI Chatbot",
         navFraud: "Fraud",
+        navAfrica: "Africa Markets",
         heroBadge: "Uganda's #1 Free Property Platform",
         heroTitleHtml: "Discover your perfect <span class=\"text-green-300\">maka</span>",
         heroSubtitle: "Your home search starts here. Find properties to rent, buy or invest.",
@@ -3492,6 +3566,7 @@
         pageAbout: "About makaug.com",
         pageSaved: "Saved Properties",
         pageAccount: "My Account",
+        pageAfrica: "Africa Markets",
         langLabel: "Language",
         langBanner: "Use makaug in 7 Ugandan languages",
         areaOnly: "This area only",
@@ -3531,8 +3606,8 @@
         badgeLand: "Land",
         listingAgent: "Broker Listed",
         listingPrivate: "Private Listed",
-        listingRegistered: "Registered",
-        listingNotRegistered: "Not Registered",
+        listingRegistered: "Verified",
+        listingNotRegistered: "Verification Pending",
         footerGrowth: "Google Ads ready and SEO-indexing enabled for growth campaigns.",
         languageSet: "Language set"
       },
@@ -3593,7 +3668,7 @@
         listingAgent: "Eteekeddwako Broker",
         listingPrivate: "Eteekeddwako Nnyiniyo",
         listingRegistered: "Akwatiddwa",
-        listingNotRegistered: "Tannakwatiddwa",
+        listingNotRegistered: "Verification Pending",
         footerGrowth: "Google Ads zitegekeddwa era SEO indexing etegeke okuyamba okukula.",
         languageSet: "Olulimi lulondeddwa"
       },
@@ -3654,7 +3729,7 @@
         listingAgent: "Imeorodheshwa na Broker",
         listingPrivate: "Imeorodheshwa na Mmiliki",
         listingRegistered: "Amesajiliwa",
-        listingNotRegistered: "Hajasajiliwa",
+        listingNotRegistered: "Verification Pending",
         footerGrowth: "Google Ads iko tayari na SEO indexing imewezeshwa kwa ukuaji.",
         languageSet: "Lugha imewekwa"
       },
@@ -3687,7 +3762,7 @@
         listingAgent: "Broker omako",
         listingPrivate: "Lac ma pe broker",
         listingRegistered: "Akwannye",
-        listingNotRegistered: "Pe akwannye",
+        listingNotRegistered: "Verification Pending",
         languageSet: "Dhok oketo"
       },
       ny: {
@@ -3719,7 +3794,7 @@
         listingAgent: "Bya broker",
         listingPrivate: "Bya nnyiniyo",
         listingRegistered: "Ari omwandikisi",
-        listingNotRegistered: "Tari mwandikisi",
+        listingNotRegistered: "Verification Pending",
         languageSet: "Orurimi rwahinduka"
       },
       rn: {
@@ -3751,7 +3826,7 @@
         listingAgent: "Byashyizweho na broker",
         listingPrivate: "Byashyizweho na nyirabyo",
         listingRegistered: "Yiyandikishije",
-        listingNotRegistered: "Ntiyiyandikishije",
+        listingNotRegistered: "Verification Pending",
         languageSet: "Orurimi rwahindurwa"
       },
       sm: {
@@ -3783,7 +3858,7 @@
         listingAgent: "Byateekebwawo na broker",
         listingPrivate: "Byateekebwawo na nnyini",
         listingRegistered: "Awandiikiddwa",
-        listingNotRegistered: "Tawandiikiddwa",
+        listingNotRegistered: "Verification Pending",
         languageSet: "Olulimi luhindukiddwa"
       }
     };
@@ -5485,6 +5560,7 @@
       setTextById("nav-mortgage", tr("navMortgage"));
       setTextById("nav-ai", tr("navAI"));
       setTextById("nav-fraud", tr("navFraud"));
+      setTextById("nav-africa", tr("navAfrica"));
       setTextById("mnav-sale", tr("navSale"));
       setTextById("mnav-rent", tr("navRent"));
       setTextById("mnav-students", tr("navStudents"));
@@ -5494,6 +5570,7 @@
       setTextById("mnav-mortgage", tr("navMortgage"));
       setTextById("mnav-ai", tr("navAI"));
       setTextById("mnav-fraud", tr("navFraud"));
+      setTextById("mnav-africa", tr("navAfrica"));
       setTextById("nav-list-btn", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
 
@@ -5523,6 +5600,7 @@
       setPageHeading("page-brokers", tr("pageBrokers"));
       setPageHeading("page-mortgage", tr("pageMortgage"));
       setPageHeading("page-ai-chatbot", tr("pageAI"));
+      setPageHeading("page-africa", tr("pageAfrica"));
       setPageHeading("page-list-property", tr("pageList"));
       setPageHeading("page-about", tr("pageAbout"));
       setPageHeading("page-saved", tr("pageSaved"));
@@ -5995,19 +6073,12 @@
     function syncAuthAgentSignupForm() {
       const wrap = document.getElementById("auth-signup-agent-registration-wrap");
       if (!wrap || wrap.classList.contains("hidden")) return;
-      const status = document.querySelector('input[name="auth-agent-registration-status"]:checked')?.value || "registered";
       const note = document.getElementById("auth-signup-agent-note");
       const licenceWrap = document.getElementById("auth-signup-agent-licence-wrap");
       const licenceInput = document.getElementById("auth-signup-agent-licence");
-      if (status === "registered") {
-        if (note) note.textContent = "Registered profiles appear as Registered after AREA checks are complete.";
-        if (licenceWrap) licenceWrap.classList.remove("hidden");
-        if (licenceInput) licenceInput.placeholder = "e.g. AREA/2024/XXXX";
-      } else {
-        if (note) note.textContent = "Not registered profiles are shown as Not Registered until verification is complete.";
-        if (licenceWrap) licenceWrap.classList.add("hidden");
-        if (licenceInput) licenceInput.value = "";
-      }
+      if (note) note.textContent = "Public broker verification badges are admin controlled.";
+      if (licenceWrap) licenceWrap.classList.remove("hidden");
+      if (licenceInput) licenceInput.placeholder = "Add it if you already have one";
     }
 
     function setAuthSignUpAudience(mode) {
@@ -6155,7 +6226,7 @@
 
       if (nameEl) nameEl.textContent = `${broker.name} • ${broker.company}`;
       if (statusEl) {
-        const regLabel = broker.registration_status === "registered" ? "Registered" : "Not Registered";
+        const regLabel = broker.registration_status === "registered" ? "AREA Verified" : "Verification pending";
         statusEl.textContent = `${regLabel} broker`;
       }
 
@@ -6500,6 +6571,12 @@
       return { cls: "bg-gray-100 text-gray-700", label: st || "Unknown" };
     }
 
+    function adminVerificationBadge(status) {
+      const st = String(status || "").toLowerCase() === "registered" ? "registered" : "not_registered";
+      if (st === "registered") return { cls: "bg-green-100 text-green-700", label: "Verified / Registered" };
+      return { cls: "bg-gray-100 text-gray-700", label: "Verification pending" };
+    }
+
     async function fetchRemoteAdminSnapshot() {
       if (!canUseLiveAdminApi()) return null;
       const headers = adminAuthHeaders();
@@ -6557,6 +6634,51 @@
               <button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
             </div>
         </div>`;
+      }).join("");
+    }
+
+    function renderAdminActionedRows(listings) {
+      const wrap = document.getElementById("admin-actioned-table");
+      if (!wrap) return;
+      const view = [...(listings || [])]
+        .filter((p) => ["approved", "rejected", "hidden", "deleted"].includes(normalizeModerationStatus(p.status)))
+        .sort((a, b) => {
+          const ad = parseDateSafe(a.reviewed_at || a.approved_at || a.updated_at || a.created_at)?.getTime() || 0;
+          const bd = parseDateSafe(b.reviewed_at || b.approved_at || b.updated_at || b.created_at)?.getTime() || 0;
+          return bd - ad;
+        })
+        .slice(0, 10);
+      if (!view.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No actioned listings yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = view.map((p) => {
+        const status = normalizeModerationStatus(p.status);
+        const meta = adminStatusBadge(status);
+        const id = String(p.backend_id || p.id || "");
+        const idArg = adminListingIdArg(id);
+        const actionText = status === "approved"
+          ? "Moved to Live Listings"
+          : status === "rejected"
+            ? "Moved to Rejected"
+            : status === "hidden"
+              ? "Moved to Hidden"
+              : "Moved to Deleted";
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(actionText)} • ${adminEscape(formatListingDate(p.reviewed_at || p.approved_at || p.updated_at || p.created_at))}</div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
+            </div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Record</button>
+              ${status === "approved" ? `<button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Owner Message</button>` : ""}
+            </div>
+          </div>`;
       }).join("");
     }
 
@@ -6765,6 +6887,7 @@
       if (sourceEl) sourceEl.textContent = sourceLabel;
 
       renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
+      renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
@@ -6778,6 +6901,7 @@
           <div class="font-semibold text-gray-800">${a.full_name || a.name || "-"}</div>
           <div class="text-xs text-gray-500">${a.company_name || a.company || "-"}</div>
           <div class="text-xs text-gray-500 mt-1">${a.licence_number || a.licence || "No licence recorded"}</div>
+          <div class="text-[11px] mt-1"><span class="inline-flex px-2 py-0.5 rounded-full ${adminVerificationBadge(a.registration_status).cls}">${adminVerificationBadge(a.registration_status).label}</span></div>
           <div class="text-[11px] mt-1"><span class="inline-flex px-2 py-0.5 rounded-full ${String(a.status || "").toLowerCase() === "approved" ? "bg-green-100 text-green-700" : String(a.status || "").toLowerCase() === "rejected" ? "bg-red-100 text-red-700" : String(a.status || "").toLowerCase() === "suspended" ? "bg-yellow-100 text-yellow-700" : "bg-amber-100 text-amber-700"}">${a.status || "pending"}</span></div>
           ${canUseLiveAdminApi() && a.id ? `
           <div class="flex flex-wrap gap-1.5 mt-2">
@@ -6785,6 +6909,8 @@
             <button onclick="adminSetAgentStatus('${a.id}','pending')" class="bg-amber-500 hover:bg-amber-400 text-white px-2 py-1 rounded text-[11px] font-semibold">Pending</button>
             <button onclick="adminSetAgentStatus('${a.id}','rejected')" class="bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded text-[11px] font-semibold">Reject</button>
             <button onclick="adminSetAgentStatus('${a.id}','suspended')" class="bg-yellow-500 hover:bg-yellow-400 text-white px-2 py-1 rounded text-[11px] font-semibold">Suspend</button>
+            <button onclick="adminSetAgentRegistrationStatus('${a.id}','registered')" class="border border-green-700 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[11px] font-semibold">Mark Verified</button>
+            <button onclick="adminSetAgentRegistrationStatus('${a.id}','not_registered')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-semibold">Mark Pending</button>
           </div>` : ""}
         </div>`);
       renderAdminList("admin-recent-reports", remoteSnap?.recent?.recentReports || localSnap.recentReports, (r) => `
@@ -7143,6 +7269,9 @@
       const canApprove = automated?.can_approve !== false;
       const events = Array.isArray(review.events) ? review.events : [];
       const reviewIdArg = adminListingIdArg(review.id);
+      const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
+      const listerVerification = adminVerificationBadge(listerVerificationStatus);
+      const ownerVerificationRequested = review.extra_fields?.ownership_verification_requested || review.extra_fields?.verify?.ownership_verification_requested;
       const automatedBadge = automated.status === "pass"
         ? { cls: "bg-green-100 text-green-700", label: "Automated checks passed" }
         : automated.status === "warning"
@@ -7190,6 +7319,19 @@
                 <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
                 <div><span class="text-gray-500">ID supplied:</span> ${review.id_number ? `<button onclick="copyAdminEvidenceText('${adminAttr(idEvidenceId)}','id_number')" class="font-mono font-semibold text-green-700 hover:underline">${adminEscape(review.id_number)}</button>` : "No"}</div>
                 <div><span class="text-gray-500">Public name:</span> ${adminEscape(review.extra_fields?.public_display_name || review.lister_name || "-")}</div>
+              </div>
+              <div class="mt-4 border border-green-100 rounded-xl p-3 bg-green-50">
+                <div class="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <div class="text-xs uppercase tracking-wide text-green-800 font-semibold">Owner Verification</div>
+                    <div class="mt-1 inline-flex items-center px-2 py-1 rounded ${listerVerification.cls} text-xs font-semibold">${listerVerification.label}</div>
+                    <p class="text-xs text-green-900 mt-2">${ownerVerificationRequested ? "Lister requested MakaUg ownership registration review." : "No owner registration request from the lister yet."}</p>
+                  </div>
+                  <div class="flex gap-2 flex-wrap">
+                    <button onclick="adminSetPropertyRegistrationStatus(${reviewIdArg}, 'registered')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Verified</button>
+                    <button onclick="adminSetPropertyRegistrationStatus(${reviewIdArg}, 'not_registered')" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Pending</button>
+                  </div>
+                </div>
               </div>
               <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
                 <div class="flex items-center justify-between gap-2 mb-2">
@@ -7509,6 +7651,50 @@
         toast(`Broker updated: ${status}.`);
       } catch (e) {
         toast(`Broker update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetAgentRegistrationStatus(agentId, registrationStatus) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/registration-status`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { registration_status: registrationStatus }
+        });
+        await renderAdminDashboard();
+        toast(registrationStatus === "registered" ? "Broker marked verified." : "Broker verification set to pending.");
+      } catch (e) {
+        toast(`Broker verification update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetPropertyRegistrationStatus(propertyId, registrationStatus) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/registration-status`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { registration_status: registrationStatus }
+        });
+        if (adminActiveReview?.id && String(adminActiveReview.id) === String(propertyId)) {
+          adminActiveReview.extra_fields = {
+            ...(adminActiveReview.extra_fields || {}),
+            ...(response?.data?.extra_fields || {}),
+            lister_registration_status: registrationStatus
+          };
+          renderAdminReviewPanel(adminActiveReview);
+        }
+        await renderAdminDashboard();
+        toast(registrationStatus === "registered" ? "Owner marked verified." : "Owner verification set to pending.");
+      } catch (e) {
+        toast(`Owner verification update failed: ${e.message || "error"}`);
       }
     }
 
@@ -7854,7 +8040,7 @@
       const role = (document.getElementById("auth-signup-role")?.value || "").trim();
       const password = (document.getElementById("auth-signup-password")?.value || "").trim();
       const otpChannel = authSignUpOtpChannel === "email" ? "email" : "phone";
-      const registrationStatus = document.querySelector('input[name="auth-agent-registration-status"]:checked')?.value || "registered";
+      const registrationStatus = "not_registered";
       const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
 
       if (!firstName || !lastName || !phone || !password) {
@@ -7869,11 +8055,6 @@
         toast("Broker account signup requires an email address.");
         return;
       }
-      if (authSignUpAudience === "agent" && registrationStatus === "registered" && !areaLicenceNumber) {
-        toast("Please enter AREA licence number for registered broker signup.");
-        return;
-      }
-
       setButtonLoading("auth-signup-btn", true);
       try {
         const register = await apiRequest("/api/auth/register", {
@@ -9133,6 +9314,7 @@
       const studentsWelcome = type === "student" || extra.students_welcome === "yes";
       const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
       const fieldAgentId = lpVal("lp-field-agent-id") || null;
+      const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
       const inquiryReference = lpInquiryReference || generateListingInquiryRef();
       lpInquiryReference = inquiryReference;
       const newUntil = new Date(Date.now() + LISTING_NEW_WINDOW_MS).toISOString();
@@ -9188,6 +9370,8 @@
           resolved_location_label: lpResolvedLocationLabel || null,
           public_display_name: publicDisplayName || null,
           area_highlights: areaHighlights,
+          ownership_verification_requested: ownerVerificationRequested,
+          lister_registration_status: "not_registered",
           nearby_facilities: nearbyFacilities.map((item) => ({
             name: item.name,
             type: item.kind,
@@ -9210,7 +9394,8 @@
             public_display_name: publicDisplayName || null,
             otp_channel: lpListingOtpChannel === "email" ? "email" : "phone",
             field_agent_assisted: fieldAgentAssisted,
-            field_agent_id: fieldAgentAssisted ? fieldAgentId : null
+            field_agent_id: fieldAgentAssisted ? fieldAgentId : null,
+            ownership_verification_requested: ownerVerificationRequested
           },
           field_agent_assisted: fieldAgentAssisted,
           field_agent_id: fieldAgentAssisted ? fieldAgentId : null
@@ -9739,15 +9924,13 @@
       const email = (document.getElementById("agent-email")?.value || "").trim().toLowerCase();
       const districtsCovered = (document.getElementById("agent-areas")?.value || "").trim();
       const nin = normalizeNinInput((document.getElementById("agent-nin")?.value || "").trim());
-      const registrationStatus = document.querySelector('input[name="agent-registration-status"]:checked')?.value || "registered";
+      const registrationStatus = "not_registered";
       const fieldAgentAssisted = (document.getElementById("agent-field-assisted")?.value || "no") === "yes";
       const fieldAgentId = (document.getElementById("agent-field-id")?.value || "").trim();
       const otpChannel = agentOtpChannel === "email" ? "email" : "phone";
-      const resolvedLicenceNumber = registrationStatus === "registered"
-        ? licenceNumber
-        : (licenceNumber || `UNREG-${Date.now()}`);
+      const resolvedLicenceNumber = licenceNumber || `PENDING-${Date.now()}`;
 
-      if (!fullName || !phone || !email || !districtsCovered || !nin || (registrationStatus === "registered" && !licenceNumber)) {
+      if (!fullName || !phone || !email || !districtsCovered || !nin) {
         toast("Please complete all required broker fields.");
         return;
       }
@@ -9795,13 +9978,14 @@
             districts_covered: districtsCovered,
             nin,
             registration_status: registrationStatus,
+            registration_request: "admin_review",
             otp_channel: otpChannel,
             listing_otp_token: agentRegistrationOtpToken,
             bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
           }
         });
         await trackEvent("agent_register_submit", { district_scope: districtsCovered });
-        toast(`Application submitted. ${registrationStatus === "registered" ? "Registered" : "Not registered"} profile set.`);
+        toast("Application submitted. Broker verification will be reviewed by admin.");
         closeModal("broker-reg-modal");
       } catch (error) {
         toast(error.message || "Could not submit application.");
@@ -9811,7 +9995,6 @@
     }
 
     function syncAgentRegistrationForm() {
-      const registrationStatus = document.querySelector('input[name="agent-registration-status"]:checked')?.value || "registered";
       const licenceLabel = document.getElementById("agent-licence-label");
       const certificateLabel = document.getElementById("agent-certificate-label");
       const licenceInput = document.getElementById("agent-licence");
@@ -9821,27 +10004,15 @@
       const registeredNote = document.getElementById("agent-registered-note");
       const notRegisteredNote = document.getElementById("agent-not-registered-note");
 
-      if (registrationStatus === "registered") {
-        if (fullNameInput) fullNameInput.placeholder = "As on your AREA certificate";
-        if (licenceLabel) licenceLabel.textContent = "AREA Uganda Licence Number *";
-        if (certificateLabel) certificateLabel.textContent = "Upload AREA Certificate *";
-        if (licenceInput) licenceInput.placeholder = "e.g. AREA/2024/XXXX";
-        if (licenceWrap) licenceWrap.classList.remove("hidden");
-        if (certificateWrap) certificateWrap.classList.remove("hidden");
-        if (certificateWrap) certificateWrap.classList.remove("opacity-70");
-        if (registeredNote) registeredNote.classList.remove("hidden");
-        if (notRegisteredNote) notRegisteredNote.classList.add("hidden");
-      } else {
-        if (fullNameInput) fullNameInput.placeholder = "As on your legal National ID";
-        if (licenceLabel) licenceLabel.textContent = "AREA Uganda Licence Number (optional for now)";
-        if (certificateLabel) certificateLabel.textContent = "Upload AREA Certificate (optional for now)";
-        if (licenceInput) licenceInput.placeholder = "Leave blank if not registered yet";
-        if (licenceWrap) licenceWrap.classList.add("hidden");
-        if (certificateWrap) certificateWrap.classList.add("hidden");
-        if (certificateWrap) certificateWrap.classList.add("opacity-70");
-        if (registeredNote) registeredNote.classList.add("hidden");
-        if (notRegisteredNote) notRegisteredNote.classList.remove("hidden");
-      }
+      if (fullNameInput) fullNameInput.placeholder = "As on your legal National ID";
+      if (licenceLabel) licenceLabel.textContent = "AREA Uganda Licence Number (optional)";
+      if (certificateLabel) certificateLabel.textContent = "Upload AREA Certificate (optional)";
+      if (licenceInput) licenceInput.placeholder = "Add it if available";
+      if (licenceWrap) licenceWrap.classList.remove("hidden");
+      if (certificateWrap) certificateWrap.classList.remove("hidden");
+      if (certificateWrap) certificateWrap.classList.remove("opacity-70");
+      if (registeredNote) registeredNote.classList.remove("hidden");
+      if (notRegisteredNote) notRegisteredNote.classList.add("hidden");
     }
 
     function toggleAgentFieldIdInput() {
@@ -11215,10 +11386,12 @@
     function listingRegistrationMeta(p) {
       const broker = BROKERS.find((b) => b.id === p?.agent);
       const status = String(
+        p?.lister_registration_status ||
+        p?.extra_fields?.lister_registration_status ||
         p?.registration_status ||
         p?.agent_registration_status ||
         broker?.registration_status ||
-        ((p?.agent || (p?.listed_by || "").toLowerCase() === "agent") ? "registered" : "not_registered")
+        "not_registered"
       ).toLowerCase();
       const isRegistered = status === "registered";
       if (isRegistered) {
@@ -11230,24 +11403,24 @@
       }
       return {
         label: tr("listingNotRegistered"),
-        cls: "bg-amber-600 text-white",
-        icon: "fas fa-circle-exclamation"
+        cls: "bg-slate-600 text-white",
+        icon: "fas fa-shield-halved"
       };
     }
 
     function brokerRegistrationMeta(broker) {
-      const isRegistered = (broker?.registration_status || "registered") === "registered";
+      const isRegistered = (broker?.registration_status || "not_registered") === "registered";
       if (isRegistered) {
         return {
-          label: "AREA Registered",
+          label: "AREA Verified",
           cls: "bg-green-50 text-green-700",
           icon: "fas fa-circle-check"
         };
       }
       return {
-        label: "Not Registered",
-        cls: "bg-amber-50 text-amber-700",
-        icon: "fas fa-circle-exclamation"
+        label: "Verification pending",
+        cls: "bg-gray-50 text-gray-700",
+        icon: "fas fa-shield-halved"
       };
     }
 
@@ -11773,6 +11946,8 @@
         lng: Number(p?.longitude),
         status: p?.status || "pending",
         moderation_status: normalizeModerationStatus(p?.status),
+        registration_status: p?.registration_status || p?.agent_registration_status || p?.extra_fields?.lister_registration_status || "not_registered",
+        lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
         inquiry_reference: p?.inquiry_reference || "",
         lister_display_name: p?.lister_name || p?.contact_display_name || "",
         images: imageItems,
