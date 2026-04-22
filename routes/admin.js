@@ -266,7 +266,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
 router.get('/summary', async (req, res, next) => {
   try {
-    const [properties, agents, reports, requests, inquiries, users] = await Promise.all([
+    const [properties, agents, reports, requests, inquiries, users, engagement] = await Promise.all([
       db.query(
         `SELECT
           COUNT(*)::int AS total,
@@ -302,8 +302,20 @@ router.get('/summary', async (req, res, next) => {
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE status = 'active')::int AS active,
           COUNT(*) FILTER (WHERE status = 'suspended')::int AS suspended,
-          COUNT(*) FILTER (WHERE phone_verified = TRUE)::int AS phone_verified
+          COUNT(*) FILTER (WHERE phone_verified = TRUE)::int AS phone_verified,
+          COUNT(*) FILTER (WHERE weekly_tips_opt_in = TRUE)::int AS weekly_tips_opt_in,
+          COUNT(*) FILTER (WHERE marketing_opt_in = TRUE)::int AS marketing_opt_in,
+          COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int AS social_linked
          FROM users`
+      ),
+      db.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+          COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
+          COUNT(*) FILTER (WHERE event_name IN ('broker_profile_open','broker_profile_view'))::int AS broker_profile_views,
+          COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
+          COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
+         FROM analytics_events`
       )
     ]);
 
@@ -315,7 +327,8 @@ router.get('/summary', async (req, res, next) => {
         users: users.rows[0],
         reports: reports.rows[0],
         propertyRequests: requests.rows[0],
-        inquiries: inquiries.rows[0]
+        inquiries: inquiries.rows[0],
+        engagement: engagement.rows[0]
       }
     });
   } catch (error) {
@@ -345,7 +358,21 @@ router.get('/recent', async (req, res, next) => {
          LIMIT 20`
       ),
       db.query(
-        `SELECT id, first_name, last_name, phone, email, role, status, phone_verified, created_at
+        `SELECT
+          id,
+          first_name,
+          last_name,
+          phone,
+          email,
+          role,
+          status,
+          phone_verified,
+          marketing_opt_in,
+          weekly_tips_opt_in,
+          preferred_contact_channel,
+          oauth_provider,
+          last_login_at,
+          created_at
          FROM users
          ORDER BY created_at DESC
          LIMIT 20`
@@ -641,10 +668,9 @@ router.get('/users', async (req, res, next) => {
     const { page, limit, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim().toLowerCase();
     const rawStatus = String(req.query.status || '').trim().toLowerCase();
-    const status = ['live', 'active', 'published'].includes(rawStatus)
-      ? 'queued'
-      : rawStatus;
+    const status = rawStatus;
     const role = String(req.query.role || '').trim().toLowerCase();
+    const weeklyTipsOnly = String(req.query.weekly_tips_only || '').trim().toLowerCase();
 
     const filters = [];
     const values = [];
@@ -666,6 +692,9 @@ router.get('/users', async (req, res, next) => {
       values.push(role);
       filters.push(`u.role = $${values.length}`);
     }
+    if (['1', 'true', 'yes'].includes(weeklyTipsOnly)) {
+      filters.push('u.weekly_tips_opt_in = TRUE');
+    }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
     const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM users u ${where}`, values);
@@ -682,10 +711,18 @@ router.get('/users', async (req, res, next) => {
         u.role,
         u.status,
         u.phone_verified,
+        u.marketing_opt_in,
+        u.weekly_tips_opt_in,
+        u.preferred_contact_channel,
+        u.oauth_provider,
         u.last_login_at,
         u.created_at,
         COALESCE(p.listings_count, 0) AS listings_count,
-        COALESCE(i.inquiries_count, 0) AS inquiries_count
+        COALESCE(i.inquiries_count, 0) AS inquiries_count,
+        COALESCE(e.property_views_count, 0) AS property_views_count,
+        COALESCE(e.property_saves_count, 0) AS property_saves_count,
+        COALESCE(e.route_events_count, 0) AS route_events_count,
+        e.last_activity_at
       FROM users u
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS listings_count
@@ -697,6 +734,18 @@ router.get('/users', async (req, res, next) => {
         FROM property_inquiries i
         WHERE i.contact_phone = u.phone OR i.contact_email = u.email
       ) i ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (WHERE ae.event_name IN ('property_open','property_view'))::int AS property_views_count,
+          COUNT(*) FILTER (WHERE ae.event_name IN ('property_save','property_saved','save_property'))::int AS property_saves_count,
+          COUNT(*) FILTER (WHERE ae.event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events_count,
+          MAX(ae.created_at) AS last_activity_at
+        FROM analytics_events ae
+        WHERE ae.user_phone = u.phone
+           OR ae.payload->>'user_id' = u.id::text
+           OR ae.payload->>'user_phone' = u.phone
+           OR (u.email IS NOT NULL AND ae.payload->>'user_email' = LOWER(u.email))
+      ) e ON true
       ${where}
       ORDER BY u.created_at DESC
       LIMIT $${values.length + 1}
@@ -717,7 +766,23 @@ router.get('/users', async (req, res, next) => {
 router.get('/users/:id', async (req, res, next) => {
   try {
     const user = await db.query(
-      `SELECT id, first_name, last_name, phone, email, role, status, phone_verified, last_login_at, created_at, updated_at
+      `SELECT
+         id,
+         first_name,
+         last_name,
+         phone,
+         email,
+         role,
+         status,
+         phone_verified,
+         marketing_opt_in,
+         weekly_tips_opt_in,
+         preferred_contact_channel,
+         oauth_provider,
+         last_login_at,
+         last_weekly_tip_sent_at,
+         created_at,
+         updated_at
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -728,7 +793,7 @@ router.get('/users/:id', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'User not found' });
     }
 
-    const [listings, inquiries] = await Promise.all([
+    const [listings, inquiries, engagement] = await Promise.all([
       db.query(
         `SELECT id, title, listing_type, district, area, status, created_at
          FROM properties
@@ -744,6 +809,18 @@ router.get('/users/:id', async (req, res, next) => {
          ORDER BY created_at DESC
          LIMIT 100`,
         [user.rows[0].phone, user.rows[0].email]
+      ),
+      db.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views_count,
+          COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves_count,
+          COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events_count,
+          MAX(created_at) AS last_activity_at
+         FROM analytics_events
+         WHERE user_phone = $1
+            OR payload->>'user_id' = $2
+            OR payload->>'user_phone' = $1`,
+        [user.rows[0].phone, String(user.rows[0].id)]
       )
     ]);
 
@@ -752,7 +829,8 @@ router.get('/users/:id', async (req, res, next) => {
       data: {
         ...user.rows[0],
         listings: listings.rows,
-        inquiries: inquiries.rows
+        inquiries: inquiries.rows,
+        engagement: engagement.rows[0] || {}
       }
     });
   } catch (error) {

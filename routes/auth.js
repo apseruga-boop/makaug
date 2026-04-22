@@ -28,15 +28,20 @@ function isAdminOtpOverrideEnabled() {
 
 function publicUser(row) {
   if (!row) return null;
+  const phone = String(row.phone || '');
   return {
     id: row.id,
     first_name: row.first_name,
     last_name: row.last_name,
-    phone: row.phone,
+    phone: phone.startsWith('oauth:') ? '' : row.phone,
     email: row.email,
     role: row.role,
     phone_verified: row.phone_verified,
     status: row.status,
+    marketing_opt_in: row.marketing_opt_in !== false,
+    weekly_tips_opt_in: row.weekly_tips_opt_in !== false,
+    preferred_contact_channel: row.preferred_contact_channel || 'whatsapp',
+    oauth_provider: row.oauth_provider || null,
     created_at: row.created_at
   };
 }
@@ -56,6 +61,160 @@ function createToken(user) {
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+}
+
+function getBaseUrl(req) {
+  const configured = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  if (configured) return configured;
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`;
+}
+
+function getOAuthRedirectUri(req, provider) {
+  return `${getBaseUrl(req)}/api/auth/oauth/${provider}/callback`;
+}
+
+function getSocialProviderConfig(req) {
+  return {
+    google: {
+      enabled: !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET),
+      redirect_uri: getOAuthRedirectUri(req, 'google')
+    },
+    facebook: {
+      enabled: !!(process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET),
+      redirect_uri: getOAuthRedirectUri(req, 'facebook')
+    },
+    apple: {
+      enabled: false,
+      setup_required: 'Apple sign-in requires an Apple Developer Service ID, private key, team ID, and callback configuration.'
+    }
+  };
+}
+
+function oauthErrorRedirect(req, message) {
+  const params = new URLSearchParams({ auth_error: message || 'Social sign-in failed' });
+  return `${getBaseUrl(req)}/#${params.toString()}`;
+}
+
+function oauthSuccessRedirect(req, token, user, provider) {
+  const params = new URLSearchParams({
+    auth_token: token,
+    auth_user: JSON.stringify(publicUser(user)),
+    auth_source: provider
+  });
+  return `${getBaseUrl(req)}/#${params.toString()}`;
+}
+
+function createOAuthState(provider, audience) {
+  return jwt.sign(
+    {
+      purpose: 'oauth',
+      provider,
+      audience: ['agent', 'field_agent', 'admin'].includes(audience) ? audience : 'finder'
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '10m' }
+  );
+}
+
+function verifyOAuthState(state, provider) {
+  const decoded = jwt.verify(state, process.env.JWT_SECRET);
+  if (decoded?.purpose !== 'oauth' || decoded?.provider !== provider) {
+    throw new Error('Invalid OAuth state');
+  }
+  return decoded;
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = data?.error_description || data?.error?.message || data?.error || `OAuth request failed (${response.status})`;
+    throw new Error(message);
+  }
+  return data;
+}
+
+function splitDisplayName(profile = {}) {
+  const fullName = cleanText(profile.name || profile.displayName || '');
+  const firstName = cleanText(profile.given_name || profile.first_name || (fullName.split(/\s+/)[0] || 'MakaUg'));
+  const lastName = cleanText(profile.family_name || profile.last_name || (fullName.split(/\s+/).slice(1).join(' ') || 'User'));
+  return { firstName, lastName };
+}
+
+async function findOrCreateOAuthUser({ provider, subject, email, profile, audience }) {
+  const normalizedEmail = normalizeEmail(email);
+  const role = audience === 'agent' ? 'agent_broker' : 'buyer_renter';
+
+  let result = subject
+    ? await db.query(
+        `SELECT *
+         FROM users
+         WHERE oauth_provider = $1 AND oauth_subject = $2 AND status = 'active'
+         LIMIT 1`,
+        [provider, subject]
+      )
+    : { rows: [] };
+
+  if (!result.rows.length && normalizedEmail) {
+    result = await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [normalizedEmail, 'active']);
+  }
+
+  if (result.rows.length) {
+    const updated = await db.query(
+      `UPDATE users
+       SET oauth_provider = COALESCE(oauth_provider, $2),
+           oauth_subject = COALESCE(oauth_subject, $3),
+           oauth_profile = $4::jsonb,
+           last_login_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [result.rows[0].id, provider, subject || null, JSON.stringify(profile || {})]
+    );
+    return updated.rows[0];
+  }
+
+  if (!normalizedEmail) {
+    const error = new Error('Your social account did not return an email address. Please sign up with phone/email.');
+    error.status = 400;
+    throw error;
+  }
+
+  const { firstName, lastName } = splitDisplayName(profile);
+  const generatedPhone = `oauth:${provider}:${subject || normalizedEmail}`;
+  const passwordHash = await bcrypt.hash(`${Date.now()}-${Math.random()}-${provider}`, 10);
+  const inserted = await db.query(
+    `INSERT INTO users (
+      first_name,
+      last_name,
+      phone,
+      email,
+      role,
+      password_hash,
+      phone_verified,
+      status,
+      marketing_opt_in,
+      weekly_tips_opt_in,
+      preferred_contact_channel,
+      oauth_provider,
+      oauth_subject,
+      oauth_profile,
+      last_login_at
+    ) VALUES ($1,$2,$3,$4,$5,$6,true,'active',true,true,'email',$7,$8,$9::jsonb,NOW())
+    RETURNING *`,
+    [
+      firstName,
+      lastName,
+      generatedPhone,
+      normalizedEmail,
+      role,
+      passwordHash,
+      provider,
+      subject || null,
+      JSON.stringify(profile || {})
+    ]
+  );
+  return inserted.rows[0];
 }
 
 function getAuthUserIdFromRequest(req) {
@@ -156,6 +315,122 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
   };
 }
 
+router.get('/social/config', (req, res) => {
+  return res.json({
+    ok: true,
+    data: {
+      providers: getSocialProviderConfig(req)
+    }
+  });
+});
+
+router.get('/oauth/:provider/start', (req, res) => {
+  try {
+    const provider = cleanText(req.params.provider).toLowerCase();
+    const audience = cleanText(req.query.audience).toLowerCase();
+    const providers = getSocialProviderConfig(req);
+    if (!['google', 'facebook'].includes(provider)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported social provider' });
+    }
+    if (!providers[provider]?.enabled) {
+      return res.status(503).json({
+        ok: false,
+        error: `${provider} sign-in is not configured`,
+        details: [`Add ${provider === 'google' ? 'GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET' : 'FACEBOOK_APP_ID and FACEBOOK_APP_SECRET'} in Render environment variables.`]
+      });
+    }
+
+    const redirectUri = getOAuthRedirectUri(req, provider);
+    const state = createOAuthState(provider, audience);
+    if (provider === 'google') {
+      const params = new URLSearchParams({
+        client_id: process.env.GOOGLE_OAUTH_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'openid email profile',
+        state,
+        prompt: 'select_account'
+      });
+      return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+    }
+
+    const params = new URLSearchParams({
+      client_id: process.env.FACEBOOK_APP_ID,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'email,public_profile',
+      state
+    });
+    return res.redirect(`https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`);
+  } catch (error) {
+    logger.error('OAuth start failed', error.message);
+    return res.redirect(oauthErrorRedirect(req, 'Social sign-in could not start'));
+  }
+});
+
+router.get('/oauth/:provider/callback', async (req, res) => {
+  const provider = cleanText(req.params.provider).toLowerCase();
+  try {
+    if (!['google', 'facebook'].includes(provider)) {
+      return res.redirect(oauthErrorRedirect(req, 'Unsupported social provider'));
+    }
+    const code = cleanText(req.query.code);
+    const state = cleanText(req.query.state);
+    if (!code || !state) {
+      return res.redirect(oauthErrorRedirect(req, 'Social sign-in did not return a valid code'));
+    }
+
+    const decodedState = verifyOAuthState(state, provider);
+    const redirectUri = getOAuthRedirectUri(req, provider);
+    let profile = null;
+    let subject = '';
+    let email = '';
+
+    if (provider === 'google') {
+      const token = await fetchJson('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          code,
+          client_id: process.env.GOOGLE_OAUTH_CLIENT_ID,
+          client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+          redirect_uri: redirectUri,
+          grant_type: 'authorization_code'
+        })
+      });
+      profile = await fetchJson('https://openidconnect.googleapis.com/v1/userinfo', {
+        headers: { Authorization: `Bearer ${token.access_token}` }
+      });
+      subject = cleanText(profile.sub);
+      email = normalizeEmail(profile.email);
+    } else {
+      const tokenParams = new URLSearchParams({
+        client_id: process.env.FACEBOOK_APP_ID,
+        client_secret: process.env.FACEBOOK_APP_SECRET,
+        redirect_uri: redirectUri,
+        code
+      });
+      const token = await fetchJson(`https://graph.facebook.com/v19.0/oauth/access_token?${tokenParams.toString()}`);
+      profile = await fetchJson(`https://graph.facebook.com/v19.0/me?fields=id,first_name,last_name,name,email&access_token=${encodeURIComponent(token.access_token)}`);
+      subject = cleanText(profile.id);
+      email = normalizeEmail(profile.email);
+    }
+
+    const user = await findOrCreateOAuthUser({
+      provider,
+      subject,
+      email,
+      profile,
+      audience: decodedState.audience
+    });
+    const jwtToken = createToken(user);
+    return res.redirect(oauthSuccessRedirect(req, jwtToken, user, provider));
+  } catch (error) {
+    logger.error(`${provider} OAuth callback failed`, error.message);
+    return res.redirect(oauthErrorRedirect(req, error.message || 'Social sign-in failed'));
+  }
+});
+
 router.post('/register', async (req, res, next) => {
   try {
     const firstName = cleanText(req.body.first_name);
@@ -166,6 +441,10 @@ router.post('/register', async (req, res, next) => {
     const password = cleanText(req.body.password);
     const otpChannelInput = cleanText(req.body.otp_channel).toLowerCase();
     const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
+    const marketingOptIn = parseBooleanLike(req.body.marketing_opt_in, true);
+    const weeklyTipsOptIn = parseBooleanLike(req.body.weekly_tips_opt_in, true);
+    const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
+    const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput) ? preferredContactInput : 'whatsapp';
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -210,10 +489,13 @@ router.post('/register', async (req, res, next) => {
         role,
         password_hash,
         phone_verified,
-        status
-      ) VALUES ($1,$2,$3,$4,$5,$6,false,'active')
+        status,
+        marketing_opt_in,
+        weekly_tips_opt_in,
+        preferred_contact_channel
+      ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9)
       RETURNING *`,
-      [firstName, lastName, phone, email, role, passwordHash]
+      [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel]
     );
 
     const user = result.rows[0];
@@ -334,27 +616,37 @@ router.post('/request-otp', async (req, res, next) => {
 
 router.post('/request-password-reset', async (req, res, next) => {
   try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
     const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
 
-    if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
+    if (channel === 'email' && (!email || !isValidEmail(email))) {
+      return res.status(400).json({ ok: false, error: 'Valid email is required' });
+    }
+    if (channel === 'phone' && (!phone || !isValidPhone(phone) || !isValidUgPhone(phone))) {
       return res.status(400).json({ ok: false, error: 'Valid phone is required' });
     }
 
-    const exists = await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    const exists = channel === 'email'
+      ? await db.query('SELECT id FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
+      : await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
     if (!exists.rows.length) {
-      return res.status(404).json({ ok: false, error: 'No account found with that phone' });
+      return res.status(404).json({ ok: false, error: channel === 'email' ? 'No account found with that email' : 'No account found with that phone' });
     }
 
     const otpIssue = await issueOtp({
       purpose: 'reset_password',
-      channel: 'phone',
-      phone
+      channel,
+      phone,
+      email
     });
 
     return res.json({
       ok: true,
       data: {
-        message: 'Password reset OTP sent',
+        message: channel === 'email' ? 'Password reset OTP sent to email' : 'Password reset OTP sent',
+        channel,
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -365,12 +657,22 @@ router.post('/request-password-reset', async (req, res, next) => {
 
 router.post('/reset-password', async (req, res, next) => {
   try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'email' ? 'email' : 'phone';
     const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
     const code = cleanText(req.body.code);
     const newPassword = cleanText(req.body.new_password);
+    const identifier = channel === 'email' ? email : phone;
 
-    if (!phone || !code || !newPassword) {
-      return res.status(400).json({ ok: false, error: 'phone, code and new_password are required' });
+    if (!identifier || !code || !newPassword) {
+      return res.status(400).json({ ok: false, error: `${channel}, code and new_password are required` });
+    }
+    if (channel === 'email' && !isValidEmail(identifier)) {
+      return res.status(400).json({ ok: false, error: 'email is invalid' });
+    }
+    if (channel === 'phone' && (!isValidPhone(identifier) || !isValidUgPhone(identifier))) {
+      return res.status(400).json({ ok: false, error: 'phone is invalid' });
     }
     if (newPassword.length < 8) {
       return res.status(400).json({ ok: false, error: 'new_password must be at least 8 characters' });
@@ -378,8 +680,8 @@ router.post('/reset-password', async (req, res, next) => {
 
     const usedOverride = isAdminOtpOverrideMatch({
       code,
-      channel: 'phone',
-      identifier: phone
+      channel,
+      identifier
     });
 
     let matchedOtp = null;
@@ -394,7 +696,7 @@ router.post('/reset-password', async (req, res, next) => {
            AND expires_at > NOW()
          ORDER BY created_at DESC
          LIMIT 1`,
-        [phone, code]
+        [identifier, code]
       );
 
       if (!otp.rows.length) {
@@ -402,10 +704,12 @@ router.post('/reset-password', async (req, res, next) => {
       }
       matchedOtp = otp.rows[0];
     } else {
-      logger.warn('Password reset OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', { phone });
+      logger.warn('Password reset OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', { channel, identifier });
     }
 
-    const userResult = await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    const userResult = channel === 'email'
+      ? await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [identifier, 'active'])
+      : await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [identifier, 'active']);
     if (!userResult.rows.length) {
       return res.status(404).json({ ok: false, error: 'Account not found' });
     }
@@ -415,7 +719,11 @@ router.post('/reset-password', async (req, res, next) => {
     if (matchedOtp?.id) {
       await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [matchedOtp.id]);
     }
-    await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE phone = $1', [phone, newHash]);
+    if (channel === 'email') {
+      await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE LOWER(email) = $1', [identifier, newHash]);
+    } else {
+      await db.query('UPDATE users SET password_hash = $2, phone_verified = TRUE WHERE phone = $1', [identifier, newHash]);
+    }
 
     return res.json({ ok: true, data: { reset: true } });
   } catch (error) {
@@ -534,6 +842,12 @@ router.patch('/me', async (req, res, next) => {
     const lastName = cleanText(req.body.last_name) || user.last_name;
     const emailInput = req.body.email !== undefined ? cleanText(req.body.email).toLowerCase() : user.email;
     const roleInput = cleanText(req.body.role).toLowerCase() || user.role;
+    const marketingOptIn = req.body.marketing_opt_in === undefined ? user.marketing_opt_in : parseBooleanLike(req.body.marketing_opt_in, true);
+    const weeklyTipsOptIn = req.body.weekly_tips_opt_in === undefined ? user.weekly_tips_opt_in : parseBooleanLike(req.body.weekly_tips_opt_in, true);
+    const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
+    const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput)
+      ? preferredContactInput
+      : (user.preferred_contact_channel || 'whatsapp');
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -562,10 +876,13 @@ router.patch('/me', async (req, res, next) => {
        SET first_name = $2,
            last_name = $3,
            email = $4,
-           role = $5
+           role = $5,
+           marketing_opt_in = $6,
+           weekly_tips_opt_in = $7,
+           preferred_contact_channel = $8
        WHERE id = $1
        RETURNING *`,
-      [auth.userId, firstName, lastName, emailInput || null, role]
+      [auth.userId, firstName, lastName, emailInput || null, role, marketingOptIn, weeklyTipsOptIn, preferredContactChannel]
     );
 
     return res.json({ ok: true, data: { user: publicUser(updated.rows[0]) } });

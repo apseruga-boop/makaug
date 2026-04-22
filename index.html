@@ -2066,6 +2066,31 @@
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
+          <h2 class="text-xl font-bold text-gray-800 mb-4">Account Benefits & Contact</h2>
+          <div class="grid md:grid-cols-2 gap-4">
+            <label class="flex items-start gap-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-gray-700">
+              <input id="account-weekly-tips" type="checkbox" class="mt-1 accent-green-700">
+              <span><strong class="block text-gray-900">Weekly property tips</strong>Receive market updates, safety tips, and reminders about saved listings.</span>
+            </label>
+            <label class="flex items-start gap-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-gray-700">
+              <input id="account-marketing-opt-in" type="checkbox" class="mt-1 accent-green-700">
+              <span><strong class="block text-gray-900">Account activity alerts</strong>Receive updates about enquiries, saves, listing progress, and new matching properties.</span>
+            </label>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Contact</label>
+              <select id="account-contact-channel" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="whatsapp">WhatsApp</option>
+                <option value="phone">Phone call / SMS</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+              Your dashboard tracks saved properties, views, enquiries sent, route opens, and recent search activity once you are signed in.
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <h2 class="text-xl font-bold text-gray-800 mb-4">Security</h2>
           <div class="grid md:grid-cols-2 gap-4">
             <div>
@@ -2105,7 +2130,7 @@
       </div>
 
       <div id="finder-body" class="hidden space-y-6">
-        <div class="grid sm:grid-cols-3 gap-4">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Saved Properties</div>
             <div id="finder-stat-saved" class="text-3xl font-black text-gray-900 mt-1">0</div>
@@ -2113,6 +2138,14 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Properties Viewed</div>
             <div id="finder-stat-viewed" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Enquiries Sent</div>
+            <div id="finder-stat-inquiries" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Routes Opened</div>
+            <div id="finder-stat-routes" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Searches Performed</div>
@@ -2441,6 +2474,32 @@
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Featured</button>
           </div>
           <div id="admin-featured-listings-table" class="space-y-3"></div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Accounts & Weekly Tips</h3>
+              <p class="text-xs text-gray-500 mt-1">Signed-up users, weekly-tip opt-ins, engagement, and outreach controls.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Accounts</button>
+          </div>
+          <div class="grid md:grid-cols-[1fr,180px,180px] gap-2 mb-3">
+            <input id="admin-users-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search users, phone, email...">
+            <select id="admin-users-role" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">All roles</option>
+              <option value="buyer_renter">Buyer / Renter</option>
+              <option value="property_owner">Property Owner</option>
+              <option value="agent_broker">Broker</option>
+              <option value="field_agent">Field Agent</option>
+              <option value="admin">Admin</option>
+            </select>
+            <select id="admin-users-tips" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">All users</option>
+              <option value="weekly">Weekly tips only</option>
+            </select>
+          </div>
+          <div id="admin-users-table" class="space-y-3"></div>
         </div>
 
         <div id="admin-review-panel" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
@@ -2821,17 +2880,18 @@
         <button id="auth-signin-btn" onclick="submitAuthSignIn()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold mb-5">Sign In</button>
 
         <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="social-auth-btn">
+          <button onclick="startSocialAuth('google')" class="social-auth-btn" data-social-provider="google">
             <i class="fab fa-google text-red-500"></i><span>Google</span>
           </button>
-          <button onclick="startSocialAuth('facebook')" class="social-auth-btn">
+          <button onclick="startSocialAuth('facebook')" class="social-auth-btn" data-social-provider="facebook">
             <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
           </button>
-          <button onclick="startSocialAuth('apple')" class="social-auth-btn">
+          <button onclick="startSocialAuth('apple')" class="social-auth-btn" data-social-provider="apple">
             <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
           </button>
         </div>
         <button id="auth-forgot-btn" onclick="startForgotPasswordFlow()" class="w-full mt-3 text-sm text-green-700 hover:text-green-800 font-semibold">Forgot password?</button>
+        <p class="text-[11px] text-gray-500 mt-1 text-center">Password reset sends an OTP to your phone or email.</p>
       </div>
 
       <div id="auth-panel-signup" class="hidden">
@@ -2847,13 +2907,13 @@
         <input id="auth-signup-role" type="hidden" value="Buyer / Renter">
 
         <div class="grid sm:grid-cols-3 gap-2 mb-4">
-          <button onclick="startSocialAuth('google')" class="social-auth-btn">
+          <button onclick="startSocialAuth('google')" class="social-auth-btn" data-social-provider="google">
             <i class="fab fa-google text-red-500"></i><span>Google</span>
           </button>
-          <button onclick="startSocialAuth('facebook')" class="social-auth-btn">
+          <button onclick="startSocialAuth('facebook')" class="social-auth-btn" data-social-provider="facebook">
             <i class="fab fa-facebook-f text-blue-600"></i><span>Facebook</span>
           </button>
-          <button onclick="startSocialAuth('apple')" class="social-auth-btn">
+          <button onclick="startSocialAuth('apple')" class="social-auth-btn" data-social-provider="apple">
             <i class="fab fa-apple text-gray-900"></i><span>Apple</span>
           </button>
         </div>
@@ -2912,6 +2972,11 @@
 
           <label class="block text-sm font-medium text-gray-800 mb-2">Password</label>
           <input id="auth-signup-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-5" placeholder="Min 8 characters">
+
+          <label class="flex items-start gap-2 text-sm text-gray-700 mb-5">
+            <input id="auth-signup-weekly-tips" type="checkbox" checked class="mt-1 accent-green-700">
+            <span>Send me weekly property tips, market updates, and account activity alerts.</span>
+          </label>
 
           <button id="auth-signup-btn" onclick="submitAuthSignUp()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Send Verification OTP →</button>
         </div>
@@ -3355,6 +3420,7 @@
     let currentTab = "sale";
     let savedIds = new Set();
     let authState = { token: null, user: null };
+    let socialAuthConfig = { providers: {} };
     let authSignInAudience = "finder";
     let authSignUpAudience = "finder";
     let authSignUpOtpChannel = "phone";
@@ -5659,7 +5725,12 @@
       } catch (e) {}
 
       if (!response.ok) {
-        const message = data?.error || `Request failed (${response.status})`;
+        const detailList = Array.isArray(data?.details)
+          ? data.details.filter(Boolean)
+          : (data?.details ? [String(data.details)] : []);
+        const message = detailList.length
+          ? `${data?.error || `Request failed (${response.status})`}: ${detailList.join("; ")}`
+          : (data?.error || `Request failed (${response.status})`);
         const err = new Error(message);
         err.response = data;
         err.status = response.status;
@@ -5689,9 +5760,14 @@
           body: {
             event_name: eventName,
             client_id: getAnalyticsClientId(),
+            user_phone: authState?.user?.phone || "",
             page_path: window.location.pathname || "/",
             source: "web",
-            params
+            params: {
+              ...params,
+              user_id: authState?.user?.id || "",
+              user_role: authState?.user?.role || ""
+            }
           }
         });
       } catch (e) {}
@@ -5847,9 +5923,15 @@
         userActivityStore[key] = {
           viewed: {},
           recentViewed: [],
-          searchCount: 0
+          searchCount: 0,
+          inquiries: {},
+          routes: {}
         };
       }
+      userActivityStore[key].viewed = userActivityStore[key].viewed || {};
+      userActivityStore[key].recentViewed = userActivityStore[key].recentViewed || [];
+      userActivityStore[key].inquiries = userActivityStore[key].inquiries || {};
+      userActivityStore[key].routes = userActivityStore[key].routes || {};
       return userActivityStore[key];
     }
 
@@ -5865,6 +5947,20 @@
       const act = getCurrentUserActivity();
       act.viewed[pid] = (parseInt(act.viewed[pid] || 0, 10) || 0) + 1;
       act.recentViewed = [propertyId, ...(act.recentViewed || []).filter((x) => String(x) !== String(propertyId))].slice(0, 24);
+      saveDashboardState();
+    }
+
+    function recordUserPropertyInquiry(propertyId) {
+      const pid = String(propertyId);
+      const act = getCurrentUserActivity();
+      act.inquiries[pid] = (parseInt(act.inquiries[pid] || 0, 10) || 0) + 1;
+      saveDashboardState();
+    }
+
+    function recordUserPropertyRoute(propertyId) {
+      const pid = String(propertyId);
+      const act = getCurrentUserActivity();
+      act.routes[pid] = (parseInt(act.routes[pid] || 0, 10) || 0) + 1;
       saveDashboardState();
     }
 
@@ -6128,9 +6224,13 @@
 
       const savedStat = document.getElementById("finder-stat-saved");
       const viewedStat = document.getElementById("finder-stat-viewed");
+      const inquiriesStat = document.getElementById("finder-stat-inquiries");
+      const routesStat = document.getElementById("finder-stat-routes");
       const searchesStat = document.getElementById("finder-stat-searches");
       if (savedStat) savedStat.textContent = String(savedList.length);
       if (viewedStat) viewedStat.textContent = String(viewedIds.length);
+      if (inquiriesStat) inquiriesStat.textContent = String(Object.keys(activity.inquiries || {}).length);
+      if (routesStat) routesStat.textContent = String(Object.keys(activity.routes || {}).length);
       if (searchesStat) searchesStat.textContent = String(parseInt(activity.searchCount || 0, 10) || 0);
 
       const savedGrid = document.getElementById("finder-saved-grid");
@@ -6432,9 +6532,13 @@
           id: authState.user.id,
           first_name: authState.user.first_name || "",
           last_name: authState.user.last_name || "",
+          phone: authState.user.phone || "",
           email: authState.user.email || "",
           role: authState.user.role || "buyer_renter",
           status: authState.user.status || "active",
+          marketing_opt_in: authState.user.marketing_opt_in !== false,
+          weekly_tips_opt_in: authState.user.weekly_tips_opt_in !== false,
+          preferred_contact_channel: authState.user.preferred_contact_channel || "whatsapp",
           created_at: authState.user.created_at || null
         };
       }
@@ -6563,11 +6667,19 @@
     async function fetchRemoteAdminSnapshot() {
       if (!canUseLiveAdminApi()) return null;
       const headers = adminAuthHeaders();
-      const [summaryRes, recentRes, pendingRes, allRes] = await Promise.all([
+      const userSearch = (document.getElementById("admin-users-q")?.value || "").trim();
+      const userRole = (document.getElementById("admin-users-role")?.value || "").trim();
+      const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
+      const userParams = new URLSearchParams({ limit: "100" });
+      if (userSearch) userParams.set("search", userSearch);
+      if (userRole) userParams.set("role", userRole);
+      if (weeklyOnly) userParams.set("weekly_tips_only", "true");
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
-        apiRequest("/api/properties?status=all&limit=100", { headers })
+        apiRequest("/api/properties?status=all&limit=100", { headers }),
+        apiRequest(`/api/admin/users?${userParams.toString()}`, { headers })
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
@@ -6583,7 +6695,8 @@
         recent: recentRes?.data || {},
         pendingListings,
         liveListings,
-        allListings
+        allListings,
+        users: usersRes?.data || []
       };
     }
 
@@ -6917,6 +7030,7 @@
       renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
+      renderAdminUsersRows(remoteSnap?.users || localSnap.recentUsers || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
@@ -7132,6 +7246,71 @@
         phone: listing.lister_phone || "",
         message: buildAdminFollowUpWhatsAppMessage(listing)
       });
+    }
+
+    function buildAdminWeeklyTipsMessage(user) {
+      const firstName = user?.first_name || "there";
+      return `Hi ${firstName}, this is MakaUg. Thanks for creating your account. We are sharing weekly Uganda property tips, saved-listing updates, and safety reminders to help you buy, rent, or list with confidence.`;
+    }
+
+    function openAdminUserTipsWhatsApp(userId) {
+      const users = adminCurrentUsers || [];
+      const user = users.find((item) => String(item.id) === String(userId));
+      if (!user) {
+        toast("User not found in current admin snapshot.");
+        return;
+      }
+      openAdminWhatsAppMessageModal({
+        title: "Send weekly tips outreach",
+        listingLabel: `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.email || user.phone || "-",
+        phone: user.phone || "",
+        message: buildAdminWeeklyTipsMessage(user)
+      });
+    }
+
+    let adminCurrentUsers = [];
+
+    function renderAdminUsersRows(users) {
+      const wrap = document.getElementById("admin-users-table");
+      if (!wrap) return;
+      adminCurrentUsers = Array.isArray(users) ? users : [];
+      if (!adminCurrentUsers.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No account users found for the current filters.</div>`;
+        return;
+      }
+      wrap.innerHTML = adminCurrentUsers.map((user) => {
+        const userIdArg = adminListingIdArg(user.id);
+        const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Unnamed user";
+        const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
+        const tips = user.weekly_tips_opt_in !== false;
+        const marketing = user.marketing_opt_in !== false;
+        const social = user.oauth_provider ? `${user.oauth_provider} linked` : "Password/OTP";
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="font-bold text-gray-900">${adminEscape(name)}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
+                <div class="text-xs text-gray-500 mt-1">${mapRoleLabel(user.role || "buyer_renter")} • ${adminEscape(user.status || "active")} • ${adminEscape(social)}</div>
+              </div>
+              <div class="flex gap-1.5 flex-wrap justify-end">
+                <span class="text-[11px] font-semibold px-2 py-1 rounded ${tips ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}">${tips ? "Weekly tips" : "No tips"}</span>
+                <span class="text-[11px] font-semibold px-2 py-1 rounded ${marketing ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}">${marketing ? "Alerts on" : "Alerts off"}</span>
+              </div>
+            </div>
+            <div class="grid sm:grid-cols-5 gap-2 mt-3 text-xs">
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Listings</div><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Enquiries</div><div class="font-black text-gray-900">${adminEscape(user.inquiries_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Views</div><div class="font-black text-gray-900">${adminEscape(user.property_views_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Saves</div><div class="font-black text-gray-900">${adminEscape(user.property_saves_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Routes</div><div class="font-black text-gray-900">${adminEscape(user.route_events_count || 0)}</div></div>
+            </div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <button onclick="openAdminUserTipsWhatsApp(${userIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Tips</button>
+              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+            </div>
+          </div>`;
+      }).join("");
     }
 
     function adminEvidenceDisplayValue(value) {
@@ -7905,6 +8084,12 @@
       setVal("account-phone", user.phone);
       setVal("account-email", user.email);
       setVal("account-role", user.role);
+      const weeklyEl = document.getElementById("account-weekly-tips");
+      const marketingEl = document.getElementById("account-marketing-opt-in");
+      const contactEl = document.getElementById("account-contact-channel");
+      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
+      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
+      if (contactEl) contactEl.value = user.preferred_contact_channel || "whatsapp";
       const statusEl = document.getElementById("account-status");
       if (statusEl) {
         const verified = user.phone_verified ? "Verified phone" : "Phone not verified";
@@ -7948,6 +8133,9 @@
       const lastName = (document.getElementById("account-last-name")?.value || "").trim();
       const email = (document.getElementById("account-email")?.value || "").trim();
       const role = (document.getElementById("account-role")?.value || "").trim();
+      const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
+      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
+      const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
 
       if (!firstName || !lastName) {
         toast("First name and last name are required.");
@@ -7962,7 +8150,10 @@
             first_name: firstName,
             last_name: lastName,
             email,
-            role
+            role,
+            weekly_tips_opt_in: weeklyTipsOptIn,
+            marketing_opt_in: marketingOptIn,
+            preferred_contact_channel: preferredContactChannel
           }
         });
         const updatedUser = res?.data?.user;
@@ -8021,8 +8212,8 @@
       toast("Signed out");
     }
 
-    function askOtpCode() {
-      const channel = authSignUpOtpChannel === "email" ? "email" : "phone";
+    function askOtpCode(channelOverride = "") {
+      const channel = channelOverride || (authSignUpOtpChannel === "email" ? "email" : "phone");
       const code = window.prompt(`Enter the 6-digit OTP code sent to your ${channel}:`);
       return (code || "").trim();
     }
@@ -8053,10 +8244,69 @@
       openSignedInDashboard();
     }
 
-    function startSocialAuth(provider) {
+    function socialProviderSetupMessage(provider) {
       const p = String(provider || "").toLowerCase();
       const label = p ? p.charAt(0).toUpperCase() + p.slice(1) : "Social";
-      toast(`${label} sign-in will be enabled in the live auth rollout.`);
+      if (p === "google") return `${label} sign-in needs GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in Render, with this callback URL allowed: ${socialAuthConfig.providers?.google?.redirect_uri || "/api/auth/oauth/google/callback"}`;
+      if (p === "facebook") return `${label} sign-in needs FACEBOOK_APP_ID and FACEBOOK_APP_SECRET in Render, with this callback URL allowed: ${socialAuthConfig.providers?.facebook?.redirect_uri || "/api/auth/oauth/facebook/callback"}`;
+      return `${label} sign-in needs provider setup before it can be enabled.`;
+    }
+
+    function updateSocialAuthButtons() {
+      document.querySelectorAll("[data-social-provider]").forEach((btn) => {
+        const provider = btn.getAttribute("data-social-provider");
+        const cfg = socialAuthConfig.providers?.[provider] || {};
+        const enabled = cfg.enabled === true;
+        btn.title = enabled ? `${provider} sign-in is connected` : socialProviderSetupMessage(provider);
+        btn.classList.toggle("opacity-60", !enabled);
+      });
+    }
+
+    async function loadSocialAuthConfig() {
+      try {
+        const res = await apiRequest("/api/auth/social/config");
+        socialAuthConfig = res?.data || { providers: {} };
+      } catch (error) {
+        socialAuthConfig = { providers: {} };
+      }
+      updateSocialAuthButtons();
+    }
+
+    async function startSocialAuth(provider) {
+      const p = String(provider || "").toLowerCase();
+      const cfg = socialAuthConfig.providers?.[p] || {};
+      if (!cfg.enabled) {
+        toast(socialProviderSetupMessage(p));
+        return;
+      }
+      await trackEvent("auth_social_start", { provider: p, audience: authSignUpAudience || authSignInAudience || "finder" });
+      const audience = document.getElementById("auth-panel-signup")?.classList.contains("hidden") ? authSignInAudience : authSignUpAudience;
+      window.location.href = apiUrl(`/api/auth/oauth/${encodeURIComponent(p)}/start?audience=${encodeURIComponent(audience || "finder")}`);
+    }
+
+    function handleOAuthReturnFromUrl() {
+      const hash = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+      const token = hash.get("auth_token");
+      const userRaw = hash.get("auth_user");
+      const source = hash.get("auth_source") || "social";
+      const error = hash.get("auth_error");
+      if (error) {
+        toast(error);
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+        return;
+      }
+      if (!token || !userRaw) return;
+      try {
+        const user = JSON.parse(userRaw);
+        persistAuthState(token, user);
+        hydrateAccountForm();
+        trackEvent("auth_success", { source, role: user.role || "" });
+        toast(`Welcome, ${user.first_name || "user"}`);
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+        openSignedInDashboard();
+      } catch (e) {
+        toast("Social sign-in returned invalid account data.");
+      }
     }
 
     async function submitAuthSignIn() {
@@ -8120,6 +8370,7 @@
       const otpChannel = authSignUpOtpChannel === "email" ? "email" : "phone";
       const registrationStatus = "not_registered";
       const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
+      const weeklyTipsOptIn = document.getElementById("auth-signup-weekly-tips")?.checked !== false;
 
       if (!firstName || !lastName || !phone || !password) {
         toast("Please complete all required signup fields.");
@@ -8145,12 +8396,15 @@
             role,
             password,
             otp_channel: otpChannel,
+            weekly_tips_opt_in: weeklyTipsOptIn,
+            marketing_opt_in: weeklyTipsOptIn,
+            preferred_contact_channel: "whatsapp",
             registration_status: authSignUpAudience === "agent" ? registrationStatus : undefined,
             area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined
           }
         });
 
-        const otpCode = askOtpCode();
+        const otpCode = askOtpCode(otpChannel);
         if (!otpCode) {
           toast("OTP verification cancelled.");
           return;
@@ -8176,10 +8430,12 @@
 
     async function startForgotPasswordFlow() {
       const identifierRaw = (document.getElementById("auth-signin-identifier")?.value || "").trim();
-      const phoneInput = identifierRaw.includes("@") ? "" : normalizePhoneInput(identifierRaw);
-      const phone = phoneInput || normalizePhoneInput(window.prompt("Enter your account phone number for password reset:"));
-      if (!phone) {
-        toast("Phone number is required for password reset.");
+      const prompted = identifierRaw || (window.prompt("Enter your account phone number or email for password reset:") || "").trim();
+      const isEmailReset = prompted.includes("@");
+      const phone = isEmailReset ? "" : normalizePhoneInput(prompted);
+      const email = isEmailReset ? prompted.toLowerCase() : "";
+      if (!phone && !email) {
+        toast("Phone number or email is required for password reset.");
         return;
       }
 
@@ -8187,10 +8443,10 @@
       try {
         const request = await apiRequest("/api/auth/request-password-reset", {
           method: "POST",
-          body: { phone }
+          body: isEmailReset ? { email, channel: "email" } : { phone, channel: "phone" }
         });
 
-        const otpCode = askOtpCode();
+        const otpCode = askOtpCode(isEmailReset ? "email" : "phone");
         if (!otpCode) {
           toast("Password reset cancelled.");
           return;
@@ -8210,7 +8466,9 @@
         await apiRequest("/api/auth/reset-password", {
           method: "POST",
           body: {
-            phone,
+            phone: isEmailReset ? undefined : phone,
+            email: isEmailReset ? email : undefined,
+            channel: isEmailReset ? "email" : "phone",
             code: otpCode,
             new_password: newPassword
           }
@@ -8218,7 +8476,7 @@
 
         const idEl = document.getElementById("auth-signin-identifier");
         const passEl = document.getElementById("auth-signin-password");
-        if (idEl) idEl.value = phone;
+        if (idEl) idEl.value = isEmailReset ? email : phone;
         if (passEl) passEl.value = "";
         await trackEvent("auth_password_reset", {});
         toast("Password reset successful. Sign in with your new password.");
@@ -11815,6 +12073,68 @@
       }
     }
 
+    function propertyDirectionsUrl(property) {
+      if (!Number.isFinite(Number(property?.lat)) || !Number.isFinite(Number(property?.lng))) return "";
+      const destination = `${Number(property.lat)},${Number(property.lng)}`;
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
+    }
+
+    function openPropertyDirections(id) {
+      const property = findPropertyForUi(id);
+      const url = propertyDirectionsUrl(property);
+      if (!url) {
+        toast("Directions are not available for this listing yet.");
+        return;
+      }
+      recordUserPropertyRoute(id);
+      trackEvent("property_directions_open", {
+        property_id: id,
+        listing_type: normalizeType(property?.type),
+        district: property?.district || "",
+        area: property?.area || ""
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+      renderFinderDashboard();
+    }
+
+    async function submitPropertyInquiry(id) {
+      const property = findPropertyForUi(id);
+      if (!property) return;
+      const name = (document.getElementById("detail-inquiry-name")?.value || "").trim();
+      const phone = normalizePhoneInput(document.getElementById("detail-inquiry-phone")?.value || "");
+      const email = (document.getElementById("detail-inquiry-email")?.value || "").trim().toLowerCase();
+      const message = (document.getElementById("detail-inquiry-message")?.value || "").trim();
+      if (!name || (!phone && !email)) {
+        toast("Add your name and phone or email to send an enquiry.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/properties/${encodeURIComponent(property.backend_id || property.id)}/inquiries`, {
+          method: "POST",
+          body: {
+            contact_name: name,
+            contact_phone: phone || undefined,
+            contact_email: email || undefined,
+            message: message || `I am interested in ${property.title}.`,
+            channel: "web"
+          }
+        });
+        recordUserPropertyInquiry(property.id);
+        await trackEvent("property_inquiry_submit", {
+          property_id: property.id,
+          listing_type: normalizeType(property.type),
+          district: property.district || "",
+          area: property.area || ""
+        });
+        const msgEl = document.getElementById("detail-inquiry-message");
+        if (msgEl) msgEl.value = "";
+        toast("Enquiry sent. The listing contact can follow up with you.");
+        renderFinderDashboard();
+      } catch (error) {
+        toast(error.message || "Could not send enquiry.");
+      }
+    }
+
     async function shareBrokerBusinessCard(id, channel = "native") {
       const broker = BROKERS.find((item) => item.id === id);
       if (!broker) return;
@@ -14523,10 +14843,12 @@
         savedIds.delete(existing);
         siteMetrics.propertySaves[String(id)] = Math.max(0, (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) - 1);
         toast("Removed from saved");
+        trackEvent("property_unsave", { property_id: id });
       } else {
         savedIds.add(key);
         siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
         toast("Property saved");
+        trackEvent("property_save", { property_id: id });
       }
       persistSavedIdsForCurrentUser();
       saveDashboardState();
@@ -15017,6 +15339,11 @@
       if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
       const detailIdArg = JSON.stringify(String(p.id));
       const detailIsSaved = Array.from(savedIds).some((value) => String(value) === String(p.id));
+      const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
+      const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
+      const inquiryNameDefault = authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
+      const inquiryPhoneDefault = authState?.user?.phone || "";
+      const inquiryEmailDefault = authState?.user?.email || "";
       document.getElementById("detail-content").innerHTML = `
         <div class="grid lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2">
@@ -15097,6 +15424,9 @@
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
               <h2 class="text-xl font-bold mb-3">Location</h2>
               <div id="map-detail" class="map-h-sm rounded-xl overflow-hidden border border-gray-200"></div>
+              <button type="button" onclick="openPropertyDirections(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
+                <i class="fas fa-route"></i> Open Google Directions
+              </button>
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
               <h2 class="text-xl font-bold mb-3">Similar Properties</h2>
@@ -15116,9 +15446,19 @@
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
                 <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public contact name")}</p>
-                <button class="w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Owner</button>
+                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Owner</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
               `}
               <button onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
+              <div class="mt-4 pt-4 border-t border-gray-100">
+                <h4 class="font-bold text-gray-800 text-sm mb-2">Send enquiry</h4>
+                <div class="space-y-2">
+                  <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Your name" value="${adminAttr(inquiryNameDefault)}">
+                  <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
+                  <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Email optional" value="${adminAttr(inquiryEmailDefault)}">
+                  <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Message">I am interested in ${adminEscape(p.title || "this property")}.</textarea>
+                  <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">Send Enquiry</button>
+                </div>
+              </div>
               ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
                 <h4 class="font-bold text-gray-800 text-sm mb-2">Mortgage Estimate</h4>
                 <div class="grid grid-cols-2 gap-2 mb-2">
@@ -15706,6 +16046,8 @@
       populateListAddressSuggestions();
       loadDashboardState();
       loadAuthState();
+      handleOAuthReturnFromUrl();
+      loadSocialAuthConfig();
       setLang(savedLang || currentLang, true, false);
       initFrontendAnalytics();
       setHeroLocationFilter(currentTab);

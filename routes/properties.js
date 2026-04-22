@@ -877,6 +877,8 @@ router.post('/', async (req, res, next) => {
       .map((url) => cleanText(url))
       .filter(Boolean);
     const invalidSubmittedImages = submittedImages.filter((url) => !isUsableSubmittedImageUrl(url));
+    const websiteMinImages = 5;
+    const websiteMaxImages = 20;
 
     if (enforceOtp) {
       if (otpChannel === 'email') {
@@ -886,8 +888,8 @@ router.post('/', async (req, res, next) => {
       } else if (!listerPhone) {
         errors.push('lister_phone is required for OTP verification');
       }
-      if (submittedImages.length !== 5) {
-        errors.push('Exactly 5 property images are required for website submissions');
+      if (submittedImages.length < websiteMinImages || submittedImages.length > websiteMaxImages) {
+        errors.push(`At least ${websiteMinImages} and no more than ${websiteMaxImages} property images are required for website submissions`);
       }
       if (invalidSubmittedImages.length) {
         errors.push('Each property image must include a viewable image URL');
@@ -1032,7 +1034,7 @@ router.post('/', async (req, res, next) => {
 
     const propertyId = insertResult.rows[0].id;
 
-    const imageUrls = submittedImages.slice(0, enforceOtp ? 5 : 20);
+    const imageUrls = submittedImages.slice(0, enforceOtp ? websiteMaxImages : 20);
 
     for (let i = 0; i < imageUrls.length; i += 1) {
       await db.query(
