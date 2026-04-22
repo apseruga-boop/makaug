@@ -2288,7 +2288,7 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-gray-800 mb-2">Admin API Key (optional)</h3>
           <p class="text-sm text-gray-500 mb-3">
-            Paste <code>ADMIN_API_KEY</code> to load live server moderation data. If empty, dashboard uses local in-browser data.
+            Signed-in admins load live moderation data automatically. Paste <code>ADMIN_API_KEY</code> only as a fallback.
           </p>
           <div class="grid sm:grid-cols-[1fr,180px] gap-2">
             <input id="admin-api-key" type="password" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Paste ADMIN_API_KEY">
@@ -3266,6 +3266,7 @@
     let authSignUpAudience = "finder";
     let authSignUpOtpChannel = "phone";
     let adminApiKey = "";
+    let adminRemoteListings = [];
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -6371,16 +6372,44 @@
       };
     }
 
+    function adminAuthHeaders() {
+      return adminApiKey ? { "x-api-key": adminApiKey } : {};
+    }
+
+    function canUseLiveAdminApi() {
+      return !!(adminApiKey || (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin"));
+    }
+
+    function normalizeRemoteAdminListing(p) {
+      const id = String(p?.id || "");
+      return {
+        ...p,
+        id,
+        backend_id: id,
+        type: normalizeType(p?.listing_type || p?.type),
+        subtype: p?.property_type || p?.subtype,
+        img: p?.primary_image_url || p?.img,
+        moderation_status: normalizeModerationStatus(p?.status)
+      };
+    }
+
     async function fetchRemoteAdminSnapshot() {
-      if (!adminApiKey) return null;
-      const headers = { "x-api-key": adminApiKey };
-      const [summaryRes, recentRes] = await Promise.all([
+      if (!canUseLiveAdminApi()) return null;
+      const headers = adminAuthHeaders();
+      const [summaryRes, recentRes, pendingRes, allRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
-        apiRequest("/api/admin/recent", { headers })
+        apiRequest("/api/admin/recent", { headers }),
+        apiRequest("/api/properties?status=pending&limit=100", { headers }),
+        apiRequest("/api/properties?status=all&limit=100", { headers })
       ]);
+      const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
+      const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
+      adminRemoteListings = allListings;
       return {
         summary: summaryRes?.data || {},
-        recent: recentRes?.data || {}
+        recent: recentRes?.data || {},
+        pendingListings,
+        allListings
       };
     }
 
@@ -6522,10 +6551,10 @@
       let remoteSnap = null;
       let sourceLabel = "Data source: local browser data.";
 
-      if (adminApiKey) {
+      if (canUseLiveAdminApi()) {
         try {
           remoteSnap = await fetchRemoteAdminSnapshot();
-          sourceLabel = "Data source: live admin API.";
+          sourceLabel = adminApiKey ? "Data source: live admin API." : "Data source: live admin API via signed-in admin.";
         } catch (e) {
           sourceLabel = `Live API unavailable (${e.message || "request failed"}). Showing local browser data.`;
         }
@@ -6579,8 +6608,8 @@
       setText("admin-stat-not-registered-agents", notRegisteredAgents);
       if (sourceEl) sourceEl.textContent = sourceLabel;
 
-      renderAdminPendingRows(localSnap.pendingListings);
-      renderAdminAllListingsRows(localSnap.allListings);
+      renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
+      renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
           <div class="font-semibold text-gray-800">${u.first_name || ""} ${u.last_name || ""}</div>
@@ -6593,7 +6622,7 @@
           <div class="text-xs text-gray-500">${a.company_name || a.company || "-"}</div>
           <div class="text-xs text-gray-500 mt-1">${a.licence_number || a.licence || "No licence recorded"}</div>
           <div class="text-[11px] mt-1"><span class="inline-flex px-2 py-0.5 rounded-full ${String(a.status || "").toLowerCase() === "approved" ? "bg-green-100 text-green-700" : String(a.status || "").toLowerCase() === "rejected" ? "bg-red-100 text-red-700" : String(a.status || "").toLowerCase() === "suspended" ? "bg-yellow-100 text-yellow-700" : "bg-amber-100 text-amber-700"}">${a.status || "pending"}</span></div>
-          ${adminApiKey && a.id ? `
+          ${canUseLiveAdminApi() && a.id ? `
           <div class="flex flex-wrap gap-1.5 mt-2">
             <button onclick="adminSetAgentStatus('${a.id}','approved')" class="bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded text-[11px] font-semibold">Approve</button>
             <button onclick="adminSetAgentStatus('${a.id}','pending')" class="bg-amber-500 hover:bg-amber-400 text-white px-2 py-1 rounded text-[11px] font-semibold">Pending</button>
@@ -6606,7 +6635,7 @@
           <div class="font-semibold text-gray-800">${r.property_reference || "Listing report"}</div>
           <div class="text-xs text-gray-500">${r.reason || "No reason provided"}</div>
           <div class="text-xs text-gray-500 mt-1">Status: ${r.status || "open"}</div>
-          ${adminApiKey && r.id ? `
+          ${canUseLiveAdminApi() && r.id ? `
           <div class="flex flex-wrap gap-1.5 mt-2">
             <button onclick="adminSetReportStatus('${r.id}','in_review')" class="bg-amber-500 hover:bg-amber-400 text-white px-2 py-1 rounded text-[11px] font-semibold">In Review</button>
             <button onclick="adminSetReportStatus('${r.id}','resolved')" class="bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded text-[11px] font-semibold">Resolve</button>
@@ -6626,6 +6655,9 @@
     async function adminSetListingStatus(localId, nextStatus, backendId = "") {
       const normalizedStatus = normalizeModerationStatus(nextStatus);
       const listing = PROPERTIES.find(
+        (p) => String(p.id) === String(localId)
+          || (backendId && String(p.backend_id || "") === String(backendId))
+      ) || adminRemoteListings.find(
         (p) => String(p.id) === String(localId)
           || (backendId && String(p.backend_id || "") === String(backendId))
       );
@@ -6655,11 +6687,11 @@
         delete listing.deleted_at;
       }
 
-      if (adminApiKey && backendId) {
+      if (backendId) {
         try {
           await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {
             method: "PATCH",
-            headers: { "x-api-key": adminApiKey },
+            headers: adminAuthHeaders(),
             body: { status: normalizedStatus, reason: moderationReason.trim() || undefined }
           });
         } catch (e) {
@@ -6674,14 +6706,14 @@
     }
 
     async function adminSetAgentStatus(agentId, status) {
-      if (!adminApiKey) {
-        toast("Set ADMIN_API_KEY first to moderate broker status.");
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first to moderate broker status.");
         return;
       }
       try {
         await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
           method: "PATCH",
-          headers: { "x-api-key": adminApiKey },
+          headers: adminAuthHeaders(),
           body: { status }
         });
         await renderAdminDashboard();
@@ -6692,15 +6724,15 @@
     }
 
     async function adminSetReportStatus(reportId, status) {
-      if (!adminApiKey) {
-        toast("Set ADMIN_API_KEY first to moderate reports.");
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first to moderate reports.");
         return;
       }
       const note = window.prompt("Optional resolution note:", "") || "";
       try {
         await apiRequest(`/api/admin/reports/${encodeURIComponent(reportId)}/status`, {
           method: "PATCH",
-          headers: { "x-api-key": adminApiKey },
+          headers: adminAuthHeaders(),
           body: { status, resolution_note: note }
         });
         await renderAdminDashboard();
