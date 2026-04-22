@@ -17,6 +17,7 @@ const {
   normalizeReviewChecklist,
   ownerEditTokenExpiry
 } = require('../services/listingModerationService');
+const { scanAndCacheExternalDuplicates } = require('../services/externalDuplicateScanService');
 
 const router = express.Router();
 
@@ -155,6 +156,12 @@ async function loadPropertyReview(propertyId) {
     )
   ]);
 
+  const externalDuplicateScan = await scanAndCacheExternalDuplicates({
+    db,
+    listing,
+    images: images.rows
+  });
+
   const automatedReview = buildAutomatedListingReview({
     listing,
     images: images.rows,
@@ -162,7 +169,8 @@ async function loadPropertyReview(propertyId) {
     likelyDuplicates: likelyDuplicates.rows,
     reusedImages: reusedImages.rows,
     idNumberMatches: idNumberMatches.rows,
-    matchingUsers: matchingUsers.rows
+    matchingUsers: matchingUsers.rows,
+    externalDuplicateScan
   });
 
   return {
@@ -187,7 +195,7 @@ async function loadPropertyReview(propertyId) {
       id_number_matches: idNumberMatches.rows,
       matching_user_count: matchingUsers.rows.length,
       matching_users: matchingUsers.rows,
-      external_duplicate_check: 'not_configured'
+      external_duplicate_check: externalDuplicateScan
     },
     events: events.rows
   };

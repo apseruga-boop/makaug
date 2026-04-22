@@ -18,6 +18,7 @@ const {
   sendOwnerListingStatusNotifications,
   sendOwnerListingSubmissionNotifications
 } = require('../services/listingModerationService');
+const { scanAndCacheExternalDuplicates } = require('../services/externalDuplicateScanService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -241,6 +242,12 @@ async function loadAutomatedReviewForProperty(propertyId) {
     )
   ]);
 
+  const externalDuplicateScan = await scanAndCacheExternalDuplicates({
+    db,
+    listing: property,
+    images
+  });
+
   return buildAutomatedListingReview({
     listing: property,
     images,
@@ -248,7 +255,8 @@ async function loadAutomatedReviewForProperty(propertyId) {
     likelyDuplicates: likelyDuplicates.rows,
     reusedImages: reusedImages.rows,
     idNumberMatches: idNumberMatches.rows,
-    matchingUsers: matchingUsers.rows
+    matchingUsers: matchingUsers.rows,
+    externalDuplicateScan
   });
 }
 

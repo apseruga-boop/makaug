@@ -130,6 +130,33 @@ function checkResult(key, status, message, evidence = {}, blocking = status === 
   };
 }
 
+function normalizeExternalDuplicateScan(scan = {}) {
+  const source = scan && typeof scan === 'object' ? scan : {};
+  const status = ['pass', 'warning', 'fail'].includes(String(source.status || '').toLowerCase())
+    ? String(source.status).toLowerCase()
+    : 'warning';
+  const provider = source.provider || 'not_run';
+  const matches = Array.isArray(source.matches) ? source.matches.slice(0, 8) : [];
+  return {
+    status,
+    blocking: source.blocking === true,
+    message: source.message || (status === 'pass'
+      ? 'External duplicate scan completed; no strong external duplicates found.'
+      : 'External duplicate scan needs review.'),
+    evidence: {
+      provider,
+      cached: source.cached === true,
+      checked_at: source.checked_at || null,
+      query: source.query || null,
+      search_url: source.search_url || null,
+      result_count: source.result_count ?? matches.length,
+      high_confidence_count: source.high_confidence_count || 0,
+      possible_match_count: source.possible_match_count || 0,
+      matches
+    }
+  };
+}
+
 function buildAutomatedListingReview({
   listing = {},
   images = [],
@@ -137,7 +164,8 @@ function buildAutomatedListingReview({
   likelyDuplicates = [],
   reusedImages = [],
   idNumberMatches = [],
-  matchingUsers = []
+  matchingUsers = [],
+  externalDuplicateScan = null
 } = {}) {
   const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
   const imageUrls = images.map((item) => String(item?.url || '').trim()).filter(Boolean);
@@ -160,6 +188,7 @@ function buildAutomatedListingReview({
   const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
   const hasViewableIdDocument = isUsableMediaUrl(idDocumentUrl, { allowPdf: true });
   const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
+  const externalScan = normalizeExternalDuplicateScan(externalDuplicateScan);
 
   const checks = [
     checkResult(
@@ -263,10 +292,10 @@ function buildAutomatedListingReview({
     ),
     checkResult(
       'external_duplicate_checked',
-      'warning',
-      'External website duplicate scan is not connected yet; internal duplicate and reused-image checks have run.',
-      { provider: 'not_configured' },
-      false
+      externalScan.status,
+      externalScan.message,
+      externalScan.evidence,
+      externalScan.blocking
     )
   ];
 
