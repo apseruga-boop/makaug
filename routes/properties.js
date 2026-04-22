@@ -106,6 +106,22 @@ function canUseOwnerEditToken(property, token) {
   return isOwnerEditTokenValid(token, property.owner_edit_token_hash);
 }
 
+function publicExtraFields(extraFields = {}) {
+  const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  return {
+    city: extra.city || null,
+    neighborhood: extra.neighborhood || null,
+    region: extra.region || null,
+    resolved_location_label: extra.resolved_location_label || null,
+    public_display_name: extra.public_display_name || null,
+    area_highlights: extra.area_highlights || '',
+    nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
+    size_raw: extra.size_raw || '',
+    featured: extra.featured === true,
+    featured_at: extra.featured_at || null
+  };
+}
+
 function publicPropertyRow(property, images = []) {
   const {
     owner_edit_token_hash: _ownerEditTokenHash,
@@ -116,6 +132,9 @@ function publicPropertyRow(property, images = []) {
   } = property || {};
   return {
     ...safeProperty,
+    extra_fields: publicExtraFields(property?.extra_fields),
+    featured: safeProperty.featured === true || String(safeProperty.extra_fields?.featured || '').toLowerCase() === 'true',
+    featured_at: safeProperty.featured_at || safeProperty.extra_fields?.featured_at || null,
     id_number_present: !!property?.id_number,
     id_document_present: !!property?.id_document_name,
     images
@@ -509,6 +528,8 @@ router.get('/', async (req, res, next) => {
         p.new_until,
         p.inquiry_reference,
         p.amenities,
+        (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
+        p.extra_fields->>'featured_at' AS featured_at,
         img.url AS primary_image_url,
         CASE
           WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'

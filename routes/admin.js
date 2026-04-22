@@ -397,6 +397,9 @@ router.get('/properties/live', async (req, res, next) => {
         p.reviewed_at,
         p.approved_at,
         p.last_moderation_notification_at,
+        p.extra_fields,
+        (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
+        p.extra_fields->>'featured_at' AS featured_at,
         COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) AS live_at,
         COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) + INTERVAL '14 days' AS follow_up_due_at,
         (NOW() >= COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) + INTERVAL '14 days') AS follow_up_due,
@@ -973,6 +976,54 @@ router.patch('/properties/:id/registration-status', async (req, res, next) => {
     await writeAudit('admin_property_lister_registration_status_updated', {
       property_id: req.params.id,
       registration_status: registrationStatus
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/featured', async (req, res, next) => {
+  try {
+    const featured = req.body.featured === true || String(req.body.featured || '').toLowerCase() === 'true';
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         extra_fields = CASE
+           WHEN $2::boolean THEN COALESCE(extra_fields, '{}'::jsonb)
+             || jsonb_build_object(
+               'featured', true,
+               'featured_at', NOW()::text,
+               'featured_by', $3::text
+             )
+           ELSE (COALESCE(extra_fields, '{}'::jsonb)
+             || jsonb_build_object(
+               'featured', false,
+               'featured_removed_at', NOW()::text,
+               'featured_removed_by', $3::text
+             ))
+         END,
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING
+         id,
+         title,
+         status,
+         extra_fields,
+         (COALESCE(extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
+         extra_fields->>'featured_at' AS featured_at,
+         updated_at`,
+      [req.params.id, featured, adminActorId(req)]
+    );
+
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    await writeAudit('admin_property_featured_updated', {
+      property_id: req.params.id,
+      featured
     }, adminActorId(req));
 
     return res.json({ ok: true, data: updated.rows[0] });

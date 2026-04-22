@@ -596,7 +596,6 @@
         <a id="nav-mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-ai" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
         <a id="nav-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
-        <a id="nav-africa" onclick="showPage('africa')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Africa Markets</a>
       </div>
       <div class="flex items-center gap-2">
         <button id="nav-list-btn" onclick="openListPropertyOptions()" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</button>
@@ -613,7 +612,6 @@
       <a id="mnav-mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-ai" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
       <a id="mnav-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
-      <a id="mnav-africa" onclick="showPage('africa');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Africa Markets</a>
     </div>
   </nav>
 
@@ -1231,9 +1229,8 @@
               <option value="">Any Language</option>
             </select>
             <select id="broker-status-f" onchange="applyBrokerFilters()" class="border border-green-100 rounded-xl px-4 py-3 text-sm bg-white w-full md:w-40">
-              <option value="">Any Verification</option>
-              <option value="registered">AREA Verified</option>
-              <option value="not_registered">Verification pending</option>
+              <option value="">All Brokers</option>
+              <option value="registered">Registered Brokers</option>
             </select>
             <button onclick="openModal('broker-reg-modal')" class="md:ml-auto shrink-0 bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
               + Register as Broker
@@ -1550,67 +1547,6 @@
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-3-title" class="text-gray-900">Identity integrity</strong><p id="fraud-monitor-3-sub" class="text-gray-600 mt-1">NIN format mismatch, OTP mismatch, impossible contact patterns.</p></div>
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-4-title" class="text-gray-900">Behavior risk</strong><p id="fraud-monitor-4-sub" class="text-gray-600 mt-1">Bulk spam, repeated complaint signals, repeat fraud patterns.</p></div>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="page-africa" class="page">
-    <div class="bg-gradient-to-br from-green-900 via-emerald-800 to-amber-700 py-10 text-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <h1 id="africa-page-title" class="text-3xl md:text-4xl font-black serif">Africa Markets</h1>
-        <p id="africa-page-sub" class="text-green-50 mt-2 max-w-3xl">
-          MakaUg is preparing one trusted property database that can power country-specific sites across Africa while keeping moderation, verification, and broker controls in one place.
-        </p>
-      </div>
-    </div>
-    <div class="max-w-7xl mx-auto px-4 py-10">
-      <div class="grid lg:grid-cols-[1.1fr,0.9fr] gap-6 items-start">
-        <div class="bg-white border border-green-100 rounded-2xl p-6">
-          <div class="text-xs uppercase tracking-wide text-green-700 font-bold mb-2">Expansion Pipeline</div>
-          <h2 class="text-2xl font-black text-gray-900 serif">One platform, country-specific property portals</h2>
-          <p class="text-sm text-gray-600 mt-3 leading-relaxed">
-            Uganda stays the live operating base. The next country pages will share the same moderation logic, owner verification workflow, broker registration controls, and listing database patterns, while each public URL can carry its own market brand.
-          </p>
-          <div class="grid sm:grid-cols-3 gap-3 mt-5 text-sm">
-            <div class="rounded-xl bg-green-50 border border-green-100 p-3">
-              <div class="font-bold text-green-900">Shared Database</div>
-              <p class="text-green-800 mt-1">Listings, brokers, verification history, and fraud signals stay connected.</p>
-            </div>
-            <div class="rounded-xl bg-amber-50 border border-amber-100 p-3">
-              <div class="font-bold text-amber-900">Local URLs</div>
-              <p class="text-amber-800 mt-1">Each country can have its own public site and market language.</p>
-            </div>
-            <div class="rounded-xl bg-gray-50 border border-gray-100 p-3">
-              <div class="font-bold text-gray-900">Admin Controlled</div>
-              <p class="text-gray-700 mt-1">Verification and registration remain controlled through the admin workflow.</p>
-            </div>
-          </div>
-        </div>
-
-        <button type="button" class="text-left bg-white border border-green-100 rounded-2xl p-6 hover:border-green-300 hover:shadow-md transition-all">
-          <div class="rounded-2xl bg-gradient-to-br from-green-50 via-white to-amber-50 border border-green-100 p-5">
-            <svg viewBox="0 0 260 300" role="img" aria-label="Stylized map of Kenya" class="w-full max-w-[260px] mx-auto drop-shadow-sm">
-              <defs>
-                <linearGradient id="kenya-grad" x1="0" x2="1" y1="0" y2="1">
-                  <stop offset="0%" stop-color="#166534"></stop>
-                  <stop offset="55%" stop-color="#22c55e"></stop>
-                  <stop offset="100%" stop-color="#d97706"></stop>
-                </linearGradient>
-              </defs>
-              <path d="M134 14 175 33 204 80 197 117 226 166 205 207 166 229 151 273 105 286 75 248 63 204 33 169 46 126 42 82 83 58 105 26Z" fill="url(#kenya-grad)" stroke="#14532d" stroke-width="5" stroke-linejoin="round"></path>
-              <path d="M111 33c12 33 19 66 21 99 2 44-7 86-27 127" fill="none" stroke="#ffffff" stroke-opacity=".72" stroke-width="6" stroke-linecap="round"></path>
-              <circle cx="150" cy="151" r="8" fill="#ffffff"></circle>
-              <text x="162" y="157" font-size="15" font-weight="800" fill="#14532d">Nairobi</text>
-            </svg>
-          </div>
-          <div class="mt-5">
-            <div class="text-xs uppercase tracking-wide text-green-700 font-bold">First Expansion Market</div>
-            <h3 class="text-3xl font-black text-gray-900 serif mt-1">Kenya</h3>
-            <p class="text-sm text-gray-600 mt-2">
-              Placeholder market page ready for the next Kenya-specific HTML build, branding, and URL setup.
-            </p>
-          </div>
-        </button>
       </div>
     </div>
   </div>
@@ -2461,7 +2397,7 @@
             <div id="admin-stat-registered-agents" class="text-3xl font-black text-green-700 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Verification Pending Brokers</div>
+            <div class="text-sm text-gray-500">Broker Reviews Needed</div>
             <div id="admin-stat-not-registered-agents" class="text-3xl font-black text-amber-600 mt-1">0</div>
           </div>
         </div>
@@ -2493,6 +2429,17 @@
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Live List</button>
           </div>
           <div id="admin-live-listings-table" class="space-y-3"></div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Featured Properties Control</h3>
+              <p class="text-xs text-gray-500 mt-1">Choose which live listings appear in the homepage Featured Properties section.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Featured</button>
+          </div>
+          <div id="admin-featured-listings-table" class="space-y-3"></div>
         </div>
 
         <div id="admin-review-panel" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
@@ -3417,6 +3364,7 @@
     let adminReviewEvidence = {};
     let adminWhatsAppDraft = null;
     let publicListingsApiLoading = false;
+    let publicListingsFromApiLoaded = false;
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -3540,7 +3488,6 @@
         navMortgage: "Mortgage Finder",
         navAI: "Discover AI Chatbot",
         navFraud: "Fraud",
-        navAfrica: "Africa Markets",
         heroBadge: "Uganda's #1 Free Property Platform",
         heroTitleHtml: "Discover your perfect <span class=\"text-green-300\">maka</span>",
         heroSubtitle: "Your home search starts here. Find properties to rent, buy or invest.",
@@ -3566,7 +3513,6 @@
         pageAbout: "About makaug.com",
         pageSaved: "Saved Properties",
         pageAccount: "My Account",
-        pageAfrica: "Africa Markets",
         langLabel: "Language",
         langBanner: "Use makaug in 7 Ugandan languages",
         areaOnly: "This area only",
@@ -3606,8 +3552,8 @@
         badgeLand: "Land",
         listingAgent: "Broker Listed",
         listingPrivate: "Private Listed",
-        listingRegistered: "Verified",
-        listingNotRegistered: "Verification Pending",
+        listingRegistered: "Registered",
+        listingNotRegistered: "",
         footerGrowth: "Google Ads ready and SEO-indexing enabled for growth campaigns.",
         languageSet: "Language set"
       },
@@ -3668,7 +3614,7 @@
         listingAgent: "Eteekeddwako Broker",
         listingPrivate: "Eteekeddwako Nnyiniyo",
         listingRegistered: "Akwatiddwa",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         footerGrowth: "Google Ads zitegekeddwa era SEO indexing etegeke okuyamba okukula.",
         languageSet: "Olulimi lulondeddwa"
       },
@@ -3729,7 +3675,7 @@
         listingAgent: "Imeorodheshwa na Broker",
         listingPrivate: "Imeorodheshwa na Mmiliki",
         listingRegistered: "Amesajiliwa",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         footerGrowth: "Google Ads iko tayari na SEO indexing imewezeshwa kwa ukuaji.",
         languageSet: "Lugha imewekwa"
       },
@@ -3762,7 +3708,7 @@
         listingAgent: "Broker omako",
         listingPrivate: "Lac ma pe broker",
         listingRegistered: "Akwannye",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         languageSet: "Dhok oketo"
       },
       ny: {
@@ -3794,7 +3740,7 @@
         listingAgent: "Bya broker",
         listingPrivate: "Bya nnyiniyo",
         listingRegistered: "Ari omwandikisi",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         languageSet: "Orurimi rwahinduka"
       },
       rn: {
@@ -3826,7 +3772,7 @@
         listingAgent: "Byashyizweho na broker",
         listingPrivate: "Byashyizweho na nyirabyo",
         listingRegistered: "Yiyandikishije",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         languageSet: "Orurimi rwahindurwa"
       },
       sm: {
@@ -3858,7 +3804,7 @@
         listingAgent: "Byateekebwawo na broker",
         listingPrivate: "Byateekebwawo na nnyini",
         listingRegistered: "Awandiikiddwa",
-        listingNotRegistered: "Verification Pending",
+        listingNotRegistered: "",
         languageSet: "Olulimi luhindukiddwa"
       }
     };
@@ -5560,7 +5506,6 @@
       setTextById("nav-mortgage", tr("navMortgage"));
       setTextById("nav-ai", tr("navAI"));
       setTextById("nav-fraud", tr("navFraud"));
-      setTextById("nav-africa", tr("navAfrica"));
       setTextById("mnav-sale", tr("navSale"));
       setTextById("mnav-rent", tr("navRent"));
       setTextById("mnav-students", tr("navStudents"));
@@ -5570,7 +5515,6 @@
       setTextById("mnav-mortgage", tr("navMortgage"));
       setTextById("mnav-ai", tr("navAI"));
       setTextById("mnav-fraud", tr("navFraud"));
-      setTextById("mnav-africa", tr("navAfrica"));
       setTextById("nav-list-btn", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
 
@@ -5600,7 +5544,6 @@
       setPageHeading("page-brokers", tr("pageBrokers"));
       setPageHeading("page-mortgage", tr("pageMortgage"));
       setPageHeading("page-ai-chatbot", tr("pageAI"));
-      setPageHeading("page-africa", tr("pageAfrica"));
       setPageHeading("page-list-property", tr("pageList"));
       setPageHeading("page-about", tr("pageAbout"));
       setPageHeading("page-saved", tr("pageSaved"));
@@ -5871,7 +5814,7 @@
       const all = getSavedStorageObject();
       const key = getSignedInUserStorageId();
       const arr = Array.isArray(all[key]) ? all[key] : [];
-      savedIds = new Set(arr.filter((x) => Number.isFinite(Number(x))).map((x) => Number(x)));
+      savedIds = new Set(arr.filter((x) => String(x || "").trim()).map((x) => String(x)));
     }
 
     function persistSavedIdsForCurrentUser() {
@@ -5879,6 +5822,11 @@
       const key = getSignedInUserStorageId();
       all[key] = Array.from(savedIds);
       saveSavedStorageObject(all);
+    }
+
+    function isPropertySaved(propertyId) {
+      const key = String(propertyId);
+      return Array.from(savedIds).some((value) => String(value) === key);
     }
 
     function getCurrentUserActivity() {
@@ -5904,7 +5852,7 @@
       siteMetrics.propertyViews[pid] = (parseInt(siteMetrics.propertyViews[pid] || 0, 10) || 0) + 1;
       const act = getCurrentUserActivity();
       act.viewed[pid] = (parseInt(act.viewed[pid] || 0, 10) || 0) + 1;
-      act.recentViewed = [propertyId, ...(act.recentViewed || []).filter((x) => Number(x) !== Number(propertyId))].slice(0, 24);
+      act.recentViewed = [propertyId, ...(act.recentViewed || []).filter((x) => String(x) !== String(propertyId))].slice(0, 24);
       saveDashboardState();
     }
 
@@ -6130,9 +6078,10 @@
     }
 
     function renderDashboardCard(p) {
+      const idArg = propertyIdArg(p.id);
       return `
         <div class="border border-gray-200 rounded-xl p-3 bg-white">
-          <button onclick="openDetail(${p.id})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
+          <button onclick="openDetail(${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
           <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
           <div class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</div>
           <div class="mt-2 text-xs text-gray-500 flex gap-3">
@@ -6158,10 +6107,10 @@
       body.classList.remove("hidden");
 
       const activity = getCurrentUserActivity();
-      const viewedIds = Object.keys(activity.viewed || {}).map((x) => Number(x)).filter((x) => Number.isFinite(x));
-      const savedList = getPublicListings().filter((p) => savedIds.has(p.id));
+      const viewedIds = Object.keys(activity.viewed || {});
+      const savedList = getPublicListings().filter((p) => isPropertySaved(p.id));
       const recentViewed = (activity.recentViewed || [])
-        .map((id) => PROPERTIES.find((p) => p.id === Number(id)))
+        .map((id) => PROPERTIES.find((p) => String(p.id) === String(id)))
         .filter((item) => item && isListingPublicVisible(item))
         .slice(0, 6);
 
@@ -6226,7 +6175,7 @@
 
       if (nameEl) nameEl.textContent = `${broker.name} • ${broker.company}`;
       if (statusEl) {
-        const regLabel = broker.registration_status === "registered" ? "AREA Verified" : "Verification pending";
+        const regLabel = broker.registration_status === "registered" ? "Registered" : "Under review";
         statusEl.textContent = `${regLabel} broker`;
       }
 
@@ -6382,13 +6331,14 @@
           listingsGrid.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No sourced listings found for your field code yet.</div>`;
         } else {
           listingsGrid.innerHTML = sourcedListings.map((p) => {
+            const idArg = propertyIdArg(p.id);
             const badgeClass = p.review_status === "approved"
               ? "bg-green-100 text-green-700"
               : (p.review_status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700");
             const badgeLabel = p.review_status === "approved" ? "Approved" : (p.review_status === "rejected" ? "Rejected" : "Pending");
             return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
               <div class="flex items-start justify-between gap-2">
-                <button onclick="openDetail(${p.id})" class="text-left font-bold text-gray-800 hover:text-green-700 line-clamp-1">${p.title}</button>
+                <button onclick="openDetail(${idArg})" class="text-left font-bold text-gray-800 hover:text-green-700 line-clamp-1">${p.title}</button>
                 <span class="text-xs font-semibold px-2 py-1 rounded ${badgeClass}">${badgeLabel}</span>
               </div>
               <p class="text-xs text-gray-500 mt-1">${p.area || "-"}, ${p.district || "-"}</p>
@@ -6426,6 +6376,23 @@
 
     function getPublicListings() {
       return PROPERTIES.filter((p) => isListingPublicVisible(p));
+    }
+
+    function isFeaturedListing(property) {
+      return property?.featured === true || String(property?.extra_fields?.featured || "").toLowerCase() === "true";
+    }
+
+    function getFeaturedListings(listings) {
+      const source = publicListingsFromApiLoaded
+        ? listings.filter((p) => p.remote_source === "api")
+        : listings;
+      return source
+        .filter((p) => isFeaturedListing(p))
+        .sort((a, b) => {
+          const ad = parseDateSafe(a.featured_at || a.extra_fields?.featured_at || a.updated_at || a.created_at)?.getTime() || 0;
+          const bd = parseDateSafe(b.featured_at || b.extra_fields?.featured_at || b.updated_at || b.created_at)?.getTime() || 0;
+          return bd - ad;
+        });
     }
 
     function getKnownUsersForAdmin() {
@@ -6561,6 +6528,10 @@
       return adminEscape(JSON.stringify(String(value || "")));
     }
 
+    function propertyIdArg(value) {
+      return adminListingIdArg(value);
+    }
+
     function adminStatusBadge(status) {
       const st = normalizeModerationStatus(status);
       if (st === "approved") return { cls: "bg-green-100 text-green-700", label: "Live" };
@@ -6574,7 +6545,7 @@
     function adminVerificationBadge(status) {
       const st = String(status || "").toLowerCase() === "registered" ? "registered" : "not_registered";
       if (st === "registered") return { cls: "bg-green-100 text-green-700", label: "Verified / Registered" };
-      return { cls: "bg-gray-100 text-gray-700", label: "Verification pending" };
+      return { cls: "bg-gray-100 text-gray-700", label: "Review needed" };
     }
 
     async function fetchRemoteAdminSnapshot() {
@@ -6619,6 +6590,7 @@
         const backendId = String(p.backend_id || p.id || "");
         const reviewId = backendId || localId;
         const reviewArg = adminListingIdArg(reviewId);
+        const featured = isFeaturedListing(p);
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex justify-between items-start gap-3 flex-wrap">
@@ -6707,6 +6679,46 @@
       ].join("\n");
     }
 
+    function renderAdminFeaturedRows(listings) {
+      const wrap = document.getElementById("admin-featured-listings-table");
+      if (!wrap) return;
+      const live = [...(listings || [])]
+        .filter((p) => normalizeModerationStatus(p.status) === "approved")
+        .sort((a, b) => {
+          const af = isFeaturedListing(a) ? 1 : 0;
+          const bf = isFeaturedListing(b) ? 1 : 0;
+          if (af !== bf) return bf - af;
+          const ad = parseDateSafe(a.featured_at || a.extra_fields?.featured_at || a.approved_at || a.updated_at || a.created_at)?.getTime() || 0;
+          const bd = parseDateSafe(b.featured_at || b.extra_fields?.featured_at || b.approved_at || b.updated_at || b.created_at)?.getTime() || 0;
+          return bd - ad;
+        })
+        .slice(0, 75);
+      if (!live.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings available for featured placement yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = live.map((p) => {
+        const id = String(p.backend_id || p.id || "");
+        const idArg = adminListingIdArg(id);
+        const featured = isFeaturedListing(p);
+        return `
+          <div class="border ${featured ? "border-green-200 bg-green-50" : "border-gray-200 bg-white"} rounded-xl p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">${featured ? `Featured since ${adminEscape(formatListingDate(p.featured_at || p.extra_fields?.featured_at || p.updated_at))}` : "Not currently on the homepage featured section."}</div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 rounded ${featured ? "bg-green-700 text-white" : "bg-gray-100 text-gray-700"}">${featured ? "Featured" : "Available"}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Preview</button>
+              <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-green-700 hover:bg-green-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature on Homepage"}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
     function renderAdminLiveListingsRows(listings) {
       const wrap = document.getElementById("admin-live-listings-table");
       if (!wrap) return;
@@ -6718,6 +6730,7 @@
       wrap.innerHTML = view.map((p) => {
         const id = String(p.backend_id || p.id || "");
         const idArg = adminListingIdArg(id);
+        const featured = isFeaturedListing(p);
         const followClass = p.follow_up_due ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-700";
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
@@ -6732,6 +6745,7 @@
             <div class="mt-3 flex flex-wrap gap-2">
               <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Live Listing</button>
               <button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Follow-up</button>
+              <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>
               <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Record</button>
             </div>
           </div>`;
@@ -6784,6 +6798,7 @@
             <div class="mt-3 flex flex-wrap gap-2">
               <button onclick="openAdminListingReview(${reviewArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review</button>
               ${status !== "pending" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'pending', ${reviewArg})" class="bg-amber-500 hover:bg-amber-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Pending</button>` : ""}
+              ${status === "approved" ? `<button onclick="adminSetListingFeatured(${reviewArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>` : ""}
               ${status !== "hidden" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'hidden', ${reviewArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>` : ""}
               ${status !== "deleted" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'deleted', ${reviewArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Delete</button>` : ""}
             </div>
@@ -6889,6 +6904,7 @@
       renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
       renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
+      renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
@@ -7634,6 +7650,56 @@
         });
       }
       toast(normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`);
+    }
+
+    async function adminSetListingFeatured(propertyId, featured) {
+      const id = String(propertyId || "");
+      if (!id) return;
+      if (!canUseLiveAdminApi()) {
+        const local = PROPERTIES.find((p) => String(p.id) === id || String(p.backend_id || "") === id);
+        if (local) {
+          local.featured = !!featured;
+          local.featured_at = featured ? new Date().toISOString() : local.featured_at;
+          local.extra_fields = {
+            ...(local.extra_fields || {}),
+            featured: !!featured,
+            ...(featured ? { featured_at: local.featured_at } : {})
+          };
+          renderAll();
+          await renderAdminDashboard();
+          toast(featured ? "Listing featured locally." : "Listing removed from local featured.");
+        } else {
+          toast("Listing not found.");
+        }
+        return;
+      }
+      try {
+        const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(id)}/featured`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { featured: !!featured }
+        });
+        const data = response?.data || {};
+        const applyFeatured = (item) => {
+          if (!item) return item;
+          item.featured = data.featured === true || !!featured;
+          item.featured_at = data.featured_at || data.extra_fields?.featured_at || item.featured_at;
+          item.extra_fields = {
+            ...(item.extra_fields || {}),
+            ...(data.extra_fields || {}),
+            featured: data.featured === true || !!featured
+          };
+          return item;
+        };
+        applyFeatured(PROPERTIES.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
+        applyFeatured(adminRemoteListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
+        applyFeatured(adminLiveListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
+        renderAll();
+        await renderAdminDashboard();
+        toast(featured ? "Listing added to Featured Properties." : "Listing removed from Featured Properties.");
+      } catch (e) {
+        toast(`Featured update failed: ${e.message || "error"}`);
+      }
     }
 
     async function adminSetAgentStatus(agentId, status) {
@@ -11401,27 +11467,25 @@
           icon: "fas fa-circle-check"
         };
       }
-      return {
-        label: tr("listingNotRegistered"),
-        cls: "bg-slate-600 text-white",
-        icon: "fas fa-shield-halved"
-      };
+      return null;
     }
 
     function brokerRegistrationMeta(broker) {
       const isRegistered = (broker?.registration_status || "not_registered") === "registered";
       if (isRegistered) {
         return {
-          label: "AREA Verified",
+          label: "Registered",
           cls: "bg-green-50 text-green-700",
           icon: "fas fa-circle-check"
         };
       }
-      return {
-        label: "Verification pending",
-        cls: "bg-gray-50 text-gray-700",
-        icon: "fas fa-shield-halved"
-      };
+      return null;
+    }
+
+    function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
+      const meta = brokerRegistrationMeta(broker);
+      if (!meta) return "";
+      return `<span class="inline-flex items-center gap-1 ${meta.cls} ${textSize} font-semibold px-2.5 py-1 rounded-full"><i class="${meta.icon} text-[10px]"></i>${meta.label}</span>`;
     }
 
     function getPropertyGalleryPhotos(property) {
@@ -11591,14 +11655,15 @@
     }
 
     function propCard(p) {
-      const saved = savedIds.has(p.id);
+      const idArg = propertyIdArg(p.id);
+      const saved = isPropertySaved(p.id);
       const broker = BROKERS.find((b) => b.id === p.agent);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
       const showNew = isListingNew(p);
       const addedMeta = listingDateMeta(p);
       return `
-        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openDetail(${p.id})">
+        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openDetail(${idArg})">
           <div class="h-48 relative overflow-hidden">
             <img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}" alt="${p.title}" class="w-full h-full object-cover">
             <div class="absolute top-2 left-2 flex flex-col gap-1.5">
@@ -11607,11 +11672,11 @@
               <div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
                 <i class="${source.icon} text-[10px]"></i> ${source.label}
               </div>
-              <div class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
+              ${registration ? `<div class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
                 <i class="${registration.icon} text-[10px]"></i> ${registration.label}
-              </div>
+              </div>` : ""}
             </div>
-            <button onclick="event.stopPropagation(); toggleSave(${p.id})" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
+            <button onclick="event.stopPropagation(); toggleSave(${idArg})" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
               <i class="${saved ? "fas text-red-500" : "far text-gray-500"} fa-heart"></i>
             </button>
             <div class="absolute bottom-2 right-2 bg-green-900/90 text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, p.period)}</div>
@@ -11628,11 +11693,11 @@
             <div class="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
               <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
               <div class="flex items-center gap-1">
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
               </div>
             </div>
           </div>
@@ -11691,7 +11756,8 @@
     }
 
     function studentCard(p) {
-      const saved = savedIds.has(p.id);
+      const idArg = propertyIdArg(p.id);
+      const saved = isPropertySaved(p.id);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
       const addedMeta = listingDateMeta(p);
@@ -11706,11 +11772,11 @@
       const bottomText = p.student_walk_text || "Near campus";
       const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
       return `
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openDetail(${p.id})">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openDetail(${idArg})">
           <div class="relative h-48 overflow-hidden">
             <img src="${p.img}" alt="${p.title}" class="w-full h-full object-cover">
             ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
-            <button onclick="event.stopPropagation(); toggleSave(${p.id})" class="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
+            <button onclick="event.stopPropagation(); toggleSave(${idArg})" class="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
               <i class="${saved ? "fas text-red-500" : "far text-gray-500"} fa-heart"></i>
             </button>
             <div class="absolute bottom-2 left-2 bg-gray-900/90 text-white font-bold px-3 py-1 rounded-lg text-sm">${fmtP(p.price, p.period || "sem")}</div>
@@ -11726,9 +11792,9 @@
               <span class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
                 <i class="${source.icon} text-[10px]"></i> ${source.label}
               </span>
-              <span class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1 ml-1.5">
+              ${registration ? `<span class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1 ml-1.5">
                 <i class="${registration.icon} text-[10px]"></i> ${registration.label}
-              </span>
+              </span>` : ""}
             </div>
             ${uniTags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="bg-indigo-600 text-white text-xs font-semibold px-2 py-1 rounded">${u}</span>`).join("")}</div>` : ""}
             ${amenities.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${amenities.map((a) => `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded inline-flex items-center gap-1"><i class="${studentAmenityIcon(a)} text-[10px]"></i>${a}</span>`).join("")}</div>` : ""}
@@ -11739,11 +11805,11 @@
             <div class="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
               <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
               <div class="flex items-center gap-1">
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${p.id}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
+                <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
               </div>
             </div>
           </div>
@@ -11782,9 +11848,7 @@
             <div class="w-14 h-14 rounded-full bg-green-50 border-4 border-green-100 mx-auto flex items-center justify-center text-2xl mb-2.5">${b.emoji || "👔"}</div>
             <h3 class="text-lg font-bold text-gray-900 text-center leading-tight">${b.name}</h3>
             <p class="text-center text-gray-500 text-sm">${b.company}</p>
-            <div class="mt-3 text-center">
-              <span class="inline-flex items-center gap-1 ${brokerRegistrationMeta(b).cls} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="${brokerRegistrationMeta(b).icon} text-[10px]"></i>${brokerRegistrationMeta(b).label}</span>
-            </div>
+            ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
 
             <div class="grid grid-cols-3 gap-2 mt-4 text-center">
               <div>
@@ -11820,9 +11884,7 @@
           <div class="w-14 h-14 rounded-full bg-green-50 border border-green-100 mx-auto flex items-center justify-center text-2xl mb-3">${b.emoji || "👔"}</div>
           <h3 class="font-bold text-gray-800 text-center">${b.name}</h3>
           <p class="text-sm text-gray-500 text-center">${b.company}</p>
-          <div class="mt-2 text-center">
-            <span class="inline-flex items-center gap-1 ${brokerRegistrationMeta(b).cls} text-[11px] font-semibold px-2 py-1 rounded-full"><i class="${brokerRegistrationMeta(b).icon} text-[10px]"></i>${brokerRegistrationMeta(b).label}</span>
-          </div>
+          ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
           <p class="text-xs text-gray-500 mt-2 text-center"><i class="fas fa-map-marker-alt text-green-600"></i> ${b.area}</p>
           <div class="mt-3 flex justify-center gap-5 text-sm">
             <span><strong>${b.listings}</strong> listings</span>
@@ -11839,7 +11901,7 @@
     function renderSaved() {
       const el = document.getElementById("saved-content");
       if (!el) return;
-      const list = getPublicListings().filter((p) => savedIds.has(p.id));
+      const list = getPublicListings().filter((p) => isPropertySaved(p.id));
       if (!list.length) {
         el.innerHTML = `
           <div class="text-center py-10">
@@ -11854,7 +11916,7 @@
 
     function renderAll() {
       const publicListings = getPublicListings();
-      renderGrid("home-grid", publicListings.filter((p) => p.featured).slice(0, 6));
+      renderGrid("home-grid", getFeaturedListings(publicListings).slice(0, 6));
       renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
       renderGrid("rent-grid", publicListings.filter((p) => normalizeType(p.type) === "rent"));
       const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
@@ -11946,6 +12008,8 @@
         lng: Number(p?.longitude),
         status: p?.status || "pending",
         moderation_status: normalizeModerationStatus(p?.status),
+        featured: p?.featured === true || String(p?.extra_fields?.featured || "").toLowerCase() === "true",
+        featured_at: p?.featured_at || p?.extra_fields?.featured_at || null,
         registration_status: p?.registration_status || p?.agent_registration_status || p?.extra_fields?.lister_registration_status || "not_registered",
         lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
         inquiry_reference: p?.inquiry_reference || "",
@@ -11984,6 +12048,7 @@
           }
         }
         rows.forEach((p) => upsertPropertyForUi(p));
+        publicListingsFromApiLoaded = true;
         return true;
       } catch (e) {
         if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
@@ -14188,7 +14253,13 @@
       const list = getPublicListings().filter((p) => normalizeType(p.type) === key);
       if (order === "price_asc") list.sort((a, b) => a.price - b.price);
       if (order === "price_desc") list.sort((a, b) => b.price - a.price);
-      if (order === "newest") list.sort((a, b) => b.id - a.id);
+      if (order === "newest") {
+        list.sort((a, b) => {
+          const ad = parseDateSafe(a.created_at || a.updated_at)?.getTime() || 0;
+          const bd = parseDateSafe(b.created_at || b.updated_at)?.getTime() || 0;
+          return bd - ad;
+        });
+      }
       renderGrid(gridMap[page], list);
     }
 
@@ -14649,7 +14720,7 @@
     }
 
     function openDetail(id) {
-      const p = PROPERTIES.find((x) => x.id === id);
+      const p = PROPERTIES.find((x) => String(x.id) === String(id) || String(x.backend_id || "") === String(id));
       if (!p) return;
       const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
       const isOwnerPreviewViewer = p.owner_preview_visible === true;
@@ -14717,7 +14788,7 @@
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="${badgeColor(p.type)} text-white text-xs font-bold px-2 py-1 rounded">${badgeLabel(p.type)}</span>
                       <span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>
-                      <span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>
+                      ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
                     </div>
                     <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${p.title}</h1>
                     <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
@@ -14847,7 +14918,7 @@
                   <h1 class="text-3xl font-black text-gray-900">${b.name}</h1>
                   <p class="text-gray-500 mt-1">${b.company}</p>
                   <div class="mt-2 flex flex-wrap gap-2">
-                    <span class="inline-flex items-center gap-1 ${brokerRegistrationMeta(b).cls} text-xs font-semibold px-2.5 py-1 rounded-full"><i class="${brokerRegistrationMeta(b).icon} text-[10px]"></i>${brokerRegistrationMeta(b).label}</span>
+                    ${renderBrokerRegistrationBadge(b)}
                     <span class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full">⭐ ${b.rating} Rating</span>
                   </div>
                 </div>
@@ -15074,14 +15145,15 @@
       list.forEach((p) => {
         if (typeof p.lat !== "number" || typeof p.lng !== "number") return;
         const marker = L.marker([p.lat, p.lng]).addTo(maps[mapId]);
+        const idArg = propertyIdArg(p.id);
         marker.bindPopup(`
           <div style="min-width:200px">
-            <button type="button" onclick="openDetail(${p.id}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
+            <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
               ${p.title}
             </button>
             <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${p.area}, ${p.district}</div>
             <div style="font-weight:700;color:#166534;margin-bottom:8px;">${fmtP(p.price, p.period)}</div>
-            <button type="button" onclick="openDetail(${p.id}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+            <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
               View Property
             </button>
           </div>
