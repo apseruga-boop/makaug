@@ -2383,9 +2383,20 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 class="text-xl font-bold text-gray-800">Pending Listing Moderation</h3>
-            <div class="text-xs text-gray-500">Approve or reject listing status</div>
+            <div class="text-xs text-gray-500">Review checklist before approval</div>
           </div>
           <div id="admin-pending-table" class="space-y-3"></div>
+        </div>
+
+        <div id="admin-review-panel" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Listing Review</h3>
+              <p id="admin-review-subtitle" class="text-xs text-gray-500 mt-1">Select a pending listing to review.</p>
+            </div>
+            <button type="button" onclick="closeAdminReviewPanel()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Close</button>
+          </div>
+          <div id="admin-review-content"></div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -3267,6 +3278,7 @@
     let authSignUpOtpChannel = "phone";
     let adminApiKey = "";
     let adminRemoteListings = [];
+    let adminActiveReview = null;
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -6393,6 +6405,33 @@
       };
     }
 
+    function adminEscape(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function adminAttr(value) {
+      return adminEscape(value);
+    }
+
+    function adminListingIdArg(value) {
+      return adminEscape(JSON.stringify(String(value || "")));
+    }
+
+    function adminStatusBadge(status) {
+      const st = normalizeModerationStatus(status);
+      if (st === "approved") return { cls: "bg-green-100 text-green-700", label: "Live" };
+      if (st === "pending") return { cls: "bg-amber-100 text-amber-700", label: "Pending" };
+      if (st === "rejected") return { cls: "bg-red-100 text-red-700", label: "Rejected" };
+      if (st === "hidden") return { cls: "bg-yellow-100 text-yellow-800", label: "Hidden" };
+      if (st === "deleted") return { cls: "bg-gray-200 text-gray-700", label: "Deleted" };
+      return { cls: "bg-gray-100 text-gray-700", label: st || "Unknown" };
+    }
+
     async function fetchRemoteAdminSnapshot() {
       if (!canUseLiveAdminApi()) return null;
       const headers = adminAuthHeaders();
@@ -6421,29 +6460,26 @@
         return;
       }
       wrap.innerHTML = listings.map((p) => {
-        const status = normalizeModerationStatus(p.status);
-        const statusClass = status === "approved"
-          ? "bg-green-100 text-green-700"
-          : (status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700");
-        const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+        const statusMeta = adminStatusBadge(p.status);
         const locationText = [p.area, p.district].filter(Boolean).join(", ") || "-";
         const createdText = listingDateMeta(p);
         const localId = String(p.id || "");
         const backendId = String(p.backend_id || p.id || "");
+        const reviewId = backendId || localId;
+        const reviewArg = adminListingIdArg(reviewId);
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex justify-between items-start gap-3 flex-wrap">
               <div>
-                <div class="font-bold text-gray-800">${p.title || "Untitled listing"}</div>
-                <div class="text-xs text-gray-500 mt-1">${locationText}</div>
-                <div class="text-xs text-gray-500 mt-1">${createdText}</div>
+                <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(locationText)}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(createdText)} • Ref: ${adminEscape(p.inquiry_reference || reviewId || "-")}</div>
               </div>
-              <span class="text-xs font-semibold px-2 py-1 rounded ${statusClass}">${statusLabel}</span>
+              <span class="text-xs font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
             </div>
             <div class="mt-3 flex gap-2 flex-wrap">
-              <button onclick="adminSetListingStatus('${localId}', 'approved', '${backendId}')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve</button>
-              <button onclick="adminSetListingStatus('${localId}', 'rejected', '${backendId}')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
-              <button onclick="openDetail(${Number.isFinite(Number(p.id)) ? Number(p.id) : 0})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold ${Number.isFinite(Number(p.id)) ? "" : "hidden"}">View</button>
+              <button onclick="openAdminListingReview(${reviewArg})" class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Open Review</button>
+              <button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
             </div>
         </div>`;
       }).join("");
@@ -6475,39 +6511,28 @@
         wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No listings match this filter.</div>`;
         return;
       }
-      const statusMeta = (status) => {
-        const st = normalizeModerationStatus(status);
-        if (st === "approved") return { cls: "bg-green-100 text-green-700", label: "Live" };
-        if (st === "pending") return { cls: "bg-amber-100 text-amber-700", label: "Pending" };
-        if (st === "rejected") return { cls: "bg-red-100 text-red-700", label: "Rejected" };
-        if (st === "hidden") return { cls: "bg-yellow-100 text-yellow-800", label: "Hidden" };
-        if (st === "deleted") return { cls: "bg-gray-200 text-gray-700", label: "Deleted" };
-        return { cls: "bg-gray-100 text-gray-700", label: st };
-      };
       wrap.innerHTML = view.map((p) => {
         const status = normalizeModerationStatus(p.status);
-        const meta = statusMeta(status);
+        const meta = adminStatusBadge(status);
         const localId = String(p.id || "");
         const backendId = String(p.backend_id || p.id || "");
-        const canOpen = Number.isFinite(Number(p.id));
+        const reviewId = backendId || localId;
+        const reviewArg = adminListingIdArg(reviewId);
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3 flex-wrap">
               <div>
-                <div class="font-bold text-gray-800">${p.title || "Untitled listing"}</div>
-                <div class="text-xs text-gray-500 mt-1">${[p.area, p.district].filter(Boolean).join(", ") || "-"}</div>
-                <div class="text-xs text-gray-500 mt-1">ID: ${localId || "-"} • ${listingDateMeta(p)}</div>
+                <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">ID: ${adminEscape(localId || "-")} • ${adminEscape(listingDateMeta(p))}</div>
               </div>
               <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
-              ${status !== "approved" ? `<button onclick="adminSetListingStatus('${localId}', 'approved', '${backendId}')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Live</button>` : ""}
-              ${status !== "pending" ? `<button onclick="adminSetListingStatus('${localId}', 'pending', '${backendId}')" class="bg-amber-500 hover:bg-amber-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Pending</button>` : ""}
-              ${status !== "hidden" ? `<button onclick="adminSetListingStatus('${localId}', 'hidden', '${backendId}')" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>` : ""}
-              ${status !== "rejected" ? `<button onclick="adminSetListingStatus('${localId}', 'rejected', '${backendId}')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>` : ""}
-              ${status !== "deleted" ? `<button onclick="adminSetListingStatus('${localId}', 'deleted', '${backendId}')" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Delete</button>` : ""}
-              ${status === "deleted" ? `<button onclick="adminSetListingStatus('${localId}', 'approved', '${backendId}')" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore</button>` : ""}
-              ${canOpen ? `<button onclick="openDetail(${Number(p.id)})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">View</button>` : ""}
+              <button onclick="openAdminListingReview(${reviewArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review</button>
+              ${status !== "pending" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'pending', ${reviewArg})" class="bg-amber-500 hover:bg-amber-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Pending</button>` : ""}
+              ${status !== "hidden" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'hidden', ${reviewArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>` : ""}
+              ${status !== "deleted" ? `<button onclick="adminSetListingStatus(${reviewArg}, 'deleted', ${reviewArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Delete</button>` : ""}
             </div>
           </div>
         `;
@@ -6652,6 +6677,202 @@
       toast(next ? "Admin API key saved." : "Admin API key cleared.");
     }
 
+    function closeAdminReviewPanel() {
+      adminActiveReview = null;
+      const panel = document.getElementById("admin-review-panel");
+      if (panel) panel.classList.add("hidden");
+    }
+
+    function getAdminReviewChecklistFromDom() {
+      const checklist = {};
+      document.querySelectorAll("[data-admin-review-check]").forEach((input) => {
+        checklist[input.getAttribute("data-admin-review-check")] = input.checked === true;
+      });
+      return checklist;
+    }
+
+    function renderAdminQualitySignals(review) {
+      const signals = review?.quality_signals || {};
+      const duplicateRows = signals.likely_duplicates || [];
+      const previousRows = signals.previous_lister_listings || [];
+      const reusedRows = signals.reused_images || [];
+      const rowHtml = (row) => `
+        <div class="border border-gray-200 rounded-lg p-2">
+          <div class="font-semibold text-gray-800">${adminEscape(row.title || row.url || row.id || "-")}</div>
+          <div class="text-xs text-gray-500 mt-0.5">${adminEscape([row.area, row.district, row.status].filter(Boolean).join(" • ") || row.url || "-")}</div>
+        </div>`;
+      return `
+        <div class="grid md:grid-cols-3 gap-3">
+          <div class="border border-gray-200 rounded-xl p-3">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Previous Lister</div>
+            <div class="text-2xl font-black text-gray-900 mt-1">${signals.previous_lister_listing_count || 0}</div>
+            <div class="mt-2 space-y-2 max-h-40 overflow-auto">${previousRows.length ? previousRows.map(rowHtml).join("") : `<div class="text-xs text-gray-500">No previous listings found.</div>`}</div>
+          </div>
+          <div class="border border-gray-200 rounded-xl p-3">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Possible Duplicates</div>
+            <div class="text-2xl font-black ${duplicateRows.length ? "text-amber-600" : "text-gray-900"} mt-1">${signals.likely_duplicate_count || 0}</div>
+            <div class="mt-2 space-y-2 max-h-40 overflow-auto">${duplicateRows.length ? duplicateRows.map(rowHtml).join("") : `<div class="text-xs text-gray-500">No likely MakaUg duplicates found.</div>`}</div>
+          </div>
+          <div class="border border-gray-200 rounded-xl p-3">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Reused Images</div>
+            <div class="text-2xl font-black ${reusedRows.length ? "text-amber-600" : "text-gray-900"} mt-1">${signals.reused_image_count || 0}</div>
+            <div class="mt-2 space-y-2 max-h-40 overflow-auto">${reusedRows.length ? reusedRows.map(rowHtml).join("") : `<div class="text-xs text-gray-500">No reused images found.</div>`}</div>
+          </div>
+        </div>`;
+    }
+
+    function renderAdminReviewPanel(review) {
+      adminActiveReview = review;
+      const panel = document.getElementById("admin-review-panel");
+      const content = document.getElementById("admin-review-content");
+      const subtitle = document.getElementById("admin-review-subtitle");
+      if (!panel || !content) return;
+
+      const meta = adminStatusBadge(review.status);
+      if (subtitle) {
+        subtitle.textContent = `${review.inquiry_reference || review.id || "-"} • ${[review.area, review.district].filter(Boolean).join(", ") || "-"}`;
+      }
+      const images = Array.isArray(review.images) ? review.images : [];
+      const checklistItems = review?.review?.checklist_items || [];
+      const checklist = review?.review?.checklist || {};
+      const events = Array.isArray(review.events) ? review.events : [];
+      const reviewIdArg = adminListingIdArg(review.id);
+
+      content.innerHTML = `
+        <div class="grid lg:grid-cols-[1.1fr,0.9fr] gap-5">
+          <div class="space-y-4">
+            <div class="border border-gray-200 rounded-xl p-4">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Listing</div>
+                  <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(review.title || "Untitled listing")}</h4>
+                  <p class="text-sm text-gray-600 mt-1">${adminEscape(review.description || "")}</p>
+                </div>
+                <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-2 mt-4 text-sm text-gray-700">
+                <div><span class="text-gray-500">Type:</span> ${adminEscape(review.listing_type || "-")}</div>
+                <div><span class="text-gray-500">Price:</span> ${fmtP(review.price || 0, review.price_period || "")}</div>
+                <div><span class="text-gray-500">Lister:</span> ${adminEscape(review.lister_name || "-")}</div>
+                <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
+                <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
+                <div><span class="text-gray-500">ID supplied:</span> ${review.id_number ? "Yes" : "No"}</div>
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <h4 class="font-bold text-gray-800">Photos</h4>
+                <div class="text-xs text-gray-500">${images.length} image${images.length === 1 ? "" : "s"}</div>
+              </div>
+              <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                ${images.length ? images.map((img, idx) => `
+                  <a href="${adminEscape(img.url || "")}" target="_blank" class="block border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                    <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
+                    <div class="px-2 py-1 text-[11px] text-gray-500">Photo ${idx + 1}${img.is_primary ? " • Primary" : ""}</div>
+                  </a>
+                `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}
+              </div>
+            </div>
+
+            <div>
+              <h4 class="font-bold text-gray-800 mb-3">Quality Signals</h4>
+              ${renderAdminQualitySignals(review)}
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="border border-gray-200 rounded-xl p-4">
+              <h4 class="font-bold text-gray-800 mb-3">Approval Checklist</h4>
+              <div class="space-y-2">
+                ${checklistItems.map((item) => `
+                  <label class="flex items-start gap-2 text-sm text-gray-700">
+                    <input type="checkbox" data-admin-review-check="${adminAttr(item.key)}" class="mt-1 accent-green-700" ${checklist[item.key] ? "checked" : ""}>
+                    <span>${adminEscape(item.label || item.key)}</span>
+                  </label>
+                `).join("")}
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl p-4">
+              <label class="block text-sm font-semibold text-gray-700 mb-1">Review notes</label>
+              <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Internal notes for this review">${adminEscape(review?.review?.notes || "")}</textarea>
+              <label class="block text-sm font-semibold text-gray-700 mt-3 mb-1">Decision reason</label>
+              <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(review?.review?.reason || "")}</textarea>
+              <div class="flex flex-wrap gap-2 mt-3">
+                <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
+                <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+                <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
+              </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-xl p-4">
+              <h4 class="font-bold text-gray-800 mb-3">Review History</h4>
+              <div class="space-y-2 max-h-56 overflow-auto">
+                ${events.length ? events.map((event) => `
+                  <div class="border border-gray-200 rounded-lg p-2">
+                    <div class="text-sm font-semibold text-gray-800">${adminEscape(event.action || "Event")}</div>
+                    <div class="text-xs text-gray-500">${adminEscape([event.status_from, event.status_to].filter(Boolean).join(" → ") || "-")} • ${adminEscape(formatListingDate(event.created_at))}</div>
+                    ${event.reason ? `<div class="text-xs text-gray-600 mt-1">${adminEscape(event.reason)}</div>` : ""}
+                  </div>
+                `).join("") : `<div class="text-sm text-gray-500">No review events yet.</div>`}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      panel.classList.remove("hidden");
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function openAdminListingReview(listingId) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(listingId)}/review`, {
+          headers: adminAuthHeaders()
+        });
+        renderAdminReviewPanel(response?.data || {});
+      } catch (e) {
+        toast(`Review load failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function saveAdminListingReview() {
+      if (!adminActiveReview?.id) return;
+      try {
+        const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/review`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: {
+            checklist: getAdminReviewChecklistFromDom(),
+            notes: document.getElementById("admin-review-notes")?.value || "",
+            reason: document.getElementById("admin-review-reason")?.value || "",
+            stage: "in_review"
+          }
+        });
+        adminActiveReview = {
+          ...adminActiveReview,
+          review: {
+            ...(adminActiveReview.review || {}),
+            checklist: response?.data?.moderation_checklist || getAdminReviewChecklistFromDom(),
+            notes: response?.data?.moderation_notes || document.getElementById("admin-review-notes")?.value || "",
+            reason: response?.data?.moderation_reason || document.getElementById("admin-review-reason")?.value || ""
+          }
+        };
+        toast("Review saved.");
+      } catch (e) {
+        toast(`Review save failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminQuickRejectListing(listingId) {
+      await openAdminListingReview(listingId);
+      const reasonEl = document.getElementById("admin-review-reason");
+      if (reasonEl && !reasonEl.value.trim()) reasonEl.focus();
+    }
+
     async function adminSetListingStatus(localId, nextStatus, backendId = "") {
       const normalizedStatus = normalizeModerationStatus(nextStatus);
       const listing = PROPERTIES.find(
@@ -6666,13 +6887,25 @@
         return;
       }
 
+      const isLiveApi = !!backendId && canUseLiveAdminApi();
+      if ((normalizedStatus === "approved" || normalizedStatus === "rejected") && isLiveApi && (!adminActiveReview || String(adminActiveReview.id) !== String(backendId))) {
+        await openAdminListingReview(backendId);
+        return;
+      }
+
       if (normalizedStatus === "deleted") {
         const ok = window.confirm("Delete this listing from public pages? You can restore it from the admin dashboard.");
         if (!ok) return;
       }
-      let moderationReason = "";
-      if (normalizedStatus === "rejected") {
-        moderationReason = window.prompt("Optional rejection reason (shown to team and sent to lister email):", listing?.extra_fields?.moderation_reason || "") || "";
+      let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
+      const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
+      const checklist = getAdminReviewChecklistFromDom();
+      if (normalizedStatus === "rejected" && !moderationReason) {
+        moderationReason = window.prompt("Rejection reason sent to the lister:", "") || "";
+        if (!moderationReason.trim()) {
+          toast("Rejection reason is required.");
+          return;
+        }
       }
 
       listing.status = normalizedStatus;
@@ -6692,16 +6925,25 @@
           await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {
             method: "PATCH",
             headers: adminAuthHeaders(),
-            body: { status: normalizedStatus, reason: moderationReason.trim() || undefined }
+            body: {
+              status: normalizedStatus,
+              reason: moderationReason.trim() || undefined,
+              review_notes: reviewNotes || undefined,
+              checklist
+            }
           });
         } catch (e) {
-          toast(`Local status updated, but API sync failed: ${e.message || "error"}`);
+          toast(`Status update failed: ${e.message || "error"}`);
+          return;
         }
       }
 
       renderAll();
       resetMaps();
       await renderAdminDashboard();
+      if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+        await openAdminListingReview(backendId);
+      }
       toast(`Listing updated: ${normalizedStatus}.`);
     }
 
