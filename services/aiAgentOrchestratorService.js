@@ -233,12 +233,12 @@ async function runListingQualityGuard({ agent, limit = 40 }) {
 
 async function runIdMatchGuard({ agent, limit = 40 }) {
   const config = mergeConfig(agent.config, {
-    ninRegex: '^(CM|CF)[A-Z0-9]{8,12}$'
+    ninRegex: '^(CM|CF|PM|PF)[A-Z0-9]{12}$'
   });
   const ninRegex = new RegExp(config.ninRegex, 'i');
 
   const rows = await db.query(
-    `SELECT id, title, lister_email, id_number, id_document_name
+    `SELECT id, title, lister_email, id_number, id_document_name, id_document_url
      FROM properties
      WHERE status = 'pending'
      ORDER BY created_at ASC
@@ -268,13 +268,13 @@ async function runIdMatchGuard({ agent, limit = 40 }) {
       });
     }
 
-    if (!row.id_document_name) {
+    if (!row.id_document_name || !row.id_document_url) {
       findings.push({
         entity_type: 'property',
         entity_id: row.id,
         severity: 'critical',
         finding_type: 'missing_id_document',
-        message: `Listing "${row.title}" has no uploaded ID document metadata.`,
+        message: `Listing "${row.title}" has no viewable uploaded ID document.`,
         recommendation: {}
       });
     }

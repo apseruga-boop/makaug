@@ -2613,6 +2613,18 @@
   <a href="https://wa.me/256760112587" target="_blank" class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center text-2xl shadow-xl z-40"><i class="fab fa-whatsapp"></i></a>
   <div class="toast" id="toast-el"></div>
 
+  <div id="admin-evidence-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:900px">
+      <button onclick="closeModal('admin-evidence-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
+      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
+        <i class="fas fa-shield-check"></i>
+        <span>Review Evidence</span>
+      </div>
+      <h2 id="admin-evidence-title" class="text-2xl font-black text-gray-800 serif">Evidence</h2>
+      <div id="admin-evidence-body" class="mt-4 text-sm text-gray-700"></div>
+    </div>
+  </div>
+
   <div id="list-choice-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:640px">
       <button onclick="closeModal('list-choice-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
@@ -3279,6 +3291,7 @@
     let adminApiKey = "";
     let adminRemoteListings = [];
     let adminActiveReview = null;
+    let adminReviewEvidence = {};
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -6733,8 +6746,110 @@
         </div>`;
     }
 
+    function adminEvidenceMediaHtml(url, label = "Evidence") {
+      const src = String(url || "");
+      if (!src) return `<div class="text-sm text-gray-500">No preview file stored.</div>`;
+      if (src.startsWith("data:image/") || /\.(png|jpe?g|webp|gif|svg)$/i.test(src)) {
+        return `<img src="${adminAttr(src)}" alt="${adminAttr(label)}" class="max-h-[60vh] w-auto rounded-xl border border-gray-200 bg-gray-50">`;
+      }
+      if (src.startsWith("data:application/pdf") || /\.pdf($|\?)/i.test(src)) {
+        return `<iframe src="${adminAttr(src)}" title="${adminAttr(label)}" class="w-full h-[60vh] rounded-xl border border-gray-200"></iframe>`;
+      }
+      return `<a href="${adminAttr(src)}" target="_blank" rel="noopener noreferrer" class="text-green-700 font-semibold hover:underline">Open stored file</a>`;
+    }
+
+    function registerAdminEvidence(id, data = {}) {
+      adminReviewEvidence[id] = data;
+      return id;
+    }
+
+    async function copyAdminEvidenceText(id, field = "text") {
+      const item = adminReviewEvidence[id] || {};
+      const value = field === "json"
+        ? JSON.stringify(item.raw || item, null, 2)
+        : String(item[field] || item.text || "");
+      if (!value) {
+        toast("Nothing to copy.");
+        return;
+      }
+      const ok = await copyTextToClipboard(value);
+      toast(ok ? "Copied." : "Copy failed.");
+    }
+
+    function downloadAdminEvidence(id) {
+      const item = adminReviewEvidence[id] || {};
+      const url = item.url || item.download_url;
+      if (!url) {
+        toast("No file available to download.");
+        return;
+      }
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = item.filename || "makaug-review-evidence";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function openAdminEvidence(id) {
+      const item = adminReviewEvidence[id];
+      if (!item) {
+        toast("Evidence not available.");
+        return;
+      }
+      const titleEl = document.getElementById("admin-evidence-title");
+      const bodyEl = document.getElementById("admin-evidence-body");
+      if (titleEl) titleEl.textContent = item.title || "Review Evidence";
+      if (!bodyEl) return;
+
+      if (item.kind === "media") {
+        bodyEl.innerHTML = `
+          <div class="space-y-4">
+            <div>${adminEvidenceMediaHtml(item.url, item.title || "Evidence")}</div>
+            <div class="grid sm:grid-cols-2 gap-2 text-sm">
+              ${item.id_number ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">ID Number</div><div class="font-mono font-bold text-gray-900 mt-1">${adminEscape(item.id_number)}</div></div>` : ""}
+              ${item.filename ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">File</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(item.filename)}</div></div>` : ""}
+            </div>
+            <div class="flex flex-wrap gap-2">
+              ${item.id_number ? `<button onclick="copyAdminEvidenceText('${adminAttr(id)}','id_number')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy ID Number</button>` : ""}
+              <button onclick="downloadAdminEvidence('${adminAttr(id)}')" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Download</button>
+              <a href="${adminAttr(item.url || "#")}" target="_blank" rel="noopener noreferrer" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Open in New Tab</a>
+            </div>
+          </div>`;
+      } else if (item.kind === "photos") {
+        const photos = Array.isArray(item.photos) ? item.photos : [];
+        bodyEl.innerHTML = `
+          <div class="grid sm:grid-cols-2 md:grid-cols-3 gap-3">
+            ${photos.map((photo, idx) => {
+              const photoId = registerAdminEvidence(`${id}-photo-${idx}`, {
+                kind: "media",
+                title: `Listing Photo ${idx + 1}`,
+                url: photo.url,
+                filename: photo.filename || `makaug-photo-${idx + 1}.jpg`
+              });
+              return `
+                <button type="button" onclick="openAdminEvidence('${adminAttr(photoId)}')" class="text-left border border-gray-200 rounded-xl overflow-hidden bg-white hover:border-green-400">
+                  <img src="${adminAttr(photo.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-36 object-cover bg-gray-50">
+                  <div class="p-2 text-xs text-gray-600">Photo ${idx + 1}${photo.is_primary ? " • Primary" : ""}</div>
+                </button>`;
+            }).join("") || `<div class="text-sm text-gray-500">No photos available.</div>`}
+          </div>`;
+      } else {
+        const rawText = JSON.stringify(item.raw || item, null, 2);
+        bodyEl.innerHTML = `
+          <div class="space-y-3">
+            ${item.message ? `<p>${adminEscape(item.message)}</p>` : ""}
+            <pre class="bg-gray-950 text-green-100 rounded-xl p-3 max-h-[55vh] overflow-auto text-xs">${adminEscape(rawText)}</pre>
+            <button onclick="copyAdminEvidenceText('${adminAttr(id)}','json')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Evidence JSON</button>
+          </div>`;
+      }
+      openModal("admin-evidence-modal");
+    }
+
     function renderAdminReviewPanel(review) {
       adminActiveReview = review;
+      adminReviewEvidence = {};
       const panel = document.getElementById("admin-review-panel");
       const content = document.getElementById("admin-review-content");
       const subtitle = document.getElementById("admin-review-subtitle");
@@ -6760,6 +6875,22 @@
         if (status === "warning") return { cls: "bg-amber-100 text-amber-700", label: "Warning" };
         return { cls: "bg-red-100 text-red-700", label: "Fail" };
       };
+      const idEvidenceId = registerAdminEvidence(`review-${review.id}-id-document`, {
+        kind: "media",
+        title: "National ID Document",
+        url: review.id_document_url || review.extra_fields?.verify?.id_document_url || "",
+        filename: review.id_document_name || review.extra_fields?.verify?.id_document_name || "makaug-id-document",
+        id_number: review.id_number || review.extra_fields?.verify?.nin || ""
+      });
+      const photoEvidenceId = registerAdminEvidence(`review-${review.id}-photos`, {
+        kind: "photos",
+        title: "Listing Photos",
+        photos: images.map((img, idx) => ({
+          url: img.url,
+          filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg`,
+          is_primary: img.is_primary
+        }))
+      });
 
       content.innerHTML = `
         <div class="grid lg:grid-cols-[1.1fr,0.9fr] gap-5">
@@ -6779,14 +6910,20 @@
                 <div><span class="text-gray-500">Lister:</span> ${adminEscape(review.lister_name || "-")}</div>
                 <div><span class="text-gray-500">Phone:</span> ${adminEscape(review.lister_phone || "-")}</div>
                 <div><span class="text-gray-500">Email:</span> ${adminEscape(review.lister_email || "-")}</div>
-                <div><span class="text-gray-500">ID supplied:</span> ${review.id_number ? adminEscape(review.id_number) : "No"}</div>
+                <div><span class="text-gray-500">ID supplied:</span> ${review.id_number ? `<button onclick="copyAdminEvidenceText('${adminAttr(idEvidenceId)}','id_number')" class="font-mono font-semibold text-green-700 hover:underline">${adminEscape(review.id_number)}</button>` : "No"}</div>
                 <div><span class="text-gray-500">Public name:</span> ${adminEscape(review.extra_fields?.public_display_name || review.lister_name || "-")}</div>
               </div>
               <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">National ID Document</div>
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">National ID Document</div>
+                  <div class="flex gap-1.5">
+                    <button onclick="openAdminEvidence('${adminAttr(idEvidenceId)}')" class="text-[11px] px-2 py-1 rounded border border-green-700 text-green-700 hover:bg-green-50">Preview</button>
+                    <button onclick="downloadAdminEvidence('${adminAttr(idEvidenceId)}')" class="text-[11px] px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Download</button>
+                  </div>
+                </div>
                 ${review.id_document_url ? (
                   String(review.id_document_url).startsWith("data:image/") || /\.(png|jpe?g|webp|gif)$/i.test(String(review.id_document_url))
-                    ? `<img src="${adminAttr(review.id_document_url)}" alt="ID document" class="max-h-56 rounded-lg border border-gray-200">`
+                    ? `<button type="button" onclick="openAdminEvidence('${adminAttr(idEvidenceId)}')" class="block"><img src="${adminAttr(review.id_document_url)}" alt="ID document" class="max-h-56 rounded-lg border border-gray-200"></button>`
                     : `<a href="${adminAttr(review.id_document_url)}" target="_blank" class="text-sm text-green-700 font-semibold hover:underline">Open ID document</a>`
                 ) : `<div class="text-sm text-gray-600">${adminEscape(review.id_document_name || "No ID document preview stored.")}</div>`}
               </div>
@@ -6795,14 +6932,14 @@
             <div class="border border-gray-200 rounded-xl p-4">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <h4 class="font-bold text-gray-800">Photos</h4>
-                <div class="text-xs text-gray-500">${images.length} image${images.length === 1 ? "" : "s"}</div>
+                <button onclick="openAdminEvidence('${adminAttr(photoEvidenceId)}')" class="text-xs text-green-700 font-semibold hover:underline">${images.length} image${images.length === 1 ? "" : "s"}</button>
               </div>
               <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
                 ${images.length ? images.map((img, idx) => `
-                  <a href="${adminEscape(img.url || "")}" target="_blank" class="block border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                  <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, { kind: "media", title: `Listing Photo ${idx + 1}`, url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg` }))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
                     <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
                     <div class="px-2 py-1 text-[11px] text-gray-500">Photo ${idx + 1}${img.is_primary ? " • Primary" : ""}</div>
-                  </a>
+                  </button>
                 `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}
               </div>
             </div>
@@ -6820,17 +6957,32 @@
                 <span class="text-xs font-semibold px-2 py-1 rounded ${automatedBadge.cls}">${automatedBadge.label}</span>
               </div>
               <div class="space-y-2">
-                ${checklistItems.map((item) => `
+                ${checklistItems.map((item, idx) => {
+                  const evidenceId = registerAdminEvidence(`review-${review.id}-check-${idx}`, {
+                    kind: ["image_count_checked", "image_quality_checked"].includes(item.key) ? "photos" : "json",
+                    title: item.label || item.key,
+                    message: item.message || "",
+                    photos: ["image_count_checked", "image_quality_checked"].includes(item.key) ? images.map((img, photoIdx) => ({ url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${photoIdx + 1}.jpg`, is_primary: img.is_primary })) : undefined,
+                    raw: {
+                      check: item,
+                      listing_id: review.id,
+                      inquiry_reference: review.inquiry_reference,
+                      id_number: review.id_number || null,
+                      id_document_name: review.id_document_name || null,
+                      id_document_url_present: !!review.id_document_url
+                    }
+                  });
+                  return `
                   <div class="border border-gray-200 rounded-lg p-2">
                     <div class="flex items-start justify-between gap-2">
                       <div>
                         <div class="text-sm font-semibold text-gray-800">${adminEscape(item.label || item.key)}</div>
                         <div class="text-xs text-gray-500 mt-0.5">${adminEscape(item.message || "")}</div>
                       </div>
-                      <span class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded ${checkBadge(item.status).cls}">${checkBadge(item.status).label}</span>
+                      <button type="button" onclick="openAdminEvidence('${adminAttr(evidenceId)}')" class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded ${checkBadge(item.status).cls} hover:ring-2 hover:ring-green-200">${checkBadge(item.status).label}</button>
                     </div>
                   </div>
-                `).join("")}
+                `}).join("")}
               </div>
             </div>
 
@@ -6994,7 +7146,10 @@
             window.open(waUrl, "_blank", "noopener,noreferrer");
           }
         } catch (e) {
-          toast(`Status update failed: ${e.message || "error"}`);
+          const details = Array.isArray(e.response?.details)
+            ? e.response.details.join("; ")
+            : (e.response?.details ? JSON.stringify(e.response.details) : "");
+          toast(`Status update failed: ${details || e.message || "error"}`);
           return;
         }
       }

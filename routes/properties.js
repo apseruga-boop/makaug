@@ -79,6 +79,13 @@ function isUsableSubmittedImageUrl(url) {
   return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
+function toUuidOrNull(value) {
+  const text = cleanText(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text
+    : null;
+}
+
 function getOwnerEditTokenFromRequest(req) {
   return cleanText(
     req.get('x-listing-edit-token')
@@ -1183,7 +1190,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
-    const reviewerUserId = req.adminAuth?.userId || null;
+    const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
     const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
     const regeneratedOwnerTokenHash = regeneratedOwnerToken ? hashOwnerEditToken(regeneratedOwnerToken) : null;
     const regeneratedOwnerTokenExpiresAt = regeneratedOwnerToken ? ownerEditTokenExpiry() : null;
@@ -1200,7 +1207,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
        SET
          status = $2,
          reviewed_at = NOW(),
-         reviewed_by = $7,
+         reviewed_by = COALESCE($7::uuid, reviewed_by),
          moderation_stage = $8,
          moderation_checklist = $4::jsonb,
          moderation_notes = COALESCE($5::text, moderation_notes),
