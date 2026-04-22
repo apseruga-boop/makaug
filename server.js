@@ -50,8 +50,8 @@ app.use(
   })
 );
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+app.use(express.json({ limit: '15mb' }));
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

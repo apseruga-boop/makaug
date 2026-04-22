@@ -8,7 +8,7 @@ const { DISTRICTS } = require('../utils/constants');
 const { processPendingCampaignQueue } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy } = require('../services/aiService');
 const {
-  REVIEW_CHECKS,
+  buildAutomatedListingReview,
   createOwnerEditToken,
   getOwnerPreviewUrl,
   hashOwnerEditToken,
@@ -62,6 +62,8 @@ async function loadPropertyReview(propertyId) {
     previousListerListings,
     likelyDuplicates,
     reusedImages,
+    idNumberMatches,
+    matchingUsers,
     events
   ] = await Promise.all([
     db.query(
@@ -123,6 +125,25 @@ async function loadPropertyReview(propertyId) {
       [propertyId]
     ),
     db.query(
+      `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND $2::text IS NOT NULL
+         AND id_number = $2
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [propertyId, listing.id_number || null]
+    ),
+    db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, created_at
+       FROM users
+       WHERE ($1::text IS NOT NULL AND phone = $1)
+          OR ($2::text IS NOT NULL AND LOWER(COALESCE(email, '')) = LOWER($2))
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [listing.lister_phone || null, listing.lister_email || null]
+    ),
+    db.query(
       `SELECT id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery, created_at
        FROM property_moderation_events
        WHERE property_id = $1
@@ -132,17 +153,26 @@ async function loadPropertyReview(propertyId) {
     )
   ]);
 
-  const checklist = normalizeReviewChecklist(listing.moderation_checklist);
+  const automatedReview = buildAutomatedListingReview({
+    listing,
+    images: images.rows,
+    previousListerListings: previousListerListings.rows,
+    likelyDuplicates: likelyDuplicates.rows,
+    reusedImages: reusedImages.rows,
+    idNumberMatches: idNumberMatches.rows,
+    matchingUsers: matchingUsers.rows
+  });
 
   return {
     ...listing,
     owner_edit_token_hash: undefined,
     images: images.rows,
     review: {
-      checklist,
-      checklist_items: REVIEW_CHECKS,
+      checklist: automatedReview.checklist,
+      checklist_items: automatedReview.checks,
       notes: listing.moderation_notes || '',
-      reason: listing.moderation_reason || listing.extra_fields?.moderation_reason || ''
+      reason: listing.moderation_reason || listing.extra_fields?.moderation_reason || '',
+      automated: automatedReview
     },
     quality_signals: {
       previous_lister_listing_count: previousListerListings.rows.length,
@@ -151,7 +181,11 @@ async function loadPropertyReview(propertyId) {
       likely_duplicates: likelyDuplicates.rows,
       reused_image_count: reusedImages.rows.length,
       reused_images: reusedImages.rows,
-      external_duplicate_check: 'manual_required'
+      id_number_match_count: idNumberMatches.rows.length,
+      id_number_matches: idNumberMatches.rows,
+      matching_user_count: matchingUsers.rows.length,
+      matching_users: matchingUsers.rows,
+      external_duplicate_check: 'not_configured'
     },
     events: events.rows
   };

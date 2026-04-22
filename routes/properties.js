@@ -9,8 +9,8 @@ const {
   sendSupportEmail
 } = require('../services/emailService');
 const {
+  buildAutomatedListingReview,
   createOwnerEditToken,
-  getMissingApprovalChecks,
   getOwnerPreviewUrl,
   hashOwnerEditToken,
   isOwnerEditTokenValid,
@@ -71,6 +71,11 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
+function isUsableSubmittedImageUrl(url) {
+  const value = cleanText(url);
+  return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
+}
+
 function getOwnerEditTokenFromRequest(req) {
   return cleanText(
     req.get('x-listing-edit-token')
@@ -95,6 +100,7 @@ function publicPropertyRow(property, images = []) {
     owner_edit_token_hash: _ownerEditTokenHash,
     id_number: _idNumber,
     id_document_name: _idDocumentName,
+    id_document_url: _idDocumentUrl,
     ...safeProperty
   } = property || {};
   return {
@@ -140,6 +146,100 @@ async function loadPropertyWithImages(propertyId) {
     property: property.rows[0],
     images: images.rows
   };
+}
+
+async function loadAutomatedReviewForProperty(propertyId) {
+  const loaded = await loadPropertyWithImages(propertyId);
+  if (!loaded) return null;
+  const { property, images } = loaded;
+  const [
+    previousListerListings,
+    likelyDuplicates,
+    reusedImages,
+    idNumberMatches,
+    matchingUsers
+  ] = await Promise.all([
+    db.query(
+      `SELECT id, title, listing_type, district, area, price, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND (
+           ($2::text IS NOT NULL AND lister_phone = $2)
+           OR ($3::text IS NOT NULL AND LOWER(COALESCE(lister_email, '')) = LOWER($3))
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [propertyId, property.lister_phone || null, property.lister_email || null]
+    ),
+    db.query(
+      `SELECT id, title, listing_type, district, area, address, price, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND (
+           LOWER(title) = LOWER($2)
+           OR (
+             COALESCE(address, '') <> ''
+             AND LOWER(COALESCE(address, '')) = LOWER(COALESCE($3::text, ''))
+           )
+           OR (
+             listing_type = $4
+             AND district = $5
+             AND LOWER(area) = LOWER($6)
+             AND COALESCE(price, 0) = COALESCE($7::bigint, 0)
+           )
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [
+        propertyId,
+        property.title || '',
+        property.address || null,
+        property.listing_type,
+        property.district,
+        property.area,
+        property.price
+      ]
+    ),
+    db.query(
+      `SELECT DISTINCT p.id, p.title, p.status, i.url
+       FROM property_images current_i
+       JOIN property_images i ON i.url = current_i.url AND i.property_id <> current_i.property_id
+       JOIN properties p ON p.id = i.property_id
+       WHERE current_i.property_id = $1
+       ORDER BY p.title ASC
+       LIMIT 20`,
+      [propertyId]
+    ),
+    db.query(
+      `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND $2::text IS NOT NULL
+         AND id_number = $2
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [propertyId, property.id_number || null]
+    ),
+    db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, created_at
+       FROM users
+       WHERE ($1::text IS NOT NULL AND phone = $1)
+          OR ($2::text IS NOT NULL AND LOWER(COALESCE(email, '')) = LOWER($2))
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [property.lister_phone || null, property.lister_email || null]
+    )
+  ]);
+
+  return buildAutomatedListingReview({
+    listing: property,
+    images,
+    previousListerListings: previousListerListings.rows,
+    likelyDuplicates: likelyDuplicates.rows,
+    reusedImages: reusedImages.rows,
+    idNumberMatches: idNumberMatches.rows,
+    matchingUsers: matchingUsers.rows
+  });
 }
 
 async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '' }) {
@@ -793,6 +893,7 @@ router.post('/', async (req, res, next) => {
       .map((item) => (typeof item === 'string' ? item : item?.url))
       .map((url) => cleanText(url))
       .filter(Boolean);
+    const invalidSubmittedImages = submittedImages.filter((url) => !isUsableSubmittedImageUrl(url));
 
     if (enforceOtp) {
       if (otpChannel === 'email') {
@@ -804,6 +905,9 @@ router.post('/', async (req, res, next) => {
       }
       if (submittedImages.length !== 5) {
         errors.push('Exactly 5 property images are required for website submissions');
+      }
+      if (invalidSubmittedImages.length) {
+        errors.push('Each property image must include a viewable image URL');
       }
       if (!listingOtpToken) {
         errors.push('listing_otp_token is required. Verify OTP before submit');
@@ -869,6 +973,7 @@ router.post('/', async (req, res, next) => {
         inquiry_reference,
         id_number,
         id_document_name,
+        id_document_url,
         new_until,
         amenities,
         extra_fields,
@@ -888,7 +993,7 @@ router.post('/', async (req, res, next) => {
         $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
         $31,$32,$33,$34,$35,$36,$37,$38,$39,$40,
-        $41,$42,$43,$44,$45,$46,$47
+        $41,$42,$43,$44,$45,$46,$47,$48
       ) RETURNING id`,
       [
         listingType,
@@ -924,6 +1029,7 @@ router.post('/', async (req, res, next) => {
         inquiryReference,
         cleanText(body.id_number) || null,
         cleanText(body.id_document_name) || null,
+        cleanText(body.id_document_url || body.extra_fields?.verify?.id_document_url) || null,
         newUntil,
         JSON.stringify(amenities),
         JSON.stringify(extraFields),
@@ -1103,11 +1209,15 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const current = currentResult.rows[0];
-    const checklistSource = req.body.checklist && typeof req.body.checklist === 'object'
-      ? req.body.checklist
-      : current.moderation_checklist;
+    const automatedReview = nextStatus === 'approved'
+      ? await loadAutomatedReviewForProperty(req.params.id)
+      : null;
+    const checklistSource = automatedReview?.checklist
+      || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
     const checklist = normalizeReviewChecklist(checklistSource);
-    const missingChecks = nextStatus === 'approved' ? getMissingApprovalChecks(checklist) : [];
+    const missingChecks = nextStatus === 'approved'
+      ? (automatedReview?.blocking_failures || []).map((item) => `${item.label}: ${item.message}`)
+      : [];
 
     if (missingChecks.length) {
       return res.status(400).json({
@@ -1221,7 +1331,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         ...listing,
         moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
         lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent),
-        notification
+        notification,
+        automated_review: automatedReview || undefined
       }
     });
   } catch (error) {

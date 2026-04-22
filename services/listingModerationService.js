@@ -1,19 +1,24 @@
 const crypto = require('crypto');
 
 const { sendSupportEmail, getSupportEmail } = require('./emailService');
-const { sendWhatsAppText } = require('./whatsappNotificationService');
+const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
 const REVIEW_CHECKS = [
+  { key: 'required_listing_fields', label: 'Required listing fields complete' },
+  { key: 'contact_details_verified', label: 'Phone/email details verified' },
+  { key: 'identity_number_supplied', label: 'ID number supplied' },
+  { key: 'identity_number_format', label: 'ID number format looks valid' },
+  { key: 'identity_document_available', label: 'ID document preview available' },
+  { key: 'identity_number_not_reused', label: 'ID number not reused by another contact' },
   { key: 'previous_lister_checked', label: 'Previous lister history checked' },
   { key: 'makaug_duplicate_checked', label: 'Not duplicated on MakaUg' },
-  { key: 'external_duplicate_checked', label: 'Not copied from another website' },
-  { key: 'identity_number_matches_document', label: 'ID number matches document' },
-  { key: 'id_image_clear', label: 'ID image is clear' },
-  { key: 'image_quality_checked', label: 'Property images are clear and relevant' },
-  { key: 'ownership_or_authority_checked', label: 'Owner or broker authority checked' },
-  { key: 'contact_details_verified', label: 'Phone/email details verified' },
-  { key: 'location_verified', label: 'Location details verified' },
-  { key: 'pricing_checked', label: 'Price looks plausible for area/type' }
+  { key: 'image_count_checked', label: 'Required property photos present' },
+  { key: 'image_quality_checked', label: 'Photo manifest and URLs look usable' },
+  { key: 'location_verified', label: 'Location details and map pin present' },
+  { key: 'pricing_checked', label: 'Price present for listing type' },
+  { key: 'otp_verified', label: 'OTP verification completed' },
+  { key: 'terms_accepted', label: 'Verification declarations accepted' },
+  { key: 'external_duplicate_checked', label: 'External duplicate scan status' }
 ];
 
 const REQUIRED_REVIEW_CHECK_KEYS = REVIEW_CHECKS.map((item) => item.key);
@@ -74,6 +79,214 @@ function getWhatsAppShareUrl(listing = {}) {
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
+function getSocialShareLinks(listing = {}) {
+  const publicUrl = getPublicListingUrl(listing);
+  const title = listing.title || 'MakaUg property listing';
+  const text = `${title}\n${publicUrl}`;
+  return {
+    live: publicUrl,
+    whatsapp: getWhatsAppShareUrl(listing),
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(publicUrl)}`,
+    x: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(publicUrl)}`,
+    linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(publicUrl)}`,
+    youtube_caption: text
+  };
+}
+
+function getDirectWhatsAppUrl(phone, message) {
+  const normalized = normalizeUgPhoneForWhatsApp(phone);
+  if (!normalized) return '';
+  return `https://wa.me/${normalized}?text=${encodeURIComponent(String(message || '').trim())}`;
+}
+
+function isValidUgNinFormat(value) {
+  return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(String(value || '').trim().toUpperCase());
+}
+
+function isUsableMediaUrl(value, { allowPdf = false } = {}) {
+  const url = String(value || '').trim();
+  if (!url || url === '[object Object]') return false;
+  if (/^https?:\/\//i.test(url)) return true;
+  if (/^data:image\//i.test(url)) return true;
+  if (allowPdf && /^data:application\/pdf/i.test(url)) return true;
+  return false;
+}
+
+function boolFromExtra(extraFields = {}, key) {
+  if (extraFields?.[key] === true) return true;
+  if (extraFields?.verify?.[key] === true) return true;
+  return false;
+}
+
+function checkResult(key, status, message, evidence = {}, blocking = status === 'fail') {
+  const meta = REVIEW_CHECKS.find((item) => item.key === key) || { key, label: key };
+  return {
+    key,
+    label: meta.label,
+    status,
+    message,
+    evidence,
+    blocking: blocking === true
+  };
+}
+
+function buildAutomatedListingReview({
+  listing = {},
+  images = [],
+  previousListerListings = [],
+  likelyDuplicates = [],
+  reusedImages = [],
+  idNumberMatches = [],
+  matchingUsers = []
+} = {}) {
+  const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
+  const imageUrls = images.map((item) => String(item?.url || '').trim()).filter(Boolean);
+  const usableImageUrls = imageUrls.filter((url) => isUsableMediaUrl(url));
+  const uniqueUsableImageUrls = new Set(usableImageUrls);
+  const photoManifest = Array.isArray(extra.photo_manifest) ? extra.photo_manifest : [];
+  const assignments = extra.photo_assignments && typeof extra.photo_assignments === 'object' ? Object.values(extra.photo_assignments).filter(Boolean) : [];
+  const idNumber = String(listing.id_number || '').trim().toUpperCase();
+  const otherIdContacts = idNumberMatches.filter((row) => {
+    const samePhone = row.lister_phone && listing.lister_phone && row.lister_phone === listing.lister_phone;
+    const sameEmail = row.lister_email && listing.lister_email && String(row.lister_email).toLowerCase() === String(listing.lister_email).toLowerCase();
+    return !samePhone && !sameEmail;
+  });
+  const hasMapPin = (listing.latitude != null && listing.longitude != null) || !!extra.map_pin_confirmed || !!extra.coordinates;
+  const hasContact = !!listing.lister_phone && !!listing.lister_email;
+  const hasRequiredCore = !!(listing.title && listing.description && listing.district && listing.area && listing.listing_type);
+  const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
+    ? listing.price != null
+    : Number(listing.price || 0) > 0;
+  const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
+  const hasViewableIdDocument = isUsableMediaUrl(idDocumentUrl, { allowPdf: true });
+  const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
+
+  const checks = [
+    checkResult(
+      'required_listing_fields',
+      hasRequiredCore ? 'pass' : 'fail',
+      hasRequiredCore ? 'Title, description, location, and listing type are present.' : 'One or more required listing fields are missing.',
+      { title: !!listing.title, description: !!listing.description, district: !!listing.district, area: !!listing.area, listing_type: !!listing.listing_type }
+    ),
+    checkResult(
+      'contact_details_verified',
+      hasContact ? 'pass' : 'fail',
+      hasContact ? 'Phone and email are present.' : 'Phone and email are both required for owner notifications.',
+      { phone: listing.lister_phone || null, email: listing.lister_email || null, matching_users: matchingUsers.length }
+    ),
+    checkResult(
+      'identity_number_supplied',
+      idNumber ? 'pass' : 'fail',
+      idNumber ? 'ID number was supplied.' : 'ID number is missing.',
+      { id_number_present: !!idNumber }
+    ),
+    checkResult(
+      'identity_number_format',
+      idNumber && isValidUgNinFormat(idNumber) ? 'pass' : 'fail',
+      idNumber && isValidUgNinFormat(idNumber) ? 'ID number matches Uganda NIN-style format.' : 'ID number does not match expected Uganda NIN-style format.',
+      { expected: 'Two letters followed by 12 letters/numbers', value: idNumber || null }
+    ),
+    checkResult(
+      'identity_document_available',
+      hasViewableIdDocument ? 'pass' : 'fail',
+      hasViewableIdDocument ? 'ID document can be opened for review.' : (idDocumentName ? 'ID document name is stored, but the document itself is not viewable.' : 'ID document is missing.'),
+      { id_document_name: idDocumentName || null, id_document_url_present: !!idDocumentUrl, id_document_viewable: hasViewableIdDocument }
+    ),
+    checkResult(
+      'identity_number_not_reused',
+      otherIdContacts.length ? 'fail' : (idNumberMatches.length ? 'warning' : 'pass'),
+      otherIdContacts.length
+        ? 'This ID number has been used by another phone/email.'
+        : (idNumberMatches.length ? 'This ID number appeared before with the same contact.' : 'No previous reuse of this ID number found.'),
+      { matches: idNumberMatches.length, other_contact_matches: otherIdContacts.length, rows: idNumberMatches.slice(0, 5) }
+    ),
+    checkResult(
+      'previous_lister_checked',
+      previousListerListings.length ? 'warning' : 'pass',
+      previousListerListings.length ? 'This lister has previous listings in the database.' : 'No previous listings found for this lister.',
+      { count: previousListerListings.length, rows: previousListerListings.slice(0, 5) },
+      false
+    ),
+    checkResult(
+      'makaug_duplicate_checked',
+      likelyDuplicates.length ? 'fail' : 'pass',
+      likelyDuplicates.length ? 'Possible duplicate listing found on MakaUg.' : 'No likely MakaUg duplicate found.',
+      { count: likelyDuplicates.length, rows: likelyDuplicates.slice(0, 5) }
+    ),
+    checkResult(
+      'image_count_checked',
+      usableImageUrls.length >= 5 ? 'pass' : 'fail',
+      usableImageUrls.length >= 5 ? 'At least five viewable property photos are attached.' : 'Fewer than five viewable property photos are attached.',
+      { image_count: images.length, usable_image_count: usableImageUrls.length }
+    ),
+    checkResult(
+      'image_quality_checked',
+      usableImageUrls.length >= 5 && uniqueUsableImageUrls.size === usableImageUrls.length && !reusedImages.length ? 'pass' : 'fail',
+      reusedImages.length
+        ? 'One or more image URLs are reused by another listing.'
+        : (usableImageUrls.length >= 5 && uniqueUsableImageUrls.size === usableImageUrls.length ? 'Image URLs are present, viewable, and unique.' : 'Image URLs are missing, duplicated, or not viewable.'),
+      {
+        image_url_count: imageUrls.length,
+        usable_image_url_count: usableImageUrls.length,
+        unique_image_url_count: uniqueUsableImageUrls.size,
+        invalid_image_url_count: Math.max(imageUrls.length - usableImageUrls.length, 0),
+        reused_images: reusedImages.length,
+        assigned_photo_slots: assignments.length || photoManifest.filter((item) => item.slot).length
+      }
+    ),
+    checkResult(
+      'location_verified',
+      hasMapPin ? 'pass' : 'fail',
+      hasMapPin ? 'Location details and coordinates/map confirmation are present.' : 'Map pin or coordinates are missing.',
+      { latitude: listing.latitude ?? null, longitude: listing.longitude ?? null, map_pin_confirmed: !!extra.map_pin_confirmed }
+    ),
+    checkResult(
+      'pricing_checked',
+      hasPrice ? 'pass' : 'fail',
+      hasPrice ? 'Price is present.' : 'Price is missing or zero.',
+      { price: listing.price ?? null, listing_type: listing.listing_type || null }
+    ),
+    checkResult(
+      'otp_verified',
+      listing.listed_via === 'website' ? 'pass' : 'warning',
+      listing.listed_via === 'website' ? 'Website OTP token was required at submission.' : 'Listing was not submitted through the website OTP flow.',
+      { listed_via: listing.listed_via || null },
+      false
+    ),
+    checkResult(
+      'terms_accepted',
+      listing.verification_terms_accepted === true && boolFromExtra(extra, 'nin_match_confirmed') ? 'pass' : 'fail',
+      listing.verification_terms_accepted === true && boolFromExtra(extra, 'nin_match_confirmed')
+        ? 'Verification terms and ID-match declaration were accepted.'
+        : 'Verification terms or ID-match declaration are missing.',
+      { verification_terms_accepted: listing.verification_terms_accepted === true, nin_match_confirmed: boolFromExtra(extra, 'nin_match_confirmed') }
+    ),
+    checkResult(
+      'external_duplicate_checked',
+      'warning',
+      'External website duplicate scan is not connected yet; internal duplicate and reused-image checks have run.',
+      { provider: 'not_configured' },
+      false
+    )
+  ];
+
+  const blockingFailures = checks.filter((item) => item.status === 'fail' && item.blocking);
+  const warnings = checks.filter((item) => item.status === 'warning');
+  const checklist = {};
+  checks.forEach((item) => {
+    checklist[item.key] = item.status !== 'fail';
+  });
+
+  return {
+    status: blockingFailures.length ? 'fail' : (warnings.length ? 'warning' : 'pass'),
+    can_approve: blockingFailures.length === 0,
+    checks,
+    checklist,
+    blocking_failures: blockingFailures,
+    warnings
+  };
+}
+
 function normalizeReviewChecklist(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const normalized = {};
@@ -108,6 +321,7 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
 
   if (String(status || '').toLowerCase() === 'approved') {
     const publicUrl = getPublicListingUrl(listing);
+    const shareLinks = getSocialShareLinks(listing);
     return {
       subject: `[MakaUg] Listing approved • ${title}`,
       text: [
@@ -119,8 +333,12 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Live link: ${publicUrl}`,
         '',
         'Share links:',
-        `WhatsApp: ${getWhatsAppShareUrl(listing)}`,
+        `WhatsApp: ${shareLinks.whatsapp}`,
+        `Facebook: ${shareLinks.facebook}`,
+        `X/Twitter: ${shareLinks.x}`,
+        `LinkedIn: ${shareLinks.linkedin}`,
         `Instagram/link-in-bio: ${publicUrl}`,
+        `YouTube description/caption: ${shareLinks.youtube_caption}`,
         '',
         `If you need help, contact ${supportEmail}.`,
         'Thank you for using MakaUg.'
@@ -130,7 +348,9 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Ref: ${reference}`,
         `Title: ${title}`,
         `View/share: ${publicUrl}`,
-        `WhatsApp share: ${getWhatsAppShareUrl(listing)}`
+        `WhatsApp share: ${shareLinks.whatsapp}`,
+        `Facebook: ${shareLinks.facebook}`,
+        `Instagram/YouTube caption: ${shareLinks.youtube_caption}`
       ].join('\n')
     };
   }
@@ -229,10 +449,20 @@ async function sendOwnerListingStatusNotifications({ listing = {}, status, reaso
   }
 
   if (listing.lister_phone) {
-    result.whatsapp = await sendWhatsAppText({
-      to: listing.lister_phone,
-      body: message.whatsapp
-    });
+    const manualUrl = getDirectWhatsAppUrl(listing.lister_phone, message.whatsapp);
+    try {
+      result.whatsapp = await sendWhatsAppText({
+        to: listing.lister_phone,
+        body: message.whatsapp
+      });
+    } catch (error) {
+      result.whatsapp = {
+        sent: false,
+        reason: 'whatsapp_send_failed',
+        error: error.message || 'send_failed'
+      };
+    }
+    result.whatsapp.manual_url = manualUrl;
   }
 
   return result;
@@ -254,10 +484,20 @@ async function sendOwnerListingSubmissionNotifications({ listing = {}, token = '
   }
 
   if (listing.lister_phone) {
-    result.whatsapp = await sendWhatsAppText({
-      to: listing.lister_phone,
-      body: message.whatsapp
-    });
+    const manualUrl = getDirectWhatsAppUrl(listing.lister_phone, message.whatsapp);
+    try {
+      result.whatsapp = await sendWhatsAppText({
+        to: listing.lister_phone,
+        body: message.whatsapp
+      });
+    } catch (error) {
+      result.whatsapp = {
+        sent: false,
+        reason: 'whatsapp_send_failed',
+        error: error.message || 'send_failed'
+      };
+    }
+    result.whatsapp.manual_url = manualUrl;
   }
 
   return result;
@@ -267,7 +507,9 @@ module.exports = {
   REVIEW_CHECKS,
   REQUIRED_REVIEW_CHECK_KEYS,
   buildOwnerStatusMessage,
+  buildAutomatedListingReview,
   createOwnerEditToken,
+  getDirectWhatsAppUrl,
   getMissingApprovalChecks,
   getOwnerPreviewUrl,
   getPublicListingUrl,
