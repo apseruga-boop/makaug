@@ -1,4 +1,4 @@
-const DEFAULT_TIMEOUT_MS = 4500;
+const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_RESULT_LIMIT = 8;
 const DEFAULT_CACHE_MINUTES = 60;
 
@@ -35,7 +35,7 @@ function toPositiveInt(value, fallback) {
 }
 
 function getTimeoutMs() {
-  return Math.max(toPositiveInt(process.env.EXTERNAL_DUPLICATE_SCAN_TIMEOUT_MS, DEFAULT_TIMEOUT_MS), 1000);
+  return Math.max(toPositiveInt(process.env.EXTERNAL_DUPLICATE_SCAN_TIMEOUT_MS, DEFAULT_TIMEOUT_MS), 8000);
 }
 
 function getResultLimit() {
@@ -81,6 +81,23 @@ function buildManualSearchUrl(query) {
   const url = new URL('https://duckduckgo.com/');
   url.searchParams.set('q', query);
   return url.href;
+}
+
+function describeSearchError(error) {
+  if (error?.name === 'AbortError') return 'search timed out';
+  const message = cleanText(error?.message || error);
+  if (/aborted/i.test(message)) return 'search timed out';
+  return message || 'search failed';
+}
+
+function isTransientScanFailure(scan = {}) {
+  const provider = String(scan.provider || '').toLowerCase();
+  const message = String(scan.message || '').toLowerCase();
+  return provider === 'search_error'
+    || provider === 'search_timeout'
+    || message.includes('operation was aborted')
+    || message.includes('search timed out')
+    || message.includes('fetch failed');
 }
 
 function tokenSet(value) {
@@ -274,6 +291,34 @@ async function searchWithDuckDuckGo(query) {
   };
 }
 
+function parseDuckDuckGoLiteHtml(html) {
+  const results = [];
+  const rowRegex = /<tr[\s\S]*?<\/tr>/gi;
+  const rows = String(html || '').match(rowRegex) || [];
+  rows.forEach((row) => {
+    const anchor = row.match(/<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+    if (!anchor) return;
+    const url = resolveDuckDuckGoUrl(anchor[1]);
+    if (!/^https?:\/\//i.test(url)) return;
+    results.push({
+      title: decodeHtml(anchor[2]),
+      url,
+      snippet: decodeHtml(row.replace(anchor[0], ''))
+    });
+  });
+  return results;
+}
+
+async function searchWithDuckDuckGoLite(query) {
+  const url = new URL('https://lite.duckduckgo.com/lite/');
+  url.searchParams.set('q', query);
+  const html = await fetchText(url);
+  return {
+    provider: 'duckduckgo_lite',
+    results: parseDuckDuckGoLiteHtml(html)
+  };
+}
+
 async function runSearch(query) {
   const preferredProvider = cleanText(process.env.EXTERNAL_DUPLICATE_SCAN_PROVIDER).toLowerCase();
   const providers = {
@@ -281,20 +326,40 @@ async function runSearch(query) {
     google_cse: searchWithGoogleCse,
     serpapi: searchWithSerpApi,
     duckduckgo: searchWithDuckDuckGo,
-    duckduckgo_html: searchWithDuckDuckGo
+    duckduckgo_html: searchWithDuckDuckGo,
+    duckduckgo_lite: searchWithDuckDuckGoLite
   };
+  const errors = [];
+
+  async function tryProvider(name, provider) {
+    try {
+      const result = await provider(query);
+      if (result) return result;
+    } catch (error) {
+      errors.push(`${name}: ${describeSearchError(error)}`);
+    }
+    return null;
+  }
 
   if (providers[preferredProvider]) {
-    const result = await providers[preferredProvider](query);
+    const result = await tryProvider(preferredProvider, providers[preferredProvider]);
     if (result) return result;
   }
 
-  const configuredProviders = [searchWithBing, searchWithGoogleCse, searchWithSerpApi];
-  for (const provider of configuredProviders) {
-    const result = await provider(query);
+  const fallbackProviders = [
+    ['bing', searchWithBing],
+    ['google_cse', searchWithGoogleCse],
+    ['serpapi', searchWithSerpApi],
+    ['duckduckgo_lite', searchWithDuckDuckGoLite],
+    ['duckduckgo_html', searchWithDuckDuckGo]
+  ].filter(([name]) => name !== preferredProvider);
+
+  for (const [name, provider] of fallbackProviders) {
+    const result = await tryProvider(name, provider);
     if (result) return result;
   }
-  return searchWithDuckDuckGo(query);
+
+  throw new Error(errors.join('; ') || 'all search providers failed');
 }
 
 function getScanStatus(matches = []) {
@@ -367,9 +432,10 @@ async function scanExternalDuplicates({ listing = {}, images = [] } = {}) {
       message: buildScanMessage(status, search.provider, matches)
     };
   } catch (error) {
+    const reason = describeSearchError(error);
     return {
       status: 'warning',
-      provider: 'search_error',
+      provider: reason === 'search timed out' ? 'search_timeout' : 'search_error',
       blocking: false,
       checked_at: checkedAt,
       query,
@@ -378,7 +444,7 @@ async function scanExternalDuplicates({ listing = {}, images = [] } = {}) {
       high_confidence_count: 0,
       possible_match_count: 0,
       matches: [],
-      message: `External duplicate scan attempted but could not complete: ${error.message || 'search failed'}`
+      message: `External search providers did not return in time. Internal duplicate checks completed and a manual search link is available.`
     };
   }
 }
@@ -387,6 +453,7 @@ function getCachedExternalDuplicateScan(listing = {}) {
   const extra = listing.extra_fields && typeof listing.extra_fields === 'object' ? listing.extra_fields : {};
   const scan = extra.review_external_duplicate_scan;
   if (!scan || typeof scan !== 'object') return null;
+  if (isTransientScanFailure(scan)) return null;
   const checkedAt = scan.checked_at ? new Date(scan.checked_at) : null;
   if (!checkedAt || Number.isNaN(checkedAt.getTime())) return null;
   const ageMs = Date.now() - checkedAt.getTime();
@@ -402,7 +469,7 @@ async function scanAndCacheExternalDuplicates({ db, listing = {}, images = [], f
   if (cached) return cached;
 
   const scan = await scanExternalDuplicates({ listing, images });
-  if (db && listing.id) {
+  if (db && listing.id && !isTransientScanFailure(scan)) {
     try {
       await db.query(
         `UPDATE properties
