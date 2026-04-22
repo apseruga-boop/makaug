@@ -267,7 +267,18 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
 router.get('/summary', async (req, res, next) => {
   try {
-    const [properties, agents, reports, requests, inquiries, users, engagement] = await Promise.all([
+    const [
+      properties,
+      agents,
+      reports,
+      requests,
+      inquiries,
+      users,
+      engagement,
+      engagement48h,
+      topAreas48h,
+      topListingTypes48h
+    ] = await Promise.all([
       db.query(
         `SELECT
           COUNT(*)::int AS total,
@@ -317,6 +328,38 @@ router.get('/summary', async (req, res, next) => {
           COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
           COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
          FROM analytics_events`
+      ),
+      db.query(
+        `SELECT
+          COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+          COUNT(DISTINCT client_id) FILTER (WHERE event_name IN ('property_open','property_view','page_view','property_search'))::int AS unique_visitors,
+          COUNT(*) FILTER (WHERE event_name IN ('property_save','property_saved','save_property'))::int AS property_saves,
+          COUNT(*) FILTER (WHERE event_name IN ('property_inquiry_submit','property_inquiry'))::int AS property_inquiries,
+          COUNT(*) FILTER (WHERE event_name IN ('property_directions_open','directions_open','route_time_view'))::int AS route_events
+         FROM analytics_events
+         WHERE created_at >= NOW() - INTERVAL '2 days'`
+      ),
+      db.query(
+        `SELECT
+          COALESCE(NULLIF(payload->>'area', ''), NULLIF(payload->>'district', ''), 'Unknown area') AS area,
+          COUNT(*)::int AS events
+         FROM analytics_events
+         WHERE created_at >= NOW() - INTERVAL '2 days'
+           AND event_name IN ('property_open','property_view','property_search','near_me_search')
+         GROUP BY 1
+         ORDER BY events DESC, area ASC
+         LIMIT 5`
+      ),
+      db.query(
+        `SELECT
+          COALESCE(NULLIF(payload->>'listing_type', ''), NULLIF(payload->>'tab', ''), 'unknown') AS listing_type,
+          COUNT(*)::int AS events
+         FROM analytics_events
+         WHERE created_at >= NOW() - INTERVAL '2 days'
+           AND event_name IN ('property_open','property_view','property_search','near_me_search')
+         GROUP BY 1
+         ORDER BY events DESC, listing_type ASC
+         LIMIT 5`
       )
     ]);
 
@@ -329,7 +372,12 @@ router.get('/summary', async (req, res, next) => {
         reports: reports.rows[0],
         propertyRequests: requests.rows[0],
         inquiries: inquiries.rows[0],
-        engagement: engagement.rows[0]
+        engagement: engagement.rows[0],
+        ai_insights: {
+          last_48h: engagement48h.rows[0],
+          top_areas: topAreas48h.rows,
+          top_listing_types: topListingTypes48h.rows
+        }
       }
     });
   } catch (error) {

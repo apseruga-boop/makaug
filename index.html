@@ -328,7 +328,10 @@
       border-radius: 28px;
       border: 7px solid #0f172a;
       overflow: hidden;
-      background: #ece5dd;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(22, 101, 52, 0.08), transparent 26%),
+        radial-gradient(circle at 80% 30%, rgba(34, 197, 94, 0.08), transparent 24%),
+        #ece5dd;
       box-shadow: 0 20px 44px rgba(0, 0, 0, 0.2);
     }
     .chatbot-phone-head {
@@ -377,6 +380,24 @@
       color: #6b7280;
       font-size: 10px;
       margin-top: 4px;
+    }
+    .chatbot-listing-card {
+      margin-top: 8px;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid #dcfce7;
+      background: #ffffff;
+    }
+    .chatbot-listing-card img {
+      width: 100%;
+      height: 92px;
+      object-fit: cover;
+      display: block;
+    }
+    .chatbot-listing-card-body {
+      padding: 8px;
+      font-size: 11px;
+      color: #1f2937;
     }
     .lp-label-premium {
       font-size: 12px !important;
@@ -1041,8 +1062,8 @@
     </section>
 
     <section class="max-w-7xl mx-auto px-4 py-8">
-      <div class="grid lg:grid-cols-4 gap-6">
-        <div class="lg:col-span-3">
+      <div class="grid lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h2 id="student-results-title" class="text-2xl font-bold text-gray-800">Student accommodation near Makerere University</h2>
@@ -1050,7 +1071,7 @@
             </div>
             <button class="text-gray-600 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50">🔔 Save search</button>
           </div>
-          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
         </div>
         <div class="hidden lg:block listing-map-col">
           <div class="listing-map-shell">
@@ -1425,17 +1446,17 @@
     <div class="max-w-7xl mx-auto px-4 py-8 space-y-6">
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
         <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="text-3xl mb-2">🏠</div>
+          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-house"></i></div>
           <h3 id="ai-card-1-title" class="text-lg font-bold text-gray-900">List Property in Minutes</h3>
           <p id="ai-card-1-sub" class="text-sm text-gray-600 mt-1">Send property details and photos on WhatsApp, then complete OTP verification in one flow.</p>
         </div>
         <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="text-3xl mb-2">📍</div>
+          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-location-dot"></i></div>
           <h3 id="ai-card-2-title" class="text-lg font-bold text-gray-900">Search by Shared Location</h3>
           <p id="ai-card-2-sub" class="text-sm text-gray-600 mt-1">Share your location and get matched listings for sale or rent nearby with direct links.</p>
         </div>
         <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div class="text-3xl mb-2">🧑‍💼</div>
+          <div class="w-11 h-11 rounded-xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-user-tie"></i></div>
           <h3 id="ai-card-3-title" class="text-lg font-bold text-gray-900">Find a Verified Broker</h3>
           <p id="ai-card-3-sub" class="text-sm text-gray-600 mt-1">Ask for broker contacts by district, speciality, or language and get options instantly.</p>
         </div>
@@ -1454,7 +1475,18 @@
               <div class="chatbot-bubble user"><span id="ai-flow-2">2 - Search near my location</span><span class="chatbot-time">09:01 ✓✓</span></div>
               <div class="chatbot-bubble bot"><span id="ai-flow-3">Share location and budget. I will send matching listings with links.</span><span class="chatbot-time">09:02</span></div>
               <div class="chatbot-bubble user"><span id="ai-flow-4">Location shared + budget USh 1.5M rent</span><span class="chatbot-time">09:02 ✓✓</span></div>
-              <div class="chatbot-bubble bot"><span id="ai-flow-5">Here are 5 matching properties in your area. Tap any link to view details.</span><span class="chatbot-time">09:03</span></div>
+              <div class="chatbot-bubble bot">
+                <span id="ai-flow-5">Here are 5 matching properties in your area. Tap any link to view details.</span>
+                <div class="chatbot-listing-card">
+                  <img src="https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80" alt="WhatsApp property result preview">
+                  <div class="chatbot-listing-card-body">
+                    <div class="font-bold">3-bed home in Ntinda</div>
+                    <div class="text-green-700 font-semibold">USh 1.5M/mo</div>
+                    <div class="text-gray-500">0.8 km away • Call or WhatsApp broker</div>
+                  </div>
+                </div>
+                <span class="chatbot-time">09:03</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1469,6 +1501,10 @@
           <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold">
             <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
           </a>
+          <div class="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
+            <div class="font-bold">WhatsApp connection readiness</div>
+            <div class="mt-1 text-green-800">The website points users to 0760112587 and the backend webhook is ready for Meta WhatsApp Cloud API credentials.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2351,6 +2387,39 @@
             <button onclick="saveAdminApiKeyAndRefresh()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Save & Refresh</button>
           </div>
           <p id="admin-summary-note" class="text-xs text-gray-500 mt-2">Data source: local browser data.</p>
+        </div>
+
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">MakaUg AI Data Assistant</h3>
+              <p class="text-xs text-gray-500 mt-1">Quick answers from live admin, account, engagement, and listing data.</p>
+            </div>
+            <span id="admin-ai-source" class="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">Ready</span>
+          </div>
+          <div class="grid md:grid-cols-4 gap-3 mb-4">
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Last 48h Views</div>
+              <div id="admin-ai-views-48h" class="text-2xl font-black text-gray-900 mt-1">0</div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Last 48h Visitors</div>
+              <div id="admin-ai-visitors-48h" class="text-2xl font-black text-gray-900 mt-1">0</div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Weekly Tips</div>
+              <div id="admin-ai-weekly-tips" class="text-2xl font-black text-gray-900 mt-1">0</div>
+            </div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Top Area</div>
+              <div id="admin-ai-top-area" class="text-lg font-black text-gray-900 mt-1 truncate">-</div>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-[1fr,160px] gap-2">
+            <input id="admin-ai-question" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="Ask: how many people visited in the last two days?">
+            <button type="button" onclick="askAdminAiAssistant()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Ask</button>
+          </div>
+          <div id="admin-ai-answer" class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Refresh the admin dashboard to load live insight data.</div>
         </div>
 
         <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -3447,6 +3516,7 @@
     let adminReviewEvidenceViewed = {};
     let adminReviewWarningOverrides = {};
     let adminWhatsAppDraft = null;
+    let adminAiSnapshot = null;
     let publicListingsApiLoading = false;
     let publicListingsFromApiLoaded = false;
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -6627,6 +6697,89 @@
       };
     }
 
+    function buildLocalAdminAreaInsights(listings = []) {
+      const counts = {};
+      (listings || []).forEach((p) => {
+        const key = [p.area, p.district].filter(Boolean).join(", ") || "Unknown area";
+        counts[key] = (counts[key] || 0) + getPropertyViewCount(p.id);
+      });
+      return Object.entries(counts)
+        .map(([area, events]) => ({ area, events }))
+        .sort((a, b) => b.events - a.events)
+        .slice(0, 5);
+    }
+
+    function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
+      const summary = remoteSnap?.summary || {};
+      const insights = summary?.ai_insights || {};
+      const users = summary?.users || {};
+      const engagement = summary?.engagement || {};
+      const localSummary = localSnap?.summary || {};
+      const topAreas = Array.isArray(insights.top_areas) && insights.top_areas.length
+        ? insights.top_areas
+        : buildLocalAdminAreaInsights(localSnap?.allListings || []);
+      const topListingTypes = Array.isArray(insights.top_listing_types) ? insights.top_listing_types : [];
+      return {
+        source: sourceLabel || "Dashboard data",
+        views48h: Number(insights.last_48h?.property_views ?? 0),
+        visitors48h: Number(insights.last_48h?.unique_visitors ?? 0),
+        routeEvents48h: Number(insights.last_48h?.route_events ?? 0),
+        inquiries48h: Number(insights.last_48h?.property_inquiries ?? 0),
+        totalViews: Number(engagement.property_views ?? localSummary.totalViews ?? 0),
+        totalSaves: Number(engagement.property_saves ?? localSummary.totalSaves ?? 0),
+        weeklyTips: Number(users.weekly_tips_opt_in ?? (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length ?? 0),
+        totalUsers: Number(users.total ?? localSummary.totalUsers ?? 0),
+        pendingListings: Number(summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
+        approvedListings: Number(summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+        topAreas,
+        topListingTypes
+      };
+    }
+
+    function renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel = "") {
+      adminAiSnapshot = buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel);
+      const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = String(value);
+      };
+      setText("admin-ai-views-48h", adminAiSnapshot.views48h);
+      setText("admin-ai-visitors-48h", adminAiSnapshot.visitors48h);
+      setText("admin-ai-weekly-tips", adminAiSnapshot.weeklyTips);
+      setText("admin-ai-top-area", adminAiSnapshot.topAreas[0]?.area || "-");
+      setText("admin-ai-source", remoteSnap ? "Live data" : "Local data");
+      const answer = document.getElementById("admin-ai-answer");
+      if (answer) {
+        answer.innerHTML = `
+          <div class="font-semibold text-gray-900">Snapshot ready.</div>
+          <div class="mt-1">Last 48h: <strong>${adminAiSnapshot.views48h}</strong> property views, <strong>${adminAiSnapshot.visitors48h}</strong> visitors, <strong>${adminAiSnapshot.routeEvents48h}</strong> direction opens, and <strong>${adminAiSnapshot.inquiries48h}</strong> enquiries.</div>
+          <div class="mt-1">Top area: <strong>${adminEscape(adminAiSnapshot.topAreas[0]?.area || "not enough data yet")}</strong>.</div>`;
+      }
+    }
+
+    function askAdminAiAssistant() {
+      if (!adminAiSnapshot) {
+        toast("Refresh admin data first.");
+        return;
+      }
+      const q = (document.getElementById("admin-ai-question")?.value || "").toLowerCase().trim();
+      const answer = document.getElementById("admin-ai-answer");
+      if (!answer) return;
+      let html = "";
+      if (q.includes("two") || q.includes("2") || q.includes("48") || q.includes("visit")) {
+        html = `In the last 48 hours the site recorded <strong>${adminAiSnapshot.views48h}</strong> property views from <strong>${adminAiSnapshot.visitors48h}</strong> visitors, plus <strong>${adminAiSnapshot.routeEvents48h}</strong> direction opens and <strong>${adminAiSnapshot.inquiries48h}</strong> enquiries.`;
+      } else if (q.includes("area") || q.includes("target") || q.includes("where")) {
+        const rows = adminAiSnapshot.topAreas.length
+          ? adminAiSnapshot.topAreas.map((row, idx) => `<li>${idx + 1}. ${adminEscape(row.area || "Unknown")} - ${adminEscape(row.events || 0)} events</li>`).join("")
+          : "<li>No area data yet.</li>";
+        html = `<div>Best current areas to target:</div><ol class="list-decimal pl-5 mt-1">${rows}</ol>`;
+      } else if (q.includes("tips") || q.includes("account") || q.includes("users")) {
+        html = `<strong>${adminAiSnapshot.weeklyTips}</strong> users are opted in for weekly tips out of <strong>${adminAiSnapshot.totalUsers}</strong> accounts.`;
+      } else {
+        html = `Current platform snapshot: <strong>${adminAiSnapshot.approvedListings}</strong> live listings, <strong>${adminAiSnapshot.pendingListings}</strong> pending listings, <strong>${adminAiSnapshot.totalViews}</strong> total views, and <strong>${adminAiSnapshot.totalSaves}</strong> saves.`;
+      }
+      answer.innerHTML = html;
+    }
+
     function adminAuthHeaders() {
       return adminApiKey ? { "x-api-key": adminApiKey } : {};
     }
@@ -7047,6 +7200,7 @@
       setText("admin-stat-registered-agents", registeredAgents);
       setText("admin-stat-not-registered-agents", notRegisteredAgents);
       if (sourceEl) sourceEl.textContent = sourceLabel;
+      renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
 
       renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
       renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
@@ -8747,9 +8901,7 @@
       const previousLabel = String(previousValue || "").startsWith(`${LP_OTHER_PHOTO_SLOT}:`)
         ? getLpPhotoSlotLabel(previousValue)
         : "";
-      const customLabel = (window.prompt("Name what this photo shows, for example Back of property, Balcony, Store room, or Compound:", previousLabel) || "").trim();
-      if (!customLabel) return "";
-      return `${LP_OTHER_PHOTO_SLOT}:${customLabel.slice(0, 80)}`;
+      return `${LP_OTHER_PHOTO_SLOT}:${previousLabel.slice(0, 80)}`;
     }
 
     function setLpPhotoAssignment(index, value) {
@@ -8759,6 +8911,16 @@
       if (!storedValue) delete lpPhotoAssignments[idx];
       else lpPhotoAssignments[idx] = storedValue;
       renderLpPhotoFeedback();
+      updateListPreview();
+      renderListReviewSummary();
+    }
+
+    function setLpPhotoOtherLabel(index, value) {
+      const idx = Number(index);
+      if (!Number.isFinite(idx)) return;
+      const label = String(value || "").trim().slice(0, 80);
+      lpPhotoAssignments[idx] = `${LP_OTHER_PHOTO_SLOT}:${label}`;
+      updateListPreview();
       renderListReviewSummary();
     }
 
@@ -8801,7 +8963,10 @@
                 <select onchange="setLpPhotoAssignment(${index}, this.value)" class="mt-2 w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white">
                   ${options}
                 </select>
-                ${isOtherAssigned && assignedLabel ? `<div class="mt-1 text-xs text-green-700 font-semibold">${translateListingLabel("Custom label")}: ${adminEscape(assignedLabel)}</div>` : ""}
+                ${isOtherAssigned ? `
+                  <label class="block mt-2 text-xs font-semibold text-green-800">${translateListingLabel("Name what this photo shows")}</label>
+                  <input value="${adminAttr(assignedLabel === translateListingLabel("Other") ? "" : assignedLabel)}" oninput="setLpPhotoOtherLabel(${index}, this.value)" class="mt-1 w-full border border-green-100 rounded-lg px-3 py-2 text-sm" placeholder="${adminAttr(translateListingLabel("e.g. Back of property, balcony, store room"))}">
+                ` : ""}
               </div>`;
           }).join("");
           Array.from(galleryEl.querySelectorAll("select")).forEach((el, idx) => {
@@ -15644,6 +15809,8 @@
       const detailIsSaved = Array.from(savedIds).some((value) => String(value) === String(p.id));
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
+      const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, I am interested in ${p.title || "this property"}.`) : "";
+      const contactTitle = broker ? translateListingLabel("Contact Broker") : translateListingLabel("Contact Lister");
       const inquiryNameDefault = authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
       const inquiryPhoneDefault = authState?.user?.phone || "";
       const inquiryEmailDefault = authState?.user?.email || "";
@@ -15738,18 +15905,19 @@
           </div>
           <div>
             <div class="bg-white border border-gray-200 rounded-2xl p-5 sticky top-24">
-              <h3 class="text-lg font-bold mb-3">${broker ? "Contact Broker" : "Contact Owner"}</h3>
+              <h3 class="text-lg font-bold mb-3">${contactTitle}</h3>
               ${broker ? `
                 <p class="font-semibold text-gray-800">${broker.name}</p>
                 <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
-                <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call</a>
-                <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp</a>
+                <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Broker</a>
+                <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Broker</a>
                 <button onclick="shareBrokerBusinessCard(${broker.id}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
                 <button onclick="openBrokerProfile(${broker.id})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">View Broker</button>
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
-                <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public contact name")}</p>
-                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Owner</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
+                <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public listing contact")}</p>
+                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
+                ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">WhatsApp unavailable</button>`}
               `}
               <button onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
