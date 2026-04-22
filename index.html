@@ -6937,7 +6937,8 @@
     }
 
     function askOtpCode() {
-      const code = window.prompt("Enter the 6-digit OTP code sent to your phone:");
+      const channel = authSignUpOtpChannel === "email" ? "email" : "phone";
+      const code = window.prompt(`Enter the 6-digit OTP code sent to your ${channel}:`);
       return (code || "").trim();
     }
 
@@ -8540,10 +8541,7 @@
         setListWizardStep(4);
         toast("Thanks. Listing submitted for review. We will contact you by WhatsApp or email within 24 hours.");
       } catch (error) {
-        applySubmittedListingToLocal(payload, { inquiry_reference: payload.inquiry_reference });
-        showListSubmissionSuccess(payload.inquiry_reference, payload, { offline: true });
-        setListWizardStep(4);
-        toast((error.message || "Could not reach server.") + " Saved in local mode so you can continue.");
+        toast(error.message || "Could not submit listing. Please try again.");
       } finally {
         setButtonLoading("lp-submit-btn", false, "Submit Listing");
       }

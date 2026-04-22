@@ -1,10 +1,35 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
+const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 
 const router = express.Router();
+
+function verifyListingSubmitToken(token) {
+  const secret = process.env.LISTING_OTP_JWT_SECRET
+    || process.env.JWT_SECRET
+    || (process.env.NODE_ENV === 'production' ? '' : 'dev-listing-otp-secret');
+  if (!secret) return { ok: false, error: 'missing_jwt_secret' };
+
+  try {
+    const decoded = jwt.verify(token, secret);
+    const channel = String(decoded?.channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
+    const identifier = channel === 'email'
+      ? normalizeEmail(decoded?.email || decoded?.identifier)
+      : normalizeUgPhone(decoded?.phone || decoded?.identifier);
+
+    if (decoded?.purpose !== 'listing_submit' || !identifier) {
+      return { ok: false, error: 'invalid_purpose' };
+    }
+
+    return { ok: true, channel, identifier };
+  } catch (error) {
+    return { ok: false, error: 'invalid_or_expired' };
+  }
+}
 
 function parseCsvList(value) {
   if (Array.isArray(value)) {
@@ -143,6 +168,9 @@ router.post('/register', async (req, res, next) => {
       : (licenceNumber || `UNREG-${Date.now()}`);
     const phone = cleanText(body.phone);
     const email = cleanText(body.email);
+    const listingOtpToken = cleanText(body.listing_otp_token);
+    const otpChannelInput = cleanText(body.otp_channel || 'phone').toLowerCase();
+    const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
 
     const errors = [];
 
@@ -152,6 +180,26 @@ router.post('/register', async (req, res, next) => {
 
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
+    if (!listingOtpToken) {
+      errors.push('listing_otp_token is required. Verify OTP before broker registration');
+    } else {
+      const verified = verifyListingSubmitToken(listingOtpToken);
+      if (!verified.ok) {
+        errors.push('listing_otp_token is invalid or expired');
+      } else if (verified.channel !== otpChannel) {
+        errors.push('listing_otp_token channel does not match otp_channel');
+      } else if (verified.channel === 'email') {
+        const normalizedEmail = normalizeEmail(email);
+        if (!normalizedEmail || verified.identifier !== normalizedEmail) {
+          errors.push('listing_otp_token does not match email');
+        }
+      } else {
+        const normalizedPhone = normalizeUgPhone(phone);
+        if (!normalizedPhone || verified.identifier !== normalizedPhone) {
+          errors.push('listing_otp_token does not match phone');
+        }
+      }
+    }
 
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
