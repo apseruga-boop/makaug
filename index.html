@@ -3373,8 +3373,12 @@
     let listWizardStep = 1;
     let lpPinMap = null;
     let lpPinMarker = null;
+    let lpPinMapProvider = "";
+    let lpPinInfoWindow = null;
     let lpPreviewMap = null;
     let lpPreviewMarker = null;
+    let lpPreviewMapProvider = "";
+    let lpPreviewInfoWindow = null;
     const LP_MIN_UPLOAD_PHOTOS = 5;
     const LP_MAX_UPLOAD_PHOTOS = 20;
     let lpSelectedPhotos = [];
@@ -8803,47 +8807,154 @@
       }
     }
 
+    function getListMapInfo(title = "", locationLabel = "") {
+      const listingTitle = title || lpVal("lp-title") || translateListingLabel("Property location");
+      const location = locationLabel || lpResolvedLocationLabel || [
+        lpVal("lp-area"),
+        lpVal("lp-city"),
+        lpVal("list-district-sel")
+      ].filter(Boolean).join(", ");
+      return { title: listingTitle, location };
+    }
+
+    function getListMapInfoHtml(title = "", locationLabel = "") {
+      const info = getListMapInfo(title, locationLabel);
+      return `
+        <div style="min-width:180px">
+          <div style="font-weight:700;color:#111827;margin-bottom:4px">${adminEscape(info.title)}</div>
+          <div style="font-size:12px;color:#4b5563">${adminEscape(info.location || translateListingLabel("Pinned property location"))}</div>
+        </div>
+      `;
+    }
+
+    function resizeListMap(map, provider, center = null, zoom = null, delay = 120) {
+      setTimeout(() => {
+        try {
+          if (provider === "google" && window.google?.maps) {
+            window.google.maps.event.trigger(map, "resize");
+            if (center) map.setCenter(center);
+            if (zoom != null) map.setZoom(zoom);
+            return;
+          }
+          if (map?.invalidateSize) {
+            map.invalidateSize();
+            if (center) map.setView([center.lat, center.lng], zoom || map.getZoom?.() || 9, { animate: false });
+          }
+        } catch (e) {}
+      }, delay);
+    }
+
+    function initGoogleListPinMap(el) {
+      if (!window.google?.maps || !el) return false;
+      el.innerHTML = "";
+      lpPinMap = new google.maps.Map(el, {
+        center: { lat: 0.347596, lng: 32.58252 },
+        zoom: 9,
+        mapTypeControl: false,
+        streetViewControl: true,
+        fullscreenControl: true,
+        clickableIcons: true
+      });
+      lpPinMapProvider = "google";
+      lpPinInfoWindow = new google.maps.InfoWindow();
+      lpPinMap.addListener("click", (evt) => {
+        if (!evt.latLng) return;
+        setListPinCoords(evt.latLng.lat(), evt.latLng.lng(), false);
+      });
+      return true;
+    }
+
+    function initLeafletListPinMap() {
+      if (!window.L) return false;
+      lpPinMap = L.map("lp-pin-map", {
+        minZoom: 6,
+        maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
+        maxBoundsViscosity: 0.65
+      }).setView([0.347596, 32.58252], 9);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18
+      }).addTo(lpPinMap);
+      lpPinMapProvider = "leaflet";
+      lpPinMap.on("click", (evt) => {
+        setListPinCoords(evt.latlng.lat, evt.latlng.lng, false);
+      });
+      return true;
+    }
+
     function ensureListPinMap() {
-      if (!window.L) return;
       const el = document.getElementById("lp-pin-map");
       if (!el) return;
-      if (!lpPinMap) {
-        lpPinMap = L.map("lp-pin-map", {
-          minZoom: 6,
-          maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
-          maxBoundsViscosity: 0.65
-        }).setView([0.347596, 32.58252], 9);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap contributors",
-          maxZoom: 18
-        }).addTo(lpPinMap);
-        lpPinMap.on("click", (evt) => {
-          setListPinCoords(evt.latlng.lat, evt.latlng.lng, false);
-        });
+      if (lpPinMap) {
+        resizeListMap(lpPinMap, lpPinMapProvider);
+        return;
       }
-      setTimeout(() => {
-        try { lpPinMap.invalidateSize(); } catch (e) {}
-      }, 120);
+      if (GOOGLE_MAPS_API_KEY) {
+        ensureGoogleMapsApi().then((useGoogle) => {
+          if (lpPinMap) return;
+          const ready = useGoogle && initGoogleListPinMap(el);
+          if (!ready) initLeafletListPinMap();
+          if (lpPinMap) {
+            refreshListPinMapFromInputs();
+            resizeListMap(lpPinMap, lpPinMapProvider);
+          }
+        });
+        return;
+      }
+      if (initLeafletListPinMap()) resizeListMap(lpPinMap, lpPinMapProvider);
+    }
+
+    function initGoogleListPreviewMap(el) {
+      if (!window.google?.maps || !el) return false;
+      el.innerHTML = "";
+      lpPreviewMap = new google.maps.Map(el, {
+        center: { lat: 0.347596, lng: 32.58252 },
+        zoom: 9,
+        mapTypeControl: false,
+        streetViewControl: true,
+        fullscreenControl: true,
+        clickableIcons: true
+      });
+      lpPreviewMapProvider = "google";
+      lpPreviewInfoWindow = new google.maps.InfoWindow();
+      return true;
+    }
+
+    function initLeafletListPreviewMap() {
+      if (!window.L) return false;
+      lpPreviewMap = L.map("lp-preview-map", {
+        minZoom: 6,
+        maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
+        maxBoundsViscosity: 0.65
+      }).setView([0.347596, 32.58252], 9);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18
+      }).addTo(lpPreviewMap);
+      lpPreviewMapProvider = "leaflet";
+      return true;
     }
 
     function ensureListPreviewMap() {
-      if (!window.L) return;
       const el = document.getElementById("lp-preview-map");
       if (!el) return;
-      if (!lpPreviewMap) {
-        lpPreviewMap = L.map("lp-preview-map", {
-          minZoom: 6,
-          maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
-          maxBoundsViscosity: 0.65
-        }).setView([0.347596, 32.58252], 9);
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap contributors",
-          maxZoom: 18
-        }).addTo(lpPreviewMap);
+      if (lpPreviewMap) {
+        resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+        return;
       }
-      setTimeout(() => {
-        try { lpPreviewMap.invalidateSize(); } catch (e) {}
-      }, 120);
+      if (GOOGLE_MAPS_API_KEY) {
+        ensureGoogleMapsApi().then((useGoogle) => {
+          if (lpPreviewMap) return;
+          const ready = useGoogle && initGoogleListPreviewMap(el);
+          if (!ready) initLeafletListPreviewMap();
+          if (lpPreviewMap) {
+            updateListPreview();
+            resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+          }
+        });
+        return;
+      }
+      if (initLeafletListPreviewMap()) resizeListMap(lpPreviewMap, lpPreviewMapProvider);
     }
 
     function updateListPreviewMap(lat, lng, title, locationLabel, district) {
@@ -8858,23 +8969,38 @@
         mLng = center.lng;
         zoom = center ? 12 : 9;
       }
-      if (!lpPreviewMarker) lpPreviewMarker = L.marker([mLat, mLng]).addTo(lpPreviewMap);
-      else lpPreviewMarker.setLatLng([mLat, mLng]);
-      lpPreviewMap.setView([mLat, mLng], zoom);
-      lpPreviewMarker.bindPopup(`<strong>${title || "Listing"}</strong><br>${locationLabel || "-"}`);
-      setTimeout(() => {
-        if (!lpPreviewMap) return;
-        try {
-          lpPreviewMap.invalidateSize();
-          lpPreviewMap.setView([mLat, mLng], zoom, { animate: false });
-        } catch (e) {}
-      }, 80);
-      setTimeout(() => {
-        if (!lpPreviewMap) return;
-        try {
-          lpPreviewMap.invalidateSize();
-        } catch (e) {}
-      }, 260);
+      if (lpPreviewMapProvider === "google" && window.google?.maps) {
+        const position = { lat: mLat, lng: mLng };
+        if (!lpPreviewMarker) {
+          lpPreviewMarker = new google.maps.Marker({
+            position,
+            map: lpPreviewMap,
+            title: getListMapInfo(title, locationLabel).title
+          });
+          lpPreviewMarker.addListener("mouseover", () => {
+            lpPreviewInfoWindow.setContent(getListMapInfoHtml());
+            lpPreviewInfoWindow.open(lpPreviewMap, lpPreviewMarker);
+          });
+          lpPreviewMarker.addListener("click", () => {
+            lpPreviewInfoWindow.setContent(getListMapInfoHtml());
+            lpPreviewInfoWindow.open(lpPreviewMap, lpPreviewMarker);
+          });
+        } else {
+          lpPreviewMarker.setPosition(position);
+          lpPreviewMarker.setTitle(getListMapInfo(title, locationLabel).title);
+        }
+        lpPreviewMap.setCenter(position);
+        lpPreviewMap.setZoom(zoom);
+        resizeListMap(lpPreviewMap, lpPreviewMapProvider, position, zoom, 80);
+        resizeListMap(lpPreviewMap, lpPreviewMapProvider, position, zoom, 260);
+      } else if (window.L) {
+        if (!lpPreviewMarker) lpPreviewMarker = L.marker([mLat, mLng]).addTo(lpPreviewMap);
+        else lpPreviewMarker.setLatLng([mLat, mLng]);
+        lpPreviewMap.setView([mLat, mLng], zoom);
+        lpPreviewMarker.bindPopup(`<strong>${title || "Listing"}</strong><br>${locationLabel || "-"}`);
+        resizeListMap(lpPreviewMap, lpPreviewMapProvider, { lat: mLat, lng: mLng }, zoom, 80);
+        resizeListMap(lpPreviewMap, lpPreviewMapProvider, null, null, 260);
+      }
       const noteEl = document.getElementById("lp-preview-map-note");
       if (noteEl) {
         const hasPin = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
@@ -8893,10 +9019,42 @@
       if (latEl) latEl.value = nLat.toFixed(6);
       if (lngEl) lngEl.value = nLng.toFixed(6);
       ensureListPinMap();
-      if (!lpPinMap) return;
-      if (!lpPinMarker) lpPinMarker = L.marker([nLat, nLng]).addTo(lpPinMap);
-      else lpPinMarker.setLatLng([nLat, nLng]);
-      if (recenter) lpPinMap.setView([nLat, nLng], 15);
+      if (lpPinMap) {
+        if (lpPinMapProvider === "google" && window.google?.maps) {
+          const position = { lat: nLat, lng: nLng };
+          if (!lpPinMarker) {
+            lpPinMarker = new google.maps.Marker({
+              position,
+              map: lpPinMap,
+              draggable: true,
+              title: getListMapInfo().title
+            });
+            lpPinMarker.addListener("dragend", (evt) => {
+              if (!evt.latLng) return;
+              setListPinCoords(evt.latLng.lat(), evt.latLng.lng(), false);
+            });
+            lpPinMarker.addListener("mouseover", () => {
+              lpPinInfoWindow.setContent(getListMapInfoHtml());
+              lpPinInfoWindow.open(lpPinMap, lpPinMarker);
+            });
+            lpPinMarker.addListener("click", () => {
+              lpPinInfoWindow.setContent(getListMapInfoHtml());
+              lpPinInfoWindow.open(lpPinMap, lpPinMarker);
+            });
+          } else {
+            lpPinMarker.setPosition(position);
+            lpPinMarker.setTitle(getListMapInfo().title);
+          }
+          if (recenter) {
+            lpPinMap.setCenter(position);
+            lpPinMap.setZoom(15);
+          }
+        } else if (window.L) {
+          if (!lpPinMarker) lpPinMarker = L.marker([nLat, nLng]).addTo(lpPinMap);
+          else lpPinMarker.setLatLng([nLat, nLng]);
+          if (recenter) lpPinMap.setView([nLat, nLng], 15);
+        }
+      }
       const confirmEl = document.getElementById("lp-location-confirm");
       if (confirmEl && !preserveConfirm) confirmEl.checked = false;
       resolveListPinLocation(nLat, nLng);
@@ -9050,7 +9208,12 @@
       const cityPoint = getCityPoint(district, city);
       const center = neighborhoodPoint || cityPoint || getDistrictCenter(district) || getRegionCenter(region) || { lat: 0.347596, lng: 32.58252 };
       const zoom = neighborhood ? 16 : city ? 14 : address ? 13 : (district ? 11 : (region ? 8 : (area ? 12 : 9)));
-      lpPinMap.setView([center.lat, center.lng], zoom);
+      if (lpPinMapProvider === "google" && window.google?.maps) {
+        lpPinMap.setCenter({ lat: center.lat, lng: center.lng });
+        lpPinMap.setZoom(zoom);
+      } else if (lpPinMap?.setView) {
+        lpPinMap.setView([center.lat, center.lng], zoom);
+      }
       if (!confirmed && (!hasCoords || hierarchyChanged || addressChanged)) {
         setListPinCoords(center.lat, center.lng, false);
       }
@@ -9098,12 +9261,12 @@
         setTimeout(() => {
           updateListPreview();
           if (lpPreviewMap) {
-            try { lpPreviewMap.invalidateSize(); } catch (e) {}
+            resizeListMap(lpPreviewMap, lpPreviewMapProvider);
           }
         }, 180);
         setTimeout(() => {
           if (lpPreviewMap) {
-            try { lpPreviewMap.invalidateSize(); } catch (e) {}
+            resizeListMap(lpPreviewMap, lpPreviewMapProvider);
           }
         }, 420);
       }
@@ -14168,7 +14331,7 @@
         updateListPreviewMap(latVal, lngVal, title, detailLocation, districtVal);
         setTimeout(() => {
           if (lpPreviewMap) {
-            try { lpPreviewMap.invalidateSize(); } catch (e) {}
+            resizeListMap(lpPreviewMap, lpPreviewMapProvider);
           }
         }, 120);
       }
@@ -15201,6 +15364,10 @@
             </button>
           </div>
         `;
+        marker.addListener("mouseover", () => {
+          infoWindow.setContent(content);
+          infoWindow.open(map, marker);
+        });
         marker.addListener("click", () => {
           if (mapId === "map-home") {
             openDetail(p.id);
@@ -15232,7 +15399,7 @@
             map,
             title: broker.name || "MakaUg broker"
           });
-          marker.addListener("click", () => {
+          const openBrokerInfo = () => {
             infoWindow.setContent(`
               <div style="min-width:210px">
                 <div style="font-weight:700;color:#111827;margin-bottom:2px">${adminEscape(broker.name || "Broker")}</div>
@@ -15244,7 +15411,9 @@
               </div>
             `);
             infoWindow.open(map, marker);
-          });
+          };
+          marker.addListener("mouseover", openBrokerInfo);
+          marker.addListener("click", openBrokerInfo);
           markers[mapId].push(marker);
         });
         if (!points.length) {
@@ -15328,7 +15497,7 @@
             center: { lat: 0.347596, lng: 32.58252 },
             zoom: 9,
             mapTypeControl: false,
-            streetViewControl: false,
+            streetViewControl: true,
             fullscreenControl: true
           });
           maps[spec.id] = map;
@@ -15343,7 +15512,7 @@
             center: { lat: 1.3733, lng: 32.2903 },
             zoom: 7,
             mapTypeControl: false,
-            streetViewControl: false,
+            streetViewControl: true,
             fullscreenControl: true
           });
           maps["map-brokers"] = brokerMap;
@@ -15442,7 +15611,7 @@
           center: { lat, lng },
           zoom: 14,
           mapTypeControl: false,
-          streetViewControl: false,
+          streetViewControl: true,
           fullscreenControl: true
         });
         const marker = new google.maps.Marker({
@@ -15452,6 +15621,7 @@
         });
         const info = new google.maps.InfoWindow({ content: `<strong>${adminEscape(p.title || "Property")}</strong>` });
         info.open(map, marker);
+        marker.addListener("mouseover", () => info.open(map, marker));
         marker.addListener("click", () => info.open(map, marker));
         return;
       }
