@@ -5,6 +5,8 @@ const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS } = require('../utils/constants');
+const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
+const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { processPendingCampaignQueue } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy } = require('../services/aiService');
 const {
@@ -473,6 +475,43 @@ router.post('/properties/:id/review-token', async (req, res, next) => {
         property_id: req.params.id,
         owner_preview_url: url,
         expires_at: expiresAt
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/listing-submit-otp-override', async (req, res, next) => {
+  try {
+    const channel = cleanText(req.body.channel).toLowerCase() === 'email' ? 'email' : 'phone';
+    const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
+    const identifier = channel === 'email' ? email : phone;
+
+    if (channel === 'email') {
+      if (!identifier || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) {
+        return res.status(400).json({ ok: false, error: 'Valid email is required' });
+      }
+    } else if (!identifier || !/^\+256\d{9}$/.test(identifier)) {
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
+    }
+
+    const token = createListingSubmitToken({ channel, phone, email });
+    await writeAudit('admin_listing_submit_otp_override_created', {
+      channel,
+      identifier
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        channel,
+        identifier,
+        phone: channel === 'phone' ? phone : undefined,
+        email: channel === 'email' ? email : undefined,
+        listing_otp_token: token,
+        expires_in: process.env.LISTING_OTP_EXPIRES_IN || '30m'
       }
     });
   } catch (error) {

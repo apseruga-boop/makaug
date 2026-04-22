@@ -347,6 +347,12 @@ Critical:
   - Resend: `RESEND_API_KEY`
   - Webhook relay: `MAIL_WEBHOOK_URL`
 
+Admin QA listing override:
+
+- Preferred for production QA: call `POST /api/admin/listing-submit-otp-override` with `ADMIN_API_KEY` to generate a one-time listing submission token for a known test phone/email.
+- Optional public OTP override: set `ADMIN_OTP_OVERRIDE_ENABLED=true`, `ADMIN_OTP_OVERRIDE_CODE=<private code>`, `ADMIN_OTP_OVERRIDE_ALLOWLIST_STRICT=true`, and `ADMIN_OTP_OVERRIDE_ALLOWLIST=<your email or phone>`.
+- To create the 25 labelled dummy listings, run `ADMIN_API_KEY=<key> npm run qa:create-listings`. Add `QA_APPROVE=1` only when you intentionally want the dummy listings approved and visible.
+
 ## Email OTP Setup (GoDaddy + Microsoft 365)
 
 If you see this error in OTP requests:

@@ -29,12 +29,12 @@ function getAdminOtpOverrideCode() {
     process.env.ADMIN_OTP_OVERRIDE_CODE
       || process.env.AUTH_OTP_OVERRIDE_CODE
       || process.env.LISTING_OTP_OVERRIDE_CODE
-      || '123456'
+      || (process.env.NODE_ENV === 'production' ? '' : '123456')
   );
 }
 
 function isAdminOtpOverrideEnabled() {
-  return parseBooleanLike(process.env.ADMIN_OTP_OVERRIDE_ENABLED, true);
+  return parseBooleanLike(process.env.ADMIN_OTP_OVERRIDE_ENABLED, process.env.NODE_ENV !== 'production');
 }
 
 function getAdminOtpOverrideAllowlist() {

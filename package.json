@@ -20,6 +20,7 @@
     "ai:run-agents": "node scripts/run-ai-agents.js",
     "qa:postman": "bash scripts/run-postman-qa.sh",
     "qa:postman:render": "BASE_URL=https://makaug.onrender.com bash scripts/run-postman-qa.sh",
+    "qa:create-listings": "node scripts/create-qa-listings.js",
     "check": "node --check server.js",
     "smoke": "bash scripts/smoke-test.sh",
     "prelaunch": "bash scripts/prelaunch-check.sh"

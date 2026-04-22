@@ -8894,17 +8894,34 @@
       const refEl = document.getElementById("lp-success-ref");
       const contactEl = document.getElementById("lp-success-contact");
       const statusEl = document.getElementById("lp-success-status");
+      const modalPillEl = document.getElementById("listing-submit-pill");
+      const modalTitleEl = document.getElementById("listing-submit-title");
+      const modalSubEl = document.getElementById("listing-submit-sub");
       const modalRefEl = document.getElementById("listing-submit-ref");
       const modalContactEl = document.getElementById("listing-submit-contact");
       const modalStatusEl = document.getElementById("listing-submit-status");
       const contactPref = payload?.extra_fields?.verify?.contact_preference || "both";
-      let contactCopy = translateListingLabel("We will WhatsApp you once it's approved, and we can also follow up by email.");
+      const ownerEmailSent = options.owner_email_sent || options.ownerNotification?.email?.sent === true;
+      const ownerWhatsAppReady = !!(options.owner_whatsapp_url || options.ownerNotification?.whatsapp?.manual_url);
+      const email = payload?.lister_email || "";
+      let contactCopy = ownerEmailSent && email
+        ? `${translateListingLabel("Confirmation email sent to")} ${email}. ${translateListingLabel("We will WhatsApp you once it's approved, and we can also follow up by email.")}`
+        : translateListingLabel("Your listing has been received. We will email or WhatsApp you with the review update.");
       if (contactPref === "phone") contactCopy = translateListingLabel("We will call or email you once this listing is approved.");
-      if (contactPref === "whatsapp") contactCopy = translateListingLabel("We will WhatsApp you once it's approved, and we can also follow up by email.");
+      if (contactPref === "whatsapp" && !ownerEmailSent) contactCopy = translateListingLabel("We will WhatsApp you once it's approved, and we can also follow up by email.");
+      if (ownerWhatsAppReady && !ownerEmailSent) {
+        contactCopy = `${contactCopy} ${translateListingLabel("A WhatsApp confirmation message has also been prepared.")}`;
+      }
+      if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Received");
+      if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("Your property has been submitted");
+      if (modalSubEl) modalSubEl.textContent = translateListingLabel("Next step: MakaUg runs automated checks on your photos, ID details, location, and duplicates. Review is normally completed within 24 hours.");
       if (refEl) refEl.textContent = reference || "-";
       if (modalRefEl) modalRefEl.textContent = reference || "-";
       if (contactEl) contactEl.textContent = contactCopy;
-      if (modalContactEl) modalContactEl.textContent = contactCopy;
+      if (modalContactEl) {
+        modalContactEl.className = "text-sm text-green-700 font-semibold mt-2";
+        modalContactEl.textContent = contactCopy;
+      }
       if (statusEl) {
         const isOffline = !!options.offline;
         statusEl.className = `text-xs mt-2 ${isOffline ? "text-amber-700" : "text-green-700"}`;
@@ -8920,6 +8937,28 @@
           : translateListingLabel("Submitted online and sent for verification.");
       }
       if (successBox) successBox.classList.add("hidden");
+      openModal("listing-submit-modal");
+    }
+
+    function showListSubmissionError(message) {
+      const modalPillEl = document.getElementById("listing-submit-pill");
+      const modalTitleEl = document.getElementById("listing-submit-title");
+      const modalSubEl = document.getElementById("listing-submit-sub");
+      const modalRefEl = document.getElementById("listing-submit-ref");
+      const modalContactEl = document.getElementById("listing-submit-contact");
+      const modalStatusEl = document.getElementById("listing-submit-status");
+      if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Not Completed");
+      if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("We could not submit this listing");
+      if (modalSubEl) modalSubEl.textContent = translateListingLabel("Please keep this page open and try again. If it continues, contact support with the error below.");
+      if (modalRefEl) modalRefEl.textContent = "-";
+      if (modalContactEl) {
+        modalContactEl.className = "text-sm text-red-700 font-semibold mt-2";
+        modalContactEl.textContent = message || translateListingLabel("Could not submit listing. Please try again.");
+      }
+      if (modalStatusEl) {
+        modalStatusEl.className = "text-sm font-semibold mt-1 text-red-700";
+        modalStatusEl.textContent = translateListingLabel("No listing has been created yet.");
+      }
       openModal("listing-submit-modal");
     }
 
@@ -8952,10 +8991,11 @@
         });
         applySubmittedListingToLocal(payload, response?.data || {});
         const ref = response?.data?.inquiry_reference || payload.inquiry_reference;
-        showListSubmissionSuccess(ref, payload, { offline: false });
+        showListSubmissionSuccess(ref, payload, { offline: false, ...(response?.data || {}) });
         setListWizardStep(4);
         toast("Thanks. Listing submitted for review. We will contact you by WhatsApp or email within 24 hours.");
       } catch (error) {
+        showListSubmissionError(error.message || "Could not submit listing. Please try again.");
         toast(error.message || "Could not submit listing. Please try again.");
       } finally {
         setButtonLoading("lp-submit-btn", false, "Submit Listing");
