@@ -3413,7 +3413,7 @@
     const MAP_DEFAULT_ZOOM = 11;
     const MAP_CITY_ZOOM = 15;
     const MAP_NEIGHBORHOOD_ZOOM = 17;
-    const MAP_PROPERTY_ZOOM = 18;
+    const MAP_PROPERTY_ZOOM = 19;
     const MAP_REGION_ZOOM = 8;
     const MAP_DISTRICT_ZOOM = 12;
     const MAP_MULTI_LISTING_MAX_ZOOM = 14;
@@ -3632,6 +3632,7 @@
     };
 
     const SAVED_IDS_STORAGE_KEY = "makaug_saved_ids_by_user";
+    const PENDING_SAVE_STORAGE_KEY = "makaug_pending_save_property_id";
     const METRICS_STORAGE_KEY = "makaug_metrics_v1";
     const USER_ACTIVITY_STORAGE_KEY = "makaug_user_activity_v1";
     const I18N_UI = {
@@ -6008,6 +6009,40 @@
       return Array.from(savedIds).some((value) => String(value) === key);
     }
 
+    function setPendingSavePropertyId(propertyId) {
+      const id = String(propertyId || "").trim();
+      if (!id) return;
+      try {
+        localStorage.setItem(PENDING_SAVE_STORAGE_KEY, id);
+      } catch (e) {}
+    }
+
+    function popPendingSavePropertyId() {
+      try {
+        const id = localStorage.getItem(PENDING_SAVE_STORAGE_KEY) || "";
+        if (id) localStorage.removeItem(PENDING_SAVE_STORAGE_KEY);
+        return id;
+      } catch (e) {
+        return "";
+      }
+    }
+
+    function applyPendingSaveAfterAuth() {
+      if (!authState?.user) return false;
+      const id = popPendingSavePropertyId();
+      if (!id) return false;
+      const property = findPropertyForUi(id);
+      if (!property) return false;
+      if (!isPropertySaved(id)) {
+        savedIds.add(String(id));
+        siteMetrics.propertySaves[String(id)] = (parseInt(siteMetrics.propertySaves[String(id)] || 0, 10) || 0) + 1;
+        persistSavedIdsForCurrentUser();
+        saveDashboardState();
+        trackEvent("property_save", { property_id: id, source: "post_auth" });
+      }
+      return true;
+    }
+
     function getCurrentUserActivity() {
       const key = getSignedInUserStorageId();
       if (!userActivityStore[key]) {
@@ -8306,11 +8341,13 @@
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
       } catch (e) {}
       loadSavedIdsForCurrentUser();
+      const appliedPendingSave = applyPendingSaveAfterAuth();
       applyAuthUi();
       renderFinderDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
       renderAdminDashboard();
+      if (appliedPendingSave) toast("Property saved to your account.");
     }
 
     function clearAuthState() {
@@ -12357,12 +12394,14 @@
       const normalized = list.map((item, idx) => {
         const url = item?.url || item?.img || item?.src || "";
         if (!url) return null;
-        const roomLabel = item?.room_label || item?.label || item?.slot || "";
+        const rawRoomLabel = item?.room_label || item?.label || "";
         const slotKey = item?.slot_key || item?.slot || "";
+        const roomLabel = /^photo\s*\d+$/i.test(String(rawRoomLabel || "").trim()) ? "" : rawRoomLabel;
         return {
           url,
           name: item?.name || `Photo ${idx + 1}`,
           room_label: roomLabel,
+          slot_key: slotKey,
           slot: slotKey || roomLabel,
           location_label: item?.location_label || baseLocation,
           is_main: !!item?.is_main || idx === Number(property.main_photo_index || -1)
@@ -12380,6 +12419,32 @@
         }];
       }
       return [];
+    }
+
+    function getPhotoFallbackLabels(listingType = "") {
+      const type = normalizeType(listingType);
+      if (type === "land") return ["Plot entrance", "Boundary markers", "Road access", "Land surface", "Title / plot document"];
+      if (type === "commercial") return ["Building frontage", "Main interior", "Access / parking", "Utilities area", "Washroom"];
+      if (type === "student") return ["Student room", "Bathroom", "Shared area / kitchen", "Building exterior", "Access route"];
+      return ["Front / exterior", "Living room", "Kitchen", "Bedroom", "Bathroom"];
+    }
+
+    function photoLabelFromSlot(slotKey, listingType = "") {
+      const slot = String(slotKey || "").trim();
+      if (!slot) return "";
+      const label = getLpPhotoSlotLabel(slot, listingType);
+      if (!label || /^photo\s*\d+$/i.test(label)) return "";
+      return label;
+    }
+
+    function getDisplayPhotoLabel(photo, index = 0, property = null) {
+      const type = normalizeType(property?.type || property?.listing_type || "");
+      const raw = String(photo?.room_label || photo?.label || "").trim();
+      if (raw && !/^photo\s*\d+$/i.test(raw)) return raw;
+      const slotLabel = photoLabelFromSlot(photo?.slot_key || photo?.slot, type);
+      if (slotLabel) return slotLabel;
+      const fallback = getPhotoFallbackLabels(type);
+      return fallback[index] || `${translateListingLabel("Photo")} ${index + 1}`;
     }
 
     function parseDateSafe(value) {
@@ -12508,8 +12573,12 @@
     }
 
     function propertyDirectionsUrl(property) {
-      if (!Number.isFinite(Number(property?.lat)) || !Number.isFinite(Number(property?.lng))) return "";
-      const destination = `${Number(property.lat)},${Number(property.lng)}`;
+      const lat = Number(property?.lat ?? property?.latitude);
+      const lng = Number(property?.lng ?? property?.longitude);
+      const destination = (Number.isFinite(lat) && Number.isFinite(lng))
+        ? `${lat},${lng}`
+        : [property?.title, property?.area, property?.district, "Uganda"].filter(Boolean).join(", ");
+      if (!destination) return "";
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
     }
 
@@ -12527,7 +12596,8 @@
         district: property?.district || "",
         area: property?.area || ""
       });
-      window.open(url, "_blank", "noopener,noreferrer");
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) window.location.href = url;
       renderFinderDashboard();
     }
 
@@ -12852,6 +12922,19 @@
     function renderSaved() {
       const el = document.getElementById("saved-content");
       if (!el) return;
+      if (!authState?.user) {
+        el.innerHTML = `
+          <div class="text-center py-10">
+            <i class="far fa-user-circle text-4xl text-gray-300 mb-3"></i>
+            <p class="text-gray-700 font-semibold">Create or sign in to your free account to save properties.</p>
+            <p class="text-sm text-gray-500 mt-1">Saved properties then appear in your personal finder dashboard.</p>
+            <div class="mt-5 flex flex-col sm:flex-row justify-center gap-2">
+              <button onclick="openAuthSignUp('finder')" class="bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">Create Free Account</button>
+              <button onclick="openAuthSignIn('finder')" class="border border-green-700 text-green-700 px-5 py-2 rounded-lg text-sm font-semibold">Sign In</button>
+            </div>
+          </div>`;
+        return;
+      }
       const list = getPublicListings().filter((p) => isPropertySaved(p.id));
       if (!list.length) {
         el.innerHTML = `
@@ -12905,6 +12988,7 @@
         trackEvent("page_view", { page });
       }
       if (page === "finder-dashboard") renderFinderDashboard();
+      if (page === "saved") renderSaved();
       if (page === "agent-dashboard") renderAgentDashboard();
       if (page === "field-dashboard") renderFieldDashboard();
       if (page === "admin-dashboard") renderAdminDashboard();
@@ -12938,8 +13022,9 @@
         url: item.url || item,
         is_main: item.is_primary === true || index === 0,
         sort_order: item.sort_order ?? index,
+        slot_key: item.slot_key || item.slot || "",
         slot: item.slot_key || item.slot || "",
-        room_label: item.room_label || item.slot_key || item.slot || `Photo ${index + 1}`,
+        room_label: /^photo\s*\d+$/i.test(String(item.room_label || "").trim()) ? "" : (item.room_label || ""),
         location_label: [p.area, p.district].filter(Boolean).join(", ")
       })).filter((item) => item.url);
       const id = String(p?.id || "");
@@ -12956,8 +13041,8 @@
         period: p?.price_period || p?.period || "",
         img: p?.primary_image_url || p?.img || imageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
         desc: p?.description || p?.desc || "",
-        lat: Number(p?.latitude),
-        lng: Number(p?.longitude),
+        lat: Number(p?.latitude ?? p?.lat),
+        lng: Number(p?.longitude ?? p?.lng),
         status: p?.status || "pending",
         moderation_status: normalizeModerationStatus(p?.status),
         featured: p?.featured === true || String(p?.extra_fields?.featured || "").toLowerCase() === "true",
@@ -15180,7 +15265,8 @@
         return;
       }
       const active = detailGalleryPhotos[detailGalleryPhotoIndex] || detailGalleryPhotos[0];
-      const slotLabel = active.room_label || active.slot || translateListingLabel("Photo");
+      const property = findPropertyForUi(activeDetailPropertyId);
+      const slotLabel = getDisplayPhotoLabel(active, detailGalleryPhotoIndex, property);
       const locationLabel = active.location_label || "";
       imageEl.src = active.url;
       captionEl.textContent = `${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} - ${slotLabel}${locationLabel ? ` • ${locationLabel}` : ""}`;
@@ -15293,6 +15379,13 @@
 
     function toggleSave(id) {
       const key = String(id);
+      if (!authState?.user) {
+        setPendingSavePropertyId(key);
+        toast("Create a free account to save this property.");
+        openAuthSignUp("finder");
+        trackEvent("property_save_auth_required", { property_id: id });
+        return;
+      }
       const existing = Array.from(savedIds).find((value) => String(value) === key);
       if (existing !== undefined) {
         savedIds.delete(existing);
@@ -15310,6 +15403,13 @@
       renderAll();
       renderFinderDashboard();
       renderAgentDashboard();
+      updateDetailSaveButton(id);
+    }
+
+    function updateDetailSaveButton(id) {
+      const btn = document.getElementById("detail-save-btn");
+      if (!btn || String(activeDetailPropertyId || "") !== String(id || "")) return;
+      btn.textContent = isPropertySaved(id) ? "Remove Saved" : "Save Property";
     }
 
     function formatUgxAmount(value) {
@@ -15830,7 +15930,7 @@
                   ${detailGalleryPhotos.map((photo, idx) => `
                     <button type="button" onclick="openDetailGalleryLightbox(${idx})" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
                       <img src="${photo.url}" alt="${photo.name || `Photo ${idx + 1}`}" class="w-full h-20 object-cover">
-                      <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${photo.room_label || photo.slot || `${translateListingLabel("Photo")} ${idx + 1}`}</div>
+                      <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${getDisplayPhotoLabel(photo, idx, p)}</div>
                     </button>
                   `).join("")}
                 </div>
@@ -15919,7 +16019,7 @@
                 ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
                 ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">WhatsApp unavailable</button>`}
               `}
-              <button onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
+              <button id="detail-save-btn" onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
                 <h4 class="font-bold text-gray-800 text-sm mb-2">Send enquiry</h4>
                 <div class="space-y-2">
@@ -16462,8 +16562,10 @@
       const el = document.getElementById("map-detail");
       if (!el) return;
       const useGoogle = await ensureGoogleMapsApi();
-      const lat = Number.isFinite(p.lat) ? p.lat : MAP_DEFAULT_CENTER.lat;
-      const lng = Number.isFinite(p.lng) ? p.lng : MAP_DEFAULT_CENTER.lng;
+      const rawLat = Number(p?.lat ?? p?.latitude);
+      const rawLng = Number(p?.lng ?? p?.longitude);
+      const lat = Number.isFinite(rawLat) ? rawLat : MAP_DEFAULT_CENTER.lat;
+      const lng = Number.isFinite(rawLng) ? rawLng : MAP_DEFAULT_CENTER.lng;
       if (useGoogle && window.google?.maps) {
         el.innerHTML = "";
         const map = new google.maps.Map(el, {
@@ -16492,7 +16594,7 @@
       const map = L.map("map-detail").setView([lat, lng], MAP_PROPERTY_ZOOM);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
-        maxZoom: 18
+        maxZoom: 19
       }).addTo(map);
       L.marker([lat, lng]).addTo(map).bindPopup(p.title).openPopup();
       setTimeout(() => map.invalidateSize(), 150);
