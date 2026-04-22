@@ -73,7 +73,7 @@ async function loadPropertyReview(propertyId) {
     events
   ] = await Promise.all([
     db.query(
-      `SELECT id, url, is_primary, sort_order, created_at
+      `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
        FROM property_images
        WHERE property_id = $1
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
@@ -181,6 +181,7 @@ async function loadPropertyReview(propertyId) {
       checklist_items: automatedReview.checks,
       notes: listing.moderation_notes || '',
       reason: listing.moderation_reason || listing.extra_fields?.moderation_reason || '',
+      warning_overrides: listing.extra_fields?.review_warning_overrides || {},
       automated: automatedReview
     },
     quality_signals: {
@@ -483,7 +484,7 @@ router.post('/properties/:id/external-duplicate-scan', async (req, res, next) =>
     }
 
     const images = await db.query(
-      `SELECT id, url, is_primary, sort_order, created_at
+      `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
        FROM property_images
        WHERE property_id = $1
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
@@ -511,7 +512,7 @@ router.post('/properties/:id/external-duplicate-scan', async (req, res, next) =>
 
 router.patch('/properties/:id/review', async (req, res, next) => {
   try {
-    const existing = await db.query('SELECT id, status, moderation_checklist FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    const existing = await db.query('SELECT id, status, moderation_checklist, extra_fields FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
     if (!existing.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
@@ -527,6 +528,9 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     const notes = cleanText(req.body.notes || req.body.review_notes) || null;
     const reason = cleanText(req.body.reason) || null;
     const stage = cleanText(req.body.stage) || 'in_review';
+    const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
+      ? req.body.warning_overrides
+      : (existing.rows[0].extra_fields?.review_warning_overrides || {});
     const actorId = adminActorId(req);
     const reviewerUserId = req.adminAuth?.userId || null;
 
@@ -538,16 +542,18 @@ router.patch('/properties/:id/review', async (req, res, next) => {
          moderation_notes = COALESCE($4::text, moderation_notes),
          moderation_reason = COALESCE($5::text, moderation_reason),
          reviewed_by = COALESCE($6::uuid, reviewed_by),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('review_warning_overrides', $7::jsonb),
          updated_at = NOW()
        WHERE id = $1
-       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, reviewed_by, updated_at`,
+       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, reviewed_by, extra_fields, updated_at`,
       [
         req.params.id,
         stage,
         JSON.stringify(checklist),
         notes,
         reason,
-        reviewerUserId
+        reviewerUserId,
+        JSON.stringify(warningOverrides)
       ]
     );
 
@@ -567,7 +573,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
     await writeAudit('admin_property_review_updated', {
       property_id: req.params.id,
       stage,
-      listing_edited: !!listingPatch
+      listing_edited: !!listingPatch,
+      warning_override_count: Object.keys(warningOverrides || {}).length
     }, actorId);
 
     return res.json({ ok: true, data: updated.rows[0] });

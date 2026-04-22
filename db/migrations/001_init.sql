@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS property_images (
   url TEXT NOT NULL,
   is_primary BOOLEAN NOT NULL DEFAULT FALSE,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  slot_key TEXT,
+  room_label TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

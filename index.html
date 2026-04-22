@@ -3429,6 +3429,8 @@
     let adminLiveListings = [];
     let adminActiveReview = null;
     let adminReviewEvidence = {};
+    let adminReviewEvidenceViewed = {};
+    let adminReviewWarningOverrides = {};
     let adminWhatsAppDraft = null;
     let publicListingsApiLoading = false;
     let publicListingsFromApiLoaded = false;
@@ -3447,6 +3449,7 @@
     let lpPreviewInfoWindow = null;
     const LP_MIN_UPLOAD_PHOTOS = 5;
     const LP_MAX_UPLOAD_PHOTOS = 20;
+    const LP_OTHER_PHOTO_SLOT = "other";
     let lpSelectedPhotos = [];
     let lpPhotoUploadUrls = [];
     let lpPhotoUploadSignature = "";
@@ -7407,6 +7410,18 @@
         toast("Evidence not available.");
         return;
       }
+      adminReviewEvidenceViewed[id] = true;
+      const overrideButton = document.getElementById(`admin-warning-override-${id}`);
+      if (overrideButton && overrideButton.dataset.overridden !== "true") {
+        overrideButton.disabled = false;
+        overrideButton.className = "border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-semibold";
+        overrideButton.textContent = "Override warning";
+      }
+      const overrideHint = document.getElementById(`admin-warning-hint-${id}`);
+      if (overrideHint && overrideButton?.dataset.overridden !== "true") {
+        overrideHint.textContent = "Evidence viewed. Override if acceptable.";
+        overrideHint.className = "text-[11px] text-amber-700";
+      }
       const titleEl = document.getElementById("admin-evidence-title");
       const bodyEl = document.getElementById("admin-evidence-body");
       if (titleEl) titleEl.textContent = item.title || "Review Evidence";
@@ -7419,6 +7434,7 @@
             <div class="grid sm:grid-cols-2 gap-2 text-sm">
               ${item.id_number ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">ID Number</div><div class="font-mono font-bold text-gray-900 mt-1">${adminEscape(item.id_number)}</div></div>` : ""}
               ${item.filename ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">File</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(item.filename)}</div></div>` : ""}
+              ${item.room_label ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">Photo Label</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(item.room_label)}</div></div>` : ""}
             </div>
             <div class="flex flex-wrap gap-2">
               ${item.id_number ? `<button onclick="copyAdminEvidenceText('${adminAttr(id)}','id_number')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy ID Number</button>` : ""}
@@ -7435,12 +7451,13 @@
                 kind: "media",
                 title: `Listing Photo ${idx + 1}`,
                 url: photo.url,
-                filename: photo.filename || `makaug-photo-${idx + 1}.jpg`
+                filename: photo.filename || `makaug-photo-${idx + 1}.jpg`,
+                room_label: photo.room_label || photo.slot_key || photo.slot || ""
               });
               return `
                 <button type="button" onclick="openAdminEvidence('${adminAttr(photoId)}')" class="text-left border border-gray-200 rounded-xl overflow-hidden bg-white hover:border-green-400">
                   <img src="${adminAttr(photo.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-36 object-cover bg-gray-50">
-                  <div class="p-2 text-xs text-gray-600">Photo ${idx + 1}${photo.is_primary ? " • Primary" : ""}</div>
+                  <div class="p-2 text-xs text-gray-600">${adminEscape(photo.room_label || photo.slot_key || photo.slot || `Photo ${idx + 1}`)}${photo.is_primary ? " • Primary" : ""}</div>
                 </button>`;
             }).join("") || `<div class="text-sm text-gray-500">No photos available.</div>`}
           </div>`;
@@ -7456,6 +7473,60 @@
           </div>`;
       }
       openModal("admin-evidence-modal");
+    }
+
+    function adminWarningOverrideKey(item) {
+      return String(item?.key || item?.label || item?.message || "").trim();
+    }
+
+    function getAdminReviewWarningItems(review = adminActiveReview) {
+      const automated = review?.review?.automated || {};
+      const checklistItems = automated?.checks || review?.review?.checklist_items || [];
+      return checklistItems.filter((item) => String(item?.status || "").toLowerCase() === "warning");
+    }
+
+    function getAdminReviewWarningOverrides(review = adminActiveReview) {
+      const reviewId = String(review?.id || "");
+      const saved = review?.review?.warning_overrides || review?.extra_fields?.review_warning_overrides || {};
+      const local = reviewId ? (adminReviewWarningOverrides[reviewId] || {}) : {};
+      return { ...(saved && typeof saved === "object" ? saved : {}), ...(local && typeof local === "object" ? local : {}) };
+    }
+
+    function getAdminPendingWarningOverrideLabels(review = adminActiveReview) {
+      const overrides = getAdminReviewWarningOverrides(review);
+      return getAdminReviewWarningItems(review)
+        .filter((item) => !overrides[adminWarningOverrideKey(item)])
+        .map((item) => item.label || item.key || "Warning");
+    }
+
+    function adminOverrideWarningCheck(evidenceId, checkKey = "") {
+      const item = adminReviewEvidence[evidenceId];
+      if (!adminActiveReview?.id || !item) {
+        toast("Warning evidence is not available.");
+        return;
+      }
+      if (!adminReviewEvidenceViewed[evidenceId]) {
+        toast("Open and review this evidence before overriding the warning.");
+        return;
+      }
+      const reviewId = String(adminActiveReview.id);
+      const key = String(checkKey || item.raw?.check?.key || item.title || evidenceId).trim();
+      adminReviewWarningOverrides[reviewId] = {
+        ...getAdminReviewWarningOverrides(adminActiveReview),
+        [key]: {
+          evidence_id: evidenceId,
+          check_key: key,
+          label: item.raw?.check?.label || item.title || key,
+          message: item.raw?.check?.message || item.message || "",
+          overridden_at: new Date().toISOString()
+        }
+      };
+      adminActiveReview.review = {
+        ...(adminActiveReview.review || {}),
+        warning_overrides: adminReviewWarningOverrides[reviewId]
+      };
+      toast("Warning override recorded.");
+      renderAdminReviewPanel(adminActiveReview);
     }
 
     function renderAdminReviewPanel(review) {
@@ -7474,6 +7545,11 @@
       const automated = review?.review?.automated || {};
       const checklistItems = automated?.checks || review?.review?.checklist_items || [];
       const canApprove = automated?.can_approve !== false;
+      const reviewOverrideKey = String(review.id || "");
+      const warningOverrides = getAdminReviewWarningOverrides(review);
+      if (reviewOverrideKey) adminReviewWarningOverrides[reviewOverrideKey] = warningOverrides;
+      const pendingWarningOverrides = getAdminPendingWarningOverrideLabels(review);
+      const approvalUnlocked = canApprove && pendingWarningOverrides.length === 0;
       const events = Array.isArray(review.events) ? review.events : [];
       const reviewIdArg = adminListingIdArg(review.id);
       const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
@@ -7485,8 +7561,9 @@
           ? { cls: "bg-amber-100 text-amber-700", label: "Checks passed with warnings" }
           : { cls: "bg-red-100 text-red-700", label: "Blocking failures" };
       const checkBadge = (status) => {
-        if (status === "pass") return { cls: "bg-green-100 text-green-700", label: "Green" };
-        if (status === "warning") return { cls: "bg-amber-100 text-amber-700", label: "Warning" };
+        const key = String(status || "").toLowerCase();
+        if (key === "pass") return { cls: "bg-green-100 text-green-700", label: "Green" };
+        if (key === "warning") return { cls: "bg-amber-100 text-amber-700", label: "Warning" };
         return { cls: "bg-red-100 text-red-700", label: "Fail" };
       };
       const idEvidenceId = registerAdminEvidence(`review-${review.id}-id-document`, {
@@ -7502,6 +7579,7 @@
         photos: images.map((img, idx) => ({
           url: img.url,
           filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg`,
+          room_label: img.room_label || img.slot_key || img.slot || "",
           is_primary: img.is_primary
         }))
       });
@@ -7563,9 +7641,9 @@
               </div>
               <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
                 ${images.length ? images.map((img, idx) => `
-                  <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, { kind: "media", title: `Listing Photo ${idx + 1}`, url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg` }))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
+                  <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, { kind: "media", title: img.room_label || img.slot_key || `Listing Photo ${idx + 1}`, url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg`, room_label: img.room_label || img.slot_key || img.slot || "" }))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
                     <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
-                    <div class="px-2 py-1 text-[11px] text-gray-500">Photo ${idx + 1}${img.is_primary ? " • Primary" : ""}</div>
+                    <div class="px-2 py-1 text-[11px] text-gray-500">${adminEscape(img.room_label || img.slot_key || img.slot || `Photo ${idx + 1}`)}${img.is_primary ? " • Primary" : ""}</div>
                   </button>
                 `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}
               </div>
@@ -7602,14 +7680,27 @@
                       id_document_url_present: !!review.id_document_url
                     }
                   });
+                  const badge = checkBadge(item.status);
+                  const warningKey = adminWarningOverrideKey(item);
+                  const isWarning = String(item.status || "").toLowerCase() === "warning";
+                  const warningOverridden = !!warningOverrides[warningKey];
+                  const warningEvidenceViewed = !!adminReviewEvidenceViewed[evidenceId];
                   return `
                   <div class="border border-gray-200 rounded-lg p-2">
                     <div class="flex items-start justify-between gap-2">
                       <div>
                         <div class="text-sm font-semibold text-gray-800">${adminEscape(item.label || item.key)}</div>
                         <div class="text-xs text-gray-500 mt-0.5">${adminEscape(item.message || "")}</div>
+                        ${isWarning ? `
+                          <div class="mt-2 flex flex-wrap items-center gap-2">
+                            <button id="admin-warning-override-${adminAttr(evidenceId)}" data-overridden="${warningOverridden ? "true" : "false"}" type="button" onclick="adminOverrideWarningCheck('${adminAttr(evidenceId)}','${adminAttr(warningKey)}')" ${warningEvidenceViewed || warningOverridden ? "" : "disabled"} class="${warningOverridden ? "bg-green-700 text-white" : warningEvidenceViewed ? "border border-amber-300 text-amber-800 hover:bg-amber-50" : "bg-gray-100 text-gray-400 cursor-not-allowed"} px-2 py-1 rounded text-[11px] font-semibold">
+                              ${warningOverridden ? "Warning overridden" : warningEvidenceViewed ? "Override warning" : "View evidence first"}
+                            </button>
+                            ${warningOverridden ? `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-green-700 font-semibold">Reviewed by admin</span>` : `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-amber-700">${warningEvidenceViewed ? "Evidence viewed. Override if acceptable." : "Open the evidence, then override if acceptable."}</span>`}
+                          </div>
+                        ` : ""}
                       </div>
-                      <button type="button" onclick="openAdminEvidence('${adminAttr(evidenceId)}')" class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded ${checkBadge(item.status).cls} hover:ring-2 hover:ring-green-200">${checkBadge(item.status).label}</button>
+                      <button type="button" onclick="openAdminEvidence('${adminAttr(evidenceId)}')" class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded ${badge.cls} hover:ring-2 hover:ring-green-200">${badge.label}</button>
                     </div>
                   </div>
                 `}).join("")}
@@ -7624,10 +7715,11 @@
               <div class="flex flex-wrap gap-2 mt-3">
                 <button onclick="openAdminListingLivePreview(${reviewIdArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Open Live-style Preview</button>
                 <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
-                <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${canApprove ? "" : "disabled"} class="${canApprove ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+                <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
                 <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
               </div>
               ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until automated red checks are resolved.</div>`}
+              ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and override warning evidence: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
             </div>
 
             <div class="border border-gray-200 rounded-xl p-4">
@@ -7690,7 +7782,8 @@
             checklist: getAdminReviewChecklistFromDom(),
             notes: document.getElementById("admin-review-notes")?.value || "",
             reason: document.getElementById("admin-review-reason")?.value || "",
-            stage: "in_review"
+            stage: "in_review",
+            warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
           }
         });
         adminActiveReview = {
@@ -7699,7 +7792,8 @@
             ...(adminActiveReview.review || {}),
             checklist: response?.data?.moderation_checklist || getAdminReviewChecklistFromDom(),
             notes: response?.data?.moderation_notes || document.getElementById("admin-review-notes")?.value || "",
-            reason: response?.data?.moderation_reason || document.getElementById("admin-review-reason")?.value || ""
+            reason: response?.data?.moderation_reason || document.getElementById("admin-review-reason")?.value || "",
+            warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
           }
         };
         toast("Review saved.");
@@ -7751,6 +7845,13 @@
         const ok = window.confirm("Delete this listing from public pages? You can restore it from the admin dashboard.");
         if (!ok) return;
       }
+      if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+        const pendingWarnings = getAdminPendingWarningOverrideLabels(adminActiveReview);
+        if (pendingWarnings.length) {
+          toast(`Review and override warning evidence first: ${pendingWarnings.slice(0, 3).join(", ")}${pendingWarnings.length > 3 ? "..." : ""}`);
+          return;
+        }
+      }
       let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
       const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
       const checklist = getAdminReviewChecklistFromDom();
@@ -7784,7 +7885,8 @@
               status: normalizedStatus,
               reason: moderationReason.trim() || undefined,
               review_notes: reviewNotes || undefined,
-              checklist
+              checklist,
+              warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
             }
           });
           statusResponse = response?.data || null;
@@ -8607,17 +8709,38 @@
     function getLpPhotoSlotLabel(slotKey, listingType = "") {
       const key = String(slotKey || "").trim();
       if (!key) return "";
+      if (key.startsWith(`${LP_OTHER_PHOTO_SLOT}:`)) {
+        return key.slice(`${LP_OTHER_PHOTO_SLOT}:`.length).trim() || translateListingLabel("Other");
+      }
+      if (key === LP_OTHER_PHOTO_SLOT) return translateListingLabel("Other");
       const checklist = getLpPhotoChecklist(normalizeType(listingType) || getListType());
       const found = checklist.find((item) => item.key === key);
       if (found?.label) return translateListingLabel(found.label);
       return key;
     }
 
+    function getLpPhotoAssignmentSelectValue(value) {
+      const key = String(value || "").trim();
+      return key.startsWith(`${LP_OTHER_PHOTO_SLOT}:`) ? LP_OTHER_PHOTO_SLOT : key;
+    }
+
+    function getLpPhotoAssignmentStorageValue(selectValue, previousValue = "") {
+      const value = String(selectValue || "").trim();
+      if (value !== LP_OTHER_PHOTO_SLOT) return value;
+      const previousLabel = String(previousValue || "").startsWith(`${LP_OTHER_PHOTO_SLOT}:`)
+        ? getLpPhotoSlotLabel(previousValue)
+        : "";
+      const customLabel = (window.prompt("Name what this photo shows, for example Back of property, Balcony, Store room, or Compound:", previousLabel) || "").trim();
+      if (!customLabel) return "";
+      return `${LP_OTHER_PHOTO_SLOT}:${customLabel.slice(0, 80)}`;
+    }
+
     function setLpPhotoAssignment(index, value) {
       const idx = Number(index);
       if (!Number.isFinite(idx)) return;
-      if (!value) delete lpPhotoAssignments[idx];
-      else lpPhotoAssignments[idx] = value;
+      const storedValue = getLpPhotoAssignmentStorageValue(value, lpPhotoAssignments[idx]);
+      if (!storedValue) delete lpPhotoAssignments[idx];
+      else lpPhotoAssignments[idx] = storedValue;
       renderLpPhotoFeedback();
       renderListReviewSummary();
     }
@@ -8641,9 +8764,12 @@
         } else {
           const options = [`<option value="">${translateListingLabel("Select photo category")}</option>`]
             .concat(checklist.map((item) => `<option value="${item.key}">${translateListingLabel(item.label)}</option>`))
+            .concat([`<option value="${LP_OTHER_PHOTO_SLOT}">${translateListingLabel("Other / custom")}</option>`])
             .join("");
           galleryEl.innerHTML = lpSelectedPhotos.map((file, index) => {
             const assigned = lpPhotoAssignments[index] || "";
+            const assignedLabel = getLpPhotoSlotLabel(assigned, getListType());
+            const isOtherAssigned = getLpPhotoAssignmentSelectValue(assigned) === LP_OTHER_PHOTO_SLOT;
             const src = URL.createObjectURL(file);
             const isMain = index === lpMainPhotoIndex;
             return `
@@ -8658,11 +8784,12 @@
                 <select onchange="setLpPhotoAssignment(${index}, this.value)" class="mt-2 w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white">
                   ${options}
                 </select>
+                ${isOtherAssigned && assignedLabel ? `<div class="mt-1 text-xs text-green-700 font-semibold">${translateListingLabel("Custom label")}: ${adminEscape(assignedLabel)}</div>` : ""}
               </div>`;
           }).join("");
           Array.from(galleryEl.querySelectorAll("select")).forEach((el, idx) => {
             const assigned = lpPhotoAssignments[idx] || "";
-            if (assigned) el.value = assigned;
+            if (assigned) el.value = getLpPhotoAssignmentSelectValue(assigned);
           });
         }
       }
@@ -9666,7 +9793,7 @@
         toast(`Assign each photo to a category before continuing. Missing: ${unassigned.slice(0, 2).map((x) => x.name).join(", ")}`);
         return false;
       }
-      const assignedKeys = new Set(Object.values(lpPhotoAssignments));
+      const assignedKeys = new Set(Object.values(lpPhotoAssignments).map((value) => getLpPhotoAssignmentSelectValue(value)));
       const pending = checklist.filter((item) => !assignedKeys.has(item.key)).map((item) => item.label);
       if (pending.length) {
         markLpFieldError("lp-photo-required-list", "Cover all required photo categories before continuing.");
@@ -9765,6 +9892,8 @@
         size: file.size,
         type: file.type || "image/jpeg",
         slot: lpPhotoAssignments[idx] || "",
+        slot_key: getLpPhotoAssignmentSelectValue(lpPhotoAssignments[idx] || ""),
+        room_label: getLpPhotoSlotLabel(lpPhotoAssignments[idx], getListType()) || "",
         is_main: idx === lpMainPhotoIndex
       }));
     }
@@ -9852,6 +9981,8 @@
           name: item.name,
           type: item.type,
           slot: item.slot,
+          slot_key: item.slot_key,
+          room_label: item.room_label,
           is_main: item.is_main || idx === lpMainPhotoIndex
         })),
         extra_fields: {
@@ -9878,7 +10009,7 @@
           main_photo_index: Number.isFinite(lpMainPhotoIndex) ? lpMainPhotoIndex : 0,
           photo_assignments: lpPhotoAssignments,
           photo_quality_issues: lpPhotoQualityIssues,
-          photo_required_checked: Object.values(lpPhotoAssignments),
+          photo_required_checked: Object.values(lpPhotoAssignments).map((value) => getLpPhotoAssignmentSelectValue(value)),
           verify: {
             nin: lpVal("lp-verify-nin") || null,
             id_document_name: lpIdentityFileMeta?.name || null,
@@ -11924,12 +12055,13 @@
       const normalized = list.map((item, idx) => {
         const url = item?.url || item?.img || item?.src || "";
         if (!url) return null;
-        const roomLabel = item?.room_label || item?.slot || item?.label || "";
+        const roomLabel = item?.room_label || item?.label || item?.slot || "";
+        const slotKey = item?.slot_key || item?.slot || "";
         return {
           url,
           name: item?.name || `Photo ${idx + 1}`,
           room_label: roomLabel,
-          slot: roomLabel,
+          slot: slotKey || roomLabel,
           location_label: item?.location_label || baseLocation,
           is_main: !!item?.is_main || idx === Number(property.main_photo_index || -1)
         };
@@ -12495,7 +12627,8 @@
         url: item.url || item,
         is_main: item.is_primary === true || index === 0,
         sort_order: item.sort_order ?? index,
-        room_label: item.room_label || `Photo ${index + 1}`,
+        slot: item.slot_key || item.slot || "",
+        room_label: item.room_label || item.slot_key || item.slot || `Photo ${index + 1}`,
         location_label: [p.area, p.district].filter(Boolean).join(", ")
       })).filter((item) => item.url);
       const id = String(p?.id || "");

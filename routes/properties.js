@@ -165,7 +165,7 @@ async function loadPropertyWithImages(propertyId) {
   if (!property.rows.length) return null;
 
   const images = await db.query(
-    `SELECT id, url, is_primary, sort_order
+    `SELECT id, url, is_primary, sort_order, slot_key, room_label
      FROM property_images
      WHERE property_id = $1
      ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
@@ -872,10 +872,19 @@ router.post('/', async (req, res, next) => {
 
     const listedVia = cleanText(body.listed_via || 'website').toLowerCase();
     const enforceOtp = listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop';
-    const submittedImages = asArray(body.images)
-      .map((item) => (typeof item === 'string' ? item : item?.url))
-      .map((url) => cleanText(url))
-      .filter(Boolean);
+    const submittedImageItems = asArray(body.images)
+      .map((item) => {
+        if (typeof item === 'string') {
+          return { url: cleanText(item), slot_key: null, room_label: null };
+        }
+        return {
+          url: cleanText(item?.url),
+          slot_key: cleanText(item?.slot_key || item?.slot) || null,
+          room_label: cleanText(item?.room_label || item?.label || item?.slot_label) || null
+        };
+      })
+      .filter((item) => item.url);
+    const submittedImages = submittedImageItems.map((item) => item.url);
     const invalidSubmittedImages = submittedImages.filter((url) => !isUsableSubmittedImageUrl(url));
     const websiteMinImages = 5;
     const websiteMaxImages = 20;
@@ -1034,13 +1043,14 @@ router.post('/', async (req, res, next) => {
 
     const propertyId = insertResult.rows[0].id;
 
-    const imageUrls = submittedImages.slice(0, enforceOtp ? websiteMaxImages : 20);
+    const imageItems = submittedImageItems.slice(0, enforceOtp ? websiteMaxImages : 20);
+    const imageUrls = imageItems.map((item) => item.url);
 
     for (let i = 0; i < imageUrls.length; i += 1) {
       await db.query(
-        `INSERT INTO property_images (property_id, url, is_primary, sort_order)
-         VALUES ($1, $2, $3, $4)`,
-        [propertyId, imageUrls[i], i === 0, i]
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [propertyId, imageUrls[i], i === 0, i, imageItems[i]?.slot_key || null, imageItems[i]?.room_label || null]
       );
     }
 
@@ -1176,6 +1186,9 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     const nextStatus = cleanText(req.body.status).toLowerCase();
     const moderationReason = cleanText(req.body.reason) || null;
     const reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
+    const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
+      ? req.body.warning_overrides
+      : {};
 
     if (!PROPERTY_STATUSES.includes(nextStatus)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
@@ -1217,12 +1230,27 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     const missingChecks = nextStatus === 'approved'
       ? (automatedReview?.blocking_failures || []).map((item) => `${item.label}: ${item.message}`)
       : [];
+    const warningOverrideKeys = new Set(Object.keys(warningOverrides || {}).filter(Boolean));
+    const missingWarningOverrides = nextStatus === 'approved'
+      ? (automatedReview?.checks || [])
+        .filter((item) => item.status === 'warning')
+        .filter((item) => !warningOverrideKeys.has(cleanText(item.key || item.label)))
+        .map((item) => `${item.label}: open evidence and override warning before approving`)
+      : [];
 
     if (missingChecks.length) {
       return res.status(400).json({
         ok: false,
         error: 'Approval checklist is incomplete',
         details: missingChecks
+      });
+    }
+
+    if (missingWarningOverrides.length) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Approval warnings require admin override',
+        details: missingWarningOverrides
       });
     }
 
@@ -1256,10 +1284,12 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
            owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
            owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
            updated_at = NOW(),
-           extra_fields = CASE
-             WHEN $3::text IS NULL OR trim($3::text) = '' THEN extra_fields
-             ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
-           END
+           extra_fields = (
+             CASE
+               WHEN $3::text IS NULL OR trim($3::text) = '' THEN COALESCE(extra_fields, '{}'::jsonb)
+               ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
+             END
+           ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, approved_at, last_moderation_notification_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
         [
@@ -1272,7 +1302,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           reviewerUserId,
           moderationStage,
           regeneratedOwnerTokenHash,
-          regeneratedOwnerTokenExpiresAt
+          regeneratedOwnerTokenExpiresAt,
+          JSON.stringify(warningOverrides)
         ]
       );
       listing = result.rows[0];
@@ -1294,7 +1325,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
                'moderation_stage', $3::text,
                'moderation_checklist', $4::jsonb,
                'moderation_notes', $5::text,
-               'moderation_reason', $6::text
+               'moderation_reason', $6::text,
+               'review_warning_overrides', $7::jsonb
              )
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, extra_fields`,
@@ -1304,7 +1336,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           moderationStage,
           JSON.stringify(checklist),
           reviewNotes,
-          moderationReason
+          moderationReason,
+          JSON.stringify(warningOverrides)
         ]
       );
       listing = {
