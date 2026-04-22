@@ -1167,7 +1167,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const currentResult = await db.query(
-      `SELECT id, status, moderation_checklist, owner_edit_token_hash
+      `SELECT id, status
        FROM properties
        WHERE id = $1
        LIMIT 1`,
@@ -1179,9 +1179,19 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const current = currentResult.rows[0];
-    const automatedReview = nextStatus === 'approved'
-      ? await loadAutomatedReviewForProperty(req.params.id)
-      : null;
+    const approvalWarnings = [];
+    let automatedReview = null;
+    if (nextStatus === 'approved') {
+      try {
+        automatedReview = await loadAutomatedReviewForProperty(req.params.id);
+      } catch (error) {
+        logger.error('Automated approval review failed; continuing with saved checklist', {
+          property_id: req.params.id,
+          message: error.message
+        });
+        approvalWarnings.push('Automated review refresh failed; used saved checklist data.');
+      }
+    }
     const checklistSource = automatedReview?.checklist
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
     const checklist = normalizeReviewChecklist(checklistSource);
@@ -1210,42 +1220,82 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           ? 'submitted'
           : nextStatus;
 
-    const result = await db.query(
-      `UPDATE properties
-       SET
-         status = $2,
-         reviewed_at = NOW(),
-         reviewed_by = COALESCE($7::uuid, reviewed_by),
-         moderation_stage = $8,
-         moderation_checklist = $4::jsonb,
-         moderation_notes = COALESCE($5::text, moderation_notes),
-         moderation_reason = $3::text,
-         approved_at = CASE WHEN $2 = 'approved' THEN NOW() ELSE approved_at END,
-         rejected_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE rejected_at END,
-         owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
-         owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
-         updated_at = NOW(),
-         extra_fields = CASE
-           WHEN $3::text IS NULL OR trim($3::text) = '' THEN extra_fields
-           ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
-         END
-       WHERE id = $1
-       RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
-      [
-        req.params.id,
-        nextStatus,
-        moderationReason,
-        JSON.stringify(checklist),
-        reviewNotes,
-        actorId,
-        reviewerUserId,
-        moderationStage,
-        regeneratedOwnerTokenHash,
-        regeneratedOwnerTokenExpiresAt
-      ]
-    );
-
-    const listing = result.rows[0];
+    let listing;
+    try {
+      const result = await db.query(
+        `UPDATE properties
+         SET
+           status = $2,
+           reviewed_at = NOW(),
+           reviewed_by = COALESCE($7::uuid, reviewed_by),
+           moderation_stage = $8,
+           moderation_checklist = $4::jsonb,
+           moderation_notes = COALESCE($5::text, moderation_notes),
+           moderation_reason = $3::text,
+           approved_at = CASE WHEN $2 = 'approved' THEN NOW() ELSE approved_at END,
+           rejected_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE rejected_at END,
+           owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
+           owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
+           updated_at = NOW(),
+           extra_fields = CASE
+             WHEN $3::text IS NULL OR trim($3::text) = '' THEN extra_fields
+             ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
+           END
+         WHERE id = $1
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
+        [
+          req.params.id,
+          nextStatus,
+          moderationReason,
+          JSON.stringify(checklist),
+          reviewNotes,
+          actorId,
+          reviewerUserId,
+          moderationStage,
+          regeneratedOwnerTokenHash,
+          regeneratedOwnerTokenExpiresAt
+        ]
+      );
+      listing = result.rows[0];
+    } catch (error) {
+      logger.error('Full listing status update failed; trying compact fallback update', {
+        property_id: req.params.id,
+        status: nextStatus,
+        message: error.message
+      });
+      approvalWarnings.push('Full moderation column update failed; compact status update was used.');
+      const fallbackResult = await db.query(
+        `UPDATE properties
+         SET
+           status = $2,
+           reviewed_at = NOW(),
+           updated_at = NOW(),
+           extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+             || jsonb_build_object(
+               'moderation_stage', $3::text,
+               'moderation_checklist', $4::jsonb,
+               'moderation_notes', $5::text,
+               'moderation_reason', $6::text
+             )
+         WHERE id = $1
+         RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, extra_fields`,
+        [
+          req.params.id,
+          nextStatus,
+          moderationStage,
+          JSON.stringify(checklist),
+          reviewNotes,
+          moderationReason
+        ]
+      );
+      listing = {
+        ...fallbackResult.rows[0],
+        moderation_stage: moderationStage,
+        moderation_checklist: checklist,
+        moderation_notes: reviewNotes,
+        moderation_reason: moderationReason
+      };
+    }
     let notification = {
       email: { sent: false, reason: 'not_attempted' },
       whatsapp: { sent: false, reason: 'not_attempted' }
@@ -1270,30 +1320,39 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       notification = { sent: false, reason: 'notification_failed', error: error.message || 'send_failed' };
     }
 
-    await db.query(
-      `INSERT INTO property_moderation_events (
-        property_id,
-        actor_id,
-        action,
-        status_from,
-        status_to,
-        checklist,
-        reason,
-        notes,
-        delivery
-      ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
-      [
-        listing.id,
-        actorId,
-        'listing_status_changed',
-        current.status,
-        nextStatus,
-        JSON.stringify(checklist),
-        moderationReason,
-        reviewNotes,
-        JSON.stringify(notification)
-      ]
-    );
+    try {
+      await db.query(
+        `INSERT INTO property_moderation_events (
+          property_id,
+          actor_id,
+          action,
+          status_from,
+          status_to,
+          checklist,
+          reason,
+          notes,
+          delivery
+        ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+        [
+          listing.id,
+          actorId,
+          'listing_status_changed',
+          current.status,
+          nextStatus,
+          JSON.stringify(checklist),
+          moderationReason,
+          reviewNotes,
+          JSON.stringify(notification)
+        ]
+      );
+    } catch (error) {
+      logger.error('Listing moderation event write failed after status update', {
+        property_id: listing.id,
+        status: nextStatus,
+        message: error.message
+      });
+      approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
+    }
 
     return res.json({
       ok: true,
@@ -1302,11 +1361,21 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
         lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent),
         notification,
+        warnings: approvalWarnings,
         automated_review: automatedReview || undefined
       }
     });
   } catch (error) {
-    return next(error);
+    logger.error('Listing status update failed', {
+      property_id: req.params.id,
+      status: req.body?.status,
+      message: error.message
+    });
+    return res.status(error.status || error.statusCode || 500).json({
+      ok: false,
+      error: 'Status update failed',
+      details: [error.message || 'Unknown server error']
+    });
   }
 });
 
