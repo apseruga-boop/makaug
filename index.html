@@ -2120,6 +2120,19 @@
                 <option value="email">Email</option>
               </select>
             </div>
+            <div>
+              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Communication Language</label>
+              <select id="account-preferred-language" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="en">English</option>
+                <option value="lg">Luganda</option>
+                <option value="sw">Kiswahili</option>
+                <option value="ac">Acholi</option>
+                <option value="ny">Runyankole</option>
+                <option value="rn">Rukiga</option>
+                <option value="sm">Lusoga</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">English remains the default. We use this for account updates where available.</p>
+            </div>
             <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               Your dashboard tracks saved properties, views, enquiries sent, route opens, and recent search activity once you are signed in.
             </div>
@@ -2166,6 +2179,10 @@
       </div>
 
       <div id="finder-body" class="hidden space-y-6">
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <div id="finder-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
+          <p id="finder-greeting-sub" class="text-sm text-gray-500 mt-1">Your saved listings, recent views, enquiries, and route opens are tracked here.</p>
+        </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Saved Properties</div>
@@ -3001,6 +3018,17 @@
 
           <label class="block text-sm font-medium text-gray-800 mb-2">Email (optional)</label>
           <input id="auth-signup-email" type="email" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-4" placeholder="your@email.com">
+
+          <label class="block text-sm font-medium text-gray-800 mb-2">Preferred Communication Language</label>
+          <select id="auth-signup-preferred-language" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white mb-4">
+            <option value="en">English</option>
+            <option value="lg">Luganda</option>
+            <option value="sw">Kiswahili</option>
+            <option value="ac">Acholi</option>
+            <option value="ny">Runyankole</option>
+            <option value="rn">Rukiga</option>
+            <option value="sm">Lusoga</option>
+          </select>
 
           <div class="grid sm:grid-cols-[1fr,170px] gap-2 mb-4">
             <div>
@@ -5945,6 +5973,13 @@
       return user?.role === "agent_broker" ? "agent" : "finder";
     }
 
+    function timeOfDayGreeting() {
+      const hour = new Date().getHours();
+      if (hour < 12) return "Good morning";
+      if (hour < 17) return "Good afternoon";
+      return "Good evening";
+    }
+
     function getSignedInUserStorageId() {
       return authState?.user?.id || "guest";
     }
@@ -6018,8 +6053,13 @@
       return Array.from(savedIds).some((value) => String(value) === key);
     }
 
+    function isUuidLike(value) {
+      return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
+    }
+
     async function syncSavedPropertyToServer(propertyId, shouldSave) {
       if (!authState?.token || !propertyId) return null;
+      if (!isUuidLike(propertyId)) return { ok: true, localOnly: true };
       return apiRequest(`/api/saved-properties/${encodeURIComponent(propertyId)}`, {
         method: shouldSave ? "POST" : "DELETE"
       });
@@ -6392,6 +6432,24 @@
       body.classList.remove("hidden");
 
       const activity = getCurrentUserActivity();
+      const greetingEl = document.getElementById("finder-greeting");
+      const greetingSubEl = document.getElementById("finder-greeting-sub");
+      if (greetingEl) {
+        const first = authState.user.first_name || "there";
+        greetingEl.textContent = `${timeOfDayGreeting()}, ${first}`;
+      }
+      if (greetingSubEl) {
+        const languageLabel = {
+          en: "English",
+          lg: "Luganda",
+          sw: "Kiswahili",
+          ac: "Acholi",
+          ny: "Runyankole",
+          rn: "Rukiga",
+          sm: "Lusoga"
+        }[authState.user.preferred_language || currentLang] || "English";
+        greetingSubEl.textContent = `We will use ${languageLabel} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.`;
+      }
       const viewedIds = Object.keys(activity.viewed || {});
       const savedList = getPublicListings().filter((p) => isPropertySaved(p.id));
       const recentViewed = (activity.recentViewed || [])
@@ -7532,6 +7590,18 @@
 
     let adminCurrentUsers = [];
 
+    function languageDisplayName(code) {
+      return {
+        en: "English",
+        lg: "Luganda",
+        sw: "Kiswahili",
+        ac: "Acholi",
+        ny: "Runyankole",
+        rn: "Rukiga",
+        sm: "Lusoga"
+      }[String(code || "en").toLowerCase()] || "English";
+    }
+
     function renderAdminUsersRows(users) {
       const wrap = document.getElementById("admin-users-table");
       if (!wrap) return;
@@ -7547,13 +7617,14 @@
         const tips = user.weekly_tips_opt_in !== false;
         const marketing = user.marketing_opt_in !== false;
         const social = user.oauth_provider ? `${user.oauth_provider} linked` : "Password/OTP";
+        const language = languageDisplayName(user.preferred_language || "en");
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <div class="font-bold text-gray-900">${adminEscape(name)}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
-                <div class="text-xs text-gray-500 mt-1">${mapRoleLabel(user.role || "buyer_renter")} • ${adminEscape(user.status || "active")} • ${adminEscape(social)}</div>
+                <div class="text-xs text-gray-500 mt-1">${mapRoleLabel(user.role || "buyer_renter")} • ${adminEscape(user.status || "active")} • ${adminEscape(social)} • ${adminEscape(language)}</div>
               </div>
               <div class="flex gap-1.5 flex-wrap justify-end">
                 <span class="text-[11px] font-semibold px-2 py-1 rounded ${tips ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}">${tips ? "Weekly tips" : "No tips"}</span>
@@ -8392,6 +8463,9 @@
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authState));
       } catch (e) {}
+      if (resolvedUser?.preferred_language && resolvedUser.preferred_language !== currentLang) {
+        setLang(resolvedUser.preferred_language, true, false);
+      }
       loadSavedIdsForCurrentUser();
       const pendingSaveId = applyPendingSaveAfterAuth();
       applyAuthUi();
@@ -8473,9 +8547,11 @@
       const weeklyEl = document.getElementById("account-weekly-tips");
       const marketingEl = document.getElementById("account-marketing-opt-in");
       const contactEl = document.getElementById("account-contact-channel");
+      const preferredLanguageEl = document.getElementById("account-preferred-language");
       if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
       if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
       if (contactEl) contactEl.value = user.preferred_contact_channel || "whatsapp";
+      if (preferredLanguageEl) preferredLanguageEl.value = user.preferred_language || currentLang || "en";
       const statusEl = document.getElementById("account-status");
       if (statusEl) {
         const verified = user.phone_verified ? "Verified phone" : "Phone not verified";
@@ -8522,6 +8598,7 @@
       const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
       const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
       const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
+      const preferredLanguage = (document.getElementById("account-preferred-language")?.value || currentLang || "en").trim();
 
       if (!firstName || !lastName) {
         toast("First name and last name are required.");
@@ -8539,7 +8616,8 @@
             role,
             weekly_tips_opt_in: weeklyTipsOptIn,
             marketing_opt_in: marketingOptIn,
-            preferred_contact_channel: preferredContactChannel
+            preferred_contact_channel: preferredContactChannel,
+            preferred_language: preferredLanguage
           }
         });
         const updatedUser = res?.data?.user;
@@ -8734,6 +8812,7 @@
       const registrationStatus = "not_registered";
       const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
       const weeklyTipsOptIn = document.getElementById("auth-signup-weekly-tips")?.checked !== false;
+      const preferredLanguage = (document.getElementById("auth-signup-preferred-language")?.value || currentLang || "en").trim();
 
       if (!firstName || !lastName || !phone || !password) {
         toast("Please complete all required signup fields.");
@@ -8762,6 +8841,7 @@
             weekly_tips_opt_in: weeklyTipsOptIn,
             marketing_opt_in: weeklyTipsOptIn,
             preferred_contact_channel: "whatsapp",
+            preferred_language: preferredLanguage,
             registration_status: authSignUpAudience === "agent" ? registrationStatus : undefined,
             area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined
           }
@@ -12635,6 +12715,20 @@
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
     }
 
+    function recordPropertyDirectionsClick(id) {
+      try {
+        const property = findPropertyForUi(id);
+        recordUserPropertyRoute(id);
+        trackEvent("property_directions_open", {
+          property_id: id,
+          listing_type: normalizeType(property?.type),
+          district: property?.district || "",
+          area: property?.area || ""
+        });
+        renderFinderDashboard();
+      } catch (e) {}
+    }
+
     function openPropertyDirections(id) {
       const property = findPropertyForUi(id);
       const url = propertyDirectionsUrl(property);
@@ -12642,16 +12736,47 @@
         toast("Directions are not available for this listing yet.");
         return;
       }
-      recordUserPropertyRoute(id);
-      trackEvent("property_directions_open", {
-        property_id: id,
-        listing_type: normalizeType(property?.type),
-        district: property?.district || "",
-        area: property?.area || ""
-      });
       const opened = window.open(url, "_blank", "noopener,noreferrer");
       if (!opened) window.location.href = url;
-      renderFinderDashboard();
+      recordPropertyDirectionsClick(id);
+    }
+
+    function getSimilarProperties(property, limit = 3) {
+      if (!property) return [];
+      const type = normalizeType(property.type);
+      const price = Number(property.price) || 0;
+      const lat = Number(property.lat);
+      const lng = Number(property.lng);
+      const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+      return getPublicListings()
+        .filter((x) => String(x.id) !== String(property.id) && isListingPublicVisible(x))
+        .map((x) => {
+          const xType = normalizeType(x.type);
+          const xPrice = Number(x.price) || 0;
+          const xLat = Number(x.lat);
+          const xLng = Number(x.lng);
+          const distanceKm = hasCoords && Number.isFinite(xLat) && Number.isFinite(xLng)
+            ? haversineKm(lat, lng, xLat, xLng)
+            : null;
+          const priceDiff = price && xPrice ? Math.abs(xPrice - price) / Math.max(price, xPrice) : 1;
+          let score = 0;
+          if (xType !== type) score += 80;
+          if (x.district !== property.district) score += 45;
+          if (String(x.area || "").toLowerCase() !== String(property.area || "").toLowerCase()) score += 15;
+          score += Math.min(priceDiff * 70, 70);
+          if (Number.isFinite(distanceKm)) score += Math.min(distanceKm * 3, 60);
+          else score += 30;
+          return { property: x, score };
+        })
+        .sort((a, b) => a.score - b.score)
+        .slice(0, limit)
+        .map((item) => item.property);
+    }
+
+    function getLocalizedListingText(property, key, fallback = "") {
+      const translations = property?.translations && typeof property.translations === "object" ? property.translations : {};
+      const langNode = translations[currentLang] || translations.en || {};
+      return langNode?.[key] || fallback || "";
     }
 
     async function submitPropertyInquiry(id) {
@@ -13105,6 +13230,7 @@
         inquiry_reference: p?.inquiry_reference || "",
         lister_display_name: p?.lister_name || p?.contact_display_name || "",
         area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",
+        translations: p?.extra_fields?.translations || p?.translations || {},
         nearby_places: Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : []),
         images: imageItems,
         detail_loaded: options.detailLoaded === true || images.length > 0,
@@ -15432,11 +15558,15 @@
 
     async function toggleSave(id) {
       const key = String(id);
-      if (!authState?.user) {
+      if (!authState?.user || !authState?.token) {
         setPendingSavePropertyId(key);
         toast("Create a free account to save this property.");
         openAuthSignUp("finder");
         trackEvent("property_save_auth_required", { property_id: id });
+        return;
+      }
+      if (!findPropertyForUi(key)) {
+        toast("This property is not available to save yet.");
         return;
       }
       const wasSaved = isPropertySaved(key);
@@ -15944,7 +16074,7 @@
       const broker = BROKERS.find((b) => b.id === p.agent);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
-      const similar = getPublicListings().filter((x) => x.id !== p.id && x.district === p.district).slice(0, 3);
+      const similar = getSimilarProperties(p, 3);
       const normalizedType = normalizeType(p.type);
       const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
       const detailNearby = Array.isArray(p.nearby_places) && p.nearby_places.length
@@ -15958,6 +16088,8 @@
         neighborhood: p.area,
         nearby: detailNearby
       });
+      const localizedDescription = getLocalizedListingText(p, "description", p.desc);
+      const localizedHighlights = getLocalizedListingText(p, "area_highlights", detailHighlights);
       const addedMeta = listingDateMeta(p);
       const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
       const detailPhotos = getPropertyGalleryPhotos(p);
@@ -15967,9 +16099,11 @@
       if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
       const detailIdArg = JSON.stringify(String(p.id));
       const detailIsSaved = Array.from(savedIds).some((value) => String(value) === String(p.id));
+      const detailSaveLabel = authState?.user ? (detailIsSaved ? "Remove Saved" : "Save Property") : "Sign in to Save Property";
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
       const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, I am interested in ${p.title || "this property"}.`) : "";
+      const directionsUrl = propertyDirectionsUrl(p);
       const contactTitle = broker ? translateListingLabel("Contact Broker") : translateListingLabel("Contact Lister");
       const inquiryNameDefault = authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
       const inquiryPhoneDefault = authState?.user?.phone || "";
@@ -16028,10 +16162,10 @@
                   <button type="button" onclick="openOwnerPreviewEdit(${detailIdArg})" class="mt-2 border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-semibold">Edit Title / Description</button>
                 </div>
                 ` : ""}
-                <div class="mt-4 text-sm text-gray-700">${p.desc}</div>
+                <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
                 <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
                   <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
-                  <p class="text-sm text-gray-700">${detailHighlights}</p>
+                  <p class="text-sm text-gray-700">${localizedHighlights}</p>
                 </div>
                 <div class="mt-3">
                   <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translateListingLabel("Nearby Amenities")}</div>
@@ -16054,9 +16188,11 @@
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
               <h2 class="text-xl font-bold mb-3">Location</h2>
               <div id="map-detail" class="map-h-sm rounded-xl overflow-hidden border border-gray-200"></div>
-              <button type="button" onclick="openPropertyDirections(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
+              ${directionsUrl ? `<a href="${adminAttr(directionsUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordPropertyDirectionsClick(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
                 <i class="fas fa-route"></i> Open Google Directions
-              </button>
+              </a>` : `<button type="button" disabled class="mt-3 inline-flex items-center gap-2 border border-gray-300 text-gray-400 px-4 py-2 rounded-xl text-sm font-semibold cursor-not-allowed">
+                <i class="fas fa-route"></i> Directions unavailable
+              </button>`}
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
               <h2 class="text-xl font-bold mb-3">Similar Properties</h2>
@@ -16079,7 +16215,7 @@
                 ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
                 ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">WhatsApp unavailable</button>`}
               `}
-              <button id="detail-save-btn" onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailIsSaved ? "Remove Saved" : "Save Property"}</button>
+              <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailSaveLabel}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
                 <h4 class="font-bold text-gray-800 text-sm mb-2">Send enquiry</h4>
                 <div class="space-y-2">

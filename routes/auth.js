@@ -41,6 +41,7 @@ function publicUser(row) {
     marketing_opt_in: row.marketing_opt_in !== false,
     weekly_tips_opt_in: row.weekly_tips_opt_in !== false,
     preferred_contact_channel: row.preferred_contact_channel || 'whatsapp',
+    preferred_language: row.preferred_language || 'en',
     oauth_provider: row.oauth_provider || null,
     created_at: row.created_at
   };
@@ -453,6 +454,8 @@ router.post('/register', async (req, res, next) => {
     const weeklyTipsOptIn = parseBooleanLike(req.body.weekly_tips_opt_in, true);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
     const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput) ? preferredContactInput : 'whatsapp';
+    const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
+    const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput) ? preferredLanguageInput : 'en';
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -500,10 +503,11 @@ router.post('/register', async (req, res, next) => {
         status,
         marketing_opt_in,
         weekly_tips_opt_in,
-        preferred_contact_channel
-      ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9)
+        preferred_contact_channel,
+        preferred_language
+      ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10)
       RETURNING *`,
-      [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel]
+      [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
     );
 
     const user = result.rows[0];
@@ -856,6 +860,10 @@ router.patch('/me', async (req, res, next) => {
     const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput)
       ? preferredContactInput
       : (user.preferred_contact_channel || 'whatsapp');
+    const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
+    const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
+      ? preferredLanguageInput
+      : (user.preferred_language || 'en');
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -887,10 +895,11 @@ router.patch('/me', async (req, res, next) => {
            role = $5,
            marketing_opt_in = $6,
            weekly_tips_opt_in = $7,
-           preferred_contact_channel = $8
+           preferred_contact_channel = $8,
+           preferred_language = $9
        WHERE id = $1
        RETURNING *`,
-      [auth.userId, firstName, lastName, emailInput || null, role, marketingOptIn, weeklyTipsOptIn, preferredContactChannel]
+      [auth.userId, firstName, lastName, emailInput || null, role, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
     );
 
     return res.json({ ok: true, data: { user: publicUser(updated.rows[0]) } });

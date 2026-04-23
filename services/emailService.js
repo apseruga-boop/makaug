@@ -4,6 +4,15 @@ function getSupportEmail() {
   return process.env.SUPPORT_EMAIL || 'info@makaug.com';
 }
 
+function getSupportPhone() {
+  return process.env.SUPPORT_PHONE || '+256760112587';
+}
+
+function getSupportWhatsappUrl() {
+  const digits = String(getSupportPhone()).replace(/\D/g, '');
+  return digits ? `https://wa.me/${digits}` : 'https://wa.me/256760112587';
+}
+
 function stripHtml(value) {
   return String(value || '').replace(/<[^>]*>/g, '').trim();
 }
@@ -31,6 +40,23 @@ function getFirstUrlFromText(text) {
   return match ? match[0] : '';
 }
 
+function renderActionLink(url, label) {
+  return `<a href="${escapeHtml(url)}" style="display:inline-block;background:#166534;color:#ffffff;text-decoration:none;border-radius:12px;padding:11px 15px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;">${escapeHtml(label)}</a>`;
+}
+
+function renderLineWithLinks(line) {
+  const text = String(line || '').trim();
+  const urlOnly = text.match(/^(https?:\/\/[^\s<>"')]+)$/i);
+  if (urlOnly) return renderActionLink(urlOnly[1], 'Open link');
+
+  const labelUrl = text.match(/^([^:]{2,60}):\s*(https?:\/\/[^\s<>"')]+)$/i);
+  if (labelUrl) return renderActionLink(labelUrl[2], labelUrl[1].trim());
+
+  return escapeHtml(text).replace(/(https?:\/\/[^\s<>"')]+)/gi, (url) => (
+    `<a href="${escapeHtml(url)}" style="color:#166534;font-weight:800;text-decoration:none;">Open link</a>`
+  ));
+}
+
 function renderPlainTextAsEmailHtml(text) {
   return String(text || '')
     .split(/\n{2,}/)
@@ -45,10 +71,10 @@ function renderPlainTextAsEmailHtml(text) {
           const idx = line.indexOf(':');
           const label = line.slice(0, idx + 1);
           const value = line.slice(idx + 1).trim();
-          return `<tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:150px;">${escapeHtml(label)}</td><td style="padding:7px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(value || '-')}</td></tr>`;
+          return `<tr><td style="padding:7px 0;color:#6b7280;font-size:13px;width:150px;">${escapeHtml(label)}</td><td style="padding:7px 0;color:#111827;font-size:14px;font-weight:600;">${value ? renderLineWithLinks(value) : '-'}</td></tr>`;
         }).join('')}</table>`;
       }
-      return `<p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.65;">${lines.map(escapeHtml).join('<br>')}</p>`;
+      return `<p style="margin:0 0 14px;color:#374151;font-size:15px;line-height:1.65;">${lines.map(renderLineWithLinks).join('<br>')}</p>`;
     })
     .filter(Boolean)
     .join('');
@@ -57,6 +83,8 @@ function renderPlainTextAsEmailHtml(text) {
 function buildBrandedEmailHtml({ subject, text }) {
   const siteUrl = getPublicSiteUrl();
   const supportEmail = getSupportEmail();
+  const supportPhone = getSupportPhone();
+  const whatsappUrl = getSupportWhatsappUrl();
   const ctaUrl = getFirstUrlFromText(text) || siteUrl;
   const ctaLabel = ctaUrl === siteUrl ? 'Visit MakaUg' : 'Open link';
   const safeSubject = escapeHtml(subject || 'MakaUg update');
@@ -91,11 +119,17 @@ function buildBrandedEmailHtml({ subject, text }) {
                 <div style="margin-top:24px;">
                   <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#166534;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:800;">${ctaLabel}</a>
                 </div>
+                <div style="margin-top:18px;border-top:1px solid #e5efe2;padding-top:18px;">
+                  <div style="color:#6b7280;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Contact MakaUg</div>
+                  <a href="${escapeHtml(whatsappUrl)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#16a34a;color:#ffffff;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">WA</span>WhatsApp</a>
+                  <a href="mailto:${escapeHtml(supportEmail)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#166534;color:#ffffff;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">@</span>Email</a>
+                  <a href="${escapeHtml(siteUrl)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#d6a62a;color:#111827;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">M</span>Website</a>
+                </div>
               </td>
             </tr>
             <tr>
               <td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">
-                Need help? Contact <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a>.<br>
+                Need help? WhatsApp <a href="${escapeHtml(whatsappUrl)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportPhone)}</a> or email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a>.<br>
                 MakaUg helps property seekers, owners, students, brokers, and land buyers find trusted opportunities in Uganda.
               </td>
             </tr>
@@ -560,6 +594,8 @@ async function sendListingModerationNotification({ to, listing = {}, status, rea
 
 module.exports = {
   getSupportEmail,
+  getSupportPhone,
+  getSupportWhatsappUrl,
   sendSupportEmail,
   sendPropertySubmissionNotification,
   sendListingModerationNotification

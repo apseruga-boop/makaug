@@ -1,7 +1,9 @@
 const express = require('express');
 
 const db = require('../config/database');
+const logger = require('../config/logger');
 const { cleanText, toNullableInt, isValidEmail, isValidPhone } = require('../middleware/validation');
+const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
 
 const router = express.Router();
 
@@ -9,6 +11,8 @@ async function handleReportListing(req, res, next) {
   try {
     const propertyReference = cleanText(req.body.property_reference || req.body.property_url);
     const reason = cleanText(req.body.reason);
+    const details = cleanText(req.body.details) || null;
+    const reporterContact = cleanText(req.body.reporter_contact || req.body.contact) || null;
 
     if (!propertyReference || !reason) {
       return res.status(400).json({
@@ -29,12 +33,59 @@ async function handleReportListing(req, res, next) {
       [
         propertyReference,
         reason,
-        cleanText(req.body.details) || null,
-        cleanText(req.body.reporter_contact || req.body.contact) || null
+        details,
+        reporterContact
       ]
     );
 
-    return res.status(201).json({ ok: true, data: result.rows[0] });
+    const report = result.rows[0];
+    const supportEmail = getSupportEmail();
+    const whatsappUrl = getSupportWhatsappUrl();
+
+    try {
+      await sendSupportEmail({
+        to: supportEmail,
+        subject: `[MakaUg] Listing report received • ${reason}`,
+        text: [
+          'A listing report was submitted on makaug.com.',
+          '',
+          `Report ID: ${report.id}`,
+          `Property Reference: ${propertyReference}`,
+          `Reason: ${reason}`,
+          `Reporter Contact: ${reporterContact || '-'}`,
+          details ? `Details: ${details}` : '',
+          '',
+          'Admin action: review the listing, contact the reporter if needed, then update the report status in the admin dashboard.'
+        ].filter(Boolean).join('\n'),
+        replyTo: reporterContact && isValidEmail(reporterContact) ? reporterContact : undefined
+      });
+
+      if (reporterContact && isValidEmail(reporterContact)) {
+        await sendSupportEmail({
+          to: reporterContact,
+          subject: 'We received your MakaUg listing report',
+          text: [
+            'Thank you for reporting this issue to MakaUg.',
+            '',
+            'Our team will investigate the listing and take the right action. We may contact you if we need more information.',
+            '',
+            `Report ID: ${report.id}`,
+            `Property Reference: ${propertyReference}`,
+            `Reason: ${reason}`,
+            '',
+            `For urgent safety concerns, WhatsApp us here: ${whatsappUrl}`,
+            `Email: ${supportEmail}`
+          ].join('\n')
+        });
+      }
+    } catch (emailError) {
+      logger.warn('Listing report email notification failed', {
+        reportId: report.id,
+        error: emailError.message || 'email_failed'
+      });
+    }
+
+    return res.status(201).json({ ok: true, data: report });
   } catch (error) {
     return next(error);
   }
