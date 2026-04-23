@@ -2708,7 +2708,16 @@
           </div>
           <div id="admin-users-table" class="space-y-3"></div>
 
-          <div class="grid xl:grid-cols-2 gap-5 mt-5">
+          <div class="grid xl:grid-cols-3 gap-5 mt-5">
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">Broker Accounts & Pipeline</h4>
+                  <p class="text-xs text-gray-500 mt-1">See all broker profiles, who is live, who is pending, and who needs admin follow-up.</p>
+                </div>
+              </div>
+              <div id="admin-broker-accounts-table" class="space-y-3"></div>
+            </div>
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
@@ -6574,6 +6583,23 @@
       `;
     }
 
+    function getCardSaveButtonClasses(propertyId) {
+      const saved = isPropertySaved(propertyId);
+      return saved
+        ? "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg ring-2 ring-white/80"
+        : "absolute top-2 right-2 min-w-[2.25rem] h-9 rounded-full bg-white/90 text-gray-500 flex items-center justify-center shadow-sm";
+    }
+
+    function getCardSaveButtonIconClasses(propertyId) {
+      return isPropertySaved(propertyId) ? "fas fa-heart text-white" : "far fa-heart text-gray-500";
+    }
+
+    function getCardSaveButtonTitle(propertyId) {
+      if (isPropertySaved(propertyId)) return translatePropertyUi("Saved to Profile");
+      if (authState?.user && authState?.token) return translatePropertyUi("Save Property");
+      return translatePropertyUi("Sign in or create an account to keep it in your profile.");
+    }
+
     function isUuidLike(value) {
       return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
     }
@@ -7387,6 +7413,7 @@
           avgViewsPerListing,
           saveToViewRatio
         },
+        users,
         pendingListings,
         liveListings: approvedListings.slice(0, 50),
         allListings,
@@ -7682,6 +7709,9 @@
               <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Record</button>
               ${status === "approved" ? `<button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Owner Message</button>` : ""}
               ${status === "rejected" ? `<button onclick="openAdminRejectedListingWhatsApp(${idArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Lister</button>` : ""}
+              ${status === "rejected" || status === "deleted" ? `<button onclick="adminSetListingStatus(${idArg}, 'pending', ${idArg})" class="border border-amber-300 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore to Pending</button>` : ""}
+              ${status === "hidden" ? `<button onclick="adminSetListingStatus(${idArg}, 'approved', ${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore Live</button>` : ""}
+              ${status === "approved" ? `<button onclick="adminSetListingStatus(${idArg}, 'deleted', ${idArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Remove from Site</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -7779,6 +7809,8 @@
               <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Live Listing</button>
               <button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Follow-up</button>
               <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>
+              <button onclick="adminSetListingStatus(${idArg}, 'hidden', ${idArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>
+              <button onclick="adminSetListingStatus(${idArg}, 'deleted', ${idArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Remove from Site</button>
               <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Record</button>
             </div>
           </div>`;
@@ -7936,21 +7968,24 @@
       if (sourceEl) sourceEl.textContent = sourceLabel;
       renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
 
+      const adminUsers = remoteSnap?.users || localSnap.users || [];
+      const adminAgents = remoteSnap?.agents || localSnap.agents || [];
       renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
       renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminOutreachOverview({
         summary,
-        users: remoteSnap?.users || localSnap.recentUsers || [],
-        agents: remoteSnap?.agents || localSnap.agents || [],
+        users: adminUsers,
+        agents: adminAgents,
         fieldAgents: remoteSnap?.fieldAgents || localSnap.fieldAgents || [],
         propertyRequests: remoteSnap?.propertyRequests || localSnap.propertyRequests || [],
         campaigns: remoteSnap?.campaigns || []
       });
       renderAdminCampaignRows(remoteSnap?.campaigns || []);
-      renderAdminUsersRows(remoteSnap?.users || localSnap.recentUsers || []);
-      renderAdminFeaturedAgentsRows(remoteSnap?.agents || localSnap.agents || []);
+      renderAdminUsersRows(adminUsers);
+      renderAdminBrokerRows(adminAgents);
+      renderAdminFeaturedAgentsRows(adminAgents);
       renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
       renderAdminFieldAgentRows(remoteSnap?.fieldAgents || localSnap.fieldAgents || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
@@ -8473,12 +8508,30 @@
     function renderAdminUsersRows(users) {
       const wrap = document.getElementById("admin-users-table");
       if (!wrap) return;
+      const search = (document.getElementById("admin-users-q")?.value || "").trim().toLowerCase();
+      const roleFilter = (document.getElementById("admin-users-role")?.value || "").trim().toLowerCase();
+      const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
       adminCurrentUsers = Array.isArray(users) ? users : [];
-      if (!adminCurrentUsers.length) {
+      const view = adminCurrentUsers.filter((user) => {
+        const role = String(user.role || "buyer_renter").toLowerCase();
+        const hay = [
+          user.first_name,
+          user.last_name,
+          user.email,
+          user.phone,
+          user.role,
+          user.preferred_language
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (roleFilter && role !== roleFilter) return false;
+        if (weeklyOnly && user.weekly_tips_opt_in === false) return false;
+        if (search && !hay.includes(search)) return false;
+        return true;
+      });
+      if (!view.length) {
         wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No account users found for the current filters.</div>`;
         return;
       }
-      wrap.innerHTML = adminCurrentUsers.map((user) => {
+      wrap.innerHTML = view.map((user) => {
         const userIdArg = adminListingIdArg(user.id);
         const name = `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Unnamed user";
         const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
@@ -8515,6 +8568,56 @@
               ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Contact</a>` : ""}
               ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
               ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderAdminBrokerRows(agents) {
+      const wrap = document.getElementById("admin-broker-accounts-table");
+      if (!wrap) return;
+      const rows = Array.isArray(agents) ? agents.slice(0, 50) : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No broker profiles found in the current dataset.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.map((agent) => {
+        const idArg = adminListingIdArg(agent.id);
+        const registration = adminVerificationBadge(agent.registration_status);
+        const status = String(agent.status || "pending").toLowerCase();
+        const statusMeta = status === "approved"
+          ? { cls: "bg-green-100 text-green-700", label: "Live" }
+          : status === "rejected"
+            ? { cls: "bg-red-100 text-red-700", label: "Rejected" }
+            : status === "suspended"
+              ? { cls: "bg-yellow-100 text-yellow-700", label: "Suspended" }
+              : { cls: "bg-amber-100 text-amber-700", label: "Pending" };
+        const contact = [agent.phone, agent.email].filter(Boolean).join(" • ") || "-";
+        const whatsappUrl = agent.phone ? buildWhatsAppUrl(agent.phone, `Hello ${agent.name || "there"}, this is MakaUg. We are following up on your broker account.`) : "";
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="font-bold text-gray-900">${adminEscape(agent.name || "Broker")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "MakaUg")} • ${adminEscape(contact)}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.area || "Uganda")} • ${adminEscape(agent.licence || "No licence recorded")}</div>
+              </div>
+              <div class="flex gap-1.5 flex-wrap justify-end">
+                <span class="text-[11px] font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
+                <span class="text-[11px] font-semibold px-2 py-1 rounded ${registration.cls}">${registration.label}</span>
+              </div>
+            </div>
+            <div class="grid sm:grid-cols-4 gap-2 mt-3 text-xs">
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Live Listings</div><div class="font-black text-gray-900">${adminEscape(agent.live_listings || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Pending</div><div class="font-black text-gray-900">${adminEscape(agent.pending_listings || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Rejected</div><div class="font-black text-gray-900">${adminEscape(agent.rejected_listings || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Sales</div><div class="font-black text-gray-900">${adminEscape(agent.sales || 0)}</div></div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="openBrokerProfile(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Profile</button>
+              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
+              ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("MakaUg broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+              ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${status === "approved" ? "Move to Pending" : "Approve"}</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -14591,8 +14694,8 @@
                 <i class="${registration.icon} text-[10px]"></i> ${registration.label}
               </div>` : ""}
             </div>
-            <button onclick="event.stopPropagation(); toggleSave(${idArg})" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center">
-              <i class="${saved ? "fas text-red-500" : "far text-gray-500"} fa-heart"></i>
+            <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
+              <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
             </button>
             <div class="absolute bottom-2 right-2 bg-green-900/90 text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, p.period)}</div>
           </div>
@@ -14692,8 +14795,8 @@
           <div class="relative h-48 overflow-hidden">
             <img src="${p.img}" alt="${p.title}" class="w-full h-full object-cover">
             ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
-            <button onclick="event.stopPropagation(); toggleSave(${idArg})" class="absolute top-2 right-2 w-9 h-9 rounded-full bg-white/90 flex items-center justify-center shadow-sm">
-              <i class="${saved ? "fas text-red-500" : "far text-gray-500"} fa-heart"></i>
+            <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
+              <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
             </button>
             <div class="absolute bottom-2 left-2 bg-gray-900/90 text-white font-bold px-3 py-1 rounded-lg text-sm">${fmtP(p.price, p.period || "sem")}</div>
             <div class="absolute bottom-2 right-2 flex items-center gap-1">
