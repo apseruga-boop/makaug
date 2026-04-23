@@ -180,7 +180,7 @@
     }
     .leaflet-top, .leaflet-bottom { z-index: 450; }
     .map-h { height: 360px; width: 100%; }
-    #map-home.map-h { height: 420px; }
+    #map-home.map-h { height: 480px; }
     .map-h-sm { height: 280px; width: 100%; }
     .listing-map-col {
       position: relative;
@@ -484,7 +484,7 @@
         padding: 0 16px;
       }
       .map-h { height: 260px; }
-      #map-home.map-h { height: 300px; }
+      #map-home.map-h { height: 340px; }
       .map-h-sm { height: 220px; }
       .listing-map-shell {
         position: relative;
@@ -732,50 +732,55 @@
       </div>
     </section>
 
-    <section class="py-10 bg-green-900 text-white">
+    <section class="py-8 bg-green-900 text-white">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="grid lg:grid-cols-[1.3fr_0.9fr] gap-6 items-start">
+        <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-5 items-start">
           <div class="max-w-2xl">
             <div id="home-assistant-pill" class="inline-flex items-center gap-2 bg-green-800 px-3 py-1.5 rounded-full text-green-300 text-xs font-bold uppercase tracking-wide mb-4">
               <i class="fas fa-robot"></i> AI Listing Assistant
             </div>
-            <h2 id="home-assistant-title" class="text-3xl md:text-4xl font-black leading-tight serif mb-3">List your property in <span class="text-green-300">under 5 minutes</span> with our AI agent</h2>
-            <p id="home-assistant-sub" class="text-green-100 mb-5 text-base">
+            <h2 id="home-assistant-title" class="text-2xl md:text-3xl font-black leading-tight serif mb-2">List your property in <span class="text-green-300">under 5 minutes</span> with our AI agent</h2>
+            <p id="home-assistant-sub" class="text-green-100 mb-4 text-sm md:text-base max-w-xl">
               Use the website or start on WhatsApp. We guide you through photos, location pinning, OTP verification, and review in your language.
             </p>
-            <div class="bg-green-950/40 border border-green-700/50 rounded-xl p-3 mb-4 text-sm text-green-100">
+            <div class="bg-green-950/35 border border-green-700/40 rounded-2xl p-3 mb-4 text-sm text-green-100">
               <p id="home-assistant-need-title" class="font-semibold text-green-200 mb-1">What you'll need before you start:</p>
-              <p id="home-assistant-need-copy">Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
-              <p id="home-assistant-need-verify" class="mt-2 text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
+              <p id="home-assistant-need-copy" class="text-sm">Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
+              <p id="home-assistant-need-verify" class="mt-2 text-xs text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
             </div>
-            <div class="grid sm:grid-cols-2 gap-3 text-sm text-green-100 mb-5">
-              <div id="home-assistant-step-1" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">1. Pick a language and listing type.</div>
-              <div id="home-assistant-step-2" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">2. Add location, price, and the key property facts.</div>
-              <div id="home-assistant-step-3" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">3. Upload at least 5 clear photos and assign what each shows.</div>
-              <div id="home-assistant-step-4" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">4. Verify by OTP and receive your listing review update.</div>
+            <div class="grid sm:grid-cols-2 gap-2 text-sm text-green-100 mb-4">
+              <div id="home-assistant-step-1" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">1. Pick a language and listing type.</div>
+              <div id="home-assistant-step-2" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">2. Add location, price, and the key property facts.</div>
+              <div id="home-assistant-step-3" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">3. Upload at least 5 clear photos and assign what each shows.</div>
+              <div id="home-assistant-step-4" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">4. Verify by OTP and receive your listing review update.</div>
             </div>
-            <a id="home-assistant-cta" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-green-900 font-bold px-5 py-3 rounded-xl">
+            <div class="flex flex-wrap gap-3">
+            <a id="home-assistant-cta" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-green-900 font-bold px-4 py-2.5 rounded-xl">
               <i class="fab fa-whatsapp text-lg"></i> Start on WhatsApp Now
             </a>
+            <button id="home-assistant-web-btn" type="button" onclick="openListPropertyOptions()" class="inline-flex items-center gap-2 border border-green-600 hover:bg-green-800 text-white font-semibold px-4 py-2.5 rounded-xl">
+              <i class="fas fa-laptop"></i> Use Website Form
+            </button>
+            </div>
           </div>
           <div class="hidden lg:block">
-            <div class="rounded-3xl border border-green-700/40 bg-green-950/40 p-4 shadow-2xl">
+            <div class="rounded-2xl border border-green-700/35 bg-green-950/30 p-4 shadow-xl">
               <div class="grid sm:grid-cols-2 gap-3">
-                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
                   <div id="home-assistant-stat-1-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Language + Type</div>
-                  <div id="home-assistant-stat-1-copy" class="mt-2 text-sm font-semibold">Pick language, sale/rent/land/commercial/student, and start instantly.</div>
+                  <div id="home-assistant-stat-1-copy" class="mt-2 text-sm font-semibold leading-snug">Pick language, sale/rent/land/commercial/student, and start instantly.</div>
                 </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
                   <div id="home-assistant-stat-2-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Photos + Map</div>
-                  <div id="home-assistant-stat-2-copy" class="mt-2 text-sm font-semibold">Add 5+ photos, pin the exact location, and improve search accuracy.</div>
+                  <div id="home-assistant-stat-2-copy" class="mt-2 text-sm font-semibold leading-snug">Add 5+ photos, pin the exact location, and improve search accuracy.</div>
                 </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
                   <div id="home-assistant-stat-3-title" class="text-xs font-bold uppercase tracking-wide text-green-700">OTP Check</div>
-                  <div id="home-assistant-stat-3-copy" class="mt-2 text-sm font-semibold">Verify by phone or email OTP before the listing goes into review.</div>
+                  <div id="home-assistant-stat-3-copy" class="mt-2 text-sm font-semibold leading-snug">Verify by phone or email OTP before the listing goes into review.</div>
                 </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
                   <div id="home-assistant-stat-4-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Live Link</div>
-                  <div id="home-assistant-stat-4-copy" class="mt-2 text-sm font-semibold">Receive approval updates and your live property link when review is complete.</div>
+                  <div id="home-assistant-stat-4-copy" class="mt-2 text-sm font-semibold leading-snug">Receive approval updates and your live property link when review is complete.</div>
                 </div>
               </div>
             </div>
@@ -1759,6 +1764,7 @@
                 <span>🎓 Student Accommodation</span>
               </label>
             </div>
+            <p id="lp-type-reset-note" class="mt-2 text-xs text-gray-500">Changed the property type? Use “Clear & Start Again” if this is a different listing.</p>
           </div>
 
           <div class="mb-5 bg-white border border-green-100 rounded-2xl p-4">
@@ -3753,9 +3759,10 @@
 
     const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
     const MAP_DEFAULT_CENTER = { lat: 0.347596, lng: 32.58252 };
+    const MAP_UGANDA_OVERVIEW_CENTER = { lat: 1.3733, lng: 32.2903 };
     const MAP_DEFAULT_ZOOM = 11;
-    const MAP_HOME_MIN_ZOOM = 7;
-    const MAP_HOME_MAX_ZOOM = 13;
+    const MAP_HOME_MIN_ZOOM = 8;
+    const MAP_HOME_MAX_ZOOM = 12;
     const MAP_CITY_ZOOM = 15;
     const MAP_NEIGHBORHOOD_ZOOM = 17;
     const MAP_PROPERTY_ZOOM = 19;
@@ -3777,6 +3784,10 @@
         && lat <= UGANDA_COORD_BOUNDS.latMax
         && lng >= UGANDA_COORD_BOUNDS.lngMin
         && lng <= UGANDA_COORD_BOUNDS.lngMax;
+    }
+
+    function getHomeMapOverviewCenter() {
+      return { ...MAP_UGANDA_OVERVIEW_CENTER };
     }
 
     const DEFAULT_MORTGAGE_PROVIDERS = [
@@ -3932,6 +3943,7 @@
     let lpLastAddressValue = "";
     let lpAreaManualOverride = false;
     let lpStreetManualOverride = false;
+    let lpCurrentFormType = "sale";
     let lpPreviewPhotos = [];
     let lpPreviewPhotoIndex = 0;
     let detailGalleryPhotos = [];
@@ -4635,19 +4647,20 @@
       en: {
         pill: "AI Listing Assistant",
         titleHtml: "List your property in <span class=\"text-green-300\">under 5 minutes</span> with our AI agent",
-        sub: "Use the website or start on WhatsApp. We guide you through photos, location pinning, OTP verification, and review in your language.",
+        sub: "Start on the website or WhatsApp. Add the location, photos, OTP check, and send your listing for review in your language.",
         needTitle: "What you'll need before you start:",
-        needCopy: "Property location, price, at least 5 clear photos, and your verification details (phone + ID).",
-        needVerify: "Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.",
-        step1: "1. Pick a language and listing type.",
-        step2: "2. Add location, price, and the key property facts.",
-        step3: "3. Upload at least 5 clear photos and assign what each shows.",
-        step4: "4. Verify by OTP and receive your listing review update.",
+        needCopy: "Location, price, 5+ clear photos, and your verification details (phone + ID).",
+        needVerify: "Owner verification can still be added during review before a public verified badge is shown.",
+        step1: "1. Choose the language and listing type.",
+        step2: "2. Add the location, price, and the key facts.",
+        step3: "3. Upload clear photos and label what each one shows.",
+        step4: "4. Verify by OTP and wait for the review update.",
         cta: "Start on WhatsApp Now",
+        webCta: "Use Website Form",
         stat1Title: "Language + Type",
-        stat1Copy: "Pick language, sale/rent/land/commercial/student, and start instantly.",
+        stat1Copy: "Pick the language and property category, then start straight away.",
         stat2Title: "Photos + Map",
-        stat2Copy: "Add 5+ photos, pin the exact location, and improve search accuracy.",
+        stat2Copy: "Add 5+ photos and pin the exact location for better search accuracy.",
         stat3Title: "OTP Check",
         stat3Copy: "Verify by phone or email OTP before the listing goes into review.",
         stat4Title: "Live Link",
@@ -4656,19 +4669,20 @@
       lg: {
         pill: "Omuyambi wa AI mu Listing",
         titleHtml: "Teka property yo mu <span class=\"text-green-300\">ddakiika 5 zokka</span> ng'okozesa AI agent yaffe",
-        sub: "Kozesa website oba tandikira ku WhatsApp. Tukulungamya ku bifaananyi, okuteeka pin ku maapu, okukakasa OTP, n'okukebera mu lulimi lwo.",
+        sub: "Tandikira ku website oba ku WhatsApp. Teka ekifo, ebifaananyi, okukakasa OTP, era oweereze listing yo mu review mu lulimi lwo.",
         needTitle: "By'olina okuba nabyo nga tonnatandika:",
-        needCopy: "Ekifo kya property, omuwendo, ebifaananyi ebitangaavu ebyenkana 5 oba okusingawo, n'ebikukakasa (essimu + ID).",
-        needVerify: "Owner verification si ya buwaze nga otandika. Admin wa MakaUg asobola okukukwatako ku nkola y'okukakasa Ministry of Lands nga tebannakuwa badge ya public verified.",
+        needCopy: "Ekifo, omuwendo, ebifaananyi ebitangaavu 5+, n'ebikukakasa (essimu + ID).",
+        needVerify: "Owner verification esobola okwongerwako mu review nga tebannalaga badge ya public verified.",
         step1: "1. Londa olulimi n'ekika kya listing.",
         step2: "2. Teka ekifo, omuwendo, n'ebikulu ku property.",
-        step3: "3. Weereza ebifaananyi ebitangaavu 5+ era olage buli kifaananyi kye kiraga.",
-        step4: "4. Kakasa ku OTP era ofune update ku review ya listing yo.",
+        step3: "3. Weereza ebifaananyi ebirungi era olage buli kifaananyi kye kiraga.",
+        step4: "4. Kakasa ku OTP era olindirire update ya review.",
         cta: "Tandika ku WhatsApp Kati",
+        webCta: "Kozesa Ffoomu ya Website",
         stat1Title: "Olulimi + Ekika",
-        stat1Copy: "Londa olulimi, okutunda/okupangisa/ettaka/obusuubuzi/abayizi, otandike mangu.",
+        stat1Copy: "Londa olulimi n'ekika kya property, otandike mangu.",
         stat2Title: "Ebifaananyi + Maapu",
-        stat2Copy: "Teka ebifaananyi 5+, pininga ekifo ekituufu, era onyweze okunoonya.",
+        stat2Copy: "Teka ebifaananyi 5+ era pininga ekifo ekituufu okulongoosa okunoonya.",
         stat3Title: "Okukakasa OTP",
         stat3Copy: "Kakasa ku phone oba email OTP nga listing tennagenda mu review.",
         stat4Title: "Live Link",
@@ -4677,19 +4691,20 @@
       sw: {
         pill: "Msaidizi wa AI wa Uorodheshaji",
         titleHtml: "Orodhesha mali yako kwa <span class=\"text-green-300\">chini ya dakika 5</span> ukitumia AI agent wetu",
-        sub: "Tumia tovuti au anza kwenye WhatsApp. Tunakuongoza kwenye picha, kupin location, uthibitisho wa OTP, na ukaguzi kwa lugha yako.",
+        sub: "Anza kwenye tovuti au WhatsApp. Weka location, picha, ukaguzi wa OTP, kisha tuma tangazo lako kwenye review kwa lugha yako.",
         needTitle: "Utahitaji nini kabla ya kuanza:",
-        needCopy: "Eneo la mali, bei, angalau picha 5 zilizo wazi, na maelezo yako ya uthibitisho (simu + kitambulisho).",
-        needVerify: "Uthibitisho wa mmiliki ni wa hiari wakati wa kuwasilisha. MakaUg admin anaweza kuwasiliana nawe kuhusu uthibitisho wa Ministry of Lands kabla ya beji ya public verified kuongezwa.",
+        needCopy: "Location, bei, picha 5+ zilizo wazi, na maelezo ya uthibitisho (simu + kitambulisho).",
+        needVerify: "Uthibitisho wa mmiliki unaweza kuongezwa wakati wa review kabla ya beji ya public verified kuonekana.",
         step1: "1. Chagua lugha na aina ya tangazo.",
-        step2: "2. Ongeza eneo, bei, na maelezo muhimu ya mali.",
-        step3: "3. Pakia angalau picha 5 zilizo wazi na ueleze kila moja inaonyesha nini.",
-        step4: "4. Thibitisha kwa OTP na upokee taarifa ya mapitio ya tangazo lako.",
+        step2: "2. Ongeza location, bei, na maelezo muhimu ya mali.",
+        step3: "3. Pakia picha zilizo wazi na ueleze kila moja inaonyesha nini.",
+        step4: "4. Thibitisha kwa OTP na usubiri taarifa ya review.",
         cta: "Anza kwenye WhatsApp Sasa",
+        webCta: "Tumia Fomu ya Tovuti",
         stat1Title: "Lugha + Aina",
-        stat1Copy: "Chagua lugha, kuuza/kupanga/ardhi/biashara/wanafunzi, na uanze papo hapo.",
+        stat1Copy: "Chagua lugha na aina ya mali, kisha uanze mara moja.",
         stat2Title: "Picha + Ramani",
-        stat2Copy: "Ongeza picha 5+, pin location sahihi, na boresha usahihi wa utafutaji.",
+        stat2Copy: "Ongeza picha 5+ na pin location sahihi kwa utafutaji bora zaidi.",
         stat3Title: "Ukaguzi wa OTP",
         stat3Copy: "Thibitisha kwa OTP ya simu au barua pepe kabla tangazo halijaingia kwenye ukaguzi.",
         stat4Title: "Kiungo Hai",
@@ -4721,6 +4736,8 @@
       setTextById("home-assistant-step-4", homeAssistantTr("step4"));
       const cta = document.getElementById("home-assistant-cta");
       if (cta) cta.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${homeAssistantTr("cta")}`;
+      const webCta = document.getElementById("home-assistant-web-btn");
+      if (webCta) webCta.innerHTML = `<i class="fas fa-laptop"></i> ${homeAssistantTr("webCta")}`;
       setTextById("home-assistant-stat-1-title", homeAssistantTr("stat1Title"));
       setTextById("home-assistant-stat-1-copy", homeAssistantTr("stat1Copy"));
       setTextById("home-assistant-stat-2-title", homeAssistantTr("stat2Title"));
@@ -5950,6 +5967,7 @@
       setTextById("listing-submit-account-btn", translateListingLabel("Create Free Account"));
       setTextById("listing-submit-home-btn", translateListingLabel("Back to Home"));
       setTextById("listing-submit-support-label", translateListingLabel("Support:"));
+      setTextById("lp-type-reset-note", translateListingLabel("Changed the property type? Use “Clear & Start Again” if this is a different listing."));
       const areaInput = document.getElementById("lp-area");
       if (areaInput) areaInput.placeholder = translateListingLabel("Auto-filled from district/city/neighbourhood");
       const streetInput = document.getElementById("lp-street-name");
@@ -11578,6 +11596,7 @@
 
     function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
       const type = getListType();
+      const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
       const extra = getLpExtraValues();
       const title = lpVal("lp-title");
       const district = lpVal("list-district-sel");
@@ -11626,8 +11645,8 @@
         price,
         price_period: lpVal("lp-period") || null,
         property_type: lpVal("lp-subtype") || null,
-        bedrooms: bedsNumeric,
-        bathrooms: bathsNumeric,
+        bedrooms: cfg.showBedsBaths ? bedsNumeric : null,
+        bathrooms: cfg.showBedsBaths ? bathsNumeric : null,
         amenities: getLpAmenities(),
         listed_via: "website",
         source: "website",
@@ -15880,19 +15899,20 @@
         "Describe business suitability, access, parking, loading, power, and terms...": "Nnyonnyola engeri property eno gy'esaanira bizinensi, okutuukako, parking, loading, amasannyalaze, n'obukwakkulizo...",
         "Describe proximity to campus, room setup, facilities, and rules...": "Nnyonnyola okumpi ne campus, entegeka y'ebisenge, ebikozesebwa, n'amateeka...",
         "Example: \"Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access.\"": "Okugeza: \"Bungalow ey'omulembe erina ebisenge 3 e Ntinda, eddakiika 5 okuva ku shopping centre. Erina ebinaabiro 2, bbugwe ow'obukuumi, compound epaved, amazzi ga borehole, ne generator ey'ekyemalirizo. Eri ku luguudo olutebenkevu olw'obulamu bw'amaka era olutuukikako amangu n'entambula ya taxi.\"",
-        "🚗 Parking": "🚗 Parking",
+        "Changed the property type? Use “Clear & Start Again” if this is a different listing.": "Okikyusizza ekika kya property? Kozesa “Gyamu Otandike Buto” bw'eba listing endala.",
+        "🚗 Parking": "🚗 Pakingi",
         "🔐 Security": "🔐 Obukuumi",
         "🌊 Borehole Water": "🌊 Amazzi ga borehole",
-        "⚡ Generator": "⚡ Generator",
+        "⚡ Generator": "⚡ Jjenereeta",
         "🌳 Garden": "🌳 Lusuku",
         "🛡️ Perimeter Wall": "🛡️ Bbugwe w'ekitundu",
         "🍳 Servant Quarters": "🍳 Ebisulo by'abakozi",
-        "📡 WiFi/Internet": "📡 WiFi/Internet",
+        "📡 WiFi/Internet": "📡 WiFi / Intaneeti",
         "☀️ Solar": "☀️ Solar",
         "🚰 Water Tank": "🚰 Ttanka y'amazzi",
         "🧱 Paved Compound": "🧱 Compound epaved",
         "🚕 Near Taxi Stage": "🚕 Kumpi ne taxi stage",
-        "📹 CCTV": "📹 CCTV",
+        "📹 CCTV": "📹 Kamera z'Obukuumi",
         "🌊 Reliable Water": "🌊 Amazzi agasigika",
         "🪟 Balcony": "🪟 Balcony",
         "🛋️ Furnished": "🛋️ Erimu ebintu munda",
@@ -15967,8 +15987,8 @@
         "Back to Home": "Ddayo Awaka",
         "Submitted online and sent for verification.": "Kiweerezeddwa ku mutimbagano era kitwaliddwa okukakasa.",
         "Submitted in offline mode. We will sync this listing once connection returns.": "Kiweerezeddwa mu offline mode. Tujja ku-sync-a listing eno nga connection ekomyewo.",
-        "Freehold": "Freehold",
-        "Leasehold": "Leasehold",
+        "Freehold": "Freehold (obwannannyini obujjuvu)",
+        "Leasehold": "Leasehold (ebbanga erikakiddwa)",
         "Mailo": "Mailo",
         "Customary": "Customary",
         "Added": "Kyataddwako",
@@ -16279,19 +16299,20 @@
         "Describe business suitability, access, parking, loading, power, and terms...": "Elezea jinsi inavyofaa kwa biashara, upatikanaji, parking, loading, umeme, na masharti...",
         "Describe proximity to campus, room setup, facilities, and rules...": "Elezea ukaribu na campus, mpangilio wa chumba, huduma zilizopo, na sheria...",
         "Example: \"Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access.\"": "Mfano: \"Bungalow ya kisasa yenye vyumba 3 vya kulala huko Ntinda, dakika 5 kutoka shopping centre. Ina bafu 2, ukuta wa usalama, compound iliyopigwa lami, maji ya borehole, na generator ya akiba. Ipo kwenye barabara tulivu ya makazi yenye upatikanaji rahisi wa taxi.\"",
-        "🚗 Parking": "🚗 Parking",
+        "Changed the property type? Use “Clear & Start Again” if this is a different listing.": "Umebadilisha aina ya mali? Tumia “Futa na Uanze Tena” kama hii ni listing tofauti.",
+        "🚗 Parking": "🚗 Maegesho",
         "🔐 Security": "🔐 Usalama",
         "🌊 Borehole Water": "🌊 Maji ya borehole",
-        "⚡ Generator": "⚡ Generator",
+        "⚡ Generator": "⚡ Jenereta",
         "🌳 Garden": "🌳 Bustani",
         "🛡️ Perimeter Wall": "🛡️ Ukuta wa perimeter",
         "🍳 Servant Quarters": "🍳 Chumba cha mfanyakazi",
-        "📡 WiFi/Internet": "📡 WiFi/Internet",
+        "📡 WiFi/Internet": "📡 WiFi / Intaneti",
         "☀️ Solar": "☀️ Solar",
         "🚰 Water Tank": "🚰 Tangi la maji",
         "🧱 Paved Compound": "🧱 Compound iliyopigwa lami",
         "🚕 Near Taxi Stage": "🚕 Karibu na taxi stage",
-        "📹 CCTV": "📹 CCTV",
+        "📹 CCTV": "📹 Kamera za usalama",
         "🌊 Reliable Water": "🌊 Maji ya uhakika",
         "🪟 Balcony": "🪟 Balcony",
         "🛋️ Furnished": "🛋️ Yenye samani",
@@ -16366,8 +16387,8 @@
         "Back to Home": "Rudi Nyumbani",
         "Submitted online and sent for verification.": "Imewasilishwa mtandaoni na kutumwa kwa uthibitisho.",
         "Submitted in offline mode. We will sync this listing once connection returns.": "Imewasilishwa kwa hali ya offline. Tutaisawazisha tangazo hili mtandao ukirudi.",
-        "Freehold": "Freehold",
-        "Leasehold": "Leasehold",
+        "Freehold": "Freehold (umiliki kamili)",
+        "Leasehold": "Leasehold (muda maalum)",
         "Mailo": "Mailo",
         "Customary": "Customary",
         "Added": "Imeongezwa",
@@ -17248,7 +17269,7 @@
       else if (normalized.length) el.value = normalized[0].value;
     }
 
-    function renderLpExtraFields(type) {
+    function renderLpExtraFields(type, preserveExisting = true) {
       const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
       const wrap = document.getElementById("lp-extra-fields");
       if (!wrap) return;
@@ -17257,9 +17278,11 @@
         return;
       }
       const prevValues = {};
-      wrap.querySelectorAll("input, select").forEach((el) => {
-        prevValues[el.id] = el.value;
-      });
+      if (preserveExisting) {
+        wrap.querySelectorAll("input, select").forEach((el) => {
+          prevValues[el.id] = el.value;
+        });
+      }
 
       wrap.innerHTML = cfg.extras.map((field) => {
         const id = `lp-extra-${field.key}`;
@@ -17279,10 +17302,12 @@
         return `<div${dependsAttr}><label class="block text-sm font-semibold text-gray-700 mb-1.5">${translateListingLabel(field.label)}</label><input id="${id}" type="${inputType}" oninput="updateLpDependentFields(); updateListPreview(); renderListReviewSummary();" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="${translateListingLabel(field.placeholder || "")}">${infoHtml}</div>`;
       }).join("");
 
-      Object.entries(prevValues).forEach(([id, value]) => {
-        const el = document.getElementById(id);
-        if (el) el.value = value;
-      });
+      if (preserveExisting) {
+        Object.entries(prevValues).forEach(([id, value]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = value;
+        });
+      }
       updateLpDependentFields();
       applyPremiumFormLabels();
     }
@@ -17323,11 +17348,13 @@
       updateLpDependentFields();
     }
 
-    function renderLpAmenities(type) {
+    function renderLpAmenities(type, preserveExisting = true) {
       const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
       const wrap = document.getElementById("lp-amenities");
       if (!wrap) return;
-      const prev = new Set(Array.from(wrap.querySelectorAll("input:checked")).map((el) => el.value));
+      const prev = preserveExisting
+        ? new Set(Array.from(wrap.querySelectorAll("input:checked")).map((el) => el.value))
+        : new Set();
       wrap.innerHTML = (cfg.amenities || []).map((amenity) => {
         const checked = prev.has(amenity.value) ? "checked" : "";
         const label = translateListingLabel(amenity.label);
@@ -17345,12 +17372,14 @@
     }
 
     function setListType(type) {
+      const previousType = lpCurrentFormType || getListType();
       if (type) {
         const radio = document.querySelector(`input[name='lp-type'][value='${type}']`);
         if (radio) radio.checked = true;
       }
       const selected = getListType();
       const cfg = LP_CONFIG[selected] || LP_CONFIG.sale;
+      const preserveTypeSpecificValues = previousType === selected;
 
       updateListTypeChips(selected);
 
@@ -17378,6 +17407,12 @@
       if (sizeEl) sizeEl.placeholder = translateListingLabel(cfg.sizePlaceholder);
       if (sizeWrapEl) sizeWrapEl.classList.toggle("hidden", cfg.showSize === false);
       if (cfg.showSize === false && sizeEl) sizeEl.value = "";
+      if (!cfg.showBedsBaths) {
+        const bedsEl = document.getElementById("lp-beds");
+        const bathsEl = document.getElementById("lp-baths");
+        if (bedsEl) bedsEl.value = "";
+        if (bathsEl) bathsEl.value = "";
+      }
       if (periodLabelEl) periodLabelEl.textContent = translateListingLabel(cfg.periodLabel);
       if (bedsLabelEl) bedsLabelEl.textContent = translateListingLabel(cfg.bedsLabel);
       if (bathsLabelEl) bathsLabelEl.textContent = translateListingLabel(cfg.bathsLabel);
@@ -17387,9 +17422,9 @@
 
       setSelectOptions("lp-subtype", cfg.subtypes || [], (cfg.subtypes || [])[0]?.value, true);
       setSelectOptions("lp-period", cfg.periods || [], (cfg.periods || [])[0]?.value, true);
-      renderLpExtraFields(selected);
+      renderLpExtraFields(selected, preserveTypeSpecificValues);
       if (selected === "commercial") syncCommercialMode();
-      renderLpAmenities(selected);
+      renderLpAmenities(selected, preserveTypeSpecificValues);
       updateLpPhotoRequirements();
       updateListPreview();
       renderListReviewSummary();
@@ -17401,6 +17436,7 @@
       }
       syncLpPublicNameSuggestion();
       refreshListPinMapFromInputs();
+      lpCurrentFormType = selected;
     }
 
     function lpVal(id) {
@@ -18688,10 +18724,19 @@
       (list || []).forEach((p) => {
         const point = getListingMapPoint(p);
         if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
+        const isHomeMap = mapId === "map-home";
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
           map,
-          title: p.title || "MakaUg listing"
+          title: p.title || "MakaUg listing",
+          icon: isHomeMap ? {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: "#16a34a",
+            fillOpacity: 0.95,
+            strokeColor: "#ffffff",
+            strokeWeight: 2
+          } : undefined
         });
         const idArg = propertyIdArg(p.id);
         const content = `
@@ -18913,7 +18958,15 @@
       list.forEach((p) => {
         const point = getListingMapPoint(p);
         if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
-        const marker = L.marker([point.lat, point.lng]).addTo(maps[mapId]);
+        const marker = mapId === "map-home"
+          ? L.circleMarker([point.lat, point.lng], {
+            radius: 7,
+            color: "#ffffff",
+            weight: 2,
+            fillColor: "#16a34a",
+            fillOpacity: 0.95
+          }).addTo(maps[mapId])
+          : L.marker([point.lat, point.lng]).addTo(maps[mapId]);
         const idArg = propertyIdArg(p.id);
         marker.bindPopup(`
           <div style="min-width:200px">
@@ -18927,6 +18980,7 @@
             </button>
           </div>
         `);
+        marker.on("mouseover", () => marker.openPopup());
         if (mapId === "map-home") {
           marker.on("click", () => openDetail(p.id));
         }
@@ -18937,6 +18991,7 @@
     function fitMapToListings(mapId, list) {
       const map = maps[mapId];
       if (!map) return;
+      const homeOverviewCenter = getHomeMapOverviewCenter();
       const points = (list || [])
         .map((p) => getListingMapPoint(p))
         .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng) && isLikelyUgandaCoordinate(point.lat, point.lng))
@@ -18944,8 +18999,13 @@
 
       if (mapProviders[mapId] === "google" && window.google?.maps) {
         if (!points.length) {
-          map.setCenter(MAP_DEFAULT_CENTER);
+          map.setCenter(mapId === "map-home" ? homeOverviewCenter : MAP_DEFAULT_CENTER);
           map.setZoom(mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
+          return;
+        }
+        if (mapId === "map-home" && points.length >= 5) {
+          map.setCenter(homeOverviewCenter);
+          map.setZoom(MAP_HOME_MIN_ZOOM);
           return;
         }
         if (points.length === 1) {
@@ -18961,7 +19021,7 @@
           const minZoom = mapId === "map-home" ? MAP_HOME_MIN_ZOOM : 0;
           if (map.getZoom() > maxZoom) map.setZoom(maxZoom);
           if (map.getZoom() < minZoom) {
-            map.setCenter(MAP_DEFAULT_CENTER);
+            map.setCenter(mapId === "map-home" ? homeOverviewCenter : MAP_DEFAULT_CENTER);
             map.setZoom(minZoom);
           }
         });
@@ -18970,7 +19030,12 @@
 
       if (!window.L) return;
       if (!points.length) {
-        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
+        const fallbackCenter = mapId === "map-home" ? homeOverviewCenter : MAP_DEFAULT_CENTER;
+        map.setView([fallbackCenter.lat, fallbackCenter.lng], mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
+        return;
+      }
+      if (mapId === "map-home" && points.length >= 5) {
+        map.setView([homeOverviewCenter.lat, homeOverviewCenter.lng], MAP_HOME_MIN_ZOOM);
         return;
       }
       if (points.length === 1) {
@@ -18981,7 +19046,7 @@
       const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
       map.fitBounds(bounds.pad(mapId === "map-home" ? 0.08 : 0.2), { maxZoom });
       if (mapId === "map-home" && map.getZoom() < MAP_HOME_MIN_ZOOM) {
-        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_HOME_MIN_ZOOM);
+        map.setView([homeOverviewCenter.lat, homeOverviewCenter.lng], MAP_HOME_MIN_ZOOM);
       }
     }
 
