@@ -16,8 +16,8 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Stanbic mortgage rates page',
-    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/vehicle-and-asset-finance/oli-in-charge'
+    sourceLabel: 'Stanbic mortgages and home loans',
+    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans'
   },
   {
     key: 'hfb',
@@ -28,8 +28,8 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
     maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Housing Finance mortgage FAQs',
-    sourceUrl: 'https://housingfinance.co.ug/mortgages-faqs/'
+    sourceLabel: 'Housing Finance mortgage terms and conditions',
+    sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/mortgage-products/housing-finance-bank-mortgages-terms-and-conditions/'
   },
   {
     key: 'dfcu',
@@ -40,8 +40,8 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 40, commercial: 40, land: 40, default: 40 },
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
-    sourceLabel: 'dfcu Dream Home campaign',
-    sourceUrl: 'https://www.dfcugroup.com/personal-banking/campaigns/personal-banking/dream-home/'
+    sourceLabel: 'dfcu home loans',
+    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/'
   },
   {
     key: 'kcb',
@@ -53,7 +53,7 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 1.5,
     sourceLabel: 'KCB mortgage overview',
-    sourceUrl: 'https://ug.kcbgroup.com/for-me/loans/mortgage'
+    sourceUrl: 'https://ug.kcbgroup.com/products/mortgage'
   },
   {
     key: 'baroda',
@@ -64,8 +64,8 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Housing loan (2% below PLR, PLR schedule)',
-    sourceUrl: 'https://www.bankofbaroda.ug/personal-banking/retail-loans/housing-loans'
+    sourceLabel: 'Baroda housing loan',
+    sourceUrl: 'https://www.bankofbaroda.ug/personal-banking/loans/housing-loan'
   },
   {
     key: 'absa',
@@ -76,8 +76,8 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Absa home loan page (LTV up to 85%)',
-    sourceUrl: 'https://www.absabank.co.ug/personal/borrow/home-loans/'
+    sourceLabel: 'Absa Uganda home loans',
+    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/'
   }
 ];
 

@@ -2671,6 +2671,57 @@
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Accounts</button>
           </div>
+          <div class="grid xl:grid-cols-[1.2fr,0.8fr] gap-5 mb-5">
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">Outreach Control Board</h4>
+                  <p class="text-xs text-gray-500 mt-1">Quick visibility into account growth, field teams, live brokers, and who needs follow-up.</p>
+                </div>
+              </div>
+              <div id="admin-outreach-overview" class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-4"></div>
+            </div>
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">Bulk Messaging</h4>
+                  <p class="text-xs text-gray-500 mt-1">Draft WhatsApp campaigns for opted-in audiences, then queue or set them live.</p>
+                </div>
+              </div>
+              <div class="space-y-3">
+                <input id="admin-campaign-name" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Campaign name">
+                <textarea id="admin-campaign-objective" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="What should this message help you achieve?"></textarea>
+                <div class="grid sm:grid-cols-2 gap-2">
+                  <select id="admin-campaign-language" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                    <option value="">All languages</option>
+                    <option value="en">English</option>
+                    <option value="lg">Luganda</option>
+                    <option value="sw">Kiswahili</option>
+                    <option value="ac">Acholi</option>
+                    <option value="ny">Runyankole</option>
+                    <option value="rn">Rukiga</option>
+                    <option value="sm">Lusoga</option>
+                  </select>
+                  <input id="admin-campaign-audience" class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Audience, e.g. saved-property users">
+                </div>
+                <div class="grid sm:grid-cols-2 gap-2">
+                  <input id="admin-campaign-days" type="number" min="0" max="365" value="30" class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Active within days">
+                  <input id="admin-campaign-limit" type="number" min="50" max="20000" step="50" value="500" class="border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Queue limit">
+                </div>
+                <button onclick="adminCreateCampaignDraft()" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">Create Campaign Draft</button>
+                <p class="text-[11px] text-gray-500">Current live queueing is set up for opted-in WhatsApp recipients. Draft first, then queue or go live from the campaign list below.</p>
+              </div>
+            </div>
+          </div>
+          <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50 mb-5">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h4 class="text-lg font-bold text-gray-800">Campaign Queue</h4>
+                <p class="text-xs text-gray-500 mt-1">Drafts, queued sends, live sends, and campaign delivery progress.</p>
+              </div>
+            </div>
+            <div id="admin-campaigns-table" class="space-y-3"></div>
+          </div>
           <div class="grid md:grid-cols-[1fr,180px,180px] gap-2 mb-3">
             <input id="admin-users-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search users, phone, email...">
             <select id="admin-users-role" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
@@ -3036,6 +3087,31 @@
         <button onclick="closeModal('listing-submit-modal'); showPage('home')" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm" id="listing-submit-home-btn">Back to Home</button>
       </div>
       <p class="text-xs text-gray-500 mt-3"><span id="listing-submit-support-label">Support:</span> info@makaug.com</p>
+    </div>
+  </div>
+
+  <div id="save-property-modal" class="modal-overlay">
+    <div class="modal-box" style="max-width:640px">
+      <button onclick="closeModal('save-property-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
+      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
+        <i class="fas fa-heart"></i>
+        <span>Save to your profile</span>
+      </div>
+      <h2 class="text-2xl font-black text-gray-800 serif">Keep this property in your MakaUg account</h2>
+      <p id="save-property-modal-sub" class="text-sm text-gray-600 mt-2">Create your free account or sign in to save this property, track updates, and come back to it later.</p>
+      <div class="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
+        <div class="text-sm font-bold text-gray-900">What happens next?</div>
+        <ul class="mt-2 text-sm text-gray-700 space-y-1.5 list-disc pl-5">
+          <li>The property will be saved straight to your personal profile after you sign in.</li>
+          <li>You can review saved homes, compare options, and track your enquiries in one place.</li>
+          <li>We will also send a welcome email when your account is created.</li>
+        </ul>
+      </div>
+      <div class="mt-4 flex flex-col sm:flex-row gap-2">
+        <button onclick="continueSavePropertyAuth('signup')" class="flex-1 bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold text-sm">Create Free Account</button>
+        <button onclick="continueSavePropertyAuth('signin')" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm">Sign In</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">No property is saved publicly. Saved homes stay inside the signed-in account only.</p>
     </div>
   </div>
 
@@ -3699,8 +3775,8 @@
         minDepositPct: { default: 20 },
         maxYears: { default: 25 },
         arrangementFeePct: 1.5,
-        sourceLabel: "Stanbic mortgage rates page",
-        sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/vehicle-and-asset-finance/oli-in-charge"
+        sourceLabel: "Stanbic mortgages and home loans",
+        sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans"
       },
       {
         id: "hfb",
@@ -3711,8 +3787,8 @@
         minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
         maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
         arrangementFeePct: 1.5,
-        sourceLabel: "Housing Finance mortgage FAQs",
-        sourceUrl: "https://housingfinance.co.ug/mortgages-faqs/"
+        sourceLabel: "Housing Finance mortgage terms and conditions",
+        sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/mortgage-products/housing-finance-bank-mortgages-terms-and-conditions/"
       },
       {
         id: "dfcu",
@@ -3723,8 +3799,8 @@
         minDepositPct: { default: 40 },
         maxYears: { default: 20 },
         arrangementFeePct: 2.0,
-        sourceLabel: "dfcu Dream Home campaign",
-        sourceUrl: "https://www.dfcugroup.com/personal-banking/campaigns/personal-banking/dream-home/"
+        sourceLabel: "dfcu home loans",
+        sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/"
       },
       {
         id: "kcb",
@@ -3736,7 +3812,7 @@
         maxYears: { residential: 20, default: 20 },
         arrangementFeePct: 1.5,
         sourceLabel: "KCB mortgage overview",
-        sourceUrl: "https://ug.kcbgroup.com/for-me/loans/mortgage"
+        sourceUrl: "https://ug.kcbgroup.com/products/mortgage"
       },
       {
         id: "baroda",
@@ -3747,8 +3823,8 @@
         minDepositPct: { default: 20 },
         maxYears: { default: 15 },
         arrangementFeePct: 1.5,
-        sourceLabel: "Housing loan (2% below PLR, PLR schedule)",
-        sourceUrl: "https://www.bankofbaroda.ug/personal-banking/retail-loans/housing-loans"
+        sourceLabel: "Baroda housing loan",
+        sourceUrl: "https://www.bankofbaroda.ug/personal-banking/loans/housing-loan"
       },
       {
         id: "absa",
@@ -3759,8 +3835,8 @@
         minDepositPct: { residential: 15, default: 20 },
         maxYears: { default: 25 },
         arrangementFeePct: 1.5,
-        sourceLabel: "Absa home loan page (LTV up to 85%)",
-        sourceUrl: "https://www.absabank.co.ug/personal/borrow/home-loans/"
+        sourceLabel: "Absa Uganda home loans",
+        sourceUrl: "https://www.absa.co.ug/personal/home-loans/"
       }
     ];
     let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
@@ -3785,6 +3861,7 @@
     let adminRemoteAgents = [];
     let adminPropertyRequests = [];
     let adminFieldAgents = [];
+    let adminCurrentCampaigns = [];
     let adminActiveReview = null;
     let activeAdminWorkflowTab = "review";
     let adminReviewEvidence = {};
@@ -6328,6 +6405,42 @@
       return Array.from(savedIds).some((value) => String(value) === key);
     }
 
+    function getDetailSaveButtonClasses(propertyId) {
+      const signedIn = !!(authState?.user && authState?.token);
+      const saved = signedIn && isPropertySaved(propertyId);
+      return saved
+        ? "w-full mt-3 border border-green-700 bg-green-700 text-white py-2.5 rounded-xl font-semibold shadow-sm"
+        : "w-full mt-3 border border-gray-300 text-gray-800 hover:bg-gray-50 py-2.5 rounded-xl font-semibold";
+    }
+
+    function getDetailSaveButtonContent(propertyId) {
+      const signedIn = !!(authState?.user && authState?.token);
+      const saved = signedIn && isPropertySaved(propertyId);
+      if (saved) {
+        return `
+          <span class="inline-flex items-center justify-center gap-2">
+            <i class="fas fa-heart"></i>
+            <span>Saved to Profile</span>
+          </span>
+        `;
+      }
+      if (signedIn) {
+        return `
+          <span class="inline-flex items-center justify-center gap-2">
+            <i class="far fa-heart"></i>
+            <span>Save Property</span>
+          </span>
+        `;
+      }
+      return `
+        <span class="inline-flex items-center justify-center gap-2">
+          <i class="far fa-heart"></i>
+          <span>Save Property</span>
+        </span>
+        <span class="block text-[11px] font-medium text-gray-500 mt-1">Sign in or create an account to keep it in your profile.</span>
+      `;
+    }
+
     function isUuidLike(value) {
       return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
     }
@@ -6395,6 +6508,25 @@
         trackEvent("property_save", { property_id: id, source: "post_auth" });
       }
       return id;
+    }
+
+    function openSavePropertyPrompt(propertyId = "") {
+      const property = findPropertyForUi(propertyId);
+      const sub = document.getElementById("save-property-modal-sub");
+      if (sub) {
+        const title = property?.title ? `“${property.title}”` : "this property";
+        sub.textContent = `Create your free account or sign in to save ${title}, track updates, and come back to it later.`;
+      }
+      openModal("save-property-modal");
+    }
+
+    function continueSavePropertyAuth(mode = "signup") {
+      closeModal("save-property-modal");
+      if (String(mode).toLowerCase() === "signin") {
+        openAuthSignIn("finder");
+        return;
+      }
+      openAuthSignUp("finder");
     }
 
     async function syncSavedStateAfterAuth(pendingSaveId = "") {
@@ -7289,7 +7421,7 @@
       if (userSearch) userParams.set("search", userSearch);
       if (userRole) userParams.set("role", userRole);
       if (weeklyOnly) userParams.set("weekly_tips_only", "true");
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes] = await Promise.all([
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
@@ -7297,7 +7429,8 @@
         apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
         apiRequest("/api/admin/agents?limit=100", { headers }),
         apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
-        apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers })
+        apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }),
+        apiRequest("/api/admin/campaigns?limit=20", { headers })
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
@@ -7311,6 +7444,7 @@
       adminRemoteAgents = Array.isArray(agentsRes?.data) ? agentsRes.data.map(mapRemoteAgentForUi) : [];
       adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
       adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
+      adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
       return {
         summary: summaryRes?.data || {},
         recent: recentRes?.data || {},
@@ -7320,7 +7454,8 @@
         users: usersRes?.data || [],
         agents: adminRemoteAgents,
         propertyRequests: adminPropertyRequests,
-        fieldAgents: adminFieldAgents
+        fieldAgents: adminFieldAgents,
+        campaigns: adminCurrentCampaigns
       };
     }
 
@@ -7658,6 +7793,15 @@
       renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
+      renderAdminOutreachOverview({
+        summary,
+        users: remoteSnap?.users || localSnap.recentUsers || [],
+        agents: remoteSnap?.agents || localSnap.agents || [],
+        fieldAgents: remoteSnap?.fieldAgents || localSnap.fieldAgents || [],
+        propertyRequests: remoteSnap?.propertyRequests || localSnap.propertyRequests || [],
+        campaigns: remoteSnap?.campaigns || []
+      });
+      renderAdminCampaignRows(remoteSnap?.campaigns || []);
       renderAdminUsersRows(remoteSnap?.users || localSnap.recentUsers || []);
       renderAdminFeaturedAgentsRows(remoteSnap?.agents || localSnap.agents || []);
       renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
@@ -7918,6 +8062,255 @@
 
     let adminCurrentUsers = [];
 
+    function campaignStatusMeta(status) {
+      const normalized = String(status || "draft").toLowerCase();
+      if (normalized === "live") return { cls: "bg-green-100 text-green-700", label: "Live" };
+      if (normalized === "queued") return { cls: "bg-blue-100 text-blue-700", label: "Queued" };
+      if (normalized === "sent") return { cls: "bg-emerald-100 text-emerald-700", label: "Sent" };
+      if (normalized === "cancelled") return { cls: "bg-red-100 text-red-700", label: "Cancelled" };
+      return { cls: "bg-gray-100 text-gray-700", label: "Draft" };
+    }
+
+    function deriveUserInterestSummary(user = {}) {
+      const interests = [];
+      if (Number(user.listings_count || 0) > 0) interests.push("Lists properties");
+      if (Number(user.inquiries_count || 0) > 0) interests.push("Actively enquiring");
+      if (Number(user.property_saves_count || 0) > 0) interests.push("Saving homes");
+      if (Number(user.route_events_count || 0) > 0) interests.push("Checks routes");
+      if (Number(user.property_views_count || 0) > 3) interests.push("Browsing heavily");
+      if (!interests.length) return "New or low-activity account";
+      return interests.slice(0, 2).join(" • ");
+    }
+
+    function renderAdminOutreachOverview({ summary = {}, users = [], agents = [], fieldAgents = [], propertyRequests = [], campaigns = [] } = {}) {
+      const wrap = document.getElementById("admin-outreach-overview");
+      if (!wrap) return;
+      const userSummary = summary?.users || {};
+      const liveAgents = (agents || []).filter((agent) => String(agent?.status || "").toLowerCase() === "approved").length;
+      const pendingAgents = (agents || []).filter((agent) => String(agent?.status || "").toLowerCase() === "pending").length;
+      const activeFieldAgents = (fieldAgents || []).filter((user) => String(user?.status || "active").toLowerCase() === "active").length;
+      const suspendedFieldAgents = (fieldAgents || []).filter((user) => String(user?.status || "").toLowerCase() === "suspended").length;
+      const liveCampaigns = (campaigns || []).filter((campaign) => String(campaign?.status || "").toLowerCase() === "live").length;
+      const draftCampaigns = (campaigns || []).filter((campaign) => ["draft", "queued"].includes(String(campaign?.status || "").toLowerCase())).length;
+      const cards = [
+        {
+          label: "Active Accounts",
+          value: Number(userSummary.active ?? users.length ?? 0),
+          note: `${Number(userSummary.weekly_tips_opt_in ?? 0)} on weekly tips`,
+          tone: "text-green-700"
+        },
+        {
+          label: "Marketing Consent",
+          value: Number(userSummary.marketing_opt_in ?? 0),
+          note: "WhatsApp / outreach eligible",
+          tone: "text-blue-700"
+        },
+        {
+          label: "Field Agents",
+          value: activeFieldAgents,
+          note: `${suspendedFieldAgents} paused`,
+          tone: "text-indigo-700"
+        },
+        {
+          label: "Brokers Live / Pending",
+          value: `${liveAgents}/${pendingAgents}`,
+          note: "Approved vs awaiting review",
+          tone: "text-emerald-700"
+        },
+        {
+          label: "Property Requests",
+          value: propertyRequests.length,
+          note: "People looking for help",
+          tone: "text-amber-700"
+        },
+        {
+          label: "Campaigns",
+          value: liveCampaigns,
+          note: `${draftCampaigns} draft or queued`,
+          tone: "text-fuchsia-700"
+        },
+        {
+          label: "Recent Interest",
+          value: users.filter((user) => Number(user.inquiries_count || 0) > 0 || Number(user.property_saves_count || 0) > 0).length,
+          note: "Accounts showing buying intent",
+          tone: "text-sky-700"
+        },
+        {
+          label: "Protected Access",
+          value: Number(userSummary.phone_verified ?? 0),
+          note: "Verified phone accounts",
+          tone: "text-gray-900"
+        }
+      ];
+      wrap.innerHTML = cards.map((card) => `
+        <div class="rounded-xl border border-gray-200 bg-white p-3">
+          <div class="text-xs uppercase tracking-wide font-semibold text-gray-500">${card.label}</div>
+          <div class="text-2xl font-black mt-1 ${card.tone}">${adminEscape(card.value)}</div>
+          <div class="text-[11px] text-gray-500 mt-1">${adminEscape(card.note)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAdminCampaignRows(campaigns) {
+      const wrap = document.getElementById("admin-campaigns-table");
+      if (!wrap) return;
+      adminCurrentCampaigns = Array.isArray(campaigns) ? campaigns : [];
+      if (!canUseLiveAdminApi()) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">Sign in as admin or load ADMIN_API_KEY to manage outreach campaigns.</div>`;
+        return;
+      }
+      if (!adminCurrentCampaigns.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No campaigns yet. Create a draft above to prepare bulk WhatsApp messaging.</div>`;
+        return;
+      }
+      wrap.innerHTML = adminCurrentCampaigns.map((campaign) => {
+        const status = campaignStatusMeta(campaign.status);
+        const campaignIdArg = adminListingIdArg(campaign.id);
+        const totals = [
+          `${adminEscape(campaign.total_recipients || 0)} recipients`,
+          `${adminEscape(campaign.sent_count || 0)} sent`,
+          `${adminEscape(campaign.pending_count || 0)} pending`,
+          `${adminEscape(campaign.failed_count || 0)} failed`
+        ].join(" • ");
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-900">${adminEscape(campaign.name || "Campaign")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(campaign.objective || "No objective saved")} • ${adminEscape((campaign.channel || "whatsapp").toUpperCase())}</div>
+                <div class="text-xs text-gray-500 mt-1">${totals}</div>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-1 rounded ${status.cls}">${status.label}</span>
+            </div>
+            <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">${adminEscape(campaign.message_template || "No message template yet.")}</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              ${["draft", "queued"].includes(String(campaign.status || "").toLowerCase()) ? `<button onclick="adminQueueCampaign(${campaignIdArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Queue Recipients</button>` : ""}
+              ${["draft", "queued"].includes(String(campaign.status || "").toLowerCase()) ? `<button onclick="adminLaunchCampaign(${campaignIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Live</button>` : ""}
+              ${["draft", "queued", "live"].includes(String(campaign.status || "").toLowerCase()) ? `<button onclick="adminCancelCampaign(${campaignIdArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Cancel</button>` : ""}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function adminSetUserStatus(userId, status) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { status }
+        });
+        await renderAdminDashboard();
+        toast(status === "active" ? "User access restored." : "User access updated.");
+      } catch (e) {
+        toast(`User update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminCreateCampaignDraft() {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      const name = (document.getElementById("admin-campaign-name")?.value || "").trim();
+      const objective = (document.getElementById("admin-campaign-objective")?.value || "").trim();
+      const audience = (document.getElementById("admin-campaign-audience")?.value || "").trim();
+      const languageCode = (document.getElementById("admin-campaign-language")?.value || "").trim().toLowerCase();
+      const activeWithinDays = Math.max(0, parseInt(document.getElementById("admin-campaign-days")?.value || 0, 10) || 0);
+
+      if (!name) {
+        toast("Add a campaign name first.");
+        return;
+      }
+
+      try {
+        await apiRequest("/api/admin/campaigns/draft", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {
+            name,
+            objective,
+            audience,
+            language: languageCode ? languageDisplayName(languageCode) : "English",
+            channel: "whatsapp",
+            target_filter: {
+              active_within_days: activeWithinDays,
+              ...(languageCode ? { languages: [languageCode] } : {})
+            }
+          }
+        });
+        ["admin-campaign-name", "admin-campaign-objective", "admin-campaign-audience"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        const langEl = document.getElementById("admin-campaign-language");
+        if (langEl) langEl.value = "";
+        await renderAdminDashboard();
+        toast("Campaign draft created.");
+      } catch (e) {
+        toast(`Campaign draft failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminQueueCampaign(campaignId) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      const limit = Math.max(50, parseInt(document.getElementById("admin-campaign-limit")?.value || 500, 10) || 500);
+      try {
+        await apiRequest(`/api/admin/campaigns/${encodeURIComponent(campaignId)}/queue`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: { limit }
+        });
+        await renderAdminDashboard();
+        toast("Campaign recipients queued.");
+      } catch (e) {
+        toast(`Campaign queue failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminLaunchCampaign(campaignId) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      const limit = Math.max(50, parseInt(document.getElementById("admin-campaign-limit")?.value || 500, 10) || 500);
+      try {
+        await apiRequest(`/api/admin/campaigns/${encodeURIComponent(campaignId)}/live`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: { limit, process_limit: Math.min(limit, 500) }
+        });
+        await renderAdminDashboard();
+        toast("Campaign set live.");
+      } catch (e) {
+        toast(`Campaign launch failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminCancelCampaign(campaignId) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/admin/campaigns/${encodeURIComponent(campaignId)}/cancel`, {
+          method: "POST",
+          headers: adminAuthHeaders()
+        });
+        await renderAdminDashboard();
+        toast("Campaign cancelled.");
+      } catch (e) {
+        toast(`Campaign cancel failed: ${e.message || "error"}`);
+      }
+    }
+
     function languageDisplayName(code) {
       return {
         en: "English",
@@ -7946,6 +8339,9 @@
         const marketing = user.marketing_opt_in !== false;
         const social = user.oauth_provider ? `${user.oauth_provider} linked` : "Password/OTP";
         const language = languageDisplayName(user.preferred_language || "en");
+        const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is MakaUg. We are following up on your account and property journey.`) : "";
+        const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
+        const interestSummary = deriveUserInterestSummary(user);
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -7953,6 +8349,7 @@
                 <div class="font-bold text-gray-900">${adminEscape(name)}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
                 <div class="text-xs text-gray-500 mt-1">${mapRoleLabel(user.role || "buyer_renter")} • ${adminEscape(user.status || "active")} • ${adminEscape(social)} • ${adminEscape(language)}</div>
+                <div class="text-xs text-green-700 mt-1 font-semibold">${adminEscape(interestSummary)}</div>
               </div>
               <div class="flex gap-1.5 flex-wrap justify-end">
                 <span class="text-[11px] font-semibold px-2 py-1 rounded ${tips ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}">${tips ? "Weekly tips" : "No tips"}</span>
@@ -7968,7 +8365,9 @@
             </div>
             <div class="mt-3 flex gap-2 flex-wrap">
               <button onclick="openAdminUserTipsWhatsApp(${userIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Tips</button>
+              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Contact</a>` : ""}
               ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -8063,6 +8462,8 @@
       }
       wrap.innerHTML = rows.map((user) => {
         const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
+        const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
+        const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is MakaUg operations. We are following up on your field activity and account access.`) : "";
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -8079,6 +8480,11 @@
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Views</div><div class="font-black text-gray-900">${adminEscape(user.property_views_count || 0)}</div></div>
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Saves</div><div class="font-black text-gray-900">${adminEscape(user.property_saves_count || 0)}</div></div>
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Routes</div><div class="font-black text-gray-900">${adminEscape(user.route_events_count || 0)}</div></div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
+              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus('${adminEscape(user.id)}', '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -12124,6 +12530,55 @@
       document.head.appendChild(script);
     }
 
+    const INLINE_REVENUE_PLACEMENTS = [
+      { anchorId: "home-grid", slotKey: "home-featured", context: "Featured Properties" },
+      { anchorId: "home-brokers", slotKey: "home-brokers", context: "Featured Agents" },
+      { anchorId: "sale-grid", slotKey: "sale-grid", context: "For Sale Listings" },
+      { anchorId: "rent-grid", slotKey: "rent-grid", context: "To Rent Listings" },
+      { anchorId: "student-grid", slotKey: "student-grid", context: "Student Accommodation" },
+      { anchorId: "commercial-grid", slotKey: "commercial-grid", context: "Commercial Listings" },
+      { anchorId: "land-grid", slotKey: "land-grid", context: "Land Listings" },
+      { anchorId: "brokers-grid", slotKey: "brokers-grid", context: "Broker Directory" },
+      { anchorId: "mortgage-results", slotKey: "mortgage-results", context: "Mortgage Finder" },
+      { anchorId: "detail-content", slotKey: "property-detail", context: "Property Detail" }
+    ];
+
+    function buildRevenuePlacementMarkup(slotKey, context) {
+      const adSlot = String(GOOGLE_ADSENSE_SLOTS[slotKey] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
+      const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
+      return `
+        <div class="max-w-7xl mx-auto px-0 py-4">
+          <div class="ad-unit">
+            <span class="ad-tag"><i class="fas fa-bullhorn"></i> Google Ads</span>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-bold text-green-900">Sponsored placement reserved on ${adminEscape(context || "makaug.com")}</div>
+              <div class="text-xs text-gray-500 mt-1">This slot is ready for Google Ads monetization and campaign placements.</div>
+            </div>
+            ${hasLiveAds
+              ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
+              : `<a href="https://ads.google.com/" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-green-700 hover:underline whitespace-nowrap">Google Ads Placeholder</a>`
+            }
+          </div>
+        </div>`;
+    }
+
+    function ensureRevenuePlacements() {
+      INLINE_REVENUE_PLACEMENTS.forEach((placement) => {
+        const anchor = document.getElementById(placement.anchorId);
+        if (!anchor) return;
+        const placementId = `revenue-placement-${placement.slotKey}`;
+        let node = document.getElementById(placementId);
+        if (!node) {
+          node = document.createElement("div");
+          node.id = placementId;
+          node.dataset.revenuePlacement = placement.slotKey;
+          anchor.insertAdjacentElement("afterend", node);
+        }
+        node.innerHTML = buildRevenuePlacementMarkup(placement.slotKey, placement.context);
+      });
+      renderGoogleAdsSlots();
+    }
+
     function populateDistricts() {
       const ids = [
         "sale-district-f",
@@ -13687,6 +14142,7 @@
       renderFinderDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
+      ensureRevenuePlacements();
     }
 
     function showPage(page) {
@@ -16104,8 +16560,7 @@
       const key = String(id);
       if (!authState?.user || !authState?.token) {
         setPendingSavePropertyId(key);
-        toast("Create a free account to save this property.");
-        openAuthSignUp("finder");
+        openSavePropertyPrompt(key);
         trackEvent("property_save_auth_required", { property_id: id });
         return;
       }
@@ -16143,7 +16598,9 @@
     function updateDetailSaveButton(id) {
       const btn = document.getElementById("detail-save-btn");
       if (!btn || String(activeDetailPropertyId || "") !== String(id || "")) return;
-      btn.textContent = isPropertySaved(id) ? "Remove Saved" : "Save Property";
+      btn.className = getDetailSaveButtonClasses(id);
+      btn.innerHTML = getDetailSaveButtonContent(id);
+      btn.setAttribute("aria-pressed", isPropertySaved(id) ? "true" : "false");
     }
 
     function formatUgxAmount(value) {
@@ -16642,8 +17099,6 @@
       detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
       if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
       const detailIdArg = JSON.stringify(String(p.id));
-      const detailIsSaved = Array.from(savedIds).some((value) => String(value) === String(p.id));
-      const detailSaveLabel = authState?.user ? (detailIsSaved ? "Remove Saved" : "Save Property") : "Sign in to Save Property";
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
       const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, I am interested in ${p.title || "this property"}.`) : "";
@@ -16759,7 +17214,7 @@
                 ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
                 ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">WhatsApp unavailable</button>`}
               `}
-              <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="w-full mt-3 border border-gray-300 py-2.5 rounded-xl font-semibold">${detailSaveLabel}</button>
+              <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
                 <h4 class="font-bold text-gray-800 text-sm mb-2">Send enquiry</h4>
                 <div class="space-y-2">
@@ -16796,6 +17251,8 @@
           </div>
         </div>`;
       showPage("detail");
+      updateDetailSaveButton(p.id);
+      ensureRevenuePlacements();
       setTimeout(() => {
         initDetailMap(p);
         if (showMortgageWidget) renderDetailMortgageWidget(p.id);

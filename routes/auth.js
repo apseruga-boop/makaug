@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
-const { sendSupportEmail } = require('../services/emailService');
+const { sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const {
   parseBooleanLike,
@@ -958,6 +958,18 @@ router.post('/verify-otp', async (req, res, next) => {
     const user = userResult.rows[0];
     const token = createToken(user);
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+
+    if (purpose === 'signup' && user.email) {
+      try {
+        await sendWelcomeEmail({ to: user.email, user });
+      } catch (emailError) {
+        logger.warn('Welcome email delivery failed after signup verification', {
+          userId: user.id,
+          email: user.email,
+          error: emailError.message
+        });
+      }
+    }
 
     return res.json({ ok: true, data: { token, user: publicUser(user) } });
   } catch (error) {

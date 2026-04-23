@@ -141,6 +141,28 @@ function buildBrandedEmailHtml({ subject, text }) {
 </html>`;
 }
 
+function getLanguageDisplayName(code = 'en') {
+  const normalized = String(code || 'en').trim().toLowerCase();
+  return {
+    en: 'English',
+    lg: 'Luganda',
+    sw: 'Kiswahili',
+    ac: 'Acholi',
+    ny: 'Runyankole',
+    rn: 'Rukiga',
+    sm: 'Lusoga'
+  }[normalized] || 'English';
+}
+
+function getContactChannelLabel(channel = 'whatsapp') {
+  const normalized = String(channel || 'whatsapp').trim().toLowerCase();
+  return {
+    whatsapp: 'WhatsApp',
+    phone: 'Phone',
+    email: 'Email'
+  }[normalized] || 'WhatsApp';
+}
+
 let smtpTransporter = null;
 let msGraphTokenCache = {
   token: null,
@@ -592,11 +614,51 @@ async function sendListingModerationNotification({ to, listing = {}, status, rea
   });
 }
 
+async function sendWelcomeEmail({ to, user = {} }) {
+  const recipient = String(to || user?.email || '').trim();
+  if (!recipient) return { sent: false, reason: 'no_recipient' };
+
+  const firstName = cleanText(user?.first_name || user?.firstName || 'there');
+  const siteUrl = getPublicSiteUrl();
+  const whatsappUrl = getSupportWhatsappUrl();
+  const preferredLanguage = getLanguageDisplayName(user?.preferred_language);
+  const preferredChannel = getContactChannelLabel(user?.preferred_contact_channel);
+  const weeklyTipsEnabled = user?.weekly_tips_opt_in !== false;
+
+  const subject = `Welcome to MakaUg, ${firstName}`;
+  const text = [
+    `Hello ${firstName},`,
+    '',
+    'Welcome to MakaUg. Your free account is now active and ready to use.',
+    `Preferred language: ${preferredLanguage}`,
+    `Preferred contact channel: ${preferredChannel}`,
+    '',
+    'Here is what you can do next:',
+    '- Save properties and build your shortlist.',
+    '- Track recent views, enquiries, and route opens from your account dashboard.',
+    '- Update your language, alerts, and contact preferences any time.',
+    '- Contact brokers, owners, and the MakaUg team from one place.',
+    weeklyTipsEnabled ? '- Receive weekly property tips and market updates from the MakaUg team.' : '',
+    '',
+    `Open MakaUg: ${siteUrl}`,
+    `WhatsApp MakaUg: ${whatsappUrl}`,
+    '',
+    'We are happy to be part of your property journey.'
+  ].filter(Boolean).join('\n');
+
+  return sendSupportEmail({
+    to: recipient,
+    subject,
+    text
+  });
+}
+
 module.exports = {
   getSupportEmail,
   getSupportPhone,
   getSupportWhatsappUrl,
   sendSupportEmail,
   sendPropertySubmissionNotification,
-  sendListingModerationNotification
+  sendListingModerationNotification,
+  sendWelcomeEmail
 };
