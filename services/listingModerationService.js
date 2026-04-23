@@ -9,16 +9,16 @@ const REVIEW_CHECKS = [
   { key: 'identity_number_supplied', label: 'ID number supplied' },
   { key: 'identity_number_format', label: 'ID number format looks valid' },
   { key: 'identity_document_available', label: 'ID document preview available' },
-  { key: 'identity_number_not_reused', label: 'ID number not reused by another contact' },
-  { key: 'previous_lister_checked', label: 'Previous lister history checked' },
-  { key: 'makaug_duplicate_checked', label: 'Not duplicated on MakaUg' },
+  { key: 'identity_number_not_reused', label: 'ID number not reused by another contact', overrideable: true },
+  { key: 'previous_lister_checked', label: 'Previous lister history checked', overrideable: true },
+  { key: 'makaug_duplicate_checked', label: 'Not duplicated on MakaUg', overrideable: true },
   { key: 'image_count_checked', label: 'Required property photos present' },
   { key: 'image_quality_checked', label: 'Photo manifest and URLs look usable' },
   { key: 'location_verified', label: 'Location details and map pin present' },
   { key: 'pricing_checked', label: 'Price present for listing type' },
   { key: 'otp_verified', label: 'OTP verification completed' },
   { key: 'terms_accepted', label: 'Verification declarations accepted' },
-  { key: 'external_duplicate_checked', label: 'External duplicate scan status' }
+  { key: 'external_duplicate_checked', label: 'External duplicate scan status', overrideable: true }
 ];
 
 const REQUIRED_REVIEW_CHECK_KEYS = REVIEW_CHECKS.map((item) => item.key);
@@ -126,7 +126,8 @@ function checkResult(key, status, message, evidence = {}, blocking = status === 
     status,
     message,
     evidence,
-    blocking: blocking === true
+    blocking: blocking === true,
+    overrideable: meta.overrideable === true
   };
 }
 
@@ -323,8 +324,11 @@ function buildAutomatedListingReview({
     )
   ];
 
-  const blockingFailures = checks.filter((item) => item.status === 'fail' && item.blocking);
-  const warnings = checks.filter((item) => item.status === 'warning');
+  const blockingFailures = checks.filter((item) => item.status === 'fail' && item.blocking && item.overrideable !== true);
+  const warnings = checks.filter((item) => {
+    const status = String(item.status || '').toLowerCase();
+    return status === 'warning' || ((status === 'fail' || status === 'error') && item.overrideable === true);
+  });
   const checklist = {};
   checks.forEach((item) => {
     checklist[item.key] = item.status !== 'fail';

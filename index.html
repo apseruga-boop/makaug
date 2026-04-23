@@ -792,10 +792,10 @@
     <section class="py-12 bg-gray-100">
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex justify-between items-center mb-6">
-          <h2 id="home-brokers-title" class="text-3xl font-bold text-gray-800 serif">Featured Brokers</h2>
-          <a onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Brokers</a>
+          <h2 id="home-brokers-title" class="text-3xl font-bold text-gray-800 serif">Featured Agents</h2>
+          <a onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Agents</a>
         </div>
-        <div id="home-brokers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"></div>
+        <div id="home-brokers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
       </div>
     </section>
   </div>
@@ -1577,6 +1577,90 @@
       </div>
 
       <div class="bg-white border border-green-100 rounded-2xl p-6">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div id="fraud-snapshot-pill" class="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-green-700">
+              <i class="fas fa-shield-check"></i> Review Snapshot
+            </div>
+            <h2 id="fraud-snapshot-title" class="text-2xl font-bold text-gray-900 mt-3">What our fraud detection looks at before a listing goes live</h2>
+            <p id="fraud-snapshot-sub" class="text-sm text-gray-600 mt-2 max-w-3xl">
+              The system checks verification, duplicated content, image quality, and suspicious behavior signals before an admin can approve a listing.
+            </p>
+          </div>
+          <div class="rounded-2xl border border-green-100 bg-green-50 px-4 py-3 text-sm text-green-900 min-w-[220px]">
+            <div class="font-bold">Live moderation logic</div>
+            <div id="fraud-snapshot-screen-sub" class="mt-1 text-green-800">Green = clear, amber = review, red = blocked until fixed or overridden by admin review.</div>
+          </div>
+        </div>
+
+        <div class="mt-6 grid lg:grid-cols-[1.1fr,0.9fr] gap-5 items-start">
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-2">
+                <div id="fraud-snapshot-check-1-title" class="text-sm font-bold text-gray-900">Identity + OTP check</div>
+                <span class="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">PASS</span>
+              </div>
+              <p id="fraud-snapshot-check-1-sub" class="text-sm text-gray-600 mt-2">Phone/email OTP, ID number format, and document availability are checked together.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-2">
+                <div id="fraud-snapshot-check-2-title" class="text-sm font-bold text-gray-900">Duplicate content scan</div>
+                <span class="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-700">REVIEW</span>
+              </div>
+              <p id="fraud-snapshot-check-2-sub" class="text-sm text-gray-600 mt-2">We compare title, location, ID reuse, and repeated image patterns before publishing.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-2">
+                <div id="fraud-snapshot-check-3-title" class="text-sm font-bold text-gray-900">Image + location quality</div>
+                <span class="rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-bold text-green-700">PASS</span>
+              </div>
+              <p id="fraud-snapshot-check-3-sub" class="text-sm text-gray-600 mt-2">Minimum photo count, usable uploads, and map pin / location consistency are verified.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-2">
+                <div id="fraud-snapshot-check-4-title" class="text-sm font-bold text-gray-900">Decision + outreach</div>
+                <span class="rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-bold text-red-700">BLOCK IF FAIL</span>
+              </div>
+              <p id="fraud-snapshot-check-4-sub" class="text-sm text-gray-600 mt-2">If checks fail, the lister receives a reason. If approved, MakaUg sends live and sharing links.</p>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-gray-200 bg-gray-950 p-4 text-green-100 shadow-sm">
+            <div class="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+              <div>
+                <div id="fraud-snapshot-screen-title" class="text-sm font-bold text-white">Moderation console preview</div>
+                <div class="text-xs text-gray-400 mt-1">Example of the checks used before approval</div>
+              </div>
+              <span class="rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold text-gray-200">QA style view</span>
+            </div>
+            <div class="mt-4 space-y-3 text-sm">
+              <div class="rounded-2xl border border-green-500/30 bg-green-500/10 p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="font-semibold text-white">OTP verification completed</div>
+                  <span class="rounded-full bg-green-500/20 px-2.5 py-1 text-[11px] font-bold text-green-200">Green</span>
+                </div>
+                <div class="mt-1 text-xs text-green-100/80">Phone/email confirmed for the same listing contact details.</div>
+              </div>
+              <div class="rounded-2xl border border-amber-400/30 bg-amber-400/10 p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="font-semibold text-white">Previous lister history checked</div>
+                  <span class="rounded-full bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-200">Warning</span>
+                </div>
+                <div class="mt-1 text-xs text-amber-100/80">The system found earlier listings and flags them for admin review, not instant rejection.</div>
+              </div>
+              <div class="rounded-2xl border border-red-400/30 bg-red-400/10 p-3">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="font-semibold text-white">Critical mismatch / fraud signal</div>
+                  <span class="rounded-full bg-red-400/20 px-2.5 py-1 text-[11px] font-bold text-red-200">Fail</span>
+                </div>
+                <div class="mt-1 text-xs text-red-100/80">Blocking failures stop approval until fixed, or until reviewed and explicitly overridden in admin.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-green-100 rounded-2xl p-6">
         <h2 id="fraud-monitor-title" class="text-2xl font-bold text-gray-900 mb-4">What we monitor continuously</h2>
         <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-1-title" class="text-gray-900">Listing quality</strong><p id="fraud-monitor-1-sub" class="text-gray-600 mt-1">Misleading titles, fake pricing, copied descriptions.</p></div>
@@ -2087,11 +2171,7 @@
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-1.5">Account Type</label>
-              <select id="account-role" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-                <option value="buyer_renter">Buyer / Renter</option>
-                <option value="property_owner">Property Owner</option>
-                <option value="agent_broker">Broker</option>
-              </select>
+              <div id="account-role" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-700">-</div>
             </div>
             <div>
               <label class="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
@@ -2572,6 +2652,17 @@
           <div id="admin-featured-listings-table" class="space-y-3"></div>
         </div>
 
+        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Featured Agents Control</h3>
+              <p class="text-xs text-gray-500 mt-1">Choose which approved agents appear on the homepage Featured Agents section and review their performance.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Agents</button>
+          </div>
+          <div id="admin-featured-agents-table" class="space-y-3"></div>
+        </div>
+
         <div data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
@@ -2596,6 +2687,27 @@
             </select>
           </div>
           <div id="admin-users-table" class="space-y-3"></div>
+
+          <div class="grid xl:grid-cols-2 gap-5 mt-5">
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">People Looking for Property</h4>
+                  <p class="text-xs text-gray-500 mt-1">Recent demand requests from buyers and renters who want help finding the right property.</p>
+                </div>
+              </div>
+              <div id="admin-property-requests-table" class="space-y-3"></div>
+            </div>
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">Field Agent Performance</h4>
+                  <p class="text-xs text-gray-500 mt-1">Review throughput, enquiries, saves, route opens, and recent activity for field teams.</p>
+                </div>
+              </div>
+              <div id="admin-field-agents-table" class="space-y-3"></div>
+            </div>
+          </div>
         </div>
 
         <div id="admin-review-panel" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
@@ -3439,6 +3551,127 @@
       }
     ];
 
+    BROKERS.forEach((broker, index) => {
+      if (typeof broker.featured_homepage !== "boolean") broker.featured_homepage = index < 3;
+      if (!broker.featured_at && broker.featured_homepage) broker.featured_at = "2026-04-01T08:00:00.000Z";
+    });
+
+    function mapRemoteAgentForUi(agent = {}) {
+      const covered = Array.isArray(agent.districts_covered) ? agent.districts_covered.filter(Boolean) : [];
+      const area = covered.length ? covered.slice(0, 3).join(" • ") : (agent.area || "Uganda");
+      const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
+      return {
+        id: String(agent.id || ""),
+        name: agent.full_name || agent.name || "MakaUg Agent",
+        company: agent.company_name || agent.company || "MakaUg",
+        phone: agent.phone || "",
+        email: agent.email || "",
+        whatsapp: String(agent.whatsapp || agent.phone || "").replace(/\D/g, ""),
+        area,
+        rating: Number(agent.rating || 0) || 4.5,
+        listings: Number(agent.listings_count || agent.total_listings || agent.listings || 0) || 0,
+        live_listings: Number(agent.live_listings || agent.listings_count || 0) || 0,
+        pending_listings: Number(agent.pending_listings || 0) || 0,
+        rejected_listings: Number(agent.rejected_listings || 0) || 0,
+        sales: Number(agent.sales_count || agent.sales || 0) || 0,
+        emoji: agent.profile_photo_url ? "" : "👔",
+        photo: agent.profile_photo_url || "",
+        profile_photo_url: agent.profile_photo_url || "",
+        registration_status: String(agent.registration_status || "not_registered").toLowerCase(),
+        experience: agent.experience || "",
+        licence: agent.licence_number || agent.licence || "",
+        languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
+        specialties: specializations,
+        bio: agent.bio || "Professional MakaUg agent profile.",
+        featured_homepage: agent.featured_homepage === true,
+        featured_at: agent.featured_at || null,
+        status: agent.status || "approved",
+        districts_covered: covered,
+        specializations
+      };
+    }
+
+    function getBrokerDirectory() {
+      return remoteBrokersLoaded ? REMOTE_BROKERS : BROKERS;
+    }
+
+    function findBrokerById(id) {
+      const key = String(id || "");
+      return getBrokerDirectory().find((broker) => String(broker.id || "") === key) || null;
+    }
+
+    function getFeaturedBrokers(list = getBrokerDirectory()) {
+      const rows = Array.isArray(list) ? [...list] : [];
+      rows.sort((a, b) => {
+        const af = a?.featured_homepage === true ? 1 : 0;
+        const bf = b?.featured_homepage === true ? 1 : 0;
+        if (af !== bf) return bf - af;
+        const ar = Number(a?.rating || 0);
+        const br = Number(b?.rating || 0);
+        if (ar !== br) return br - ar;
+        return Number(b?.listings || 0) - Number(a?.listings || 0);
+      });
+      return rows;
+    }
+
+    async function refreshBrokersFromApi({ silent = true } = {}) {
+      try {
+        const response = await apiRequest("/api/agents?status=approved&limit=100");
+        const rows = Array.isArray(response?.data) ? response.data : [];
+        REMOTE_BROKERS = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id);
+        remoteBrokersLoaded = true;
+        populateBrokerFilterOptions();
+        renderAll();
+        setBrokerMapMarkers(getBrokerDirectory());
+        return true;
+      } catch (error) {
+        if (!silent) toast(`Agent refresh failed: ${error.message || "error"}`);
+        return false;
+      }
+    }
+
+    function getHierarchyPointForArea(district, area) {
+      const districtName = String(district || "").trim();
+      const areaName = String(area || "").trim().toLowerCase();
+      if (!districtName || !areaName) return null;
+      const tree = getDistrictLocationTree(districtName);
+      for (const node of tree) {
+        if (String(node.city || "").trim().toLowerCase() === areaName) {
+          return getCityPoint(districtName, node.city);
+        }
+        const neighborhood = (node.neighborhoods || []).find((item) => String(item.name || "").trim().toLowerCase() === areaName);
+        if (neighborhood && Number.isFinite(neighborhood.lat) && Number.isFinite(neighborhood.lng)) {
+          return { lat: neighborhood.lat, lng: neighborhood.lng };
+        }
+      }
+      return null;
+    }
+
+    function getListingMapPoint(property = {}) {
+      const rawLat = Number(property?.lat ?? property?.latitude);
+      const rawLng = Number(property?.lng ?? property?.longitude);
+      if (Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+        return { lat: rawLat, lng: rawLng, exact: true };
+      }
+
+      const district = property?.district || "";
+      const city = property?.city || property?.location_town || "";
+      const neighborhood = property?.neighborhood || property?.area || "";
+      const hierarchyPoint = getNeighborhoodPoint(district, city, neighborhood)
+        || getHierarchyPointForArea(district, neighborhood)
+        || getCityPoint(district, city)
+        || getHierarchyPointForArea(district, city);
+      if (hierarchyPoint) return { ...hierarchyPoint, exact: false };
+
+      const districtCenter = getDistrictCenter(district);
+      if (districtCenter) return { ...districtCenter, exact: false };
+
+      const regionCenter = getRegionCenter(regionForDistrict(district));
+      if (regionCenter) return { ...regionCenter, exact: false };
+
+      return { ...MAP_DEFAULT_CENTER, exact: false };
+    }
+
     const CURRENCIES = {
       UGX: { fmt: (v, p) => v ? `USh ${formatCompact(v)}${p ? "/" + p : ""}` : "Price on request" },
       USD: { fmt: (v, p) => v ? `$${Math.round(v / 3800).toLocaleString()}${p ? "/" + p : ""}` : "-" },
@@ -3549,6 +3782,9 @@
     let adminApiKey = "";
     let adminRemoteListings = [];
     let adminLiveListings = [];
+    let adminRemoteAgents = [];
+    let adminPropertyRequests = [];
+    let adminFieldAgents = [];
     let adminActiveReview = null;
     let activeAdminWorkflowTab = "review";
     let adminReviewEvidence = {};
@@ -3558,6 +3794,8 @@
     let adminAiSnapshot = null;
     let publicListingsApiLoading = false;
     let publicListingsFromApiLoaded = false;
+    let remoteBrokersLoaded = false;
+    let REMOTE_BROKERS = [];
     let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
     let userActivityStore = {};
     let maps = {};
@@ -3702,7 +3940,7 @@
         heroSearch: "Search",
         homeFeatured: "Featured Properties",
         homeMap: "Explore on Map",
-        homeBrokers: "Featured Brokers",
+        homeBrokers: "Featured Agents",
         pageSale: "Find your perfect home for sale",
         pageRent: "Find your perfect rental property",
         pageStudents: "Find your perfect student accommodation",
@@ -3786,7 +4024,7 @@
         heroSearch: "Noonya",
         homeFeatured: "Property Ezitwaliridde",
         homeMap: "Noonya ku Maapu",
-        homeBrokers: "Broker Abalondedwa",
+        homeBrokers: "Agents Abalondedwa",
         pageSale: "Property Ezitundibwa",
         pageRent: "Property Ezibapangisibwa",
         pageStudents: "Noonya obulamu bw'abayizi obutuufu",
@@ -3847,7 +4085,7 @@
         heroSearch: "Tafuta",
         homeFeatured: "Mali Zilizoangaziwa",
         homeMap: "Tafuta kwenye Ramani",
-        homeBrokers: "Wakala Walioangaziwa",
+        homeBrokers: "Agents walioangaziwa",
         pageSale: "Mali za Kuuza",
         pageRent: "Mali za Kupanga",
         pageStudents: "Pata makazi bora ya wanafunzi",
@@ -4075,7 +4313,7 @@
         heroListFree: "Ket gang i nono",
         homeFeatured: "Gangi ma oyero",
         homeMap: "Yeny i mapa",
-        homeBrokers: "Broker ma oyero",
+        homeBrokers: "Agents ma oyero",
         pageSale: "Gangi me cato",
         pageRent: "Gangi me gero",
         pageStudents: "Gang pa jo yot",
@@ -4129,7 +4367,7 @@
         heroListFree: "Teka property yawe busha",
         homeFeatured: "Property z’ahaiguru",
         homeMap: "Noonya aha Maapu",
-        homeBrokers: "Brokers abakundwa",
+        homeBrokers: "Agents abakundwa",
         pageSale: "Property ez’okutunda",
         pageRent: "Property ez’okupangisa",
         pageStudents: "Makazi g’abanyeshomesa",
@@ -4183,7 +4421,7 @@
         heroListFree: "Taho property yawe busha",
         homeFeatured: "Property ezahimbisibwe",
         homeMap: "Shaka aha Mapa",
-        homeBrokers: "Brokers abahimbisibwe",
+        homeBrokers: "Agents abahimbisibwe",
         pageSale: "Property ez’okugurishwa",
         pageRent: "Property ez’okupangisibwa",
         pageStudents: "Obuturo bw’abanyeshuuri",
@@ -4237,7 +4475,7 @@
         heroListFree: "Teka property yo busa",
         homeFeatured: "Property ezirondeddwa",
         homeMap: "Noonia ku Maapu",
-        homeBrokers: "Brokers abalondeddwa",
+        homeBrokers: "Agents abalondeddwa",
         pageSale: "Property ez’okutunda",
         pageRent: "Property ez’okukodesa",
         pageStudents: "Obuturo bw’abaisomesa",
@@ -5146,6 +5384,19 @@
         tip4: "Report suspicious listings immediately with screenshots.",
         reportBtn: "Report a Listing",
         waBtn: "WhatsApp Fraud Team",
+        snapshotPill: "Review Snapshot",
+        snapshotTitle: "What our fraud detection checks before a listing goes live",
+        snapshotSub: "This is the same style of evidence our moderation team sees before a property is approved, held, or rejected.",
+        snapshotScreenSub: "Green = clear, amber = review, red = blocked until fixed or explicitly overridden by admin review.",
+        snapshotCheck1Title: "Identity + OTP check",
+        snapshotCheck1Sub: "Phone/email OTP, ID number format, and document availability are checked together.",
+        snapshotCheck2Title: "Duplicate content scan",
+        snapshotCheck2Sub: "We compare title, location, ID reuse, and repeated image patterns before publishing.",
+        snapshotCheck3Title: "Image + location quality",
+        snapshotCheck3Sub: "Minimum photo count, usable uploads, and map pin / location consistency are verified.",
+        snapshotCheck4Title: "Decision + outreach",
+        snapshotCheck4Sub: "If checks fail, the lister receives a reason. If approved, MakaUg sends live and sharing links.",
+        snapshotScreenTitle: "Moderation console preview",
         monitorTitle: "What we monitor continuously",
         monitor1Title: "Listing quality",
         monitor1Sub: "Misleading titles, fake pricing, copied descriptions.",
@@ -5676,6 +5927,19 @@
       setTextById("fraud-report-btn", fraudTr("reportBtn"));
       const waBtn = document.getElementById("fraud-wa-btn");
       if (waBtn) waBtn.innerHTML = `<i class="fab fa-whatsapp"></i> ${fraudTr("waBtn")}`;
+      setTextById("fraud-snapshot-pill", fraudTr("snapshotPill"));
+      setTextById("fraud-snapshot-title", fraudTr("snapshotTitle"));
+      setTextById("fraud-snapshot-sub", fraudTr("snapshotSub"));
+      setTextById("fraud-snapshot-screen-sub", fraudTr("snapshotScreenSub"));
+      setTextById("fraud-snapshot-check-1-title", fraudTr("snapshotCheck1Title"));
+      setTextById("fraud-snapshot-check-1-sub", fraudTr("snapshotCheck1Sub"));
+      setTextById("fraud-snapshot-check-2-title", fraudTr("snapshotCheck2Title"));
+      setTextById("fraud-snapshot-check-2-sub", fraudTr("snapshotCheck2Sub"));
+      setTextById("fraud-snapshot-check-3-title", fraudTr("snapshotCheck3Title"));
+      setTextById("fraud-snapshot-check-3-sub", fraudTr("snapshotCheck3Sub"));
+      setTextById("fraud-snapshot-check-4-title", fraudTr("snapshotCheck4Title"));
+      setTextById("fraud-snapshot-check-4-sub", fraudTr("snapshotCheck4Sub"));
+      setTextById("fraud-snapshot-screen-title", fraudTr("snapshotScreenTitle"));
       setTextById("fraud-monitor-title", fraudTr("monitorTitle"));
       setTextById("fraud-monitor-1-title", fraudTr("monitor1Title"));
       setTextById("fraud-monitor-1-sub", fraudTr("monitor1Sub"));
@@ -6406,9 +6670,9 @@
       if (!authState?.user || authState.user.role !== "agent_broker") return null;
       const email = String(authState.user.email || "").toLowerCase();
       const phoneDigits = normalizeDigits(authState.user.phone);
-      let broker = BROKERS.find((b) => String(b.email || "").toLowerCase() === email);
+      let broker = getBrokerDirectory().find((b) => String(b.email || "").toLowerCase() === email);
       if (!broker && phoneDigits) {
-        broker = BROKERS.find((b) => normalizeDigits(b.phone || b.whatsapp) === phoneDigits);
+        broker = getBrokerDirectory().find((b) => normalizeDigits(b.phone || b.whatsapp) === phoneDigits);
       }
       return broker || null;
     }
@@ -6526,7 +6790,7 @@
         return;
       }
 
-      const myListings = PROPERTIES.filter((p) => p.agent === broker.id);
+      const myListings = PROPERTIES.filter((p) => String(p.agent || "") === String(broker.id || ""));
       const totalViews = myListings.reduce((sum, p) => sum + getPropertyViewCount(p.id), 0);
       const totalSaves = myListings.reduce((sum, p) => sum + getPropertySaveCount(p.id), 0);
       const profileViews = getBrokerProfileViewCount(broker.id);
@@ -6814,8 +7078,9 @@
       const privateListings = listings.filter((p) => listingSourceMeta(p).key === "private").length;
       const agentListings = listings.length - privateListings;
       const studentDiscoverableListings = listings.filter((p) => isStudentDiscoverable(p)).length;
-      const registeredAgents = BROKERS.filter((b) => String(b.registration_status || "").toLowerCase() === "registered").length;
-      const notRegisteredAgents = Math.max(0, BROKERS.length - registeredAgents);
+      const brokerDirectory = getBrokerDirectory();
+      const registeredAgents = brokerDirectory.filter((b) => String(b.registration_status || "").toLowerCase() === "registered").length;
+      const notRegisteredAgents = Math.max(0, brokerDirectory.length - registeredAgents);
       const approvalRate = listings.length ? Math.round((approvedListings.length / listings.length) * 100) : 0;
       const rejectionRate = listings.length ? Math.round((rejectedListings.length / listings.length) * 100) : 0;
       const avgViewsPerListing = listings.length ? Math.round((totalViews / listings.length) * 10) / 10 : 0;
@@ -6828,7 +7093,7 @@
           rejectedListings: rejectedListings.length,
           hiddenListings: hiddenListings.length,
           deletedListings: deletedListings.length,
-          totalAgents: BROKERS.length,
+          totalAgents: brokerDirectory.length,
           totalUsers: users.length,
           totalViews,
           totalSaves,
@@ -6847,8 +7112,11 @@
         liveListings: approvedListings.slice(0, 50),
         allListings,
         recentUsers: users.slice(0, 10),
-        recentAgents: BROKERS.slice(0, 10),
-        recentReports: []
+        recentAgents: brokerDirectory.slice(0, 10),
+        recentReports: [],
+        agents: brokerDirectory,
+        fieldAgents: users.filter((user) => user.role === "field_agent").slice(0, 20),
+        propertyRequests: []
       };
     }
 
@@ -7016,15 +7284,20 @@
       const userRole = (document.getElementById("admin-users-role")?.value || "").trim();
       const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
       const userParams = new URLSearchParams({ limit: "100" });
+      const propertyRequestParams = new URLSearchParams({ limit: "100" });
+      const fieldAgentParams = new URLSearchParams({ limit: "100", role: "field_agent" });
       if (userSearch) userParams.set("search", userSearch);
       if (userRole) userParams.set("role", userRole);
       if (weeklyOnly) userParams.set("weekly_tips_only", "true");
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes] = await Promise.all([
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
         apiRequest("/api/properties?status=all&limit=100", { headers }),
-        apiRequest(`/api/admin/users?${userParams.toString()}`, { headers })
+        apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
+        apiRequest("/api/admin/agents?limit=100", { headers }),
+        apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
+        apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers })
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
@@ -7035,13 +7308,19 @@
       } catch (e) {}
       adminRemoteListings = allListings;
       adminLiveListings = liveListings;
+      adminRemoteAgents = Array.isArray(agentsRes?.data) ? agentsRes.data.map(mapRemoteAgentForUi) : [];
+      adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
+      adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
       return {
         summary: summaryRes?.data || {},
         recent: recentRes?.data || {},
         pendingListings,
         liveListings,
         allListings,
-        users: usersRes?.data || []
+        users: usersRes?.data || [],
+        agents: adminRemoteAgents,
+        propertyRequests: adminPropertyRequests,
+        fieldAgents: adminFieldAgents
       };
     }
 
@@ -7380,6 +7659,9 @@
       renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
       renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminUsersRows(remoteSnap?.users || localSnap.recentUsers || []);
+      renderAdminFeaturedAgentsRows(remoteSnap?.agents || localSnap.agents || []);
+      renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
+      renderAdminFieldAgentRows(remoteSnap?.fieldAgents || localSnap.fieldAgents || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       setAdminWorkflowTab(activeAdminWorkflowTab);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
@@ -7692,6 +7974,116 @@
       }).join("");
     }
 
+    function renderAdminFeaturedAgentsRows(agents) {
+      const wrap = document.getElementById("admin-featured-agents-table");
+      if (!wrap) return;
+      const rows = [...(Array.isArray(agents) ? agents : [])]
+        .filter((agent) => String(agent?.status || "approved").toLowerCase() !== "rejected")
+        .sort((a, b) => {
+          const af = a?.featured_homepage === true ? 1 : 0;
+          const bf = b?.featured_homepage === true ? 1 : 0;
+          if (af !== bf) return bf - af;
+          const ar = Number(a?.rating || 0);
+          const br = Number(b?.rating || 0);
+          if (ar !== br) return br - ar;
+          return Number(b?.live_listings || b?.listings || 0) - Number(a?.live_listings || a?.listings || 0);
+        })
+        .slice(0, 40);
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No approved agents available for homepage placement yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.map((agent) => {
+        const idArg = adminListingIdArg(agent.id);
+        const featured = agent.featured_homepage === true;
+        const registration = adminVerificationBadge(agent.registration_status);
+        return `
+          <div class="border ${featured ? "border-green-200 bg-green-50" : "border-gray-200 bg-white"} rounded-xl p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-900">${adminEscape(agent.name || "Agent")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "MakaUg")} • ${adminEscape(agent.area || "Uganda")}</div>
+                <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                  <span class="inline-flex items-center px-2 py-1 rounded-full ${registration.cls} font-semibold">${registration.label}</span>
+                  <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">⭐ ${adminEscape(agent.rating || 0)}</span>
+                  <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">${adminEscape(agent.live_listings || agent.listings || 0)} live</span>
+                  <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">${adminEscape(agent.sales || 0)} sales</span>
+                </div>
+              </div>
+              <span class="text-xs font-semibold px-2 py-1 rounded ${featured ? "bg-green-700 text-white" : "bg-gray-100 text-gray-700"}">${featured ? "Featured Agent" : "Available"}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="openBrokerProfile(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Profile</button>
+              <button onclick="adminSetAgentFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-green-700 hover:bg-green-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature on Homepage"}</button>
+              <button onclick="adminSetAgentRegistrationStatus(${idArg}, '${agent.registration_status === "registered" ? "not_registered" : "registered"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${agent.registration_status === "registered" ? "Mark Pending" : "Mark Verified"}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderAdminPropertyRequestRows(requests) {
+      const wrap = document.getElementById("admin-property-requests-table");
+      if (!wrap) return;
+      const rows = Array.isArray(requests) ? requests.slice(0, 25) : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No property requests have been submitted yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.map((request) => {
+        const digits = String(request.phone || "").replace(/\D/g, "");
+        const whatsappUrl = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hello ${request.full_name || ""}, this is MakaUg. We received your request and can help you find a property that matches your brief.`)}` : "";
+        const budget = request.max_budget ? fmtP(request.max_budget, "") : "Budget not set";
+        const heading = [request.listing_type || "Any type", request.preferred_locations || "Any location"].filter(Boolean).join(" • ");
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-900">${adminEscape(request.full_name || "Property request")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape([request.phone, request.email].filter(Boolean).join(" • ") || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(heading)} • ${adminEscape(budget)}</div>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-1 rounded bg-green-100 text-green-700">${adminEscape(formatListingDate(request.created_at) || "New")}</span>
+            </div>
+            <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">${adminEscape(request.requirements || "No extra requirements recorded.")}</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp</a>` : ""}
+              ${request.email ? `<a href="mailto:${adminAttr(request.email)}?subject=${encodeURIComponent("MakaUg property request follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function renderAdminFieldAgentRows(users) {
+      const wrap = document.getElementById("admin-field-agents-table");
+      if (!wrap) return;
+      const rows = Array.isArray(users) ? users.slice(0, 25) : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No field agents found in the current live dataset.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.map((user) => {
+        const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • Last activity: ${adminEscape(formatListingDate(user.last_activity_at) || "No recent event")}</div>
+              </div>
+              <span class="text-[11px] font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">Field Agent</span>
+            </div>
+            <div class="grid sm:grid-cols-5 gap-2 mt-3 text-xs">
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Listings</div><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Enquiries</div><div class="font-black text-gray-900">${adminEscape(user.inquiries_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Views</div><div class="font-black text-gray-900">${adminEscape(user.property_views_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Saves</div><div class="font-black text-gray-900">${adminEscape(user.property_saves_count || 0)}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Routes</div><div class="font-black text-gray-900">${adminEscape(user.route_events_count || 0)}</div></div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
     function adminEvidenceDisplayValue(value) {
       if (value === true) return "Yes";
       if (value === false) return "No";
@@ -7858,7 +8250,10 @@
     function getAdminReviewWarningItems(review = adminActiveReview) {
       const automated = review?.review?.automated || {};
       const checklistItems = automated?.checks || review?.review?.checklist_items || [];
-      return checklistItems.filter((item) => String(item?.status || "").toLowerCase() === "warning");
+      return checklistItems.filter((item) => {
+        const status = String(item?.status || "").toLowerCase();
+        return status === "warning" || (["fail", "error"].includes(status) && item?.overrideable === true);
+      });
     }
 
     function getAdminReviewWarningOverrides(review = adminActiveReview) {
@@ -7929,11 +8324,11 @@
     function adminOverrideWarningCheck(evidenceId, checkKey = "") {
       const item = adminReviewEvidence[evidenceId];
       if (!adminActiveReview?.id || !item) {
-        toast("Warning evidence is not available.");
+        toast("Review evidence is not available.");
         return;
       }
       if (!adminReviewEvidenceViewed[evidenceId]) {
-        toast("Open and review this evidence before overriding the warning.");
+        toast("Open and review this evidence before recording an override.");
         return;
       }
       const reviewId = String(adminActiveReview.id);
@@ -7952,7 +8347,7 @@
         ...(adminActiveReview.review || {}),
         warning_overrides: adminReviewWarningOverrides[reviewId]
       };
-      toast("Warning override recorded.");
+      toast("Override recorded.");
       renderAdminReviewPanel(adminActiveReview);
     }
 
@@ -8111,7 +8506,8 @@
                   });
                   const badge = checkBadge(item.status);
                   const warningKey = adminWarningOverrideKey(item);
-                  const isWarning = String(item.status || "").toLowerCase() === "warning";
+                  const itemStatus = String(item.status || "").toLowerCase();
+                  const needsOverride = itemStatus === "warning" || ((itemStatus === "fail" || itemStatus === "error") && item?.overrideable === true);
                   const warningOverridden = !!warningOverrides[warningKey];
                   const warningEvidenceViewed = !!adminReviewEvidenceViewed[evidenceId];
                   return `
@@ -8120,12 +8516,12 @@
                       <div>
                         <div class="text-sm font-semibold text-gray-800">${adminEscape(item.label || item.key)}</div>
                         <div class="text-xs text-gray-500 mt-0.5">${adminEscape(item.message || "")}</div>
-                        ${isWarning ? `
+                        ${needsOverride ? `
                           <div class="mt-2 flex flex-wrap items-center gap-2">
                             <button id="admin-warning-override-${adminAttr(evidenceId)}" data-overridden="${warningOverridden ? "true" : "false"}" type="button" onclick="adminOverrideWarningCheck('${adminAttr(evidenceId)}','${adminAttr(warningKey)}')" ${warningEvidenceViewed || warningOverridden ? "" : "disabled"} class="${warningOverridden ? "bg-green-700 text-white" : warningEvidenceViewed ? "border border-amber-300 text-amber-800 hover:bg-amber-50" : "bg-gray-100 text-gray-400 cursor-not-allowed"} px-2 py-1 rounded text-[11px] font-semibold">
-                              ${warningOverridden ? "Warning overridden" : warningEvidenceViewed ? "Override warning" : "View evidence first"}
+                              ${warningOverridden ? "Review flag overridden" : warningEvidenceViewed ? "Override after review" : "View evidence first"}
                             </button>
-                            ${warningOverridden ? `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-green-700 font-semibold">Reviewed by admin</span>` : `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-amber-700">${warningEvidenceViewed ? "Evidence viewed. Override if acceptable." : "Open the evidence, then override if acceptable."}</span>`}
+                            ${warningOverridden ? `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-green-700 font-semibold">Reviewed and accepted by admin override</span>` : `<span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] text-amber-700">${warningEvidenceViewed ? "Evidence viewed. Override this flag only if the supporting evidence is acceptable." : "Open the evidence first, then override if it is acceptable."}</span>`}
                           </div>
                         ` : ""}
                       </div>
@@ -8154,8 +8550,8 @@
                 <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
                 <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
               </div>
-              ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until automated red checks are resolved.</div>`}
-              ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and override warning evidence: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
+              ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until non-overrideable red checks are resolved.</div>`}
+              ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
             </div>
 
             <div class="border border-gray-200 rounded-xl p-4">
@@ -8473,10 +8869,30 @@
           headers: adminAuthHeaders(),
           body: { status }
         });
+        await refreshBrokersFromApi({ silent: true });
         await renderAdminDashboard();
         toast(`Broker updated: ${status}.`);
       } catch (e) {
         toast(`Broker update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetAgentFeatured(agentId, featured) {
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY first.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/featured`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { featured: !!featured }
+        });
+        await refreshBrokersFromApi({ silent: true });
+        await renderAdminDashboard();
+        toast(featured ? "Agent added to homepage feature slots." : "Agent removed from homepage features.");
+      } catch (e) {
+        toast(`Agent featured update failed: ${e.message || "error"}`);
       }
     }
 
@@ -8491,6 +8907,7 @@
           headers: adminAuthHeaders(),
           body: { registration_status: registrationStatus }
         });
+        await refreshBrokersFromApi({ silent: true });
         await renderAdminDashboard();
         toast(registrationStatus === "registered" ? "Broker marked verified." : "Broker verification set to pending.");
       } catch (e) {
@@ -8653,7 +9070,9 @@
       const user = authState.user;
       const setVal = (id, value) => {
         const el = document.getElementById(id);
-        if (el) el.value = value || "";
+        if (!el) return;
+        if ("value" in el) el.value = value || "";
+        else el.textContent = value || "-";
       };
       setVal("account-first-name", user.first_name);
       setVal("account-last-name", user.last_name);
@@ -8710,7 +9129,6 @@
       const firstName = (document.getElementById("account-first-name")?.value || "").trim();
       const lastName = (document.getElementById("account-last-name")?.value || "").trim();
       const email = (document.getElementById("account-email")?.value || "").trim();
-      const role = (document.getElementById("account-role")?.value || "").trim();
       const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
       const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
       const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
@@ -8729,7 +9147,6 @@
             first_name: firstName,
             last_name: lastName,
             email,
-            role,
             weekly_tips_opt_in: weeklyTipsOptIn,
             marketing_opt_in: marketingOptIn,
             preferred_contact_channel: preferredContactChannel,
@@ -8738,7 +9155,7 @@
         });
         const updatedUser = res?.data?.user;
         persistAuthState(authState.token, updatedUser || authState.user);
-        await trackEvent("account_profile_update", { role: role || "" });
+        await trackEvent("account_profile_update", { role: authState?.user?.role || "" });
         toast("Profile updated.");
       } catch (error) {
         toast(error.message || "Could not update profile.");
@@ -9002,7 +9419,9 @@
       try {
         const request = await apiRequest("/api/auth/request-password-reset", {
           method: "POST",
-          body: isEmailReset ? { email, channel: "email" } : { phone, channel: "phone" }
+          body: isEmailReset
+            ? { email, channel: "email", preferred_language: currentLang || "en" }
+            : { phone, channel: "phone", preferred_language: currentLang || "en" }
         });
 
         const otpCode = askOtpCode(isEmailReset ? "email" : "phone");
@@ -9559,7 +9978,9 @@
           body: {
             channel,
             phone: channel === "phone" ? phone : undefined,
-            email: channel === "email" ? email : undefined
+            email: channel === "email" ? email : undefined,
+            preferred_language: currentLang || "en",
+            audience: "listing"
           }
         });
         const otpStatus = document.getElementById("lp-otp-status");
@@ -11065,7 +11486,9 @@
           body: {
             channel,
             phone: channel === "phone" ? phone : undefined,
-            email: channel === "email" ? email : undefined
+            email: channel === "email" ? email : undefined,
+            preferred_language: currentLang || "en",
+            audience: "agent"
           }
         });
         agentRegistrationOtpToken = "";
@@ -11725,15 +12148,16 @@
     function populateBrokerFilterOptions() {
       const specialtyEl = document.getElementById("broker-specialty-f");
       const languageEl = document.getElementById("broker-language-f");
+      const brokerDirectory = getBrokerDirectory();
       if (specialtyEl) {
         const current = specialtyEl.value || "";
-        const specialties = Array.from(new Set(BROKERS.flatMap((b) => b.specialties || []))).sort((a, b) => a.localeCompare(b));
+        const specialties = Array.from(new Set(brokerDirectory.flatMap((b) => b.specialties || [])).values()).sort((a, b) => a.localeCompare(b));
         specialtyEl.innerHTML = `<option value="">Any Speciality</option>` + specialties.map((s) => `<option value="${s}">${s}</option>`).join("");
         specialtyEl.value = specialties.includes(current) ? current : "";
       }
       if (languageEl) {
         const current = languageEl.value || "";
-        const languages = Array.from(new Set(BROKERS.flatMap((b) => b.languages || []))).sort((a, b) => a.localeCompare(b));
+        const languages = Array.from(new Set(brokerDirectory.flatMap((b) => b.languages || [])).values()).sort((a, b) => a.localeCompare(b));
         languageEl.innerHTML = `<option value="">Any Language</option>` + languages.map((l) => `<option value="${l}">${l}</option>`).join("");
         languageEl.value = languages.includes(current) ? current : "";
       }
@@ -12434,7 +12858,7 @@
 
     function getBrokerSuggestionPool() {
       const map = new Map();
-      BROKERS.forEach((b) => {
+      getBrokerDirectory().forEach((b) => {
         addSugg(map, b.name, "Broker");
         addSugg(map, b.company, "Agency");
         addSugg(map, b.area, "Area");
@@ -12585,12 +13009,14 @@
       const byAgent = p && (p.agent || (p.listed_by || "").toLowerCase() === "agent");
       if (byAgent) {
         return {
+          key: "agent",
           label: tr("listingAgent"),
           cls: "bg-emerald-700 text-white",
           icon: "fas fa-user-tie"
         };
       }
       return {
+        key: "private",
         label: tr("listingPrivate"),
         cls: "bg-slate-700 text-white",
         icon: "fas fa-user"
@@ -12598,7 +13024,7 @@
     }
 
     function listingRegistrationMeta(p) {
-      const broker = BROKERS.find((b) => b.id === p?.agent);
+      const broker = findBrokerById(p?.agent);
       const status = String(
         p?.lister_registration_status ||
         p?.extra_fields?.lister_registration_status ||
@@ -12822,10 +13248,9 @@
     }
 
     function propertyDirectionsUrl(property) {
-      const lat = Number(property?.lat ?? property?.latitude);
-      const lng = Number(property?.lng ?? property?.longitude);
-      const destination = (Number.isFinite(lat) && Number.isFinite(lng))
-        ? `${lat},${lng}`
+      const point = getListingMapPoint(property);
+      const destination = (point && Number.isFinite(point.lat) && Number.isFinite(point.lng))
+        ? `${point.lat},${point.lng}`
         : [property?.title, property?.area, property?.district, "Uganda"].filter(Boolean).join(", ");
       if (!destination) return "";
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
@@ -12861,16 +13286,18 @@
       if (!property) return [];
       const type = normalizeType(property.type);
       const price = Number(property.price) || 0;
-      const lat = Number(property.lat);
-      const lng = Number(property.lng);
+      const point = getListingMapPoint(property);
+      const lat = Number(point?.lat);
+      const lng = Number(point?.lng);
       const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
       return getPublicListings()
         .filter((x) => String(x.id) !== String(property.id) && isListingPublicVisible(x))
         .map((x) => {
           const xType = normalizeType(x.type);
           const xPrice = Number(x.price) || 0;
-          const xLat = Number(x.lat);
-          const xLng = Number(x.lng);
+          const xPoint = getListingMapPoint(x);
+          const xLat = Number(xPoint?.lat);
+          const xLng = Number(xPoint?.lng);
           const distanceKm = hasCoords && Number.isFinite(xLat) && Number.isFinite(xLng)
             ? haversineKm(lat, lng, xLat, xLng)
             : null;
@@ -12934,7 +13361,7 @@
     }
 
     async function shareBrokerBusinessCard(id, channel = "native") {
-      const broker = BROKERS.find((item) => item.id === id);
+      const broker = findBrokerById(id);
       if (!broker) return;
       const shareUrl = getBrokerShareUrl(broker);
       const shareText = `Broker Card: ${broker.name}\n${broker.company || ""}\n${broker.phone ? `Call: ${broker.phone}\n` : ""}${broker.whatsapp ? `WhatsApp: https://wa.me/${String(broker.whatsapp).replace(/\D/g, "")}\n` : ""}${shareUrl}`;
@@ -12961,7 +13388,7 @@
     function propCard(p) {
       const idArg = propertyIdArg(p.id);
       const saved = isPropertySaved(p.id);
-      const broker = BROKERS.find((b) => b.id === p.agent);
+      const broker = findBrokerById(p.agent);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
       const showNew = isListingNew(p);
@@ -13159,7 +13586,7 @@
       if (!el) return;
       if (id === "brokers-grid") {
         el.innerHTML = list.map((b) => `
-          <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${b.id})">
+          <div class="broker-grid-card bg-white rounded-2xl border border-green-100 p-4 shadow-sm cursor-pointer hover:shadow-md transition-all" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
             <div class="mb-2.5">${brokerAvatarHtml(b, "w-14 h-14 border-4")}</div>
             <h3 class="text-lg font-bold text-gray-900 text-center leading-tight">${b.name}</h3>
             <p class="text-center text-gray-500 text-sm">${b.company}</p>
@@ -13185,8 +13612,8 @@
             <div class="mt-auto grid grid-cols-2 gap-2 mt-4">
               <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="broker-action-btn border border-green-700 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-phone text-[11px]"></i><span>Call</span></a>
               <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>WhatsApp</span></a>
-              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>Share WA</span></button>
-              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${b.id}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>Share X</span></button>
+              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>Share WA</span></button>
+              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>Share X</span></button>
             </div>
           </div>
         `).join("");
@@ -13195,7 +13622,7 @@
       }
 
       el.innerHTML = list.map((b) => `
-        <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md" onclick="openBrokerProfile(${b.id})">
+        <div class="bg-white rounded-xl border border-gray-100 p-5 shadow-sm cursor-pointer hover:shadow-md" onclick="openBrokerProfile(${adminListingIdArg(b.id)})">
           <div class="mb-3">${brokerAvatarHtml(b, "w-14 h-14")}</div>
           <h3 class="font-bold text-gray-800 text-center">${b.name}</h3>
           <p class="text-sm text-gray-500 text-center">${b.company}</p>
@@ -13209,7 +13636,7 @@
             <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">Call</a>
             <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">WhatsApp</a>
           </div>
-          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">Share Broker Card</button>
+          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">Share Broker Card</button>
         </div>`).join("");
     }
 
@@ -13244,7 +13671,7 @@
 
     function renderAll() {
       const publicListings = getPublicListings();
-      renderGrid("home-grid", getFeaturedListings(publicListings).slice(0, 6));
+      renderGrid("home-grid", getFeaturedListings(publicListings).slice(0, 3));
       renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
       renderGrid("rent-grid", publicListings.filter((p) => normalizeType(p.type) === "rent"));
       const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
@@ -13252,8 +13679,8 @@
       updateStudentHeader(studentList);
       renderGrid("commercial-grid", publicListings.filter((p) => normalizeType(p.type) === "commercial"));
       renderGrid("land-grid", publicListings.filter((p) => normalizeType(p.type) === "land"));
-      renderBrokers("home-brokers", BROKERS.slice(0, 4));
-      renderBrokers("brokers-grid", BROKERS);
+      renderBrokers("home-brokers", getFeaturedBrokers(getBrokerDirectory()).slice(0, 3));
+      renderBrokers("brokers-grid", getBrokerDirectory());
       document.getElementById("sale-count").textContent = publicListings.filter((p) => normalizeType(p.type) === "sale").length;
       document.getElementById("rent-count").textContent = publicListings.filter((p) => normalizeType(p.type) === "rent").length;
       renderSaved();
@@ -13344,6 +13771,7 @@
         registration_status: p?.registration_status || p?.agent_registration_status || p?.extra_fields?.lister_registration_status || "not_registered",
         lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
         inquiry_reference: p?.inquiry_reference || "",
+        agent: p?.agent_id || p?.agent || null,
         lister_display_name: p?.lister_name || p?.contact_display_name || "",
         area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",
         translations: p?.extra_fields?.translations || p?.translations || {},
@@ -13411,7 +13839,7 @@
       if (publicListingsApiLoading) return false;
       publicListingsApiLoading = true;
       try {
-        const response = await apiRequest("/api/properties?status=approved&limit=250");
+      const response = await apiRequest("/api/properties?status=approved&limit=1000");
         const rows = Array.isArray(response?.data) ? response.data : [];
         const remoteIds = new Set(rows.map((p) => String(p.id || "")).filter(Boolean));
         for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
@@ -13528,7 +13956,7 @@
 
       if (agentFromPath || brokerFromQuery) {
         const bid = agentFromPath || brokerFromQuery;
-        const found = BROKERS.find((b) => String(b.id) === String(bid));
+        const found = findBrokerById(bid);
         if (found) {
           showPage("brokers");
           openBrokerProfile(found.id);
@@ -16187,7 +16615,7 @@
         district: p.district,
         area: p.area
       });
-      const broker = BROKERS.find((b) => b.id === p.agent);
+      const broker = findBrokerById(p.agent);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
       const similar = getSimilarProperties(p, 3);
@@ -16323,8 +16751,8 @@
                 <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
                 <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Broker</a>
                 <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Broker</a>
-                <button onclick="shareBrokerBusinessCard(${broker.id}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
-                <button onclick="openBrokerProfile(${broker.id})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">View Broker</button>
+                <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
+                <button onclick="openBrokerProfile(${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">View Broker</button>
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
                 <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public listing contact")}</p>
@@ -16375,10 +16803,10 @@
     }
 
     function openBrokerProfile(id) {
-      const b = BROKERS.find((x) => x.id === id);
+      const b = findBrokerById(id);
       if (!b) return;
       recordBrokerProfileView(id);
-      const list = getPublicListings().filter((p) => p.agent === id);
+      const list = getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
       const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
       document.getElementById("broker-profile-content").innerHTML = `
         <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
@@ -16437,7 +16865,7 @@
                 <a href="tel:${b.phone}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">📞 Call ${b.name.split(" ")[0]}</a>
                 <a href="https://wa.me/${b.whatsapp}" target="_blank" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">📲 WhatsApp</a>
               </div>
-              <button type="button" onclick="shareBrokerBusinessCard(${b.id}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Broker Card</button>
+              <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Broker Card</button>
             </div>
           </div>
         </div>
@@ -16458,7 +16886,7 @@
       const specialty = (document.getElementById("broker-specialty-f")?.value || "").toLowerCase().trim();
       const language = (document.getElementById("broker-language-f")?.value || "").toLowerCase().trim();
       const status = (document.getElementById("broker-status-f")?.value || "").toLowerCase().trim();
-      const list = BROKERS.filter((b) => {
+      const list = getBrokerDirectory().filter((b) => {
         const haystack = [
           b.name,
           b.company,
@@ -16491,13 +16919,14 @@
 
     function getBrokerMapPoint(broker) {
       if (!broker) return null;
-      const brokerListings = getPublicListings().filter(
-        (p) => p.agent === broker.id && typeof p.lat === "number" && typeof p.lng === "number"
-      );
+      const brokerListings = getPublicListings()
+        .filter((p) => String(p.agent || "") === String(broker.id || ""))
+        .map((p) => ({ property: p, point: getListingMapPoint(p) }))
+        .filter((entry) => Number.isFinite(entry.point?.lat) && Number.isFinite(entry.point?.lng));
       if (brokerListings.length) {
-        const totals = brokerListings.reduce((acc, p) => {
-          acc.lat += p.lat;
-          acc.lng += p.lng;
+        const totals = brokerListings.reduce((acc, entry) => {
+          acc.lat += entry.point.lat;
+          acc.lng += entry.point.lng;
           return acc;
         }, { lat: 0, lng: 0 });
         return {
@@ -16568,9 +16997,10 @@
       if (!map || !window.google?.maps) return;
       const infoWindow = new google.maps.InfoWindow();
       (list || []).forEach((p) => {
-        if (typeof p.lat !== "number" || typeof p.lng !== "number") return;
+        const point = getListingMapPoint(p);
+        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
         const marker = new google.maps.Marker({
-          position: { lat: p.lat, lng: p.lng },
+          position: { lat: point.lat, lng: point.lng },
           map,
           title: p.title || "MakaUg listing"
         });
@@ -16617,6 +17047,7 @@
       if (mapProviders[mapId] === "google" && window.google?.maps) {
         const infoWindow = new google.maps.InfoWindow();
         points.forEach(({ broker, point }) => {
+          const brokerIdArg = adminListingIdArg(broker.id);
           const marker = new google.maps.Marker({
             position: { lat: point.lat, lng: point.lng },
             map,
@@ -16628,7 +17059,7 @@
                 <div style="font-weight:700;color:#111827;margin-bottom:2px">${adminEscape(broker.name || "Broker")}</div>
                 <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${adminEscape(broker.company || "")}</div>
                 <div style="font-size:12px;color:#374151;margin-bottom:8px">Location: ${adminEscape(broker.area || "")}</div>
-                <button type="button" onclick="openBrokerProfile(${Number(broker.id) || 0}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+                <button type="button" onclick="openBrokerProfile(${brokerIdArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
                   View Broker
                 </button>
               </div>
@@ -16662,6 +17093,7 @@
       if (!window.L) return;
 
       points.forEach(({ broker, point }) => {
+        const brokerIdArg = adminListingIdArg(broker.id);
         const marker = L.marker([point.lat, point.lng]).addTo(map);
 
         marker.bindPopup(`
@@ -16673,7 +17105,7 @@
               <span style="font-weight:600;color:#166534">⭐ ${broker.rating}</span>
               <span style="color:#4b5563">${broker.listings} listings</span>
             </div>
-            <button type="button" onclick="openBrokerProfile(${broker.id}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+            <button type="button" onclick="openBrokerProfile(${brokerIdArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
               View Broker
             </button>
           </div>
@@ -16746,7 +17178,7 @@
           maps["map-brokers"] = brokerMap;
           mapProviders["map-brokers"] = "google";
           markers["map-brokers"] = [];
-          setBrokerMapMarkers(BROKERS);
+          setBrokerMapMarkers(getBrokerDirectory());
         }
         return;
       }
@@ -16778,7 +17210,7 @@
         maps["map-brokers"] = brokerMap;
         mapProviders["map-brokers"] = "leaflet";
         markers["map-brokers"] = [];
-        setBrokerMapMarkers(BROKERS);
+        setBrokerMapMarkers(getBrokerDirectory());
       }
     }
 
@@ -16790,8 +17222,9 @@
       }
       if (!window.L) return;
       list.forEach((p) => {
-        if (typeof p.lat !== "number" || typeof p.lng !== "number") return;
-        const marker = L.marker([p.lat, p.lng]).addTo(maps[mapId]);
+        const point = getListingMapPoint(p);
+        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
+        const marker = L.marker([point.lat, point.lng]).addTo(maps[mapId]);
         const idArg = propertyIdArg(p.id);
         marker.bindPopup(`
           <div style="min-width:200px">
@@ -16816,8 +17249,9 @@
       const map = maps[mapId];
       if (!map) return;
       const points = (list || [])
-        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-        .map((p) => ({ lat: p.lat, lng: p.lng }));
+        .map((p) => getListingMapPoint(p))
+        .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+        .map((point) => ({ lat: point.lat, lng: point.lng }));
 
       if (mapProviders[mapId] === "google" && window.google?.maps) {
         if (!points.length) {
@@ -16867,7 +17301,7 @@
       setMapMarkers("map-students", publicListings.filter((p) => isStudentDiscoverable(p)));
       setMapMarkers("map-commercial", publicListings.filter((p) => normalizeType(p.type) === "commercial"));
       setMapMarkers("map-land", publicListings.filter((p) => normalizeType(p.type) === "land"));
-      setBrokerMapMarkers(BROKERS);
+      setBrokerMapMarkers(getBrokerDirectory());
     }
 
     async function initDetailMap(p) {
@@ -17010,6 +17444,12 @@
       renderMortgageFinder();
       loadMortgageRates();
       initMaps();
+      refreshBrokersFromApi({ silent: true }).then((loaded) => {
+        if (loaded) {
+          renderAll();
+          setBrokerMapMarkers(getBrokerDirectory());
+        }
+      });
       filterStudents();
       filterCommercial();
       filterLand();

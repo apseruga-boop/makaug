@@ -387,7 +387,7 @@ router.get('/summary', async (req, res, next) => {
 
 router.get('/recent', async (req, res, next) => {
   try {
-    const [recentProperties, recentAgents, recentReports, recentUsers] = await Promise.all([
+    const [recentProperties, recentAgents, recentReports, recentUsers, recentPropertyRequests] = await Promise.all([
       db.query(
         `SELECT id, title, listing_type, district, status, created_at
          FROM properties
@@ -425,6 +425,21 @@ router.get('/recent', async (req, res, next) => {
          FROM users
          ORDER BY created_at DESC
          LIMIT 20`
+      ),
+      db.query(
+        `SELECT
+          id,
+          full_name,
+          phone,
+          email,
+          preferred_locations,
+          listing_type,
+          max_budget,
+          requirements,
+          created_at
+         FROM property_requests
+         ORDER BY created_at DESC
+         LIMIT 20`
       )
     ]);
 
@@ -434,7 +449,8 @@ router.get('/recent', async (req, res, next) => {
         recentProperties: recentProperties.rows,
         recentAgents: recentAgents.rows,
         recentReports: recentReports.rows,
-        recentUsers: recentUsers.rows
+        recentUsers: recentUsers.rows,
+        recentPropertyRequests: recentPropertyRequests.rows
       }
     });
   } catch (error) {
@@ -895,6 +911,59 @@ router.get('/users/:id', async (req, res, next) => {
   }
 });
 
+router.get('/property-requests', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const search = String(req.query.search || '').trim().toLowerCase();
+    const filters = [];
+    const values = [];
+
+    if (search) {
+      values.push(`%${search}%`);
+      filters.push(`(
+        pr.full_name ILIKE $${values.length}
+        OR pr.phone ILIKE $${values.length}
+        OR COALESCE(pr.email, '') ILIKE $${values.length}
+        OR COALESCE(pr.preferred_locations, '') ILIKE $${values.length}
+        OR COALESCE(pr.listing_type, '') ILIKE $${values.length}
+        OR COALESCE(pr.requirements, '') ILIKE $${values.length}
+      )`);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM property_requests pr ${where}`, values);
+    const total = countResult.rows[0]?.total || 0;
+
+    const listValues = [...values, limit, offset];
+    const rows = await db.query(
+      `SELECT
+        pr.id,
+        pr.full_name,
+        pr.phone,
+        pr.email,
+        pr.preferred_locations,
+        pr.listing_type,
+        pr.max_budget,
+        pr.requirements,
+        pr.created_at
+       FROM property_requests pr
+       ${where}
+       ORDER BY pr.created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      listValues
+    );
+
+    return res.json({
+      ok: true,
+      data: rows.rows,
+      pagination: toPagination(total, page, limit)
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.patch('/users/:id', async (req, res, next) => {
   try {
     const status = req.body.status ? String(req.body.status).trim().toLowerCase() : undefined;
@@ -996,10 +1065,27 @@ router.get('/agents', async (req, res, next) => {
         a.email,
         a.licence_number,
         a.registration_status,
+        a.featured_homepage,
+        a.featured_at,
+        a.rating,
+        a.sales_count,
         a.status,
         a.created_at,
-        a.updated_at
+        a.updated_at,
+        COALESCE(p.total_listings, 0) AS total_listings,
+        COALESCE(p.live_listings, 0) AS live_listings,
+        COALESCE(p.pending_listings, 0) AS pending_listings,
+        COALESCE(p.rejected_listings, 0) AS rejected_listings
       FROM agents a
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)::int AS total_listings,
+          COUNT(*) FILTER (WHERE p.status = 'approved')::int AS live_listings,
+          COUNT(*) FILTER (WHERE p.status = 'pending')::int AS pending_listings,
+          COUNT(*) FILTER (WHERE p.status = 'rejected')::int AS rejected_listings
+        FROM properties p
+        WHERE p.agent_id = a.id
+      ) p ON true
       ${where}
       ORDER BY a.created_at DESC
       LIMIT $${values.length + 1}
@@ -1012,6 +1098,35 @@ router.get('/agents', async (req, res, next) => {
       data: rows.rows,
       pagination: toPagination(total, page, limit)
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/agents/:id/featured', async (req, res, next) => {
+  try {
+    const featured = req.body.featured === true || String(req.body.featured || '').toLowerCase() === 'true';
+    const updated = await db.query(
+      `UPDATE agents
+       SET
+         featured_homepage = $2,
+         featured_at = CASE WHEN $2::boolean THEN NOW() ELSE NULL END,
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, full_name, company_name, featured_homepage, featured_at, updated_at`,
+      [req.params.id, featured]
+    );
+
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Agent not found' });
+    }
+
+    await writeAudit('admin_agent_featured_updated', {
+      agent_id: req.params.id,
+      featured
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated.rows[0] });
   } catch (error) {
     return next(error);
   }

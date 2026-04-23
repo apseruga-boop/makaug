@@ -75,6 +75,46 @@ function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
 }
 
+function normalizePreferredLanguage(value) {
+  const lang = cleanText(value).toLowerCase();
+  return ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(lang) ? lang : 'en';
+}
+
+function getListingOtpCopy(language = 'en', { otp, expiresMinutes, audience = 'listing' } = {}) {
+  const lang = normalizePreferredLanguage(language);
+  const catalog = {
+    en: {
+      listing: `MakaUg listing verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue publishing your property.`,
+      agent: `MakaUg agent verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue your agent application.`
+    },
+    lg: {
+      listing: `MakaUg okukakasa listing: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okutangaza property yo.`,
+      agent: `MakaUg okukakasa agent application: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okusaba okuba agent.`
+    },
+    sw: {
+      listing: `Uthibitishaji wa listing ya MakaUg: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee kuchapisha mali yako.`,
+      agent: `Uthibitishaji wa ombi la agent la MakaUg: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee na ombi lako la agent.`
+    },
+    ac: {
+      listing: `MakaUg kubeero me listing: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki keto property ni live.`,
+      agent: `MakaUg kubeero me agent application: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki application me agent.`
+    },
+    ny: {
+      listing: `Okwehamya listing ya MakaUg: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n'okutangaza property yawe.`,
+      agent: `Okwehamya okusaba kwa agent kwa MakaUg: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n’okusaba kwawe kwa agent.`
+    },
+    rn: {
+      listing: `Okuhamya listing ya MakaUg: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okutangaza property yawe.`,
+      agent: `Okuhamya application ya agent ya MakaUg: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okusaba kwawe kwa agent.`
+    },
+    sm: {
+      listing: `Okukakasa listing ya MakaUg: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okutangaza property yo.`,
+      agent: `Okukakasa okusaba kwa agent ku MakaUg: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okusaba kwa agent.`
+    }
+  };
+  return catalog[lang]?.[audience] || catalog.en[audience] || catalog.en.listing;
+}
+
 function isUsableSubmittedImageUrl(url) {
   const value = cleanText(url);
   return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
@@ -275,12 +315,14 @@ async function loadAutomatedReviewForProperty(propertyId) {
   });
 }
 
-async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '' }) {
+async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = '', preferredLanguage = 'en', audience = 'listing' }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
   const overrideAllowed = canUseAdminOtpOverride({ channel: resolvedChannel, identifier });
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresMinutes = Math.max(parseInt(process.env.OTP_EXPIRES_MINUTES || '10', 10), 1);
+  const normalizedLanguage = normalizePreferredLanguage(preferredLanguage);
+  const otpCopy = getListingOtpCopy(normalizedLanguage, { otp, expiresMinutes, audience });
   if (!identifier) {
     throw new Error('Missing OTP identifier');
   }
@@ -310,8 +352,8 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
     try {
       delivery = await sendSupportEmail({
         to: identifier,
-        subject: 'MakaUg listing OTP code',
-        text: `Your MakaUg listing OTP is ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
+        subject: audience === 'agent' ? 'MakaUg agent verification code' : 'MakaUg listing verification code',
+        text: otpCopy
       });
     } catch (error) {
       logger.error('Listing OTP email failed:', error.message);
@@ -343,7 +385,7 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
     try {
       delivery = await smsService.sendSMS(
         identifier,
-        `MakaUg listing OTP: ${otp}. Valid for ${expiresMinutes} minutes. Do not share this code.`
+        otpCopy
       );
     } catch (error) {
       logger.error('Listing OTP SMS failed:', error.message);
@@ -537,6 +579,7 @@ router.get('/', async (req, res, next) => {
         p.new_until,
         p.inquiry_reference,
         p.amenities,
+        p.agent_id,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
         p.extra_fields->>'featured_at' AS featured_at,
         img.url AS primary_image_url,
@@ -743,6 +786,8 @@ router.post('/request-submit-otp', async (req, res, next) => {
     const channel = channelInput === 'email' ? 'email' : 'phone';
     const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
+    const preferredLanguage = normalizePreferredLanguage(req.body.preferred_language);
+    const audience = cleanText(req.body.audience).toLowerCase() === 'agent' ? 'agent' : 'listing';
 
     if (channel === 'email') {
       if (!email || !isValidEmail(email)) {
@@ -752,7 +797,7 @@ router.post('/request-submit-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Valid Uganda phone is required' });
     }
 
-    const { otp, expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email });
+    const { otp, expiresMinutes, identifier } = await issueListingSubmitOtp({ channel, phone, email, preferredLanguage, audience });
 
     return res.json({
       ok: true,
@@ -1237,14 +1282,22 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       || (req.body.checklist && typeof req.body.checklist === 'object' ? req.body.checklist : current.moderation_checklist);
     const checklist = normalizeReviewChecklist(checklistSource);
     const missingChecks = nextStatus === 'approved'
-      ? (automatedReview?.blocking_failures || []).map((item) => `${item.label}: ${item.message}`)
+      ? (automatedReview?.checks || [])
+        .filter((item) => {
+          const status = String(item?.status || '').toLowerCase();
+          return (status === 'fail' || status === 'error') && item?.blocking === true && item?.overrideable !== true;
+        })
+        .map((item) => `${item.label}: ${item.message}`)
       : [];
     const warningOverrideKeys = new Set(Object.keys(warningOverrides || {}).filter(Boolean));
     const missingWarningOverrides = nextStatus === 'approved'
       ? (automatedReview?.checks || [])
-        .filter((item) => item.status === 'warning')
+        .filter((item) => {
+          const status = String(item?.status || '').toLowerCase();
+          return status === 'warning' || ((status === 'fail' || status === 'error') && item?.overrideable === true);
+        })
         .filter((item) => !warningOverrideKeys.has(cleanText(item.key || item.label)))
-        .map((item) => `${item.label}: open evidence and override warning before approving`)
+        .map((item) => `${item.label}: open evidence and override this review flag before approving`)
       : [];
 
     if (missingChecks.length) {

@@ -81,6 +81,8 @@ router.get('/', async (req, res, next) => {
         a.whatsapp,
         a.email,
         a.registration_status,
+        a.featured_homepage,
+        a.featured_at,
         a.bio,
         a.profile_photo_url,
         a.licence_number,

@@ -249,7 +249,51 @@ function isPhoneOtpDeliveryConfirmed(delivery) {
   return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
 }
 
-async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', queryRunner = db }) {
+function getOtpCopy(language = 'en', { otp, expiresMinutes, purpose = 'login' } = {}) {
+  const lang = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(String(language || '').toLowerCase())
+    ? String(language || '').toLowerCase()
+    : 'en';
+  const catalog = {
+    en: {
+      signup: `MakaUg account verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
+      login: `MakaUg sign-in verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
+      reset_password: `MakaUg password reset: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`
+    },
+    lg: {
+      signup: `MakaUg okukakasa akawunti: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
+      login: `MakaUg okukakasa okuyingira: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
+      reset_password: `MakaUg okukyusa password: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`
+    },
+    sw: {
+      signup: `Uthibitishaji wa akaunti ya MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
+      login: `Uthibitishaji wa kuingia MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
+      reset_password: `Kubadilisha nenosiri la MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`
+    },
+    ac: {
+      signup: `MakaUg kubeero me account: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
+      login: `MakaUg kubeero me donyo: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
+      reset_password: `MakaUg loko password: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`
+    },
+    ny: {
+      signup: `Okwehamya akawunti ya MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
+      login: `Okwehamya okuyingira MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
+      reset_password: `Okugarura password ya MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`
+    },
+    rn: {
+      signup: `Okuhamya account ya MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
+      login: `Okuhamya okwinjira MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
+      reset_password: `Okuhindura password ya MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`
+    },
+    sm: {
+      signup: `Okukakasa account ya MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
+      login: `Okukakasa okuyingira MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
+      reset_password: `Okukyusa password ya MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`
+    }
+  };
+  return catalog[lang]?.[purpose] || catalog.en[purpose] || catalog.en.login;
+}
+
+async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', preferredLanguage = 'en', queryRunner = db }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
   const overrideAllowed = canUseAdminOtpOverride({ channel: resolvedChannel, identifier });
@@ -281,7 +325,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', qu
       delivery = await sendSupportEmail({
         to: identifier,
         subject: 'MakaUg verification code',
-        text: `Your MakaUg verification code is ${otp}. It expires in ${expiresMinutes} minutes.`
+        text: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
       });
     } catch (error) {
       logger.error('Failed to send OTP email', error.message);
@@ -311,7 +355,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', qu
   } else {
     let delivery = null;
     try {
-      delivery = await smsService.sendSMS(identifier, `MakaUg verification code: ${otp}. Expires in ${expiresMinutes} minutes.`);
+      delivery = await smsService.sendSMS(identifier, getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose }));
     } catch (error) {
       logger.error('Failed to send OTP SMS', error.message);
       if (overrideAllowed) {
@@ -493,9 +537,7 @@ router.post('/register', async (req, res, next) => {
       'agent / broker': 'agent_broker',
       agent: 'agent_broker',
       broker: 'agent_broker',
-      agent_broker: 'agent_broker',
-      'field agent': 'field_agent',
-      field_agent: 'field_agent'
+      agent_broker: 'agent_broker'
     };
 
     const role = roleMap[roleInput] || 'buyer_renter';
@@ -598,6 +640,7 @@ router.post('/register', async (req, res, next) => {
       channel: otpChannel === 'email' && email ? 'email' : 'phone',
       phone,
       email,
+      preferredLanguage,
       queryRunner: client
     });
 
@@ -678,12 +721,13 @@ router.post('/request-otp', async (req, res, next) => {
     const purposeRaw = cleanText(req.body.purpose).toLowerCase();
     const purpose = ['signup', 'login', 'reset_password'].includes(purposeRaw) ? purposeRaw : 'login';
     let exists = null;
+    let preferredLanguage = cleanText(req.body.preferred_language).toLowerCase();
 
     if (channel === 'email') {
       if (!email || !isValidEmail(email)) {
         return res.status(400).json({ ok: false, error: 'Valid email is required' });
       }
-      exists = await db.query('SELECT id FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
+      exists = await db.query('SELECT id, preferred_language FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
       if (!exists.rows.length) {
         return res.status(404).json({ ok: false, error: 'No account found with that email' });
       }
@@ -691,17 +735,22 @@ router.post('/request-otp', async (req, res, next) => {
       if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
         return res.status(400).json({ ok: false, error: 'Valid phone is required' });
       }
-      exists = await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+      exists = await db.query('SELECT id, preferred_language FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
       if (!exists.rows.length) {
         return res.status(404).json({ ok: false, error: 'No account found with that phone' });
       }
     }
 
+    preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguage)
+      ? preferredLanguage
+      : (exists.rows[0]?.preferred_language || 'en');
+
     const otpIssue = await issueOtp({
       purpose,
       channel,
       phone,
-      email
+      email,
+      preferredLanguage
     });
 
     return res.json({
@@ -732,17 +781,23 @@ router.post('/request-password-reset', async (req, res, next) => {
     }
 
     const exists = channel === 'email'
-      ? await db.query('SELECT id FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
-      : await db.query('SELECT id FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+      ? await db.query('SELECT id, preferred_language FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
+      : await db.query('SELECT id, preferred_language FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
     if (!exists.rows.length) {
       return res.status(404).json({ ok: false, error: channel === 'email' ? 'No account found with that email' : 'No account found with that phone' });
     }
+
+    const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
+    const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
+      ? preferredLanguageInput
+      : (exists.rows[0]?.preferred_language || 'en');
 
     const otpIssue = await issueOtp({
       purpose: 'reset_password',
       channel,
       phone,
-      email
+      email,
+      preferredLanguage
     });
 
     return res.json({
@@ -944,7 +999,6 @@ router.patch('/me', async (req, res, next) => {
     const firstName = cleanText(req.body.first_name) || user.first_name;
     const lastName = cleanText(req.body.last_name) || user.last_name;
     const emailInput = req.body.email !== undefined ? cleanText(req.body.email).toLowerCase() : user.email;
-    const roleInput = cleanText(req.body.role).toLowerCase() || user.role;
     const marketingOptIn = req.body.marketing_opt_in === undefined ? user.marketing_opt_in : parseBooleanLike(req.body.marketing_opt_in, true);
     const weeklyTipsOptIn = req.body.weekly_tips_opt_in === undefined ? user.weekly_tips_opt_in : parseBooleanLike(req.body.weekly_tips_opt_in, true);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
@@ -956,24 +1010,6 @@ router.patch('/me', async (req, res, next) => {
       ? preferredLanguageInput
       : (user.preferred_language || 'en');
 
-    const roleMap = {
-      'buyer / renter': 'buyer_renter',
-      buyer: 'buyer_renter',
-      renter: 'buyer_renter',
-      buyer_renter: 'buyer_renter',
-      'property owner': 'property_owner',
-      owner: 'property_owner',
-      property_owner: 'property_owner',
-      'agent / broker': 'agent_broker',
-      agent: 'agent_broker',
-      broker: 'agent_broker',
-      agent_broker: 'agent_broker',
-      'field agent': 'field_agent',
-      field_agent: 'field_agent',
-      admin: 'admin'
-    };
-    const role = roleMap[roleInput] || user.role;
-
     if (emailInput && !isValidEmail(emailInput)) {
       return res.status(400).json({ ok: false, error: 'email is invalid' });
     }
@@ -983,14 +1019,13 @@ router.patch('/me', async (req, res, next) => {
        SET first_name = $2,
            last_name = $3,
            email = $4,
-           role = $5,
-           marketing_opt_in = $6,
-           weekly_tips_opt_in = $7,
-           preferred_contact_channel = $8,
-           preferred_language = $9
+           marketing_opt_in = $5,
+           weekly_tips_opt_in = $6,
+           preferred_contact_channel = $7,
+           preferred_language = $8
        WHERE id = $1
        RETURNING *`,
-      [auth.userId, firstName, lastName, emailInput || null, role, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
+      [auth.userId, firstName, lastName, emailInput || null, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
     );
 
     return res.json({ ok: true, data: { user: publicUser(updated.rows[0]) } });
