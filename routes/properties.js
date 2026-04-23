@@ -151,6 +151,7 @@ function publicExtraFields(extraFields = {}) {
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
+    street_name: extra.street_name || null,
     region: extra.region || null,
     resolved_location_label: extra.resolved_location_label || null,
     public_display_name: extra.public_display_name || null,
@@ -447,6 +448,16 @@ router.get('/suggestions', async (req, res, next) => {
       values
     );
 
+    const streets = await db.query(
+      `SELECT DISTINCT extra_fields->>'street_name' AS street_name
+       FROM properties
+       WHERE status = 'approved'
+         AND COALESCE(extra_fields->>'street_name', '') ILIKE $1${whereType}
+       ORDER BY extra_fields->>'street_name' ASC
+       LIMIT 20`,
+      values
+    );
+
     const districts = DISTRICTS.filter((d) => d.toLowerCase().includes(query)).slice(0, 20);
 
     let universities = [];
@@ -458,6 +469,9 @@ router.get('/suggestions', async (req, res, next) => {
 
     areas.rows.forEach((r) => {
       if (r.area) items.push({ label: r.area, category: 'area' });
+    });
+    streets.rows.forEach((r) => {
+      if (r.street_name) items.push({ label: r.street_name, category: 'street' });
     });
 
     districts.forEach((d) => items.push({ label: d, category: 'district' }));
@@ -518,7 +532,8 @@ router.get('/', async (req, res, next) => {
       addFilter(
         filters,
         values,
-        '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ? OR COALESCE(p.address, \'\') ILIKE ? OR COALESCE(p.description, \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'city\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'neighborhood\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'region\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'resolved_location_label\', \'\') ILIKE ?)',
+        '(p.area ILIKE ? OR p.title ILIKE ? OR p.district ILIKE ? OR COALESCE(p.address, \'\') ILIKE ? OR COALESCE(p.description, \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'city\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'neighborhood\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'street_name\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'region\', \'\') ILIKE ? OR COALESCE(p.extra_fields->>\'resolved_location_label\', \'\') ILIKE ?)',
+        `%${area}%`,
         `%${area}%`,
         `%${area}%`,
         `%${area}%`,
@@ -565,6 +580,7 @@ router.get('/', async (req, res, next) => {
         p.description,
         p.district,
         p.area,
+        p.address,
         p.price,
         p.price_period,
         p.bedrooms,
@@ -580,6 +596,11 @@ router.get('/', async (req, res, next) => {
         p.inquiry_reference,
         p.amenities,
         p.agent_id,
+        p.extra_fields->>'city' AS city,
+        p.extra_fields->>'neighborhood' AS neighborhood,
+        p.extra_fields->>'street_name' AS street_name,
+        p.extra_fields->>'region' AS region,
+        p.extra_fields->>'resolved_location_label' AS resolved_location_label,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
         p.extra_fields->>'featured_at' AS featured_at,
         img.url AS primary_image_url,

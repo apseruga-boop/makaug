@@ -180,6 +180,7 @@
     }
     .leaflet-top, .leaflet-bottom { z-index: 450; }
     .map-h { height: 360px; width: 100%; }
+    #map-home.map-h { height: 420px; }
     .map-h-sm { height: 280px; width: 100%; }
     .listing-map-col {
       position: relative;
@@ -483,6 +484,7 @@
         padding: 0 16px;
       }
       .map-h { height: 260px; }
+      #map-home.map-h { height: 300px; }
       .map-h-sm { height: 220px; }
       .listing-map-shell {
         position: relative;
@@ -713,82 +715,6 @@
       </div>
     </section>
 
-    <section class="py-12 bg-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif mb-6">Explore on Map</h2>
-        <div id="map-home" class="map-h rounded-2xl border border-gray-200 overflow-hidden"></div>
-      </div>
-    </section>
-
-    <section class="py-12 bg-green-900 text-white">
-      <div class="max-w-7xl mx-auto px-4">
-        <div class="grid lg:grid-cols-2 gap-10 items-center">
-          <div>
-            <div class="inline-flex items-center gap-2 bg-green-800 px-3 py-1.5 rounded-full text-green-300 text-xs font-bold uppercase tracking-wide mb-4">
-              <i class="fab fa-whatsapp"></i> WhatsApp Listing
-            </div>
-            <h2 class="text-4xl font-black leading-tight serif mb-3">List your property in <span class="text-green-300">under 5 minutes</span> via WhatsApp</h2>
-            <p class="text-green-100 mb-5 text-base">
-              No laptop needed. Just send a WhatsApp message and our assistant will guide you from start to finish in your language.
-            </p>
-            <div class="bg-green-950/40 border border-green-700/50 rounded-xl p-3 mb-5 text-sm text-green-100">
-              <p class="font-semibold text-green-200 mb-1">What you'll need before you start:</p>
-              <p>Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
-              <p class="mt-2 text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
-            </div>
-            <div class="space-y-2.5 text-sm text-green-100 mb-6">
-              <div class="flex items-start gap-2"><span class="w-6 h-6 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold mt-0.5">1</span><span><strong class="text-green-200">Start chat:</strong> choose language and listing type (sale, rent, land, commercial, student).</span></div>
-              <div class="flex items-start gap-2"><span class="w-6 h-6 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold mt-0.5">2</span><span><strong class="text-green-200">Share details:</strong> send title, district/area, price, bedrooms and description.</span></div>
-              <div class="flex items-start gap-2"><span class="w-6 h-6 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold mt-0.5">3</span><span><strong class="text-green-200">Upload photos:</strong> send property photos directly in chat, one after another.</span></div>
-              <div class="flex items-start gap-2"><span class="w-6 h-6 rounded-full bg-green-700 flex items-center justify-center text-xs font-bold mt-0.5">4</span><span><strong class="text-green-200">Verify & publish:</strong> confirm via OTP and ID, then receive your live listing link.</span></div>
-            </div>
-            <a href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-green-900 font-bold px-6 py-3 rounded-xl">
-              <i class="fab fa-whatsapp text-lg"></i> Start on WhatsApp Now
-            </a>
-          </div>
-          <div class="hidden md:flex justify-center">
-            <div class="w-64 bg-gray-800 rounded-3xl p-2 shadow-2xl">
-              <div class="bg-gray-900 rounded-2xl overflow-hidden">
-                <div class="bg-green-800 px-4 py-3 text-sm font-semibold">makaug bot • online</div>
-                <div class="p-3 space-y-2 text-xs leading-relaxed text-gray-800" style="background:#ece5dd">
-                  <div class="bg-white rounded-lg rounded-tl-sm p-2.5 max-w-[92%] shadow-sm text-gray-800">
-                    👋 Welcome to makaug. Choose language:<br>1. English  2. Luganda  3. Kiswahili
-                  </div>
-                  <div class="flex justify-end">
-                    <div class="bg-green-100 rounded-lg rounded-tr-sm p-2.5 max-w-[84%] shadow-sm text-green-900">1 - English</div>
-                  </div>
-                  <div class="bg-white rounded-lg rounded-tl-sm p-2.5 max-w-[92%] shadow-sm text-gray-800">
-                    Great. What are you listing?<br>1. For Sale  2. For Rent  3. Land  4. Commercial  5. Student
-                  </div>
-                  <div class="flex justify-end">
-                    <div class="bg-green-100 rounded-lg rounded-tr-sm p-2.5 max-w-[84%] shadow-sm text-green-900">
-                      2 - For Rent<br>Ntinda, Kampala<br>USh 1,800,000 / month
-                    </div>
-                  </div>
-                  <div class="bg-white rounded-lg rounded-tl-sm p-2.5 max-w-[92%] shadow-sm text-gray-800">
-                    Nice. Please send at least 5 photos. Start with front view, sitting room, bedroom, kitchen, and bathroom.
-                  </div>
-                  <div class="flex justify-end">
-                    <div class="bg-green-100 rounded-lg rounded-tr-sm p-2.5 max-w-[88%] shadow-sm text-green-900">
-                      <div class="font-semibold text-[11px] mb-1 text-green-950">📸 Photos sent</div>
-                      <div class="grid grid-cols-3 gap-1.5">
-                        <div class="h-10 rounded bg-green-200 flex items-center justify-center">🏠</div>
-                        <div class="h-10 rounded bg-green-200 flex items-center justify-center">🛋️</div>
-                        <div class="h-10 rounded bg-green-200 flex items-center justify-center">🛏️</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="bg-white rounded-lg rounded-tl-sm p-2.5 max-w-[92%] shadow-sm text-gray-800">
-                    Perfect. We have sent OTP to verify your phone. After verification, your listing goes live within 24 hours.
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <section class="py-12 bg-gray-100">
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex justify-between items-center mb-6">
@@ -796,6 +722,65 @@
           <a onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Agents</a>
         </div>
         <div id="home-brokers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+      </div>
+    </section>
+
+    <section class="py-12 bg-white">
+      <div class="max-w-7xl mx-auto px-4">
+        <h2 id="home-map-title" class="text-3xl font-bold text-gray-800 serif mb-6">Explore on Map</h2>
+        <div id="map-home" class="map-h rounded-2xl border border-gray-200 overflow-hidden"></div>
+      </div>
+    </section>
+
+    <section class="py-10 bg-green-900 text-white">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="grid lg:grid-cols-[1.3fr_0.9fr] gap-6 items-start">
+          <div class="max-w-2xl">
+            <div id="home-assistant-pill" class="inline-flex items-center gap-2 bg-green-800 px-3 py-1.5 rounded-full text-green-300 text-xs font-bold uppercase tracking-wide mb-4">
+              <i class="fas fa-robot"></i> AI Listing Assistant
+            </div>
+            <h2 id="home-assistant-title" class="text-3xl md:text-4xl font-black leading-tight serif mb-3">List your property in <span class="text-green-300">under 5 minutes</span> with our AI agent</h2>
+            <p id="home-assistant-sub" class="text-green-100 mb-5 text-base">
+              Use the website or start on WhatsApp. We guide you through photos, location pinning, OTP verification, and review in your language.
+            </p>
+            <div class="bg-green-950/40 border border-green-700/50 rounded-xl p-3 mb-4 text-sm text-green-100">
+              <p id="home-assistant-need-title" class="font-semibold text-green-200 mb-1">What you'll need before you start:</p>
+              <p id="home-assistant-need-copy">Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
+              <p id="home-assistant-need-verify" class="mt-2 text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3 text-sm text-green-100 mb-5">
+              <div id="home-assistant-step-1" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">1. Pick a language and listing type.</div>
+              <div id="home-assistant-step-2" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">2. Add location, price, and the key property facts.</div>
+              <div id="home-assistant-step-3" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">3. Upload at least 5 clear photos and assign what each shows.</div>
+              <div id="home-assistant-step-4" class="rounded-xl border border-green-700/50 bg-green-950/30 p-3">4. Verify by OTP and receive your listing review update.</div>
+            </div>
+            <a id="home-assistant-cta" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-green-900 font-bold px-5 py-3 rounded-xl">
+              <i class="fab fa-whatsapp text-lg"></i> Start on WhatsApp Now
+            </a>
+          </div>
+          <div class="hidden lg:block">
+            <div class="rounded-3xl border border-green-700/40 bg-green-950/40 p-4 shadow-2xl">
+              <div class="grid sm:grid-cols-2 gap-3">
+                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                  <div id="home-assistant-stat-1-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Language + Type</div>
+                  <div id="home-assistant-stat-1-copy" class="mt-2 text-sm font-semibold">Pick language, sale/rent/land/commercial/student, and start instantly.</div>
+                </div>
+                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                  <div id="home-assistant-stat-2-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Photos + Map</div>
+                  <div id="home-assistant-stat-2-copy" class="mt-2 text-sm font-semibold">Add 5+ photos, pin the exact location, and improve search accuracy.</div>
+                </div>
+                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                  <div id="home-assistant-stat-3-title" class="text-xs font-bold uppercase tracking-wide text-green-700">OTP Check</div>
+                  <div id="home-assistant-stat-3-copy" class="mt-2 text-sm font-semibold">Verify by phone or email OTP before the listing goes into review.</div>
+                </div>
+                <div class="rounded-2xl bg-white/95 text-green-950 p-4">
+                  <div id="home-assistant-stat-4-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Live Link</div>
+                  <div id="home-assistant-stat-4-copy" class="mt-2 text-sm font-semibold">Receive approval updates and your live property link when review is complete.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -1739,7 +1724,12 @@
         </div>
 
         <div id="lp-step-1" data-lp-step-panel="1">
-          <h2 id="lp-step1-title" class="text-3xl md:text-5xl font-black serif text-gray-800 mb-6">Property Details</h2>
+          <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
+            <h2 id="lp-step1-title" class="text-3xl md:text-5xl font-black serif text-gray-800">Property Details</h2>
+            <button id="lp-reset-form-btn" type="button" onclick="clearListPropertyDraft()" class="inline-flex items-center gap-2 border border-red-200 text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-semibold">
+              <i class="fas fa-rotate-left"></i> Clear & Start Again
+            </button>
+          </div>
           <div id="lp-language-tip" class="lp-lang-tip">
             <i class="fas fa-language"></i>
             <span>You can change language any time from the selector at the top bar.</span>
@@ -1776,7 +1766,7 @@
             <ol class="space-y-1.5 text-sm text-gray-700">
               <li id="lp-location-step-1"><strong>1.</strong> Select region, then district.</li>
               <li id="lp-location-step-2"><strong>2.</strong> Select city/town, then neighbourhood/zone.</li>
-              <li id="lp-location-step-3"><strong>3.</strong> Confirm area and optionally type full street address.</li>
+              <li id="lp-location-step-3"><strong>3.</strong> Confirm area, street, and optionally type full address.</li>
               <li id="lp-location-step-4"><strong>4.</strong> Confirm the map pin matches your property location.</li>
             </ol>
           </div>
@@ -1814,6 +1804,11 @@
               <label id="lp-area-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Area / Neighbourhood *</label>
               <input id="lp-area" list="lp-area-suggestions" oninput="onLpAreaManualInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Auto-filled from district/city/neighbourhood">
               <datalist id="lp-area-suggestions"></datalist>
+            </div>
+            <div class="md:col-span-2">
+              <label id="lp-street-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Street / Road</label>
+              <input id="lp-street-name" list="lp-street-suggestions" oninput="onLpStreetInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kira Road">
+              <datalist id="lp-street-suggestions"></datalist>
             </div>
             <div class="md:col-span-2">
               <label id="lp-address-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Full Address</label>
@@ -3727,7 +3722,7 @@
     function getListingMapPoint(property = {}) {
       const rawLat = Number(property?.lat ?? property?.latitude);
       const rawLng = Number(property?.lng ?? property?.longitude);
-      if (Number.isFinite(rawLat) && Number.isFinite(rawLng)) {
+      if (Number.isFinite(rawLat) && Number.isFinite(rawLng) && isLikelyUgandaCoordinate(rawLat, rawLng)) {
         return { lat: rawLat, lng: rawLng, exact: true };
       }
 
@@ -3759,6 +3754,8 @@
     const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
     const MAP_DEFAULT_CENTER = { lat: 0.347596, lng: 32.58252 };
     const MAP_DEFAULT_ZOOM = 11;
+    const MAP_HOME_MIN_ZOOM = 7;
+    const MAP_HOME_MAX_ZOOM = 13;
     const MAP_CITY_ZOOM = 15;
     const MAP_NEIGHBORHOOD_ZOOM = 17;
     const MAP_PROPERTY_ZOOM = 19;
@@ -3766,6 +3763,22 @@
     const MAP_DISTRICT_ZOOM = 12;
     const MAP_MULTI_LISTING_MAX_ZOOM = 14;
     const MAP_BROKER_DEFAULT_ZOOM = 8;
+    const UGANDA_COORD_BOUNDS = {
+      latMin: -1.6,
+      latMax: 4.5,
+      lngMin: 29.4,
+      lngMax: 35.1
+    };
+
+    function isLikelyUgandaCoordinate(lat, lng) {
+      return Number.isFinite(lat)
+        && Number.isFinite(lng)
+        && lat >= UGANDA_COORD_BOUNDS.latMin
+        && lat <= UGANDA_COORD_BOUNDS.latMax
+        && lng >= UGANDA_COORD_BOUNDS.lngMin
+        && lng <= UGANDA_COORD_BOUNDS.lngMax;
+    }
+
     const DEFAULT_MORTGAGE_PROVIDERS = [
       {
         id: "stanbic",
@@ -3918,6 +3931,7 @@
     let lpLastHierarchySignature = "";
     let lpLastAddressValue = "";
     let lpAreaManualOverride = false;
+    let lpStreetManualOverride = false;
     let lpPreviewPhotos = [];
     let lpPreviewPhotoIndex = 0;
     let detailGalleryPhotos = [];
@@ -4615,6 +4629,106 @@
       const langPack = I18N_UI[lang] || I18N_UI.en;
       const fallbackPack = I18N_UI[LANG_FALLBACK[lang] || "en"] || I18N_UI.en;
       return langPack[key] || fallbackPack[key] || I18N_UI.en[key] || key;
+    }
+
+    const HOME_ASSISTANT_I18N = {
+      en: {
+        pill: "AI Listing Assistant",
+        titleHtml: "List your property in <span class=\"text-green-300\">under 5 minutes</span> with our AI agent",
+        sub: "Use the website or start on WhatsApp. We guide you through photos, location pinning, OTP verification, and review in your language.",
+        needTitle: "What you'll need before you start:",
+        needCopy: "Property location, price, at least 5 clear photos, and your verification details (phone + ID).",
+        needVerify: "Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.",
+        step1: "1. Pick a language and listing type.",
+        step2: "2. Add location, price, and the key property facts.",
+        step3: "3. Upload at least 5 clear photos and assign what each shows.",
+        step4: "4. Verify by OTP and receive your listing review update.",
+        cta: "Start on WhatsApp Now",
+        stat1Title: "Language + Type",
+        stat1Copy: "Pick language, sale/rent/land/commercial/student, and start instantly.",
+        stat2Title: "Photos + Map",
+        stat2Copy: "Add 5+ photos, pin the exact location, and improve search accuracy.",
+        stat3Title: "OTP Check",
+        stat3Copy: "Verify by phone or email OTP before the listing goes into review.",
+        stat4Title: "Live Link",
+        stat4Copy: "Receive approval updates and your live property link when review is complete."
+      },
+      lg: {
+        pill: "Omuyambi wa AI mu Listing",
+        titleHtml: "Teka property yo mu <span class=\"text-green-300\">ddakiika 5 zokka</span> ng'okozesa AI agent yaffe",
+        sub: "Kozesa website oba tandikira ku WhatsApp. Tukulungamya ku bifaananyi, okuteeka pin ku maapu, okukakasa OTP, n'okukebera mu lulimi lwo.",
+        needTitle: "By'olina okuba nabyo nga tonnatandika:",
+        needCopy: "Ekifo kya property, omuwendo, ebifaananyi ebitangaavu ebyenkana 5 oba okusingawo, n'ebikukakasa (essimu + ID).",
+        needVerify: "Owner verification si ya buwaze nga otandika. Admin wa MakaUg asobola okukukwatako ku nkola y'okukakasa Ministry of Lands nga tebannakuwa badge ya public verified.",
+        step1: "1. Londa olulimi n'ekika kya listing.",
+        step2: "2. Teka ekifo, omuwendo, n'ebikulu ku property.",
+        step3: "3. Weereza ebifaananyi ebitangaavu 5+ era olage buli kifaananyi kye kiraga.",
+        step4: "4. Kakasa ku OTP era ofune update ku review ya listing yo.",
+        cta: "Tandika ku WhatsApp Kati",
+        stat1Title: "Olulimi + Ekika",
+        stat1Copy: "Londa olulimi, okutunda/okupangisa/ettaka/obusuubuzi/abayizi, otandike mangu.",
+        stat2Title: "Ebifaananyi + Maapu",
+        stat2Copy: "Teka ebifaananyi 5+, pininga ekifo ekituufu, era onyweze okunoonya.",
+        stat3Title: "Okukakasa OTP",
+        stat3Copy: "Kakasa ku phone oba email OTP nga listing tennagenda mu review.",
+        stat4Title: "Live Link",
+        stat4Copy: "Funa updates z'okukkiriza n'enkola ya live link ya property yo review bw'eggwa."
+      },
+      sw: {
+        pill: "Msaidizi wa AI wa Uorodheshaji",
+        titleHtml: "Orodhesha mali yako kwa <span class=\"text-green-300\">chini ya dakika 5</span> ukitumia AI agent wetu",
+        sub: "Tumia tovuti au anza kwenye WhatsApp. Tunakuongoza kwenye picha, kupin location, uthibitisho wa OTP, na ukaguzi kwa lugha yako.",
+        needTitle: "Utahitaji nini kabla ya kuanza:",
+        needCopy: "Eneo la mali, bei, angalau picha 5 zilizo wazi, na maelezo yako ya uthibitisho (simu + kitambulisho).",
+        needVerify: "Uthibitisho wa mmiliki ni wa hiari wakati wa kuwasilisha. MakaUg admin anaweza kuwasiliana nawe kuhusu uthibitisho wa Ministry of Lands kabla ya beji ya public verified kuongezwa.",
+        step1: "1. Chagua lugha na aina ya tangazo.",
+        step2: "2. Ongeza eneo, bei, na maelezo muhimu ya mali.",
+        step3: "3. Pakia angalau picha 5 zilizo wazi na ueleze kila moja inaonyesha nini.",
+        step4: "4. Thibitisha kwa OTP na upokee taarifa ya mapitio ya tangazo lako.",
+        cta: "Anza kwenye WhatsApp Sasa",
+        stat1Title: "Lugha + Aina",
+        stat1Copy: "Chagua lugha, kuuza/kupanga/ardhi/biashara/wanafunzi, na uanze papo hapo.",
+        stat2Title: "Picha + Ramani",
+        stat2Copy: "Ongeza picha 5+, pin location sahihi, na boresha usahihi wa utafutaji.",
+        stat3Title: "Ukaguzi wa OTP",
+        stat3Copy: "Thibitisha kwa OTP ya simu au barua pepe kabla tangazo halijaingia kwenye ukaguzi.",
+        stat4Title: "Kiungo Hai",
+        stat4Copy: "Pokea taarifa za idhini na kiungo cha moja kwa moja cha mali yako ukaguzi ukikamilika."
+      }
+    };
+
+    function homeAssistantTr(key) {
+      const lang = currentLang || "en";
+      const fallback = LANG_FALLBACK[lang] || "en";
+      return HOME_ASSISTANT_I18N[lang]?.[key]
+        || HOME_ASSISTANT_I18N[fallback]?.[key]
+        || HOME_ASSISTANT_I18N.en?.[key]
+        || "";
+    }
+
+    function applyHomeAssistantLanguageUI() {
+      const titleEl = document.getElementById("home-assistant-title");
+      if (titleEl) titleEl.innerHTML = homeAssistantTr("titleHtml");
+      const pillEl = document.getElementById("home-assistant-pill");
+      if (pillEl) pillEl.innerHTML = `<i class="fas fa-robot"></i> ${homeAssistantTr("pill")}`;
+      setTextById("home-assistant-sub", homeAssistantTr("sub"));
+      setTextById("home-assistant-need-title", homeAssistantTr("needTitle"));
+      setTextById("home-assistant-need-copy", homeAssistantTr("needCopy"));
+      setTextById("home-assistant-need-verify", homeAssistantTr("needVerify"));
+      setTextById("home-assistant-step-1", homeAssistantTr("step1"));
+      setTextById("home-assistant-step-2", homeAssistantTr("step2"));
+      setTextById("home-assistant-step-3", homeAssistantTr("step3"));
+      setTextById("home-assistant-step-4", homeAssistantTr("step4"));
+      const cta = document.getElementById("home-assistant-cta");
+      if (cta) cta.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${homeAssistantTr("cta")}`;
+      setTextById("home-assistant-stat-1-title", homeAssistantTr("stat1Title"));
+      setTextById("home-assistant-stat-1-copy", homeAssistantTr("stat1Copy"));
+      setTextById("home-assistant-stat-2-title", homeAssistantTr("stat2Title"));
+      setTextById("home-assistant-stat-2-copy", homeAssistantTr("stat2Copy"));
+      setTextById("home-assistant-stat-3-title", homeAssistantTr("stat3Title"));
+      setTextById("home-assistant-stat-3-copy", homeAssistantTr("stat3Copy"));
+      setTextById("home-assistant-stat-4-title", homeAssistantTr("stat4Title"));
+      setTextById("home-assistant-stat-4-copy", homeAssistantTr("stat4Copy"));
     }
 
     const MORTGAGE_I18N = {
@@ -5708,6 +5822,7 @@
         ["lp-city-label", "Location / Town *"],
         ["lp-neighborhood-label", "Neighbourhood / Zone *"],
         ["lp-area-label", "Area / Neighbourhood *"],
+        ["lp-street-label", "Street / Road"],
         ["lp-address-label", "Full Address"],
         ["lp-price-label", "Price (USh) *"],
         ["lp-description-label", "Description *"],
@@ -5715,7 +5830,7 @@
         ["lp-location-guide-title", "Location setup (step-by-step)"],
         ["lp-location-step-1", "1. Select region, then district."],
         ["lp-location-step-2", "2. Select city/town, then neighbourhood/zone."],
-        ["lp-location-step-3", "3. Confirm area and optionally type full street address."],
+        ["lp-location-step-3", "3. Confirm area, street, and optionally type full address."],
         ["lp-location-step-4", "4. Confirm the map pin matches your property location."],
         ["lp-alt-label", "Altitude (m)"],
         ["lp-step2-title", "Photos & Media"],
@@ -5798,6 +5913,8 @@
       setTextById("listing-submit-support-label", translateListingLabel("Support:"));
       const areaInput = document.getElementById("lp-area");
       if (areaInput) areaInput.placeholder = translateListingLabel("Auto-filled from district/city/neighbourhood");
+      const streetInput = document.getElementById("lp-street-name");
+      if (streetInput && !streetInput.value) streetInput.placeholder = translateListingLabel("e.g. Kira Road");
       const areaHighlightsInput = document.getElementById("lp-area-highlights-edit");
       if (areaHighlightsInput && !areaHighlightsInput.value) {
         areaHighlightsInput.placeholder = translateListingLabel("You can edit this area summary before submitting.");
@@ -5809,6 +5926,10 @@
       const mapSyncBtn = document.getElementById("lp-map-sync-btn");
       if (mapSyncBtn) {
         mapSyncBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${translateListingLabel("Sync map to selected area")}`;
+      }
+      const resetFormBtn = document.getElementById("lp-reset-form-btn");
+      if (resetFormBtn) {
+        resetFormBtn.innerHTML = `<i class="fas fa-rotate-left"></i> ${translateListingLabel("Clear & Start Again")}`;
       }
       const resetSummaryBtn = document.getElementById("lp-area-highlights-reset-btn");
       if (resetSummaryBtn) {
@@ -6083,6 +6204,7 @@
       setTextById("home-featured-title", tr("homeFeatured"));
       setTextById("home-map-title", tr("homeMap"));
       setTextById("home-brokers-title", tr("homeBrokers"));
+      applyHomeAssistantLanguageUI();
 
       setPageHeading("page-sale", tr("pageSale"));
       setPageHeading("page-rent", tr("pageRent"));
@@ -10479,8 +10601,63 @@
       }
     }
 
+    function normalizeStreetCandidate(value = "") {
+      const cleaned = String(value || "").replace(/\s+/g, " ").trim();
+      return cleaned.length >= 2 ? cleaned : "";
+    }
+
+    function mergeLpStreetSuggestions(values = []) {
+      const listEl = document.getElementById("lp-street-suggestions");
+      if (!listEl) return;
+      const existing = new Set(
+        Array.from(listEl.querySelectorAll("option"))
+          .map((option) => normalizeStreetCandidate(option.value))
+          .filter(Boolean)
+      );
+      values.forEach((value) => {
+        const normalized = normalizeStreetCandidate(value);
+        if (normalized) existing.add(normalized);
+      });
+      listEl.innerHTML = Array.from(existing).slice(0, 200).map((value) => `<option value="${value}"></option>`).join("");
+    }
+
+    function setLpStreetName(value = "", { force = false } = {}) {
+      const streetEl = document.getElementById("lp-street-name");
+      const normalized = normalizeStreetCandidate(value);
+      if (!streetEl || !normalized) return;
+      mergeLpStreetSuggestions([normalized]);
+      if (!streetEl.value || !lpStreetManualOverride || force) {
+        streetEl.value = normalized;
+        streetEl.dataset.auto = force ? "0" : "1";
+      }
+    }
+
+    function extractStreetNameFromGoogleResult(result = {}) {
+      const components = Array.isArray(result?.address_components) ? result.address_components : [];
+      const findComponent = (...types) => {
+        const match = components.find((item) => Array.isArray(item.types) && item.types.some((type) => types.includes(type)));
+        return match?.long_name || "";
+      };
+      const streetNumber = findComponent("street_number");
+      const route = findComponent("route");
+      const premise = findComponent("premise", "subpremise");
+      return normalizeStreetCandidate([streetNumber, route || premise].filter(Boolean).join(" ") || route || premise);
+    }
+
+    function extractStreetNameFromNominatimAddress(address = {}) {
+      return normalizeStreetCandidate(
+        address?.road
+        || address?.residential
+        || address?.pedestrian
+        || address?.footway
+        || address?.path
+        || address?.street
+      );
+    }
+
     function populateListAddressSuggestions() {
       const areaEl = document.getElementById("lp-area-suggestions");
+      const streetEl = document.getElementById("lp-street-suggestions");
       const addrEl = document.getElementById("lp-address-suggestions");
       if (areaEl) {
         const hierarchyAreas = [];
@@ -10493,6 +10670,19 @@
         });
         const areas = Array.from(new Set([...LOCATION_HINTS, ...hierarchyAreas, ...PROPERTIES.map((p) => p.area).filter(Boolean)])).slice(0, 400);
         areaEl.innerHTML = areas.map((name) => `<option value="${name}"></option>`).join("");
+      }
+      if (streetEl) {
+        const streetNames = Array.from(new Set(
+          PROPERTIES.flatMap((property) => {
+            const extra = property?.extra_fields || {};
+            const addressParts = String(property?.address || "").split(",").map((part) => normalizeStreetCandidate(part));
+            return [
+              normalizeStreetCandidate(property?.street_name || extra.street_name || ""),
+              addressParts[0] || ""
+            ].filter(Boolean);
+          })
+        )).slice(0, 250);
+        streetEl.innerHTML = streetNames.map((name) => `<option value="${name}"></option>`).join("");
       }
       if (addrEl) {
         const examples = Array.from(new Set([
@@ -10510,6 +10700,7 @@
     function getListMapInfo(title = "", locationLabel = "") {
       const listingTitle = title || lpVal("lp-title") || translateListingLabel("Property location");
       const location = locationLabel || lpResolvedLocationLabel || [
+        lpVal("lp-street-name"),
         lpVal("lp-area"),
         lpVal("lp-city"),
         lpVal("list-district-sel")
@@ -10568,6 +10759,8 @@
             resolve(null);
             return;
           }
+          const streetName = extractStreetNameFromGoogleResult(results[0]);
+          if (streetName) setLpStreetName(streetName);
           resolve({
             lat: loc.lat(),
             lng: loc.lng(),
@@ -10588,6 +10781,8 @@
             resolve(null);
             return;
           }
+          const streetName = extractStreetNameFromGoogleResult(results[0]);
+          if (streetName) setLpStreetName(streetName);
           resolve(results[0]?.formatted_address || "");
         });
       });
@@ -10845,6 +11040,8 @@
           if (!response.ok) throw new Error(`Reverse geocode failed (${response.status})`);
           const data = await response.json();
           const addr = data?.address || {};
+          const streetName = extractStreetNameFromNominatimAddress(addr);
+          if (streetName) setLpStreetName(streetName);
           const label = [
             addr.road || addr.suburb || addr.neighbourhood || addr.village || addr.town || addr.city,
             addr.city || addr.town || addr.county || addr.state_district,
@@ -10879,14 +11076,15 @@
       const district = lpVal("list-district-sel");
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
+      const streetName = lpVal("lp-street-name");
       const address = lpVal("lp-address");
-      if (!address || address.length < 4) return;
+      if ((!address || address.length < 4) && !streetName) return;
       if (lpAddressGeoTimer) clearTimeout(lpAddressGeoTimer);
 
       lpAddressGeoTimer = setTimeout(async () => {
         const reqSeq = ++lpAddressGeoSeq;
         try {
-          const query = [address, neighborhood, city, district, region, "Uganda"].filter(Boolean).join(", ");
+          const query = [address, streetName, neighborhood, city, district, region, "Uganda"].filter(Boolean).join(", ");
           const googlePoint = await geocodeWithGoogle(query);
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
           if (googlePoint) {
@@ -10902,6 +11100,8 @@
           const lat = Number(rows[0].lat);
           const lng = Number(rows[0].lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const streetCandidate = extractStreetNameFromNominatimAddress(rows[0]?.address || {});
+          if (streetCandidate) setLpStreetName(streetCandidate);
           setListPinCoords(lat, lng, true, true);
         } catch (error) {
           // silently ignore geocode misses to avoid noisy UX
@@ -10915,13 +11115,14 @@
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
       const area = lpVal("lp-area");
+      const streetName = lpVal("lp-street-name");
       if (!district && !city && !neighborhood && !area && !region) return;
       if (lpHierarchyGeoTimer) clearTimeout(lpHierarchyGeoTimer);
       lpHierarchyGeoTimer = setTimeout(async () => {
         const reqSeq = ++lpHierarchyGeoSeq;
         try {
           const areaPart = area && area !== neighborhood ? area : "";
-          const query = [neighborhood, areaPart, city, district, region, "Uganda"].filter(Boolean).join(", ");
+          const query = [streetName, neighborhood, areaPart, city, district, region, "Uganda"].filter(Boolean).join(", ");
           if (!query) return;
           const googlePoint = await geocodeWithGoogle(query);
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
@@ -10938,6 +11139,8 @@
           const lat = Number(rows[0].lat);
           const lng = Number(rows[0].lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          const streetCandidate = extractStreetNameFromNominatimAddress(rows[0]?.address || {});
+          if (streetCandidate) setLpStreetName(streetCandidate);
           setListPinCoords(lat, lng, true, true);
         } catch (error) {
           // silent fallback to local center
@@ -10953,9 +11156,10 @@
       const district = lpVal("list-district-sel") || guessDistrictFromText(area);
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
+      const streetName = lpVal("lp-street-name");
       const address = lpVal("lp-address");
-      const hierarchySignature = [region, district, city, neighborhood, area].join("|");
-      const addressSignature = address.toLowerCase();
+      const hierarchySignature = [region, district, city, neighborhood, area, streetName].join("|");
+      const addressSignature = [streetName, address].join("|").toLowerCase();
       const hierarchyChanged = hierarchySignature !== lpLastHierarchySignature;
       const addressChanged = addressSignature !== lpLastAddressValue;
       if (hierarchyChanged || addressChanged) {
@@ -10975,7 +11179,15 @@
       const neighborhoodPoint = getNeighborhoodPoint(district, city, neighborhood);
       const cityPoint = getCityPoint(district, city);
       const center = neighborhoodPoint || cityPoint || getDistrictCenter(district) || getRegionCenter(region) || MAP_DEFAULT_CENTER;
-      const zoom = neighborhood ? MAP_NEIGHBORHOOD_ZOOM : city ? MAP_CITY_ZOOM : address ? MAP_CITY_ZOOM : (district ? MAP_DISTRICT_ZOOM : (region ? MAP_REGION_ZOOM : (area ? MAP_CITY_ZOOM : MAP_DEFAULT_ZOOM)));
+      const zoom = streetName
+        ? MAP_PROPERTY_ZOOM - 1
+        : neighborhood
+          ? MAP_NEIGHBORHOOD_ZOOM
+          : city
+            ? MAP_CITY_ZOOM
+            : address
+              ? MAP_CITY_ZOOM
+              : (district ? MAP_DISTRICT_ZOOM : (region ? MAP_REGION_ZOOM : (area ? MAP_CITY_ZOOM : MAP_DEFAULT_ZOOM)));
       if (lpPinMapProvider === "google" && window.google?.maps) {
         lpPinMap.setCenter({ lat: center.lat, lng: center.lng });
         lpPinMap.setZoom(zoom);
@@ -11295,6 +11507,7 @@
       const region = lpVal("lp-region");
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
+      const streetName = lpVal("lp-street-name");
       const area = lpVal("lp-area") || neighborhood || city;
       const description = lpVal("lp-description");
       const price = parseIntSafe(lpVal("lp-price"));
@@ -11374,6 +11587,7 @@
           size_raw: sizeRaw || null,
           city: city || null,
           neighborhood: neighborhood || null,
+          street_name: streetName || null,
           altitude_m: altitudeM,
           map_pin_confirmed: !!document.getElementById("lp-location-confirm")?.checked,
           resolved_location_label: lpResolvedLocationLabel || null,
@@ -12739,6 +12953,7 @@
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
       const region = lpVal("lp-region");
+      const streetName = lpVal("lp-street-name");
       const areaEl = document.getElementById("lp-area");
       if (!areaEl) return;
       const autoArea = neighborhood || city || "";
@@ -12746,13 +12961,19 @@
         areaEl.value = autoArea;
       }
       const addressEl = document.getElementById("lp-address");
-      if (addressEl && !addressEl.value && neighborhood && city && district) {
-        addressEl.value = `${neighborhood}, ${city}, ${district}${region ? `, ${region}` : ""}`;
+      if (addressEl && !addressEl.value && (neighborhood || streetName) && city && district) {
+        addressEl.value = [streetName, neighborhood, city, district, region].filter(Boolean).join(", ");
       }
     }
 
     function onLpAreaManualInput() {
       lpAreaManualOverride = true;
+      updateListPreview();
+      refreshListPinMapFromInputs();
+    }
+
+    function onLpStreetInput() {
+      lpStreetManualOverride = true;
       updateListPreview();
       refreshListPinMapFromInputs();
     }
@@ -12880,6 +13101,70 @@
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+    }
+
+    function clearListPropertyDraft() {
+      const confirmReset = window.confirm(translateListingLabel("Reset this listing form and remove the current photos, details, and verification draft?"));
+      if (!confirmReset) return;
+
+      const selectedType = getListType();
+      lpSelectedPhotos = [];
+      lpPhotoUploadUrls = [];
+      lpPhotoUploadSignature = "";
+      lpMainPhotoIndex = 0;
+      lpPhotoAssignments = {};
+      lpPhotoQualityIssues = [];
+      lpIdentityFileMeta = null;
+      lpInquiryReference = "";
+      lpResolvedLocationLabel = "";
+      lpResolvedAltitudeM = null;
+      lpAddressGeoSeq = 0;
+      lpHierarchyGeoSeq = 0;
+      lpListingOtpToken = "";
+      lpListingOtpVerifiedPhone = "";
+      lpListingOtpVerifiedEmail = "";
+      lpListingOtpChannel = "phone";
+      lpLastHierarchySignature = "";
+      lpLastAddressValue = "";
+      lpAreaManualOverride = false;
+      lpStreetManualOverride = false;
+      lpPreviewPhotoIndex = 0;
+
+      document.querySelectorAll("#page-list-property input[type='text'], #page-list-property input[type='email'], #page-list-property input[type='number'], #page-list-property textarea").forEach((el) => {
+        if (["lp-lat", "lp-lng", "lp-alt"].includes(el.id)) return;
+        el.value = "";
+      });
+      document.querySelectorAll("#page-list-property input[type='checkbox']").forEach((el) => {
+        el.checked = false;
+      });
+
+      const otpStatus = document.getElementById("lp-otp-status");
+      if (otpStatus) {
+        otpStatus.className = "text-xs text-gray-500 mt-1";
+        otpStatus.textContent = "";
+      }
+
+      const success = document.getElementById("lp-success-box");
+      if (success) success.classList.add("hidden");
+
+      populateLpRegionOptions("");
+      populateLpDistrictOptions("");
+      populateLpCityOptions("");
+      populateLpNeighborhoodOptions("", "");
+      populateListAddressSuggestions();
+      setLpResolvedLocationLabel("");
+      setLpResolvedAltitude(null);
+
+      document.querySelectorAll("input[name='lp-type']").forEach((radio) => {
+        radio.checked = radio.value === selectedType;
+      });
+      setListType(selectedType);
+      setListWizardStep(1);
+      renderLpPhotoFeedback();
+      updateListPreview();
+      renderListReviewSummary();
+      refreshListPinMapFromInputs();
+      toast(translateListingLabel("Listing form cleared. Start again with the correct property type."));
     }
 
     function formatRadiusDistanceText(miles) {
@@ -13177,6 +13462,7 @@
       const pieces = [
         property.title,
         property.area,
+        property.street_name,
         property.district,
         property.city,
         property.region,
@@ -13197,6 +13483,7 @@
         extra.region,
         extra.city,
         extra.neighborhood,
+        extra.street_name,
         extra.location_town,
         extra.resolved_location_label,
         extra.area_highlights,
@@ -13797,6 +14084,143 @@
       return langNode?.[key] || fallback || "";
     }
 
+    function uniqueTextParts(parts = []) {
+      const seen = new Set();
+      return parts.filter((part) => {
+        const value = String(part || "").trim();
+        if (!value) return false;
+        const key = value.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function getPropertyStructuredLocation(property = {}) {
+      const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+      return {
+        street: property?.street_name || extra.street_name || "",
+        area: property?.area || extra.neighborhood || extra.city || "",
+        neighborhood: property?.neighborhood || extra.neighborhood || property?.area || "",
+        city: property?.city || extra.city || "",
+        district: property?.district || "",
+        region: property?.region || extra.region || ""
+      };
+    }
+
+    function getPropertyLocationDisplay(property = {}) {
+      const location = getPropertyStructuredLocation(property);
+      return uniqueTextParts([location.street, location.area, location.city, location.district]).join(", ");
+    }
+
+    function getAmenityDisplayLabel(value, listingType = "sale") {
+      const raw = String(value || "").trim();
+      if (!raw) return "";
+      const configs = Object.values(LP_CONFIG || {});
+      for (const cfg of configs) {
+        const found = (cfg.amenities || []).find((item) => item.value === raw || item.label === raw);
+        if (found?.label) return translateListingLabel(found.label);
+      }
+      return raw.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function isGeneratedPropertyNarrative(text = "") {
+      const value = String(text || "").trim();
+      if (!value) return false;
+      const markers = [
+        "Located in",
+        "Key facts:",
+        "Features include:",
+        "Nearby highlights include:",
+        "Area summary:",
+        "This listing is",
+        "Guide price:"
+      ];
+      return markers.filter((marker) => value.includes(marker)).length >= 3;
+    }
+
+    function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
+      const normalizedType = normalizeType(property?.type || property?.listing_type || "sale");
+      const location = getPropertyStructuredLocation(property);
+      const title = property?.title || translateListingLabel("Property listing");
+      const subtype = property?.subtype || property?.property_type || translateListingLabel("Property");
+      const introBits = [title, subtype].filter(Boolean).join(" - ");
+      const locationBits = uniqueTextParts([location.street, location.area, location.city, location.district]).join(", ");
+      const factBits = [];
+      const beds = property?.beds ?? property?.bedrooms;
+      const baths = property?.baths ?? property?.bathrooms;
+      const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+      if (beds) factBits.push(`${beds} ${translateListingLabel("bed")}${String(beds) === "1" ? "" : "s"}`);
+      if (baths) factBits.push(`${baths} ${translateListingLabel("bath")}${String(baths) === "1" ? "" : "s"}`);
+      if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
+      if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${property.title_type || extra.title_type}`);
+      if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${extra.furnished}`);
+      if (extra.contract_months) factBits.push(`${translateListingLabel("Minimum Contract")}: ${extra.contract_months} ${translateListingLabel("months")}`);
+      if (extra.deposit) factBits.push(`${translateListingLabel("Deposit")}: ${fmtP(parseIntSafe(extra.deposit) || 0)}`);
+      const amenityLabels = (Array.isArray(property?.amenities) ? property.amenities : [])
+        .map((amenity) => getAmenityDisplayLabel(amenity, normalizedType))
+        .filter(Boolean);
+      const amenitiesText = amenityLabels.length ? amenityLabels.slice(0, 6).join(", ") : translateListingLabel("standard amenities");
+      const nearbyText = (Array.isArray(nearby) ? nearby : [])
+        .slice(0, 3)
+        .map((item) => item?.name || item?.label || "")
+        .filter(Boolean)
+        .join(", ") || translateListingLabel("key daily services");
+      const areaSummary = buildLocationHighlightsText({
+        type: normalizedType,
+        area: location.area,
+        district: location.district,
+        city: location.city,
+        neighborhood: location.neighborhood,
+        nearby
+      });
+      const typePurpose = {
+        sale: translateListingLabel("ideal for buyers looking for long-term value"),
+        rent: translateListingLabel("well-suited for renters seeking convenience"),
+        land: translateListingLabel("suitable for development or long-term investment"),
+        commercial: translateListingLabel("positioned for business operations and growth"),
+        student: translateListingLabel("tailored for students and guardians seeking safe accommodation")
+      };
+      const priceText = Number(property?.price) ? fmtP(property.price, property.period) : "";
+      return [
+        introBits,
+        locationBits ? `${translateListingLabel("Located in")} ${locationBits}.` : "",
+        factBits.length ? `${translateListingLabel("Key facts")}: ${factBits.join(", ")}.` : "",
+        `${translateListingLabel("Features include")}: ${amenitiesText}.`,
+        `${translateListingLabel("Nearby highlights include")}: ${nearbyText}.`,
+        areaSummary ? `${translateListingLabel("Area summary")}: ${areaSummary}` : "",
+        `${translateListingLabel("This listing is")} ${typePurpose[normalizedType] || translateListingLabel("well-positioned in its area")}.`,
+        priceText ? `${translateListingLabel("Guide price")}: ${priceText}.` : ""
+      ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    }
+
+    function getLocalizedPropertyDescription(property = {}, nearby = []) {
+      const translated = getLocalizedListingText(property, "description", "");
+      if (translated) return translated;
+      const raw = property?.desc || property?.description || "";
+      if (currentLang !== "en" && isGeneratedPropertyNarrative(raw)) {
+        return buildLocalizedPropertyNarrative(property, nearby);
+      }
+      return raw || buildLocalizedPropertyNarrative(property, nearby);
+    }
+
+    function getLocalizedPropertyHighlights(property = {}, nearby = []) {
+      const translated = getLocalizedListingText(property, "area_highlights", "");
+      if (translated) return translated;
+      const location = getPropertyStructuredLocation(property);
+      if (currentLang !== "en" || !property?.area_highlights) {
+        return buildLocationHighlightsText({
+          type: normalizeType(property?.type || property?.listing_type || "sale"),
+          area: location.area,
+          district: location.district,
+          city: location.city,
+          neighborhood: location.neighborhood,
+          nearby
+        });
+      }
+      return property.area_highlights;
+    }
+
     async function submitPropertyInquiry(id) {
       const property = findPropertyForUi(id);
       if (!property) return;
@@ -14204,6 +14628,7 @@
           lpLastHierarchySignature = "";
           lpLastAddressValue = "";
           lpAreaManualOverride = false;
+          lpStreetManualOverride = false;
           const success = document.getElementById("lp-success-box");
           if (success) success.classList.add("hidden");
         }
@@ -14238,6 +14663,7 @@
         period: p?.price_period || p?.period || "",
         img: p?.primary_image_url || p?.img || imageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
         desc: p?.description || p?.desc || "",
+        address: p?.address || "",
         lat: Number(p?.latitude ?? p?.lat),
         lng: Number(p?.longitude ?? p?.lng),
         status: p?.status || "pending",
@@ -14251,6 +14677,11 @@
         lister_display_name: p?.lister_name || p?.contact_display_name || "",
         area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",
         translations: p?.extra_fields?.translations || p?.translations || {},
+        city: p?.city || p?.extra_fields?.city || "",
+        neighborhood: p?.neighborhood || p?.extra_fields?.neighborhood || "",
+        region: p?.region || p?.extra_fields?.region || "",
+        street_name: p?.street_name || p?.extra_fields?.street_name || "",
+        resolved_location_label: p?.resolved_location_label || p?.extra_fields?.resolved_location_label || "",
         nearby_places: Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : []),
         images: imageItems,
         detail_loaded: options.detailLoaded === true || images.length > 0,
@@ -15107,6 +15538,7 @@
         "East": "Buvanjuba",
         "West": "Bugwanjuba",
         "Area / Neighbourhood *": "Ekitundu / Ekifo *",
+        "Street / Road": "Ekkubo / Oluguudo",
         "Full Address": "Endagiriro yonna",
         "Property Category *": "Ekika kya Property *",
         "Price (USh) *": "Omuwendo (USh) *",
@@ -15117,7 +15549,7 @@
         "Location setup (step-by-step)": "Okutegeka Ekifo (omutendera ku mutendera)",
         "1. Select region, then district.": "1. Londa region, oluvannyuma district.",
         "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, oluvannyuma neighbourhood/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Kakasa area era oyinza okuwandiika endagiriro yonna ey'ekkubo.",
+        "3. Confirm area, street, and optionally type full address.": "3. Kakasa area, ekkubo, era oyinza okuwandiika endagiriro yonna.",
         "4. Confirm the map pin matches your property location.": "4. Kakasa nti map pin ekwatagana n'ekifo kya property yo.",
         "Sync map to selected area": "Tereza maapu ku kitundu ekirondeddwa",
         "Continue to Photos →": "Genda ku Bifaananyi →",
@@ -15150,6 +15582,10 @@
         "Select neighbourhood": "Londa ekifo",
         "Continue to Photos →": "Genda ku Bifaananyi →",
         "Auto-filled from district/city/neighbourhood": "Ejjula yokka okuva ku disitulikiti/ekibuga/ekifo",
+        "e.g. Kira Road": "nga Kira Road",
+        "Clear & Start Again": "Gyamu Otandike Buto",
+        "Reset this listing form and remove the current photos, details, and verification draft?": "Oddemu otandike ffoomu eno era oggyewo ebifaananyi, details, n'ekiwandiiko ky'okukakasa ekiriwo kati?",
+        "Listing form cleared. Start again with the correct property type.": "Ffoomu ya listing eggiddwawo. Tandika nate n'ekika kya property ekituufu.",
         "Auto-detected after pin placement": "Etegeerekeka yokka oluvannyuma lwa pin",
         "Set a pin to resolve the nearest location label.": "Teeka pin okulaga ekifo ekisinga okuba okumpi.",
         "Resolving nearest location...": "Tunoonya ekifo ekiri okumpi...",
@@ -15276,6 +15712,7 @@
         "East": "Mashariki",
         "West": "Magharibi",
         "Area / Neighbourhood *": "Eneo / Mtaa *",
+        "Street / Road": "Barabara / Mtaa",
         "Full Address": "Anwani Kamili",
         "Property Category *": "Kundi la Mali *",
         "Price (USh) *": "Bei (USh) *",
@@ -15286,7 +15723,7 @@
         "Location setup (step-by-step)": "Mpangilio wa Eneo (hatua kwa hatua)",
         "1. Select region, then district.": "1. Chagua kanda, kisha wilaya.",
         "2. Select city/town, then neighbourhood/zone.": "2. Chagua mji/town, kisha mtaa/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Thibitisha eneo na unaweza kuandika anwani kamili ya barabara.",
+        "3. Confirm area, street, and optionally type full address.": "3. Thibitisha eneo, barabara, na kwa hiari andika anwani kamili.",
         "4. Confirm the map pin matches your property location.": "4. Thibitisha pin ya ramani inalingana na eneo la mali yako.",
         "Sync map to selected area": "Sawazisha ramani na eneo ulilochagua",
         "Continue to Photos →": "Endelea kwa Picha →",
@@ -15319,6 +15756,10 @@
         "Select neighbourhood": "Chagua mtaa",
         "Continue to Photos →": "Endelea kwa Picha →",
         "Auto-filled from district/city/neighbourhood": "Hujazwa moja kwa moja kutoka wilaya/mji/mtaa",
+        "e.g. Kira Road": "mf. Barabara ya Kira",
+        "Clear & Start Again": "Futa na Uanze Tena",
+        "Reset this listing form and remove the current photos, details, and verification draft?": "Ufute fomu hii ya tangazo na kuondoa picha, maelezo, na rasimu ya uthibitisho ya sasa?",
+        "Listing form cleared. Start again with the correct property type.": "Fomu ya tangazo imefutwa. Anza tena kwa aina sahihi ya mali.",
         "Auto-detected after pin placement": "Hutambuliwa moja kwa moja baada ya kuweka pin",
         "Set a pin to resolve the nearest location label.": "Weka pin ili kutambua eneo la karibu kwa usahihi.",
         "Resolving nearest location...": "Inatafuta eneo la karibu...",
@@ -16445,10 +16886,11 @@
       const title = lpVal("lp-title") || translateListingLabel("Your listing title will appear here");
       if (titleEl) titleEl.textContent = title;
 
+      const streetName = lpVal("lp-street-name");
       const area = lpVal("lp-area") || translateListingLabel("Area");
       const city = lpVal("lp-city");
       const district = lpVal("list-district-sel") || translateListingLabel("District");
-      const locationParts = [area];
+      const locationParts = uniqueTextParts([streetName, area]);
       if (city && city !== area) locationParts.push(city);
       locationParts.push(district);
       if (locEl) locEl.textContent = locationParts.filter(Boolean).join(", ");
@@ -17332,16 +17774,8 @@
       const detailNearby = Array.isArray(p.nearby_places) && p.nearby_places.length
         ? p.nearby_places
         : getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
-      const detailHighlights = p.area_highlights || buildLocationHighlightsText({
-        type: normalizedType,
-        area: p.area,
-        district: p.district,
-        city: p.city || "",
-        neighborhood: p.area,
-        nearby: detailNearby
-      });
-      const localizedDescription = getLocalizedListingText(p, "description", p.desc);
-      const localizedHighlights = getLocalizedListingText(p, "area_highlights", detailHighlights);
+      const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
+      const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
       const addedMeta = listingDateMeta(p);
       const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
       const detailPhotos = getPropertyGalleryPhotos(p);
@@ -17350,6 +17784,7 @@
       detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
       if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
       const detailIdArg = JSON.stringify(String(p.id));
+      const detailLocation = getPropertyLocationDisplay(p);
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
       const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, ${translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" })}`) : "";
@@ -17389,7 +17824,7 @@
                       ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
                     </div>
                     <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${p.title}</h1>
-                    <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
+                    <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${detailLocation || [p.area, p.district].filter(Boolean).join(", ")}</p>
                     <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
                       <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
                     </div>
@@ -17429,10 +17864,10 @@
                   </div>
                 </div>
                 <div class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
-                  ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> Beds</div>` : ""}
-                  ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> Baths</div>` : ""}
+                  ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${translateListingLabel("bed")}${String(p.beds) === "1" ? "" : "s"}</div>` : ""}
+                  ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${translateListingLabel("bath")}${String(p.baths) === "1" ? "" : "s"}</div>` : ""}
                   ${p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""}
-                  <div class="bg-green-50 rounded-lg p-2"><strong>${p.subtype || "Property"}</strong></div>
+                  <div class="bg-green-50 rounded-lg p-2"><strong>${p.subtype || translateListingLabel("Property")}</strong></div>
                 </div>
               </div>
             </div>
@@ -17959,13 +18394,13 @@
       if (!map) return;
       const points = (list || [])
         .map((p) => getListingMapPoint(p))
-        .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng))
+        .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng) && isLikelyUgandaCoordinate(point.lat, point.lng))
         .map((point) => ({ lat: point.lat, lng: point.lng }));
 
       if (mapProviders[mapId] === "google" && window.google?.maps) {
         if (!points.length) {
           map.setCenter(MAP_DEFAULT_CENTER);
-          map.setZoom(MAP_DEFAULT_ZOOM);
+          map.setZoom(mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
           return;
         }
         if (points.length === 1) {
@@ -17977,14 +18412,20 @@
         points.forEach((point) => bounds.extend(point));
         map.fitBounds(bounds);
         google.maps.event.addListenerOnce(map, "idle", () => {
-          if (map.getZoom() > MAP_MULTI_LISTING_MAX_ZOOM) map.setZoom(MAP_MULTI_LISTING_MAX_ZOOM);
+          const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
+          const minZoom = mapId === "map-home" ? MAP_HOME_MIN_ZOOM : 0;
+          if (map.getZoom() > maxZoom) map.setZoom(maxZoom);
+          if (map.getZoom() < minZoom) {
+            map.setCenter(MAP_DEFAULT_CENTER);
+            map.setZoom(minZoom);
+          }
         });
         return;
       }
 
       if (!window.L) return;
       if (!points.length) {
-        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
+        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
         return;
       }
       if (points.length === 1) {
@@ -17992,7 +18433,11 @@
         return;
       }
       const bounds = L.latLngBounds(points.map((point) => [point.lat, point.lng]));
-      map.fitBounds(bounds.pad(0.2), { maxZoom: MAP_MULTI_LISTING_MAX_ZOOM });
+      const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
+      map.fitBounds(bounds.pad(mapId === "map-home" ? 0.08 : 0.2), { maxZoom });
+      if (mapId === "map-home" && map.getZoom() < MAP_HOME_MIN_ZOOM) {
+        map.setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_HOME_MIN_ZOOM);
+      }
     }
 
     function setMapMarkers(mapId, list) {
