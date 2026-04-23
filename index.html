@@ -18731,11 +18731,11 @@
           title: p.title || "MakaUg listing",
           icon: isHomeMap ? {
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 7,
-            fillColor: "#16a34a",
+            scale: 8.5,
+            fillColor: "#f97316",
             fillOpacity: 0.95,
             strokeColor: "#ffffff",
-            strokeWeight: 2
+            strokeWeight: 2.5
           } : undefined
         });
         const idArg = propertyIdArg(p.id);
@@ -18960,10 +18960,10 @@
         if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
         const marker = mapId === "map-home"
           ? L.circleMarker([point.lat, point.lng], {
-            radius: 7,
+            radius: 8,
             color: "#ffffff",
-            weight: 2,
-            fillColor: "#16a34a",
+            weight: 2.5,
+            fillColor: "#f97316",
             fillOpacity: 0.95
           }).addTo(maps[mapId])
           : L.marker([point.lat, point.lng]).addTo(maps[mapId]);
@@ -19003,11 +19003,6 @@
           map.setZoom(mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
           return;
         }
-        if (mapId === "map-home" && points.length >= 5) {
-          map.setCenter(homeOverviewCenter);
-          map.setZoom(MAP_HOME_MIN_ZOOM);
-          return;
-        }
         if (points.length === 1) {
           map.setCenter(points[0]);
           map.setZoom(MAP_NEIGHBORHOOD_ZOOM);
@@ -19020,10 +19015,7 @@
           const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
           const minZoom = mapId === "map-home" ? MAP_HOME_MIN_ZOOM : 0;
           if (map.getZoom() > maxZoom) map.setZoom(maxZoom);
-          if (map.getZoom() < minZoom) {
-            map.setCenter(mapId === "map-home" ? homeOverviewCenter : MAP_DEFAULT_CENTER);
-            map.setZoom(minZoom);
-          }
+          if (map.getZoom() < minZoom) map.setZoom(minZoom);
         });
         return;
       }
@@ -19034,10 +19026,6 @@
         map.setView([fallbackCenter.lat, fallbackCenter.lng], mapId === "map-home" ? MAP_HOME_MIN_ZOOM : MAP_DEFAULT_ZOOM);
         return;
       }
-      if (mapId === "map-home" && points.length >= 5) {
-        map.setView([homeOverviewCenter.lat, homeOverviewCenter.lng], MAP_HOME_MIN_ZOOM);
-        return;
-      }
       if (points.length === 1) {
         map.setView([points[0].lat, points[0].lng], MAP_NEIGHBORHOOD_ZOOM);
         return;
@@ -19046,7 +19034,7 @@
       const maxZoom = mapId === "map-home" ? MAP_HOME_MAX_ZOOM : MAP_MULTI_LISTING_MAX_ZOOM;
       map.fitBounds(bounds.pad(mapId === "map-home" ? 0.08 : 0.2), { maxZoom });
       if (mapId === "map-home" && map.getZoom() < MAP_HOME_MIN_ZOOM) {
-        map.setView([homeOverviewCenter.lat, homeOverviewCenter.lng], MAP_HOME_MIN_ZOOM);
+        map.setZoom(MAP_HOME_MIN_ZOOM);
       }
     }
 
