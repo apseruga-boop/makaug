@@ -2577,6 +2577,7 @@
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
+            <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
         </div>
@@ -2736,6 +2737,64 @@
               </div>
               <div id="admin-field-agents-table" class="space-y-3"></div>
             </div>
+          </div>
+        </div>
+
+        <div data-admin-tab-panel="whatsapp" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">WhatsApp AI Inbox</h3>
+              <p class="text-xs text-gray-500 mt-1">Monitor every WhatsApp conversation, categorize the reason for contact, assign follow-up, and switch between AI autopilot and human takeover.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Inbox</button>
+          </div>
+          <div id="admin-whatsapp-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div class="grid md:grid-cols-[1fr,180px,180px,180px] gap-2">
+            <input id="admin-whatsapp-search" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search phone, contact, last message...">
+            <select id="admin-whatsapp-status" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">All statuses</option>
+              <option value="open">Open</option>
+              <option value="ai_active">AI Active</option>
+              <option value="awaiting_customer">Awaiting Customer</option>
+              <option value="needs_human">Needs Human</option>
+              <option value="escalated">Escalated</option>
+              <option value="resolved">Resolved</option>
+              <option value="archived">Archived</option>
+            </select>
+            <select id="admin-whatsapp-category" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">All categories</option>
+              <option value="property_search">Property Search</option>
+              <option value="property_listing">Property Listing</option>
+              <option value="broker_help">Broker Help</option>
+              <option value="mortgage">Mortgage</option>
+              <option value="account">Account</option>
+              <option value="support">Support</option>
+              <option value="fraud_report">Fraud / Report</option>
+              <option value="marketing">Campaign / Marketing</option>
+              <option value="general">General</option>
+              <option value="uncategorized">Uncategorized</option>
+            </select>
+            <select id="admin-whatsapp-ai-mode" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+              <option value="">All AI modes</option>
+              <option value="autopilot">Autopilot</option>
+              <option value="copilot">Copilot</option>
+              <option value="off">Human only</option>
+            </select>
+          </div>
+        </div>
+
+        <div data-admin-tab-panel="whatsapp" class="admin-tab-panel grid xl:grid-cols-[360px,1fr] gap-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h4 class="text-lg font-bold text-gray-800">Conversation Queue</h4>
+                <p class="text-xs text-gray-500 mt-1">Latest WhatsApp threads, grouped by phone number and workflow status.</p>
+              </div>
+            </div>
+            <div id="admin-whatsapp-conversations" class="space-y-3"></div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-4">
+            <div id="admin-whatsapp-detail" class="text-sm text-gray-500">Select a conversation to open the full thread, reply with AI help, and control the workflow.</div>
           </div>
         </div>
 
@@ -3863,6 +3922,11 @@
     let adminPropertyRequests = [];
     let adminFieldAgents = [];
     let adminCurrentCampaigns = [];
+    let adminWhatsappSummary = {};
+    let adminWhatsappConversations = [];
+    let adminWhatsappActivePhone = "";
+    let adminWhatsappActiveConversation = null;
+    let adminWhatsappReplyDraft = "";
     let adminActiveReview = null;
     let activeAdminWorkflowTab = "review";
     let adminReviewEvidence = {};
@@ -7422,7 +7486,17 @@
         recentReports: [],
         agents: brokerDirectory,
         fieldAgents: users.filter((user) => user.role === "field_agent").slice(0, 20),
-        propertyRequests: []
+        propertyRequests: [],
+        whatsappSummary: {
+          total_conversations: 0,
+          active_7d: 0,
+          needs_human: 0,
+          resolved: 0,
+          autopilot: 0,
+          copilot: 0,
+          manual_only: 0
+        },
+        whatsappConversations: []
       };
     }
 
@@ -7568,7 +7642,7 @@
     }
 
     function setAdminWorkflowTab(tab = "review") {
-      const allowed = ["review", "actioned", "live", "accounts", "listings"];
+      const allowed = ["review", "actioned", "live", "accounts", "whatsapp", "listings"];
       activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
       document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -7589,13 +7663,22 @@
       const userSearch = (document.getElementById("admin-users-q")?.value || "").trim();
       const userRole = (document.getElementById("admin-users-role")?.value || "").trim();
       const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
+      const whatsappSearch = (document.getElementById("admin-whatsapp-search")?.value || "").trim();
+      const whatsappStatus = (document.getElementById("admin-whatsapp-status")?.value || "").trim();
+      const whatsappCategory = (document.getElementById("admin-whatsapp-category")?.value || "").trim();
+      const whatsappAiMode = (document.getElementById("admin-whatsapp-ai-mode")?.value || "").trim();
       const userParams = new URLSearchParams({ limit: "100" });
       const propertyRequestParams = new URLSearchParams({ limit: "100" });
       const fieldAgentParams = new URLSearchParams({ limit: "100", role: "field_agent" });
+      const whatsappParams = new URLSearchParams({ limit: "50" });
       if (userSearch) userParams.set("search", userSearch);
       if (userRole) userParams.set("role", userRole);
       if (weeklyOnly) userParams.set("weekly_tips_only", "true");
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes] = await Promise.all([
+      if (whatsappSearch) whatsappParams.set("search", whatsappSearch);
+      if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
+      if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
+      if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
@@ -7604,7 +7687,9 @@
         apiRequest("/api/admin/agents?limit=100", { headers }),
         apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
         apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }),
-        apiRequest("/api/admin/campaigns?limit=20", { headers })
+        apiRequest("/api/admin/campaigns?limit=20", { headers }),
+        apiRequest("/api/admin/whatsapp/insights", { headers }),
+        apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers })
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
@@ -7619,6 +7704,8 @@
       adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
       adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
       adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
+      adminWhatsappSummary = whatsappConversationsRes?.summary || whatsappInsightsRes?.data || {};
+      adminWhatsappConversations = Array.isArray(whatsappConversationsRes?.data) ? whatsappConversationsRes.data : [];
       return {
         summary: summaryRes?.data || {},
         recent: recentRes?.data || {},
@@ -7629,7 +7716,9 @@
         agents: adminRemoteAgents,
         propertyRequests: adminPropertyRequests,
         fieldAgents: adminFieldAgents,
-        campaigns: adminCurrentCampaigns
+        campaigns: adminCurrentCampaigns,
+        whatsappSummary: adminWhatsappSummary,
+        whatsappConversations: adminWhatsappConversations
       };
     }
 
@@ -7988,8 +8077,11 @@
       renderAdminFeaturedAgentsRows(adminAgents);
       renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
       renderAdminFieldAgentRows(remoteSnap?.fieldAgents || localSnap.fieldAgents || []);
+      renderAdminWhatsappOverview(remoteSnap?.whatsappSummary || localSnap.whatsappSummary || {});
+      renderAdminWhatsappConversationList(remoteSnap?.whatsappConversations || localSnap.whatsappConversations || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
       setAdminWorkflowTab(activeAdminWorkflowTab);
+      await ensureAdminWhatsappConversationLoaded();
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
           <div class="font-semibold text-gray-800">${u.first_name || ""} ${u.last_name || ""}</div>
@@ -8738,6 +8830,486 @@
             </div>
           </div>`;
       }).join("");
+    }
+
+    function adminWhatsappStatusMeta(status) {
+      const st = String(status || "open").toLowerCase();
+      if (st === "needs_human") return { cls: "bg-red-100 text-red-700", label: "Needs Human" };
+      if (st === "escalated") return { cls: "bg-orange-100 text-orange-700", label: "Escalated" };
+      if (st === "resolved") return { cls: "bg-green-100 text-green-700", label: "Resolved" };
+      if (st === "awaiting_customer") return { cls: "bg-blue-100 text-blue-700", label: "Awaiting Customer" };
+      if (st === "ai_active") return { cls: "bg-emerald-100 text-emerald-700", label: "AI Active" };
+      if (st === "archived") return { cls: "bg-gray-200 text-gray-700", label: "Archived" };
+      return { cls: "bg-amber-100 text-amber-700", label: "Open" };
+    }
+
+    function adminWhatsappPriorityMeta(priority) {
+      const value = String(priority || "normal").toLowerCase();
+      if (value === "urgent") return { cls: "bg-red-100 text-red-700", label: "Urgent" };
+      if (value === "high") return { cls: "bg-orange-100 text-orange-700", label: "High" };
+      if (value === "low") return { cls: "bg-gray-100 text-gray-700", label: "Low" };
+      return { cls: "bg-blue-100 text-blue-700", label: "Normal" };
+    }
+
+    function adminWhatsappAiModeMeta(mode) {
+      const value = String(mode || "autopilot").toLowerCase();
+      if (value === "off") return { cls: "bg-gray-200 text-gray-700", label: "Human Only" };
+      if (value === "copilot") return { cls: "bg-indigo-100 text-indigo-700", label: "Copilot" };
+      return { cls: "bg-green-100 text-green-700", label: "Autopilot" };
+    }
+
+    function adminWhatsappCategoryLabel(category) {
+      const value = String(category || "uncategorized").toLowerCase();
+      return {
+        uncategorized: "Uncategorized",
+        property_search: "Property Search",
+        property_listing: "Property Listing",
+        broker_help: "Broker Help",
+        mortgage: "Mortgage",
+        account: "Account",
+        support: "Support",
+        fraud_report: "Fraud / Report",
+        marketing: "Campaign / Marketing",
+        general: "General"
+      }[value] || "General";
+    }
+
+    function adminWhatsappMessageIcon(messageType) {
+      const type = String(messageType || "text").toLowerCase();
+      if (type === "voice") return "🎤";
+      if (type === "location") return "📍";
+      if (type === "image") return "🖼️";
+      if (type === "document") return "📄";
+      if (type === "media") return "📎";
+      return "💬";
+    }
+
+    function adminWhatsappTimeText(value) {
+      return formatListingDate(value) || "Just now";
+    }
+
+    function renderAdminWhatsappOverview(summary = {}) {
+      const wrap = document.getElementById("admin-whatsapp-overview");
+      if (!wrap) return;
+      const cards = [
+        { label: "Conversations", value: summary.total_conversations || 0, cls: "text-gray-900" },
+        { label: "Active 7d", value: summary.active_7d || 0, cls: "text-green-700" },
+        { label: "Needs Human", value: summary.needs_human || 0, cls: "text-red-700" },
+        { label: "Resolved", value: summary.resolved || 0, cls: "text-green-700" },
+        { label: "Autopilot", value: summary.autopilot || 0, cls: "text-emerald-700" },
+        { label: "Manual / Copilot", value: Number(summary.copilot || 0) + Number(summary.manual_only || 0), cls: "text-indigo-700" }
+      ];
+      wrap.innerHTML = cards.map((card) => `
+        <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">${adminEscape(card.label)}</div>
+          <div class="text-2xl font-black mt-2 ${card.cls}">${adminEscape(card.value)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAdminWhatsappConversationList(conversations = []) {
+      const wrap = document.getElementById("admin-whatsapp-conversations");
+      if (!wrap) return;
+      adminWhatsappConversations = Array.isArray(conversations) ? conversations : [];
+      if (!adminWhatsappConversations.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No WhatsApp conversations have been captured yet.</div>`;
+        const detail = document.getElementById("admin-whatsapp-detail");
+        if (detail) detail.innerHTML = `<div class="text-sm text-gray-500">Once people message the WhatsApp number, each conversation will appear here with category, AI mode, and full message history.</div>`;
+        adminWhatsappActivePhone = "";
+        adminWhatsappActiveConversation = null;
+        return;
+      }
+
+      const phoneSet = new Set(adminWhatsappConversations.map((row) => String(row.phone || "")));
+      if (!adminWhatsappActivePhone || !phoneSet.has(String(adminWhatsappActivePhone))) {
+        adminWhatsappActivePhone = String(adminWhatsappConversations[0]?.phone || "");
+      }
+
+      wrap.innerHTML = adminWhatsappConversations.map((row) => {
+        const active = String(row.phone || "") === String(adminWhatsappActivePhone || "");
+        const status = adminWhatsappStatusMeta(row.status);
+        const aiMode = adminWhatsappAiModeMeta(row.ai_mode);
+        const priority = adminWhatsappPriorityMeta(row.priority);
+        const lastPreview = row.latest_preview || "No preview available yet.";
+        const name = row.contact_name || row.phone || "WhatsApp contact";
+        const role = row.participant_type === "broker"
+          ? "Broker"
+          : row.participant_type === "account"
+            ? "Account holder"
+            : "Guest";
+        return `
+          <button type="button" onclick="adminSelectWhatsappConversation('${adminAttr(row.phone)}')" class="w-full text-left rounded-2xl border ${active ? "border-green-400 bg-green-50 shadow-sm" : "border-gray-200 bg-white hover:border-green-200 hover:bg-green-50/50"} p-4 transition-all">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-900 truncate">${adminEscape(name)}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(row.phone || "-")} • ${adminEscape(role)}</div>
+              </div>
+              <span class="inline-flex items-center rounded-full px-2 py-1 text-[11px] font-bold ${status.cls}">${status.label}</span>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-1.5 text-[11px]">
+              <span class="inline-flex items-center rounded-full px-2 py-1 font-semibold ${aiMode.cls}">${aiMode.label}</span>
+              <span class="inline-flex items-center rounded-full px-2 py-1 font-semibold ${priority.cls}">${priority.label}</span>
+              <span class="inline-flex items-center rounded-full px-2 py-1 font-semibold bg-gray-100 text-gray-700">${adminEscape(adminWhatsappCategoryLabel(row.category))}</span>
+              ${row.needs_attention ? `<span class="inline-flex items-center rounded-full px-2 py-1 font-semibold bg-red-100 text-red-700">Needs reply</span>` : ""}
+            </div>
+            <div class="mt-3 text-sm text-gray-700 line-clamp-2">${adminEscape(lastPreview)}</div>
+            <div class="mt-3 flex items-center justify-between gap-3 text-xs text-gray-500">
+              <span>${adminEscape(adminWhatsappTimeText(row.last_message_at))}</span>
+              <span>${adminEscape(row.inbound_count || 0)} in • ${adminEscape(row.outbound_count || 0)} out</span>
+            </div>
+          </button>
+        `;
+      }).join("");
+    }
+
+    function renderAdminWhatsappDetail(detail = null) {
+      const wrap = document.getElementById("admin-whatsapp-detail");
+      if (!wrap) return;
+      if (!detail?.conversation) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500">Select a conversation to open the thread.</div>`;
+        return;
+      }
+
+      adminWhatsappActiveConversation = detail;
+      const convo = detail.conversation;
+      const status = adminWhatsappStatusMeta(convo.status);
+      const aiMode = adminWhatsappAiModeMeta(convo.ai_mode);
+      const priority = adminWhatsappPriorityMeta(convo.priority);
+      const name = convo.contact_name || convo.phone || "WhatsApp contact";
+      const role = convo.participant_type === "broker"
+        ? `Broker${convo.agent_company ? ` • ${convo.agent_company}` : ""}`
+        : convo.participant_type === "account"
+          ? `Account${convo.user_role ? ` • ${mapRoleLabel(convo.user_role)}` : ""}`
+          : "Guest / public user";
+
+      wrap.innerHTML = `
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-5">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">Active Conversation</div>
+            <h4 class="text-2xl font-black text-gray-900 mt-1">${adminEscape(name)}</h4>
+            <div class="text-sm text-gray-500 mt-1">${adminEscape(convo.phone || "-")} • ${adminEscape(role)}</div>
+            <div class="text-xs text-gray-500 mt-1">Last message: ${adminEscape(adminWhatsappTimeText(convo.last_message_at))}</div>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${status.cls}">${status.label}</span>
+            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${aiMode.cls}">${aiMode.label}</span>
+            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${priority.cls}">${priority.label}</span>
+            <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold bg-gray-100 text-gray-700">${adminEscape(adminWhatsappCategoryLabel(convo.category))}</span>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-[1.05fr,0.95fr] gap-5">
+          <div class="space-y-5">
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Messages</div><div class="text-2xl font-black text-gray-900 mt-2">${adminEscape(convo.total_messages || 0)}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Inbound</div><div class="text-2xl font-black text-gray-900 mt-2">${adminEscape(convo.inbound_count || 0)}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Outbound</div><div class="text-2xl font-black text-gray-900 mt-2">${adminEscape(convo.outbound_count || 0)}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Last intent</div><div class="text-sm font-bold text-gray-900 mt-2">${adminEscape(convo.last_intent || "unknown")}</div></div>
+              </div>
+              <div class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mt-3 text-sm">
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Language</div><div class="font-bold text-gray-900 mt-1">${adminEscape(languageDisplayName(convo.preferred_language || "en"))}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Current step</div><div class="font-bold text-gray-900 mt-1">${adminEscape(convo.current_step || "-")}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Search requests</div><div class="font-bold text-gray-900 mt-1">${adminEscape(detail.related?.search_requests || 0)}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Leads</div><div class="font-bold text-gray-900 mt-1">${adminEscape((detail.related?.property_leads || 0) + (detail.related?.mortgage_leads || 0))}</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">Listings / agent apps</div><div class="font-bold text-gray-900 mt-1">${adminEscape((detail.related?.listings || 0) + (detail.related?.agent_applications || 0))}</div></div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-white p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h5 class="text-lg font-bold text-gray-900">Conversation Thread</h5>
+                  <p class="text-xs text-gray-500 mt-1">Every captured inbound and outbound WhatsApp message for this phone number.</p>
+                </div>
+              </div>
+              <div class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
+                ${(detail.messages || []).length ? detail.messages.map((message) => {
+                  const inbound = String(message.direction || "inbound").toLowerCase() === "inbound";
+                  const body = message.preview || "Message";
+                  return `
+                    <div class="flex ${inbound ? "justify-start" : "justify-end"}">
+                      <div class="max-w-[92%] rounded-2xl px-4 py-3 border ${inbound ? "bg-gray-50 border-gray-200 text-gray-800" : "bg-green-50 border-green-200 text-gray-900"}">
+                        <div class="flex items-center gap-2 text-[11px] text-gray-500 mb-1">
+                          <span>${inbound ? "Customer" : "MakaUg"}</span>
+                          <span>•</span>
+                          <span>${adminEscape(adminWhatsappMessageIcon(message.message_type))}</span>
+                          <span>${adminEscape(message.message_type || "text")}</span>
+                          <span>•</span>
+                          <span>${adminEscape(adminWhatsappTimeText(message.created_at))}</span>
+                        </div>
+                        <div class="text-sm leading-relaxed whitespace-pre-wrap">${adminEscape(body)}</div>
+                      </div>
+                    </div>
+                  `;
+                }).join("") : `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No messages are stored yet for this thread.</div>`}
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-5">
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h5 class="text-lg font-bold text-gray-900">Workflow Control</h5>
+                  <p class="text-xs text-gray-500 mt-1">Categorize the conversation, decide who owns it, and control whether AI should keep driving replies.</p>
+                </div>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">Status</span>
+                  <select id="admin-whatsapp-detail-status" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                    <option value="open"${convo.status === "open" ? " selected" : ""}>Open</option>
+                    <option value="ai_active"${convo.status === "ai_active" ? " selected" : ""}>AI Active</option>
+                    <option value="awaiting_customer"${convo.status === "awaiting_customer" ? " selected" : ""}>Awaiting Customer</option>
+                    <option value="needs_human"${convo.status === "needs_human" ? " selected" : ""}>Needs Human</option>
+                    <option value="escalated"${convo.status === "escalated" ? " selected" : ""}>Escalated</option>
+                    <option value="resolved"${convo.status === "resolved" ? " selected" : ""}>Resolved</option>
+                    <option value="archived"${convo.status === "archived" ? " selected" : ""}>Archived</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">Category</span>
+                  <select id="admin-whatsapp-detail-category" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                    <option value="uncategorized"${convo.category === "uncategorized" ? " selected" : ""}>Uncategorized</option>
+                    <option value="property_search"${convo.category === "property_search" ? " selected" : ""}>Property Search</option>
+                    <option value="property_listing"${convo.category === "property_listing" ? " selected" : ""}>Property Listing</option>
+                    <option value="broker_help"${convo.category === "broker_help" ? " selected" : ""}>Broker Help</option>
+                    <option value="mortgage"${convo.category === "mortgage" ? " selected" : ""}>Mortgage</option>
+                    <option value="account"${convo.category === "account" ? " selected" : ""}>Account</option>
+                    <option value="support"${convo.category === "support" ? " selected" : ""}>Support</option>
+                    <option value="fraud_report"${convo.category === "fraud_report" ? " selected" : ""}>Fraud / Report</option>
+                    <option value="marketing"${convo.category === "marketing" ? " selected" : ""}>Campaign / Marketing</option>
+                    <option value="general"${convo.category === "general" ? " selected" : ""}>General</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">Priority</span>
+                  <select id="admin-whatsapp-detail-priority" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                    <option value="low"${convo.priority === "low" ? " selected" : ""}>Low</option>
+                    <option value="normal"${convo.priority === "normal" ? " selected" : ""}>Normal</option>
+                    <option value="high"${convo.priority === "high" ? " selected" : ""}>High</option>
+                    <option value="urgent"${convo.priority === "urgent" ? " selected" : ""}>Urgent</option>
+                  </select>
+                </label>
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">AI Mode</span>
+                  <select id="admin-whatsapp-detail-ai-mode" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                    <option value="autopilot"${convo.ai_mode === "autopilot" ? " selected" : ""}>Autopilot</option>
+                    <option value="copilot"${convo.ai_mode === "copilot" ? " selected" : ""}>Copilot</option>
+                    <option value="off"${convo.ai_mode === "off" ? " selected" : ""}>Human Only</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3 mt-3">
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">Assigned To</span>
+                  <input id="admin-whatsapp-detail-assigned" value="${adminAttr(convo.assigned_to || "")}" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Admin owner or team member">
+                </label>
+                <label class="block">
+                  <span class="text-xs font-semibold text-gray-600">Conversation Summary</span>
+                  <input id="admin-whatsapp-detail-summary" value="${adminAttr(convo.last_summary || "")}" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Short summary of what the person needs">
+                </label>
+              </div>
+              <label class="block mt-3">
+                <span class="text-xs font-semibold text-gray-600">Admin Notes</span>
+                <textarea id="admin-whatsapp-detail-notes" rows="4" class="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Internal notes for the support team...">${adminEscape(convo.admin_notes || "")}</textarea>
+              </label>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button onclick="adminSaveWhatsappConversationState()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Save Workflow</button>
+                <button type="button" onclick="adminOpenWhatsappThread()" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2.5 rounded-xl text-sm font-semibold">Open in WhatsApp</button>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-white p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h5 class="text-lg font-bold text-gray-900">Reply Composer</h5>
+                  <p class="text-xs text-gray-500 mt-1">Use AI to draft the reply, then send it through the connected provider or open it manually in WhatsApp.</p>
+                </div>
+              </div>
+              <div class="rounded-xl border border-green-100 bg-green-50 p-3 text-sm text-green-900 mb-3">
+                <div class="font-semibold">Latest ask</div>
+                <div class="mt-1">${adminEscape(convo.latest_preview || "No inbound message preview available yet.")}</div>
+              </div>
+              <textarea id="admin-whatsapp-reply-text" oninput="adminWhatsappReplyDraft = this.value" rows="8" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50" placeholder="Type the reply here or ask AI to draft it...">${adminEscape(adminWhatsappReplyDraft || "")}</textarea>
+              <div id="admin-whatsapp-suggestion-box" class="mt-3 text-xs text-gray-500">${convo.ai_mode === "autopilot" ? "Autopilot is active for this conversation. Switch to Copilot or Human Only if you want AI to stop auto-handling new inbound messages." : "Ask AI to draft a reply, then edit before sending."}</div>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button onclick="adminSuggestWhatsappReply()" class="border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2.5 rounded-xl text-sm font-semibold">AI Draft Reply</button>
+                <button onclick="adminSendWhatsappReply()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Send Reply</button>
+                <button onclick="adminSendWhatsappReply('ai')" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-4 py-2.5 rounded-xl text-sm font-semibold">Send as AI</button>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h5 class="text-lg font-bold text-gray-900">Intent & Record Signals</h5>
+                  <p class="text-xs text-gray-500 mt-1">Quick view of what the system believes this conversation is about and what linked records already exist.</p>
+                </div>
+              </div>
+              <div class="space-y-3">
+                ${(detail.intents || []).slice(0, 5).map((intent) => `
+                  <div class="rounded-xl border border-gray-200 bg-white p-3">
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                      <div class="font-semibold text-gray-900">${adminEscape(intent.detected_intent || "unknown")}</div>
+                      <div class="text-xs text-gray-500">${adminEscape(adminWhatsappTimeText(intent.created_at))}</div>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">Confidence: ${adminEscape(intent.confidence || "-")} • Step: ${adminEscape(intent.current_step || "-")} • Language: ${adminEscape(intent.language || "en")}</div>
+                    ${intent.raw_text ? `<div class="text-sm text-gray-700 mt-2">${adminEscape(intent.raw_text)}</div>` : ""}
+                  </div>
+                `).join("") || `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No intent logs saved yet.</div>`}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function adminSelectWhatsappConversation(phone) {
+      adminWhatsappActivePhone = String(phone || "");
+      adminWhatsappReplyDraft = "";
+      await loadAdminWhatsappConversation(adminWhatsappActivePhone);
+    }
+
+    async function ensureAdminWhatsappConversationLoaded() {
+      if (activeAdminWorkflowTab !== "whatsapp") return;
+      if (!adminWhatsappConversations.length) return;
+      if (!adminWhatsappActivePhone) {
+        adminWhatsappActivePhone = String(adminWhatsappConversations[0]?.phone || "");
+      }
+      if (!adminWhatsappActivePhone) return;
+      if (String(adminWhatsappActiveConversation?.conversation?.phone || "") === String(adminWhatsappActivePhone)) return;
+      await loadAdminWhatsappConversation(adminWhatsappActivePhone, { preserveDraft: true });
+    }
+
+    async function loadAdminWhatsappConversation(phone, options = {}) {
+      const wrap = document.getElementById("admin-whatsapp-detail");
+      if (wrap) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500">Loading conversation...</div>`;
+      }
+      if (!canUseLiveAdminApi()) {
+        if (wrap) wrap.innerHTML = `<div class="text-sm text-gray-500">Sign in as admin or save an admin API key first.</div>`;
+        return;
+      }
+      try {
+        const response = await apiRequest(`/api/admin/whatsapp/conversations/${encodeURIComponent(phone)}`, {
+          headers: adminAuthHeaders()
+        });
+        adminWhatsappActiveConversation = response?.data || null;
+        if (!options.preserveDraft) {
+          adminWhatsappReplyDraft = "";
+        }
+        renderAdminWhatsappDetail(adminWhatsappActiveConversation);
+      } catch (error) {
+        if (wrap) {
+          wrap.innerHTML = `<div class="text-sm text-red-600">Could not load this WhatsApp conversation: ${adminEscape(error.message || "request failed")}</div>`;
+        }
+      }
+    }
+
+    async function adminSaveWhatsappConversationState() {
+      if (!adminWhatsappActivePhone || !canUseLiveAdminApi()) {
+        toast("Open a WhatsApp conversation first.");
+        return;
+      }
+      try {
+        await apiRequest(`/api/admin/whatsapp/conversations/${encodeURIComponent(adminWhatsappActivePhone)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: {
+            status: document.getElementById("admin-whatsapp-detail-status")?.value || "open",
+            category: document.getElementById("admin-whatsapp-detail-category")?.value || "uncategorized",
+            priority: document.getElementById("admin-whatsapp-detail-priority")?.value || "normal",
+            ai_mode: document.getElementById("admin-whatsapp-detail-ai-mode")?.value || "autopilot",
+            assigned_to: document.getElementById("admin-whatsapp-detail-assigned")?.value || "",
+            last_summary: document.getElementById("admin-whatsapp-detail-summary")?.value || "",
+            admin_notes: document.getElementById("admin-whatsapp-detail-notes")?.value || ""
+          }
+        });
+        await renderAdminDashboard();
+        await loadAdminWhatsappConversation(adminWhatsappActivePhone, { preserveDraft: true });
+        toast("WhatsApp workflow updated.");
+      } catch (error) {
+        toast(`Could not save WhatsApp workflow: ${error.message || "error"}`);
+      }
+    }
+
+    async function adminSuggestWhatsappReply() {
+      if (!adminWhatsappActivePhone || !canUseLiveAdminApi()) {
+        toast("Open a WhatsApp conversation first.");
+        return;
+      }
+      const suggestionBox = document.getElementById("admin-whatsapp-suggestion-box");
+      if (suggestionBox) suggestionBox.textContent = "Generating AI draft...";
+      try {
+        const response = await apiRequest(`/api/admin/whatsapp/conversations/${encodeURIComponent(adminWhatsappActivePhone)}/suggest-reply`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {}
+        });
+        adminWhatsappReplyDraft = response?.data?.text || "";
+        const textarea = document.getElementById("admin-whatsapp-reply-text");
+        if (textarea) textarea.value = adminWhatsappReplyDraft;
+        if (suggestionBox) suggestionBox.textContent = "AI draft ready. Review it, edit if needed, then send.";
+      } catch (error) {
+        if (suggestionBox) suggestionBox.textContent = `AI draft failed: ${error.message || "error"}`;
+        toast(`AI reply suggestion failed: ${error.message || "error"}`);
+      }
+    }
+
+    async function adminSendWhatsappReply(source = "human") {
+      if (!adminWhatsappActivePhone || !canUseLiveAdminApi()) {
+        toast("Open a WhatsApp conversation first.");
+        return;
+      }
+      const textarea = document.getElementById("admin-whatsapp-reply-text");
+      const text = (textarea?.value || adminWhatsappReplyDraft || "").trim();
+      if (!text) {
+        toast("Write the reply first or ask AI to draft it.");
+        return;
+      }
+
+      try {
+        const response = await apiRequest(`/api/admin/whatsapp/conversations/${encodeURIComponent(adminWhatsappActivePhone)}/reply`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {
+            text,
+            source,
+            status: "awaiting_customer"
+          }
+        });
+
+        const manualUrl = response?.data?.manual_url || "";
+        if (response?.data?.manual_required && manualUrl) {
+          window.open(manualUrl, "_blank", "noopener,noreferrer");
+          toast("Provider fallback opened in WhatsApp. Send the message there to complete the reply.");
+        } else {
+          toast(source === "ai" ? "AI reply sent." : "WhatsApp reply sent.");
+        }
+
+        adminWhatsappReplyDraft = "";
+        if (textarea) textarea.value = "";
+        await renderAdminDashboard();
+        await loadAdminWhatsappConversation(adminWhatsappActivePhone);
+      } catch (error) {
+        toast(`Could not send WhatsApp reply: ${error.message || "error"}`);
+      }
+    }
+
+    function adminOpenWhatsappThread() {
+      if (!adminWhatsappActivePhone) {
+        toast("Open a WhatsApp conversation first.");
+        return;
+      }
+      const text = (document.getElementById("admin-whatsapp-reply-text")?.value || adminWhatsappReplyDraft || "").trim();
+      const url = buildWhatsAppUrl(adminWhatsappActivePhone, text);
+      if (!url) {
+        toast("Could not open WhatsApp for this phone number.");
+        return;
+      }
+      window.open(url, "_blank", "noopener,noreferrer");
     }
 
     function adminEvidenceDisplayValue(value) {

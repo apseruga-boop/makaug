@@ -8,6 +8,10 @@ const {
   transcribeAudioFromUrl,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
+const {
+  getWhatsappConversationControl,
+  syncWhatsappConversationState
+} = require('../services/whatsappConversationService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -258,6 +262,20 @@ function tt(lang, key, vars = {}) {
     msg = msg.replaceAll(`{${k}}`, String(v));
   });
   return msg;
+}
+
+function humanHandoffAck(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: 'Thanks. Your message is now in the MakaUg support inbox and a team member will reply here shortly.',
+    lg: 'Webale. Obubaka bwo butuuse mu support inbox ya MakaUg era omu ku team ajja kuddamu wano mu bbanga ttono.',
+    sw: 'Asante. Ujumbe wako sasa uko kwenye kisanduku cha msaada cha MakaUg na mshiriki wa timu atakujibu hapa karibuni.',
+    ac: 'Apwoyo. Ngec mamegi dong odonyo i MakaUg support inbox, ci dano me tim wa bino dwogo kany cok.',
+    ny: 'Webare. Obutumwa bwawe bwashika omu support inbox ya MakaUg kandi omu ahari team naija kukugarukamu hano ahonaaho.',
+    rn: 'Murakoze. Ubutumwa bwanyu bwinjiye omu support inbox ya MakaUg kandi omuntu wo omu team aragarukamu aha mu bwangu.',
+    sm: 'Webale. Obubaka bwo butuuse mu support inbox ya MakaUg era omu ku team ajja kukuddamu wano mu bbanga ttono.'
+  };
+  return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
 }
 
 function normalizeInput(value) {
@@ -2249,6 +2267,7 @@ async function processInboundRuntime({
   const session = await getSession(phone);
   const sessionLang = session.language || 'en';
   const sessionStep = session.current_step || 'greeting';
+  const conversationControl = await getWhatsappConversationControl(phone);
 
   let effectiveBody = normalizeInput(body);
   let transcriptRecord = null;
@@ -2309,6 +2328,36 @@ async function processInboundRuntime({
     modelUsed: intentResult.model || null
   });
 
+  const shouldPauseAutomation = ['off', 'copilot'].includes(String(conversationControl?.ai_mode || '').toLowerCase())
+    || ['needs_human', 'escalated'].includes(String(conversationControl?.status || '').toLowerCase());
+
+  if (shouldPauseAutomation) {
+    await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
+    await upsertWhatsappUserProfile(phone, {
+      preferredLanguage: sessionLang,
+      metadata: {
+        last_intent: intentResult.intent || 'unknown',
+        last_step: sessionStep,
+        automation_paused: true
+      }
+    });
+    await syncWhatsappConversationState({
+      phone,
+      direction: 'inbound',
+      intent: intentResult.intent,
+      preferredLanguage: sessionLang,
+      currentStep: sessionStep,
+      provider,
+      messageType,
+      metadata: {
+        automation_paused: true,
+        paused_reason: conversationControl?.status || conversationControl?.ai_mode || 'manual_review'
+      }
+    });
+
+    return { message: humanHandoffAck(sessionLang), nextStep: sessionStep };
+  }
+
   const { message, nextStep } = await processMessage(
     phone,
     effectiveBody,
@@ -2324,6 +2373,19 @@ async function processInboundRuntime({
     metadata: {
       last_intent: intentResult.intent || 'unknown',
       last_step: nextStep
+    }
+  });
+
+  await syncWhatsappConversationState({
+    phone,
+    direction: 'inbound',
+    intent: intentResult.intent,
+    preferredLanguage: refreshedSession.language || sessionLang,
+    currentStep: nextStep,
+    provider,
+    messageType,
+    metadata: {
+      last_inbound_message_id: inboundMessageId || null
     }
   });
 
@@ -2381,6 +2443,19 @@ router.post('/webhook', async (req, res) => {
               nextStep
             }
           });
+          await syncWhatsappConversationState({
+            phone: inbound.phone,
+            direction: 'outbound',
+            preferredLanguage: nextStep === 'choose_language' ? 'en' : null,
+            currentStep: nextStep,
+            provider: 'meta',
+            messageType: 'text',
+            ai: true,
+            metadata: {
+              source: 'whatsapp_runtime',
+              last_reply_preview: String(message || '').slice(0, 240)
+            }
+          });
         } catch (err) {
           logger.error(`Meta inbound processing failed for ${inbound.phone}`, err);
         }
@@ -2424,6 +2499,19 @@ router.post('/webhook', async (req, res) => {
         provider: 'twilio',
         reply: message,
         nextStep
+      }
+    });
+    await syncWhatsappConversationState({
+      phone,
+      direction: 'outbound',
+      preferredLanguage: nextStep === 'choose_language' ? 'en' : null,
+      currentStep: nextStep,
+      provider: 'twilio',
+      messageType: 'text',
+      ai: true,
+      metadata: {
+        source: 'whatsapp_runtime',
+        last_reply_preview: String(message || '').slice(0, 240)
       }
     });
 

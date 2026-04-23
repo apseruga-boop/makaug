@@ -8,7 +8,8 @@ const { DISTRICTS } = require('../utils/constants');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { processPendingCampaignQueue, refreshCampaignStatus } = require('../services/whatsappCampaignService');
-const { generateCampaignCopy } = require('../services/aiService');
+const { generateCampaignCopy, suggestWhatsappAssistantReply } = require('../services/aiService');
+const { sendWhatsAppText } = require('../services/whatsappNotificationService');
 const {
   buildAutomatedListingReview,
   createOwnerEditToken,
@@ -21,6 +22,21 @@ const {
   getCachedExternalDuplicateScan,
   scanAndCacheExternalDuplicates
 } = require('../services/externalDuplicateScanService');
+const {
+  WHATSAPP_CONVERSATION_AI_MODES,
+  WHATSAPP_CONVERSATION_CATEGORIES,
+  WHATSAPP_CONVERSATION_PRIORITIES,
+  WHATSAPP_CONVERSATION_STATUSES,
+  buildManualWhatsAppUrl,
+  normalizeConversationAiMode,
+  normalizeConversationCategory,
+  normalizeConversationPhone,
+  normalizeConversationPriority,
+  normalizeConversationStatus,
+  updateWhatsappConversationControl,
+  mapIntentToConversationCategory,
+  syncWhatsappConversationState
+} = require('../services/whatsappConversationService');
 
 const router = express.Router();
 
@@ -40,6 +56,322 @@ async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
 
 function adminActorId(req) {
   return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+}
+
+function whatsappPayloadPreview(payload = {}, messageType = 'text') {
+  const safePayload = payload && typeof payload === 'object' ? payload : {};
+  const type = String(messageType || safePayload?.message_type || 'text').toLowerCase();
+  const text = String(
+    safePayload.effectiveBody
+      || safePayload.body
+      || safePayload.reply
+      || safePayload.text
+      || ''
+  ).trim();
+
+  if (text) return text.slice(0, 280);
+  if (type === 'location') {
+    const label = String(safePayload?.sharedLocation?.label || safePayload?.sharedLocation?.address || '').trim();
+    return label ? `Shared location: ${label}` : 'Shared location';
+  }
+  if (type === 'voice') return 'Voice note';
+  if (type === 'image') return 'Image';
+  if (type === 'document') return 'Document';
+  if (type === 'media' || type === 'video') return 'Media attachment';
+  return 'Message';
+}
+
+function buildConversationNeedsAttention(conversation = {}) {
+  const status = String(conversation.status || 'open').toLowerCase();
+  if (['needs_human', 'escalated'].includes(status)) return true;
+  const lastInbound = new Date(conversation.last_inbound_at || 0).getTime();
+  const lastResponse = Math.max(
+    new Date(conversation.last_human_reply_at || 0).getTime(),
+    new Date(conversation.last_ai_reply_at || 0).getTime(),
+    new Date(conversation.last_outbound_at || 0).getTime()
+  );
+  return lastInbound > 0 && lastInbound > lastResponse;
+}
+
+const WHATSAPP_CONVERSATION_BASE_SQL = `
+  WITH phones AS (
+    SELECT phone FROM whatsapp_conversation_state
+    UNION
+    SELECT DISTINCT user_phone AS phone FROM whatsapp_messages
+  ),
+  latest_message AS (
+    SELECT DISTINCT ON (m.user_phone)
+      m.user_phone,
+      m.direction,
+      m.message_type,
+      m.payload,
+      m.created_at
+    FROM whatsapp_messages m
+    ORDER BY m.user_phone, m.created_at DESC
+  ),
+  message_counts AS (
+    SELECT
+      user_phone,
+      COUNT(*)::int AS total_messages,
+      COUNT(*) FILTER (WHERE direction = 'inbound')::int AS inbound_count,
+      COUNT(*) FILTER (WHERE direction = 'outbound')::int AS outbound_count,
+      MAX(created_at) AS last_message_at
+    FROM whatsapp_messages
+    GROUP BY user_phone
+  ),
+  latest_intent AS (
+    SELECT DISTINCT ON (i.user_phone)
+      i.user_phone,
+      i.detected_intent,
+      i.confidence,
+      i.language,
+      i.current_step,
+      i.created_at
+    FROM whatsapp_intent_logs i
+    ORDER BY i.user_phone, i.created_at DESC
+  )
+  SELECT
+    p.phone,
+    COALESCE(c.status, 'open') AS status,
+    COALESCE(c.category, 'uncategorized') AS category,
+    COALESCE(c.priority, 'normal') AS priority,
+    COALESCE(c.ai_mode, 'autopilot') AS ai_mode,
+    COALESCE(c.category_source, 'auto') AS category_source,
+    c.assigned_to,
+    c.last_summary,
+    c.admin_notes,
+    COALESCE(c.tags, '[]'::jsonb) AS tags,
+    COALESCE(c.metadata, '{}'::jsonb) AS metadata,
+    COALESCE(c.last_message_at, mc.last_message_at, lm.created_at, s.last_message_at) AS last_message_at,
+    c.last_inbound_at,
+    c.last_outbound_at,
+    c.last_ai_reply_at,
+    c.last_human_reply_at,
+    COALESCE(mc.total_messages, 0) AS total_messages,
+    COALESCE(mc.inbound_count, 0) AS inbound_count,
+    COALESCE(mc.outbound_count, 0) AS outbound_count,
+    lm.direction AS latest_direction,
+    lm.message_type AS latest_message_type,
+    lm.payload AS latest_payload,
+    li.detected_intent AS last_intent,
+    li.confidence AS last_intent_confidence,
+    li.language AS detected_language,
+    COALESCE(wup.preferred_language, s.language, li.language, 'en') AS preferred_language,
+    COALESCE(s.current_step, li.current_step, 'greeting') AS current_step,
+    u.id AS user_id,
+    CONCAT_WS(' ', NULLIF(u.first_name, ''), NULLIF(u.last_name, '')) AS user_name,
+    u.role AS user_role,
+    u.status AS user_status,
+    u.email AS user_email,
+    a.id AS agent_id,
+    a.full_name AS agent_name,
+    a.company_name AS agent_company,
+    a.status AS agent_status,
+    a.registration_status AS agent_registration_status
+  FROM phones p
+  LEFT JOIN whatsapp_conversation_state c
+    ON c.phone = p.phone
+  LEFT JOIN message_counts mc
+    ON mc.user_phone = p.phone
+  LEFT JOIN latest_message lm
+    ON lm.user_phone = p.phone
+  LEFT JOIN latest_intent li
+    ON li.user_phone = p.phone
+  LEFT JOIN whatsapp_user_profiles wup
+    ON wup.phone = p.phone
+  LEFT JOIN whatsapp_sessions s
+    ON s.phone = p.phone
+  LEFT JOIN LATERAL (
+    SELECT id, first_name, last_name, role, status, email
+    FROM users
+    WHERE phone = p.phone
+    ORDER BY created_at DESC
+    LIMIT 1
+  ) u ON true
+  LEFT JOIN LATERAL (
+    SELECT id, full_name, company_name, status, registration_status
+    FROM agents
+    WHERE phone = p.phone
+       OR whatsapp = p.phone
+    ORDER BY created_at DESC
+    LIMIT 1
+  ) a ON true
+`;
+
+async function listWhatsappConversations(query = {}) {
+  const { page, limit, offset } = parsePagination(query);
+  const search = String(query.search || '').trim().toLowerCase();
+  const status = String(query.status || '').trim().toLowerCase();
+  const category = String(query.category || '').trim().toLowerCase();
+  const aiMode = String(query.ai_mode || '').trim().toLowerCase();
+  const priority = String(query.priority || '').trim().toLowerCase();
+
+  const filters = [];
+  const values = [];
+
+  if (search) {
+    values.push(`%${search}%`);
+    filters.push(`(
+      convo.phone ILIKE $${values.length}
+      OR COALESCE(convo.user_name, '') ILIKE $${values.length}
+      OR COALESCE(convo.user_email, '') ILIKE $${values.length}
+      OR COALESCE(convo.agent_name, '') ILIKE $${values.length}
+      OR COALESCE(convo.agent_company, '') ILIKE $${values.length}
+      OR COALESCE(convo.last_summary, '') ILIKE $${values.length}
+      OR COALESCE(convo.admin_notes, '') ILIKE $${values.length}
+      OR COALESCE(convo.last_intent, '') ILIKE $${values.length}
+      OR COALESCE(convo.latest_payload->>'body', '') ILIKE $${values.length}
+      OR COALESCE(convo.latest_payload->>'effectiveBody', '') ILIKE $${values.length}
+      OR COALESCE(convo.latest_payload->>'reply', '') ILIKE $${values.length}
+    )`);
+  }
+
+  if (status) {
+    values.push(normalizeConversationStatus(status));
+    filters.push(`convo.status = $${values.length}`);
+  }
+
+  if (category) {
+    values.push(normalizeConversationCategory(category));
+    filters.push(`convo.category = $${values.length}`);
+  }
+
+  if (aiMode) {
+    values.push(normalizeConversationAiMode(aiMode));
+    filters.push(`convo.ai_mode = $${values.length}`);
+  }
+
+  if (priority) {
+    values.push(normalizeConversationPriority(priority));
+    filters.push(`convo.priority = $${values.length}`);
+  }
+
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const countResult = await db.query(
+    `SELECT COUNT(*)::int AS total
+     FROM (${WHATSAPP_CONVERSATION_BASE_SQL}) convo
+     ${where}`,
+    values
+  );
+  const total = countResult.rows[0]?.total || 0;
+
+  const listValues = [...values, limit, offset];
+  const rows = await db.query(
+    `SELECT *
+     FROM (${WHATSAPP_CONVERSATION_BASE_SQL}) convo
+     ${where}
+     ORDER BY convo.last_message_at DESC NULLS LAST, convo.phone ASC
+     LIMIT $${values.length + 1}
+     OFFSET $${values.length + 2}`,
+    listValues
+  );
+
+  const conversations = rows.rows.map((row) => {
+    const latestPreview = whatsappPayloadPreview(row.latest_payload, row.latest_message_type);
+    const contactName = row.user_name || row.agent_name || null;
+    const participantType = row.agent_id
+      ? 'broker'
+      : row.user_id
+        ? 'account'
+        : 'guest';
+    return {
+      ...row,
+      latest_preview: latestPreview,
+      contact_name: contactName,
+      participant_type: participantType,
+      needs_attention: buildConversationNeedsAttention(row)
+    };
+  });
+
+  const summaryResult = await db.query(
+    `SELECT
+      COUNT(*)::int AS total_conversations,
+      COUNT(*) FILTER (WHERE last_message_at >= NOW() - INTERVAL '7 days')::int AS active_7d,
+      COUNT(*) FILTER (WHERE status IN ('needs_human', 'escalated'))::int AS needs_human,
+      COUNT(*) FILTER (WHERE status = 'resolved')::int AS resolved,
+      COUNT(*) FILTER (WHERE ai_mode = 'autopilot')::int AS autopilot,
+      COUNT(*) FILTER (WHERE ai_mode = 'copilot')::int AS copilot,
+      COUNT(*) FILTER (WHERE ai_mode = 'off')::int AS manual_only
+     FROM (${WHATSAPP_CONVERSATION_BASE_SQL}) convo`,
+    []
+  );
+
+  return {
+    conversations,
+    summary: summaryResult.rows[0] || {},
+    pagination: toPagination(total, page, limit)
+  };
+}
+
+async function loadWhatsappConversationDetail(phone) {
+  const normalizedPhone = normalizeConversationPhone(phone);
+  if (!normalizedPhone) {
+    const error = new Error('Invalid WhatsApp phone');
+    error.status = 400;
+    throw error;
+  }
+
+  const conversationResult = await db.query(
+    `SELECT *
+     FROM (${WHATSAPP_CONVERSATION_BASE_SQL}) convo
+     WHERE convo.phone = $1
+     LIMIT 1`,
+    [normalizedPhone]
+  );
+
+  if (!conversationResult.rows.length) return null;
+
+  const conversation = conversationResult.rows[0];
+  conversation.latest_preview = whatsappPayloadPreview(conversation.latest_payload, conversation.latest_message_type);
+  conversation.contact_name = conversation.user_name || conversation.agent_name || null;
+  conversation.participant_type = conversation.agent_id
+    ? 'broker'
+    : conversation.user_id
+      ? 'account'
+      : 'guest';
+  conversation.needs_attention = buildConversationNeedsAttention(conversation);
+
+  const [messagesResult, intentsResult, relatedResult] = await Promise.all([
+    db.query(
+      `SELECT *
+       FROM (
+         SELECT id, user_phone, wa_message_id, direction, message_type, payload, created_at
+         FROM whatsapp_messages
+         WHERE user_phone = $1
+         ORDER BY created_at DESC
+         LIMIT 120
+       ) m
+       ORDER BY created_at ASC`,
+      [normalizedPhone]
+    ),
+    db.query(
+      `SELECT id, detected_intent, confidence, language, current_step, raw_text, transcript, entities, model_used, created_at
+       FROM whatsapp_intent_logs
+       WHERE user_phone = $1
+       ORDER BY created_at DESC
+       LIMIT 25`,
+      [normalizedPhone]
+    ),
+    db.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM property_search_requests WHERE user_phone = $1) AS search_requests,
+        (SELECT COUNT(*)::int FROM property_leads WHERE phone = $1) AS property_leads,
+        (SELECT COUNT(*)::int FROM mortgage_enquiries WHERE user_phone = $1) AS mortgage_leads,
+        (SELECT COUNT(*)::int FROM agent_applications WHERE phone = $1) AS agent_applications,
+        (SELECT COUNT(*)::int FROM properties WHERE lister_phone = $1) AS listings`,
+      [normalizedPhone]
+    )
+  ]);
+
+  return {
+    conversation,
+    messages: messagesResult.rows.map((row) => ({
+      ...row,
+      preview: whatsappPayloadPreview(row.payload, row.message_type)
+    })),
+    intents: intentsResult.rows,
+    related: relatedResult.rows[0] || {}
+  };
 }
 
 async function loadPropertyReview(propertyId) {
@@ -1439,6 +1771,197 @@ router.get('/whatsapp/insights', async (req, res, next) => {
         queue: queueCounts.rows[0],
         topIntents: topIntents.rows,
         transcriptions: transcriptionCounts.rows[0]
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/whatsapp/conversations', async (req, res, next) => {
+  try {
+    const result = await listWhatsappConversations(req.query);
+    return res.json({
+      ok: true,
+      data: result.conversations,
+      summary: result.summary,
+      pagination: result.pagination
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/whatsapp/conversations/:phone', async (req, res, next) => {
+  try {
+    const detail = await loadWhatsappConversationDetail(req.params.phone);
+    if (!detail) {
+      return res.status(404).json({ ok: false, error: 'Conversation not found' });
+    }
+    return res.json({ ok: true, data: detail });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/whatsapp/conversations/:phone', async (req, res, next) => {
+  try {
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(req.body, 'status')) patch.status = normalizeConversationStatus(req.body.status);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'category')) patch.category = normalizeConversationCategory(req.body.category);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'priority')) patch.priority = normalizeConversationPriority(req.body.priority);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'assigned_to')) patch.assigned_to = String(req.body.assigned_to || '').trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, 'ai_mode')) patch.ai_mode = normalizeConversationAiMode(req.body.ai_mode);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'last_summary')) patch.last_summary = String(req.body.last_summary || '').trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, 'admin_notes')) patch.admin_notes = String(req.body.admin_notes || '').trim();
+    if (Object.prototype.hasOwnProperty.call(req.body, 'tags')) patch.tags = Array.isArray(req.body.tags) ? req.body.tags : [];
+
+    const updated = await updateWhatsappConversationControl(
+      req.params.phone,
+      patch,
+      adminActorId(req)
+    );
+
+    await writeAudit('admin_whatsapp_conversation_updated', {
+      phone: normalizeConversationPhone(req.params.phone),
+      patch
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: updated });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/whatsapp/conversations/:phone/suggest-reply', async (req, res, next) => {
+  try {
+    const detail = await loadWhatsappConversationDetail(req.params.phone);
+    if (!detail) {
+      return res.status(404).json({ ok: false, error: 'Conversation not found' });
+    }
+
+    const recentMessages = detail.messages.slice(-12).map((message) => ({
+      direction: message.direction,
+      text: message.preview,
+      created_at: message.created_at
+    }));
+    const latestInbound = [...detail.messages].reverse().find((message) => message.direction === 'inbound');
+    const fallbackIntent = detail.conversation.category === 'property_search'
+      ? 'property_search'
+      : detail.conversation.category === 'property_listing'
+        ? 'property_listing'
+        : detail.conversation.category === 'broker_help'
+          ? 'agent_search'
+          : detail.conversation.category === 'mortgage'
+            ? 'mortgage_help'
+            : detail.conversation.category === 'account'
+              ? 'account_help'
+              : detail.conversation.category === 'fraud_report'
+                ? 'report_listing'
+                : 'support';
+
+    const suggestion = await suggestWhatsappAssistantReply({
+      userMessage: latestInbound?.preview || detail.conversation.latest_preview || 'Customer needs support.',
+      intent: detail.conversation.last_intent || fallbackIntent,
+      language: detail.conversation.preferred_language || 'en',
+      context: {
+        category: detail.conversation.category,
+        status: detail.conversation.status,
+        priority: detail.conversation.priority,
+        ai_mode: detail.conversation.ai_mode,
+        participant_type: detail.conversation.participant_type,
+        contact_name: detail.conversation.contact_name,
+        account_role: detail.conversation.user_role || null,
+        broker_company: detail.conversation.agent_company || null,
+        current_step: detail.conversation.current_step || null,
+        related: detail.related,
+        admin_notes: detail.conversation.admin_notes || null,
+        recent_messages: recentMessages
+      },
+      source: 'admin_whatsapp_inbox'
+    });
+
+    await writeAudit('admin_whatsapp_reply_suggested', {
+      phone: detail.conversation.phone,
+      intent: detail.conversation.last_intent || fallbackIntent,
+      language: detail.conversation.preferred_language || 'en'
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: suggestion });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
+  try {
+    const phone = normalizeConversationPhone(req.params.phone);
+    const text = String(req.body.text || '').trim();
+    const source = String(req.body.source || 'human').trim().toLowerCase();
+    const requestedStatus = req.body.status ? normalizeConversationStatus(req.body.status) : null;
+
+    if (!phone) {
+      return res.status(400).json({ ok: false, error: 'Invalid destination phone' });
+    }
+    if (!text) {
+      return res.status(400).json({ ok: false, error: 'Reply text is required' });
+    }
+
+    const manualUrl = buildManualWhatsAppUrl(phone, text);
+    const delivery = await sendWhatsAppText({ to: phone, body: text });
+    const actor = adminActorId(req);
+
+    if (delivery.sent) {
+      await db.query(
+        `INSERT INTO whatsapp_messages (user_phone, wa_message_id, direction, message_type, payload)
+         VALUES ($1, NULLIF($2, ''), 'outbound', 'text', $3::jsonb)`,
+        [
+          phone,
+          delivery.id || null,
+          JSON.stringify({
+            provider: delivery.provider || 'whatsapp',
+            reply: text,
+            source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+            actor_id: actor
+          })
+        ]
+      );
+
+      await syncWhatsappConversationState({
+        phone,
+        direction: 'outbound',
+        provider: delivery.provider || 'whatsapp',
+        messageType: 'text',
+        ai: source === 'ai',
+        human: source !== 'ai',
+        metadata: {
+          last_reply_source: source,
+          last_reply_actor: actor,
+          last_reply_preview: text.slice(0, 240)
+        }
+      });
+
+      await updateWhatsappConversationControl(phone, {
+        status: requestedStatus || 'awaiting_customer'
+      }, actor);
+    }
+
+    await writeAudit('admin_whatsapp_reply_sent', {
+      phone,
+      sent: delivery.sent === true,
+      provider: delivery.provider || null,
+      source,
+      manual_required: delivery.sent !== true,
+      manual_url: manualUrl || null
+    }, actor);
+
+    return res.json({
+      ok: true,
+      data: {
+        sent: delivery.sent === true,
+        delivery,
+        manual_required: delivery.sent !== true,
+        manual_url: manualUrl || null
       }
     });
   } catch (error) {
