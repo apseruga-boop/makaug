@@ -1671,7 +1671,7 @@
   <div id="page-list-property" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-4xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">List Your Property - Free</h1>
+        <h1 id="lp-page-title" class="text-3xl font-black serif">List Your Property - Free</h1>
       </div>
     </div>
     <div class="max-w-4xl mx-auto px-4 py-10">
@@ -1825,7 +1825,7 @@
               </div>
               <div id="lp-pin-map" class="map-h-sm rounded-xl border border-gray-200 overflow-hidden mt-3"></div>
               <div class="mt-3 p-3 rounded-xl border border-gray-200 bg-white">
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-1">Resolved Map Location</div>
+                <div id="lp-resolved-map-label" class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-1">Resolved Map Location</div>
                 <div id="lp-location-resolved" class="text-sm text-gray-700">Set a pin to resolve the nearest location label.</div>
                 <label class="mt-2 inline-flex items-start gap-2 text-sm text-gray-700">
                   <input id="lp-location-confirm" type="checkbox" class="mt-1 accent-green-700">
@@ -1834,11 +1834,11 @@
               </div>
               <div class="grid md:grid-cols-2 gap-3 mt-3">
                 <div>
-                  <label class="text-xs font-semibold text-gray-500 uppercase">Latitude</label>
+                  <label id="lp-lat-label" class="text-xs font-semibold text-gray-500 uppercase">Latitude</label>
                   <input id="lp-lat" readonly class="w-full border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Click map to set">
                 </div>
                 <div>
-                  <label class="text-xs font-semibold text-gray-500 uppercase">Longitude</label>
+                  <label id="lp-lng-label" class="text-xs font-semibold text-gray-500 uppercase">Longitude</label>
                   <input id="lp-lng" readonly class="w-full border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Click map to set">
                 </div>
                 <div class="md:col-span-2">
@@ -2121,10 +2121,10 @@
 
       <div class="mt-7 rounded-2xl p-8 text-center text-white bg-gradient-to-r from-green-950 via-green-900 to-emerald-950">
         <div class="text-3xl mb-2">📲</div>
-        <h3 class="text-3xl md:text-4xl font-black serif mb-2">Prefer WhatsApp?</h3>
-        <p class="text-green-100 mb-5">No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.</p>
+        <h3 id="lp-wa-title" class="text-3xl md:text-4xl font-black serif mb-2">Prefer WhatsApp?</h3>
+        <p id="lp-wa-copy" class="text-green-100 mb-5">No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.</p>
         <a href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center justify-center bg-green-400 hover:bg-green-300 text-green-950 font-bold rounded-xl px-8 py-3.5 text-base">
-          📲 List on WhatsApp Instead
+          <span id="lp-wa-btn-label">📲 List on WhatsApp Instead</span>
         </a>
       </div>
     </div>
@@ -3026,25 +3026,25 @@
   <div id="list-choice-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:640px">
       <button onclick="closeModal('list-choice-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
-      <h2 class="text-2xl font-bold text-gray-800 serif">List Your Property</h2>
-      <p class="text-sm text-gray-500 mt-1 mb-5">Choose how you'd like to add your property</p>
+      <h2 id="list-choice-title" class="text-2xl font-bold text-gray-800 serif">List Your Property</h2>
+      <p id="list-choice-sub" class="text-sm text-gray-500 mt-1 mb-5">Choose how you'd like to add your property</p>
 
       <div class="grid md:grid-cols-2 gap-4">
         <button onclick="closeModal('list-choice-modal'); showPage('list-property')" class="border-2 border-green-100 rounded-2xl p-7 text-center hover:border-green-300 hover:bg-green-50 transition-all">
           <div class="text-4xl mb-3">💻</div>
-          <h3 class="text-base font-bold text-gray-800">List Online</h3>
-          <p class="text-sm text-gray-500 mt-1">Full form on website</p>
+          <h3 id="list-choice-online-title" class="text-base font-bold text-gray-800">List Online</h3>
+          <p id="list-choice-online-copy" class="text-sm text-gray-500 mt-1">Full form on website</p>
         </button>
 
         <a href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" onclick="closeModal('list-choice-modal')" class="border-2 border-green-100 rounded-2xl p-7 text-center hover:border-green-300 hover:bg-green-50 transition-all">
           <div class="text-4xl mb-3">📲</div>
-          <h3 class="text-base font-bold text-gray-800">Via WhatsApp</h3>
-          <p class="text-sm text-gray-500 mt-1">Chat with our AI bot</p>
+          <h3 id="list-choice-wa-title" class="text-base font-bold text-gray-800">Via WhatsApp</h3>
+          <p id="list-choice-wa-copy" class="text-sm text-gray-500 mt-1">Chat with our AI bot</p>
         </a>
       </div>
 
       <div class="mt-5 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-sm text-green-800">
-        ✅ <strong>Always 100% Free.</strong> Your listing goes live within 24 hours after identity verification.
+        ✅ <strong id="list-choice-free-title">Always 100% Free.</strong> <span id="list-choice-free-copy">Your listing goes live within 24 hours after identity verification.</span>
       </div>
     </div>
   </div>
@@ -5859,11 +5859,50 @@
         ["lp-area-highlights-edit-label", "Listing Area Summary (editable)"],
         ["lp-area-highlights-edit-help", "You can adjust this text to improve the final listing description."],
         ["lp-preview-map-label", "Location Preview"],
-        ["lp-location-confirm-label", "I confirm this pin matches my property location."]
+        ["lp-location-confirm-label", "I confirm this pin matches my property location."],
+        ["lp-page-title", "List Your Property - Free"],
+        ["lp-resolved-map-label", "Resolved Map Location"],
+        ["lp-lat-label", "Latitude"],
+        ["lp-lng-label", "Longitude"],
+        ["lp-wa-title", "Prefer WhatsApp?"],
+        ["lp-wa-copy", "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language."],
+        ["lp-wa-btn-label", "📲 List on WhatsApp Instead"],
+        ["list-choice-title", "List Your Property"],
+        ["list-choice-sub", "Choose how you'd like to add your property"],
+        ["list-choice-online-title", "List Online"],
+        ["list-choice-online-copy", "Full form on website"],
+        ["list-choice-wa-title", "Via WhatsApp"],
+        ["list-choice-wa-copy", "Chat with our AI bot"],
+        ["list-choice-free-title", "Always 100% Free."],
+        ["list-choice-free-copy", "Your listing goes live within 24 hours after identity verification."]
       ];
       labelPairs.forEach(([id, text]) => {
         const el = document.getElementById(id);
         if (el) el.textContent = translateListingLabel(text);
+      });
+      const stepLabelMap = {
+        "1": "Property Details",
+        "2": "Photos & Media",
+        "3": "Verify Identity",
+        "4": "Review & Submit"
+      };
+      document.querySelectorAll("[data-lp-step-label]").forEach((el) => {
+        const step = el.getAttribute("data-lp-step-label");
+        const text = stepLabelMap[step];
+        if (text) el.textContent = translateListingLabel(text);
+      });
+      const typeChipMap = {
+        sale: "🏠 For Sale",
+        rent: "🔑 For Rent",
+        land: "🌿 Land",
+        commercial: "🏢 Commercial",
+        student: "🎓 Student Accommodation"
+      };
+      document.querySelectorAll("[data-lp-type-chip]").forEach((chip) => {
+        const key = chip.getAttribute("data-lp-type-chip");
+        const label = chip.querySelector("span");
+        if (!label || !typeChipMap[key]) return;
+        label.textContent = translateListingLabel(typeChipMap[key]);
       });
       const sub1 = document.getElementById("lp-pin-sub");
       if (sub1) sub1.textContent = translateListingLabel("Due to limited formal addresses, place a map pin for best search accuracy. District/city/neighbourhood info recenters the map automatically.");
@@ -5915,6 +5954,8 @@
       if (areaInput) areaInput.placeholder = translateListingLabel("Auto-filled from district/city/neighbourhood");
       const streetInput = document.getElementById("lp-street-name");
       if (streetInput && !streetInput.value) streetInput.placeholder = translateListingLabel("e.g. Kira Road");
+      const addressInput = document.getElementById("lp-address");
+      if (addressInput && !addressInput.value) addressInput.placeholder = translateListingLabel("Street name, plot number, etc.");
       const areaHighlightsInput = document.getElementById("lp-area-highlights-edit");
       if (areaHighlightsInput && !areaHighlightsInput.value) {
         areaHighlightsInput.placeholder = translateListingLabel("You can edit this area summary before submitting.");
@@ -15725,6 +15766,53 @@
         "Report a Listing": "Loopa Listing",
         "Safety Tips": "Obukodyo bw'Obukuumi",
         "Chat on WhatsApp": "Kuba Chat ku WhatsApp",
+        "List Your Property - Free": "Teka Property Yo - Bwereere",
+        "List Your Property": "Teka Property Yo",
+        "Choose how you'd like to add your property": "Londa engeri gy'oyagala okutekeramu property yo",
+        "List Online": "Teka ku Mukutu",
+        "Full form on website": "Ffoomu enzijuvu ku website",
+        "Via WhatsApp": "Okuyita ku WhatsApp",
+        "Chat with our AI bot": "Yogera ne AI bot waffe",
+        "Always 100% Free.": "Buli kiseera Bwereere 100%.",
+        "Your listing goes live within 24 hours after identity verification.": "Listing yo egenda ku mukutu mu ssaawa 24 oluvannyuma lw'okukakasa endagamuntu.",
+        "Prefer WhatsApp?": "Wasinga kwagala WhatsApp?",
+        "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.": "Tolina laptop? Tewali buzibu. Teka listing okuyita mu WhatsApp chatbot yaffe mu lulimi lwonna olw'e Uganda.",
+        "📲 List on WhatsApp Instead": "📲 Teka ku WhatsApp mu kifo ky'ekyo",
+        "🏠 For Sale": "🏠 Kutunda",
+        "🔑 For Rent": "🔑 Kupangisa",
+        "🌿 Land": "🌿 Ettaka",
+        "🏢 Commercial": "🏢 By'obusuubuzi",
+        "🎓 Student Accommodation": "🎓 Obutuuze bw'Abayizi",
+        "For Sale": "Kutunda",
+        "For Rent": "Kupangisa",
+        "Commercial": "By'obusuubuzi",
+        "Mortgage Finder": "Noonya Mortgage",
+        "House Type *": "Ekika ky'Ennyumba *",
+        "Rental Type *": "Ekika ky'Okupangisa *",
+        "Commercial Property Type *": "Ekika kya Property y'Obusuubuzi *",
+        "Accommodation Type *": "Ekika ky'Obutuuze *",
+        "Size": "Obunene",
+        "Bedrooms": "Ebisenge",
+        "Bathrooms": "Ebinaabiro",
+        "Bed Spaces": "Obifo by'Ebitanda",
+        "Rent Period": "Obudde bw'Okupangisa",
+        "Commercial Price Period": "Obudde bw'Omuwendo gw'Obusuubuzi",
+        "Payment Period": "Obudde bw'Okusasula",
+        "Street name, plot number, etc.": "Erinnya ly'oluguudo, namba ya plot, n'ebirala",
+        "Resolved Map Location": "Ekifo kya maapu ekitegeerekeddwa",
+        "Latitude": "Latitude",
+        "Longitude": "Longitude",
+        "House": "Ennyumba",
+        "Total / Once off": "Omuwendo gwonna / omulundi gumu",
+        "Negotiable": "Kisobola okuteesebwako",
+        "Per Month": "Buli mwezi",
+        "Per Year": "Buli mwaka",
+        "Per Week": "Buli wiiki",
+        "Per Acre": "Buli acre",
+        "Per Plot": "Buli plot",
+        "Total / Sale Price": "Omuwendo gwonna / ogw'okutunda",
+        "Per Semester": "Buli semester",
+        "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola property — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
         "📍 Kampala, Uganda": "📍 Kampala, Uganda",
         "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu ya property ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
         "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Eddembe lyonna likuumiddwa.",
@@ -15967,6 +16055,53 @@
         "Report a Listing": "Ripoti Tangazo",
         "Safety Tips": "Vidokezo vya Usalama",
         "Chat on WhatsApp": "Piga gumzo kwenye WhatsApp",
+        "List Your Property - Free": "Tangaza Mali Yako - Bure",
+        "List Your Property": "Tangaza Mali Yako",
+        "Choose how you'd like to add your property": "Chagua namna ungependa kuongeza mali yako",
+        "List Online": "Tangaza Mtandaoni",
+        "Full form on website": "Fomu kamili kwenye tovuti",
+        "Via WhatsApp": "Kupitia WhatsApp",
+        "Chat with our AI bot": "Ongea na AI bot wetu",
+        "Always 100% Free.": "Daima Bure 100%.",
+        "Your listing goes live within 24 hours after identity verification.": "Tangazo lako linaenda hewani ndani ya saa 24 baada ya uthibitisho wa utambulisho.",
+        "Prefer WhatsApp?": "Unapendelea WhatsApp?",
+        "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.": "Huna laptop? Hakuna shida. Tangaza kupitia chatbot yetu ya WhatsApp kwa lugha yoyote ya Uganda.",
+        "📲 List on WhatsApp Instead": "📲 Tangaza kupitia WhatsApp badala yake",
+        "🏠 For Sale": "🏠 Ya Kuuza",
+        "🔑 For Rent": "🔑 Ya Kupangisha",
+        "🌿 Land": "🌿 Ardhi",
+        "🏢 Commercial": "🏢 Biashara",
+        "🎓 Student Accommodation": "🎓 Makazi ya Wanafunzi",
+        "For Sale": "Ya Kuuza",
+        "For Rent": "Ya Kupangisha",
+        "Commercial": "Biashara",
+        "Mortgage Finder": "Tafuta Mortgage",
+        "House Type *": "Aina ya Nyumba *",
+        "Rental Type *": "Aina ya Kupangisha *",
+        "Commercial Property Type *": "Aina ya Mali ya Biashara *",
+        "Accommodation Type *": "Aina ya Makazi *",
+        "Size": "Ukubwa",
+        "Bedrooms": "Vyumba vya kulala",
+        "Bathrooms": "Bafu",
+        "Bed Spaces": "Nafasi za kitanda",
+        "Rent Period": "Muda wa Kupangisha",
+        "Commercial Price Period": "Muda wa Bei ya Biashara",
+        "Payment Period": "Muda wa Malipo",
+        "Street name, plot number, etc.": "Jina la barabara, namba ya ploti, n.k.",
+        "Resolved Map Location": "Eneo la ramani lililotambuliwa",
+        "Latitude": "Latitude",
+        "Longitude": "Longitude",
+        "House": "Nyumba",
+        "Total / Once off": "Jumla / mara moja",
+        "Negotiable": "Inajadilikana",
+        "Per Month": "Kwa mwezi",
+        "Per Year": "Kwa mwaka",
+        "Per Week": "Kwa wiki",
+        "Per Acre": "Kwa ekari",
+        "Per Plot": "Kwa ploti",
+        "Total / Sale Price": "Jumla / bei ya kuuza",
+        "Per Semester": "Kwa muhula",
+        "Describe the property — key features, condition, neighbourhood highlights...": "Elezea mali — vipengele muhimu, hali yake, na vivutio vya eneo...",
         "📍 Kampala, Uganda": "📍 Kampala, Uganda",
         "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Jukwaa la kwanza kabisa la mali nchini Uganda lisilo na malipo. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.",
         "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Haki zote zimehifadhiwa.",
