@@ -1894,18 +1894,6 @@
               </div>
             </div>
 
-            <div class="md:col-span-2">
-              <div class="flex items-center justify-between gap-2 mb-1.5">
-                <label id="lp-description-label" class="block text-sm font-semibold text-gray-700">Description *</label>
-                <button id="lp-improve-desc-btn" type="button" onclick="improveLpDescription()" class="inline-flex items-center gap-1.5 border border-green-200 text-green-800 hover:bg-green-50 rounded-lg px-3 py-1.5 text-xs font-semibold">
-                  <i class="fas fa-wand-magic-sparkles"></i> Improve Description
-                </button>
-              </div>
-              <textarea id="lp-description" rows="4" oninput="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm resize-y" placeholder="Describe the property — key features, condition, neighbourhood highlights..."></textarea>
-              <div id="lp-description-example" class="mt-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">
-                Example: "Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access."
-              </div>
-            </div>
           </div>
 
           <div id="lp-extra-fields" class="mt-4 grid md:grid-cols-2 gap-4"></div>
@@ -1913,6 +1901,19 @@
           <div class="mt-5">
             <label id="lp-amenities-label" class="block text-sm font-semibold text-gray-700 mb-2">Amenities</label>
             <div id="lp-amenities" class="flex flex-wrap gap-x-3 gap-y-2 text-sm text-gray-700"></div>
+          </div>
+
+          <div class="mt-5">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+              <label id="lp-description-label" class="block text-sm font-semibold text-gray-700">Description *</label>
+              <button id="lp-improve-desc-btn" type="button" onclick="improveLpDescription()" class="inline-flex items-center gap-1.5 border border-green-200 text-green-800 hover:bg-green-50 rounded-lg px-3 py-1.5 text-xs font-semibold">
+                <i class="fas fa-wand-magic-sparkles"></i> AI Write Description
+              </button>
+            </div>
+            <textarea id="lp-description" rows="4" oninput="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm resize-y" placeholder="Describe the property — key features, condition, neighbourhood highlights..."></textarea>
+            <div id="lp-description-example" class="mt-2 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">
+              Example: "Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access."
+            </div>
           </div>
 
           <button id="lp-step1-next-btn" onclick="nextListStepFromDetails()" class="w-full mt-6 bg-green-800 hover:bg-green-700 text-white py-3.5 rounded-xl text-base font-bold">
@@ -3093,25 +3094,25 @@
   <div id="save-property-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:640px">
       <button onclick="closeModal('save-property-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
-      <div class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
+      <div id="save-property-modal-pill" class="inline-flex items-center gap-2 bg-green-100 text-green-800 text-xs font-bold rounded-full px-3 py-1 mb-3">
         <i class="fas fa-heart"></i>
-        <span>Save to your profile</span>
+        <span id="save-property-modal-pill-text">Save to your profile</span>
       </div>
-      <h2 class="text-2xl font-black text-gray-800 serif">Keep this property in your MakaUg account</h2>
+      <h2 id="save-property-modal-title" class="text-2xl font-black text-gray-800 serif">Keep this property in your MakaUg account</h2>
       <p id="save-property-modal-sub" class="text-sm text-gray-600 mt-2">Create your free account or sign in to save this property, track updates, and come back to it later.</p>
       <div class="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-4">
-        <div class="text-sm font-bold text-gray-900">What happens next?</div>
+        <div id="save-property-next-title" class="text-sm font-bold text-gray-900">What happens next?</div>
         <ul class="mt-2 text-sm text-gray-700 space-y-1.5 list-disc pl-5">
-          <li>The property will be saved straight to your personal profile after you sign in.</li>
-          <li>You can review saved homes, compare options, and track your enquiries in one place.</li>
-          <li>We will also send a welcome email when your account is created.</li>
+          <li id="save-property-next-1">The property will be saved straight to your personal profile after you sign in.</li>
+          <li id="save-property-next-2">You can review saved homes, compare options, and track your enquiries in one place.</li>
+          <li id="save-property-next-3">We will also send a welcome email when your account is created.</li>
         </ul>
       </div>
       <div class="mt-4 flex flex-col sm:flex-row gap-2">
-        <button onclick="continueSavePropertyAuth('signup')" class="flex-1 bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold text-sm">Create Free Account</button>
-        <button onclick="continueSavePropertyAuth('signin')" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm">Sign In</button>
+        <button id="save-property-signup-btn" onclick="continueSavePropertyAuth('signup')" class="flex-1 bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-lg font-semibold text-sm">Create Free Account</button>
+        <button id="save-property-signin-btn" onclick="continueSavePropertyAuth('signin')" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm">Sign In</button>
       </div>
-      <p class="text-xs text-gray-500 mt-3">No property is saved publicly. Saved homes stay inside the signed-in account only.</p>
+      <p id="save-property-footnote" class="text-xs text-gray-500 mt-3">No property is saved publicly. Saved homes stay inside the signed-in account only.</p>
     </div>
   </div>
 
@@ -5763,6 +5764,10 @@
       if (legal) legal.textContent = translateListingLabel("By submitting, you confirm listing details are truthful. Fraudulent behavior may be reported to law enforcement and relevant regulators in Uganda.");
       const desc = document.getElementById("lp-description-example");
       if (desc) desc.textContent = translateListingLabel('Example: "Modern 3-bedroom bungalow in Ntinda, 5 minutes from shopping centre. 2 bathrooms, secure perimeter wall, paved compound, borehole water, and backup generator. Quiet residential street with easy taxi access."');
+      const improveDescBtn = document.getElementById("lp-improve-desc-btn");
+      if (improveDescBtn) {
+        improveDescBtn.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> ${translatePropertyUi("AI Write Description")}`;
+      }
       const langTip = document.querySelector("#lp-language-tip span");
       if (langTip) langTip.textContent = translateListingLabel("You can change language any time from the language bar above.");
       setTextById("lp-success-title", translateListingLabel("Listing submitted successfully"));
@@ -6093,6 +6098,7 @@
       setPageHeading("page-account", tr("pageAccount"));
       applyAuthUi();
       applyListingWizardLanguageUI();
+      applySavePropertyLanguageUI();
       applyMortgageLanguageUI();
       applyAiChatbotLanguageUI();
       applyFraudLanguageUI();
@@ -6420,7 +6426,7 @@
         return `
           <span class="inline-flex items-center justify-center gap-2">
             <i class="fas fa-heart"></i>
-            <span>Saved to Profile</span>
+            <span>${translatePropertyUi("Saved to Profile")}</span>
           </span>
         `;
       }
@@ -6428,16 +6434,16 @@
         return `
           <span class="inline-flex items-center justify-center gap-2">
             <i class="far fa-heart"></i>
-            <span>Save Property</span>
+            <span>${translatePropertyUi("Save Property")}</span>
           </span>
         `;
       }
       return `
         <span class="inline-flex items-center justify-center gap-2">
           <i class="far fa-heart"></i>
-          <span>Save Property</span>
+          <span>${translatePropertyUi("Save Property")}</span>
         </span>
-        <span class="block text-[11px] font-medium text-gray-500 mt-1">Sign in or create an account to keep it in your profile.</span>
+        <span class="block text-[11px] font-medium text-gray-500 mt-1">${translatePropertyUi("Sign in or create an account to keep it in your profile.")}</span>
       `;
     }
 
@@ -6510,13 +6516,27 @@
       return id;
     }
 
+    function applySavePropertyLanguageUI() {
+      const modal = document.getElementById("save-property-modal");
+      if (!modal) return;
+      const property = findPropertyForUi(modal.dataset.propertyId || "");
+      const title = property?.title ? `"${property.title}"` : translatePropertyUi("this property");
+      setTextById("save-property-modal-pill-text", translatePropertyUi("Save to your profile"));
+      setTextById("save-property-modal-title", translatePropertyUi("Keep this property in your MakaUg account"));
+      setTextById("save-property-modal-sub", translatePropertyUi("Create your free account or sign in to save {title}, track updates, and come back to it later.", { title }));
+      setTextById("save-property-next-title", translatePropertyUi("What happens next?"));
+      setTextById("save-property-next-1", translatePropertyUi("The property will be saved straight to your personal profile after you sign in."));
+      setTextById("save-property-next-2", translatePropertyUi("You can review saved homes, compare options, and track your enquiries in one place."));
+      setTextById("save-property-next-3", translatePropertyUi("We will also send a welcome email when your account is created."));
+      setTextById("save-property-footnote", translatePropertyUi("No property is saved publicly. Saved homes stay inside the signed-in account only."));
+      setTextById("save-property-signup-btn", translateListingLabel("Create Free Account"));
+      setTextById("save-property-signin-btn", translatePropertyUi("Sign In"));
+    }
+
     function openSavePropertyPrompt(propertyId = "") {
-      const property = findPropertyForUi(propertyId);
-      const sub = document.getElementById("save-property-modal-sub");
-      if (sub) {
-        const title = property?.title ? `“${property.title}”` : "this property";
-        sub.textContent = `Create your free account or sign in to save ${title}, track updates, and come back to it later.`;
-      }
+      const modal = document.getElementById("save-property-modal");
+      if (modal) modal.dataset.propertyId = String(propertyId || "");
+      applySavePropertyLanguageUI();
       openModal("save-property-modal");
     }
 
@@ -12815,7 +12835,7 @@
       descEl.value = generated.replace(/\s+/g, " ").trim();
       updateListPreview();
       renderListReviewSummary();
-      toast(translateListingLabel("Description improved. You can still edit it before submitting."));
+      toast(translatePropertyUi("AI description written. You can still edit it before submitting."));
     }
 
     function onLpRegionChange() {
@@ -15716,6 +15736,237 @@
         || text;
     }
 
+    const PROPERTY_UI_I18N = {
+      lg: {
+        "AI Write Description": "AI Wandika Ennyonnyola",
+        "AI description written. You can still edit it before submitting.": "AI ewadde ennyonnyola. Okyasobola okugikyusa nga tonnawereza.",
+        "Gallery": "Galeri",
+        "Location": "Ekifo",
+        "Open Google Directions": "Ggulawo Google Directions",
+        "Directions unavailable": "Directions teziriwo",
+        "Similar Properties": "Property Efanana",
+        "Contact Lister": "Kwatagana n'Omutunzi",
+        "Contact Broker": "Kwatagana ne Broker",
+        "Public listing contact": "Omukwatagana wa listing ey'olukale",
+        "Call Contact": "Kuba Omukwatagana",
+        "Call unavailable": "Okukuba tekusoboka",
+        "WhatsApp Contact": "WhatsApp Omukwatagana",
+        "WhatsApp unavailable": "WhatsApp teriwo",
+        "Call Broker": "Kuba Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Laba Broker",
+        "Send enquiry": "Weereza Okubuuza",
+        "Your name": "Erinnya lyo",
+        "Email optional": "Email (si ya buwaze)",
+        "Message": "Obubaka",
+        "I am interested in {title}.": "Nnina obwagazi mu {title}.",
+        "Save Property": "Tereka Property",
+        "Saved to Profile": "Eterekeddwa ku Profile",
+        "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
+        "Save to your profile": "Tereka ku profile yo",
+        "Keep this property in your MakaUg account": "Kuuma property eno mu account yo eya MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yo eya bwereere oba yingira okutereka {title}, okulondoola updates, n'okudda gy'eri oluvannyuma.",
+        "What happens next?": "Ekiddako kiba ki?",
+        "The property will be saved straight to your personal profile after you sign in.": "Property eno ejja kuterekebwa butereevu ku profile yo gy'oyingira.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "Osobola okulaba amayumba g'oterekedde, okugeraageranya eby'okulonda, n'okulondoola okubuuza kwo mu kifo kimu.",
+        "We will also send a welcome email when your account is created.": "Era tujja kukuweereza welcome email nga account yo emaze okukolebwa.",
+        "Sign In": "Yingira",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tewali property eterekebwa ku lukale. Ebiterekeddwa bisigala mu account gy'oyingidde yokka."
+      },
+      sw: {
+        "AI Write Description": "AI Andika Maelezo",
+        "AI description written. You can still edit it before submitting.": "AI imeandika maelezo. Bado unaweza kuyahariri kabla ya kutuma.",
+        "Gallery": "Galeri",
+        "Location": "Eneo",
+        "Open Google Directions": "Fungua Google Directions",
+        "Directions unavailable": "Directions hazipatikani",
+        "Similar Properties": "Mali Zinazofanana",
+        "Contact Lister": "Wasiliana na Muuzaji",
+        "Contact Broker": "Wasiliana na Broker",
+        "Public listing contact": "Mawasiliano ya tangazo la umma",
+        "Call Contact": "Piga Mawasiliano",
+        "Call unavailable": "Kupiga hakuwezekani",
+        "WhatsApp Contact": "WhatsApp Mawasiliano",
+        "WhatsApp unavailable": "WhatsApp haipatikani",
+        "Call Broker": "Piga Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Tazama Broker",
+        "Send enquiry": "Tuma Swali",
+        "Your name": "Jina lako",
+        "Email optional": "Barua pepe si lazima",
+        "Message": "Ujumbe",
+        "I am interested in {title}.": "Ninavutiwa na {title}.",
+        "Save Property": "Hifadhi Mali",
+        "Saved to Profile": "Imehifadhiwa kwenye Profaili",
+        "Sign in or create an account to keep it in your profile.": "Ingia au fungua akaunti ili uiweke kwenye profaili yako.",
+        "Save to your profile": "Hifadhi kwenye profaili yako",
+        "Keep this property in your MakaUg account": "Weka mali hii ndani ya akaunti yako ya MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Fungua akaunti yako ya bure au ingia ili kuhifadhi {title}, kufuatilia masasisho, na kuirudia baadaye.",
+        "What happens next?": "Nini kinafuata?",
+        "The property will be saved straight to your personal profile after you sign in.": "Mali hii itahifadhiwa moja kwa moja kwenye profaili yako binafsi baada ya kuingia.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "Unaweza kukagua nyumba ulizohifadhi, kulinganisha chaguo, na kufuatilia maulizo yako sehemu moja.",
+        "We will also send a welcome email when your account is created.": "Pia tutakutumia barua pepe ya kukukaribisha akaunti yako itakapoundwa.",
+        "Sign In": "Ingia",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Hakuna mali inayohifadhiwa hadharani. Mali zilizohifadhiwa hubaki ndani ya akaunti iliyoingia pekee."
+      },
+      ac: {
+        "AI Write Description": "AI Coc Lok me Nyuto",
+        "AI description written. You can still edit it before submitting.": "AI ocoyo lok me nyuto. I twero pud loko mbere pe i keto.",
+        "Gallery": "Galeri",
+        "Location": "Kabedo",
+        "Open Google Directions": "Yab Google Directions",
+        "Directions unavailable": "Directions pe tye",
+        "Similar Properties": "Property ma rwate",
+        "Contact Lister": "Kub Lister",
+        "Contact Broker": "Kub Broker",
+        "Public listing contact": "Kub pa listing me lwak",
+        "Call Contact": "Go cim",
+        "Call unavailable": "Cim pe tye",
+        "WhatsApp Contact": "WhatsApp Kub",
+        "WhatsApp unavailable": "WhatsApp pe tye",
+        "Call Broker": "Go cim Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Nen Broker",
+        "Send enquiry": "Or penyo",
+        "Your name": "Nying mamegi",
+        "Email optional": "Email pe obedo gin me tic",
+        "Message": "Coc",
+        "I am interested in {title}.": "Amito {title}.",
+        "Save Property": "Gwok Property",
+        "Saved to Profile": "Kigwoke i Profile",
+        "Sign in or create an account to keep it in your profile.": "Dony onyo ket account me gwoko i profile mamegi.",
+        "Save to your profile": "Gwok i profile mamegi",
+        "Keep this property in your MakaUg account": "Gwok property man i account mamegi pa MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Ket account mamegi me nono onyo dony me gwoko {title}, lub updates, ka dok i iye lacen.",
+        "What happens next?": "Gin ango matye anyim?",
+        "The property will be saved straight to your personal profile after you sign in.": "Property man bigwoke atir i profile mamegi ka idonyo.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "I twero nen gang ma igwoko, poro yero, ki lub penyo mamegi i kabedo acel.",
+        "We will also send a welcome email when your account is created.": "Wan bene wabiro cwalo email me powo ka account mamegi kiyubo.",
+        "Sign In": "Dony",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Pe kigwoko property i lwak. Gang ma kigwoko gitye keken i account ma odonyo."
+      },
+      ny: {
+        "AI Write Description": "AI Handika Enyonyora",
+        "AI description written. You can still edit it before submitting.": "AI ehandiikire enyonyora. Okyabaasa kugihindura otakagiheereza.",
+        "Gallery": "Galeri",
+        "Location": "Eifo",
+        "Open Google Directions": "Ggulaho Google Directions",
+        "Directions unavailable": "Directions tizirimu",
+        "Similar Properties": "Property Ezishushana",
+        "Contact Lister": "Hikaho Omutunzi",
+        "Contact Broker": "Hikaho Broker",
+        "Public listing contact": "Omuntu w'okuhikaho wa listing y'aha bweru",
+        "Call Contact": "Kuba Omuntu w'okuhikaho",
+        "Call unavailable": "Okukuba tikirikubaasika",
+        "WhatsApp Contact": "WhatsApp Omuntu w'okuhikaho",
+        "WhatsApp unavailable": "WhatsApp teriho",
+        "Call Broker": "Kuba Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Reeba Broker",
+        "Send enquiry": "Ohereze Okubuuza",
+        "Your name": "Eriinya lyawe",
+        "Email optional": "Email si ya buwaze",
+        "Message": "Obutumwa",
+        "I am interested in {title}.": "Ninyenda {title}.",
+        "Save Property": "Tereka Property",
+        "Saved to Profile": "Etairwe omu Profile",
+        "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
+        "Save to your profile": "Tereka omu profile yawe",
+        "Keep this property in your MakaUg account": "Kuuma property enu omu account yawe eya MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yawe ey'obwereere nari yingira okutereka {title}, okulondoola updates, kandi ogigarukemu bwanyima.",
+        "What happens next?": "Ekirikwija kukurataho niki?",
+        "The property will be saved straight to your personal profile after you sign in.": "Property enu neija kuterekwa butunu omu profile yawe bw'omaara kwingira.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "Noobaasa kureeba amaka g'oterekire, kugyeragyeranisa eby'okulonda, n'okulondoola okubuuza kwawe omu mwanya gumwe.",
+        "We will also send a welcome email when your account is created.": "Kandi nitwija kukusindikira email y'okukwakira account yawe bw'eraaba ekozirwe.",
+        "Sign In": "Yingira",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tihari property erikuterekwa aha rubuga rwona. Ebiterekirwe bisigara omu account ehingiremu yokka."
+      },
+      rn: {
+        "AI Write Description": "AI Handika Enshoborora",
+        "AI description written. You can still edit it before submitting.": "AI ehandiikire enshoborora. Nooshobora kukigihindura otaakagiheereza.",
+        "Gallery": "Galeri",
+        "Location": "Ahantu",
+        "Open Google Directions": "Ggulaho Google Directions",
+        "Directions unavailable": "Directions tiziriho",
+        "Similar Properties": "Property Ezishushana",
+        "Contact Lister": "Hikaho Omutunzi",
+        "Contact Broker": "Hikaho Broker",
+        "Public listing contact": "Omuntu w'okuhikaho wa listing y'aha rubaju",
+        "Call Contact": "Kuba Omuntu w'okuhikaho",
+        "Call unavailable": "Okukuba tikiriho",
+        "WhatsApp Contact": "WhatsApp Omuntu w'okuhikaho",
+        "WhatsApp unavailable": "WhatsApp teriho",
+        "Call Broker": "Kuba Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Reeba Broker",
+        "Send enquiry": "Ohereze Okubuuza",
+        "Your name": "Eriinya lyawe",
+        "Email optional": "Email si ya buwaze",
+        "Message": "Obutumwa",
+        "I am interested in {title}.": "Ninyenda {title}.",
+        "Save Property": "Tereka Property",
+        "Saved to Profile": "Etairwe omu Profile",
+        "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
+        "Save to your profile": "Tereka omu profile yawe",
+        "Keep this property in your MakaUg account": "Kuuma property enu omu account yawe eya MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yawe ey'obwereere nari yingira okutereka {title}, okulondoola updates, kandi ogigarukemu bwanyima.",
+        "What happens next?": "Ekirikwija kukurataho niki?",
+        "The property will be saved straight to your personal profile after you sign in.": "Property enu neija kuterekwa butunu omu profile yawe bw'omaara kwingira.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "Nooshobora kureeba amaka g'oterekire, kugyeragyeranisa eby'okulonda, n'okulondoola okubuuza kwawe omu mwanya gumwe.",
+        "We will also send a welcome email when your account is created.": "Kandi nitwija kukusindikira email y'okukwakira account yawe bw'eraaba ekozirwe.",
+        "Sign In": "Yingira",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tihari property erikuterekwa aha rubuga rwona. Ebiterekirwe bisigara omu account ehingiremu yokka."
+      },
+      sm: {
+        "AI Write Description": "AI Wandika Ennyonnyola",
+        "AI description written. You can still edit it before submitting.": "AI ewadde ennyonnyola. Okyasobola okugikyusa nga tonnagiweereza.",
+        "Gallery": "Galeri",
+        "Location": "Ekifo",
+        "Open Google Directions": "Ggulawo Google Directions",
+        "Directions unavailable": "Directions teziriwo",
+        "Similar Properties": "Property Efanana",
+        "Contact Lister": "Kwatagana n'Omutunzi",
+        "Contact Broker": "Kwatagana ne Broker",
+        "Public listing contact": "Omukwatagana wa listing ey'olukale",
+        "Call Contact": "Kuba Omukwatagana",
+        "Call unavailable": "Okukuba tekusoboka",
+        "WhatsApp Contact": "WhatsApp Omukwatagana",
+        "WhatsApp unavailable": "WhatsApp teriwo",
+        "Call Broker": "Kuba Broker",
+        "WhatsApp Broker": "WhatsApp Broker",
+        "View Broker": "Laba Broker",
+        "Send enquiry": "Weereza Okubuuza",
+        "Your name": "Erinnya lyo",
+        "Email optional": "Email (si ya buwaze)",
+        "Message": "Obubaka",
+        "I am interested in {title}.": "Nnina obwagazi mu {title}.",
+        "Save Property": "Tereka Property",
+        "Saved to Profile": "Eterekeddwa ku Profile",
+        "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
+        "Save to your profile": "Tereka ku profile yo",
+        "Keep this property in your MakaUg account": "Kuuma property eno mu account yo eya MakaUg",
+        "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yo eya bwereere oba yingira okutereka {title}, okulondoola updates, n'okudda gy'eri oluvannyuma.",
+        "What happens next?": "Ekiddako kiba ki?",
+        "The property will be saved straight to your personal profile after you sign in.": "Property eno ejja kuterekebwa butereevu ku profile yo gy'oyingira.",
+        "You can review saved homes, compare options, and track your enquiries in one place.": "Osobola okulaba amayumba g'oterekedde, okugeraageranya eby'okulonda, n'okulondoola okubuuza kwo mu kifo kimu.",
+        "We will also send a welcome email when your account is created.": "Era tujja kukuweereza welcome email nga account yo emaze okukolebwa.",
+        "Sign In": "Yingira",
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tewali property eterekebwa ku lukale. Ebiterekeddwa bisigala mu account gy'oyingidde yokka."
+      }
+    };
+
+    function translatePropertyUi(text, vars = {}) {
+      const lang = currentLang || "en";
+      const fallback = LANG_FALLBACK[lang] || "en";
+      const template = PROPERTY_UI_I18N[lang]?.[text]
+        || PROPERTY_UI_I18N[fallback]?.[text]
+        || translateListingLabel(text)
+        || text;
+      return Object.entries(vars).reduce((acc, [key, value]) => (
+        acc.replaceAll(`{${key}}`, String(value == null ? "" : value))
+      ), template);
+    }
+
     const LP_CONFIG = {
       sale: {
         badge: "For Sale",
@@ -17101,9 +17352,10 @@
       const detailIdArg = JSON.stringify(String(p.id));
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
-      const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, I am interested in ${p.title || "this property"}.`) : "";
+      const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, ${translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" })}`) : "";
       const directionsUrl = propertyDirectionsUrl(p);
-      const contactTitle = broker ? translateListingLabel("Contact Broker") : translateListingLabel("Contact Lister");
+      const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
+      const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
       const inquiryNameDefault = authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
       const inquiryPhoneDefault = authState?.user?.phone || "";
       const inquiryEmailDefault = authState?.user?.email || "";
@@ -17114,11 +17366,11 @@
               <button type="button" onclick="openDetailGalleryLightbox(${detailGalleryPhotoIndex})" class="block w-full h-72 relative overflow-hidden group">
                 <img src="${primaryPhoto?.url || p.img}" alt="${p.title}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
                 <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-                  <i class="fas fa-images"></i> ${detailGalleryPhotos.length} ${translateListingLabel("photo")}${detailGalleryPhotos.length === 1 ? "" : "s"}
+                  <i class="fas fa-images"></i> ${detailGalleryPhotos.length} ${photoCountLabel}
                 </div>
               </button>
               <div class="px-5 pt-4">
-                <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translateListingLabel("Gallery")}</div>
+                <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translatePropertyUi("Gallery")}</div>
                 <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                   ${detailGalleryPhotos.map((photo, idx) => `
                     <button type="button" onclick="openDetailGalleryLightbox(${idx})" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
@@ -17185,16 +17437,16 @@
               </div>
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
-              <h2 class="text-xl font-bold mb-3">Location</h2>
+              <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Location")}</h2>
               <div id="map-detail" class="map-h-sm rounded-xl overflow-hidden border border-gray-200"></div>
               ${directionsUrl ? `<a href="${adminAttr(directionsUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordPropertyDirectionsClick(${detailIdArg})" class="mt-3 inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-xl text-sm font-semibold">
-                <i class="fas fa-route"></i> Open Google Directions
+                <i class="fas fa-route"></i> ${translatePropertyUi("Open Google Directions")}
               </a>` : `<button type="button" disabled class="mt-3 inline-flex items-center gap-2 border border-gray-300 text-gray-400 px-4 py-2 rounded-xl text-sm font-semibold cursor-not-allowed">
-                <i class="fas fa-route"></i> Directions unavailable
+                <i class="fas fa-route"></i> ${translatePropertyUi("Directions unavailable")}
               </button>`}
             </div>
             <div class="bg-white border border-gray-200 rounded-2xl p-5 mt-5">
-              <h2 class="text-xl font-bold mb-3">Similar Properties</h2>
+              <h2 class="text-xl font-bold mb-3">${translatePropertyUi("Similar Properties")}</h2>
               <div class="grid md:grid-cols-3 gap-4">${similar.map(propCard).join("")}</div>
             </div>
           </div>
@@ -17204,25 +17456,25 @@
               ${broker ? `
                 <p class="font-semibold text-gray-800">${broker.name}</p>
                 <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
-                <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Broker</a>
-                <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Broker</a>
+                <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>
+                <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
                 <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
-                <button onclick="openBrokerProfile(${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">View Broker</button>
+                <button onclick="openBrokerProfile(${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">${translatePropertyUi("View Broker")}</button>
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
-                <p class="text-xs text-gray-500 mb-3">${translateListingLabel("Public listing contact")}</p>
-                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">Call Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">Call unavailable</button>`}
-                ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">WhatsApp Contact</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">WhatsApp unavailable</button>`}
+                <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
+                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
+                ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
               `}
               <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
-                <h4 class="font-bold text-gray-800 text-sm mb-2">Send enquiry</h4>
+                <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
                 <div class="space-y-2">
-                  <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Your name" value="${adminAttr(inquiryNameDefault)}">
+                  <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
                   <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
-                  <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Email optional" value="${adminAttr(inquiryEmailDefault)}">
-                  <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="Message">I am interested in ${adminEscape(p.title || "this property")}.</textarea>
-                  <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">Send Enquiry</button>
+                  <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
+                  <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" }))}</textarea>
+                  <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
                 </div>
               </div>
               ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
