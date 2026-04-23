@@ -6022,6 +6022,9 @@
       const nSel = document.getElementById("lp-neighborhood");
       if (citySel && !citySel.value) populateLpCityOptions(lpVal("list-district-sel"), "");
       if (nSel && !nSel.value) populateLpNeighborhoodOptions(lpVal("list-district-sel"), lpVal("lp-city"), "");
+      if (document.getElementById("lp-subtype")) {
+        setListType(getListType());
+      }
       applyPremiumFormLabels();
     }
 
