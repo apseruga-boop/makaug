@@ -709,7 +709,7 @@
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex justify-between items-center mb-6">
           <h2 id="home-featured-title" class="text-3xl font-bold text-gray-800 serif">Featured Properties</h2>
-          <a onclick="showPage('sale')" class="cursor-pointer text-green-700 font-semibold">View all</a>
+          <a id="home-featured-link" onclick="showPage('sale')" class="cursor-pointer text-green-700 font-semibold">View all</a>
         </div>
         <div id="home-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
       </div>
@@ -719,7 +719,7 @@
       <div class="max-w-7xl mx-auto px-4">
         <div class="flex justify-between items-center mb-6">
           <h2 id="home-brokers-title" class="text-3xl font-bold text-gray-800 serif">Featured Agents</h2>
-          <a onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Agents</a>
+          <a id="home-brokers-link" onclick="showPage('brokers')" class="cursor-pointer text-green-700 font-semibold">All Agents</a>
         </div>
         <div id="home-brokers" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"></div>
       </div>
@@ -6202,8 +6202,10 @@
       setTextById("hero-search-btn", tr("heroSearch"));
 
       setTextById("home-featured-title", tr("homeFeatured"));
+      setTextById("home-featured-link", translateListingLabel("View all"));
       setTextById("home-map-title", tr("homeMap"));
       setTextById("home-brokers-title", tr("homeBrokers"));
+      setTextById("home-brokers-link", translateListingLabel("All Agents"));
       applyHomeAssistantLanguageUI();
 
       setPageHeading("page-sale", tr("pageSale"));
@@ -14197,8 +14199,8 @@
     function getLocalizedPropertyDescription(property = {}, nearby = []) {
       const translated = getLocalizedListingText(property, "description", "");
       if (translated) return translated;
-      const raw = property?.desc || property?.description || "";
-      if (currentLang !== "en" && isGeneratedPropertyNarrative(raw)) {
+      const raw = String(property?.desc || property?.description || "").trim();
+      if (currentLang !== "en") {
         return buildLocalizedPropertyNarrative(property, nearby);
       }
       return raw || buildLocalizedPropertyNarrative(property, nearby);
@@ -14298,7 +14300,7 @@
             <img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}" alt="${p.title}" class="w-full h-full object-cover">
             <div class="absolute top-2 left-2 flex flex-col gap-1.5">
               <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
-              ${showNew ? `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> NEW</div>` : ""}
+              ${showNew ? `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>` : ""}
               <div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
                 <i class="${source.icon} text-[10px]"></i> ${source.label}
               </div>
@@ -14315,11 +14317,11 @@
             <h3 class="font-bold text-gray-800 line-clamp-1">${p.title}</h3>
             <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
             <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
-              ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} bed</span>` : ""}
-              ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} bath</span>` : ""}
+              ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${translateListingLabel("bed")}</span>` : ""}
+              ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${translateListingLabel("bath")}</span>` : ""}
               ${p.size ? `<span><i class="fas fa-vector-square text-green-600"></i> ${p.size}</span>` : ""}
             </div>
-            <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : "Private Owner"}</div>
+            <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : translateListingLabel("Private Owner")}</div>
             <div class="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
               <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
               <div class="flex items-center gap-1">
@@ -15679,6 +15681,13 @@
         "Added": "Kyataddwako",
         "Added today": "Kyataddwako leero",
         "Added recently": "Kyataddwako mu biseera eby'okumpi",
+        "View all": "Laba byonna",
+        "All Agents": "Agents Bonna",
+        "This location is attractive for owner-occupiers and long-term value growth.": "Ekifo kino kisikiriza nnyo abagenda okubeera mu maka gaabwe n'abanoonya okukula kw'omuwendo okumala ebbanga.",
+        "Renters value this area for practical day-to-day access and flexible commuting.": "Abapangisi batwala ekitundu kino nga kikulu olw'okutuukirira obwangu ku bya buli lunaku n'entambula ennyangu.",
+        "Students prefer this area for convenience, safety, and access to nearby campuses.": "Abayizi baagala ekitundu kino olw'obwangu, obukuumi, n'okutuuka ku campuses eziri okumpi.",
+        "Businesses choose this location for visibility, access, and steady customer flow.": "Bizinensi zironda ekifo kino olw'okulabika obulungi, okutuukibwako, n'okujja kw'abakasitoma okutakyukakyuka.",
+        "Land in this area is considered promising for phased development and future appreciation.": "Ettaka mu kitundu kino litwalibwa ng'erina amaanyi ku nkulaakulana y'emitendera n'okwongera omuwendo mu biseera eby'omu maaso.",
         "Listing link copied.": "Link ya listing ekopeddwa.",
         "Unable to copy link right now.": "Tetusobodde kukoppa link kati.",
         "Unable to share right now.": "Tetusobodde kugabana kati.",
@@ -15853,6 +15862,13 @@
         "Added": "Imeongezwa",
         "Added today": "Imeongezwa leo",
         "Added recently": "Imeongezwa hivi karibuni",
+        "View all": "Tazama zote",
+        "All Agents": "Agents wote",
+        "This location is attractive for owner-occupiers and long-term value growth.": "Eneo hili linavutia wanaotaka kuishi wenyewe na wale wanaotafuta ukuaji wa thamani wa muda mrefu.",
+        "Renters value this area for practical day-to-day access and flexible commuting.": "Wapangaji wanathamini eneo hili kwa urahisi wa maisha ya kila siku na usafiri unaobadilika kirahisi.",
+        "Students prefer this area for convenience, safety, and access to nearby campuses.": "Wanafunzi wanapendelea eneo hili kwa urahisi, usalama, na kufikia kampasi zilizo karibu.",
+        "Businesses choose this location for visibility, access, and steady customer flow.": "Biashara huchagua eneo hili kwa kuonekana vizuri, urahisi wa kufika, na mtiririko thabiti wa wateja.",
+        "Land in this area is considered promising for phased development and future appreciation.": "Ardhi katika eneo hili inaonekana kuwa na matumaini kwa maendeleo ya hatua kwa hatua na kuongezeka kwa thamani siku zijazo.",
         "Listing link copied.": "Kiungo cha tangazo kimenakiliwa.",
         "Unable to copy link right now.": "Imeshindikana kunakili kiungo kwa sasa.",
         "Unable to share right now.": "Imeshindikana kushiriki kwa sasa.",
