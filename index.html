@@ -180,7 +180,7 @@
     }
     .leaflet-top, .leaflet-bottom { z-index: 450; }
     .map-h { height: 360px; width: 100%; }
-    #map-home.map-h { height: 480px; }
+    #map-home.map-h { height: 560px; }
     .map-h-sm { height: 280px; width: 100%; }
     .listing-map-col {
       position: relative;
@@ -484,7 +484,7 @@
         padding: 0 16px;
       }
       .map-h { height: 260px; }
-      #map-home.map-h { height: 340px; }
+      #map-home.map-h { height: 400px; }
       .map-h-sm { height: 220px; }
       .listing-map-shell {
         position: relative;
@@ -732,58 +732,25 @@
       </div>
     </section>
 
-    <section class="py-8 bg-green-900 text-white">
+    <section class="py-6 bg-green-900 text-white">
       <div class="max-w-7xl mx-auto px-4">
-        <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-5 items-start">
-          <div class="max-w-2xl">
+        <div class="rounded-2xl border border-green-700/35 bg-green-950/25 px-5 py-5 md:px-6 md:py-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div class="max-w-3xl">
             <div id="home-assistant-pill" class="inline-flex items-center gap-2 bg-green-800 px-3 py-1.5 rounded-full text-green-300 text-xs font-bold uppercase tracking-wide mb-4">
               <i class="fas fa-robot"></i> AI Listing Assistant
             </div>
-            <h2 id="home-assistant-title" class="text-2xl md:text-3xl font-black leading-tight serif mb-2">List your property in <span class="text-green-300">under 5 minutes</span> with our AI agent</h2>
-            <p id="home-assistant-sub" class="text-green-100 mb-4 text-sm md:text-base max-w-xl">
-              Use the website or start on WhatsApp. We guide you through photos, location pinning, OTP verification, and review in your language.
+            <h2 id="home-assistant-title" class="text-2xl md:text-3xl font-black leading-tight serif mb-2">Our AI chatbot helps you list, search, and verify property faster</h2>
+            <p id="home-assistant-sub" class="text-green-100 text-sm md:text-base max-w-2xl">
+              Ask questions in your language, learn how listing works, understand the checks, and get guided help before you post a property or contact a lister.
             </p>
-            <div class="bg-green-950/35 border border-green-700/40 rounded-2xl p-3 mb-4 text-sm text-green-100">
-              <p id="home-assistant-need-title" class="font-semibold text-green-200 mb-1">What you'll need before you start:</p>
-              <p id="home-assistant-need-copy" class="text-sm">Property location, price, at least 5 clear photos, and your verification details (phone + ID).</p>
-              <p id="home-assistant-need-verify" class="mt-2 text-xs text-green-200">Owner verification is optional at submission. MakaUg admin can contact you about the paid Ministry of Lands confirmation process before a public verified badge is added.</p>
-            </div>
-            <div class="grid sm:grid-cols-2 gap-2 text-sm text-green-100 mb-4">
-              <div id="home-assistant-step-1" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">1. Pick a language and listing type.</div>
-              <div id="home-assistant-step-2" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">2. Add location, price, and the key property facts.</div>
-              <div id="home-assistant-step-3" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">3. Upload at least 5 clear photos and assign what each shows.</div>
-              <div id="home-assistant-step-4" class="rounded-xl border border-green-700/40 bg-green-950/25 p-2.5">4. Verify by OTP and receive your listing review update.</div>
-            </div>
-            <div class="flex flex-wrap gap-3">
-            <a id="home-assistant-cta" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-green-900 font-bold px-4 py-2.5 rounded-xl">
-              <i class="fab fa-whatsapp text-lg"></i> Start on WhatsApp Now
-            </a>
-            <button id="home-assistant-web-btn" type="button" onclick="openListPropertyOptions()" class="inline-flex items-center gap-2 border border-green-600 hover:bg-green-800 text-white font-semibold px-4 py-2.5 rounded-xl">
-              <i class="fas fa-laptop"></i> Use Website Form
-            </button>
-            </div>
+            <p id="home-assistant-detail" class="mt-3 text-sm text-green-200 max-w-2xl">
+              It is designed to help buyers, renters, brokers, and sellers move through MakaUg with less confusion and faster answers.
+            </p>
           </div>
-          <div class="hidden lg:block">
-            <div class="rounded-2xl border border-green-700/35 bg-green-950/30 p-4 shadow-xl">
-              <div class="grid sm:grid-cols-2 gap-3">
-                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
-                  <div id="home-assistant-stat-1-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Language + Type</div>
-                  <div id="home-assistant-stat-1-copy" class="mt-2 text-sm font-semibold leading-snug">Pick language, sale/rent/land/commercial/student, and start instantly.</div>
-                </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
-                  <div id="home-assistant-stat-2-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Photos + Map</div>
-                  <div id="home-assistant-stat-2-copy" class="mt-2 text-sm font-semibold leading-snug">Add 5+ photos, pin the exact location, and improve search accuracy.</div>
-                </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
-                  <div id="home-assistant-stat-3-title" class="text-xs font-bold uppercase tracking-wide text-green-700">OTP Check</div>
-                  <div id="home-assistant-stat-3-copy" class="mt-2 text-sm font-semibold leading-snug">Verify by phone or email OTP before the listing goes into review.</div>
-                </div>
-                <div class="rounded-2xl bg-white/95 text-green-950 p-3">
-                  <div id="home-assistant-stat-4-title" class="text-xs font-bold uppercase tracking-wide text-green-700">Live Link</div>
-                  <div id="home-assistant-stat-4-copy" class="mt-2 text-sm font-semibold leading-snug">Receive approval updates and your live property link when review is complete.</div>
-                </div>
-              </div>
-            </div>
+          <div class="flex items-start lg:items-center">
+            <button id="home-assistant-discover-btn" type="button" onclick="showPage('ai-chatbot')" class="inline-flex items-center gap-2 bg-white text-green-900 hover:bg-green-100 font-bold px-4 py-2.5 rounded-xl whitespace-nowrap">
+              <i class="fas fa-circle-info"></i> Discover AI Chatbot
+            </button>
           </div>
         </div>
       </div>
@@ -1818,7 +1785,7 @@
             </div>
             <div class="md:col-span-2">
               <label id="lp-address-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Full Address</label>
-              <input id="lp-address" list="lp-address-suggestions" oninput="updateListPreview();refreshListPinMapFromInputs()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, etc.">
+              <input id="lp-address" list="lp-address-suggestions" oninput="onLpAddressInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, etc.">
               <datalist id="lp-address-suggestions"></datalist>
             </div>
             <div class="md:col-span-2 bg-gray-50 border border-green-100 rounded-2xl p-4">
@@ -3943,14 +3910,18 @@
     let lpLastAddressValue = "";
     let lpAreaManualOverride = false;
     let lpStreetManualOverride = false;
+    let lpAddressManualOverride = false;
     let lpCurrentFormType = "sale";
     let lpPreviewPhotos = [];
     let lpPreviewPhotoIndex = 0;
+    let lpHierarchyAnchorSeq = 0;
+    let lpStreetSuggestSeq = 0;
     let detailGalleryPhotos = [];
     let detailGalleryPhotoIndex = 0;
     let activeDetailPropertyId = "";
     let adminAccessUnlocked = false;
     let adminUnlockTapBuffer = [];
+    const lpHierarchyAnchorCache = new Map();
     const LISTING_NEW_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
     const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
     const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40];
@@ -4646,69 +4617,24 @@
     const HOME_ASSISTANT_I18N = {
       en: {
         pill: "AI Listing Assistant",
-        titleHtml: "List your property in <span class=\"text-green-300\">under 5 minutes</span> with our AI agent",
-        sub: "Start on the website or WhatsApp. Add the location, photos, OTP check, and send your listing for review in your language.",
-        needTitle: "What you'll need before you start:",
-        needCopy: "Location, price, 5+ clear photos, and your verification details (phone + ID).",
-        needVerify: "Owner verification can still be added during review before a public verified badge is shown.",
-        step1: "1. Choose the language and listing type.",
-        step2: "2. Add the location, price, and the key facts.",
-        step3: "3. Upload clear photos and label what each one shows.",
-        step4: "4. Verify by OTP and wait for the review update.",
-        cta: "Start on WhatsApp Now",
-        webCta: "Use Website Form",
-        stat1Title: "Language + Type",
-        stat1Copy: "Pick the language and property category, then start straight away.",
-        stat2Title: "Photos + Map",
-        stat2Copy: "Add 5+ photos and pin the exact location for better search accuracy.",
-        stat3Title: "OTP Check",
-        stat3Copy: "Verify by phone or email OTP before the listing goes into review.",
-        stat4Title: "Live Link",
-        stat4Copy: "Receive approval updates and your live property link when review is complete."
+        titleHtml: "Our AI chatbot helps you list, search, and verify property faster",
+        sub: "Ask questions in your language, learn how listing works, understand the checks, and get guided help before you post a property or contact a lister.",
+        detail: "It is designed to help buyers, renters, brokers, and sellers move through MakaUg with less confusion and faster answers.",
+        discoverCta: "Discover AI Chatbot"
       },
       lg: {
         pill: "Omuyambi wa AI mu Listing",
-        titleHtml: "Teka property yo mu <span class=\"text-green-300\">ddakiika 5 zokka</span> ng'okozesa AI agent yaffe",
-        sub: "Tandikira ku website oba ku WhatsApp. Teka ekifo, ebifaananyi, okukakasa OTP, era oweereze listing yo mu review mu lulimi lwo.",
-        needTitle: "By'olina okuba nabyo nga tonnatandika:",
-        needCopy: "Ekifo, omuwendo, ebifaananyi ebitangaavu 5+, n'ebikukakasa (essimu + ID).",
-        needVerify: "Owner verification esobola okwongerwako mu review nga tebannalaga badge ya public verified.",
-        step1: "1. Londa olulimi n'ekika kya listing.",
-        step2: "2. Teka ekifo, omuwendo, n'ebikulu ku property.",
-        step3: "3. Weereza ebifaananyi ebirungi era olage buli kifaananyi kye kiraga.",
-        step4: "4. Kakasa ku OTP era olindirire update ya review.",
-        cta: "Tandika ku WhatsApp Kati",
-        webCta: "Kozesa Ffoomu ya Website",
-        stat1Title: "Olulimi + Ekika",
-        stat1Copy: "Londa olulimi n'ekika kya property, otandike mangu.",
-        stat2Title: "Ebifaananyi + Maapu",
-        stat2Copy: "Teka ebifaananyi 5+ era pininga ekifo ekituufu okulongoosa okunoonya.",
-        stat3Title: "Okukakasa OTP",
-        stat3Copy: "Kakasa ku phone oba email OTP nga listing tennagenda mu review.",
-        stat4Title: "Live Link",
-        stat4Copy: "Funa updates z'okukkiriza n'enkola ya live link ya property yo review bw'eggwa."
+        titleHtml: "AI chatbot yaffe ekuyamba okuteka, okunoonya, n'okukakasa property mu bwangu",
+        sub: "Buuza mu lulimi lwo, tegeera engeri listing gy'ekola, omanye ensengeka z'okwekebejja, era ofune obuyambi nga tonnatereka property oba okubuuza ku lister.",
+        detail: "Etegekeddwa okuyamba abagula, abapangisa, brokers, n'abatunda okuyita mu MakaUg mu ngeri etateeka muntu mu buzibu era efuna eby'okuddamu amangu.",
+        discoverCta: "Noonya ku AI Chatbot"
       },
       sw: {
         pill: "Msaidizi wa AI wa Uorodheshaji",
-        titleHtml: "Orodhesha mali yako kwa <span class=\"text-green-300\">chini ya dakika 5</span> ukitumia AI agent wetu",
-        sub: "Anza kwenye tovuti au WhatsApp. Weka location, picha, ukaguzi wa OTP, kisha tuma tangazo lako kwenye review kwa lugha yako.",
-        needTitle: "Utahitaji nini kabla ya kuanza:",
-        needCopy: "Location, bei, picha 5+ zilizo wazi, na maelezo ya uthibitisho (simu + kitambulisho).",
-        needVerify: "Uthibitisho wa mmiliki unaweza kuongezwa wakati wa review kabla ya beji ya public verified kuonekana.",
-        step1: "1. Chagua lugha na aina ya tangazo.",
-        step2: "2. Ongeza location, bei, na maelezo muhimu ya mali.",
-        step3: "3. Pakia picha zilizo wazi na ueleze kila moja inaonyesha nini.",
-        step4: "4. Thibitisha kwa OTP na usubiri taarifa ya review.",
-        cta: "Anza kwenye WhatsApp Sasa",
-        webCta: "Tumia Fomu ya Tovuti",
-        stat1Title: "Lugha + Aina",
-        stat1Copy: "Chagua lugha na aina ya mali, kisha uanze mara moja.",
-        stat2Title: "Picha + Ramani",
-        stat2Copy: "Ongeza picha 5+ na pin location sahihi kwa utafutaji bora zaidi.",
-        stat3Title: "Ukaguzi wa OTP",
-        stat3Copy: "Thibitisha kwa OTP ya simu au barua pepe kabla tangazo halijaingia kwenye ukaguzi.",
-        stat4Title: "Kiungo Hai",
-        stat4Copy: "Pokea taarifa za idhini na kiungo cha moja kwa moja cha mali yako ukaguzi ukikamilika."
+        titleHtml: "AI chatbot yetu hukusaidia kuorodhesha, kutafuta, na kuthibitisha mali kwa haraka zaidi",
+        sub: "Uliza maswali kwa lugha yako, elewa jinsi uorodheshaji unavyofanya kazi, fahamu ukaguzi unaohitajika, na upate mwongozo kabla hujatuma tangazo au kuwasiliana na muuzaji.",
+        detail: "Imeundwa kuwasaidia wanunuzi, wapangaji, mawakala, na wauzaji kutumia MakaUg bila mkanganyiko na kwa majibu ya haraka zaidi.",
+        discoverCta: "Gundua AI Chatbot"
       }
     };
 
@@ -4727,25 +4653,9 @@
       const pillEl = document.getElementById("home-assistant-pill");
       if (pillEl) pillEl.innerHTML = `<i class="fas fa-robot"></i> ${homeAssistantTr("pill")}`;
       setTextById("home-assistant-sub", homeAssistantTr("sub"));
-      setTextById("home-assistant-need-title", homeAssistantTr("needTitle"));
-      setTextById("home-assistant-need-copy", homeAssistantTr("needCopy"));
-      setTextById("home-assistant-need-verify", homeAssistantTr("needVerify"));
-      setTextById("home-assistant-step-1", homeAssistantTr("step1"));
-      setTextById("home-assistant-step-2", homeAssistantTr("step2"));
-      setTextById("home-assistant-step-3", homeAssistantTr("step3"));
-      setTextById("home-assistant-step-4", homeAssistantTr("step4"));
-      const cta = document.getElementById("home-assistant-cta");
-      if (cta) cta.innerHTML = `<i class="fab fa-whatsapp text-lg"></i> ${homeAssistantTr("cta")}`;
-      const webCta = document.getElementById("home-assistant-web-btn");
-      if (webCta) webCta.innerHTML = `<i class="fas fa-laptop"></i> ${homeAssistantTr("webCta")}`;
-      setTextById("home-assistant-stat-1-title", homeAssistantTr("stat1Title"));
-      setTextById("home-assistant-stat-1-copy", homeAssistantTr("stat1Copy"));
-      setTextById("home-assistant-stat-2-title", homeAssistantTr("stat2Title"));
-      setTextById("home-assistant-stat-2-copy", homeAssistantTr("stat2Copy"));
-      setTextById("home-assistant-stat-3-title", homeAssistantTr("stat3Title"));
-      setTextById("home-assistant-stat-3-copy", homeAssistantTr("stat3Copy"));
-      setTextById("home-assistant-stat-4-title", homeAssistantTr("stat4Title"));
-      setTextById("home-assistant-stat-4-copy", homeAssistantTr("stat4Copy"));
+      setTextById("home-assistant-detail", homeAssistantTr("detail"));
+      const discoverBtn = document.getElementById("home-assistant-discover-btn");
+      if (discoverBtn) discoverBtn.innerHTML = `<i class="fas fa-circle-info"></i> ${homeAssistantTr("discoverCta")}`;
     }
 
     const MORTGAGE_I18N = {
@@ -10701,6 +10611,41 @@
       return cleaned.length >= 2 ? cleaned : "";
     }
 
+    function getLocationScopedProperties({ district = "", city = "", neighborhood = "", area = "" } = {}) {
+      const districtKey = String(district || "").trim().toLowerCase();
+      const cityKey = String(city || "").trim().toLowerCase();
+      const areaKeys = new Set(
+        [neighborhood, area]
+          .map((value) => String(value || "").trim().toLowerCase())
+          .filter(Boolean)
+      );
+
+      return PROPERTIES.filter((property) => {
+        const propertyDistrict = String(property?.district || "").trim().toLowerCase();
+        const propertyCity = String(property?.city || property?.location_town || "").trim().toLowerCase();
+        const propertyAreas = new Set(
+          [
+            property?.area,
+            property?.neighborhood,
+            property?.extra_fields?.neighborhood,
+            property?.extra_fields?.area
+          ]
+            .map((value) => String(value || "").trim().toLowerCase())
+            .filter(Boolean)
+        );
+        if (districtKey && propertyDistrict !== districtKey) return false;
+        if (cityKey && propertyCity && propertyCity !== cityKey) return false;
+        if (areaKeys.size) {
+          let matchedArea = false;
+          areaKeys.forEach((key) => {
+            if (propertyAreas.has(key)) matchedArea = true;
+          });
+          if (!matchedArea && propertyAreas.size) return false;
+        }
+        return true;
+      });
+    }
+
     function mergeLpStreetSuggestions(values = []) {
       const listEl = document.getElementById("lp-street-suggestions");
       if (!listEl) return;
@@ -10724,6 +10669,7 @@
       if (!streetEl.value || !lpStreetManualOverride || force) {
         streetEl.value = normalized;
         streetEl.dataset.auto = force ? "0" : "1";
+        syncLpAddressFromHierarchy();
       }
     }
 
@@ -10750,10 +10696,12 @@
       );
     }
 
-    function populateListAddressSuggestions() {
+    function populateListAddressSuggestions({ district = "", city = "", neighborhood = "", area = "" } = {}) {
       const areaEl = document.getElementById("lp-area-suggestions");
       const streetEl = document.getElementById("lp-street-suggestions");
       const addrEl = document.getElementById("lp-address-suggestions");
+      const hasLocationScope = !!(district || city || neighborhood || area);
+      const scopedProperties = getLocationScopedProperties({ district, city, neighborhood, area });
       if (areaEl) {
         const hierarchyAreas = [];
         DISTRICTS.forEach((district) => {
@@ -10768,7 +10716,7 @@
       }
       if (streetEl) {
         const streetNames = Array.from(new Set(
-          PROPERTIES.flatMap((property) => {
+          (hasLocationScope ? scopedProperties : PROPERTIES).flatMap((property) => {
             const extra = property?.extra_fields || {};
             const addressParts = String(property?.address || "").split(",").map((part) => normalizeStreetCandidate(part));
             return [
@@ -10781,14 +10729,31 @@
       }
       if (addrEl) {
         const examples = Array.from(new Set([
-          ...PROPERTIES.map((p) => `${p.area}, ${p.district}`).filter(Boolean),
-          "Plot 12, Ntinda Road, Kampala",
-          "Near main tarmac road, Kira",
-          "Behind market, Mbarara Town",
-          "Kikoni Road, Makerere, Kampala",
-          "Lufula Zone, Kireka, Wakiso"
+          ...(hasLocationScope ? scopedProperties : PROPERTIES).map((p) => p?.address || `${p.area}, ${p.district}`).filter(Boolean),
+          ...(hasLocationScope ? [] : [
+            "Plot 12, Ntinda Road, Kampala",
+            "Near main tarmac road, Kira",
+            "Behind market, Mbarara Town",
+            "Kikoni Road, Makerere, Kampala",
+            "Lufula Zone, Kireka, Wakiso"
+          ])
         ])).slice(0, 300);
         addrEl.innerHTML = examples.map((name) => `<option value="${name}"></option>`).join("");
+      }
+    }
+
+    function syncLpAddressFromHierarchy() {
+      const addressEl = document.getElementById("lp-address");
+      if (!addressEl) return;
+      const region = lpVal("lp-region");
+      const district = lpVal("list-district-sel");
+      const city = lpVal("lp-city");
+      const neighborhood = lpVal("lp-neighborhood");
+      const streetName = lpVal("lp-street-name");
+      const nextAddress = [streetName, neighborhood, city, district, region].filter(Boolean).join(", ");
+      if (!lpAddressManualOverride || !addressEl.value.trim()) {
+        addressEl.value = nextAddress;
+        addressEl.dataset.auto = nextAddress ? "1" : "0";
       }
     }
 
@@ -10830,6 +10795,41 @@
       }, delay);
     }
 
+    function buildHierarchyLocationQuery({ region = "", district = "", city = "", neighborhood = "", area = "" } = {}) {
+      const areaPart = area && area !== neighborhood && area !== city ? area : "";
+      return uniqueTextParts([neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
+    }
+
+    function distanceBetweenPointsKm(a, b) {
+      if (!a || !b) return Infinity;
+      const toRad = (value) => (Number(value) * Math.PI) / 180;
+      const earthRadiusKm = 6371;
+      const dLat = toRad(Number(b.lat) - Number(a.lat));
+      const dLng = toRad(Number(b.lng) - Number(a.lng));
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const sinLat = Math.sin(dLat / 2);
+      const sinLng = Math.sin(dLng / 2);
+      const chord = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
+      const arc = 2 * Math.atan2(Math.sqrt(chord), Math.sqrt(1 - chord));
+      return earthRadiusKm * arc;
+    }
+
+    function pointMatchesHierarchyAnchor(point, anchor, maxDistanceKm = 60) {
+      if (!anchor || !Number.isFinite(anchor.lat) || !Number.isFinite(anchor.lng)) return true;
+      return distanceBetweenPointsKm(point, anchor) <= maxDistanceKm;
+    }
+
+    function buildGoogleBoundsFromCenter(center, radiusKm = 35) {
+      if (!window.google?.maps || !center) return null;
+      const latRadius = radiusKm / 111;
+      const lngRadius = radiusKm / (111 * Math.max(Math.cos((Number(center.lat) * Math.PI) / 180), 0.25));
+      return new google.maps.LatLngBounds(
+        { lat: Number(center.lat) - latRadius, lng: Number(center.lng) - lngRadius },
+        { lat: Number(center.lat) + latRadius, lng: Number(center.lng) + lngRadius }
+      );
+    }
+
     async function getGoogleGeocoder() {
       const ready = await ensureGoogleMapsApi();
       if (!ready || !window.google?.maps?.Geocoder) return null;
@@ -10837,14 +10837,16 @@
       return googleGeocoderInstance;
     }
 
-    async function geocodeWithGoogle(query) {
+    async function geocodeWithGoogle(query, options = {}) {
       const geocoder = await getGoogleGeocoder();
       if (!geocoder || !query) return null;
       return new Promise((resolve) => {
-        geocoder.geocode({
+        const request = {
           address: query,
           componentRestrictions: { country: "UG" }
-        }, (results, status) => {
+        };
+        if (options.bounds) request.bounds = options.bounds;
+        geocoder.geocode(request, (results, status) => {
           if (status !== "OK" || !Array.isArray(results) || !results.length) {
             resolve(null);
             return;
@@ -10865,7 +10867,7 @@
       });
     }
 
-    async function reverseGeocodeWithGoogle(lat, lng) {
+    async function reverseGeocodeGoogleResult(lat, lng) {
       const geocoder = await getGoogleGeocoder();
       if (!geocoder) return null;
       return new Promise((resolve) => {
@@ -10876,11 +10878,92 @@
             resolve(null);
             return;
           }
-          const streetName = extractStreetNameFromGoogleResult(results[0]);
-          if (streetName) setLpStreetName(streetName);
-          resolve(results[0]?.formatted_address || "");
+          resolve(results[0] || null);
         });
       });
+    }
+
+    async function reverseGeocodeWithGoogle(lat, lng) {
+      const result = await reverseGeocodeGoogleResult(lat, lng);
+      if (!result) return null;
+      const streetName = extractStreetNameFromGoogleResult(result);
+      if (streetName) setLpStreetName(streetName);
+      return result?.formatted_address || "";
+    }
+
+    async function hydrateStreetSuggestionsForSelection(center) {
+      if (!center || !Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
+      const geocoder = await getGoogleGeocoder();
+      if (!geocoder) return;
+      const seq = ++lpStreetSuggestSeq;
+      const seen = new Set();
+      const suggestions = [];
+      const offsets = [
+        { lat: 0, lng: 0 },
+        { lat: 0.0018, lng: 0 },
+        { lat: -0.0018, lng: 0 },
+        { lat: 0, lng: 0.0018 },
+        { lat: 0, lng: -0.0018 }
+      ];
+      for (const offset of offsets) {
+        const result = await reverseGeocodeGoogleResult(center.lat + offset.lat, center.lng + offset.lng);
+        if (seq !== lpStreetSuggestSeq) return;
+        const streetName = extractStreetNameFromGoogleResult(result || {});
+        if (streetName && !seen.has(streetName.toLowerCase())) {
+          seen.add(streetName.toLowerCase());
+          suggestions.push(streetName);
+        }
+      }
+      if (seq !== lpStreetSuggestSeq || !suggestions.length) return;
+      mergeLpStreetSuggestions(suggestions);
+    }
+
+    async function resolveHierarchyMapAnchor({ region = "", district = "", city = "", neighborhood = "", area = "" } = {}) {
+      const localPoint = getNeighborhoodPoint(district, city, neighborhood)
+        || getHierarchyPointForArea(district, neighborhood)
+        || getCityPoint(district, city)
+        || getHierarchyPointForArea(district, city)
+        || getDistrictCenter(district);
+      if (localPoint) return localPoint;
+
+      const cacheKey = [region, district, city, neighborhood, area].map((value) => String(value || "").trim().toLowerCase()).join("|");
+      if (cacheKey && lpHierarchyAnchorCache.has(cacheKey)) return lpHierarchyAnchorCache.get(cacheKey);
+
+      const queries = Array.from(new Set([
+        buildHierarchyLocationQuery({ region, district, city, neighborhood, area }),
+        uniqueTextParts([city, district, region, "Uganda"]).join(", "),
+        uniqueTextParts([district, region, "Uganda"]).join(", "),
+        uniqueTextParts([district, "Uganda"]).join(", ")
+      ].filter(Boolean)));
+
+      for (const query of queries) {
+        const googlePoint = await geocodeWithGoogle(query);
+        if (googlePoint) {
+          if (cacheKey) lpHierarchyAnchorCache.set(cacheKey, googlePoint);
+          hydrateStreetSuggestionsForSelection(googlePoint);
+          return googlePoint;
+        }
+      }
+
+      for (const query of queries) {
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+          const response = await fetch(url, { headers: { Accept: "application/json" } });
+          if (!response.ok) continue;
+          const rows = await response.json();
+          const lat = Number(rows?.[0]?.lat);
+          const lng = Number(rows?.[0]?.lon);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const point = { lat, lng };
+            if (cacheKey) lpHierarchyAnchorCache.set(cacheKey, point);
+            return point;
+          }
+        } catch (error) {}
+      }
+
+      const fallback = getRegionCenter(region) || MAP_DEFAULT_CENTER;
+      if (cacheKey) lpHierarchyAnchorCache.set(cacheKey, fallback);
+      return fallback;
     }
 
     function initGoogleListPinMap(el) {
@@ -11128,6 +11211,7 @@
           const googleLabel = await reverseGeocodeWithGoogle(lat, lng);
           if (googleLabel) {
             setLpResolvedLocationLabel(googleLabel);
+            hydrateStreetSuggestionsForSelection({ lat: Number(lat), lng: Number(lng) });
             return;
           }
           const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&zoom=18&addressdetails=1&countrycodes=ug`;
@@ -11166,7 +11250,7 @@
       }
     }
 
-    async function geocodeListAddressToMap() {
+    async function geocodeListAddressToMap(anchorCenter = null) {
       const region = lpVal("lp-region");
       const district = lpVal("list-district-sel");
       const city = lpVal("lp-city");
@@ -11179,12 +11263,16 @@
       lpAddressGeoTimer = setTimeout(async () => {
         const reqSeq = ++lpAddressGeoSeq;
         try {
-          const query = [address, streetName, neighborhood, city, district, region, "Uganda"].filter(Boolean).join(", ");
-          const googlePoint = await geocodeWithGoogle(query);
+          const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area: lpVal("lp-area") });
+          const query = uniqueTextParts([streetName, address, neighborhood, city, district, region, "Uganda"]).join(", ");
+          const googlePoint = await geocodeWithGoogle(query, {
+            bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 22 : 35) : null
+          });
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
-          if (googlePoint) {
+          if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 45 : 75)) {
             if (reqSeq !== lpAddressGeoSeq) return;
             setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
+            hydrateStreetSuggestionsForSelection(googlePoint);
             return;
           }
           const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -11195,16 +11283,20 @@
           const lat = Number(rows[0].lat);
           const lng = Number(rows[0].lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          if (!pointMatchesHierarchyAnchor({ lat, lng }, hierarchyAnchor, streetName ? 45 : 75)) {
+            if (hierarchyAnchor) setListPinCoords(hierarchyAnchor.lat, hierarchyAnchor.lng, true, true);
+            return;
+          }
           const streetCandidate = extractStreetNameFromNominatimAddress(rows[0]?.address || {});
           if (streetCandidate) setLpStreetName(streetCandidate);
           setListPinCoords(lat, lng, true, true);
         } catch (error) {
-          // silently ignore geocode misses to avoid noisy UX
+          if (anchorCenter) setListPinCoords(anchorCenter.lat, anchorCenter.lng, true, true);
         }
       }, 350);
     }
 
-    async function geocodeListHierarchyToMap() {
+    async function geocodeListHierarchyToMap(anchorCenter = null) {
       const region = lpVal("lp-region");
       const district = lpVal("list-district-sel");
       const city = lpVal("lp-city");
@@ -11217,13 +11309,17 @@
         const reqSeq = ++lpHierarchyGeoSeq;
         try {
           const areaPart = area && area !== neighborhood ? area : "";
-          const query = [streetName, neighborhood, areaPart, city, district, region, "Uganda"].filter(Boolean).join(", ");
+          const query = uniqueTextParts([streetName, neighborhood, areaPart, city, district, region, "Uganda"]).join(", ");
           if (!query) return;
-          const googlePoint = await geocodeWithGoogle(query);
+          const hierarchyAnchor = anchorCenter || await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area });
+          const googlePoint = await geocodeWithGoogle(query, {
+            bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, streetName ? 20 : 30) : null
+          });
           const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
-          if (googlePoint) {
+          if (googlePoint && pointMatchesHierarchyAnchor(googlePoint, hierarchyAnchor, streetName ? 40 : 70)) {
             if (reqSeq !== lpHierarchyGeoSeq) return;
             setListPinCoords(googlePoint.lat, googlePoint.lng, true, true);
+            hydrateStreetSuggestionsForSelection(googlePoint);
             return;
           }
           const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -11234,11 +11330,15 @@
           const lat = Number(rows[0].lat);
           const lng = Number(rows[0].lon);
           if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+          if (!pointMatchesHierarchyAnchor({ lat, lng }, hierarchyAnchor, streetName ? 40 : 70)) {
+            if (hierarchyAnchor) setListPinCoords(hierarchyAnchor.lat, hierarchyAnchor.lng, true, true);
+            return;
+          }
           const streetCandidate = extractStreetNameFromNominatimAddress(rows[0]?.address || {});
           if (streetCandidate) setLpStreetName(streetCandidate);
           setListPinCoords(lat, lng, true, true);
         } catch (error) {
-          // silent fallback to local center
+          if (anchorCenter) setListPinCoords(anchorCenter.lat, anchorCenter.lng, true, true);
         }
       }, 220);
     }
@@ -11289,13 +11389,36 @@
       } else if (lpPinMap?.setView) {
         lpPinMap.setView([center.lat, center.lng], zoom);
       }
-      if (!confirmed && (!hasCoords || hierarchyChanged || addressChanged)) {
+      const needsPreciseAnchor = !!streetName || !!address || (!neighborhoodPoint && !cityPoint && !getDistrictCenter(district) && (district || city || neighborhood || area));
+      const shouldMovePin = !confirmed && (!hasCoords || hierarchyChanged || addressChanged);
+      if (!needsPreciseAnchor && shouldMovePin) {
         setListPinCoords(center.lat, center.lng, false);
       }
+      if (needsPreciseAnchor) {
+        const reqSeq = ++lpHierarchyAnchorSeq;
+        resolveHierarchyMapAnchor({ region, district, city, neighborhood, area }).then((anchorCenter) => {
+          if (reqSeq !== lpHierarchyAnchorSeq || !anchorCenter) return;
+          if (lpPinMapProvider === "google" && window.google?.maps) {
+            lpPinMap.setCenter({ lat: anchorCenter.lat, lng: anchorCenter.lng });
+            lpPinMap.setZoom(zoom);
+          } else if (lpPinMap?.setView) {
+            lpPinMap.setView([anchorCenter.lat, anchorCenter.lng], zoom);
+          }
+          if (shouldMovePin) {
+            setListPinCoords(anchorCenter.lat, anchorCenter.lng, false, true);
+          }
+          if (address && (addressChanged || hierarchyChanged)) {
+            geocodeListAddressToMap(anchorCenter);
+          } else if ((area || streetName || !confirmed) && (hierarchyChanged || addressChanged || !hasCoords)) {
+            geocodeListHierarchyToMap(anchorCenter);
+          }
+        });
+        return;
+      }
       if (address && (addressChanged || hierarchyChanged)) {
-        geocodeListAddressToMap();
-      } else if ((area || !confirmed) && hierarchyChanged) {
-        geocodeListHierarchyToMap();
+        geocodeListAddressToMap(center);
+      } else if ((area || streetName || !confirmed) && (hierarchyChanged || addressChanged || !hasCoords)) {
+        geocodeListHierarchyToMap(center);
       }
     }
 
@@ -13049,27 +13172,39 @@
       const city = lpVal("lp-city");
       const neighborhood = lpVal("lp-neighborhood");
       const region = lpVal("lp-region");
-      const streetName = lpVal("lp-street-name");
       const areaEl = document.getElementById("lp-area");
       if (!areaEl) return;
       const autoArea = neighborhood || city || "";
       if (!lpAreaManualOverride || !areaEl.value.trim()) {
         areaEl.value = autoArea;
       }
-      const addressEl = document.getElementById("lp-address");
-      if (addressEl && !addressEl.value && (neighborhood || streetName) && city && district) {
-        addressEl.value = [streetName, neighborhood, city, district, region].filter(Boolean).join(", ");
-      }
+      populateListAddressSuggestions({ district, city, neighborhood, area: areaEl.value.trim() || autoArea, region });
+      syncLpAddressFromHierarchy();
     }
 
     function onLpAreaManualInput() {
       lpAreaManualOverride = true;
+      populateListAddressSuggestions({
+        district: lpVal("list-district-sel"),
+        city: lpVal("lp-city"),
+        neighborhood: lpVal("lp-neighborhood"),
+        area: lpVal("lp-area")
+      });
       updateListPreview();
       refreshListPinMapFromInputs();
     }
 
     function onLpStreetInput() {
       lpStreetManualOverride = true;
+      syncLpAddressFromHierarchy();
+      updateListPreview();
+      refreshListPinMapFromInputs();
+    }
+
+    function onLpAddressInput() {
+      lpAddressManualOverride = true;
+      const addressEl = document.getElementById("lp-address");
+      if (addressEl) addressEl.dataset.auto = "0";
       updateListPreview();
       refreshListPinMapFromInputs();
     }
@@ -13163,6 +13298,12 @@
       populateLpCityOptions(district);
       populateLpNeighborhoodOptions(district, "");
       lpAreaManualOverride = false;
+      lpStreetManualOverride = false;
+      lpAddressManualOverride = false;
+      const streetEl = document.getElementById("lp-street-name");
+      const addressEl = document.getElementById("lp-address");
+      if (streetEl) streetEl.value = "";
+      if (addressEl) addressEl.value = "";
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
@@ -13177,6 +13318,12 @@
       populateLpCityOptions(district);
       populateLpNeighborhoodOptions(district, "");
       lpAreaManualOverride = false;
+      lpStreetManualOverride = false;
+      lpAddressManualOverride = false;
+      const streetEl = document.getElementById("lp-street-name");
+      const addressEl = document.getElementById("lp-address");
+      if (streetEl) streetEl.value = "";
+      if (addressEl) addressEl.value = "";
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
@@ -13187,6 +13334,12 @@
       const city = lpVal("lp-city");
       populateLpNeighborhoodOptions(district, city);
       lpAreaManualOverride = false;
+      lpStreetManualOverride = false;
+      lpAddressManualOverride = false;
+      const streetEl = document.getElementById("lp-street-name");
+      const addressEl = document.getElementById("lp-address");
+      if (streetEl) streetEl.value = "";
+      if (addressEl) addressEl.value = "";
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
@@ -13194,6 +13347,12 @@
 
     function onLpNeighborhoodChange() {
       lpAreaManualOverride = false;
+      lpStreetManualOverride = false;
+      lpAddressManualOverride = false;
+      const streetEl = document.getElementById("lp-street-name");
+      const addressEl = document.getElementById("lp-address");
+      if (streetEl) streetEl.value = "";
+      if (addressEl) addressEl.value = "";
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
@@ -13224,6 +13383,7 @@
       lpLastAddressValue = "";
       lpAreaManualOverride = false;
       lpStreetManualOverride = false;
+      lpAddressManualOverride = false;
       lpPreviewPhotoIndex = 0;
 
       document.querySelectorAll("#page-list-property input[type='text'], #page-list-property input[type='email'], #page-list-property input[type='number'], #page-list-property textarea").forEach((el) => {
@@ -14209,6 +14369,35 @@
       return uniqueTextParts([location.street, location.area, location.city, location.district]).join(", ");
     }
 
+    function getPropertyPreviewPhotoUrl(property = {}) {
+      const images = Array.isArray(property?.images) ? property.images : [];
+      const firstImage = images.find((item) => String(item?.url || "").trim());
+      return property?.primary_image_url
+        || property?.img
+        || firstImage?.url
+        || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80";
+    }
+
+    function buildMapListingPopupHtml(property = {}) {
+      const idArg = propertyIdArg(property.id);
+      const title = property?.title || translatePropertyUi("Property");
+      const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
+      const photoUrl = getPropertyPreviewPhotoUrl(property);
+      return `
+        <div style="min-width:220px;max-width:240px">
+          <img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />
+          <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
+            ${adminEscape(title)}
+          </button>
+          <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${adminEscape(location)}</div>
+          <div style="font-weight:700;color:#166534;margin-bottom:8px;">${adminEscape(fmtP(property?.price, property?.period))}</div>
+          <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+            ${adminEscape(translatePropertyUi("View Property"))}
+          </button>
+        </div>
+      `;
+    }
+
     function getAmenityDisplayLabel(value, listingType = "sale") {
       const raw = String(value || "").trim();
       if (!raw) return "";
@@ -14725,6 +14914,7 @@
           lpLastAddressValue = "";
           lpAreaManualOverride = false;
           lpStreetManualOverride = false;
+          lpAddressManualOverride = false;
           const success = document.getElementById("lp-success-box");
           if (success) success.classList.add("hidden");
         }
@@ -18724,42 +18914,17 @@
       (list || []).forEach((p) => {
         const point = getListingMapPoint(p);
         if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
-        const isHomeMap = mapId === "map-home";
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
           map,
-          title: p.title || "MakaUg listing",
-          icon: isHomeMap ? {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8.5,
-            fillColor: "#f97316",
-            fillOpacity: 0.95,
-            strokeColor: "#ffffff",
-            strokeWeight: 2.5
-          } : undefined
+          title: p.title || "MakaUg listing"
         });
-        const idArg = propertyIdArg(p.id);
-        const content = `
-          <div style="min-width:200px">
-            <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
-              ${adminEscape(p.title || "Property")}
-            </button>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${adminEscape([p.area, p.district].filter(Boolean).join(", "))}</div>
-            <div style="font-weight:700;color:#166534;margin-bottom:8px;">${adminEscape(fmtP(p.price, p.period))}</div>
-            <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
-              View Property
-            </button>
-          </div>
-        `;
+        const content = buildMapListingPopupHtml(p);
         marker.addListener("mouseover", () => {
           infoWindow.setContent(content);
           infoWindow.open(map, marker);
         });
         marker.addListener("click", () => {
-          if (mapId === "map-home") {
-            openDetail(p.id);
-            return;
-          }
           infoWindow.setContent(content);
           infoWindow.open(map, marker);
         });
@@ -18958,32 +19123,9 @@
       list.forEach((p) => {
         const point = getListingMapPoint(p);
         if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
-        const marker = mapId === "map-home"
-          ? L.circleMarker([point.lat, point.lng], {
-            radius: 8,
-            color: "#ffffff",
-            weight: 2.5,
-            fillColor: "#f97316",
-            fillOpacity: 0.95
-          }).addTo(maps[mapId])
-          : L.marker([point.lat, point.lng]).addTo(maps[mapId]);
-        const idArg = propertyIdArg(p.id);
-        marker.bindPopup(`
-          <div style="min-width:200px">
-            <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
-              ${p.title}
-            </button>
-            <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${p.area}, ${p.district}</div>
-            <div style="font-weight:700;color:#166534;margin-bottom:8px;">${fmtP(p.price, p.period)}</div>
-            <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
-              View Property
-            </button>
-          </div>
-        `);
+        const marker = L.marker([point.lat, point.lng]).addTo(maps[mapId]);
+        marker.bindPopup(buildMapListingPopupHtml(p));
         marker.on("mouseover", () => marker.openPopup());
-        if (mapId === "map-home") {
-          marker.on("click", () => openDetail(p.id));
-        }
         markers[mapId].push(marker);
       });
     }
