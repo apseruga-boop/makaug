@@ -1663,7 +1663,7 @@
 
   <div id="page-detail" class="page">
     <div class="max-w-7xl mx-auto px-4 py-6">
-      <button onclick="showPage(lastPage || 'home')" class="mb-4 text-green-700 text-sm font-semibold"><i class="fas fa-arrow-left"></i> Back to results</button>
+      <button id="detail-back-results-btn" onclick="showPage(lastPage || 'home')" class="mb-4 text-green-700 text-sm font-semibold"><i class="fas fa-arrow-left"></i> Back to results</button>
       <div id="detail-content"></div>
     </div>
   </div>
@@ -2902,54 +2902,54 @@
     <div class="max-w-7xl mx-auto px-4">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <div>
-          <div class="text-2xl font-black serif">Uganda Property</div>
-          <p class="text-green-200 text-sm mt-3 leading-relaxed">
+          <div class="text-2xl font-black serif" id="footer-brand-title">Uganda Property</div>
+          <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
             Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
             <a href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">📲 WhatsApp: 0760112587</a>
             <a href="mailto:info@makaug.com" class="block hover:text-white">📧 info@makaug.com</a>
-            <a href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">💬 Chat on WhatsApp</a>
-            <span class="block">📍 Kampala, Uganda</span>
+            <a id="footer-chat-whatsapp" href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">💬 Chat on WhatsApp</a>
+            <span id="footer-location-label" class="block">📍 Kampala, Uganda</span>
           </div>
         </div>
 
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Properties</h4>
+          <h4 id="footer-col-properties" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Properties</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a onclick="showPage('sale')" class="block cursor-pointer hover:text-white">Houses for Sale</a>
-            <a onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
-            <a onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
-            <a onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
-            <a onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
-            <a onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
-            <a onclick="openListPropertyOptions()" class="block cursor-pointer hover:text-white">List a Property Free</a>
-            <a onclick="openModal('looking-modal')" class="block cursor-pointer hover:text-white">Looking For...</a>
+            <a id="footer-link-sale" onclick="showPage('sale')" class="block cursor-pointer hover:text-white">Houses for Sale</a>
+            <a id="footer-link-rent" onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
+            <a id="footer-link-students" onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
+            <a id="footer-link-commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
+            <a id="footer-link-land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
+            <a id="footer-link-mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
+            <a id="footer-link-list-free" onclick="openListPropertyOptions()" class="block cursor-pointer hover:text-white">List a Property Free</a>
+            <a id="footer-link-looking" onclick="openModal('looking-modal')" class="block cursor-pointer hover:text-white">Looking For...</a>
           </div>
         </div>
 
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Company</h4>
+          <h4 id="footer-col-company" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Company</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
-            <a onclick="openPageMod('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
-            <a onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
-            <a onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
-            <a onclick="openPageMod('advertise')" class="block cursor-pointer hover:text-white">Advertise with Us</a>
-            <a onclick="openPageMod('careers')" class="block cursor-pointer hover:text-white">Careers</a>
+            <a id="footer-link-about" onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
+            <a id="footer-link-how" onclick="openPageMod('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
+            <a id="footer-link-broker" onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
+            <a id="footer-link-register-broker" onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
+            <a id="footer-link-advertise" onclick="openPageMod('advertise')" class="block cursor-pointer hover:text-white">Advertise with Us</a>
+            <a id="footer-link-careers" onclick="openPageMod('careers')" class="block cursor-pointer hover:text-white">Careers</a>
           </div>
         </div>
 
         <div>
-          <h4 class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Legal & Support</h4>
+          <h4 id="footer-col-legal" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Legal & Support</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a onclick="openPageMod('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
-            <a onclick="openPageMod('privacy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
-            <a onclick="openPageMod('cookies')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
-            <a onclick="openPageMod('anti-fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
-            <a onclick="openPageMod('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
-            <a onclick="openModal('report-modal')" class="block cursor-pointer hover:text-white">Report a Listing</a>
-            <a onclick="openPageMod('safety')" class="block cursor-pointer hover:text-white">Safety Tips</a>
+            <a id="footer-link-terms" onclick="openPageMod('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
+            <a id="footer-link-privacy" onclick="openPageMod('privacy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
+            <a id="footer-link-cookies" onclick="openPageMod('cookies')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
+            <a id="footer-link-anti-fraud" onclick="openPageMod('anti-fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
+            <a id="footer-link-help" onclick="openPageMod('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
+            <a id="footer-link-report" onclick="openModal('report-modal')" class="block cursor-pointer hover:text-white">Report a Listing</a>
+            <a id="footer-link-safety" onclick="openPageMod('safety')" class="block cursor-pointer hover:text-white">Safety Tips</a>
           </div>
         </div>
       </div>
@@ -2972,7 +2972,7 @@
           </div>
           <div class="text-xs text-green-300" id="footer-growth-note">Google Ads ready and SEO-indexing enabled for growth campaigns.</div>
         </div>
-        <div class="text-xs text-green-400 mt-3">
+        <div id="footer-copyright" class="text-xs text-green-400 mt-3">
           © 2026 Uganda Property. All rights reserved.
         </div>
       </div>
@@ -6162,6 +6162,8 @@
       if (savedEl) savedEl.innerHTML = `<i class="fas fa-heart text-green-300"></i> ${tr("saved")}`;
       const signEl = document.getElementById("top-signin-link");
       if (signEl) signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
+      const signOutEl = document.getElementById("top-signout-link");
+      if (signOutEl) signOutEl.innerHTML = `<i class="fas fa-right-from-bracket text-green-300"></i> ${translateListingLabel("Sign Out")}`;
       const topLangEl = document.getElementById("top-language-label");
       if (topLangEl) topLangEl.innerHTML = `<i class="fas fa-language text-green-200"></i> ${tr("langLabel")}`;
       setTextById("lang-spotlight-copy", tr("langBanner"));
@@ -6206,6 +6208,35 @@
       setTextById("home-map-title", tr("homeMap"));
       setTextById("home-brokers-title", tr("homeBrokers"));
       setTextById("home-brokers-link", translateListingLabel("All Agents"));
+      setTextById("detail-back-results-btn", translateListingLabel("Back to results"));
+      setTextById("footer-brand-copy", translateListingLabel("Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts."));
+      setTextById("footer-chat-whatsapp", `💬 ${translateListingLabel("Chat on WhatsApp")}`);
+      setTextById("footer-location-label", translateListingLabel("📍 Kampala, Uganda"));
+      setTextById("footer-col-properties", translateListingLabel("Properties"));
+      setTextById("footer-link-sale", translateListingLabel("Houses for Sale"));
+      setTextById("footer-link-rent", translateListingLabel("Houses for Rent"));
+      setTextById("footer-link-students", translateListingLabel("Student Housing"));
+      setTextById("footer-link-commercial", translateListingLabel("Commercial"));
+      setTextById("footer-link-land", translateListingLabel("Land for Sale"));
+      setTextById("footer-link-mortgage", translateListingLabel("Mortgage Finder"));
+      setTextById("footer-link-list-free", translateListingLabel("List a Property Free"));
+      setTextById("footer-link-looking", translateListingLabel("Looking For..."));
+      setTextById("footer-col-company", translateListingLabel("Company"));
+      setTextById("footer-link-about", translateListingLabel("About Us"));
+      setTextById("footer-link-how", translateListingLabel("How It Works"));
+      setTextById("footer-link-broker", translateListingLabel("Find a Broker"));
+      setTextById("footer-link-register-broker", translateListingLabel("Register as Broker"));
+      setTextById("footer-link-advertise", translateListingLabel("Advertise with Us"));
+      setTextById("footer-link-careers", translateListingLabel("Careers"));
+      setTextById("footer-col-legal", translateListingLabel("Legal & Support"));
+      setTextById("footer-link-terms", translateListingLabel("Terms & Conditions"));
+      setTextById("footer-link-privacy", translateListingLabel("Privacy Policy"));
+      setTextById("footer-link-cookies", translateListingLabel("Cookie Policy"));
+      setTextById("footer-link-anti-fraud", translateListingLabel("Anti-Fraud Policy"));
+      setTextById("footer-link-help", translateListingLabel("Help Centre"));
+      setTextById("footer-link-report", translateListingLabel("Report a Listing"));
+      setTextById("footer-link-safety", translateListingLabel("Safety Tips"));
+      setTextById("footer-copyright", translateListingLabel("© 2026 Uganda Property. All rights reserved."));
       applyHomeAssistantLanguageUI();
 
       setPageHeading("page-sale", tr("pageSale"));
@@ -13025,8 +13056,8 @@
       const introBits = [title, subtype].filter(Boolean).join(" - ");
       const locationBits = [area, city, district].filter(Boolean).join(", ");
       const factBits = [];
-      if (beds) factBits.push(`${beds} ${translateListingLabel("bed")}${beds === "1" ? "" : "s"}`);
-      if (baths) factBits.push(`${baths} ${translateListingLabel("bath")}${baths === "1" ? "" : "s"}`);
+      if (beds) factBits.push(`${beds} ${countLabel(beds, "bed", "beds")}`);
+      if (baths) factBits.push(`${baths} ${countLabel(baths, "bath", "baths")}`);
       if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
       if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${extra.furnished}`);
       if (extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${extra.title_type}`);
@@ -13812,7 +13843,7 @@
       const isRegistered = (broker?.registration_status || "not_registered") === "registered";
       if (isRegistered) {
         return {
-          label: "Registered",
+          label: translateListingLabel("Registered"),
           cls: "bg-green-50 text-green-700",
           icon: "fas fa-circle-check"
         };
@@ -14152,8 +14183,8 @@
       const beds = property?.beds ?? property?.bedrooms;
       const baths = property?.baths ?? property?.bathrooms;
       const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
-      if (beds) factBits.push(`${beds} ${translateListingLabel("bed")}${String(beds) === "1" ? "" : "s"}`);
-      if (baths) factBits.push(`${baths} ${translateListingLabel("bath")}${String(baths) === "1" ? "" : "s"}`);
+      if (beds) factBits.push(`${beds} ${countLabel(beds, "bed", "beds")}`);
+      if (baths) factBits.push(`${baths} ${countLabel(baths, "bath", "baths")}`);
       if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
       if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${property.title_type || extra.title_type}`);
       if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${extra.furnished}`);
@@ -14317,8 +14348,8 @@
             <h3 class="font-bold text-gray-800 line-clamp-1">${p.title}</h3>
             <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
             <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
-              ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${translateListingLabel("bed")}</span>` : ""}
-              ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${translateListingLabel("bath")}</span>` : ""}
+              ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
+              ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
               ${p.size ? `<span><i class="fas fa-vector-square text-green-600"></i> ${p.size}</span>` : ""}
             </div>
             <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : translateListingLabel("Private Owner")}</div>
@@ -14496,25 +14527,25 @@
             <div class="grid grid-cols-3 gap-2 mt-4 text-center">
               <div>
                 <div class="text-2xl font-bold text-gray-900 leading-none">${b.listings}</div>
-                <div class="text-xs text-gray-500">Active Listings</div>
+                <div class="text-xs text-gray-500">${translateListingLabel("Active Listings")}</div>
               </div>
               <div>
                 <div class="text-2xl font-bold text-gray-900 leading-none">${b.sales || 0}</div>
-                <div class="text-xs text-gray-500">Sales</div>
+                <div class="text-xs text-gray-500">${translateListingLabel("Sales")}</div>
               </div>
               <div>
                 <div class="text-2xl font-bold text-gray-900 leading-none">⭐${b.rating}</div>
-                <div class="text-xs text-gray-500">Rating</div>
+                <div class="text-xs text-gray-500">${translateListingLabel("Rating")}</div>
               </div>
             </div>
 
             <p class="text-center text-gray-500 text-sm mt-3">📍 ${b.area}</p>
 
             <div class="mt-auto grid grid-cols-2 gap-2 mt-4">
-              <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="broker-action-btn border border-green-700 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-phone text-[11px]"></i><span>Call</span></a>
-              <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>WhatsApp</span></a>
-              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>Share WA</span></button>
-              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>Share X</span></button>
+              <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="broker-action-btn border border-green-700 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-phone text-[11px]"></i><span>${translateListingLabel("Call")}</span></a>
+              <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>${translateListingLabel("WhatsApp")}</span></a>
+              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>${translateListingLabel("Share WA")}</span></button>
+              <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>${translateListingLabel("Share X")}</span></button>
             </div>
           </div>
         `).join("");
@@ -14530,14 +14561,14 @@
           ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
           <p class="text-xs text-gray-500 mt-2 text-center"><i class="fas fa-map-marker-alt text-green-600"></i> ${b.area}</p>
           <div class="mt-3 flex justify-center gap-5 text-sm">
-            <span><strong>${b.listings}</strong> listings</span>
+            <span><strong>${b.listings}</strong> ${translateListingLabel("listings")}</span>
             <span>⭐ ${b.rating}</span>
           </div>
           <div class="grid grid-cols-2 gap-2 mt-4">
-            <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">Call</a>
-            <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">WhatsApp</a>
+            <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("Call")}</a>
+            <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
           </div>
-          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">Share Broker Card</button>
+          <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
         </div>`).join("");
     }
 
@@ -15633,9 +15664,70 @@
         "Public contact name": "Erinnya ery'olukale ery'okukwatibwako",
         "Map synced to selected region/district/neighbourhood.": "Maapu etereezeddwa ku region/district/neighbourhood olondedde.",
         "NEW": "KIPYA",
-        "bed": "bed",
-        "bath": "bath",
+        "bed": "ekisenge",
+        "beds": "ebisenge",
+        "bath": "ekinaabiro",
+        "baths": "ebinaabiro",
         "Private Owner": "Nnyini Property",
+        "Back to results": "Ddayo ku byavuddemu",
+        "Sign Out": "Fuluma",
+        "Registered": "Akwatiddwa",
+        "Active Listings": "Listing ezikola",
+        "Sales": "Kutunda",
+        "Rating": "Okupima",
+        "Call": "Kuba",
+        "WhatsApp": "WhatsApp",
+        "Share WA": "Gabana WA",
+        "Share X": "Gabana X",
+        "listings": "listing",
+        "Share Broker Card": "Gabana Kaadi ya Broker",
+        "Located in": "Esangibwa mu",
+        "Key facts": "Ebikulu",
+        "Features include": "Ebirimu mulimu",
+        "Area summary": "Mu bufunze ku kitundu",
+        "This listing is": "Listing eno eri",
+        "Guide price": "Omuwendo ogulagirwa",
+        "ideal for buyers looking for long-term value": "nnungi eri abagula abanoonya omuwendo ogw'ebiseera ebiwanvu",
+        "well-suited for renters seeking convenience": "nnungi eri abapangisi abanoonya obwangu",
+        "suitable for development or long-term investment": "nnungi ku nkulaakulana oba okusiga ensimbi okw'ebbanga eddene",
+        "positioned for business operations and growth": "nnungi ku mirimu gya bizinensi n'okukula",
+        "tailored for students and guardians seeking safe accommodation": "etegekeddwa abayizi n'ababakuuma abanoonya obutuuze obukuumi",
+        "Property listing": "Listing ya property",
+        "Property": "Property",
+        "standard amenities": "ebiriwo ebya bulijjo",
+        "key daily services": "empeereza enkulu eya buli lunaku",
+        "Built in": "Yazimbibwa mu",
+        "Title Type": "Ekika ky'Obwannannyini",
+        "Furnishing": "Ebiri munda",
+        "Minimum Contract": "Endagaano esinga obutono",
+        "months": "emyezi",
+        "Deposit": "Deposit",
+        "Properties": "Properties",
+        "Houses for Sale": "Ennyumba Ezitundibwa",
+        "Houses for Rent": "Ennyumba Ezapangisibwa",
+        "Student Housing": "Obutuuze bw'Abayizi",
+        "Land for Sale": "Ettaka Eritundibwa",
+        "List a Property Free": "Teka Property ku Bwereere",
+        "Looking For...": "Onoonya ki...",
+        "Company": "Kkampuni",
+        "About Us": "Ebikwata ku Ffe",
+        "How It Works": "Engeri Gye Kikola",
+        "Find a Broker": "Noonya Broker",
+        "Register as Broker": "Wewandiise nga Broker",
+        "Advertise with Us": "Tangaza Naffe",
+        "Careers": "Emirimu",
+        "Legal & Support": "Amateeka n'Obuyambi",
+        "Terms & Conditions": "Amateeka n'Obukwakkulizo",
+        "Privacy Policy": "Enkola ya Privacy",
+        "Cookie Policy": "Enkola ya Cookie",
+        "Anti-Fraud Policy": "Enkola y'Okulwanyisa Obulimba",
+        "Help Centre": "Ekifo ky'Obuyambi",
+        "Report a Listing": "Loopa Listing",
+        "Safety Tips": "Obukodyo bw'Obukuumi",
+        "Chat on WhatsApp": "Kuba Chat ku WhatsApp",
+        "📍 Kampala, Uganda": "📍 Kampala, Uganda",
+        "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu ya property ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
+        "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Eddembe lyonna likuumiddwa.",
         "quality flag(s)": "obubaka bw'omutindo",
         "No quality flags": "Tewali buzibu bwa mutindo",
         "Accepted": "Kikkiriziddwa",
@@ -15815,8 +15907,69 @@
         "Map synced to selected region/district/neighbourhood.": "Ramani imesawazishwa na kanda/wilaya/mtaa uliochagua.",
         "NEW": "MPYA",
         "bed": "chumba",
+        "beds": "vyumba",
         "bath": "bafu",
+        "baths": "bafu",
         "Private Owner": "Mmiliki Binafsi",
+        "Back to results": "Rudi kwenye matokeo",
+        "Sign Out": "Toka",
+        "Registered": "Amesajiliwa",
+        "Active Listings": "Matangazo Hai",
+        "Sales": "Mauzo",
+        "Rating": "Ukadiriaji",
+        "Call": "Piga",
+        "WhatsApp": "WhatsApp",
+        "Share WA": "Shiriki WA",
+        "Share X": "Shiriki X",
+        "listings": "matangazo",
+        "Share Broker Card": "Shiriki Kadi ya Broker",
+        "Located in": "Ipo",
+        "Key facts": "Mambo muhimu",
+        "Features include": "Vipengele ni pamoja na",
+        "Area summary": "Muhtasari wa eneo",
+        "This listing is": "Tangazo hili ni",
+        "Guide price": "Bei elekezi",
+        "ideal for buyers looking for long-term value": "linafaa kwa wanunuzi wanaotafuta thamani ya muda mrefu",
+        "well-suited for renters seeking convenience": "linafaa kwa wapangaji wanaotafuta urahisi",
+        "suitable for development or long-term investment": "linafaa kwa maendeleo au uwekezaji wa muda mrefu",
+        "positioned for business operations and growth": "limewekwa vizuri kwa biashara na ukuaji",
+        "tailored for students and guardians seeking safe accommodation": "limeandaliwa kwa wanafunzi na walezi wanaotafuta makazi salama",
+        "Property listing": "Tangazo la mali",
+        "Property": "Mali",
+        "standard amenities": "huduma za kawaida",
+        "key daily services": "huduma muhimu za kila siku",
+        "Built in": "Ilijengwa mwaka",
+        "Title Type": "Aina ya Hati",
+        "Furnishing": "Fanicha",
+        "Minimum Contract": "Mkataba wa chini kabisa",
+        "months": "miezi",
+        "Deposit": "Amana",
+        "Properties": "Mali",
+        "Houses for Sale": "Nyumba za Kuuza",
+        "Houses for Rent": "Nyumba za Kupangisha",
+        "Student Housing": "Makazi ya Wanafunzi",
+        "Land for Sale": "Ardhi ya Kuuza",
+        "List a Property Free": "Tangaza Mali Bure",
+        "Looking For...": "Unatafuta...",
+        "Company": "Kampuni",
+        "About Us": "Kuhusu Sisi",
+        "How It Works": "Jinsi Inavyofanya Kazi",
+        "Find a Broker": "Tafuta Broker",
+        "Register as Broker": "Jisajili kama Broker",
+        "Advertise with Us": "Tangaza Nasi",
+        "Careers": "Kazi",
+        "Legal & Support": "Sheria na Msaada",
+        "Terms & Conditions": "Sheria na Masharti",
+        "Privacy Policy": "Sera ya Faragha",
+        "Cookie Policy": "Sera ya Cookie",
+        "Anti-Fraud Policy": "Sera ya Kupinga Udanganyifu",
+        "Help Centre": "Kituo cha Msaada",
+        "Report a Listing": "Ripoti Tangazo",
+        "Safety Tips": "Vidokezo vya Usalama",
+        "Chat on WhatsApp": "Piga gumzo kwenye WhatsApp",
+        "📍 Kampala, Uganda": "📍 Kampala, Uganda",
+        "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Jukwaa la kwanza kabisa la mali nchini Uganda lisilo na malipo. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.",
+        "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Haki zote zimehifadhiwa.",
         "quality flag(s)": "alama za ubora",
         "No quality flags": "Hakuna alama za ubora",
         "Accepted": "Imekubaliwa",
@@ -16193,6 +16346,12 @@
         || text;
     }
 
+    function countLabel(count, singular, plural) {
+      const numeric = Number(count);
+      const labelKey = numeric === 1 ? singular : plural;
+      return translateListingLabel(labelKey);
+    }
+
     const PROPERTY_UI_I18N = {
       lg: {
         "AI Write Description": "AI Wandika Ennyonnyola",
@@ -16229,6 +16388,12 @@
         "We will also send a welcome email when your account is created.": "Era tujja kukuweereza welcome email nga account yo emaze okukolebwa.",
         "Sign In": "Yingira",
         "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tewali property eterekebwa ku lukale. Ebiterekeddwa bisigala mu account gy'oyingidde yokka."
+        ,
+        "Mortgage Estimate": "Okubalirira Mortgage",
+        "Deposit %": "Deposit %",
+        "Term": "Ebbanga",
+        "years": "emyaka",
+        "Open full Mortgage Finder": "Ggulawo Mortgage Finder yonna"
       },
       sw: {
         "AI Write Description": "AI Andika Maelezo",
@@ -16264,7 +16429,12 @@
         "You can review saved homes, compare options, and track your enquiries in one place.": "Unaweza kukagua nyumba ulizohifadhi, kulinganisha chaguo, na kufuatilia maulizo yako sehemu moja.",
         "We will also send a welcome email when your account is created.": "Pia tutakutumia barua pepe ya kukukaribisha akaunti yako itakapoundwa.",
         "Sign In": "Ingia",
-        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Hakuna mali inayohifadhiwa hadharani. Mali zilizohifadhiwa hubaki ndani ya akaunti iliyoingia pekee."
+        "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Hakuna mali inayohifadhiwa hadharani. Mali zilizohifadhiwa hubaki ndani ya akaunti iliyoingia pekee.",
+        "Mortgage Estimate": "Makadirio ya Mortgage",
+        "Deposit %": "Amana %",
+        "Term": "Muda",
+        "years": "miaka",
+        "Open full Mortgage Finder": "Fungua Mortgage Finder kamili"
       },
       ac: {
         "AI Write Description": "AI Coc Lok me Nyuto",
@@ -17068,8 +17238,8 @@
                 </div>
               </div>
               <div class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
-                ${bedVal ? `<div class="bg-green-50 rounded-lg p-2"><strong>${bedVal}</strong> ${translateListingLabel("bed")}${bedVal === "1" ? "" : "s"}</div>` : ""}
-                ${bathVal ? `<div class="bg-green-50 rounded-lg p-2"><strong>${bathVal}</strong> ${translateListingLabel("bath")}${bathVal === "1" ? "" : "s"}</div>` : ""}
+                  ${bedVal ? `<div class="bg-green-50 rounded-lg p-2"><strong>${bedVal}</strong> ${countLabel(bedVal, "bed", "beds")}</div>` : ""}
+                  ${bathVal ? `<div class="bg-green-50 rounded-lg p-2"><strong>${bathVal}</strong> ${countLabel(bathVal, "bath", "baths")}</div>` : ""}
                 ${sizeVal ? `<div class="bg-green-50 rounded-lg p-2"><strong>${sizeVal}</strong></div>` : ""}
                 <div class="bg-green-50 rounded-lg p-2"><strong>${subtypeLabel}</strong></div>
               </div>
@@ -17880,8 +18050,8 @@
                   </div>
                 </div>
                 <div class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
-                  ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${translateListingLabel("bed")}${String(p.beds) === "1" ? "" : "s"}</div>` : ""}
-                  ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${translateListingLabel("bath")}${String(p.baths) === "1" ? "" : "s"}</div>` : ""}
+                  ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${countLabel(p.beds, "bed", "beds")}</div>` : ""}
+                  ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${countLabel(p.baths, "bath", "baths")}</div>` : ""}
                   ${p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""}
                   <div class="bg-green-50 rounded-lg p-2"><strong>${p.subtype || translateListingLabel("Property")}</strong></div>
                 </div>
@@ -17929,25 +18099,25 @@
                 </div>
               </div>
               ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
-                <h4 class="font-bold text-gray-800 text-sm mb-2">Mortgage Estimate</h4>
+                <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Mortgage Estimate")}</h4>
                 <div class="grid grid-cols-2 gap-2 mb-2">
                   <div>
-                    <label class="block text-[11px] text-gray-500 font-semibold mb-1">Deposit %</label>
+                    <label class="block text-[11px] text-gray-500 font-semibold mb-1">${translatePropertyUi("Deposit %")}</label>
                     <input id="detail-mortgage-deposit" type="number" min="0" max="90" value="20" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs" oninput="renderDetailMortgageWidget(${detailIdArg})">
                   </div>
                   <div>
-                    <label class="block text-[11px] text-gray-500 font-semibold mb-1">Term</label>
+                    <label class="block text-[11px] text-gray-500 font-semibold mb-1">${translatePropertyUi("Term")}</label>
                     <select id="detail-mortgage-years" class="w-full border border-green-100 rounded-lg px-2.5 py-2 text-xs bg-white" onchange="renderDetailMortgageWidget(${detailIdArg})">
-                      <option value="10">10 years</option>
-                      <option value="15">15 years</option>
-                      <option value="20" selected>20 years</option>
-                      <option value="25">25 years</option>
+                      <option value="10">10 ${translatePropertyUi("years")}</option>
+                      <option value="15">15 ${translatePropertyUi("years")}</option>
+                      <option value="20" selected>20 ${translatePropertyUi("years")}</option>
+                      <option value="25">25 ${translatePropertyUi("years")}</option>
                     </select>
                   </div>
                 </div>
                 <div id="detail-mortgage-result"></div>
                 <button onclick="openMortgageFinderWithPrefill(${p.price}, '${normalizeType(p.type)}')" class="w-full mt-2 border border-green-700 text-green-700 py-2 rounded-lg text-xs font-semibold hover:bg-green-50">
-                  Open full Mortgage Finder
+                  ${translatePropertyUi("Open full Mortgage Finder")}
                 </button>
               </div>` : ""}
             </div>
