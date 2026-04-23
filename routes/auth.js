@@ -235,7 +235,21 @@ function getAuthUserIdFromRequest(req) {
   }
 }
 
-async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) {
+function isEmailOtpDeliveryConfirmed(delivery) {
+  return delivery?.sent === true && delivery?.mocked !== true;
+}
+
+function isPhoneOtpDeliveryConfirmed(delivery) {
+  if (!delivery || delivery.mocked) return false;
+  if (delivery.sid || delivery.messageId || delivery.sent === true) return true;
+
+  const status = String(delivery.status || '').trim().toLowerCase();
+  if (!status) return false;
+  if (/(fail|reject|invalid|error|undeliver)/i.test(status)) return false;
+  return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
+}
+
+async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', queryRunner = db }) {
   const resolvedChannel = String(channel || 'phone').toLowerCase() === 'email' ? 'email' : 'phone';
   const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
   const overrideAllowed = canUseAdminOtpOverride({ channel: resolvedChannel, identifier });
@@ -246,7 +260,16 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
     throw new Error('Missing OTP identifier');
   }
 
-  await db.query(
+  await queryRunner.query(
+    `UPDATE otps
+     SET used = TRUE
+     WHERE phone = $1
+       AND purpose = $2
+       AND used = FALSE`,
+    [identifier, purpose]
+  );
+
+  await queryRunner.query(
     `INSERT INTO otps (phone, code, purpose, expires_at)
      VALUES ($1, $2, $3, NOW() + ($4::text || ' minutes')::interval)`,
     [identifier, otp, purpose, String(expiresMinutes)]
@@ -270,7 +293,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
+    if (process.env.NODE_ENV === 'production' && !isEmailOtpDeliveryConfirmed(delivery)) {
       logger.warn('Email OTP delivery unavailable', { channel: resolvedChannel, delivery });
       if (overrideAllowed) {
         logger.warn('Email OTP delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
@@ -299,7 +322,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '' }) 
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+    if (process.env.NODE_ENV === 'production' && !isPhoneOtpDeliveryConfirmed(delivery)) {
       if (overrideAllowed) {
         logger.warn('OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
         return { otp, channel: resolvedChannel, identifier, expiresMinutes };
@@ -441,7 +464,9 @@ router.get('/oauth/:provider/callback', async (req, res) => {
 });
 
 router.post('/register', async (req, res, next) => {
+  let client = null;
   try {
+    client = await db.getClient();
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name);
     const phone = normalizeUgPhone(req.body.phone);
@@ -491,34 +516,93 @@ router.post('/register', async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await db.query(
-      `INSERT INTO users (
-        first_name,
-        last_name,
-        phone,
-        email,
-        role,
-        password_hash,
-        phone_verified,
-        status,
-        marketing_opt_in,
-        weekly_tips_opt_in,
-        preferred_contact_channel,
-        preferred_language
-      ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10)
-      RETURNING *`,
-      [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
+    await client.query('BEGIN');
+
+    const existingResult = await client.query(
+      `SELECT *
+       FROM users
+       WHERE phone = $1
+          OR ($2::text IS NOT NULL AND LOWER(email) = LOWER($2))
+       ORDER BY created_at ASC
+       FOR UPDATE`,
+      [phone, email]
     );
 
-    const user = result.rows[0];
+    const verifiedConflict = existingResult.rows.find((row) => row.phone_verified || row.status !== 'active');
+    if (verifiedConflict) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, error: 'Account with this phone or email already exists' });
+    }
+
+    if (existingResult.rows.length > 1) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ ok: false, error: 'This phone/email is already tied to another unverified signup. Please use sign in or contact support.' });
+    }
+
+    let user = null;
+    if (existingResult.rows.length === 1) {
+      const updated = await client.query(
+        `UPDATE users
+         SET first_name = $2,
+             last_name = $3,
+             phone = $4,
+             email = $5,
+             role = $6,
+             password_hash = $7,
+             marketing_opt_in = $8,
+             weekly_tips_opt_in = $9,
+             preferred_contact_channel = $10,
+             preferred_language = $11,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          existingResult.rows[0].id,
+          firstName,
+          lastName,
+          phone,
+          email,
+          role,
+          passwordHash,
+          marketingOptIn,
+          weeklyTipsOptIn,
+          preferredContactChannel,
+          preferredLanguage
+        ]
+      );
+      user = updated.rows[0];
+    } else {
+      const result = await client.query(
+        `INSERT INTO users (
+          first_name,
+          last_name,
+          phone,
+          email,
+          role,
+          password_hash,
+          phone_verified,
+          status,
+          marketing_opt_in,
+          weekly_tips_opt_in,
+          preferred_contact_channel,
+          preferred_language
+        ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10)
+        RETURNING *`,
+        [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
+      );
+      user = result.rows[0];
+    }
+
     const otpIssue = await issueOtp({
       purpose: 'signup',
       channel: otpChannel === 'email' && email ? 'email' : 'phone',
       phone,
-      email
+      email,
+      queryRunner: client
     });
 
-    await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    await client.query('COMMIT');
 
     return res.status(201).json({
       ok: true,
@@ -530,10 +614,17 @@ router.post('/register', async (req, res, next) => {
       }
     });
   } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (_) {}
+    }
     if (error.code === '23505') {
       return res.status(409).json({ ok: false, error: 'Account with this phone or email already exists' });
     }
     return next(error);
+  } finally {
+    if (client) client.release();
   }
 });
 

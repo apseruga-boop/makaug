@@ -2522,7 +2522,17 @@
           </div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div class="bg-white border border-gray-200 rounded-2xl p-3">
+          <div class="flex gap-2 overflow-x-auto">
+            <button type="button" data-admin-tab-button="review" onclick="setAdminWorkflowTab('review')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Review Queue</button>
+            <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
+            <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
+            <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
+            <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
+          </div>
+        </div>
+
+        <div data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 class="text-xl font-bold text-gray-800">Pending Listing Moderation</h3>
             <div class="text-xs text-gray-500">Review checklist before approval</div>
@@ -2530,7 +2540,7 @@
           <div id="admin-pending-table" class="space-y-3"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-admin-tab-panel="actioned" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Recently Actioned Listings</h3>
@@ -2540,7 +2550,7 @@
           <div id="admin-actioned-table" class="space-y-3"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Live Listings Follow-up</h3>
@@ -2551,7 +2561,7 @@
           <div id="admin-live-listings-table" class="space-y-3"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Featured Properties Control</h3>
@@ -2562,7 +2572,7 @@
           <div id="admin-featured-listings-table" class="space-y-3"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Accounts & Weekly Tips</h3>
@@ -2599,7 +2609,7 @@
           <div id="admin-review-content"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Motherboard Listing Control</h3>
@@ -2620,7 +2630,7 @@
           <div id="admin-all-listings-table" class="space-y-3"></div>
         </div>
 
-        <div class="grid md:grid-cols-3 gap-5">
+        <div data-admin-tab-panel="listings" class="admin-tab-panel grid md:grid-cols-3 gap-5">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-3">Recent Users</h3>
             <div id="admin-recent-users" class="space-y-2 text-sm text-gray-700"></div>
@@ -3540,6 +3550,7 @@
     let adminRemoteListings = [];
     let adminLiveListings = [];
     let adminActiveReview = null;
+    let activeAdminWorkflowTab = "review";
     let adminReviewEvidence = {};
     let adminReviewEvidenceViewed = {};
     let adminReviewWarningOverrides = {};
@@ -6982,6 +6993,22 @@
       return { cls: "bg-gray-100 text-gray-700", label: "Review needed" };
     }
 
+    function setAdminWorkflowTab(tab = "review") {
+      const allowed = ["review", "actioned", "live", "accounts", "listings"];
+      activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
+      document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
+        panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
+      });
+      document.querySelectorAll("[data-admin-tab-button]").forEach((button) => {
+        const active = button.dataset.adminTabButton === activeAdminWorkflowTab;
+        button.classList.toggle("bg-gray-900", active);
+        button.classList.toggle("text-white", active);
+        button.classList.toggle("bg-gray-100", !active);
+        button.classList.toggle("text-gray-700", !active);
+      });
+      if (activeAdminWorkflowTab !== "review") closeAdminReviewPanel();
+    }
+
     async function fetchRemoteAdminSnapshot() {
       if (!canUseLiveAdminApi()) return null;
       const headers = adminAuthHeaders();
@@ -7086,12 +7113,14 @@
                 <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape(actionText)} • ${adminEscape(formatListingDate(p.reviewed_at || p.approved_at || p.updated_at || p.created_at))}</div>
+                ${status === "rejected" ? `<div class="text-xs text-red-700 mt-1">${adminEscape(p.moderation_reason || p.extra_fields?.moderation_reason || "Rejection reason saved on the review record.")}</div>` : ""}
               </div>
               <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
             </div>
             <div class="mt-3 flex gap-2 flex-wrap">
               <button onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Record</button>
               ${status === "approved" ? `<button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Owner Message</button>` : ""}
+              ${status === "rejected" ? `<button onclick="openAdminRejectedListingWhatsApp(${idArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Lister</button>` : ""}
             </div>
           </div>`;
       }).join("");
@@ -7352,6 +7381,7 @@
       renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
       renderAdminUsersRows(remoteSnap?.users || localSnap.recentUsers || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
+      setAdminWorkflowTab(activeAdminWorkflowTab);
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
         <div class="border border-gray-200 rounded-lg p-2.5">
           <div class="font-semibold text-gray-800">${u.first_name || ""} ${u.last_name || ""}</div>
@@ -7565,6 +7595,22 @@
         listingLabel: listing.inquiry_reference || listing.title || listing.id || "-",
         phone: listing.lister_phone || "",
         message: buildAdminFollowUpWhatsAppMessage(listing)
+      });
+    }
+
+    function openAdminRejectedListingWhatsApp(listingId) {
+      const listing = adminRemoteListings.find((p) => String(p.id) === String(listingId) || String(p.backend_id || "") === String(listingId))
+        || PROPERTIES.find((p) => String(p.id) === String(listingId) || String(p.backend_id || "") === String(listingId));
+      if (!listing) {
+        toast("Rejected listing not found in current snapshot.");
+        return;
+      }
+      const reason = listing.moderation_reason || listing.extra_fields?.moderation_reason || listing.review?.reason || "";
+      openAdminWhatsAppMessageModal({
+        title: "Send rejection follow-up",
+        listingLabel: listing.inquiry_reference || listing.title || listing.id || "-",
+        phone: listing.lister_phone || "",
+        message: buildAdminRejectionWhatsAppMessage(listing, reason)
       });
     }
 
@@ -7829,6 +7875,57 @@
         .map((item) => item.label || item.key || "Warning");
     }
 
+    function getAdminRejectionCheckItems(review = adminActiveReview) {
+      const automated = review?.review?.automated || {};
+      const checklistItems = automated?.checks || review?.review?.checklist_items || [];
+      const normalized = checklistItems.filter((item) => {
+        const status = String(item?.status || "").toLowerCase();
+        return status === "fail" || status === "error";
+      });
+      if (normalized.length) return normalized;
+      return checklistItems.filter((item) => String(item?.status || "").toLowerCase() === "warning");
+    }
+
+    function buildAdminGeneratedDecisionReason(review = adminActiveReview) {
+      const checks = getAdminRejectionCheckItems(review);
+      if (!checks.length) return "";
+      const reasons = checks.slice(0, 5).map((item) => {
+        const label = item.label || item.key || "Review check";
+        const message = item.message || "needs attention";
+        return `${label}: ${message}`;
+      });
+      const more = checks.length > reasons.length ? ` Plus ${checks.length - reasons.length} more review item${checks.length - reasons.length === 1 ? "" : "s"}.` : "";
+      return `We could not approve this listing yet because ${reasons.join("; ")}.${more} Please correct these items and resubmit, or contact the MakaUg team if you need help.`;
+    }
+
+    function useAdminGeneratedDecisionReason() {
+      const reasonEl = document.getElementById("admin-review-reason");
+      if (!reasonEl) return;
+      const generated = buildAdminGeneratedDecisionReason(adminActiveReview);
+      if (!generated) {
+        toast("No failed or warning checks are available to turn into a message.");
+        return;
+      }
+      reasonEl.value = generated;
+      toast("Suggested rejection message added.");
+    }
+
+    function buildAdminRejectionWhatsAppMessage(listing = {}, reason = "") {
+      const name = listing.lister_name || "there";
+      const ref = listing.inquiry_reference || listing.id || "-";
+      const title = listing.title || "your MakaUg property listing";
+      const body = String(reason || buildAdminGeneratedDecisionReason(adminActiveReview) || "the listing needs more information before it can go live").trim();
+      return [
+        `Hello ${name}, this is MakaUg.`,
+        `We reviewed your listing: ${title}`,
+        `Reference: ${ref}`,
+        "",
+        `It has not been approved yet because: ${body}`,
+        "",
+        "Please update the listing or contact the MakaUg team on WhatsApp if you need help."
+      ].join("\n");
+    }
+
     function adminOverrideWarningCheck(evidenceId, checkKey = "") {
       const item = adminReviewEvidence[evidenceId];
       if (!adminActiveReview?.id || !item) {
@@ -7875,6 +7972,8 @@
       const automated = review?.review?.automated || {};
       const checklistItems = automated?.checks || review?.review?.checklist_items || [];
       const canApprove = automated?.can_approve !== false;
+      const generatedDecisionReason = buildAdminGeneratedDecisionReason(review);
+      const decisionReason = review?.review?.reason || review?.moderation_reason || review?.extra_fields?.moderation_reason || generatedDecisionReason || "";
       const reviewOverrideKey = String(review.id || "");
       const warningOverrides = getAdminReviewWarningOverrides(review);
       if (reviewOverrideKey) adminReviewWarningOverrides[reviewOverrideKey] = warningOverrides;
@@ -8041,10 +8140,17 @@
               <label class="block text-sm font-semibold text-gray-700 mb-1">Review notes</label>
               <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Internal notes for this review">${adminEscape(review?.review?.notes || "")}</textarea>
               <label class="block text-sm font-semibold text-gray-700 mt-3 mb-1">Decision reason</label>
-              <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(review?.review?.reason || "")}</textarea>
+              <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[110px]" placeholder="Required for rejection, optional for other statuses">${adminEscape(decisionReason)}</textarea>
+              ${generatedDecisionReason ? `
+                <div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">
+                  <div class="font-bold mb-1">Suggested rejection message</div>
+                  <div>${adminEscape(generatedDecisionReason)}</div>
+                </div>
+              ` : ""}
               <div class="flex flex-wrap gap-2 mt-3">
                 <button onclick="openAdminListingLivePreview(${reviewIdArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Open Live-style Preview</button>
                 <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
+                ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
                 <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
                 <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
               </div>
@@ -8079,6 +8185,7 @@
         const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(listingId)}/review`, {
           headers: adminAuthHeaders()
         });
+        setAdminWorkflowTab("review");
         renderAdminReviewPanel(response?.data || {});
       } catch (e) {
         toast(`Review load failed: ${e.message || "error"}`);
@@ -8186,7 +8293,9 @@
       const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
       const checklist = getAdminReviewChecklistFromDom();
       if (normalizedStatus === "rejected" && !moderationReason) {
-        moderationReason = window.prompt("Rejection reason sent to the lister:", "") || "";
+        moderationReason = buildAdminGeneratedDecisionReason(adminActiveReview) || "";
+        const reasonEl = document.getElementById("admin-review-reason");
+        if (reasonEl && moderationReason) reasonEl.value = moderationReason;
         if (!moderationReason.trim()) {
           toast("Rejection reason is required.");
           return;
@@ -8259,16 +8368,23 @@
       renderAll();
       resetMaps();
       await renderAdminDashboard();
-      if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+      if (normalizedStatus === "approved") {
+        setAdminWorkflowTab("live");
+      } else if (["rejected", "hidden", "deleted"].includes(normalizedStatus)) {
+        setAdminWorkflowTab("actioned");
+      } else if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
         await openAdminListingReview(backendId);
       }
       const waPayload = statusResponse?.notification?.whatsapp || {};
       if (["approved", "rejected"].includes(normalizedStatus) && (waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) {
+        const fallbackMessage = normalizedStatus === "rejected"
+          ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
+          : "";
         openAdminWhatsAppMessageModal({
           title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
           listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
           phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
-          message: waPayload.message || "",
+          message: waPayload.message || fallbackMessage,
           manualUrl: waPayload.manual_url || ""
         });
       }

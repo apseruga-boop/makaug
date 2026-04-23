@@ -296,6 +296,15 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
     [identifier, otp, String(expiresMinutes)]
   );
 
+  const emailDeliveryConfirmed = (delivery) => delivery?.sent === true && delivery?.mocked !== true;
+  const phoneDeliveryConfirmed = (delivery) => {
+    if (!delivery || delivery.mocked) return false;
+    if (delivery.sid || delivery.messageId || delivery.sent === true) return true;
+    const status = String(delivery.status || '').trim().toLowerCase();
+    if (!status || /(fail|reject|invalid|error|undeliver)/i.test(status)) return false;
+    return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
+  };
+
   if (resolvedChannel === 'email') {
     let delivery = null;
     try {
@@ -314,7 +323,7 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && (!delivery?.sent || delivery?.mocked)) {
+    if (process.env.NODE_ENV === 'production' && !emailDeliveryConfirmed(delivery)) {
       logger.warn('Listing email OTP delivery unavailable', { channel: resolvedChannel, delivery });
       if (overrideAllowed) {
         logger.warn('Listing OTP email delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
@@ -346,7 +355,7 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && (delivery?.mocked || !delivery?.sid)) {
+    if (process.env.NODE_ENV === 'production' && !phoneDeliveryConfirmed(delivery)) {
       if (overrideAllowed) {
         logger.warn('Listing OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
         return { otp, expiresMinutes, channel: resolvedChannel, identifier };
