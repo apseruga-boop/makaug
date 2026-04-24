@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
@@ -12,6 +13,14 @@ const {
   getWhatsappConversationControl,
   syncWhatsappConversationState
 } = require('../services/whatsappConversationService');
+const {
+  claimWhatsappWebBridgeMessages,
+  getWhatsappWebBridgeToken,
+  markWhatsappWebBridgeMessageFailed,
+  markWhatsappWebBridgeMessageSent,
+  queueWhatsappWebBridgeMessage,
+  upsertWhatsappWebBridgeClient
+} = require('../services/whatsappWebBridgeService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -19,6 +28,7 @@ const WHATSAPP_API_VERSION = (process.env.WHATSAPP_API_VERSION || 'v20.0').trim(
 const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const WHATSAPP_VERIFY_TOKEN = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
+const WHATSAPP_WEB_BRIDGE_TOKEN = getWhatsappWebBridgeToken();
 
 // Language Translations
 const T = {
@@ -276,6 +286,42 @@ function humanHandoffAck(lang) {
     sm: 'Webale. Obubaka bwo butuuse mu support inbox ya MakaUg era omu ku team ajja kukuddamu wano mu bbanga ttono.'
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function isWhatsappWebBridgeAuthorized(req) {
+  const token = String(
+    req.headers['x-whatsapp-web-bridge-token']
+      || req.query?.token
+      || req.body?.token
+      || ''
+  ).trim();
+  return !!WHATSAPP_WEB_BRIDGE_TOKEN && token === WHATSAPP_WEB_BRIDGE_TOKEN;
+}
+
+function bridgeUnauthorized(res) {
+  return res.status(401).json({ ok: false, error: 'Invalid WhatsApp Web bridge token' });
+}
+
+function normalizeBridgeInboundKey(value) {
+  const raw = normalizeInput(value);
+  if (!raw) return '';
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 9) return digits;
+  return raw.slice(0, 160);
+}
+
+function createBridgeMessageId({ phone, body, createdAt, providerMessageId, mediaType }) {
+  if (providerMessageId) return String(providerMessageId).trim();
+  const hash = crypto
+    .createHash('sha1')
+    .update(JSON.stringify({
+      phone: normalizeBridgeInboundKey(phone),
+      body: String(body || '').trim(),
+      createdAt: String(createdAt || ''),
+      mediaType: String(mediaType || '').trim().toLowerCase()
+    }))
+    .digest('hex');
+  return `webbridge:${hash}`;
 }
 
 function normalizeInput(value) {
@@ -1042,6 +1088,29 @@ async function logWhatsappMessage({
      ON CONFLICT (wa_message_id) DO NOTHING`,
     [userPhone, waMessageId || null, direction, messageType, JSON.stringify(payload || {})]
   );
+}
+
+async function queueWhatsappWebBridgeAutoReply({
+  phone,
+  message,
+  nextStep = null,
+  source = 'whatsapp_runtime',
+  actorId = 'system'
+}) {
+  const text = String(message || '').trim();
+  if (!text) return null;
+
+  return queueWhatsappWebBridgeMessage({
+    recipient: phone,
+    text,
+    source,
+    actorId,
+    metadata: {
+      next_step: nextStep || null,
+      queued_by: source,
+      queued_at: new Date().toISOString()
+    }
+  });
 }
 
 async function logIntent({
@@ -2531,6 +2600,211 @@ router.post('/webhook', async (req, res) => {
     res.type('text/xml');
     return res.send(twiml.toString());
   }
+});
+
+// POST /api/whatsapp/web-bridge/heartbeat
+router.post('/web-bridge/heartbeat', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const client = await upsertWhatsappWebBridgeClient({
+    clientId: req.body.client_id || 'web_bridge',
+    operatorName: req.body.operator_name || null,
+    status: req.body.status || 'online',
+    browserName: req.body.browser_name || 'Google Chrome',
+    profileDir: req.body.profile_dir || null,
+    currentUrl: req.body.current_url || null,
+    activeChatKey: req.body.active_chat_key || null,
+    unreadCount: req.body.unread_count || 0,
+    lastError: req.body.last_error || null,
+    stats: req.body.stats || {},
+    metadata: req.body.metadata || {}
+  });
+
+  return res.json({ ok: true, data: client });
+});
+
+// POST /api/whatsapp/web-bridge/inbound
+router.post('/web-bridge/inbound', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
+  const body = normalizeInput(req.body.body || req.body.text || '');
+  const mediaUrl = normalizeInput(req.body.media_url || req.body.mediaUrl);
+  const mediaType = normalizeInput(req.body.media_type || req.body.mediaType).toLowerCase();
+  const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
+  const inboundMessageId = createBridgeMessageId({
+    phone,
+    body,
+    createdAt: req.body.created_at || req.body.timestamp || '',
+    providerMessageId: req.body.message_id || req.body.provider_message_id || '',
+    mediaType
+  });
+
+  if (!phone) {
+    return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
+  }
+  if (!body && !mediaUrl && !sharedLocation) {
+    return res.status(400).json({ ok: false, error: 'body, media, or location is required' });
+  }
+
+  const alreadySeen = await db.query(
+    'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
+    [inboundMessageId]
+  );
+  if (alreadySeen.rows.length) {
+    return res.json({ ok: true, duplicate: true, inbound_message_id: inboundMessageId });
+  }
+
+  if (req.body.client_id) {
+    await upsertWhatsappWebBridgeClient({
+      clientId: req.body.client_id,
+      operatorName: req.body.operator_name || null,
+      status: req.body.status || 'online',
+      browserName: req.body.browser_name || 'Google Chrome',
+      activeChatKey: phone,
+      unreadCount: req.body.unread_count || 0,
+      currentUrl: req.body.current_url || null,
+      stats: req.body.stats || {},
+      metadata: {
+        ...(req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {}),
+        last_inbound_message_id: inboundMessageId
+      }
+    });
+  }
+
+  const { message, nextStep } = await processInboundRuntime({
+    phone,
+    inboundMessageId,
+    body,
+    mediaUrl: mediaUrl || null,
+    mediaType,
+    sharedLocation,
+    provider: 'web_bridge'
+  });
+
+  let queuedReply = null;
+  if (message) {
+    queuedReply = await queueWhatsappWebBridgeAutoReply({
+      phone,
+      message,
+      nextStep,
+      source: 'whatsapp_runtime',
+      actorId: 'system'
+    });
+  }
+
+  return res.json({
+    ok: true,
+    data: {
+      inbound_message_id: inboundMessageId,
+      next_step: nextStep,
+      queued_reply: !!queuedReply,
+      queue_id: queuedReply?.id || null
+    }
+  });
+});
+
+// GET /api/whatsapp/web-bridge/outbox
+router.get('/web-bridge/outbox', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const clientId = normalizeInput(req.query.client_id || req.headers['x-whatsapp-web-bridge-client'] || 'web_bridge');
+  const messages = await claimWhatsappWebBridgeMessages({
+    clientId,
+    limit: req.query.limit || 10
+  });
+
+  return res.json({
+    ok: true,
+    data: messages.map((row) => ({
+      id: row.id,
+      recipient: row.user_phone,
+      text: row.payload?.text || '',
+      source: row.metadata?.source || 'system',
+      actor_id: row.metadata?.actor_id || null,
+      metadata: row.metadata || {},
+      created_at: row.created_at,
+      attempts: row.attempts || 0
+    }))
+  });
+});
+
+// POST /api/whatsapp/web-bridge/outbox/:id/sent
+router.post('/web-bridge/outbox/:id/sent', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const updated = await markWhatsappWebBridgeMessageSent(req.params.id, {
+    bridge_client_id: req.body.client_id || null,
+    bridge_sent_at: new Date().toISOString(),
+    bridge_message_id: req.body.bridge_message_id || null
+  });
+
+  if (!updated) {
+    return res.status(404).json({ ok: false, error: 'Queued message not found' });
+  }
+
+  const replyText = String(updated.payload?.text || '').trim();
+  const source = String(updated.metadata?.source || '').trim().toLowerCase();
+
+  await logWhatsappMessage({
+    userPhone: updated.user_phone,
+    waMessageId: req.body.bridge_message_id || null,
+    direction: 'outbound',
+    messageType: 'text',
+    payload: {
+      provider: 'web_bridge',
+      reply: replyText,
+      source: source || 'web_bridge',
+      bridge_client_id: req.body.client_id || null
+    }
+  });
+
+  await syncWhatsappConversationState({
+    phone: updated.user_phone,
+    direction: 'outbound',
+    provider: 'web_bridge',
+    messageType: 'text',
+    ai: source.includes('ai') || source === 'whatsapp_runtime',
+    human: !(source.includes('ai') || source === 'whatsapp_runtime'),
+    metadata: {
+      source: source || 'web_bridge',
+      bridge_client_id: req.body.client_id || null,
+      last_reply_preview: replyText.slice(0, 240)
+    }
+  });
+
+  return res.json({ ok: true, data: updated });
+});
+
+// POST /api/whatsapp/web-bridge/outbox/:id/failed
+router.post('/web-bridge/outbox/:id/failed', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const updated = await markWhatsappWebBridgeMessageFailed(
+    req.params.id,
+    req.body.error || 'bridge_send_failed',
+    {
+      bridge_client_id: req.body.client_id || null,
+      bridge_failed_at: new Date().toISOString()
+    }
+  );
+
+  if (!updated) {
+    return res.status(404).json({ ok: false, error: 'Queued message not found' });
+  }
+
+  if (req.body.client_id) {
+    await upsertWhatsappWebBridgeClient({
+      clientId: req.body.client_id,
+      status: 'degraded',
+      lastError: req.body.error || 'bridge_send_failed',
+      metadata: {
+        last_failed_queue_id: req.params.id
+      }
+    });
+  }
+
+  return res.json({ ok: true, data: updated });
 });
 
 // POST /api/whatsapp/test

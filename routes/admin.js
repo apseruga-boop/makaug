@@ -37,6 +37,12 @@ const {
   mapIntentToConversationCategory,
   syncWhatsappConversationState
 } = require('../services/whatsappConversationService');
+const {
+  getWhatsappDeliveryMode,
+  getWhatsappWebBridgeStatus,
+  isWhatsappWebBridgeEnabled,
+  queueWhatsappWebBridgeMessage
+} = require('../services/whatsappWebBridgeService');
 
 const router = express.Router();
 
@@ -1717,7 +1723,8 @@ router.get('/whatsapp/insights', async (req, res, next) => {
       optIn,
       queueCounts,
       topIntents,
-      transcriptionCounts
+      transcriptionCounts,
+      bridgeStatus
     ] = await Promise.all([
       db.query(
         `SELECT
@@ -1759,7 +1766,8 @@ router.get('/whatsapp/insights', async (req, res, next) => {
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int AS last_7d
          FROM transcriptions`
-      )
+      ),
+      getWhatsappWebBridgeStatus()
     ]);
 
     return res.json({
@@ -1770,7 +1778,8 @@ router.get('/whatsapp/insights', async (req, res, next) => {
         optIn: optIn.rows[0],
         queue: queueCounts.rows[0],
         topIntents: topIntents.rows,
-        transcriptions: transcriptionCounts.rows[0]
+        transcriptions: transcriptionCounts.rows[0],
+        webBridge: bridgeStatus
       }
     });
   } catch (error) {
@@ -1899,6 +1908,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
     const text = String(req.body.text || '').trim();
     const source = String(req.body.source || 'human').trim().toLowerCase();
     const requestedStatus = req.body.status ? normalizeConversationStatus(req.body.status) : null;
+    const requestedDeliveryMode = String(req.body.delivery_mode || '').trim().toLowerCase();
+    const actor = adminActorId(req);
 
     if (!phone) {
       return res.status(400).json({ ok: false, error: 'Invalid destination phone' });
@@ -1908,8 +1919,53 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
     }
 
     const manualUrl = buildManualWhatsAppUrl(phone, text);
-    const delivery = await sendWhatsAppText({ to: phone, body: text });
-    const actor = adminActorId(req);
+    const effectiveDeliveryMode = ['provider', 'web_bridge', 'auto'].includes(requestedDeliveryMode)
+      ? requestedDeliveryMode
+      : getWhatsappDeliveryMode();
+
+    let delivery = {
+      sent: false,
+      provider: null
+    };
+    let queuedForBridge = false;
+    let bridgeQueueId = null;
+
+    if (effectiveDeliveryMode === 'web_bridge') {
+      const queued = await queueWhatsappWebBridgeMessage({
+        recipient: phone,
+        text,
+        source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+        actorId: actor,
+        metadata: {
+          requested_status: requestedStatus || 'awaiting_customer'
+        }
+      });
+      queuedForBridge = true;
+      bridgeQueueId = queued?.id || null;
+      delivery = {
+        sent: false,
+        queued: true,
+        provider: 'whatsapp_web_bridge',
+        id: bridgeQueueId
+      };
+    } else {
+      delivery = await sendWhatsAppText({ to: phone, body: text });
+
+      if (!delivery.sent && isWhatsappWebBridgeEnabled()) {
+        const queued = await queueWhatsappWebBridgeMessage({
+          recipient: phone,
+          text,
+          source: source === 'ai' ? 'admin_ai_reply' : 'admin_human_reply',
+          actorId: actor,
+          metadata: {
+            fallback_from: delivery.provider || 'provider',
+            requested_status: requestedStatus || 'awaiting_customer'
+          }
+        });
+        queuedForBridge = true;
+        bridgeQueueId = queued?.id || null;
+      }
+    }
 
     if (delivery.sent) {
       await db.query(
@@ -1944,6 +2000,14 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       await updateWhatsappConversationControl(phone, {
         status: requestedStatus || 'awaiting_customer'
       }, actor);
+    } else if (queuedForBridge) {
+      await updateWhatsappConversationControl(phone, {
+        status: requestedStatus || 'awaiting_customer',
+        metadata: {
+          pending_bridge_queue_id: bridgeQueueId,
+          pending_bridge_reply_preview: text.slice(0, 240)
+        }
+      }, actor);
     }
 
     await writeAudit('admin_whatsapp_reply_sent', {
@@ -1951,6 +2015,9 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       sent: delivery.sent === true,
       provider: delivery.provider || null,
       source,
+      delivery_mode: effectiveDeliveryMode,
+      queued_for_bridge: queuedForBridge,
+      bridge_queue_id: bridgeQueueId,
       manual_required: delivery.sent !== true,
       manual_url: manualUrl || null
     }, actor);
@@ -1960,6 +2027,8 @@ router.post('/whatsapp/conversations/:phone/reply', async (req, res, next) => {
       data: {
         sent: delivery.sent === true,
         delivery,
+        queued_for_bridge: queuedForBridge,
+        bridge_queue_id: bridgeQueueId,
         manual_required: delivery.sent !== true,
         manual_url: manualUrl || null
       }

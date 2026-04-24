@@ -7704,7 +7704,11 @@
       adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
       adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
       adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
-      adminWhatsappSummary = whatsappConversationsRes?.summary || whatsappInsightsRes?.data || {};
+      adminWhatsappSummary = {
+        ...(whatsappInsightsRes?.data || {}),
+        ...(whatsappConversationsRes?.summary || {}),
+        webBridge: whatsappInsightsRes?.data?.webBridge || {}
+      };
       adminWhatsappConversations = Array.isArray(whatsappConversationsRes?.data) ? whatsappConversationsRes.data : [];
       return {
         summary: summaryRes?.data || {},
@@ -8891,13 +8895,15 @@
     function renderAdminWhatsappOverview(summary = {}) {
       const wrap = document.getElementById("admin-whatsapp-overview");
       if (!wrap) return;
+      const bridgeSummary = summary?.webBridge?.summary || {};
       const cards = [
         { label: "Conversations", value: summary.total_conversations || 0, cls: "text-gray-900" },
         { label: "Active 7d", value: summary.active_7d || 0, cls: "text-green-700" },
         { label: "Needs Human", value: summary.needs_human || 0, cls: "text-red-700" },
         { label: "Resolved", value: summary.resolved || 0, cls: "text-green-700" },
         { label: "Autopilot", value: summary.autopilot || 0, cls: "text-emerald-700" },
-        { label: "Manual / Copilot", value: Number(summary.copilot || 0) + Number(summary.manual_only || 0), cls: "text-indigo-700" }
+        { label: "Manual / Copilot", value: Number(summary.copilot || 0) + Number(summary.manual_only || 0), cls: "text-indigo-700" },
+        { label: "Web Bridge Online", value: bridgeSummary.online_clients || 0, cls: Number(bridgeSummary.online_clients || 0) > 0 ? "text-green-700" : "text-amber-700" }
       ];
       wrap.innerHTML = cards.map((card) => `
         <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -9282,7 +9288,9 @@
         });
 
         const manualUrl = response?.data?.manual_url || "";
-        if (response?.data?.manual_required && manualUrl) {
+        if (response?.data?.queued_for_bridge) {
+          toast("Reply queued for the WhatsApp Web copilot. It will send from the open browser session.");
+        } else if (response?.data?.manual_required && manualUrl) {
           window.open(manualUrl, "_blank", "noopener,noreferrer");
           toast("Provider fallback opened in WhatsApp. Send the message there to complete the reply.");
         } else {

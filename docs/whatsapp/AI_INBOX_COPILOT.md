@@ -56,6 +56,14 @@ This is better than browser automation because:
 - every reply can be categorized and tracked
 - it supports real dashboards and reporting
 
+## Low-cost launch option
+
+If you want to start with WhatsApp Web first, use:
+
+- [WhatsApp Web Copilot Setup](/Users/arthurseruga/Documents/New project/docs/whatsapp/WEB_COPILOT_SETUP.md)
+
+That mode keeps Chrome + WhatsApp Web open on a dedicated machine and lets the MakaUg inbox queue replies for the local browser bridge to send.
+
 ## Required env vars
 
 For Meta WhatsApp Cloud API:

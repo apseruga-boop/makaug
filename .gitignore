@@ -6,3 +6,4 @@ npm-debug.log*
 coverage/
 private-local/
 qa-output/
+.whatsapp-web-copilot-profile/
