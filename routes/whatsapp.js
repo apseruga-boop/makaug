@@ -570,6 +570,7 @@ function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeti
   const currentLang = resolveLangCode(sessionLang || 'en');
   if (!nextLang || nextLang === currentLang) return false;
   if (detectedLanguage.source === 'intent_entity') return true;
+  if (detectedLanguage.source === 'voice_transcription') return true;
   if (Number(detectedLanguage.confidence || 0) < 0.9) return false;
   if (nextLang === 'en' && currentLang !== 'en') return false;
   return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(sessionStep || 'greeting');
@@ -622,6 +623,43 @@ function parseLanguageChange(text) {
     lusoga: 'sm'
   };
   return map[value] || '';
+}
+
+function normalizeTranscriptionLanguage(value) {
+  const clean = normalizeInput(value).toLowerCase();
+  if (!clean) return '';
+  const map = {
+    en: 'en',
+    eng: 'en',
+    english: 'en',
+    lg: 'lg',
+    lug: 'lg',
+    luganda: 'lg',
+    sw: 'sw',
+    swa: 'sw',
+    swahili: 'sw',
+    kiswahili: 'sw',
+    ac: 'ac',
+    ach: 'ac',
+    acholi: 'ac',
+    ny: 'ny',
+    nyn: 'ny',
+    runyankole: 'ny',
+    rn: 'rn',
+    rukiga: 'rn',
+    sm: 'sm',
+    xog: 'sm',
+    lusoga: 'sm'
+  };
+  return map[clean] || map[clean.split(/[-_]/)[0]] || '';
+}
+
+function resolveVoiceDetectedLanguage(transcriptRecord, transcriptText, sessionLang) {
+  const fromProvider = normalizeTranscriptionLanguage(transcriptRecord?.language);
+  if (fromProvider) return { code: fromProvider, confidence: 0.96, source: 'voice_transcription' };
+  const fromText = detectLanguageFromText(transcriptText);
+  if (fromText.code) return { ...fromText, source: 'voice_transcript_text' };
+  return { code: resolveLangCode(sessionLang), confidence: 0.5, source: 'session' };
 }
 
 function photoRequirementLabel(index, lang = 'en') {
@@ -2911,7 +2949,7 @@ const STEPS = [
 
 async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
   const session = await getSession(phone);
-  const lang = session.language || 'en';
+  const lang = resolveLangCode(runtime.language || session.language || 'en');
   const step = session.current_step;
   const draft = session.listing_draft || {};
   const sessionData = session.session_data || {};
@@ -4062,7 +4100,24 @@ async function processInboundRuntime({
   );
 
   if (isAudioNote) {
-    transcriptRecord = await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg');
+    const providedTranscript = normalizeInput(
+      inboundMetadata.transcript
+      || inboundMetadata.voice_transcript
+      || inboundMetadata.transcription
+    );
+    if (providedTranscript) {
+      transcriptRecord = {
+        text: providedTranscript,
+        language: normalizeTranscriptionLanguage(
+          inboundMetadata.transcript_language
+          || inboundMetadata.voice_language
+          || inboundMetadata.language
+        ) || null,
+        model: 'provided_voice_transcript'
+      };
+    } else {
+      transcriptRecord = await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg');
+    }
     if (transcriptRecord?.text) effectiveBody = transcriptRecord.text;
   }
 
@@ -4122,11 +4177,13 @@ async function processInboundRuntime({
     step: sessionStep,
     sessionData: session.session_data || {}
   });
-  const detectedLanguage = resolveDetectedLanguage({
-    text: effectiveBody,
-    sessionLang,
-    intentResult
-  });
+  const detectedLanguage = transcriptRecord?.text
+    ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
+    : resolveDetectedLanguage({
+      text: effectiveBody,
+      sessionLang,
+      intentResult
+    });
   const runtimeLang = detectedLanguage.code || sessionLang;
   const adoptDetectedLanguage = shouldAdoptDetectedLanguage({ sessionLang, sessionStep, detectedLanguage });
   const activeLang = adoptDetectedLanguage ? runtimeLang : sessionLang;
@@ -4185,6 +4242,7 @@ async function processInboundRuntime({
     sharedLocation,
     {
       intent: intentResult,
+      language: activeLang,
       mediaType: normalizedMediaType,
       mediaCount: Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0)),
       transcript: transcriptRecord?.text || null
