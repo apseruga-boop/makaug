@@ -25,7 +25,7 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const POLL_MS = Math.max(2500, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 5000));
+const POLL_MS = Math.max(1200, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 1500));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 
 if (!BRIDGE_TOKEN) {
@@ -222,12 +222,66 @@ async function getActiveChatSnapshot(page) {
   });
 }
 
+async function getRecentIncomingSnapshots(page, limit = 20) {
+  return page.evaluate((maxItems) => {
+    const header = document.querySelector('header');
+    const chatKey = header?.querySelector('span[title]')?.getAttribute('title')
+      || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
+      || '';
+
+    const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    return nodes
+      .slice(-Math.max(1, maxItems))
+      .map((node) => {
+        const pre = node.getAttribute('data-pre-plain-text') || '';
+        const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
+        const senderLabel = pre
+          .replace(/^\[[^\]]+\]\s*/, '')
+          .replace(/:\s*$/, '')
+          .trim();
+        const direction = node.closest('.message-out')
+          ? 'out'
+          : node.closest('.message-in')
+            ? 'in'
+            : 'unknown';
+        const messageId = node.closest('[data-id]')?.getAttribute('data-id')
+          || node.getAttribute('data-id')
+          || '';
+        const mediaType = node.querySelector('audio')
+          ? 'voice'
+          : node.querySelector('video')
+            ? 'media'
+            : node.querySelector('img')
+              ? 'image'
+              : 'text';
+        const rawText = (node.innerText || node.textContent || '').trim();
+        const text = rawText || (mediaType === 'image'
+          ? '[image]'
+          : mediaType === 'voice'
+            ? '[voice note]'
+            : mediaType === 'media'
+              ? '[media]'
+              : '');
+        return {
+          chatKey: chatKey || senderLabel,
+          text,
+          timestampLabel,
+          messageId,
+          direction,
+          mediaType,
+          mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`
+        };
+      })
+      .filter((item) => item.direction === 'in' && item.chatKey && item.text);
+  }, limit);
+}
+
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
   const text = String(snapshot.text || row.preview || '').trim();
   const mediaType = snapshot.mediaType || 'text';
 
-  if (!chatKey || !text) return { processed: 0, skipped: 'missing_chat_or_text' };
+  if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
 
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
@@ -241,6 +295,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         phone: chatKey,
         body: text,
         message_id: messageId,
+        media_url: snapshot.mediaUrl || '',
         media_type: mediaType,
         created_at: snapshot.timestampLabel || new Date().toISOString(),
         metadata: {
@@ -251,7 +306,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
       }
     });
     if (!result.duplicate) {
-      log(`ingested ${source} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
+      log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
     return { processed: result.duplicate ? 0 : 1, duplicate: !!result.duplicate };
   } catch (error) {
@@ -268,9 +323,11 @@ async function ingestUnreadChats(page) {
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
 
-    const snapshot = await getActiveChatSnapshot(page);
-    const result = await ingestSnapshot({ snapshot, row, source: 'unread_scan' });
-    processed += result.processed || 0;
+    const snapshots = await getRecentIncomingSnapshots(page);
+    for (const snapshot of snapshots) {
+      const result = await ingestSnapshot({ snapshot, row, source: 'unread_scan' });
+      processed += result.processed || 0;
+    }
   }
 
   return {
@@ -280,14 +337,17 @@ async function ingestUnreadChats(page) {
 }
 
 async function ingestActiveChat(page) {
-  const snapshot = await getActiveChatSnapshot(page);
-  const result = await ingestSnapshot({
-    snapshot,
-    row: { title: snapshot.chatKey, preview: '' },
-    source: 'active_chat'
-  });
-
-  return result.processed || 0;
+  const snapshots = await getRecentIncomingSnapshots(page);
+  let processed = 0;
+  for (const snapshot of snapshots) {
+    const result = await ingestSnapshot({
+      snapshot,
+      row: { title: snapshot.chatKey, preview: '' },
+      source: 'active_chat'
+    });
+    processed += result.processed || 0;
+  }
+  return processed;
 }
 
 async function openChatForReply(page, recipient) {
