@@ -54,3 +54,25 @@ Stored per phone in `whatsapp_sessions`:
 - Add moderation dashboard for pending listings/agent applications/reports
 - Add retries + dead letter queue for outbound failures
 - Add observability (Sentry + structured logs + dashboards)
+
+## Agent Runtime Improvements
+
+The SSD download `claw-code-rust-main` is an MIT-licensed Rust agent runtime,
+not a WhatsApp integration. The useful parts for MakaUg are runtime patterns,
+so we adapted the ideas instead of copying Rust into Node:
+
+- Fast message loop: deterministic WhatsApp flow steps now use heuristic intent
+  routing first, avoiding slow LLM calls for simple replies and media uploads.
+- Language lock: voice transcripts and detected text language are resolved
+  before intent classification, so the classifier and reply flow stay in the
+  user's current language unless they explicitly switch.
+- Error/retry posture: the existing LLM wrapper already retries rate-limit and
+  server errors; the runtime now records the model used and latency per turn so
+  slow or failing paths can be found in admin telemetry.
+- Session memory: conversation state stores last intent, step, language source,
+  and runtime latency, keeping the admin view aligned with where the user left
+  off.
+- Media continuity: WhatsApp Web media messages now receive a placeholder media
+  URL whenever a media type is reported, even if WhatsApp sends no text body or
+  album count. This keeps the photo listing flow moving to the next required
+  image.

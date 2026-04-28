@@ -254,6 +254,48 @@ function buildIntentLink(intent) {
   return PUBLIC_BASE_URL;
 }
 
+function buildLocalizedAssistantFallbackText(languageCode, link) {
+  const code = normalizeLanguageCode(languageCode);
+  const copy = {
+    en: [
+      'I can help with property search, listing, agent support, mortgage guidance, and account help.',
+      `Open: ${link}`,
+      'If you need human support, call 0760112587 or email info@makaug.com.'
+    ],
+    lg: [
+      'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
+      `Ggulawo: ${link}`,
+      'Bwoba weetaaga omuntu akuyambe, kuba 0760112587 oba email info@makaug.com.'
+    ],
+    sw: [
+      'Naweza kusaidia kutafuta mali, kuorodhesha mali, kupata agent, mortgage, na akaunti.',
+      `Fungua: ${link}`,
+      'Ukitaka msaada wa mtu, piga 0760112587 au tuma email info@makaug.com.'
+    ],
+    ac: [
+      'Aromo konyi me yeny property, keto property, nongo agent, mortgage, ki account.',
+      `Yab: ${link}`,
+      'Ka imito kony pa dano, lwong 0760112587 onyo email info@makaug.com.'
+    ],
+    ny: [
+      'Nimbaasa kukuyamba kushaka property, kuhandiika property, kushaka agent, mortgage, na account.',
+      `Guraho: ${link}`,
+      'Ku oraabe nooyenda omuntu akuyambe, teera 0760112587 nari email info@makaug.com.'
+    ],
+    rn: [
+      'Nshobora kugufasha gushaka property, kuyishyiraho, gushaka agent, mortgage, na account.',
+      `Fungura: ${link}`,
+      'Niba mukeneye umuntu abafasha, hamagara 0760112587 canke email info@makaug.com.'
+    ],
+    sm: [
+      'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
+      `Ggulawo: ${link}`,
+      'Bwoba weetaaga omuntu akuyambe, kuba 0760112587 oba email info@makaug.com.'
+    ]
+  };
+  return (copy[code] || copy.en).join(' ');
+}
+
 async function logAiModelEvent({
   eventType,
   source = 'api',
@@ -326,6 +368,50 @@ function heuristicIntent(text) {
     return { intent: 'report_listing', confidence: 0.7, entities: {} };
   }
   return { intent: 'unknown', confidence: 0.2, entities: {} };
+}
+
+function shouldUseFastIntentPath({ text = '', step = '', fallback = {} } = {}) {
+  const clean = cleanText(text, 700);
+  const currentStep = String(step || '').trim().toLowerCase();
+  const fallbackIntent = normalizeIntent(fallback.intent);
+  const confidence = safeNumber(fallback.confidence, 0);
+
+  if (!clean) return true;
+
+  // Borrowed from the Claw runtime idea of keeping the hot message loop lean:
+  // deterministic flow steps should not wait on a model unless the message is
+  // clearly trying to change task.
+  const flowOwnedSteps = new Set([
+    'listing_type',
+    'ownership',
+    'title',
+    'district',
+    'area',
+    'price',
+    'bedrooms',
+    'description',
+    'photos',
+    'ask_deposit',
+    'ask_contract',
+    'ask_university',
+    'ask_distance',
+    'ask_public_name',
+    'ask_contact_method',
+    'ask_contact_value',
+    'ask_id_number',
+    'ask_selfie',
+    'ask_phone',
+    'verify_otp'
+  ]);
+
+  if (flowOwnedSteps.has(currentStep) && fallbackIntent === 'unknown') return true;
+  if (flowOwnedSteps.has(currentStep) && confidence < 0.7) return true;
+
+  if (['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area'].includes(currentStep)) {
+    return confidence >= 0.64 && fallbackIntent !== 'unknown';
+  }
+
+  return false;
 }
 
 const QUERY_SEARCH_TYPE_RULES = [
@@ -706,6 +792,13 @@ Rules:
 
 async function classifyWhatsappIntent({ text, language = 'en', step = '', sessionData = {} }) {
   const fallback = heuristicIntent(text);
+  if (shouldUseFastIntentPath({ text, step, fallback })) {
+    return {
+      ...fallback,
+      model: 'heuristic_fast'
+    };
+  }
+
   const client = getClient();
   if (!client) {
     return {
@@ -1118,12 +1211,7 @@ async function suggestWhatsappAssistantReply({
 }) {
   const link = buildIntentLink(intent);
   const languageCode = normalizeLanguageCode(language);
-
-  const fallbackText = [
-    'I can help with property search, listing, agent support, mortgage guidance, and account help.',
-    `Open: ${link}`,
-    'If you need human support, call 0760112587 or email info@makaug.com.'
-  ].join(' ');
+  const fallbackText = buildLocalizedAssistantFallbackText(languageCode, link);
 
   const client = getClient();
   if (!client) {

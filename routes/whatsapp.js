@@ -571,6 +571,7 @@ function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeti
   if (!nextLang || nextLang === currentLang) return false;
   if (detectedLanguage.source === 'intent_entity') return true;
   if (detectedLanguage.source === 'voice_transcription') return true;
+  if (detectedLanguage.source === 'voice_transcript_text') return true;
   if (Number(detectedLanguage.confidence || 0) < 0.9) return false;
   if (nextLang === 'en' && currentLang !== 'en') return false;
   return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(sessionStep || 'greeting');
@@ -4064,6 +4065,7 @@ async function processInboundRuntime({
   provider = 'whatsapp',
   metadata = {}
 }) {
+  const runtimeStartedAt = Date.now();
   logger.info(
     `WhatsApp message from ${phone}: "${String(body || '').substring(0, 50)}"${
       mediaUrl ? ' [media]' : ''
@@ -4171,9 +4173,18 @@ async function processInboundRuntime({
     };
   }
 
+  const preliminaryLanguage = transcriptRecord?.text
+    ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
+    : resolveDetectedLanguage({
+      text: effectiveBody,
+      sessionLang,
+      intentResult: null
+    });
+  const classifierLanguage = preliminaryLanguage.code || sessionLang;
+
   const intentResult = await classifyWhatsappIntent({
     text: effectiveBody,
-    language: sessionLang,
+    language: classifierLanguage,
     step: sessionStep,
     sessionData: session.session_data || {}
   });
@@ -4256,6 +4267,8 @@ async function processInboundRuntime({
     }
   }
 
+  const runtimeLatencyMs = Math.max(0, Date.now() - runtimeStartedAt);
+
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
   const refreshedSession = await getSession(phone);
   await upsertWhatsappUserProfile(phone, {
@@ -4263,6 +4276,8 @@ async function processInboundRuntime({
     metadata: {
       last_intent: intentResult.intent || 'unknown',
       last_step: nextStep,
+      last_language_source: detectedLanguage.source || null,
+      last_runtime_latency_ms: runtimeLatencyMs,
       ...(contactName ? { display_name: contactName } : {})
     }
   });
@@ -4276,7 +4291,11 @@ async function processInboundRuntime({
     provider,
     messageType,
     metadata: {
-      last_inbound_message_id: inboundMessageId || null
+      last_inbound_message_id: inboundMessageId || null,
+      runtime_latency_ms: runtimeLatencyMs,
+      language_source: detectedLanguage.source || null,
+      classifier_language: classifierLanguage,
+      intent_model: intentResult.model || null
     }
   });
 
@@ -4466,7 +4485,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
     mediaType
   });
   const bridgeHasMedia = mediaType && mediaType !== 'text' && !mediaType.includes('location');
-  if (!mediaUrl && bridgeHasMedia && (mediaCount > 0 || /\[(image|media|photo)\]/i.test(body))) {
+  if (!mediaUrl && bridgeHasMedia) {
     mediaUrl = `whatsapp-web://${inboundMessageId}`;
   }
 
