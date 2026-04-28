@@ -973,11 +973,11 @@ async function sendMetaTextMessage(phone, message) {
 }
 
 const SEARCH_TYPE_KEYWORDS = [
-  { type: 'rent', re: /\b(rent|rental|to rent|monthly|per month|a month|\/month|lease)\b/i },
-  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
   { type: 'student', re: /\b(student|students|hostel|dorm|dormitory|campus|university)\b/i },
   { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business premises)\b/i },
-  { type: 'land', re: /\b(land|plot|acre|acres|farm land|agricultural)\b/i }
+  { type: 'land', re: /\b(land|plot|plots|acre|acres|farm land|agricultural)\b/i },
+  { type: 'rent', re: /\b(rent|rental|to rent|monthly|per month|a month|\/month|lease)\b/i },
+  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i }
 ];
 
 const PROPERTY_TYPE_KEYWORDS = [
@@ -1033,6 +1033,58 @@ const AREA_ALIASES = {
   rubagaa: 'Rubaga',
   lubaga: 'Rubaga'
 };
+
+const REGION_DISTRICTS = {
+  central: [
+    'Buikwe', 'Bukomansimbi', 'Buvuma', 'Gomba', 'Kalangala', 'Kalungu',
+    'Kampala', 'Kasanda', 'Kayunga', 'Kiboga', 'Kyankwanzi', 'Kyotera',
+    'Luwero', 'Lwengo', 'Lyantonde', 'Masaka', 'Mityana', 'Mpigi',
+    'Mubende', 'Mukono', 'Nakaseke', 'Nakasongola', 'Rakai',
+    'Sembabule', 'Wakiso', 'Butambala'
+  ],
+  eastern: [
+    'Budaka', 'Bududa', 'Bugiri', 'Bugweri', 'Bukedea', 'Bukwo',
+    'Bulambuli', 'Busia', 'Butaleja', 'Butebo', 'Buyende', 'Iganga',
+    'Jinja', 'Kaberamaido', 'Kalaki', 'Kaliro', 'Kamuli', 'Kapchorwa',
+    'Kapelebyong', 'Katakwi', 'Kibuku', 'Kumi', 'Luuka', 'Mayuge',
+    'Mbale', 'Namisindwa', 'Namutumba', 'Namayingo', 'Ngora',
+    'Pallisa', 'Serere', 'Sironko', 'Soroti', 'Tororo', 'Amuria'
+  ],
+  northern: [
+    'Abim', 'Adjumani', 'Agago', 'Alebtong', 'Amolatar', 'Amudat',
+    'Amuru', 'Apac', 'Arua', 'Dokolo', 'Gulu', 'Kaabong', 'Karenga',
+    'Kitgum', 'Koboko', 'Kole', 'Kotido', 'Kwania',
+    'Lamwo', 'Lira', 'Madi-Okollo', 'Maracha', 'Moroto', 'Moyo',
+    'Nabilatuk', 'Nakapiripirit', 'Napak', 'Nebbi', 'Nwoya',
+    'Obongi', 'Omoro', 'Otuke', 'Oyam', 'Pader', 'Pakwach',
+    'Yumbe', 'Zombo'
+  ],
+  western: [
+    'Buhweju', 'Buliisa', 'Bundibugyo', 'Bunyangabu', 'Bushenyi',
+    'Hoima', 'Ibanda', 'Isingiro', 'Kabale', 'Kabarole', 'Kagadi',
+    'Kakumiro', 'Kamwenge', 'Kanungu', 'Kasese', 'Kibaale', 'Kitagwenda',
+    'Kikuube', 'Kiruhura', 'Kiryandongo', 'Kisoro', 'Kyegegwa',
+    'Kyenjojo', 'Mbarara', 'Mitooma', 'Ntoroko', 'Ntungamo',
+    'Rubanda', 'Rubirizi', 'Rukiga', 'Rukungiri', 'Sheema'
+  ],
+  'greater kampala': ['Kampala', 'Wakiso', 'Mukono']
+};
+
+function normalizeRegionKey(value) {
+  const clean = normalizeInput(value)
+    .toLowerCase()
+    .replace(/\b(region|metropolitan area|metro area|metro)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (['gkla', 'gkma', 'greater kampala'].includes(clean)) return 'greater kampala';
+  if (['central', 'eastern', 'northern', 'western'].includes(clean)) return clean;
+  return '';
+}
+
+function getRegionDistricts(value) {
+  const key = normalizeRegionKey(value);
+  return key ? (REGION_DISTRICTS[key] || []) : [];
+}
 
 const NEAR_ME_PATTERNS = [
   /\bnear\s+me\b/i,
@@ -1147,6 +1199,9 @@ function parseSearchType(text) {
   const clean = normalizeInput(text);
   const mapped = mapSearchTypeInput(clean);
   if (mapped) return mapped;
+  if (/\b(land|plot|plots|acre|acres|farm land|agricultural)\b/i.test(clean)) return 'land';
+  if (/\b(commercial|office|retail|warehouse|shop|business premises)\b/i.test(clean)) return 'commercial';
+  if (/\b(student|students|hostel|dorm|dormitory|campus|university)\b/i.test(clean)) return 'student';
   for (const rule of SEARCH_TYPE_KEYWORDS) {
     if (rule.re.test(clean)) return rule.type;
   }
@@ -1194,6 +1249,9 @@ function parseAreaFromText(text, sessionData = {}) {
 
   const districtHit = DISTRICTS.find((d) => cleanedLower.includes(d.toLowerCase()));
   if (districtHit) return districtHit;
+
+  const regionHit = normalizeRegionKey(cleanedLower);
+  if (regionHit) return regionHit === 'greater kampala' ? 'Greater Kampala' : `${regionHit.charAt(0).toUpperCase()}${regionHit.slice(1)} Region`;
 
   const areaRe = /\b(?:in|at|around|near|within|from)\s+([a-z][a-z\s'-]{2,})/i;
   const areaMatch = cleanedLower.match(areaRe);
@@ -1304,7 +1362,20 @@ async function resolveNaturalSearchFilters({
       sessionData,
       fallbackType
     });
-    return mergeNaturalSearchFilters(aiExtract, deterministic);
+    const merged = mergeNaturalSearchFilters(aiExtract, deterministic);
+    if (deterministic.searchType && deterministic.searchType !== 'any') merged.searchType = deterministic.searchType;
+    if (deterministic.area) merged.area = deterministic.area;
+    if (deterministic.propertyType) merged.propertyType = deterministic.propertyType;
+    merged.hasSignal = Boolean(
+      merged.area
+      || merged.district
+      || merged.bedsMin > 0
+      || merged.propertyType
+      || merged.maxBudgetUgx > 0
+      || merged.useSharedLocation
+      || (merged.searchType && merged.searchType !== 'any')
+    );
+    return merged;
   } catch (error) {
     logger.warn('AI natural search extraction failed in route fallback:', error.message);
     return deterministic;
@@ -1344,20 +1415,33 @@ async function findPropertiesByNaturalFilters(filters = {}) {
 
   const area = normalizeInput(filters.area);
   if (area) {
-    values.push(`%${area}%`);
-    const qIdx = values.length;
-    where += ` AND (
-      district ILIKE $${qIdx}
-      OR area ILIKE $${qIdx}
-      OR title ILIKE $${qIdx}
-      OR COALESCE(address, '') ILIKE $${qIdx}
-      OR COALESCE(description, '') ILIKE $${qIdx}
-      OR COALESCE(extra_fields->>'city', '') ILIKE $${qIdx}
-      OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${qIdx}
-      OR COALESCE(extra_fields->>'street_name', '') ILIKE $${qIdx}
-      OR COALESCE(extra_fields->>'region', '') ILIKE $${qIdx}
-      OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
-    )`;
+    const regionDistricts = getRegionDistricts(area);
+    if (regionDistricts.length) {
+      values.push(regionDistricts);
+      const regionIdx = values.length;
+      values.push(`%${area}%`);
+      const qIdx = values.length;
+      where += ` AND (
+        district = ANY($${regionIdx})
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
+      )`;
+    } else {
+      values.push(`%${area}%`);
+      const qIdx = values.length;
+      where += ` AND (
+        district ILIKE $${qIdx}
+        OR area ILIKE $${qIdx}
+        OR title ILIKE $${qIdx}
+        OR COALESCE(address, '') ILIKE $${qIdx}
+        OR COALESCE(description, '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'city', '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'street_name', '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${qIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
+      )`;
+    }
   }
 
   if (Number.isFinite(Number(filters.maxBudgetUgx)) && Number(filters.maxBudgetUgx) > 0) {
@@ -1713,20 +1797,33 @@ async function findPropertiesForWhatsapp(searchType, location) {
 
   const cleanLocation = normalizeInput(location);
   if (cleanLocation) {
-    values.push(`%${cleanLocation}%`);
-    const likeIdx = values.length;
-    where += ` AND (
-      district ILIKE $${likeIdx}
-      OR area ILIKE $${likeIdx}
-      OR title ILIKE $${likeIdx}
-      OR COALESCE(address, '') ILIKE $${likeIdx}
-      OR COALESCE(description, '') ILIKE $${likeIdx}
-      OR COALESCE(extra_fields->>'city', '') ILIKE $${likeIdx}
-      OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${likeIdx}
-      OR COALESCE(extra_fields->>'street_name', '') ILIKE $${likeIdx}
-      OR COALESCE(extra_fields->>'region', '') ILIKE $${likeIdx}
-      OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${likeIdx}
-    )`;
+    const regionDistricts = getRegionDistricts(cleanLocation);
+    if (regionDistricts.length) {
+      values.push(regionDistricts);
+      const regionIdx = values.length;
+      values.push(`%${cleanLocation}%`);
+      const likeIdx = values.length;
+      where += ` AND (
+        district = ANY($${regionIdx})
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${likeIdx}
+      )`;
+    } else {
+      values.push(`%${cleanLocation}%`);
+      const likeIdx = values.length;
+      where += ` AND (
+        district ILIKE $${likeIdx}
+        OR area ILIKE $${likeIdx}
+        OR title ILIKE $${likeIdx}
+        OR COALESCE(address, '') ILIKE $${likeIdx}
+        OR COALESCE(description, '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'city', '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'street_name', '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${likeIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${likeIdx}
+      )`;
+    }
   }
 
   const result = await db.query(
@@ -1842,20 +1939,33 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
 
   const area = normalizeInput(f.area || '');
   if (area) {
-    values.push(`%${area}%`);
-    const areaIdx = values.length;
-    where += ` AND (
-      district ILIKE $${areaIdx}
-      OR area ILIKE $${areaIdx}
-      OR title ILIKE $${areaIdx}
-      OR COALESCE(address, '') ILIKE $${areaIdx}
-      OR COALESCE(description, '') ILIKE $${areaIdx}
-      OR COALESCE(extra_fields->>'city', '') ILIKE $${areaIdx}
-      OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${areaIdx}
-      OR COALESCE(extra_fields->>'street_name', '') ILIKE $${areaIdx}
-      OR COALESCE(extra_fields->>'region', '') ILIKE $${areaIdx}
-      OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${areaIdx}
-    )`;
+    const regionDistricts = getRegionDistricts(area);
+    if (regionDistricts.length) {
+      values.push(regionDistricts);
+      const regionIdx = values.length;
+      values.push(`%${area}%`);
+      const areaIdx = values.length;
+      where += ` AND (
+        district = ANY($${regionIdx})
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${areaIdx}
+      )`;
+    } else {
+      values.push(`%${area}%`);
+      const areaIdx = values.length;
+      where += ` AND (
+        district ILIKE $${areaIdx}
+        OR area ILIKE $${areaIdx}
+        OR title ILIKE $${areaIdx}
+        OR COALESCE(address, '') ILIKE $${areaIdx}
+        OR COALESCE(description, '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'city', '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'street_name', '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'region', '') ILIKE $${areaIdx}
+        OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${areaIdx}
+      )`;
+    }
   }
 
   const result = await db.query(
@@ -2297,6 +2407,22 @@ function menuRouteReply(lang, route) {
   return { message: welcomeMessage(lang), nextStep: 'main_menu' };
 }
 
+function isIdleResumeDue(session = {}) {
+  const last = session.last_message_at ? new Date(session.last_message_at).getTime() : 0;
+  if (!Number.isFinite(last) || last <= 0) return false;
+  return Date.now() - last > 2 * 60 * 1000;
+}
+
+function idleResumePrompt(lang, step) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `Welcome back. Do you want to carry on where we left off, or is this a new request?\n\nReply *CONTINUE* to carry on: ${stepReminderMessage(code, step)}\n\nReply *MENU* to start again, or type your new request in one sentence.`,
+    lg: `Tukwanirizza nate. Oyagala tugende mu maaso gye twakoma, oba kino kipya?\n\nReply *CONTINUE* okugenda mu maaso: ${stepReminderMessage(code, step)}\n\nReply *MENU* okutandika nate, oba wandika ky'oyagala mu sentence emu.`,
+    sw: `Karibu tena. Unataka tuendelee tulipoishia, au hili ni ombi jipya?\n\nJibu *CONTINUE* kuendelea: ${stepReminderMessage(code, step)}\n\nJibu *MENU* kuanza upya, au andika ombi jipya kwa sentensi moja.`
+  };
+  return messages[code] || messages.en;
+}
+
 function intentMenuRoute(intent) {
   const key = normalizeInput(intent).toLowerCase();
   if (key === 'property_listing') return 'listing_type';
@@ -2382,7 +2508,44 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (bodyUpper === 'MENU' || bodyUpper === 'HOME') {
+    await patchSessionData(phone, { idle_resume_prompt: null });
     return respond(welcomeMessage(lang, sessionData), 'main_menu');
+  }
+
+  const idlePrompt = sessionData.idle_resume_prompt && typeof sessionData.idle_resume_prompt === 'object'
+    ? sessionData.idle_resume_prompt
+    : null;
+  if (idlePrompt) {
+    if (isAffirmativeReply(cleanBody) || compactUpper === 'CONTINUE') {
+      await patchSessionData(phone, { idle_resume_prompt: null });
+      return respond(stepReminderMessage(lang, idlePrompt.step || step), idlePrompt.step || step);
+    }
+    await patchSessionData(phone, {
+      idle_resume_prompt: null,
+      idle_resume_resolved_as: 'new_request',
+      idle_resume_resolved_at: new Date().toISOString(),
+      idle_resume_new_text: cleanBody
+    });
+    if (!isGreetingText(cleanBody)) {
+      await updateSession(phone, { current_step: 'main_menu' });
+      return respond(`Got it. I will treat this as a new request.\n\n${friendlyGreetingReply(lang, sessionData)}`, 'main_menu');
+    }
+  }
+
+  if (
+    isIdleResumeDue(session)
+    && !['greeting', 'main_menu', 'submitted', 'choose_language'].includes(step)
+    && !mediaUrl
+    && !sharedLocation
+    && cleanBody
+  ) {
+    await patchSessionData(phone, {
+      idle_resume_prompt: {
+        step,
+        prompted_at: new Date().toISOString()
+      }
+    });
+    return respond(idleResumePrompt(lang, step), step);
   }
 
   if (isNoMatchChallenge(cleanBody) && sessionData.last_no_match) {
@@ -3786,6 +3949,16 @@ router.post('/web-bridge/inbound', async (req, res) => {
         last_inbound_message_id: inboundMessageId
       }
     });
+  }
+
+  if (dryRun && inboundMetadata.force_idle_minutes) {
+    const minutes = Math.max(0, Number(inboundMetadata.force_idle_minutes || 0));
+    if (minutes > 0) {
+      await db.query(
+        "UPDATE whatsapp_sessions SET last_message_at = NOW() - ($2::text || ' minutes')::interval WHERE phone = $1",
+        [phone, String(minutes)]
+      );
+    }
   }
 
   const { message, nextStep } = await processInboundRuntime({

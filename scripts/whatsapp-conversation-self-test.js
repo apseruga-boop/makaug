@@ -111,6 +111,29 @@ const scenarios = [
     ]
   },
   {
+    name: 'Land for sale in Kampala stays land and shows similar properties',
+    messages: ['Land for sale in Kampala'],
+    expect: [
+      {
+        step: 'main_menu',
+        includes: ['exact match for', 'Land', 'Kampala'],
+        includesAny: ['similar live MakaUg', 'live MakaUg listings', 'MakaUg Matchboard'],
+        excludes: ['Filters applied: For Sale', '🎯 Filter: For Sale', 'data:image']
+      }
+    ]
+  },
+  {
+    name: 'Greater Kampala region search uses website district grouping',
+    messages: ['Show me houses in Greater Kampala'],
+    expect: [
+      {
+        step: 'main_menu',
+        includesAny: ['Greater Kampala', 'MakaUg Matchboard', 'live MakaUg listings', 'saved this request'],
+        excludes: ['data:image']
+      }
+    ]
+  },
+  {
     name: 'Search menu student Kampala falls back to live listings when exact is empty',
     messages: ['2', '4', 'Kampala'],
     expect: [
@@ -142,6 +165,21 @@ const scenarios = [
       'Looking for student accommodation'
     ],
     expectLast: { step: 'search_area', includesAny: ['kept your listing draft safe', 'area', 'district'], excludes: ['front/outside photo'] }
+  },
+  {
+    name: 'Two-minute stale conversation asks whether to continue',
+    messages: [
+      '1',
+      '1',
+      '1',
+      { body: 'Hello', metadata: { force_idle_minutes: 3 } }
+    ],
+    expect: [
+      { step: 'listing_type' },
+      { step: 'ownership' },
+      { step: 'title' },
+      { step: 'title', includesAny: ['carry on where we left off', 'new request', 'CONTINUE'] }
+    ]
   },
   {
     name: 'English language search path works',
@@ -583,6 +621,13 @@ async function runScenario(scenario, scenarioIndex) {
 
   for (let i = 0; i < scenario.messages.length; i += 1) {
     const item = scenario.messages[i];
+    if (item && typeof item === 'object' && item.metadata?.force_idle_minutes && !LIVE_BASE_URL) {
+      const minutes = Math.max(0, Number(item.metadata.force_idle_minutes || 0));
+      await db.query(
+        "UPDATE whatsapp_sessions SET last_message_at = NOW() - ($2::text || ' minutes')::interval WHERE phone = $1",
+        [phone, String(minutes)]
+      );
+    }
     const startedAt = Date.now();
     const result = LIVE_BASE_URL
       ? await sendLiveDryRun({ phone, item, index: i })
