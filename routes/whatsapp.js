@@ -401,6 +401,44 @@ function friendlyGreetingReply(lang) {
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
 }
 
+function stepReminderMessage(lang, step) {
+  const code = resolveLangCode(lang);
+  const prompts = {
+    choose_language: t(code, 'chooseLanguage'),
+    listing_type: t(code, 'askListingType'),
+    ownership: t(code, 'askOwnership'),
+    title: t(code, 'askTitle'),
+    district: t(code, 'askDistrict'),
+    area: t(code, 'askArea'),
+    price: t(code, 'askPrice'),
+    bedrooms: t(code, 'askBedrooms'),
+    description: t(code, 'askDescription'),
+    photos: t(code, 'askPhotos'),
+    ask_deposit: t(code, 'askDeposit'),
+    ask_contract: t(code, 'askContract'),
+    ask_university: t(code, 'askUniversity'),
+    ask_distance: t(code, 'askDistance'),
+    ask_id_number: t(code, 'askIDNumber'),
+    ask_selfie: t(code, 'askSelfie'),
+    ask_phone: t(code, 'askPhone'),
+    search_type: t(code, 'askSearchType'),
+    search_area: t(code, 'askSearchArea'),
+    agent_area: t(code, 'askAgentArea'),
+    verify_otp: t(code, 'verifyOTP')
+  };
+  const prompt = prompts[step] || t(code, 'menuHint');
+  const lead = {
+    en: 'I am here with you. We were at this step:',
+    lg: 'Ndi wano naawe. Tubadde ku mutendera guno:',
+    sw: 'Niko hapa na wewe. Tulikuwa kwenye hatua hii:',
+    ac: 'An atye kany kwedi. Onongo watye i kabedo man:',
+    ny: 'Ndi hano naiwe. Tukaba turi aha ntambwe egi:',
+    rn: 'Ndi hano namwe. Twari tugeze aha ntambwe eyi:',
+    sm: 'Ndi wano naawe. Tubadde ku mutendera guno:'
+  };
+  return `${timeGreeting(code)} 👋 ${lead[code] || lead.en}\n\n${prompt}\n\n${t(code, 'menuHint')}`;
+}
+
 function friendlyUnknownReply(lang) {
   const code = resolveLangCode(lang);
   const messages = {
@@ -1937,11 +1975,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(welcomeMessage(lang), 'main_menu');
   }
 
-  // GREETING
-  if (step === 'greeting') {
-    if (isGreetingText(cleanBody)) {
+  if (isGreetingText(cleanBody)) {
+    if (['greeting', 'main_menu', 'submitted'].includes(step)) {
       return respond(friendlyGreetingReply(lang), 'main_menu');
     }
+    return respond(stepReminderMessage(lang, step), step);
+  }
+
+  // GREETING
+  if (step === 'greeting') {
     return respond(`${friendlyGreetingReply(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
@@ -1983,10 +2025,6 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
-
-    if (isGreetingText(cleanBody)) {
-      return respond(friendlyGreetingReply(lang), 'main_menu');
-    }
 
     const naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
