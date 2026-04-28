@@ -12,6 +12,10 @@ const LIVE_BASE_URL = String(process.env.WHATSAPP_SELF_TEST_BASE_URL || '').repl
 const BRIDGE_TOKEN = String(process.env.WHATSAPP_WEB_BRIDGE_TOKEN || '').trim();
 const SOAK_MINUTES = Math.max(0, Number(process.env.WHATSAPP_SELF_TEST_MINUTES || 0));
 const SOAK_UNTIL = SOAK_MINUTES > 0 ? Date.now() + SOAK_MINUTES * 60 * 1000 : 0;
+const REQUEST_DELAY_MS = Math.max(
+  LIVE_BASE_URL && SOAK_MINUTES ? 1000 : 0,
+  Number(process.env.WHATSAPP_SELF_TEST_DELAY_MS || 0)
+);
 
 const scenarios = [
   {
@@ -261,6 +265,11 @@ async function sendLiveDryRun({ phone, item, index }) {
         },
         body
       });
+      if (response.status === 429 && attempt < 3) {
+        const retryAfter = Math.max(5, Number(response.headers.get('retry-after') || 20));
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
       break;
     } catch (error) {
       lastError = error;
@@ -320,6 +329,9 @@ async function runScenario(scenario, scenarioIndex) {
     const result = LIVE_BASE_URL
       ? await sendLiveDryRun({ phone, item, index: i })
       : await sendDirect({ phone, item, index: i });
+    if (REQUEST_DELAY_MS > 0) {
+      await new Promise((resolve) => setTimeout(resolve, REQUEST_DELAY_MS));
+    }
     const elapsedMs = Date.now() - startedAt;
     transcript.push({
       user: messageText(item),
