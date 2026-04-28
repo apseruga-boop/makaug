@@ -246,11 +246,14 @@ async function getActiveChatSnapshot(page) {
       : last.closest('.message-in')
         ? 'in'
         : 'unknown';
-    const hasNonEmojiImage = Array.from(last.querySelectorAll('img')).some((img) => {
+    const nonEmojiImages = Array.from(last.querySelectorAll('img')).filter((img) => {
       const src = img.getAttribute('src') || '';
       const alt = img.getAttribute('alt') || '';
       return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
     });
+    const hasNonEmojiImage = nonEmojiImages.length > 0;
+    const extraImageMatch = text.match(/\+(\d+)/);
+    const mediaCount = hasNonEmojiImage ? Math.max(nonEmojiImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
     const sharedLocation = extractSharedLocation(last);
     const mediaType = sharedLocation
       ? 'location'
@@ -273,7 +276,8 @@ async function getActiveChatSnapshot(page) {
       direction,
       mediaType,
       mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
-      sharedLocation
+      sharedLocation,
+      mediaCount
     };
   });
 }
@@ -336,11 +340,14 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const messageId = node.closest('[data-id]')?.getAttribute('data-id')
           || node.getAttribute('data-id')
           || '';
-        const hasNonEmojiImage = Array.from(node.querySelectorAll('img')).some((img) => {
+        const nonEmojiImages = Array.from(node.querySelectorAll('img')).filter((img) => {
           const src = img.getAttribute('src') || '';
           const alt = img.getAttribute('alt') || '';
           return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
         });
+        const hasNonEmojiImage = nonEmojiImages.length > 0;
+        const extraImageMatch = rawText.match(/\+(\d+)/);
+        const mediaCount = hasNonEmojiImage ? Math.max(nonEmojiImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
         const sharedLocation = extractSharedLocation(node);
         const mediaType = sharedLocation
           ? 'location'
@@ -376,7 +383,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           direction,
           mediaType,
           mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
-          sharedLocation
+          sharedLocation,
+          mediaCount
         };
       })
       .filter((item) => item.direction === 'in' && item.chatKey && item.text);
@@ -406,11 +414,13 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         message_id: messageId,
         media_url: snapshot.mediaUrl || '',
         media_type: mediaType,
+        media_count: snapshot.mediaCount || 0,
         shared_location: snapshot.sharedLocation || null,
         created_at: snapshot.timestampLabel || new Date().toISOString(),
         metadata: {
           chat_title: snapshot.chatKey || row.title,
           contact_name: snapshot.contactName || row.title || '',
+          media_count: snapshot.mediaCount || 0,
           unread_preview: row.preview || '',
           source
         }
@@ -541,7 +551,15 @@ async function typeAndSendReply(page, text) {
   await composer.click();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
-  await page.keyboard.type(String(text || ''), { delay: 14 });
+  const lines = String(text || '').split('\n');
+  for (let i = 0; i < lines.length; i += 1) {
+    if (lines[i]) await page.keyboard.type(lines[i], { delay: 6 });
+    if (i < lines.length - 1) {
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('Enter');
+      await page.keyboard.up('Shift');
+    }
+  }
   await page.waitForTimeout(250);
 
   const sendSelectors = [

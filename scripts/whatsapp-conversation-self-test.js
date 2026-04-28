@@ -119,6 +119,21 @@ const scenarios = [
     ]
   },
   {
+    name: 'Near me search asks for shared location',
+    messages: ['Find a house near me'],
+    expect: [
+      { step: 'search_area', includesAny: ['share your WhatsApp location', 'search around you'], excludes: ['area or district'] }
+    ]
+  },
+  {
+    name: 'Any area search shows broad listings',
+    messages: ['Give me any property', 'Any I don’t mind'],
+    expect: [
+      { step: 'search_area', includesAny: ['area', 'district'] },
+      { step: 'main_menu', includesAny: ['Best matching properties', 'Any area', 'property/'], excludes: ['Any I don’t mind right now'] }
+    ]
+  },
+  {
     name: 'Shared location search progresses',
     messages: [
       '2',
@@ -157,10 +172,17 @@ const scenarios = [
   },
   {
     name: 'Agent search drives to agent website profiles',
-    messages: ['I need an agent in Kampala', 'Kampala'],
+    messages: ['I need an agent', 'Kampala'],
     expect: [
       { step: 'agent_area', includesAny: ['agent', 'district', 'area'] },
       { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified'], excludes: ['Wandiika'] }
+    ]
+  },
+  {
+    name: 'Find me an agent in Kampala is not treated as property search',
+    messages: ['Find me an agent in Kampala'],
+    expect: [
+      { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified', 'agent'], excludes: ['Best matching properties', '/property/'] }
     ]
   },
   {
@@ -198,6 +220,52 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://bedroom', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
+      'DONE'
+    ],
+    expectLast: { step: 'ask_id_number', includesAny: ['National ID', 'NIN'] }
+  },
+  {
+    name: 'Listing photo flow keeps language switch in place',
+    messages: [
+      'Oli otya',
+      '1',
+      '1',
+      'House in Kololo',
+      'Wakiso',
+      'Kololo',
+      '200000',
+      '3',
+      '30000',
+      'Carry on the conversation in English',
+      { mediaUrl: 'whatsapp-web://front', mediaType: 'image' }
+    ],
+    expect: [
+      { step: 'main_menu' },
+      { step: 'listing_type' },
+      { step: 'ownership' },
+      { step: 'title' },
+      { step: 'district' },
+      { step: 'area' },
+      { step: 'price' },
+      { step: 'bedrooms' },
+      { step: 'description', includesAny: ['Wandiika', 'description'] },
+      { step: 'photos', includesAny: ['Language updated', 'front/outside'], excludes: ['main menu'] },
+      { step: 'photos', includesAny: ['Photo 1', 'sitting room'], excludes: ['Ekifaananyi'] }
+    ]
+  },
+  {
+    name: 'Listing photo flow counts WhatsApp album previews',
+    messages: [
+      '1',
+      '1',
+      '1',
+      'Family house in Kololo',
+      'Kampala',
+      'Kololo',
+      '250000000',
+      '3',
+      'A bright family home with parking, security, kitchen, and garden.',
+      { mediaUrl: 'whatsapp-web://album', mediaType: 'image', mediaCount: 5 },
       'DONE'
     ],
     expectLast: { step: 'ask_id_number', includesAny: ['National ID', 'NIN'] }
@@ -279,7 +347,7 @@ async function sendDirect({ phone, item, index }) {
     mediaType: payload.mediaType || '',
     sharedLocation: payload.location || null,
     provider: 'conversation_self_test',
-    metadata: payload.metadata || {}
+    metadata: { ...(payload.metadata || {}), media_count: payload.mediaCount || payload.media_count || 0 }
   });
 }
 
@@ -298,6 +366,7 @@ async function sendLiveDryRun({ phone, item, index }) {
     body: payload.body || payload.text || '',
     media_url: payload.mediaUrl || '',
     media_type: payload.mediaType || '',
+    media_count: payload.mediaCount || payload.media_count || 0,
     shared_location: payload.location || null,
     message_id: `${phone}:${index}:${crypto.randomUUID()}`,
     dry_run: true,

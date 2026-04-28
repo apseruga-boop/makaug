@@ -45,7 +45,7 @@ const T = {
     askPrice: '💰 What is your asking price in Uganda Shillings? (numbers only, e.g. 250000000)',
     askBedrooms: '🛏 How many bedrooms does the property have? (Enter a number, or 0 if N/A)',
     askDescription: '📝 Describe your property in a few sentences (location, features, condition...)',
-    askPhotos: '📸 Please send exactly *5* photos, one by one. When done, type *DONE*\n\n📌 Required: front of building, sitting room, bedroom, kitchen, bathroom',
+    askPhotos: '📸 Please send the *front/outside* photo first.',
     askIDNumber: '🪪 For security, we need your National ID Number (NIN). This is required to prevent fraud and will not be publicly shown.\n\nPlease type your NIN:',
     askSelfie: '🤳 Please take a clear selfie (photo of yourself) holding your National ID card and send it here. This verifies you are real and reduces fraud.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
@@ -77,8 +77,8 @@ const T = {
     descriptionTooShort: 'Please write a longer description (at least 10 characters).',
     needAtLeastOnePhoto: '❌ Please send all 5 required photos before typing DONE.',
     needExactlyFivePhotos: '❌ Please upload exactly 5 photos: front, sitting room, bedroom, kitchen, bathroom.',
-    photosUploaded: "📸 You've uploaded {count}/5 photos. Type *DONE* to continue once you reach 5.",
-    photoReceived: '✅ Photo {count}/5 received! Send the next required photo.',
+    photosUploaded: "📸 You've uploaded {count} photos. Type *DONE* to continue, or send any extra helpful photos.",
+    photoReceived: '✅ Photo {count} received.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
     sendSelfiePhotoOnly: '❌ Please send a photo (selfie) - not text.',
     invalidPhone: '❌ Invalid phone format. Try: 0760112587',
@@ -111,7 +111,7 @@ const T = {
     askPrice: '💰 Ebbeeyi yayo mu Shillingi za Uganda bwoba nyo? (ennamba zokka)',
     askBedrooms: "🛏 Eddiini ezingaana? (Okwandika ennamba, oba 0 bw'etaba)",
     askDescription: '📝 Teeka ennukuta ntono ku ensi eno (otuutu, ebintu, embeera...)',
-    askPhotos: "📸 Weereza ebifaananyi 5 byokka, ekimu ku kimu. Bw'omala, wandiike *DONE*\n\n📌 Ebyetaagisa: front, sitting room, bedroom, kitchen, bathroom",
+    askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
     askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number). Ejja kutuzikirira bukyamu.',
     askSelfie: "🤳 Weereza selfie (ekifaananyi kyo) ng'oyita NIN yo.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
@@ -172,7 +172,7 @@ const T = {
     askDistrict: '📍 Wilaya ipi? (mf. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Mtaa au eneo gani?',
     askPrice: '💰 Bei gani kwa Shilingi za Uganda? (nambari tu)',
-    askPhotos: '📸 Tuma picha 5 kamili, moja baada ya nyingine. Ukimaliza andika *DONE*\n\n📌 Inahitajika: mbele ya jengo, sebuleni, chumba cha kulala, jikoni, bafu',
+    askPhotos: '📸 Tuma picha ya *mbele/nje* kwanza.',
     listingSubmitted: '🎉 *Mali yako imewasilishwa!*\n\nRef: #{ref}\n\n✅ Hatua inayofuata: weka profile yako ili kufuatilia views, saves na enquiries za tangazo lako.\n\nAsante kwa kutumia MakaUg! 🏠🇺🇬',
     invalidInput: '❓ Sijaelewa. Tafadhali jibu kwa mojawapo ya chaguo.',
     otpSent: '📲 Tumetuma nambari ya siri kwa SMS yako. Andika hapa:',
@@ -420,7 +420,7 @@ function isGreetingText(text) {
 function parseLanguageChange(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
-  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk)\s+(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+)?(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)\b/);
+  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+)?(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)\b/);
   const direct = clean.match(/^(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)$/);
   const value = (explicit || direct || [])[1] || '';
   const map = {
@@ -434,6 +434,36 @@ function parseLanguageChange(text) {
     lusoga: 'sm'
   };
   return map[value] || '';
+}
+
+function photoRequirementLabel(index) {
+  return [
+    'front/outside',
+    'sitting room or main room',
+    'bedroom',
+    'kitchen',
+    'bathroom'
+  ][index] || 'extra useful photo';
+}
+
+function photoNextPrompt(lang, count = 0) {
+  const code = resolveLangCode(lang);
+  const safeCount = Math.max(0, Number(count) || 0);
+  if (safeCount >= 5) {
+    const done = {
+      en: `✅ I have the 5 key photos. Type *DONE* to continue, or send any extra helpful photos.`,
+      lg: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala bw'oba obirina.`,
+      sw: `✅ Nimepata picha 5 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`
+    };
+    return done[code] || done.en;
+  }
+  const label = photoRequirementLabel(safeCount);
+  const prompts = {
+    en: `📸 Next: please send the *${label}* photo.`,
+    lg: `📸 Ekiddako: weereza ekifaananyi kya *${label}*.`,
+    sw: `📸 Inayofuata: tafadhali tuma picha ya *${label}*.`
+  };
+  return prompts[code] || prompts.en;
 }
 
 function friendlyGreetingReply(lang, sessionData = {}) {
@@ -1364,6 +1394,11 @@ function isNegativeReply(value) {
   return /\b(no|cancel|stop)\b/i.test(clean);
 }
 
+function isAnyAreaReply(value) {
+  const clean = normalizeInput(value).toLowerCase();
+  return /^(any|anywhere|any area|i don'?t mind|dont mind|doesn'?t matter|doesnt matter|show me anything|anything)$/i.test(clean);
+}
+
 async function upsertWhatsappUserProfile(phone, updates = {}) {
   const preferredLanguage = normalizeInput(updates.preferredLanguage);
   const optInSource = normalizeInput(updates.optInSource);
@@ -1977,7 +2012,7 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     if (Number.isFinite(Number(r.distance_km))) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }
-    lines.push(`   ${HOME_URL}/property/${r.id}`);
+    lines.push(`   Photos/details: ${HOME_URL}/property/${r.id}`);
     lines.push('');
   });
   lines.push(t(lang, 'menuHint'));
@@ -2109,11 +2144,18 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const languageSwitch = parseLanguageChange(cleanBody);
   if (languageSwitch) {
-    await updateSession(phone, { language: languageSwitch, current_step: 'main_menu' });
+    const continuingStep = ['greeting', 'main_menu', 'submitted'].includes(step) ? 'main_menu' : step;
+    await updateSession(phone, { language: languageSwitch, current_step: continuingStep });
     await patchSessionData(phone, {
       language_changed_at: new Date().toISOString(),
       language_changed_from: lang
     });
+    if (continuingStep !== 'main_menu') {
+      const reminder = continuingStep === 'photos'
+        ? photoNextPrompt(languageSwitch, (draft.photos || []).length)
+        : stepReminderMessage(languageSwitch, continuingStep);
+      return respond(`${t(languageSwitch, 'languageUpdated')}\n\n${reminder}`, continuingStep);
+    }
     return respond(welcomeMessage(languageSwitch, sessionData), 'main_menu');
   }
 
@@ -2159,6 +2201,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
+  if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
+    const keywords = extractAgentSearchKeywords(cleanBody, sessionData);
+    const rows = await findAgentsForWhatsappKeywords(keywords);
+    if (keywords.length && rows.length) {
+      return respond(formatAgentSearchMessage(lang, rows, keywords[0]), 'main_menu');
+    }
+    return respond(t(lang, 'askAgentArea'), 'agent_area');
+  }
+
   if (
     ['greeting', 'main_menu'].includes(step)
     && cleanBody.length > 3
@@ -2174,6 +2225,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     if (!naturalFilters.hasSignal) {
       // Let non-search intents, greetings, and free-form support messages continue through the normal router.
+    } else if (naturalFilters.useSharedLocation) {
+      await patchSessionData(phone, {
+        search_type: naturalFilters.searchType || 'any',
+        pending_search_filters: naturalFilters,
+        natural_query_text: cleanBody
+      });
+      return respond(
+        `📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+        'search_area'
+      );
     } else if (!naturalFilters.area) {
       await patchSessionData(phone, {
         search_type: naturalFilters.searchType || 'any',
@@ -2494,6 +2555,29 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(locationPreviewPrompt(lang), 'search_area');
     }
 
+    if (isAnyAreaReply(cleanBody)) {
+      const rows = await findPropertiesForWhatsapp(searchType, '');
+      await patchSessionData(phone, { pending_search_filters: null });
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType,
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType,
+          preferredArea: 'any',
+          notes: 'No approved listings found from broad WhatsApp search.'
+        });
+        return respond(formatNoMatchReply(lang, 'any area'), 'main_menu');
+      }
+      return respond(formatPropertySearchMessage(lang, rows, 'Any area', searchType), 'main_menu');
+    }
+
     if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
       await patchSessionData(phone, {
         search_lat: Number(sharedLocation.lat),
@@ -2753,7 +2837,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (step === 'description') {
     if (cleanBody.length < 10) return respond(t(lang, 'descriptionTooShort'), 'description');
     await patchDraft(phone, { description: cleanBody });
-    return respond(t(lang, 'askPhotos'), 'photos');
+    return respond(`${t(lang, 'askPhotos')}\n${photoNextPrompt(lang, 0)}`, 'photos');
   }
 
   // PHOTOS
@@ -2765,16 +2849,21 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
     if (mediaUrl) {
       const photos = draft.photos || [];
-      if (photos.length >= 5) {
+      const incomingCount = Math.max(1, Math.min(10, Number(runtime.mediaCount || 0) || 1));
+      if (photos.length >= 10) {
         return respond(tt(lang, 'photosUploaded', { count: photos.length }), 'photos');
       }
-      photos.push(mediaUrl);
+      const availableSlots = Math.max(0, 10 - photos.length);
+      const toAdd = Math.min(incomingCount, availableSlots);
+      for (let i = 0; i < toAdd; i += 1) {
+        photos.push(toAdd === 1 ? mediaUrl : `${mediaUrl}#${i + 1}`);
+      }
       await patchDraft(phone, { photos });
       const count = photos.length;
-      if (count >= 5) return respond(tt(lang, 'photosUploaded', { count }), 'photos');
-      return respond(tt(lang, 'photoReceived', { count }), 'photos');
+      if (count >= 5) return respond(`${tt(lang, 'photosUploaded', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
+      return respond(`${tt(lang, 'photoReceived', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
     }
-    return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askPhotos'), 'photos');
+    return respond(t(lang, 'invalidInput') + '\n\n' + photoNextPrompt(lang, (draft.photos || []).length), 'photos');
   }
 
   // NATIONAL ID
@@ -3022,7 +3111,12 @@ async function processInboundRuntime({
     effectiveBody,
     mediaUrl,
     sharedLocation,
-    { intent: intentResult, mediaType: normalizedMediaType, transcript: transcriptRecord?.text || null }
+    {
+      intent: intentResult,
+      mediaType: normalizedMediaType,
+      mediaCount: Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0)),
+      transcript: transcriptRecord?.text || null
+    }
   );
 
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
@@ -3222,6 +3316,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
   const body = normalizeInput(req.body.body || req.body.text || '');
   const mediaUrl = normalizeInput(req.body.media_url || req.body.mediaUrl);
   const mediaType = normalizeInput(req.body.media_type || req.body.mediaType).toLowerCase();
+  const mediaCount = Math.max(0, Math.min(10, Number(req.body.media_count || req.body.mediaCount || 0) || 0));
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
   const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
@@ -3277,6 +3372,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
     provider: 'web_bridge',
     metadata: {
       ...inboundMetadata,
+      media_count: mediaCount,
       ...(contactName ? { contact_name: contactName } : {})
     }
   });
