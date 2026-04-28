@@ -2338,6 +2338,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
+    && !(globalRoute === 'search_type' && ['search_type', 'search_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
     && (
       !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos'].includes(step)
