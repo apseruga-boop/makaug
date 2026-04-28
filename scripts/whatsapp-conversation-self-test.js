@@ -119,6 +119,14 @@ const scenarios = [
     ]
   },
   {
+    name: 'Full rent sentence inside search menu searches directly',
+    messages: ['2', 'House to rent in Kampala'],
+    expect: [
+      { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['Best matching properties', 'Browse live listings', 'request'], excludes: ['What are you looking for?'] }
+    ]
+  },
+  {
     name: 'Near me search asks for shared location',
     messages: ['Find a house near me'],
     expect: [
@@ -175,7 +183,7 @@ const scenarios = [
     messages: ['I need an agent', 'Kampala'],
     expect: [
       { step: 'agent_area', includesAny: ['agent', 'district', 'area'] },
-      { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified'], excludes: ['Wandiika'] }
+      { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified'], excludes: ['Wandiika', 'Call:', 'WhatsApp:', 'wa.me'] }
     ]
   },
   {

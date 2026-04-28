@@ -2024,17 +2024,25 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
   return lines.join('\n');
 }
 
+function cleanAgentDisplayName(value) {
+  return normalizeInput(value)
+    .replace(/\b\d{7,}\b/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+-\s+$/g, '')
+    .trim();
+}
+
 function formatAgentSearchMessage(lang, rows, location) {
   const lines = [];
   lines.push(`👔 *${t(lang, 'agentHeader')}* (${location})`);
   lines.push('');
   rows.forEach((r, idx) => {
     const areas = Array.isArray(r.districts_covered) ? r.districts_covered.join(', ') : '';
-    lines.push(`${idx + 1}. *${r.full_name}*${r.company_name ? ` - ${r.company_name}` : ''}`);
+    const name = cleanAgentDisplayName(r.full_name) || 'MakaUg agent';
+    const company = cleanAgentDisplayName(r.company_name);
+    lines.push(`${idx + 1}. *${name}*${company ? ` - ${company}` : ''}`);
     if (areas) lines.push(`   ${t(lang, 'areasLabel')}: ${areas}`);
     if (r.rating != null) lines.push(`   ${t(lang, 'ratingLabel')}: ⭐ ${Number(r.rating).toFixed(1)}`);
-    if (r.phone) lines.push(`   ${t(lang, 'callLabel')}: ${r.phone}`);
-    if (r.whatsapp) lines.push(`   ${t(lang, 'whatsappLabel')}: https://wa.me/${String(r.whatsapp).replace(/\D/g, '')}`);
     lines.push(`   ${t(lang, 'profileLabel')}: ${HOME_URL}/agents/${r.id}`);
     lines.push('');
   });
@@ -2473,6 +2481,48 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SEARCH TYPE
   if (step === 'search_type') {
+    const naturalFilters = await resolveNaturalSearchFilters({
+      text: cleanBody,
+      entities: intentResult?.entities || {},
+      fallbackType: 'any',
+      language: lang,
+      sessionData
+    });
+
+    if (naturalFilters.hasSignal && naturalFilters.area) {
+      const rows = await findPropertiesByNaturalFilters(naturalFilters);
+      await patchSessionData(phone, { pending_search_filters: null, search_type: naturalFilters.searchType || 'any' });
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: naturalFilters.searchType || 'any',
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType: naturalFilters.searchType || 'any',
+          preferredArea: naturalFilters.area,
+          notes: `No approved listings found for natural query in search_type: ${cleanBody}`
+        });
+        await patchSessionData(phone, {
+          last_no_match: {
+            search_type: naturalFilters.searchType || 'any',
+            area: naturalFilters.area,
+            query: cleanBody,
+            created_at: new Date().toISOString()
+          }
+        });
+        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+      }
+      return respond(
+        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        'main_menu'
+      );
+    }
+
     if (isAnyAreaReply(cleanBody)) {
       const rows = await findPropertiesForWhatsapp('any', '');
       await patchSessionData(phone, { search_type: 'any', pending_search_filters: null });
@@ -2502,13 +2552,6 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(t(lang, 'askSearchArea'), 'search_area');
     }
 
-    const naturalFilters = await resolveNaturalSearchFilters({
-      text: cleanBody,
-      entities: intentResult?.entities || {},
-      fallbackType: 'any',
-      language: lang,
-      sessionData
-    });
     if (!naturalFilters.hasSignal) return respond(`${t(lang, 'invalidInput')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
 
     if (naturalFilters.useSharedLocation) {

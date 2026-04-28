@@ -551,15 +551,7 @@ async function typeAndSendReply(page, text) {
   await composer.click();
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
-  const lines = String(text || '').split('\n');
-  for (let i = 0; i < lines.length; i += 1) {
-    if (lines[i]) await page.keyboard.type(lines[i], { delay: 6 });
-    if (i < lines.length - 1) {
-      await page.keyboard.down('Shift');
-      await page.keyboard.press('Enter');
-      await page.keyboard.up('Shift');
-    }
-  }
+  await page.keyboard.insertText(String(text || ''));
   await page.waitForTimeout(250);
 
   const sendSelectors = [
