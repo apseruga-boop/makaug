@@ -129,7 +129,7 @@ const scenarios = [
     name: 'Any area search shows broad listings',
     messages: ['Give me any property', 'Any I don’t mind'],
     expect: [
-      { step: 'search_area', includesAny: ['area', 'district'] },
+      { step: 'search_type', includesAny: ['What are you looking for?', 'Anything'] },
       { step: 'main_menu', includesAny: ['Best matching properties', 'Any area', 'property/'], excludes: ['Any I don’t mind right now'] }
     ]
   },
