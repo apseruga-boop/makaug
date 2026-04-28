@@ -1984,6 +1984,28 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
+  if (globalRoute === 'search_type' && ['greeting', 'main_menu'].includes(step) && cleanBody.length > 3) {
+    const naturalFilters = await resolveNaturalSearchFilters({
+      text: cleanBody,
+      entities: intentResult?.entities || {},
+      fallbackType: 'any',
+      language: lang,
+      sessionData
+    });
+
+    if (naturalFilters.hasSignal && !naturalFilters.area) {
+      await patchSessionData(phone, {
+        search_type: naturalFilters.searchType || 'any',
+        pending_search_filters: naturalFilters,
+        natural_query_text: cleanBody
+      });
+      return respond(
+        `🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+        'search_area'
+      );
+    }
+  }
+
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
@@ -2002,6 +2024,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // GREETING
   if (step === 'greeting') {
+    if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
+    if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
+    if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     return respond(`${friendlyGreetingReply(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 

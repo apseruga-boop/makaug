@@ -301,17 +301,20 @@ function heuristicIntent(text) {
   const t = String(text || '').toLowerCase();
   if (!t) return { intent: 'unknown', confidence: 0.1, entities: {} };
 
-  if (/(find|search|looking|rent|buy|sale|house|apartment|property|near me|area|nyumba|plot|ttaka|enju|ot|ot me)/.test(t)) {
-    return { intent: 'property_search', confidence: 0.62, entities: {} };
-  }
-  if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
-    return { intent: 'property_listing', confidence: 0.67, entities: {} };
-  }
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
   }
   if (/(register agent|agent registration|area licence|license|lisensi|licence)/.test(t)) {
     return { intent: 'agent_registration', confidence: 0.68, entities: {} };
+  }
+  if (/(help|support|human|call me|contact)/.test(t)) {
+    return { intent: 'support', confidence: 0.64, entities: {} };
+  }
+  if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
+    return { intent: 'property_listing', confidence: 0.67, entities: {} };
+  }
+  if (/(find|search|looking|rent|buy|sale|house|apartment|property|near me|area|nyumba|plot|ttaka|enju|ot|ot me)/.test(t)) {
+    return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
     return { intent: 'mortgage_help', confidence: 0.66, entities: {} };
@@ -321,9 +324,6 @@ function heuristicIntent(text) {
   }
   if (/(report|fraud|scam|suspicious|fake)/.test(t)) {
     return { intent: 'report_listing', confidence: 0.7, entities: {} };
-  }
-  if (/(help|support|human|call me|contact)/.test(t)) {
-    return { intent: 'support', confidence: 0.64, entities: {} };
   }
   return { intent: 'unknown', confidence: 0.2, entities: {} };
 }
