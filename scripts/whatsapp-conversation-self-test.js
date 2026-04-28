@@ -220,7 +220,7 @@ const scenarios = [
       { step: 'choose_language', includesAny: ['English', 'Luganda'] },
       { step: 'main_menu', includes: ['MakaUg'] },
       { step: 'search_type', includesAny: ['Onoonya', 'looking for'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ma rwate', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -241,7 +241,7 @@ const scenarios = [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Acholi'] },
       { step: 'main_menu', includes: ['MakaUg'] },
-      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
+      { step: 'search_type', includesAny: ['Itye kayenyo', 'Me acata'], excludes: ['What are you looking for?', 'For sale'] },
       { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
     ]
   },
@@ -252,8 +252,8 @@ const scenarios = [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Runyankole'] },
       { step: 'main_menu', includes: ['MakaUg'] },
-      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'search_type', includesAny: ['Noshaka', 'Ebyokugurisha'], excludes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ezirikukwatagana', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -263,8 +263,8 @@ const scenarios = [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Rukiga'] },
       { step: 'main_menu', includes: ['MakaUg'] },
-      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'search_type', includesAny: ['Urashaka', 'Kugurisha'], excludes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties zihuye', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -274,8 +274,8 @@ const scenarios = [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Lusoga'] },
       { step: 'main_menu', includes: ['MakaUg'] },
-      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'search_type', includesAny: ['Onoonya', 'Ebitundibwa'], excludes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ezisinga', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
