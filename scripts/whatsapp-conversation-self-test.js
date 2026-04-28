@@ -10,6 +10,8 @@ const RUN_ID = `selftest-${Date.now().toString(36)}`;
 const PHONE_PREFIX = `sim-${RUN_ID}`;
 const LIVE_BASE_URL = String(process.env.WHATSAPP_SELF_TEST_BASE_URL || '').replace(/\/+$/, '');
 const BRIDGE_TOKEN = String(process.env.WHATSAPP_WEB_BRIDGE_TOKEN || '').trim();
+const SOAK_MINUTES = Math.max(0, Number(process.env.WHATSAPP_SELF_TEST_MINUTES || 0));
+const SOAK_UNTIL = SOAK_MINUTES > 0 ? Date.now() + SOAK_MINUTES * 60 * 1000 : 0;
 
 const scenarios = [
   {
@@ -41,10 +43,28 @@ const scenarios = [
     ]
   },
   {
+    name: 'English search menu stays English',
+    messages: ['2'],
+    expect: [
+      {
+        step: 'search_type',
+        includes: ['What are you looking for?', 'For sale', 'To rent'],
+        excludes: ['Onoonya', 'Wandiika', 'Ebitundibwa']
+      }
+    ]
+  },
+  {
+    name: 'Commercial properties in Kampala are handled',
+    messages: ['I am looking for commercial properties in Kampala'],
+    expect: [
+      { step: 'main_menu', includesAny: ['Commercial', 'Kampala', 'listings', 'request', 'MakaUg'], excludes: ['Wandiika', 'Onoonya'] }
+    ]
+  },
+  {
     name: 'Student accommodation in Kampala searches like the website',
     messages: ['I need student accommodation in Kampala'],
     expect: [
-      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'] }
+      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'], excludes: ['Wandiika', 'Onoonya'] }
     ]
   },
   {
@@ -80,7 +100,22 @@ const scenarios = [
     name: 'Find an agent from main menu',
     messages: ['I need to find an agent'],
     expect: [
-      { step: 'agent_area', includesAny: ['agent', 'district', 'kitundu'] }
+      { step: 'agent_area', includesAny: ['agent', 'district', 'area'], excludes: ['kitundu', 'Wandiika'] }
+    ]
+  },
+  {
+    name: 'Agent search drives to agent website profiles',
+    messages: ['I need an agent in Kampala', 'Kampala'],
+    expect: [
+      { step: 'agent_area', includesAny: ['agent', 'district', 'area'] },
+      { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified'], excludes: ['Wandiika'] }
+    ]
+  },
+  {
+    name: 'Agent registration points to broker website page',
+    messages: ['How do I sign up as an agent?'],
+    expect: [
+      { step: 'main_menu', includesAny: ['Register as a broker', '#page-brokers', 'broker'], excludes: ['Wandiika'] }
     ]
   },
   {
@@ -114,6 +149,34 @@ const scenarios = [
       'DONE'
     ],
     expectLast: { step: 'ask_id_number', includesAny: ['National ID', 'NIN'] }
+  },
+  {
+    name: 'Commercial listing reaches commercial details',
+    messages: [
+      '1',
+      '5',
+      '1',
+      'Retail shop in Kampala',
+      'Kampala',
+      'Kololo',
+      '3000000',
+      '0'
+    ],
+    expectLast: { step: 'description', includesAny: ['Describe your property'] }
+  },
+  {
+    name: 'Student listing asks nearest university',
+    messages: [
+      '1',
+      '4',
+      '1',
+      'Student hostel near Makerere',
+      'Kampala',
+      'Wandegeya',
+      '800000',
+      '1'
+    ],
+    expectLast: { step: 'ask_university', includesAny: ['nearest university'] }
   },
   {
     name: 'Out-of-country support request routes to human support',
@@ -217,6 +280,12 @@ function assertExpectation({ scenario, index, result, expectation }) {
     }
   }
 
+  for (const needle of expectation.excludes || []) {
+    if (text.toLowerCase().includes(String(needle).toLowerCase())) {
+      failures.push(`expected reply not to include "${needle}"`);
+    }
+  }
+
   if (expectation.includesAny?.length) {
     const ok = expectation.includesAny.some((needle) => text.toLowerCase().includes(String(needle).toLowerCase()));
     if (!ok) failures.push(`expected reply to include one of ${expectation.includesAny.map((x) => `"${x}"`).join(', ')}`);
@@ -274,22 +343,33 @@ async function main() {
   const phones = scenarios.map((_, index) => makePhone(index));
   if (!LIVE_BASE_URL) await cleanupPhones(phones);
 
-  const results = [];
-  for (let i = 0; i < scenarios.length; i += 1) {
-    const result = await runScenario(scenarios[i], i);
-    results.push(result);
-    const symbol = result.ok ? 'PASS' : 'FAIL';
-    console.log(`${symbol} ${result.name}`);
-    if (!result.ok) {
-      result.failures.forEach((failure) => console.log(`  - ${failure}`));
-      const last = result.transcript[result.transcript.length - 1];
-      console.log(`  last step: ${last?.nextStep || 'n/a'}`);
-      console.log(`  last reply: ${String(last?.reply || '').replace(/\s+/g, ' ').slice(0, 240)}`);
+  const allResults = [];
+  let iteration = 0;
+  do {
+    iteration += 1;
+    const results = [];
+    console.log(`\nConversation self-test iteration ${iteration}${SOAK_MINUTES ? ` (${SOAK_MINUTES} minute soak)` : ''}`);
+    for (let i = 0; i < scenarios.length; i += 1) {
+      const result = await runScenario(scenarios[i], i + (iteration - 1) * scenarios.length);
+      results.push(result);
+      allResults.push(result);
+      const symbol = result.ok ? 'PASS' : 'FAIL';
+      console.log(`${symbol} ${result.name}`);
+      if (!result.ok) {
+        result.failures.forEach((failure) => console.log(`  - ${failure}`));
+        const last = result.transcript[result.transcript.length - 1];
+        console.log(`  last step: ${last?.nextStep || 'n/a'}`);
+        console.log(`  last reply: ${String(last?.reply || '').replace(/\s+/g, ' ').slice(0, 240)}`);
+      }
     }
-  }
 
-  const failed = results.filter((result) => !result.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} WhatsApp conversation scenarios passed.`);
+    const failed = results.filter((result) => !result.ok);
+    console.log(`${results.length - failed.length}/${results.length} WhatsApp conversation scenarios passed in iteration ${iteration}.`);
+    if (failed.length || !SOAK_UNTIL) break;
+  } while (Date.now() < SOAK_UNTIL);
+
+  const failed = allResults.filter((result) => !result.ok);
+  console.log(`\n${allResults.length - failed.length}/${allResults.length} total WhatsApp conversation scenario runs passed.`);
 
   if (!LIVE_BASE_URL && process.env.WHATSAPP_SELF_TEST_KEEP_DATA !== 'true') {
     await cleanupPhones(phones);

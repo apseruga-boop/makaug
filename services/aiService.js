@@ -301,11 +301,11 @@ function heuristicIntent(text) {
   const t = String(text || '').toLowerCase();
   if (!t) return { intent: 'unknown', confidence: 0.1, entities: {} };
 
+  if (/(register agent|agent registration|sign up as (?:an )?agent|become (?:an )?agent|join as (?:an )?agent|area licence|license|lisensi|licence)/.test(t)) {
+    return { intent: 'agent_registration', confidence: 0.68, entities: {} };
+  }
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
-  }
-  if (/(register agent|agent registration|area licence|license|lisensi|licence)/.test(t)) {
-    return { intent: 'agent_registration', confidence: 0.68, entities: {} };
   }
   if (/(help|support|human|call me|contact)/.test(t)) {
     return { intent: 'support', confidence: 0.64, entities: {} };
