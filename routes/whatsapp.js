@@ -103,6 +103,7 @@ const T = {
     typeStudent: 'Student',
     typeCommercial: 'Commercial',
     typeAny: 'Any',
+    voiceNotUnderstood: "🎙️ I received your voice note, but I couldn't understand it clearly. Please send it again in a clear voice, or type the message.",
     genericSaveError: '❌ Something went wrong saving your listing. Please try again or visit {url}',
     genericWebhookError: 'Sorry, something went wrong. Please try again or visit {url}'
   },
@@ -168,6 +169,7 @@ const T = {
     typeStudent: 'Abayizi',
     typeCommercial: 'Byobusuubuzi',
     typeAny: 'Byonna',
+    voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message yo.',
     genericSaveError: '❌ Wabaddewo ensobi mu kutereka listing yo. Gezaako nate oba genda ku {url}',
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
   },
@@ -254,6 +256,138 @@ const T = {
     restarted: '🔄 Session etandise bupya.'
   },
 };
+
+Object.assign(T.sw, {
+  languageUpdated: '✅ Lugha imesasishwa.',
+  restarted: '🔄 Mazungumzo yameanza upya.',
+  askOwnership: '✅ Wewe ndiye mmiliki wa mali hii, au ni wakala?\n1️⃣ Mimi ni mmiliki\n2️⃣ Mimi ni wakala aliyesajiliwa',
+  askBedrooms: '🛏 Mali ina vyumba vingapi vya kulala? (Andika nambari, au 0 kama haihusiki)',
+  askDescription: '📝 Eleza mali yako kwa sentensi chache (eneo, vipengele, hali...)',
+  askPublicName: '👤 Jina gani lionekane kwenye tangazo? (mfano Amina, Amina Properties, au Private Owner)',
+  askContactMethod: '📲 Watazamaji makini wakupateje?\n1️⃣ WhatsApp / simu\n2️⃣ Email',
+  askContactValuePhone: '📱 Tuma namba ya WhatsApp/simu kwa maswali ya tangazo.\nMfano: +256 7XX XXX XXX',
+  askContactValueEmail: '✉️ Tuma email ya maswali ya tangazo.',
+  askIDNumber: '🪪 Kwa usalama, tunahitaji National ID Number (NIN). Haitaonekana hadharani.\n\nTafadhali andika NIN yako:',
+  askSelfie: '🤳 Tuma selfie iliyo wazi ukiwa umeshika National ID yako.',
+  askPhone: '📱 Namba yako ya simu ya uthibitisho ni ipi?\nMfano: +256 7XX XXX XXX',
+  verifyOTP: 'Tafadhali andika code ya tarakimu 6 tuliyotuma:',
+  askDeposit: '💵 Deposit ni kiasi gani? (UGX, nambari tu)',
+  askContract: '📅 Mkataba wa chini ni miezi mingapi? (mfano 6, 12, 24)',
+  askUniversity: '🎓 Chuo kikuu kilicho karibu ni kipi?',
+  askDistance: '🚶 Mali iko umbali gani kutoka chuo kikuu kwa km? (mfano 0.5, 1, 2)',
+  voiceNotUnderstood: '🎙️ Nimepokea voice note yako, lakini sikuweza kuisoma vizuri. Tafadhali tuma tena kwa sauti wazi au andika ujumbe wako.'
+});
+
+Object.assign(T.ac, {
+  askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business',
+  askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent ma registered',
+  askTitle: '✏️ Coo nying property macek:',
+  askDistrict: '📍 Property man tye i district mene?',
+  askArea: '🗺️ Kabedo/neighbourhood mene?',
+  askPrice: '💰 Wel-ne i Uganda Shillings? (namba keken)',
+  askBedrooms: '🛏 Tye ki bedrooms adi? (Coo namba, onyo 0)',
+  askDescription: '📝 Tit property man macek (kabedo, jami, kit ma tye...)',
+  askPhotos: '📸 Cwal cal me *front/outside* mukwongo.',
+  askPublicName: '👤 Nying mene myero nen i listing?',
+  askContactMethod: '📲 Jo ma mito property bikubi kwedi nining?\n1️⃣ WhatsApp / cim\n2️⃣ Email',
+  askContactValuePhone: '📱 Cwal namba me WhatsApp/cim pi enquiries.',
+  askContactValueEmail: '✉️ Cwal email pi enquiries.',
+  askIDNumber: '🪪 Pi gwoko kuc, wamito National ID Number (NIN). Pe bino nyute bot lwak.\n\nCoo NIN mamegi:',
+  askSelfie: '🤳 Cwal selfie ma nen maber ki National ID mamegi.',
+  askPhone: '📱 Namba cim mamegi pi verification?',
+  otpSent: '📲 Wacwalo code me digit 6 i cim mamegi. Coo code kany:',
+  otpSentEmail: '✉️ Wacwalo code me digit 6 i email mamegi. Coo code kany:',
+  verifyOTP: 'Coo code me digit 6 ma wacwalo:',
+  otpSuccess: '✅ Cim mamegi ocikke!',
+  otpFailed: '❌ Code pe kakare. Tem doki.',
+  askDeposit: '💵 Deposit rom mene i UGX?',
+  askContract: '📅 Contract manok twero bedo dwe adi?',
+  askUniversity: '🎓 University ma cok obedo mene?',
+  askDistance: '🚶 Bor-ne ki university i km rom mene?',
+  askSearchType: '🔎 Itye kayenyo ngo?\n1️⃣ Me acata\n2️⃣ Me rent\n3️⃣ Ngom\n4️⃣ Kabedo me students\n5️⃣ Business\n6️⃣ Weng',
+  askSearchArea: '📍 Coo area onyo district ma iyenyo iye, onyo share location mamegi.',
+  locationSharedReceived: '📍 Location onongo. Wayenyo properties ma cok...',
+  searchNoNearbyResults: 'Pe wanongo listings ma approved i miles 5. Wanyuto ma cok.',
+  searchNoResults: 'Pe wanongo listing ma approved ma rwate kombedi.',
+  askAgentArea: '👔 Imito agent i district/area mene?',
+  noAgentsFound: 'Pe wanongo agent ma verified i area meno kombedi.',
+  menuHint: 'Coo MENU cawa mo keken me dwogo i main menu.',
+  searchHeader: 'Properties ma rwate maber',
+  agentHeader: 'Agents ma verified',
+  titleTooShort: 'Nying macek tutwal. Coo nying ma nyuto property maber.',
+  invalidPrice: '❌ Coo wel ma kakare i UGX (namba keken).',
+  descriptionTooShort: 'Coo description ma bor nok (letters 10 onyo makato).',
+  needExactlyFivePhotos: '❌ Cwal photos 5: front, sitting room, bedroom, kitchen, bathroom.',
+  photosUploaded: '📸 Itye ki photos {count}/5. Coo *DONE* ka oromo 5.',
+  photoReceived: '✅ Photo {count}/5 onongo! Cwal ma lubo kore.',
+  sendSelfiePhotoOnly: '❌ Cwal photo/selfie, pe text.',
+  replySearchAgain: 'Dwog 2 me yenyo doki.',
+  replyAgentAgain: 'Dwog 3 me yenyo agent mukene.',
+  typeSale: 'Me acata',
+  typeRent: 'Me rent',
+  typeLand: 'Ngom',
+  typeStudent: 'Students',
+  typeCommercial: 'Business',
+  typeAny: 'Weng',
+  voiceNotUnderstood: '🎙️ Wanongo voice note mamegi, ento pe watye ki transcription maber. Tim ber icwal doki ki dwon maleng onyo coo message.'
+});
+
+Object.assign(T.ny, {
+  askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property',
+  askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent owahandiikirwe',
+  askTitle: '✏️ Ha property yaawe omutwe mugufi:',
+  askDistrict: '📍 Property eri mu district ki?',
+  askArea: '🗺️ Area/neighbourhood ki?',
+  askPrice: '💰 Omuhendo mu Uganda Shillings? (namba zonka)',
+  askBedrooms: '🛏 Ebyumba byo kwebaka bingahi? (Handiika namba, nari 0)',
+  askDescription: '📝 Shoboorora property yaawe mu sentences nke (location, features, condition...)',
+  askPhotos: '📸 Tuma ekishushani kya *front/outside* kubanza.',
+  askSearchType: '🔎 Noshaka ki?\n1️⃣ Ebyokugurisha\n2️⃣ Ebyokukodisa\n3️⃣ Itaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Byona',
+  askSearchArea: '📍 Handiika area nari district eyi orikushakiramu, nari share location yaawe.',
+  menuHint: 'Handiika MENU obwire bwona kugaruka aha main menu.',
+  photoReceived: '✅ Ekishushani {count}/5 kyatunga! Tuma ekirikukurataho.',
+  photosUploaded: '📸 Otumire ebishushani {count}/5. Handiika *DONE* waheza 5.',
+  needExactlyFivePhotos: '❌ Tuma ebishushani 5: front, sitting room, bedroom, kitchen, bathroom.',
+  voiceNotUnderstood: '🎙️ Natunga voice note yaawe, kwonka tindagihurire gye. Tuma kandi n’eiraka eririkwetegyerezibwa nari ohandiike.'
+});
+
+Object.assign(T.rn, {
+  askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property',
+  askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent yanditswe',
+  askTitle: '✏️ Andika umutwe mugufi wa property:',
+  askDistrict: '📍 Property iri muri district iyihe?',
+  askArea: '🗺️ Area/neighbourhood iyihe?',
+  askPrice: '💰 Igiciro muri Uganda Shillings? (nimero gusa)',
+  askBedrooms: '🛏 Bedrooms zingahe? (Andika nimero, canke 0)',
+  askDescription: '📝 Sobanura property mu nteruro nke (location, features, condition...)',
+  askPhotos: '📸 Ohereza ifoto ya *front/outside* mbere.',
+  askSearchType: '🔎 Urashaka iki?\n1️⃣ Kugurisha\n2️⃣ Gukodesha\n3️⃣ Ubutaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Vyose',
+  askSearchArea: '📍 Andika area canke district uronderamwo, canke share location yawe.',
+  menuHint: 'Andika MENU igihe cose gusubira kuri main menu.',
+  photoReceived: '✅ Ifoto {count}/5 yakiriwe! Ohereza ikurikira.',
+  photosUploaded: '📸 Wohereje amafoto {count}/5. Andika *DONE* umaze 5.',
+  needExactlyFivePhotos: '❌ Ohereza amafoto 5: front, sitting room, bedroom, kitchen, bathroom.',
+  voiceNotUnderstood: '🎙️ Nakiriye voice note yawe, ariko sinayumvise neza. Ongera uyohereze uvuga neza canke wandike ubutumwa.'
+});
+
+Object.assign(T.sm, {
+  askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property",
+  askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent registered',
+  askTitle: '✏️ Wa property yo omutwe omumpi:',
+  askDistrict: '📍 Property eri mu district ki?',
+  askArea: '🗺️ Area/neighbourhood ki?',
+  askPrice: '💰 Ebbeeyi mu Uganda Shillings? (ennamba zokka)',
+  askBedrooms: '🛏 Bedrooms ziri mmeka? (Wandiika ennamba, oba 0)',
+  askDescription: '📝 Nnyonnyola property yo mu sentences ntono (location, features, condition...)',
+  askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
+  askSearchType: "🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Eby'okukodisa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial\n6️⃣ Byonna",
+  askSearchArea: '📍 Wandiika area oba district gyonoonya, oba share location yo.',
+  menuHint: 'Wandiika MENU anytime okudda ku main menu.',
+  photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
+  photosUploaded: '📸 Oweerezza ebifaananyi {count}/5. Wandiika *DONE* bwomala 5.',
+  needExactlyFivePhotos: '❌ Weereza ebifaananyi 5: front, sitting room, bedroom, kitchen, bathroom.',
+  voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message.'
+});
 
 // Get translation (fallback to English)
 function resolveLangCode(lang) {
@@ -393,6 +527,16 @@ function resolveDetectedLanguage({ text, sessionLang = 'en', intentResult = null
   return { code: resolveLangCode(sessionLang), confidence: 0.5, source: 'session' };
 }
 
+function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeting', detectedLanguage = {} }) {
+  const nextLang = resolveLangCode(detectedLanguage.code || '');
+  const currentLang = resolveLangCode(sessionLang || 'en');
+  if (!nextLang || nextLang === currentLang) return false;
+  if (detectedLanguage.source === 'intent_entity') return true;
+  if (Number(detectedLanguage.confidence || 0) < 0.9) return false;
+  if (nextLang === 'en' && currentLang !== 'en') return false;
+  return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(sessionStep || 'greeting');
+}
+
 function appendSiteNudge(lang, message, url = HOME_URL) {
   const code = resolveLangCode(lang);
   if (!message || String(message).includes('http')) return message;
@@ -442,14 +586,19 @@ function parseLanguageChange(text) {
   return map[value] || '';
 }
 
-function photoRequirementLabel(index) {
-  return [
-    'front/outside',
-    'sitting room or main room',
-    'bedroom',
-    'kitchen',
-    'bathroom'
-  ][index] || 'extra useful photo';
+function photoRequirementLabel(index, lang = 'en') {
+  const code = resolveLangCode(lang);
+  const labels = {
+    en: ['front/outside', 'sitting room or main room', 'bedroom', 'kitchen', 'bathroom', 'extra useful photo'],
+    lg: ['front/outside', 'sitting room oba ekisenge ekikulu', 'bedroom', 'kitchen', 'bathroom', 'ekifaananyi ekirala'],
+    sw: ['mbele/nje', 'sebule au chumba kikuu', 'chumba cha kulala', 'jikoni', 'bafu', 'picha nyingine muhimu'],
+    ac: ['front/outside', 'sitting room onyo room madit', 'bedroom', 'kitchen', 'bathroom', 'photo mukene ma konyo'],
+    ny: ['front/outside', 'sitting room nari main room', 'bedroom', 'kitchen', 'bathroom', 'ekishushani ekindi'],
+    rn: ['front/outside', 'sitting room canke main room', 'bedroom', 'kitchen', 'bathroom', 'ifoto yindi ifasha'],
+    sm: ['front/outside', 'sitting room oba ekisenge ekikulu', 'bedroom', 'kitchen', 'bathroom', 'ekifaananyi ekirala']
+  };
+  const row = labels[code] || labels.en;
+  return row[index] || row[5];
 }
 
 function photoNextPrompt(lang, count = 0) {
@@ -459,15 +608,23 @@ function photoNextPrompt(lang, count = 0) {
     const done = {
       en: `✅ I have the 5 key photos. Type *DONE* to continue, or send any extra helpful photos.`,
       lg: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala bw'oba obirina.`,
-      sw: `✅ Nimepata picha 5 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`
+      sw: `✅ Nimepata picha 5 muhimu. Andika *DONE* kuendelea, au tuma picha nyingine kama zipo.`,
+      ac: `✅ Atye ki photos 5 ma pire tek. Coo *DONE* me mede anyim, onyo cwal photos mukene ma konyo.`,
+      ny: `✅ Natunga ebishushani 5 ebikuru. Handiika *DONE* kugumizamu, nari tuma ebindi.`,
+      rn: `✅ Nakiriye amafoto 5 akenewe. Andika *DONE* gukomeza, canke ohereze ayandi.`,
+      sm: `✅ Ebifaananyi 5 ebikulu bifuniddwa. Wandiika *DONE* okugenda mu maaso, oba weereza ebirala.`
     };
     return done[code] || done.en;
   }
-  const label = photoRequirementLabel(safeCount);
+  const label = photoRequirementLabel(safeCount, code);
   const prompts = {
     en: `📸 Next: please send the *${label}* photo.`,
     lg: `📸 Ekiddako: weereza ekifaananyi kya *${label}*.`,
-    sw: `📸 Inayofuata: tafadhali tuma picha ya *${label}*.`
+    sw: `📸 Inayofuata: tafadhali tuma picha ya *${label}*.`,
+    ac: `📸 Malubo: tim ber icwal photo me *${label}*.`,
+    ny: `📸 Ekirikukurataho: tuma ekishushani kya *${label}*.`,
+    rn: `📸 Igikurikira: ohereza ifoto ya *${label}*.`,
+    sm: `📸 Ekiddako: weereza ekifaananyi kya *${label}*.`
   };
   return prompts[code] || prompts.en;
 }
@@ -3858,7 +4015,13 @@ async function processInboundRuntime({
   let effectiveBody = normalizeInput(body);
   let transcriptRecord = null;
   const normalizedMediaType = String(mediaType || '').toLowerCase();
-  const isAudioNote = mediaUrl && normalizedMediaType.startsWith('audio/');
+  const isAudioNote = mediaUrl && (
+    normalizedMediaType.startsWith('audio/')
+    || normalizedMediaType === 'voice'
+    || normalizedMediaType === 'audio'
+    || normalizedMediaType.includes('opus')
+    || normalizedMediaType.includes('ogg')
+  );
 
   if (isAudioNote) {
     transcriptRecord = await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg');
@@ -3895,6 +4058,26 @@ async function processInboundRuntime({
     });
   }
 
+  if (isAudioNote && !transcriptRecord?.text) {
+    const voiceLang = sessionLang || 'en';
+    await logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: 'unknown',
+      confidence: 0,
+      language: voiceLang,
+      currentStep: sessionStep,
+      rawText: body || '[voice note]',
+      transcript: null,
+      entities: { media_type: normalizedMediaType || 'voice' },
+      modelUsed: 'voice_transcription_unavailable'
+    });
+    return {
+      message: t(voiceLang, 'voiceNotUnderstood'),
+      nextStep: sessionStep
+    };
+  }
+
   const intentResult = await classifyWhatsappIntent({
     text: effectiveBody,
     language: sessionLang,
@@ -3907,12 +4090,9 @@ async function processInboundRuntime({
     intentResult
   });
   const runtimeLang = detectedLanguage.code || sessionLang;
-  if (
-    runtimeLang
-    && runtimeLang !== sessionLang
-    && detectedLanguage.source !== 'session'
-    && Number(detectedLanguage.confidence || 0) >= 0.84
-  ) {
+  const adoptDetectedLanguage = shouldAdoptDetectedLanguage({ sessionLang, sessionStep, detectedLanguage });
+  const activeLang = adoptDetectedLanguage ? runtimeLang : sessionLang;
+  if (adoptDetectedLanguage) {
     await updateSession(phone, { language: runtimeLang });
   }
 
@@ -3921,7 +4101,7 @@ async function processInboundRuntime({
     waMessageId: inboundMessageId,
     detectedIntent: intentResult.intent,
     confidence: intentResult.confidence,
-    language: runtimeLang,
+    language: activeLang,
     currentStep: sessionStep,
     rawText: body,
     transcript: transcriptRecord?.text || null,
@@ -3935,7 +4115,7 @@ async function processInboundRuntime({
   if (shouldPauseAutomation) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
     await upsertWhatsappUserProfile(phone, {
-      preferredLanguage: runtimeLang,
+      preferredLanguage: activeLang,
       metadata: {
         last_intent: intentResult.intent || 'unknown',
         last_step: sessionStep,
@@ -3947,7 +4127,7 @@ async function processInboundRuntime({
       phone,
       direction: 'inbound',
       intent: intentResult.intent,
-      preferredLanguage: runtimeLang,
+      preferredLanguage: activeLang,
       currentStep: sessionStep,
       provider,
       messageType,
@@ -3957,7 +4137,7 @@ async function processInboundRuntime({
       }
     });
 
-    return { message: humanHandoffAck(runtimeLang), nextStep: sessionStep };
+    return { message: humanHandoffAck(activeLang), nextStep: sessionStep };
   }
 
   const { message, nextStep } = await processMessage(

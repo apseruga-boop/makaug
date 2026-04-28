@@ -428,6 +428,23 @@ const scenarios = [
     expectLast: { step: 'photos', includesAny: ['Photo 1', 'sitting room'], excludes: ['Ekifaananyi'] }
   },
   {
+    name: 'Luganda listing flow does not drift to English from English title text',
+    messages: [
+      'Oli otya',
+      '1',
+      '1',
+      '1',
+      'House in Kololo',
+      'Wakiso',
+      'Kololo',
+      '200000000',
+      '3',
+      'A clean home close to the main road with parking and security.',
+      { mediaUrl: 'whatsapp-web://front-lg', mediaType: 'image' }
+    ],
+    expectLast: { step: 'photos', includesAny: ['Ekifaananyi 1/5', 'Ekiddako'], excludes: ['Photo 1 received', 'Next: please send'] }
+  },
+  {
     name: 'Listing photo flow counts WhatsApp album previews',
     messages: [
       '1',
@@ -469,6 +486,14 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://selfie', mediaType: 'image' }
     ],
     expectLast: { step: 'verify_otp', includesAny: ['6-digit code', 'SMS'] }
+  },
+  {
+    name: 'Voice note architecture asks clearly when transcription is unavailable',
+    messages: [
+      'Habari',
+      { mediaUrl: 'whatsapp-web://voice-note', mediaType: 'voice' }
+    ],
+    expectLast: { step: 'main_menu', includesAny: ['voice note', 'sauti', 'andika'], excludes: ['Sorry, something went wrong'] }
   },
   {
     name: 'Commercial listing reaches commercial details',

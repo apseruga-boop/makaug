@@ -27,6 +27,7 @@ const PROFILE_DIR = path.resolve(
 );
 const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
+const seenBrowserMessageIds = new Set();
 
 if (!BRIDGE_TOKEN) {
   console.error('Missing WHATSAPP_WEB_BRIDGE_TOKEN in environment.');
@@ -447,6 +448,11 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
 
+  const browserMessageKey = `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || text}:${mediaType}`.slice(0, 260);
+  if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
+    return { processed: 0, duplicate: true };
+  }
+
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
 
   try {
@@ -472,6 +478,13 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         }
       }
     });
+    if (browserMessageKey) {
+      seenBrowserMessageIds.add(browserMessageKey);
+      if (seenBrowserMessageIds.size > 1000) {
+        const first = seenBrowserMessageIds.values().next().value;
+        if (first) seenBrowserMessageIds.delete(first);
+      }
+    }
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
