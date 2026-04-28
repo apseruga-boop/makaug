@@ -1403,6 +1403,33 @@ function isAnyAreaReply(value) {
     || /\bdoesnt matter\b/i.test(clean);
 }
 
+function fallbackNaturalSearchSentence(text) {
+  const clean = normalizeInput(text);
+  const lower = clean.toLowerCase();
+  const areaMatch = lower.match(/\b(?:in|near|around)\s+([a-z][a-z\s'.-]{1,60})$/i);
+  const area = normalizeInput(areaMatch?.[1] || '').replace(/\b(right now|please|thanks?)$/i, '').trim();
+  if (!area) return { hasSignal: false };
+
+  let searchType = 'any';
+  if (/\b(student|hostel|accommodation)\b/i.test(clean)) searchType = 'student';
+  else if (/\b(commercial|shop|office|retail)\b/i.test(clean)) searchType = 'commercial';
+  else if (/\b(land|plot)\b/i.test(clean)) searchType = 'land';
+  else if (/\b(rent|rental|to rent|for rent)\b/i.test(clean)) searchType = 'rent';
+  else if (/\b(buy|sale|for sale|purchase)\b/i.test(clean)) searchType = 'sale';
+
+  let propertyType = '';
+  if (/\bhouse|home\b/i.test(clean)) propertyType = 'house';
+  else if (/\bflat|apartment\b/i.test(clean)) propertyType = 'apartment';
+  else if (/\broom\b/i.test(clean)) propertyType = 'room';
+
+  return {
+    hasSignal: searchType !== 'any' || !!propertyType,
+    searchType,
+    area,
+    propertyType: propertyType || null
+  };
+}
+
 async function upsertWhatsappUserProfile(phone, updates = {}) {
   const preferredLanguage = normalizeInput(updates.preferredLanguage);
   const optInSource = normalizeInput(updates.optInSource);
@@ -2232,13 +2259,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && cleanBody.length > 3
     && (!globalRoute || globalRoute === 'search_type')
   ) {
-    const naturalFilters = await resolveNaturalSearchFilters({
+    let naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
       fallbackType: 'any',
       language: lang,
       sessionData
     });
+
+    if (!naturalFilters.hasSignal || !naturalFilters.area) {
+      const fallbackFilters = fallbackNaturalSearchSentence(cleanBody);
+      if (fallbackFilters.hasSignal && fallbackFilters.area) {
+        naturalFilters = {
+          ...naturalFilters,
+          ...fallbackFilters,
+          hasSignal: true
+        };
+      }
+    }
 
     if (!naturalFilters.hasSignal) {
       // Let non-search intents, greetings, and free-form support messages continue through the normal router.
@@ -2481,13 +2519,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SEARCH TYPE
   if (step === 'search_type') {
-    const naturalFilters = await resolveNaturalSearchFilters({
+    let naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
       fallbackType: 'any',
       language: lang,
       sessionData
     });
+
+    if (!naturalFilters.hasSignal || !naturalFilters.area) {
+      const fallbackFilters = fallbackNaturalSearchSentence(cleanBody);
+      if (fallbackFilters.hasSignal && fallbackFilters.area) {
+        naturalFilters = {
+          ...naturalFilters,
+          ...fallbackFilters,
+          hasSignal: true
+        };
+      }
+    }
 
     if (naturalFilters.hasSignal && naturalFilters.area) {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
