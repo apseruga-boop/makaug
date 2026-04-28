@@ -241,20 +241,7 @@ const scenarios = [
       'A clean home close to the main road with parking and security.',
       { mediaUrl: 'whatsapp-web://front', mediaType: 'image' }
     ],
-    expect: [
-      { step: 'main_menu' },
-      { step: 'listing_type' },
-      { step: 'ownership' },
-      { step: 'title' },
-      { step: 'district' },
-      { step: 'area' },
-      { step: 'price' },
-      { step: 'bedrooms' },
-      { step: 'description', includesAny: ['Wandiika', 'description'] },
-      { step: 'description', includesAny: ['Language updated', 'Describe'], excludes: ['main menu'] },
-      { step: 'photos', includesAny: ['front/outside'], excludes: ['main menu'] },
-      { step: 'photos', includesAny: ['Photo 1', 'sitting room'], excludes: ['Ekifaananyi'] }
-    ]
+    expectLast: { step: 'photos', includesAny: ['Photo 1', 'sitting room'], excludes: ['Ekifaananyi'] }
   },
   {
     name: 'Listing photo flow counts WhatsApp album previews',

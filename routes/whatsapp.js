@@ -1396,7 +1396,7 @@ function isNegativeReply(value) {
 
 function isAnyAreaReply(value) {
   const clean = normalizeInput(value).toLowerCase();
-  return /^(any|anywhere|any area|i don'?t mind|dont mind|doesn'?t matter|doesnt matter|show me anything|anything)$/i.test(clean);
+  return /^(any|anywhere|any area|i don.?t mind|dont mind|doesn.?t matter|doesnt matter|show me anything|anything)$/i.test(clean);
 }
 
 async function upsertWhatsappUserProfile(phone, updates = {}) {
