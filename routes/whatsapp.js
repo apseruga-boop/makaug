@@ -741,6 +741,26 @@ function parseInboundLocation(payload = {}) {
   };
 }
 
+function isLocationPreviewWithoutCoordinates(mediaType = '', body = '') {
+  const type = String(mediaType || '').toLowerCase();
+  if (type.includes('location')) return true;
+  return type === 'image' && /^\s*\d{1,2}:\d{2}\s*(?:am|pm)?\s*$/i.test(String(body || '').trim());
+}
+
+function locationPreviewPrompt(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: '📍 I can see a map/location preview, but WhatsApp Web did not expose the exact pin. Please tap *+ → Location → Send your current location*, or type the nearest area/district so I can search accurately.',
+    lg: '📍 Ndaba map/location preview, naye WhatsApp Web tempadde pin entuufu. Share location yo oba wandika ekitundu/district ekiri okumpi.',
+    sw: '📍 Naona ramani/location preview, lakini WhatsApp Web haijatoa pin halisi. Tafadhali tuma location yako au andika eneo/wilaya iliyo karibu.',
+    ac: '📍 Aneno map/location preview, ento WhatsApp Web pe omiyo pin kikome. Tim ber share location mamegi onyo cwoo area/district macok.',
+    ny: '📍 Nindeba map/location preview, kwonka WhatsApp Web terikworeka pin eyenyini. Share location yaawe ninga handiika area/district eri haihi.',
+    rn: '📍 Ndabona map/location preview, ariko WhatsApp Web ntiyerekanye pin nyayo. Sangiza location cyangwa wandike area/district iri hafi.',
+    sm: '📍 Ndaba map/location preview, naye WhatsApp Web tempadde pin entuufu. Share location yo oba wandika ekitundu/district ekiri okumpi.'
+  };
+  return messages[code] || messages.en;
+}
+
 function isMetaWebhookPayload(payload = {}) {
   return payload
     && payload.object === 'whatsapp_business_account'
@@ -2462,6 +2482,18 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const pendingFilters = sessionData.pending_search_filters && typeof sessionData.pending_search_filters === 'object'
       ? sessionData.pending_search_filters
       : null;
+    if (!sharedLocation && isLocationPreviewWithoutCoordinates(runtime.mediaType, cleanBody)) {
+      await patchSessionData(phone, {
+        last_location_preview_without_coordinates: {
+          search_type: pendingFilters?.searchType || searchType,
+          body: cleanBody,
+          media_type: runtime.mediaType || null,
+          created_at: new Date().toISOString()
+        }
+      });
+      return respond(locationPreviewPrompt(lang), 'search_area');
+    }
+
     if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
       await patchSessionData(phone, {
         search_lat: Number(sharedLocation.lat),

@@ -132,6 +132,23 @@ const scenarios = [
     ]
   },
   {
+    name: 'Map preview without coordinates asks for exact location',
+    messages: [
+      '2',
+      '6',
+      { body: '10:12 AM', mediaUrl: 'whatsapp-web://location-preview', mediaType: 'location_preview' }
+    ],
+    expect: [
+      { step: 'search_type' },
+      { step: 'search_area' },
+      {
+        step: 'search_area',
+        includesAny: ['exact pin', 'Send your current location', 'nearest area'],
+        excludes: ['10:12 AM right now', 'approved match in *10:12 AM*']
+      }
+    ]
+  },
+  {
     name: 'Find an agent from main menu',
     messages: ['I need to find an agent'],
     expect: [

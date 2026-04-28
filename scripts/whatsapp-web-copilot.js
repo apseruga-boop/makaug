@@ -65,6 +65,10 @@ function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text',
   })).digest('hex')}`;
 }
 
+function isTimestampOnly(value) {
+  return /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
+}
+
 async function apiRequest(endpoint, { method = 'GET', body } = {}) {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method,
@@ -178,6 +182,35 @@ async function getActiveChatSnapshot(page) {
       const digits = String(value || '').replace(/\D/g, '');
       return digits.length >= 7 ? digits : '';
     };
+    const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
+    const parseCoords = (value) => {
+      const raw = String(value || '');
+      const decoded = (() => {
+        try { return decodeURIComponent(raw); } catch (_error) { return raw; }
+      })();
+      const candidates = [
+        decoded.match(/[?&](?:q|query|center|markers)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i),
+        decoded.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i),
+        decoded.match(/\b(-?\d{1,2}\.\d{4,}),\s*(-?\d{1,3}\.\d{4,})\b/)
+      ].filter(Boolean);
+      if (!candidates.length) return null;
+      const lat = Number(candidates[0][1]);
+      const lng = Number(candidates[0][2]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+      return { lat, lng };
+    };
+    const extractSharedLocation = (root) => {
+      const values = [
+        ...Array.from(root.querySelectorAll('a')).map((a) => a.href || ''),
+        ...Array.from(root.querySelectorAll('img')).map((img) => `${img.src || ''} ${img.alt || ''}`)
+      ];
+      for (const value of values) {
+        const coords = parseCoords(value);
+        if (coords) return coords;
+      }
+      return null;
+    };
 
     const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const last = nodes[nodes.length - 1];
@@ -213,7 +246,17 @@ async function getActiveChatSnapshot(page) {
       : last.closest('.message-in')
         ? 'in'
         : 'unknown';
-    const mediaType = last.querySelector('img')
+    const hasNonEmojiImage = Array.from(last.querySelectorAll('img')).some((img) => {
+      const src = img.getAttribute('src') || '';
+      const alt = img.getAttribute('alt') || '';
+      return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
+    });
+    const sharedLocation = extractSharedLocation(last);
+    const mediaType = sharedLocation
+      ? 'location'
+      : hasNonEmojiImage && isTimestampOnlyText(text)
+        ? 'location_preview'
+        : last.querySelector('img')
       ? 'image'
       : last.querySelector('audio')
         ? 'voice'
@@ -229,7 +272,8 @@ async function getActiveChatSnapshot(page) {
       messageId,
       direction,
       mediaType,
-      mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`
+      mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
+      sharedLocation
     };
   });
 }
@@ -243,6 +287,35 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const phoneLike = (value) => {
       const digits = String(value || '').replace(/\D/g, '');
       return digits.length >= 7 ? digits : '';
+    };
+    const isTimestampOnlyText = (value) => /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
+    const parseCoords = (value) => {
+      const raw = String(value || '');
+      const decoded = (() => {
+        try { return decodeURIComponent(raw); } catch (_error) { return raw; }
+      })();
+      const candidates = [
+        decoded.match(/[?&](?:q|query|center|markers)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i),
+        decoded.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/i),
+        decoded.match(/\b(-?\d{1,2}\.\d{4,}),\s*(-?\d{1,3}\.\d{4,})\b/)
+      ].filter(Boolean);
+      if (!candidates.length) return null;
+      const lat = Number(candidates[0][1]);
+      const lng = Number(candidates[0][2]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+      return { lat, lng };
+    };
+    const extractSharedLocation = (root) => {
+      const values = [
+        ...Array.from(root.querySelectorAll('a')).map((a) => a.href || ''),
+        ...Array.from(root.querySelectorAll('img')).map((img) => `${img.src || ''} ${img.alt || ''}`)
+      ];
+      for (const value of values) {
+        const coords = parseCoords(value);
+        if (coords) return coords;
+      }
+      return null;
     };
 
     const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
@@ -263,7 +336,17 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const messageId = node.closest('[data-id]')?.getAttribute('data-id')
           || node.getAttribute('data-id')
           || '';
-        const mediaType = node.querySelector('audio')
+        const hasNonEmojiImage = Array.from(node.querySelectorAll('img')).some((img) => {
+          const src = img.getAttribute('src') || '';
+          const alt = img.getAttribute('alt') || '';
+          return !src.startsWith('data:image/gif') && !img.className.includes('emoji') && !alt.match(/^\p{Emoji}+$/u);
+        });
+        const sharedLocation = extractSharedLocation(node);
+        const mediaType = sharedLocation
+          ? 'location'
+          : hasNonEmojiImage && isTimestampOnlyText(rawText)
+            ? 'location_preview'
+            : node.querySelector('audio')
           ? 'voice'
           : node.querySelector('video')
             ? 'media'
@@ -292,7 +375,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           messageId,
           direction,
           mediaType,
-          mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`
+          mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
+          sharedLocation
         };
       })
       .filter((item) => item.direction === 'in' && item.chatKey && item.text);
@@ -301,8 +385,10 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
 
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
-  const text = String(snapshot.text || row.preview || '').trim();
   const mediaType = snapshot.mediaType || 'text';
+  const text = isTimestampOnly(snapshot.text) && String(mediaType).includes('location')
+    ? '[shared location]'
+    : String(snapshot.text || row.preview || '').trim();
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
@@ -320,6 +406,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         message_id: messageId,
         media_url: snapshot.mediaUrl || '',
         media_type: mediaType,
+        shared_location: snapshot.sharedLocation || null,
         created_at: snapshot.timestampLabel || new Date().toISOString(),
         metadata: {
           chat_title: snapshot.chatKey || row.title,
