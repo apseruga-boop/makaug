@@ -474,6 +474,10 @@ async function ingestActiveChat(page) {
 async function openChatForReply(page, recipient) {
   const chatKey = String(recipient || '').trim();
   const phoneDigits = chatKey.replace(/\D/g, '');
+  const activeSnapshot = await getActiveChatSnapshot(page).catch(() => null);
+  const activeKey = normalizeChatKey(activeSnapshot?.chatKey || '');
+  if (activeKey && activeKey === normalizeChatKey(chatKey)) return true;
+  if (phoneDigits.length >= 9 && activeKey === normalizeChatKey(phoneDigits)) return true;
 
   if (phoneDigits.length >= 9) {
     await page.goto(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}`, {
