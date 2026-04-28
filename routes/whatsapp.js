@@ -2406,13 +2406,23 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
 
-    const naturalFilters = await resolveNaturalSearchFilters({
+    let naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
       fallbackType: 'any',
       language: lang,
       sessionData
     });
+    if (!naturalFilters.hasSignal || !naturalFilters.area) {
+      const fallbackFilters = fallbackNaturalSearchSentence(cleanBody);
+      if (fallbackFilters.hasSignal && fallbackFilters.area) {
+        naturalFilters = {
+          ...naturalFilters,
+          ...fallbackFilters,
+          hasSignal: true
+        };
+      }
+    }
     const likelyPropertySearchIntent = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent);
     if (likelyPropertySearchIntent || naturalFilters.hasSignal) {
       if (naturalFilters.useSharedLocation) {
