@@ -104,6 +104,7 @@ const T = {
     typeCommercial: 'Commercial',
     typeAny: 'Any',
     voiceNotUnderstood: "🎙️ I received your voice note, but I couldn't understand it clearly. Please send it again in a clear voice, or type the message.",
+    voiceTranscriptEcho: '🎙️ I heard: "{transcript}"',
     genericSaveError: '❌ Something went wrong saving your listing. Please try again or visit {url}',
     genericWebhookError: 'Sorry, something went wrong. Please try again or visit {url}'
   },
@@ -170,6 +171,7 @@ const T = {
     typeCommercial: 'Byobusuubuzi',
     typeAny: 'Byonna',
     voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message yo.',
+    voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"',
     genericSaveError: '❌ Wabaddewo ensobi mu kutereka listing yo. Gezaako nate oba genda ku {url}',
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
   },
@@ -224,6 +226,7 @@ const T = {
     typeStudent: 'Wanafunzi',
     typeCommercial: 'Biashara',
     typeAny: 'Yoyote',
+    voiceTranscriptEcho: '🎙️ Nimesikia: "{transcript}"',
     genericSaveError: '❌ Hitilafu imetokea wakati wa kuhifadhi tangazo lako. Jaribu tena au tembelea {url}',
     genericWebhookError: 'Samahani, hitilafu imetokea. Jaribu tena au tembelea {url}'
   },
@@ -275,7 +278,8 @@ Object.assign(T.sw, {
   askContract: '📅 Mkataba wa chini ni miezi mingapi? (mfano 6, 12, 24)',
   askUniversity: '🎓 Chuo kikuu kilicho karibu ni kipi?',
   askDistance: '🚶 Mali iko umbali gani kutoka chuo kikuu kwa km? (mfano 0.5, 1, 2)',
-  voiceNotUnderstood: '🎙️ Nimepokea voice note yako, lakini sikuweza kuisoma vizuri. Tafadhali tuma tena kwa sauti wazi au andika ujumbe wako.'
+  voiceNotUnderstood: '🎙️ Nimepokea voice note yako, lakini sikuweza kuisoma vizuri. Tafadhali tuma tena kwa sauti wazi au andika ujumbe wako.',
+  voiceTranscriptEcho: '🎙️ Nimesikia: "{transcript}"'
 });
 
 Object.assign(T.ac, {
@@ -329,7 +333,8 @@ Object.assign(T.ac, {
   typeStudent: 'Students',
   typeCommercial: 'Business',
   typeAny: 'Weng',
-  voiceNotUnderstood: '🎙️ Wanongo voice note mamegi, ento pe watye ki transcription maber. Tim ber icwal doki ki dwon maleng onyo coo message.'
+  voiceNotUnderstood: '🎙️ Wanongo voice note mamegi, ento pe watye ki transcription maber. Tim ber icwal doki ki dwon maleng onyo coo message.',
+  voiceTranscriptEcho: '🎙️ Wawinyo ni: "{transcript}"'
 });
 
 Object.assign(T.ny, {
@@ -358,7 +363,8 @@ Object.assign(T.ny, {
   photoReceived: '✅ Ekishushani {count}/5 kyatunga! Tuma ekirikukurataho.',
   photosUploaded: '📸 Otumire ebishushani {count}/5. Handiika *DONE* waheza 5.',
   needExactlyFivePhotos: '❌ Tuma ebishushani 5: front, sitting room, bedroom, kitchen, bathroom.',
-  voiceNotUnderstood: '🎙️ Natunga voice note yaawe, kwonka tindagihurire gye. Tuma kandi n’eiraka eririkwetegyerezibwa nari ohandiike.'
+  voiceNotUnderstood: '🎙️ Natunga voice note yaawe, kwonka tindagihurire gye. Tuma kandi n’eiraka eririkwetegyerezibwa nari ohandiike.',
+  voiceTranscriptEcho: '🎙️ Nahurira nti: "{transcript}"'
 });
 
 Object.assign(T.rn, {
@@ -387,7 +393,8 @@ Object.assign(T.rn, {
   photoReceived: '✅ Ifoto {count}/5 yakiriwe! Ohereza ikurikira.',
   photosUploaded: '📸 Wohereje amafoto {count}/5. Andika *DONE* umaze 5.',
   needExactlyFivePhotos: '❌ Ohereza amafoto 5: front, sitting room, bedroom, kitchen, bathroom.',
-  voiceNotUnderstood: '🎙️ Nakiriye voice note yawe, ariko sinayumvise neza. Ongera uyohereze uvuga neza canke wandike ubutumwa.'
+  voiceNotUnderstood: '🎙️ Nakiriye voice note yawe, ariko sinayumvise neza. Ongera uyohereze uvuga neza canke wandike ubutumwa.',
+  voiceTranscriptEcho: '🎙️ Numvise uti: "{transcript}"'
 });
 
 Object.assign(T.sm, {
@@ -416,7 +423,8 @@ Object.assign(T.sm, {
   photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
   photosUploaded: '📸 Oweerezza ebifaananyi {count}/5. Wandiika *DONE* bwomala 5.',
   needExactlyFivePhotos: '❌ Weereza ebifaananyi 5: front, sitting room, bedroom, kitchen, bathroom.',
-  voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message.'
+  voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message.',
+  voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"'
 });
 
 // Get translation (fallback to English)
@@ -4170,7 +4178,7 @@ async function processInboundRuntime({
     return { message: humanHandoffAck(activeLang), nextStep: sessionStep };
   }
 
-  const { message, nextStep } = await processMessage(
+  let { message, nextStep } = await processMessage(
     phone,
     effectiveBody,
     mediaUrl,
@@ -4182,6 +4190,13 @@ async function processInboundRuntime({
       transcript: transcriptRecord?.text || null
     }
   );
+
+  if (transcriptRecord?.text) {
+    const transcriptText = normalizeInput(transcriptRecord.text).slice(0, 220);
+    if (transcriptText) {
+      message = `${tt(activeLang, 'voiceTranscriptEcho', { transcript: transcriptText })}\n\n${message}`;
+    }
+  }
 
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
   const refreshedSession = await getSession(phone);

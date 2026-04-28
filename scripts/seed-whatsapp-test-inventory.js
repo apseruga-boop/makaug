@@ -14,6 +14,7 @@ const COUNT = Number.isFinite(REQUESTED_COUNT) && REQUESTED_COUNT > 0 ? REQUESTE
 const CLEANUP = argv.has('--cleanup');
 const REPLACE = argv.has('--replace');
 const DRY_RUN = argv.has('--dry-run');
+const APPROVE = argv.has('--approve');
 
 const IMAGE_SETS = {
   residential: [
@@ -155,7 +156,7 @@ function propertyTypeFor(type, index) {
 }
 
 function makeDescription({ type, district, area, title, bedrooms, bathrooms, university }) {
-  const base = `${title} in ${area}, ${district}. This is MakaUg WhatsApp test inventory for live search, map, agent and listing-flow QA.`;
+  const base = `${title} in ${area}, ${district}. TEST LISTING for MakaUg WhatsApp chatbot, search, map, agent and approval-flow QA.`;
   if (type === 'student') {
     return `${base} Close to ${university}, with secure access, study-friendly rooms, water, power and nearby transport.`;
   }
@@ -260,9 +261,10 @@ function buildListing(index, type, agents) {
   const bathrooms = type === 'land' ? null : 1 + (index % 3);
   const university = pick(UNIVERSITIES, index);
   const propertyType = propertyTypeFor(type, index);
-  const title = type === 'land'
+  const naturalTitle = type === 'land'
     ? `${(0.25 + (index % 8) * 0.25).toFixed(index % 2 ? 2 : 1)} Acre ${propertyType} - ${area.area}`
     : `${pick(TITLE_WORDS[type], index)} - ${area.area}`;
+  const title = `[TEST] ${naturalTitle}`;
   const jitter = ((index % 9) - 4) * 0.006;
   const price = moneyFor(type, index);
   const displayName = pick(AGENTS, index)[0];
@@ -274,7 +276,7 @@ function buildListing(index, type, agents) {
     neighborhood: area.area,
     street_name: `${area.area} Test Road`,
     resolved_location_label: `${area.area}, ${area.district}`,
-    public_display_name: displayName,
+    public_display_name: `[TEST] ${displayName}`,
     featured: index % 11 === 0,
     featured_at: index % 11 === 0 ? new Date().toISOString() : null,
     area_highlights: `${area.area} gives testers a realistic ${area.region} Uganda search result.`,
@@ -327,16 +329,17 @@ function buildListing(index, type, agents) {
       ? ['Road access', 'Surveyed', 'Title check', 'Map pin']
       : ['Parking', 'Security', 'Water', 'Power', type === 'student' ? 'Study area' : 'Good access']),
     extra_fields: JSON.stringify(extra),
-    lister_name: displayName,
+    lister_name: `[TEST] ${displayName}`,
     lister_phone: `+256779${String(500000 + index).slice(-6)}`,
     lister_email: `whatsapp-test-listing-${String(index).padStart(4, '0')}@makaug.test`,
     lister_type: 'agent',
     agent_id: agentId,
     source: SOURCE,
     listed_via: 'seed',
-    status: 'approved',
-    moderation_stage: 'approved',
-    reviewed_at: new Date(),
+    status: APPROVE ? 'approved' : 'pending',
+    moderation_stage: APPROVE ? 'approved' : 'submitted',
+    reviewed_at: APPROVE ? new Date() : null,
+    moderation_notes: 'TEST LISTING: seeded for WhatsApp chatbot QA. Safe to approve for testing or delete before official launch.',
     images: imageRows(type, index)
   };
 }
@@ -353,13 +356,13 @@ async function insertListing(client, listing) {
       inquiry_reference, id_number, id_document_name, id_document_url, new_until,
       amenities, extra_fields, lister_name, lister_phone, lister_email,
       lister_type, agent_id, source, listed_via, status, moderation_stage,
-      reviewed_at
+      reviewed_at, moderation_notes
     ) VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
       $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
       $31,$32,$33,$34,$35,$36::jsonb,$37::jsonb,$38,$39,$40,
-      $41,$42,$43,$44,$45,$46,$47
+      $41,$42,$43,$44,$45,$46,$47,$48
     ) RETURNING id`,
     [
       listing.listing_type, listing.title, listing.description, listing.district,
@@ -375,7 +378,8 @@ async function insertListing(client, listing) {
       listing.id_document_url, listing.new_until, listing.amenities,
       listing.extra_fields, listing.lister_name, listing.lister_phone,
       listing.lister_email, listing.lister_type, listing.agent_id, listing.source,
-      listing.listed_via, listing.status, listing.moderation_stage, listing.reviewed_at
+      listing.listed_via, listing.status, listing.moderation_stage, listing.reviewed_at,
+      listing.moderation_notes
     ]
   );
 
@@ -387,6 +391,22 @@ async function insertListing(client, listing) {
       [propertyId, image.url, image.is_primary, image.sort_order, image.slot_key, image.room_label]
     );
   }
+  await client.query(
+    `INSERT INTO property_moderation_events (
+      property_id, actor_id, action, status_from, status_to, checklist, notes, delivery
+    ) VALUES ($1, 'qa_seed', 'qa_listing_submitted_for_review', NULL, $2, $3::jsonb, $4, $5::jsonb)`,
+    [
+      propertyId,
+      listing.status,
+      JSON.stringify({
+        test_inventory: true,
+        photo_count: listing.images.length,
+        source: SOURCE
+      }),
+      listing.moderation_notes,
+      JSON.stringify({ seeded: true, visible_in_backend_review_queue: !APPROVE })
+    ]
+  );
   return propertyId;
 }
 
@@ -421,6 +441,8 @@ async function main() {
       properties_to_create: listings.length,
       agents_to_create: AGENTS.length,
       by_type: byType,
+      target_status: APPROVE ? 'approved' : 'pending',
+      moderation_stage: APPROVE ? 'approved' : 'submitted',
       coverage: {
         districts: districts.size,
         areas: areas.size
@@ -492,6 +514,8 @@ async function main() {
       cleanup: cleanupResult,
       created_properties: created.length,
       agents_available: agentIds.length,
+      target_status: APPROVE ? 'approved' : 'pending',
+      moderation_stage: APPROVE ? 'approved' : 'submitted',
       by_type: summary.rows,
       coverage: districtSummary.rows[0],
       cleanup_command: 'node scripts/seed-whatsapp-test-inventory.js --cleanup'
