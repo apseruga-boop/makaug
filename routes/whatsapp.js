@@ -2009,6 +2009,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
+    && (
+      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos'].includes(step)
+      || ['agent_area', 'support', 'account_help', 'report_listing', 'mortgage_help'].includes(globalRoute)
+    )
     && globalIntentConfidence >= 0.6;
 
   if (canSwitchFlow) {
