@@ -2139,7 +2139,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
-  if (['greeting', 'main_menu'].includes(step) && cleanBody.length > 3) {
+  if (
+    ['greeting', 'main_menu'].includes(step)
+    && cleanBody.length > 3
+    && (!globalRoute || globalRoute === 'search_type')
+  ) {
     const naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
