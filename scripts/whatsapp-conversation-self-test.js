@@ -41,6 +41,21 @@ const scenarios = [
     ]
   },
   {
+    name: 'Student accommodation in Kampala searches like the website',
+    messages: ['I need student accommodation in Kampala'],
+    expect: [
+      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'] }
+    ]
+  },
+  {
+    name: 'User challenges a no-match result without becoming a fake area',
+    messages: ['I need student accommodation in Kampala', 'Yes you do I looked at the website'],
+    expect: [
+      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'] },
+      { step: 'main_menu', includesAny: ['filtered too narrowly', 'admin', 'live website', 'listings'] }
+    ]
+  },
+  {
     name: 'Property search with area returns results or saves no-match lead',
     messages: ['2', 'Muyenga'],
     expect: [

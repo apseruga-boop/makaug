@@ -453,6 +453,30 @@ function friendlyUnknownReply(lang) {
   return `${messages[code] || messages.en}\n\n${HOME_URL}`;
 }
 
+function isNoMatchChallenge(text) {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return false;
+  return /\b(yes you do|you do|saw it|seen it|looked at|on the website|on your website|it is there|available on|but you have)\b/.test(clean);
+}
+
+function noMatchChallengeReply(lang, sessionData = {}) {
+  const code = resolveLangCode(lang);
+  const last = sessionData?.last_no_match && typeof sessionData.last_no_match === 'object'
+    ? sessionData.last_no_match
+    : {};
+  const area = normalizeInput(last.area || '');
+  const searchType = normalizeInput(last.search_type || 'any');
+  const areaParam = area ? `&area=${encodeURIComponent(area)}` : '';
+  const typeParam = searchType && searchType !== 'any' ? `?listing_type=${encodeURIComponent(searchType)}${areaParam}` : (area ? `?area=${encodeURIComponent(area)}` : '');
+  const url = `${HOME_URL}/#page-sale${typeParam}`;
+  const messages = {
+    en: `You're right to challenge that. I may have filtered too narrowly, so I am sending you back to the live website results and saving this for admin review.\n\nOpen live MakaUg listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
+    lg: `Oli mutuufu okukibuuzako. Nyinza okuba nga nsumbye filter nnyo, kale nkusindika ku live listings era nterese kino admin akirabe.\n\nGgulawo listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`,
+    sw: `Uko sawa kuuliza hilo. Huenda nilichuja sana, kwa hiyo nakutuma kwenye matokeo ya live website na nimehifadhi hili kwa admin.\n\nFungua listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`
+  };
+  return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
 async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {
   if (!isLlmEnabled()) {
     return friendlyUnknownReply(lang);
@@ -1181,8 +1205,20 @@ async function findPropertiesByNaturalFilters(filters = {}) {
 
   const listingType = normalizeListingType(filters.searchType || 'any');
   if (listingType !== 'any') {
-    values.push(listingType);
-    where += ` AND listing_type = $${values.length}`;
+    if (listingType === 'student') {
+      where += ` AND (
+        listing_type = 'student'
+        OR students_welcome = TRUE
+        OR title ILIKE '%student%'
+        OR title ILIKE '%hostel%'
+        OR description ILIKE '%student%'
+        OR description ILIKE '%hostel%'
+        OR COALESCE(property_type, '') ILIKE '%hostel%'
+      )`;
+    } else {
+      values.push(listingType);
+      where += ` AND listing_type = $${values.length}`;
+    }
   }
 
   const area = normalizeInput(filters.area);
@@ -1467,8 +1503,20 @@ async function findPropertiesForWhatsapp(searchType, location) {
   let where = 'WHERE status = $1';
 
   if (searchType && searchType !== 'any') {
-    values.push(searchType);
-    where += ` AND listing_type = $${values.length}`;
+    if (searchType === 'student') {
+      where += ` AND (
+        listing_type = 'student'
+        OR students_welcome = TRUE
+        OR title ILIKE '%student%'
+        OR title ILIKE '%hostel%'
+        OR description ILIKE '%student%'
+        OR description ILIKE '%hostel%'
+        OR COALESCE(property_type, '') ILIKE '%hostel%'
+      )`;
+    } else {
+      values.push(searchType);
+      where += ` AND listing_type = $${values.length}`;
+    }
   }
 
   values.push(`%${location}%`);
@@ -1533,8 +1581,20 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
 
   const listingType = normalizeListingType(f.searchType || baseSearchType || 'any');
   if (listingType && listingType !== 'any') {
-    values.push(listingType);
-    where += ` AND listing_type = $${values.length}`;
+    if (listingType === 'student') {
+      where += ` AND (
+        listing_type = 'student'
+        OR students_welcome = TRUE
+        OR title ILIKE '%student%'
+        OR title ILIKE '%hostel%'
+        OR description ILIKE '%student%'
+        OR description ILIKE '%hostel%'
+        OR COALESCE(property_type, '') ILIKE '%hostel%'
+      )`;
+    } else {
+      values.push(listingType);
+      where += ` AND listing_type = $${values.length}`;
+    }
   }
 
   if (Number.isFinite(Number(f.maxBudgetUgx)) && Number(f.maxBudgetUgx) > 0) {
@@ -1975,6 +2035,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(welcomeMessage(lang), 'main_menu');
   }
 
+  if (isNoMatchChallenge(cleanBody) && sessionData.last_no_match) {
+    await patchSessionData(phone, {
+      last_no_match_challenge: {
+        text: cleanBody,
+        last_no_match: sessionData.last_no_match,
+        created_at: new Date().toISOString()
+      }
+    });
+    return respond(noMatchChallengeReply(lang, sessionData), 'main_menu');
+  }
+
   if (isGreetingText(cleanBody)) {
     if (['greeting', 'main_menu', 'submitted'].includes(step)) {
       return respond(friendlyGreetingReply(lang), 'main_menu');
@@ -2122,6 +2193,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: naturalFilters.area,
           notes: `No approved listings found for natural query: ${cleanBody}`
         });
+        await patchSessionData(phone, {
+          last_no_match: {
+            search_type: naturalFilters.searchType || 'any',
+            area: naturalFilters.area,
+            query: cleanBody,
+            created_at: new Date().toISOString()
+          }
+        });
         return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
       }
 
@@ -2234,6 +2313,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         preferredArea: naturalFilters.area,
         notes: `No approved listings found for natural query: ${cleanBody}`
       });
+      await patchSessionData(phone, {
+        last_no_match: {
+          search_type: naturalFilters.searchType || 'any',
+          area: naturalFilters.area,
+          query: cleanBody,
+          created_at: new Date().toISOString()
+        }
+      });
       return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
     }
 
@@ -2282,6 +2369,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: locationText,
           notes: 'No approved listings found from shared location search.'
         });
+        await patchSessionData(phone, {
+          last_no_match: {
+            search_type: pendingFilters?.searchType || searchType,
+            area: locationText,
+            query: 'shared_location',
+            created_at: new Date().toISOString()
+          }
+        });
         return respond(formatNoMatchReply(lang, locationText), 'main_menu');
       }
 
@@ -2326,6 +2421,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: naturalFilters.area,
           notes: `No approved listings found for natural query in search_area: ${cleanBody}`
         });
+        await patchSessionData(phone, {
+          last_no_match: {
+            search_type: naturalFilters.searchType || 'any',
+            area: naturalFilters.area,
+            query: cleanBody,
+            created_at: new Date().toISOString()
+          }
+        });
         return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
       }
       return respond(
@@ -2351,6 +2454,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         searchType,
         preferredArea: cleanBody,
         notes: 'No approved listings found from typed area search.'
+      });
+      await patchSessionData(phone, {
+        last_no_match: {
+          search_type: searchType,
+          area: cleanBody,
+          query: cleanBody,
+          created_at: new Date().toISOString()
+        }
       });
       return respond(formatNoMatchReply(lang, cleanBody), 'main_menu');
     }
