@@ -1982,6 +1982,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(stepReminderMessage(lang, step), step);
   }
 
+  const globalRoute = intentMenuRoute(intentResult?.intent);
+  const globalIntentConfidence = Number(intentResult?.confidence || 0);
+  const canSwitchFlow = globalRoute
+    && step !== 'main_menu'
+    && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
+    && globalIntentConfidence >= 0.68;
+
+  if (canSwitchFlow) {
+    const next = menuRouteReply(lang, globalRoute);
+    await patchSessionData(phone, {
+      interrupted_step: step,
+      interrupted_at: new Date().toISOString(),
+      interrupted_by_intent: intentResult.intent,
+      interrupted_text: cleanBody
+    });
+    return respond(next.message, next.nextStep);
+  }
+
   // GREETING
   if (step === 'greeting') {
     return respond(`${friendlyGreetingReply(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
