@@ -20,6 +20,7 @@ const CHROME_PATH = String(
   process.env.WHATSAPP_WEB_COPILOT_CHROME_PATH
     || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ).trim();
+const CDP_URL = String(process.env.WHATSAPP_WEB_COPILOT_CDP_URL || '').trim();
 const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
@@ -32,7 +33,7 @@ if (!BRIDGE_TOKEN) {
   process.exit(1);
 }
 
-if (!fs.existsSync(CHROME_PATH)) {
+if (!CDP_URL && !fs.existsSync(CHROME_PATH)) {
   console.error(`Chrome executable not found at ${CHROME_PATH}`);
   process.exit(1);
 }
@@ -54,12 +55,13 @@ function normalizeChatKey(value) {
   return raw.replace(/\s+/g, ' ').slice(0, 160);
 }
 
-function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text') {
+function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text', nonce = '') {
   return `webbridge:${crypto.createHash('sha1').update(JSON.stringify({
     chatKey: normalizeChatKey(chatKey),
     text: String(text || '').trim(),
     timestampLabel: String(timestampLabel || '').trim(),
-    mediaType: String(mediaType || '').trim().toLowerCase()
+    mediaType: String(mediaType || '').trim().toLowerCase(),
+    nonce: String(nonce || '').trim()
   })).digest('hex')}`;
 }
 
@@ -112,9 +114,12 @@ async function detectWhatsappReady(page) {
       || bodyText.includes('use whatsapp on your phone to link a device')
       || bodyText.includes('link with phone number');
     const hasChatShell = !!document.querySelector('header') && !!document.querySelector('footer');
+    const hasChatList = !!document.querySelector('[aria-label*="Chat list"], [data-testid="chat-list"], div[role="grid"], div[role="list"]');
+    const hasLoggedInCopy = bodyText.includes('message notifications are off')
+      || bodyText.includes('end-to-end encrypted');
     return {
       waitingForLogin,
-      ready: hasChatShell && !waitingForLogin
+      ready: (hasChatShell || hasChatList || hasLoggedInCopy) && !waitingForLogin
     };
   });
 }
@@ -177,13 +182,24 @@ async function getActiveChatSnapshot(page) {
         chatKey,
         text: '',
         timestampLabel: '',
+        messageOrdinal: 0,
         mediaType: 'text'
       };
     }
 
-    const text = (last.innerText || last.textContent || '').trim();
     const pre = last.getAttribute('data-pre-plain-text') || '';
     const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
+    const senderLabel = pre
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .replace(/:\s*$/, '')
+      .trim();
+    const resolvedChatKey = chatKey || senderLabel;
+    const text = (last.innerText || last.textContent || '').trim();
+    const direction = last.closest('.message-out')
+      ? 'out'
+      : last.closest('.message-in')
+        ? 'in'
+        : 'unknown';
     const mediaType = last.querySelector('img')
       ? 'image'
       : last.querySelector('audio')
@@ -193,12 +209,52 @@ async function getActiveChatSnapshot(page) {
           : 'text';
 
     return {
-      chatKey,
+      chatKey: resolvedChatKey,
       text,
       timestampLabel,
+      messageOrdinal: nodes.length,
+      direction,
       mediaType
     };
   });
+}
+
+async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
+  const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
+  const text = String(snapshot.text || row.preview || '').trim();
+  const mediaType = snapshot.mediaType || 'text';
+
+  if (!chatKey || !text) return { processed: 0, skipped: 'missing_chat_or_text' };
+  if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
+
+  const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageOrdinal || '');
+
+  try {
+    const result = await apiRequest('/api/whatsapp/web-bridge/inbound', {
+      method: 'POST',
+      body: {
+        client_id: CLIENT_ID,
+        operator_name: OPERATOR_NAME || null,
+        phone: chatKey,
+        body: text,
+        message_id: messageId,
+        media_type: mediaType,
+        created_at: snapshot.timestampLabel || new Date().toISOString(),
+        metadata: {
+          chat_title: snapshot.chatKey || row.title,
+          unread_preview: row.preview || '',
+          source
+        }
+      }
+    });
+    if (!result.duplicate) {
+      log(`ingested ${source} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
+    }
+    return { processed: result.duplicate ? 0 : 1, duplicate: !!result.duplicate };
+  } catch (error) {
+    log('failed to ingest chat:', chatKey, error.message || error);
+    return { processed: 0, error };
+  }
 }
 
 async function ingestUnreadChats(page) {
@@ -210,43 +266,25 @@ async function ingestUnreadChats(page) {
     if (!opened) continue;
 
     const snapshot = await getActiveChatSnapshot(page);
-    const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
-    const text = String(snapshot.text || row.preview || '').trim();
-    const mediaType = snapshot.mediaType || 'text';
-
-    if (!chatKey || !text) continue;
-
-    const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType);
-
-    try {
-      const result = await apiRequest('/api/whatsapp/web-bridge/inbound', {
-        method: 'POST',
-        body: {
-          client_id: CLIENT_ID,
-          operator_name: OPERATOR_NAME || null,
-          phone: chatKey,
-          body: text,
-          message_id: messageId,
-          media_type: mediaType,
-          created_at: snapshot.timestampLabel || new Date().toISOString(),
-          metadata: {
-            chat_title: snapshot.chatKey || row.title,
-            unread_preview: row.preview || ''
-          }
-        }
-      });
-      if (!result.duplicate) {
-        processed += 1;
-      }
-    } catch (error) {
-      log('failed to ingest unread chat:', chatKey, error.message || error);
-    }
+    const result = await ingestSnapshot({ snapshot, row, source: 'unread_scan' });
+    processed += result.processed || 0;
   }
 
   return {
     unreadCount: unreadRows.length,
     processed
   };
+}
+
+async function ingestActiveChat(page) {
+  const snapshot = await getActiveChatSnapshot(page);
+  const result = await ingestSnapshot({
+    snapshot,
+    row: { title: snapshot.chatKey, preview: '' },
+    source: 'active_chat'
+  });
+
+  return result.processed || 0;
 }
 
 async function openChatForReply(page, recipient) {
@@ -302,18 +340,24 @@ async function openChatForReply(page, recipient) {
 
 async function typeAndSendReply(page, text) {
   const composerSelectors = [
+    'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
+    'footer div[aria-label^="Type a message"][contenteditable="true"]',
     'footer div[contenteditable="true"][data-tab]',
     'footer div[contenteditable="true"]',
     'div[contenteditable="true"][data-tab="10"]'
   ];
 
   let composer = null;
-  for (const selector of composerSelectors) {
-    const locator = page.locator(selector).last();
-    if (await locator.count()) {
-      composer = locator;
-      break;
+  const deadline = Date.now() + 15000;
+  while (!composer && Date.now() < deadline) {
+    for (const selector of composerSelectors) {
+      const locator = page.locator(selector).last();
+      if (await locator.count()) {
+        composer = locator;
+        break;
+      }
     }
+    if (!composer) await page.waitForTimeout(500);
   }
 
   if (!composer) {
@@ -329,6 +373,7 @@ async function typeAndSendReply(page, text) {
   const sendSelectors = [
     '[data-testid="compose-btn-send"]',
     'span[data-icon="send"]',
+    'button span[data-icon="send"]',
     'button[aria-label*="Send"]'
   ];
 
@@ -359,6 +404,7 @@ async function processOutbox(page) {
       }
 
       await typeAndSendReply(page, item.text);
+      log(`sent queued reply to ${item.recipient}`);
 
       await apiRequest(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(item.id)}/sent`, {
         method: 'POST',
@@ -392,14 +438,24 @@ async function ensureWhatsappTab(page) {
 }
 
 async function main() {
-  fs.mkdirSync(PROFILE_DIR, { recursive: true });
+  let browser = null;
+  let context = null;
 
-  const context = await chromium.launchPersistentContext(PROFILE_DIR, {
-    headless: false,
-    executablePath: CHROME_PATH,
-    viewport: { width: 1440, height: 980 },
-    args: ['--disable-dev-shm-usage']
-  });
+  if (CDP_URL) {
+    browser = await chromium.connectOverCDP(CDP_URL);
+    context = browser.contexts()[0];
+    if (!context) {
+      throw new Error(`No browser context available via CDP at ${CDP_URL}`);
+    }
+  } else {
+    fs.mkdirSync(PROFILE_DIR, { recursive: true });
+    context = await chromium.launchPersistentContext(PROFILE_DIR, {
+      headless: false,
+      executablePath: CHROME_PATH,
+      viewport: { width: 1440, height: 980 },
+      args: ['--disable-dev-shm-usage']
+    });
+  }
 
   const page = context.pages()[0] || await context.newPage();
   await ensureWhatsappTab(page);
@@ -407,15 +463,30 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Profile dir: ${PROFILE_DIR}`);
+  if (CDP_URL) {
+    log(`Connected over CDP: ${CDP_URL}`);
+  } else {
+    log(`Profile dir: ${PROFILE_DIR}`);
+  }
   log('If WhatsApp asks for a QR scan, keep this window open and log in once.');
 
   let lastHeartbeat = 0;
+  let lastBridgeState = '';
 
   while (true) {
     try {
       const readyState = await detectWhatsappReady(page);
       const now = Date.now();
+      const bridgeState = readyState.ready
+        ? 'online'
+        : readyState.waitingForLogin
+          ? 'waiting_for_login'
+          : 'starting';
+
+      if (bridgeState !== lastBridgeState) {
+        log(`bridge state -> ${bridgeState} (${page.url() || 'no_url'})`);
+        lastBridgeState = bridgeState;
+      }
 
       if (!readyState.ready) {
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
@@ -436,6 +507,7 @@ async function main() {
       }
 
       const unreadResult = await ingestUnreadChats(page);
+      const activeProcessed = await ingestActiveChat(page);
       const sentCount = await processOutbox(page);
       const activeSnapshot = await getActiveChatSnapshot(page);
 
@@ -447,6 +519,7 @@ async function main() {
           unread_count: unreadResult.unreadCount || 0,
           stats: {
             processed_unread: unreadResult.processed || 0,
+            processed_active: activeProcessed || 0,
             sent_outbound: sentCount || 0
           }
         });

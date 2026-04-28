@@ -6,6 +6,7 @@ const logger = require('../config/logger');
 const { DISTRICTS } = require('../utils/constants');
 const {
   classifyWhatsappIntent,
+  suggestWhatsappAssistantReply,
   transcribeAudioFromUrl,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
@@ -21,6 +22,7 @@ const {
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
+const { isLlmEnabled } = require('../services/llmProvider');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -272,6 +274,196 @@ function tt(lang, key, vars = {}) {
     msg = msg.replaceAll(`{${k}}`, String(v));
   });
   return msg;
+}
+
+function getUgandaDayPart(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Kampala',
+    hour: 'numeric',
+    hour12: false
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value || 0);
+  if (hour < 12) return 'morning';
+  if (hour < 17) return 'afternoon';
+  return 'evening';
+}
+
+function timeGreeting(lang, date = new Date()) {
+  const code = resolveLangCode(lang);
+  const part = getUgandaDayPart(date);
+  const greetings = {
+    en: { morning: 'Good morning', afternoon: 'Good afternoon', evening: 'Good evening' },
+    lg: { morning: 'Wasuze otya', afternoon: 'Osiibye otya', evening: 'Osiibye otya' },
+    sw: { morning: 'Habari za asubuhi', afternoon: 'Habari za mchana', evening: 'Habari za jioni' },
+    ac: { morning: 'Itye nining i odiko', afternoon: 'Itye nining i dye ceng', evening: 'Itye nining i otyeno' },
+    ny: { morning: 'Oraire ota', afternoon: 'Osiibire ota', evening: 'Osiibire ota' },
+    rn: { morning: 'Mwaramutse', afternoon: 'Mwiriwe', evening: 'Mwiriwe' },
+    sm: { morning: 'Wasuze otya', afternoon: 'Osiibye otya', evening: 'Osiibye otya' }
+  };
+  return (greetings[code] || greetings.en)[part] || greetings.en[part];
+}
+
+function assistantIntro(lang) {
+  const code = resolveLangCode(lang);
+  const intros = {
+    en: "I'm your MakaUg property assistant in your pocket.",
+    lg: 'Nze MakaUg assistant wo ow\'eby\'amaka ku WhatsApp.',
+    sw: 'Mimi ni msaidizi wako wa MakaUg wa mali kwenye WhatsApp.',
+    ac: 'An aye MakaUg property assistant mamegi i WhatsApp.',
+    ny: 'Ndi MakaUg property assistant yaawe aha WhatsApp.',
+    rn: 'Ndi assistant wawe wa MakaUg kuri WhatsApp.',
+    sm: 'Nze MakaUg assistant wo ow\'eby\'amaka ku WhatsApp.'
+  };
+  return intros[code] || intros.en;
+}
+
+function welcomeMessage(lang) {
+  const code = resolveLangCode(lang);
+  return `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\n${t(code, 'welcome')}\n\nBrowse MakaUg anytime: ${HOME_URL}`;
+}
+
+function detectLanguageFromText(text) {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return { code: '', confidence: 0 };
+
+  const rules = [
+    { code: 'sw', confidence: 0.92, re: /\b(habari|mambo|niaje|tafuta|nyumba|kupangisha|kuuza|bei|asante|karibu)\b/ },
+    { code: 'lg', confidence: 0.9, re: /\b(oli otya|wasuze|osiibye|webale|noonya|nfunira|nyumba|enju|ttaka|okupangisa)\b/ },
+    { code: 'sm', confidence: 0.86, re: /\b(mirembe|noonia|amaka|ebifa|lusoga)\b/ },
+    { code: 'ac', confidence: 0.88, re: /\b(itye|apwoyo|yeny|nongo|gang|ot|acholi)\b/ },
+    { code: 'ny', confidence: 0.86, re: /\b(oraire|osiibire|webare|shaka|nyowe|runyankole)\b/ },
+    { code: 'rn', confidence: 0.84, re: /\b(mwaramutse|mwiriwe|murakoze|shaka|rukiga)\b/ },
+    { code: 'en', confidence: 0.7, re: /\b(hello|hi|good morning|good afternoon|good evening|rent|buy|house|property|agent|broker|land)\b/ }
+  ];
+
+  for (const rule of rules) {
+    if (rule.re.test(clean)) return { code: rule.code, confidence: rule.confidence };
+  }
+
+  return { code: '', confidence: 0 };
+}
+
+function resolveDetectedLanguage({ text, sessionLang = 'en', intentResult = null }) {
+  const entityLang = resolveLangCode(intentResult?.entities?.language || '');
+  if (intentResult?.entities?.language && entityLang) {
+    return { code: entityLang, confidence: 0.95, source: 'intent_entity' };
+  }
+
+  const heuristic = detectLanguageFromText(text);
+  if (heuristic.code && heuristic.confidence >= 0.84) {
+    return { ...heuristic, source: 'heuristic' };
+  }
+
+  return { code: resolveLangCode(sessionLang), confidence: 0.5, source: 'session' };
+}
+
+function appendSiteNudge(lang, message, url = HOME_URL) {
+  const code = resolveLangCode(lang);
+  if (!message || String(message).includes('http')) return message;
+  const nudges = {
+    en: `\n\nOpen MakaUg: ${url}`,
+    lg: `\n\nGgulawo MakaUg: ${url}`,
+    sw: `\n\nFungua MakaUg: ${url}`,
+    ac: `\n\nYab MakaUg: ${url}`,
+    ny: `\n\nGuraho MakaUg: ${url}`,
+    rn: `\n\nFungura MakaUg: ${url}`,
+    sm: `\n\nGgulawo MakaUg: ${url}`
+  };
+  return `${message}${nudges[code] || nudges.en}`;
+}
+
+function isGreetingText(text) {
+  const clean = normalizeInput(text).toLowerCase().replace(/[!?.]+$/g, '').trim();
+  if (!clean) return false;
+  const compact = clean.replace(/\s+/g, ' ');
+  if (compact.length > 80) return false;
+  return [
+    /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)$/,
+    /^(habari|mambo|niaje|jambo|sasa|salama)$/,
+    /^(oli otya|wasuze otya|osiibye otya|gyebale|mulembe|mirembe)$/,
+    /^(itye nining|apwoyo|kopango)$/,
+    /^(oraire ota|osiibire ota|agandi|webare)$/,
+    /^(mwaramutse|mwiriwe|amakuru|muraho)$/
+  ].some((rule) => rule.test(compact));
+}
+
+function friendlyGreetingReply(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala" or share your location.`,
+    lg: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`,
+    sw: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala" au kushare location yako.`,
+    ac: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
+    ny: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
+    rn: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
+    sm: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`
+  };
+  return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function friendlyUnknownReply(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `I can help with that. Tell me what you need in one sentence, or pick:\n1️⃣ List a property\n2️⃣ Search properties\n3️⃣ Find an agent\n\nExample: "rent in Muyenga under 2m"`,
+    lg: `Nsobola okukuyamba. Mpandiikira ky'oyagala mu sentence emu, oba londa:\n1️⃣ Listing y'ennyumba\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent`,
+    sw: `Naweza kusaidia. Niambie unahitaji nini kwa sentensi moja, au chagua:\n1️⃣ Orodhesha mali\n2️⃣ Tafuta mali\n3️⃣ Tafuta agent`,
+    ac: `Aromo konyi. Waca gin ma imito i lok acel, onyo yer:\n1️⃣ Ket property\n2️⃣ Yeny property\n3️⃣ Nong agent`,
+    ny: `Ninkubaasa kukuyamba. Ngambira eki orikwenda omu sentence emwe, ninga toorana:\n1️⃣ Handiika property\n2️⃣ Shaka property\n3️⃣ Shaka agent`,
+    rn: `Ninkubaasa kubafasha. Mumbwire icyo mushaka mu nteruro imwe, cyangwa muhitemo:\n1️⃣ Shyira propertyho\n2️⃣ Shaka property\n3️⃣ Shaka agent`,
+    sm: `Nsobola okukuyamba. Mpandiikira ky'oyagala mu sentence emu, oba londa:\n1️⃣ Listing y'ennyumba\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent`
+  };
+  return `${messages[code] || messages.en}\n\n${HOME_URL}`;
+}
+
+async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {
+  if (!isLlmEnabled()) {
+    return friendlyUnknownReply(lang);
+  }
+
+  const inferredRoute = intentMenuRoute(intentResult?.intent);
+  const linkByRoute = {
+    listing_type: `${HOME_URL}/#page-list-property`,
+    search_type: `${HOME_URL}/#page-search`,
+    agent_area: `${HOME_URL}/#page-brokers`,
+    agent_registration: `${HOME_URL}/#page-brokers`,
+    mortgage_help: `${HOME_URL}/#page-mortgage`,
+    account_help: `${HOME_URL}/#page-account`,
+    report_listing: `${HOME_URL}/#page-report`,
+    support: `${HOME_URL}/#page-contact`
+  };
+
+  try {
+    const reply = await suggestWhatsappAssistantReply({
+      userMessage: body,
+      intent: intentResult?.intent || 'unknown',
+      language: lang,
+      source: 'whatsapp_conversation_fallback',
+      context: {
+        phone,
+        step,
+        confidence: intentResult?.confidence || 0,
+        entities: intentResult?.entities || {},
+        currentFlow: sessionData?.pending_intent_confirmation ? 'confirming_intent' : 'main_menu',
+        assistantRole: 'friendly property assistant in the user pocket',
+        supportedActions: [
+          'search approved MakaUg listings',
+          'start a property listing',
+          'find a verified agent',
+          'accept shared location for nearby property search',
+          'save no-match property requests for follow-up'
+        ],
+        preferredLink: linkByRoute[inferredRoute] || HOME_URL
+      }
+    });
+
+    if (reply?.text && reply.model && !reply.model.startsWith('template')) {
+      return reply.text;
+    }
+  } catch (error) {
+    logger.warn('WhatsApp conversational fallback failed:', error.message);
+  }
+
+  return friendlyUnknownReply(lang);
 }
 
 function humanHandoffAck(lang) {
@@ -1620,6 +1812,18 @@ function formatAgentSearchMessage(lang, rows, location) {
   return lines.join('\n');
 }
 
+function formatNoMatchReply(lang, preferredArea = '') {
+  const code = resolveLangCode(lang);
+  const area = normalizeInput(preferredArea);
+  const areaText = area ? ` in *${area}*` : '';
+  const messages = {
+    en: `I do not have an approved match${areaText} right now. I have saved this request so MakaUg can follow up when a matching listing appears.\n\nBrowse live listings: ${HOME_URL}\n${t(code, 'menuHint')}`,
+    lg: `Sifunye listing ekakasiddwa${areaText} kati. Nterese okusaba kuno MakaUg esobole okukuddamu nga listing efaanana efunye.\n\nLaba listings: ${HOME_URL}\n${t(code, 'menuHint')}`,
+    sw: `Sijapata tangazo lililoidhinishwa${areaText} kwa sasa. Nimehifadhi ombi hili ili MakaUg ikujulishe likipatikana.\n\nTazama matangazo: ${HOME_URL}\n${t(code, 'menuHint')}`
+  };
+  return messages[code] || messages.en;
+}
+
 function intentRouteLabel(route) {
   const labels = {
     listing_type: 'list a property',
@@ -1659,7 +1863,7 @@ function menuRouteReply(lang, route) {
       nextStep: 'main_menu'
     };
   }
-  return { message: t(lang, 'welcome'), nextStep: 'main_menu' };
+  return { message: welcomeMessage(lang), nextStep: 'main_menu' };
 }
 
 function intentMenuRoute(intent) {
@@ -1699,7 +1903,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (!STEPS.includes(step)) {
     await updateSession(phone, { current_step: 'greeting' });
-    return respond(t(lang, 'chooseLanguage'), 'choose_language');
+    return respond(welcomeMessage(lang), 'main_menu');
   }
 
   if (bodyUpper === 'RESET' || bodyUpper === 'RESTART') {
@@ -1730,12 +1934,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (bodyUpper === 'MENU' || bodyUpper === 'HOME') {
-    return respond(t(lang, 'welcome'), 'main_menu');
+    return respond(welcomeMessage(lang), 'main_menu');
   }
 
   // GREETING
   if (step === 'greeting') {
-    return respond(t(lang, 'chooseLanguage'), 'choose_language');
+    if (isGreetingText(cleanBody)) {
+      return respond(friendlyGreetingReply(lang), 'main_menu');
+    }
+    return respond(`${friendlyGreetingReply(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
   // CHOOSE LANGUAGE
@@ -1744,7 +1951,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const chosen = langMap[cleanBody] || 'en';
     await updateSession(phone, { language: chosen });
     await clearSessionData(phone);
-    return respond(t(chosen, 'welcome'), 'main_menu');
+    return respond(welcomeMessage(chosen), 'main_menu');
   }
 
   // MAIN MENU
@@ -1763,7 +1970,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
       if (isNegativeReply(cleanBody)) {
         await patchSessionData(phone, { pending_intent_confirmation: null });
-        return respond(`${t(lang, 'welcome')}\n\n${t(lang, 'menuHint')}`, 'main_menu');
+        return respond(`${welcomeMessage(lang)}\n\n${t(lang, 'menuHint')}`, 'main_menu');
       }
 
       return respond(
@@ -1776,6 +1983,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
+
+    if (isGreetingText(cleanBody)) {
+      return respond(friendlyGreetingReply(lang), 'main_menu');
+    }
 
     const naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
@@ -1826,10 +2037,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: naturalFilters.area,
           notes: `No approved listings found for natural query: ${cleanBody}`
         });
-        return respond(
-          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
-          'main_menu'
-        );
+        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
       }
 
       const fxNote = naturalFilters.convertedFromUsd
@@ -1870,7 +2078,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(next.message, next.nextStep);
     }
 
-    return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'welcome'), 'main_menu');
+    return respond(
+      await conversationalAssistantFallback({
+        phone,
+        body: cleanBody,
+        lang,
+        step,
+        intentResult,
+        sessionData
+      }),
+      'main_menu'
+    );
   }
 
   // SEARCH TYPE
@@ -1931,10 +2149,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         preferredArea: naturalFilters.area,
         notes: `No approved listings found for natural query: ${cleanBody}`
       });
-      return respond(
-        `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
-        'main_menu'
-      );
+      return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
     }
 
     return respond(
@@ -1982,10 +2197,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: locationText,
           notes: 'No approved listings found from shared location search.'
         });
-        return respond(
-          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
-          'main_menu'
-        );
+        return respond(formatNoMatchReply(lang, locationText), 'main_menu');
       }
 
       const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
@@ -2029,10 +2241,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           preferredArea: naturalFilters.area,
           notes: `No approved listings found for natural query in search_area: ${cleanBody}`
         });
-        return respond(
-          `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
-          'main_menu'
-        );
+        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
       }
       return respond(
         `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
@@ -2058,10 +2267,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         preferredArea: cleanBody,
         notes: 'No approved listings found from typed area search.'
       });
-      return respond(
-        `${t(lang, 'searchNoResults')}\n\n${tt(lang, 'visitMoreListings', { url: HOME_URL })}\n${t(lang, 'menuHint')}`,
-        'main_menu'
-      );
+      return respond(formatNoMatchReply(lang, cleanBody), 'main_menu');
     }
 
     return respond(formatPropertySearchMessage(lang, rows, cleanBody, searchType), 'main_menu');
@@ -2312,7 +2518,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // SUBMITTED (restart)
   if (step === 'submitted') {
     await clearSessionData(phone);
-    return respond(t(lang, 'welcome'), 'main_menu');
+    return respond(welcomeMessage(lang), 'main_menu');
   }
 
   return respond(t(lang, 'invalidInput'), step);
@@ -2383,13 +2589,27 @@ async function processInboundRuntime({
     step: sessionStep,
     sessionData: session.session_data || {}
   });
+  const detectedLanguage = resolveDetectedLanguage({
+    text: effectiveBody,
+    sessionLang,
+    intentResult
+  });
+  const runtimeLang = detectedLanguage.code || sessionLang;
+  if (
+    runtimeLang
+    && runtimeLang !== sessionLang
+    && detectedLanguage.source !== 'session'
+    && Number(detectedLanguage.confidence || 0) >= 0.84
+  ) {
+    await updateSession(phone, { language: runtimeLang });
+  }
 
   await logIntent({
     userPhone: phone,
     waMessageId: inboundMessageId,
     detectedIntent: intentResult.intent,
     confidence: intentResult.confidence,
-    language: sessionLang,
+    language: runtimeLang,
     currentStep: sessionStep,
     rawText: body,
     transcript: transcriptRecord?.text || null,
@@ -2403,7 +2623,7 @@ async function processInboundRuntime({
   if (shouldPauseAutomation) {
     await updateSession(phone, { current_step: sessionStep, current_intent: intentResult.intent || null });
     await upsertWhatsappUserProfile(phone, {
-      preferredLanguage: sessionLang,
+      preferredLanguage: runtimeLang,
       metadata: {
         last_intent: intentResult.intent || 'unknown',
         last_step: sessionStep,
@@ -2414,7 +2634,7 @@ async function processInboundRuntime({
       phone,
       direction: 'inbound',
       intent: intentResult.intent,
-      preferredLanguage: sessionLang,
+      preferredLanguage: runtimeLang,
       currentStep: sessionStep,
       provider,
       messageType,
@@ -2424,7 +2644,7 @@ async function processInboundRuntime({
       }
     });
 
-    return { message: humanHandoffAck(sessionLang), nextStep: sessionStep };
+    return { message: humanHandoffAck(runtimeLang), nextStep: sessionStep };
   }
 
   const { message, nextStep } = await processMessage(
@@ -2438,7 +2658,7 @@ async function processInboundRuntime({
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
   const refreshedSession = await getSession(phone);
   await upsertWhatsappUserProfile(phone, {
-    preferredLanguage: refreshedSession.language || sessionLang,
+    preferredLanguage: refreshedSession.language || runtimeLang,
     metadata: {
       last_intent: intentResult.intent || 'unknown',
       last_step: nextStep
@@ -2449,7 +2669,7 @@ async function processInboundRuntime({
     phone,
     direction: 'inbound',
     intent: intentResult.intent,
-    preferredLanguage: refreshedSession.language || sessionLang,
+    preferredLanguage: refreshedSession.language || runtimeLang,
     currentStep: nextStep,
     provider,
     messageType,

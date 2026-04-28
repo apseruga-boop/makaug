@@ -41,6 +41,7 @@ Add these to the machine running the bridge:
 - `WHATSAPP_WEB_COPILOT_OPERATOR_NAME=Arthur`
 - `WHATSAPP_WEB_COPILOT_CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - `WHATSAPP_WEB_COPILOT_PROFILE_DIR=.whatsapp-web-copilot-profile`
+- `WHATSAPP_WEB_COPILOT_CDP_URL=http://127.0.0.1:9222` (optional, for attaching to an already-running Chrome)
 
 The backend and the bridge must share the same:
 
@@ -57,6 +58,22 @@ The backend and the bridge must share the same:
 4. Chrome will open WhatsApp Web.
 5. Scan the QR code once.
 6. Leave that Chrome window open.
+
+### Attach to an existing Chrome session
+
+If WhatsApp Web is already logged in inside a normal Chrome profile, start Chrome with remote debugging enabled:
+
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222
+```
+
+Then run the bridge with:
+
+```bash
+WHATSAPP_WEB_COPILOT_CDP_URL=http://127.0.0.1:9222 npm run dev:whatsapp-web
+```
+
+When `WHATSAPP_WEB_COPILOT_CDP_URL` is set, the bridge attaches to that browser instead of launching its own persistent profile.
 
 ## Admin workflow
 
