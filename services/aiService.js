@@ -313,7 +313,7 @@ function heuristicIntent(text) {
   if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
-  if (/(find|search|looking|rent|buy|sale|house|apartment|property|near me|area|nyumba|plot|ttaka|enju|ot|ot me)/.test(t)) {
+  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|near me|area|nyumba|plot|ttaka|enju|ot|ot me)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {

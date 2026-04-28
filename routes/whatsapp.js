@@ -2075,6 +2075,41 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         'search_area'
       );
     }
+
+    if (naturalFilters.hasSignal && naturalFilters.area) {
+      const rows = await findPropertiesByNaturalFilters(naturalFilters);
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: naturalFilters.searchType || 'any',
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType: naturalFilters.searchType || 'any',
+          preferredArea: naturalFilters.area,
+          notes: `No approved listings found for natural query: ${cleanBody}`
+        });
+        await patchSessionData(phone, {
+          last_no_match: {
+            search_type: naturalFilters.searchType || 'any',
+            area: naturalFilters.area,
+            query: cleanBody,
+            created_at: new Date().toISOString()
+          }
+        });
+        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+      }
+
+      return respond(
+        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        'main_menu'
+      );
+    }
   }
 
   const canSwitchFlow = globalRoute
