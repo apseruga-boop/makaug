@@ -212,7 +212,14 @@ async function getActiveChatSnapshot(page) {
       return null;
     };
 
-    const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
+      if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
+      return !!el.querySelector('img, video, audio');
+    });
+    const nodes = [...copyNodes, ...mediaOnlyNodes]
+      .filter((el, idx, arr) => arr.indexOf(el) === idx)
+      .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     const last = nodes[nodes.length - 1];
     if (!last) {
       return {
@@ -225,7 +232,10 @@ async function getActiveChatSnapshot(page) {
       };
     }
 
-    const pre = last.getAttribute('data-pre-plain-text') || '';
+    const copyNode = last.matches('div.copyable-text[data-pre-plain-text]')
+      ? last
+      : last.querySelector('div.copyable-text[data-pre-plain-text]');
+    const pre = copyNode?.getAttribute('data-pre-plain-text') || '';
     const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
     const senderLabel = pre
       .replace(/^\[[^\]]+\]\s*/, '')
@@ -253,13 +263,13 @@ async function getActiveChatSnapshot(page) {
     });
     const hasNonEmojiImage = nonEmojiImages.length > 0;
     const extraImageMatch = text.match(/\+(\d+)/);
-    const mediaCount = hasNonEmojiImage ? Math.max(nonEmojiImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
+    const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
     const sharedLocation = extractSharedLocation(last);
     const mediaType = sharedLocation
       ? 'location'
-      : hasNonEmojiImage && isTimestampOnlyText(text)
+      : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
         ? 'location_preview'
-        : last.querySelector('img')
+      : last.querySelector('img')
       ? 'image'
       : last.querySelector('audio')
         ? 'voice'
@@ -270,7 +280,7 @@ async function getActiveChatSnapshot(page) {
     return {
       chatKey: resolvedChatKey,
       contactName,
-      text,
+      text: text || (mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
       timestampLabel,
       messageId,
       direction,
@@ -322,11 +332,21 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       return null;
     };
 
-    const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
+      if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
+      return !!el.querySelector('img, video, audio');
+    });
+    const nodes = [...copyNodes, ...mediaOnlyNodes]
+      .filter((el, idx, arr) => arr.indexOf(el) === idx)
+      .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     return nodes
       .slice(-Math.max(1, maxItems))
       .map((node) => {
-        const pre = node.getAttribute('data-pre-plain-text') || '';
+        const copyNode = node.matches('div.copyable-text[data-pre-plain-text]')
+          ? node
+          : node.querySelector('div.copyable-text[data-pre-plain-text]');
+        const pre = copyNode?.getAttribute('data-pre-plain-text') || '';
         const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
         const senderLabel = pre
           .replace(/^\[[^\]]+\]\s*/, '')
@@ -348,11 +368,11 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         });
         const hasNonEmojiImage = nonEmojiImages.length > 0;
         const extraImageMatch = rawText.match(/\+(\d+)/);
-        const mediaCount = hasNonEmojiImage ? Math.max(nonEmojiImages.length, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
+        const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
         const sharedLocation = extractSharedLocation(node);
         const mediaType = sharedLocation
           ? 'location'
-          : hasNonEmojiImage && isTimestampOnlyText(rawText)
+          : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
             ? 'location_preview'
             : node.querySelector('audio')
           ? 'voice'
@@ -387,7 +407,10 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           mediaCount
         };
       })
-      .filter((item) => item.direction === 'in' && item.chatKey && item.text);
+      .filter((item) => item.chatKey && item.text && (
+        item.direction === 'in'
+        || (item.direction === 'unknown' && item.mediaType && item.mediaType !== 'text')
+      ));
   }, limit);
 }
 

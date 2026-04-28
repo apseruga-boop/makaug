@@ -1086,7 +1086,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 950000000,
     price_period: '',
     primary_image_url: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80',
-    property_url: `${HOME_URL}/#page-sale`
+    property_url: `${HOME_URL}/property/1`
   },
   {
     id: 'website-seed-2',
@@ -1100,7 +1100,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 5500000,
     price_period: 'mo',
     primary_image_url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=900&q=80',
-    property_url: `${HOME_URL}/#page-rent`
+    property_url: `${HOME_URL}/property/2`
   },
   {
     id: 'website-seed-3',
@@ -1114,7 +1114,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 450000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/3`
   },
   {
     id: 'website-seed-4',
@@ -1128,7 +1128,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 12000000,
     price_period: 'mo',
     primary_image_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=80',
-    property_url: `${HOME_URL}/#page-commercial`
+    property_url: `${HOME_URL}/property/4`
   },
   {
     id: 'website-seed-5',
@@ -1142,7 +1142,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 120000000,
     price_period: '',
     primary_image_url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80',
-    property_url: `${HOME_URL}/#page-land`
+    property_url: `${HOME_URL}/property/5`
   },
   {
     id: 'website-seed-6',
@@ -1156,7 +1156,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 1800000,
     price_period: 'mo',
     primary_image_url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=900&q=80',
-    property_url: `${HOME_URL}/#page-rent`
+    property_url: `${HOME_URL}/property/6`
   },
   {
     id: 'website-seed-7',
@@ -1170,7 +1170,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 480000000,
     price_period: '',
     primary_image_url: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80',
-    property_url: `${HOME_URL}/#page-sale`
+    property_url: `${HOME_URL}/property/7`
   },
   {
     id: 'website-seed-8',
@@ -1184,7 +1184,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 185000000,
     price_period: '',
     primary_image_url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80',
-    property_url: `${HOME_URL}/#page-land`
+    property_url: `${HOME_URL}/property/8`
   },
   {
     id: 'website-seed-9',
@@ -1198,7 +1198,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 800000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1494526585095-c41746248156?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/9`
   },
   {
     id: 'website-seed-10',
@@ -1212,7 +1212,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 300000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/10`
   },
   {
     id: 'website-seed-11',
@@ -1226,7 +1226,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 1200000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/11`
   },
   {
     id: 'website-seed-12',
@@ -1240,7 +1240,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 350000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/12`
   },
   {
     id: 'website-seed-13',
@@ -1254,7 +1254,7 @@ const WEBSITE_PUBLIC_LISTINGS = [
     price: 500000,
     price_period: 'sem',
     primary_image_url: 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=900&q=80',
-    property_url: `${HOME_URL}/#page-students`
+    property_url: `${HOME_URL}/property/13`
   }
 ];
 

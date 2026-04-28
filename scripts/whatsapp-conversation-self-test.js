@@ -128,7 +128,7 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land'],
+        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land', 'https://makaug.com/property/8'],
         excludes: ['do not have an approved exact match', 'Seeta QA']
       }
     ]
@@ -139,7 +139,7 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land'],
+        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land', 'https://makaug.com/property/8'],
         excludes: ['do not have an approved exact match', 'Seeta QA']
       }
     ]
