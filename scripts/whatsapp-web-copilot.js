@@ -236,6 +236,21 @@ async function getActiveChatSnapshot(page) {
       ? last
       : last.querySelector('div.copyable-text[data-pre-plain-text]');
     const pre = copyNode?.getAttribute('data-pre-plain-text') || '';
+    let fallbackChatKey = '';
+    let fallbackContactName = '';
+    for (const node of copyNodes) {
+      if (node === last || (node.compareDocumentPosition(last) & Node.DOCUMENT_POSITION_PRECEDING)) continue;
+      const nodePre = node.getAttribute('data-pre-plain-text') || '';
+      const nodeSender = nodePre
+        .replace(/^\[[^\]]+\]\s*/, '')
+        .replace(/:\s*$/, '')
+        .trim();
+      const nodeDigits = phoneLike(nodeSender);
+      if (nodeDigits) {
+        fallbackChatKey = nodeDigits;
+        fallbackContactName = nodeSender;
+      }
+    }
     const timestampLabel = (pre.match(/^\[(.*?)\]/) || [])[1] || '';
     const senderLabel = pre
       .replace(/^\[[^\]]+\]\s*/, '')
@@ -243,10 +258,10 @@ async function getActiveChatSnapshot(page) {
       .trim();
     const senderDigits = phoneLike(senderLabel);
     const headerDigits = phoneLike(headerTitle);
-    const resolvedChatKey = senderDigits || headerDigits || headerTitle || senderLabel;
+    const resolvedChatKey = senderDigits || headerDigits || fallbackChatKey || headerTitle || senderLabel;
     const contactName = senderDigits
       ? headerTitle
-      : (headerDigits ? senderLabel : (headerTitle || senderLabel));
+      : (headerDigits ? senderLabel : (fallbackContactName || headerTitle || senderLabel));
     const text = (last.innerText || last.textContent || '').trim();
     const messageId = last.closest('[data-id]')?.getAttribute('data-id')
       || last.getAttribute('data-id')
@@ -340,9 +355,10 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     const nodes = [...copyNodes, ...mediaOnlyNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-    return nodes
-      .slice(-Math.max(1, maxItems))
-      .map((node) => {
+    const snapshots = [];
+    let lastInboundChatKey = '';
+    let lastInboundContactName = '';
+    nodes.forEach((node) => {
         const copyNode = node.matches('div.copyable-text[data-pre-plain-text]')
           ? node
           : node.querySelector('div.copyable-text[data-pre-plain-text]');
@@ -390,23 +406,30 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
               : '');
         const senderDigits = phoneLike(senderLabel);
         const headerDigits = phoneLike(headerTitle);
-        const resolvedChatKey = senderDigits || headerDigits || headerTitle || senderLabel;
+        const resolvedChatKey = senderDigits || headerDigits || lastInboundChatKey || headerTitle || senderLabel;
         const contactName = senderDigits
           ? headerTitle
-          : (headerDigits ? senderLabel : (headerTitle || senderLabel));
-        return {
+          : (headerDigits ? senderLabel : (lastInboundContactName || headerTitle || senderLabel));
+        const inferredDirection = senderDigits ? 'in' : direction;
+        if (senderDigits) {
+          lastInboundChatKey = senderDigits;
+          lastInboundContactName = senderLabel;
+        }
+        snapshots.push({
           chatKey: resolvedChatKey,
           contactName,
           text,
           timestampLabel,
           messageId,
-          direction,
+          direction: inferredDirection,
           mediaType,
           mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
           sharedLocation,
           mediaCount
-        };
-      })
+        });
+      });
+    return snapshots
+      .slice(-Math.max(1, maxItems))
       .filter((item) => item.chatKey && item.text && (
         item.direction === 'in'
         || (item.direction === 'unknown' && item.mediaType && item.mediaType !== 'text')
