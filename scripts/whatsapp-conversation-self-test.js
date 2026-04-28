@@ -119,6 +119,14 @@ const scenarios = [
     ]
   },
   {
+    name: 'District-only Kampala search mirrors website district search',
+    messages: ['2', 'Kampala'],
+    expect: [
+      { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Browse live listings', 'request', 'property/'], excludes: ['What are you looking for?'] }
+    ]
+  },
+  {
     name: 'Full rent sentence inside search menu searches directly',
     messages: ['2', 'House to rent in Kampala'],
     expect: [
@@ -230,7 +238,7 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
       'DONE'
     ],
-    expectLast: { step: 'ask_id_number', includesAny: ['National ID', 'NIN'] }
+    expectLast: { step: 'ask_public_name', includesAny: ['public contact name', 'Amina'] }
   },
   {
     name: 'Listing photo flow keeps language switch in place',
@@ -266,7 +274,33 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://album', mediaType: 'image', mediaCount: 5 },
       'DONE'
     ],
-    expectLast: { step: 'ask_id_number', includesAny: ['National ID', 'NIN'] }
+    expectLast: { step: 'ask_public_name', includesAny: ['public contact name', 'Amina'] }
+  },
+  {
+    name: 'Listing contact details continue after photos to OTP',
+    messages: [
+      '1',
+      '1',
+      '1',
+      'Family house in Kololo',
+      'Kampala',
+      'Kololo',
+      '250000000',
+      '3',
+      'A bright family home with parking, security, kitchen, and garden.',
+      { body: '[image]', mediaType: 'image', mediaCount: 1 },
+      { mediaUrl: 'whatsapp-web://living-room', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://bedroom', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
+      'DONE',
+      'Amina',
+      '1',
+      '+256760112587',
+      'CM1234567890ABCD',
+      { mediaUrl: 'whatsapp-web://selfie', mediaType: 'image' }
+    ],
+    expectLast: { step: 'verify_otp', includesAny: ['6-digit code', 'SMS'] }
   },
   {
     name: 'Commercial listing reaches commercial details',
