@@ -230,6 +230,7 @@ const scenarios = [
       'Oli otya',
       '1',
       '1',
+      '1',
       'House in Kololo',
       'Wakiso',
       'Kololo',
@@ -237,6 +238,7 @@ const scenarios = [
       '3',
       '30000',
       'Carry on the conversation in English',
+      'A clean home close to the main road with parking and security.',
       { mediaUrl: 'whatsapp-web://front', mediaType: 'image' }
     ],
     expect: [
@@ -249,7 +251,8 @@ const scenarios = [
       { step: 'price' },
       { step: 'bedrooms' },
       { step: 'description', includesAny: ['Wandiika', 'description'] },
-      { step: 'photos', includesAny: ['Language updated', 'front/outside'], excludes: ['main menu'] },
+      { step: 'description', includesAny: ['Language updated', 'Describe'], excludes: ['main menu'] },
+      { step: 'photos', includesAny: ['front/outside'], excludes: ['main menu'] },
       { step: 'photos', includesAny: ['Photo 1', 'sitting room'], excludes: ['Ekifaananyi'] }
     ]
   },

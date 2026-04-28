@@ -2201,6 +2201,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
+  if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
+    const next = menuRouteReply(lang, globalRoute);
+    return respond(next.message, next.nextStep);
+  }
+
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
     const keywords = extractAgentSearchKeywords(cleanBody, sessionData);
     const rows = await findAgentsForWhatsappKeywords(keywords);
@@ -2464,6 +2469,29 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SEARCH TYPE
   if (step === 'search_type') {
+    if (isAnyAreaReply(cleanBody)) {
+      const rows = await findPropertiesForWhatsapp('any', '');
+      await patchSessionData(phone, { search_type: 'any', pending_search_filters: null });
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: 'any',
+        queryText: cleanBody,
+        location: null,
+        resultRows: rows,
+        usedNearestFallback: false
+      });
+      if (!rows.length) {
+        await createNoMatchLead({
+          userPhone: phone,
+          searchType: 'any',
+          preferredArea: 'any',
+          notes: 'No approved listings found from broad WhatsApp search type.'
+        });
+        return respond(formatNoMatchReply(lang, 'any area'), 'main_menu');
+      }
+      return respond(formatPropertySearchMessage(lang, rows, 'Any area', 'any'), 'main_menu');
+    }
+
     const searchType = mapSearchTypeInput(cleanBody);
     if (searchType) {
       await patchSessionData(phone, { search_type: searchType });
