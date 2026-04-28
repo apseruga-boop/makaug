@@ -1386,7 +1386,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
-       SELECT url
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
        FROM property_images
        WHERE property_id = p.id
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC
@@ -1734,7 +1734,7 @@ async function findPropertiesForWhatsapp(searchType, location) {
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
-       SELECT url
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
        FROM property_images
        WHERE property_id = p.id
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC
@@ -1763,7 +1763,7 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
             p.bedrooms, p.bathrooms, p.property_type, img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
-       SELECT url
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
        FROM property_images
        WHERE property_id = p.id
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC
@@ -1863,7 +1863,7 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
-       SELECT url
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
        FROM property_images
        WHERE property_id = p.id
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC
@@ -2109,6 +2109,83 @@ async function createNoMatchLead({
   );
 }
 
+function safePublicPreviewUrl(value) {
+  const url = normalizeInput(value);
+  if (!/^https?:\/\//i.test(url)) return '';
+  if (url.length > 500) return '';
+  return url;
+}
+
+async function findBroaderPropertyFallback(filters = {}) {
+  const searchType = normalizeListingType(filters.searchType || 'any');
+  const area = normalizeInput(filters.area || filters.preferredArea || '');
+  const propertyType = normalizeInput(filters.propertyType || '');
+  const attempts = [];
+
+  if (searchType !== 'any' && area) {
+    attempts.push(() => findPropertiesByNaturalFilters({
+      ...filters,
+      searchType: 'any',
+      propertyType: propertyType || null
+    }));
+  }
+  if (area) attempts.push(() => findPropertiesForWhatsapp('any', area));
+  if (searchType !== 'any') attempts.push(() => findPropertiesForWhatsapp(searchType, ''));
+  attempts.push(() => findPropertiesForWhatsapp('any', ''));
+
+  for (const attempt of attempts) {
+    const rows = await attempt();
+    if (rows.length) return rows;
+  }
+  return [];
+}
+
+async function formatNoMatchOrFallbackReply({
+  lang,
+  userPhone,
+  searchType = 'any',
+  area = '',
+  queryText = '',
+  notes = '',
+  filters = {}
+}) {
+  const normalizedSearchType = normalizeListingType(searchType || filters.searchType || 'any');
+  const preferredArea = normalizeInput(area || filters.area || '') || 'any';
+  await createNoMatchLead({
+    userPhone,
+    searchType: normalizedSearchType,
+    preferredArea,
+    notes
+  });
+  await patchSessionData(userPhone, {
+    last_no_match: {
+      search_type: normalizedSearchType,
+      area: preferredArea,
+      query: queryText,
+      created_at: new Date().toISOString()
+    }
+  });
+
+  const fallbackRows = await findBroaderPropertyFallback({
+    ...filters,
+    searchType: normalizedSearchType,
+    area: preferredArea === 'any' ? '' : preferredArea
+  });
+
+  if (!fallbackRows.length) return formatNoMatchReply(lang, preferredArea === 'any' ? 'any area' : preferredArea);
+
+  const exactLabel = typeLabel(normalizedSearchType, lang);
+  const locationLabel = preferredArea === 'any' ? 'any area' : preferredArea;
+  return [
+    `I do not have an approved exact match for *${exactLabel}* in *${locationLabel}* right now.`,
+    'I have saved this request so MakaUg can follow up when a matching listing appears.',
+    '',
+    'While we look, here are live MakaUg listings that may still help:',
+    '',
+    formatPropertySearchMessage(lang, fallbackRows, preferredArea === 'any' ? 'Any area' : preferredArea, 'any')
+  ].join('\n');
+}
+
 function formatPropertySearchMessage(lang, rows, location, searchType) {
   const lines = [];
   lines.push('🟩🟨 *MakaUg Matchboard* 🟨🟩');
@@ -2128,7 +2205,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     if (Number.isFinite(Number(r.distance_km))) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }
-    if (r.primary_image_url) lines.push(`   🖼️ Preview: ${r.primary_image_url}`);
+    const previewUrl = safePublicPreviewUrl(r.primary_image_url);
+    if (previewUrl) lines.push(`   🖼️ Preview: ${previewUrl}`);
     lines.push(`   🔗 View photos, map and enquire: ${HOME_URL}/property/${r.id}`);
     lines.push('━━━━━━━━━━━━━━');
   });
@@ -2399,21 +2477,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       });
 
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          preferredArea: naturalFilters.area,
+          area: naturalFilters.area,
+          queryText: cleanBody,
+          filters: naturalFilters,
           notes: `No approved listings found for natural query: ${cleanBody}`
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: naturalFilters.searchType || 'any',
-            area: naturalFilters.area,
-            query: cleanBody,
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+        return respond(reply, 'main_menu');
       }
 
       return respond(
@@ -2548,21 +2621,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       });
 
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          preferredArea: naturalFilters.area,
+          area: naturalFilters.area,
+          queryText: cleanBody,
+          filters: naturalFilters,
           notes: `No approved listings found for natural query: ${cleanBody}`
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: naturalFilters.searchType || 'any',
-            area: naturalFilters.area,
-            query: cleanBody,
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+        return respond(reply, 'main_menu');
       }
 
       const fxNote = naturalFilters.convertedFromUsd
@@ -2649,21 +2717,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          preferredArea: naturalFilters.area,
+          area: naturalFilters.area,
+          queryText: cleanBody,
+          filters: naturalFilters,
           notes: `No approved listings found for natural query in search_type: ${cleanBody}`
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: naturalFilters.searchType || 'any',
-            area: naturalFilters.area,
-            query: cleanBody,
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+        return respond(reply, 'main_menu');
       }
       return respond(
         `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
@@ -2683,13 +2746,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: 'any',
-          preferredArea: 'any',
+          area: 'any',
+          queryText: cleanBody,
           notes: 'No approved listings found from broad WhatsApp search type.'
         });
-        return respond(formatNoMatchReply(lang, 'any area'), 'main_menu');
+        return respond(reply, 'main_menu');
       }
       return respond(formatPropertySearchMessage(lang, rows, 'Any area', 'any'), 'main_menu');
     }
@@ -2712,21 +2777,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: 'any',
-          preferredArea: cleanBody,
+          area: cleanBody,
+          queryText: cleanBody,
           notes: `No approved listings found for location-only WhatsApp search: ${cleanBody}`
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: 'any',
-            area: cleanBody,
-            query: cleanBody,
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, cleanBody), 'main_menu');
+        return respond(reply, 'main_menu');
       }
       return respond(formatPropertySearchMessage(lang, rows, cleanBody, 'any'), 'main_menu');
     }
@@ -2768,21 +2827,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     });
 
     if (!rows.length) {
-      await createNoMatchLead({
+      const reply = await formatNoMatchOrFallbackReply({
+        lang,
         userPhone: phone,
         searchType: naturalFilters.searchType || 'any',
-        preferredArea: naturalFilters.area,
+        area: naturalFilters.area,
+        queryText: cleanBody,
+        filters: naturalFilters,
         notes: `No approved listings found for natural query: ${cleanBody}`
       });
-      await patchSessionData(phone, {
-        last_no_match: {
-          search_type: naturalFilters.searchType || 'any',
-          area: naturalFilters.area,
-          query: cleanBody,
-          created_at: new Date().toISOString()
-        }
-      });
-      return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+      return respond(reply, 'main_menu');
     }
 
     return respond(
@@ -2821,13 +2875,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType,
-          preferredArea: 'any',
+          area: 'any',
+          queryText: cleanBody,
           notes: 'No approved listings found from broad WhatsApp search.'
         });
-        return respond(formatNoMatchReply(lang, 'any area'), 'main_menu');
+        return respond(reply, 'main_menu');
       }
       return respond(formatPropertySearchMessage(lang, rows, 'Any area', searchType), 'main_menu');
     }
@@ -2859,21 +2915,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: near.usedNearestFallback
       });
       if (!near.rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: pendingFilters?.searchType || searchType,
-          preferredArea: locationText,
+          area: locationText,
+          queryText: 'shared_location',
+          filters: pendingFilters || { searchType },
           notes: 'No approved listings found from shared location search.'
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: pendingFilters?.searchType || searchType,
-            area: locationText,
-            query: 'shared_location',
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, locationText), 'main_menu');
+        return respond(reply, 'main_menu');
       }
 
       const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
@@ -2911,21 +2962,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         usedNearestFallback: false
       });
       if (!rows.length) {
-        await createNoMatchLead({
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
           userPhone: phone,
           searchType: naturalFilters.searchType || 'any',
-          preferredArea: naturalFilters.area,
+          area: naturalFilters.area,
+          queryText: cleanBody,
+          filters: naturalFilters,
           notes: `No approved listings found for natural query in search_area: ${cleanBody}`
         });
-        await patchSessionData(phone, {
-          last_no_match: {
-            search_type: naturalFilters.searchType || 'any',
-            area: naturalFilters.area,
-            query: cleanBody,
-            created_at: new Date().toISOString()
-          }
-        });
-        return respond(formatNoMatchReply(lang, naturalFilters.area), 'main_menu');
+        return respond(reply, 'main_menu');
       }
       return respond(
         `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
@@ -2945,21 +2991,15 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     });
 
     if (!rows.length) {
-      await createNoMatchLead({
+      const reply = await formatNoMatchOrFallbackReply({
+        lang,
         userPhone: phone,
         searchType,
-        preferredArea: cleanBody,
+        area: cleanBody,
+        queryText: cleanBody,
         notes: 'No approved listings found from typed area search.'
       });
-      await patchSessionData(phone, {
-        last_no_match: {
-          search_type: searchType,
-          area: cleanBody,
-          query: cleanBody,
-          created_at: new Date().toISOString()
-        }
-      });
-      return respond(formatNoMatchReply(lang, cleanBody), 'main_menu');
+      return respond(reply, 'main_menu');
     }
 
     return respond(formatPropertySearchMessage(lang, rows, cleanBody, searchType), 'main_menu');
@@ -3096,6 +3136,85 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // PHOTOS
   if (step === 'photos') {
+    if (!mediaUrl && cleanBody && bodyUpper !== 'DONE') {
+      let naturalFilters = await resolveNaturalSearchFilters({
+        text: cleanBody,
+        entities: intentResult?.entities || {},
+        fallbackType: 'any',
+        language: lang,
+        sessionData
+      });
+      if (!naturalFilters.hasSignal || !naturalFilters.area) {
+        const fallbackFilters = fallbackNaturalSearchSentence(cleanBody);
+        if (fallbackFilters.hasSignal && fallbackFilters.area) {
+          naturalFilters = {
+            ...naturalFilters,
+            ...fallbackFilters,
+            hasSignal: true
+          };
+        }
+      }
+
+      const likelySearch = ['property_search', 'looking_for_property_lead'].includes(intentResult?.intent)
+        || /\b(looking for|search|find|need|student accommodation|house|home|apartment|flat|land|commercial|rent|buy)\b/i.test(cleanBody);
+
+      if (likelySearch || naturalFilters.hasSignal) {
+        await patchSessionData(phone, {
+          interrupted_step: 'photos',
+          interrupted_at: new Date().toISOString(),
+          interrupted_by_intent: 'property_search',
+          interrupted_text: cleanBody,
+          listing_draft_saved: true,
+          search_type: naturalFilters.searchType || 'any',
+          pending_search_filters: naturalFilters.hasSignal ? naturalFilters : null,
+          natural_query_text: cleanBody
+        });
+
+        const draftNote = 'I have kept your listing draft safe.';
+        if (naturalFilters.useSharedLocation) {
+          return respond(
+            `${draftNote}\n\n📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+            'search_area'
+          );
+        }
+
+        if (!naturalFilters.area) {
+          return respond(
+            `${draftNote}\n\n🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+            'search_area'
+          );
+        }
+
+        const rows = await findPropertiesByNaturalFilters(naturalFilters);
+        await logPropertySearchRequest({
+          userPhone: phone,
+          searchType: naturalFilters.searchType || 'any',
+          queryText: cleanBody,
+          location: null,
+          resultRows: rows,
+          usedNearestFallback: false
+        });
+
+        if (!rows.length) {
+          const reply = await formatNoMatchOrFallbackReply({
+            lang,
+            userPhone: phone,
+            searchType: naturalFilters.searchType || 'any',
+            area: naturalFilters.area,
+            queryText: cleanBody,
+            filters: naturalFilters,
+            notes: `No approved listings found for natural query during photo upload: ${cleanBody}`
+          });
+          return respond(`${draftNote}\n\n${reply}`, 'main_menu');
+        }
+
+        return respond(
+          `${draftNote}\n\n${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+          'main_menu'
+        );
+      }
+    }
+
     if (bodyUpper === 'DONE' && !mediaUrl) {
       const currentPhotos = draft.photos || [];
       if (currentPhotos.length < 5) return respond(t(lang, 'needExactlyFivePhotos'), 'photos');

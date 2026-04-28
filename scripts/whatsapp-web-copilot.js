@@ -25,7 +25,7 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const POLL_MS = Math.max(1200, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 1500));
+const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 
 if (!BRIDGE_TOKEN) {
@@ -165,7 +165,7 @@ async function openChatByIndex(page, index) {
     const locator = page.locator(selector).nth(index);
     if (await locator.count()) {
       await locator.click();
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(350);
       return true;
     }
   }
@@ -479,7 +479,7 @@ async function openChatForReply(page, recipient) {
     await page.goto(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}`, {
       waitUntil: 'domcontentloaded'
     });
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(700);
     return true;
   }
 
@@ -498,19 +498,19 @@ async function openChatForReply(page, recipient) {
         await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
         await page.keyboard.press('Backspace');
         await page.keyboard.type(chatKey, { delay: 20 });
-        await page.waitForTimeout(900);
+        await page.waitForTimeout(350);
 
         const exactTitle = page.locator(`span[title="${chatKey.replace(/"/g, '\\"')}"]`).first();
         if (await exactTitle.count()) {
           await exactTitle.click();
-          await page.waitForTimeout(900);
+          await page.waitForTimeout(350);
           return true;
         }
 
         const row = page.locator('[data-testid="cell-frame-container"], div[role="listitem"]').first();
         if (await row.count()) {
           await row.click();
-          await page.waitForTimeout(900);
+          await page.waitForTimeout(350);
           return true;
         }
       } catch (_error) {
@@ -541,7 +541,7 @@ async function typeAndSendReply(page, text) {
         break;
       }
     }
-    if (!composer) await page.waitForTimeout(500);
+    if (!composer) await page.waitForTimeout(250);
   }
 
   if (!composer) {
@@ -552,7 +552,7 @@ async function typeAndSendReply(page, text) {
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
   await page.keyboard.insertText(String(text || ''));
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(120);
 
   const sendSelectors = [
     '[data-testid="compose-btn-send"]',
@@ -565,13 +565,13 @@ async function typeAndSendReply(page, text) {
     const button = page.locator(selector).last();
     if (await button.count()) {
       await button.click();
-      await page.waitForTimeout(700);
+      await page.waitForTimeout(250);
       return true;
     }
   }
 
   await page.keyboard.press('Enter');
-  await page.waitForTimeout(700);
+  await page.waitForTimeout(250);
   return true;
 }
 

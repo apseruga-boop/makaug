@@ -99,7 +99,24 @@ const scenarios = [
     name: 'Student accommodation in Kampala searches like the website',
     messages: ['I need student accommodation in Kampala'],
     expect: [
-      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'], excludes: ['Wandiika', 'Onoonya'] }
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'student', 'Kampala'], excludes: ['Wandiika', 'Onoonya', 'data:image'] }
+    ]
+  },
+  {
+    name: 'Student accommodation any area does not dead-end',
+    messages: ['Do you have any student accommodation', 'Any area'],
+    expect: [
+      { step: 'search_area', includesAny: ['area', 'district'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'saved this request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Search menu student Kampala falls back to live listings when exact is empty',
+    messages: ['2', '4', 'Kampala'],
+    expect: [
+      { step: 'search_type', includes: ['What are you looking for?', 'Student accommodation'] },
+      { step: 'search_area', includesAny: ['area', 'district'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'saved this request'], excludes: ['data:image'] }
     ]
   },
   {
@@ -108,6 +125,97 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'] },
       { step: 'main_menu', includesAny: ['filtered too narrowly', 'admin', 'live website', 'listings'] }
+    ]
+  },
+  {
+    name: 'Photo upload step can switch to property search without losing draft',
+    messages: [
+      '1',
+      '1',
+      '1',
+      'Family house in Kololo',
+      'Kampala',
+      'Kololo',
+      '250000000',
+      '3',
+      'A bright family home with parking, security, kitchen, and garden.',
+      'Looking for student accommodation'
+    ],
+    expectLast: { step: 'search_area', includesAny: ['kept your listing draft safe', 'area', 'district'], excludes: ['front/outside photo'] }
+  },
+  {
+    name: 'English language search path works',
+    messages: ['Hello', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'search_type', includesAny: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Luganda language search path works',
+    messages: ['Hello', '9', '2', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Luganda'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['Onoonya', 'looking for'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Kiswahili language search path works',
+    messages: ['Hello', '9', '3', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Kiswahili'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['Tafuta', 'looking for'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Acholi language search path works',
+    messages: ['Hello', '9', '4', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Acholi'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Runyankole language search path works',
+    messages: ['Hello', '9', '5', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Runyankole'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Rukiga language search path works',
+    messages: ['Hello', '9', '6', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Rukiga'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+    ]
+  },
+  {
+    name: 'Lusoga language search path works',
+    messages: ['Hello', '9', '7', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['English', 'Lusoga'] },
+      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'search_type', includesAny: ['looking for', 'For sale'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
     ]
   },
   {
