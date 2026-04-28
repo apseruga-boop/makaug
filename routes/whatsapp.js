@@ -2139,7 +2139,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
-  if (globalRoute === 'search_type' && ['greeting', 'main_menu'].includes(step) && cleanBody.length > 3) {
+  if (['greeting', 'main_menu'].includes(step) && cleanBody.length > 3) {
     const naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
@@ -2148,7 +2148,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       sessionData
     });
 
-    if (naturalFilters.hasSignal && !naturalFilters.area) {
+    if (!naturalFilters.hasSignal) {
+      // Let non-search intents, greetings, and free-form support messages continue through the normal router.
+    } else if (!naturalFilters.area) {
       await patchSessionData(phone, {
         search_type: naturalFilters.searchType || 'any',
         pending_search_filters: naturalFilters,
@@ -2158,9 +2160,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         `🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
         'search_area'
       );
-    }
-
-    if (naturalFilters.hasSignal && naturalFilters.area) {
+    } else {
       const rows = await findPropertiesByNaturalFilters(naturalFilters);
       await logPropertySearchRequest({
         userPhone: phone,
