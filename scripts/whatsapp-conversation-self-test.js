@@ -79,7 +79,7 @@ const scenarios = [
     name: 'Property search with area returns results or saves no-match lead',
     messages: ['2', 'Muyenga'],
     expect: [
-      { step: 'search_type', includes: ['Onoonya', 'Ebitundibwa'] },
+      { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
       { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request'] }
     ]
   },
@@ -165,7 +165,7 @@ const scenarios = [
     expectLast: { step: 'description', includesAny: ['Describe your property'] }
   },
   {
-    name: 'Student listing asks nearest university',
+    name: 'Student listing captures university then asks distance',
     messages: [
       '1',
       '4',
@@ -174,9 +174,11 @@ const scenarios = [
       'Kampala',
       'Wandegeya',
       '800000',
+      'Makerere University',
+      '0.8',
       '1'
     ],
-    expectLast: { step: 'ask_university', includesAny: ['nearest university'] }
+    expectLast: { step: 'description', includesAny: ['Describe your property'] }
   },
   {
     name: 'Out-of-country support request routes to human support',
