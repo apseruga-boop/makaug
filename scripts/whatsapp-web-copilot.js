@@ -182,7 +182,7 @@ async function getActiveChatSnapshot(page) {
         chatKey,
         text: '',
         timestampLabel: '',
-        messageOrdinal: 0,
+        messageId: '',
         mediaType: 'text'
       };
     }
@@ -195,6 +195,9 @@ async function getActiveChatSnapshot(page) {
       .trim();
     const resolvedChatKey = chatKey || senderLabel;
     const text = (last.innerText || last.textContent || '').trim();
+    const messageId = last.closest('[data-id]')?.getAttribute('data-id')
+      || last.getAttribute('data-id')
+      || '';
     const direction = last.closest('.message-out')
       ? 'out'
       : last.closest('.message-in')
@@ -212,7 +215,7 @@ async function getActiveChatSnapshot(page) {
       chatKey: resolvedChatKey,
       text,
       timestampLabel,
-      messageOrdinal: nodes.length,
+      messageId,
       direction,
       mediaType
     };
@@ -227,7 +230,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   if (!chatKey || !text) return { processed: 0, skipped: 'missing_chat_or_text' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
 
-  const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageOrdinal || '');
+  const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
 
   try {
     const result = await apiRequest('/api/whatsapp/web-bridge/inbound', {
