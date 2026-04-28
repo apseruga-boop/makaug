@@ -171,15 +171,20 @@ async function openChatByIndex(page, index) {
 async function getActiveChatSnapshot(page) {
   return page.evaluate(() => {
     const header = document.querySelector('header');
-    const chatKey = header?.querySelector('span[title]')?.getAttribute('title')
+    const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
       || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
       || '';
+    const phoneLike = (value) => {
+      const digits = String(value || '').replace(/\D/g, '');
+      return digits.length >= 7 ? digits : '';
+    };
 
     const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const last = nodes[nodes.length - 1];
     if (!last) {
       return {
-        chatKey,
+        chatKey: headerTitle,
+        contactName: headerTitle,
         text: '',
         timestampLabel: '',
         messageId: '',
@@ -193,7 +198,12 @@ async function getActiveChatSnapshot(page) {
       .replace(/^\[[^\]]+\]\s*/, '')
       .replace(/:\s*$/, '')
       .trim();
-    const resolvedChatKey = chatKey || senderLabel;
+    const senderDigits = phoneLike(senderLabel);
+    const headerDigits = phoneLike(headerTitle);
+    const resolvedChatKey = senderDigits || headerDigits || headerTitle || senderLabel;
+    const contactName = senderDigits
+      ? headerTitle
+      : (headerDigits ? senderLabel : (headerTitle || senderLabel));
     const text = (last.innerText || last.textContent || '').trim();
     const messageId = last.closest('[data-id]')?.getAttribute('data-id')
       || last.getAttribute('data-id')
@@ -213,11 +223,13 @@ async function getActiveChatSnapshot(page) {
 
     return {
       chatKey: resolvedChatKey,
+      contactName,
       text,
       timestampLabel,
       messageId,
       direction,
-      mediaType
+      mediaType,
+      mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`
     };
   });
 }
@@ -225,9 +237,13 @@ async function getActiveChatSnapshot(page) {
 async function getRecentIncomingSnapshots(page, limit = 20) {
   return page.evaluate((maxItems) => {
     const header = document.querySelector('header');
-    const chatKey = header?.querySelector('span[title]')?.getAttribute('title')
+    const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
       || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => (el.textContent || '').trim()).find(Boolean)
       || '';
+    const phoneLike = (value) => {
+      const digits = String(value || '').replace(/\D/g, '');
+      return digits.length >= 7 ? digits : '';
+    };
 
     const nodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     return nodes
@@ -262,8 +278,15 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
             : mediaType === 'media'
               ? '[media]'
               : '');
+        const senderDigits = phoneLike(senderLabel);
+        const headerDigits = phoneLike(headerTitle);
+        const resolvedChatKey = senderDigits || headerDigits || headerTitle || senderLabel;
+        const contactName = senderDigits
+          ? headerTitle
+          : (headerDigits ? senderLabel : (headerTitle || senderLabel));
         return {
-          chatKey: chatKey || senderLabel,
+          chatKey: resolvedChatKey,
+          contactName,
           text,
           timestampLabel,
           messageId,
@@ -300,6 +323,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         created_at: snapshot.timestampLabel || new Date().toISOString(),
         metadata: {
           chat_title: snapshot.chatKey || row.title,
+          contact_name: snapshot.contactName || row.title || '',
           unread_preview: row.preview || '',
           source
         }

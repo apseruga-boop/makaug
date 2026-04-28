@@ -317,9 +317,39 @@ function assistantIntro(lang) {
   return intros[code] || intros.en;
 }
 
-function welcomeMessage(lang) {
+function cleanDisplayName(value) {
+  const raw = normalizeInput(value);
+  if (!raw) return '';
+  const withoutBusinessSuffix = raw
+    .replace(/\s*\|\s*.+$/g, '')
+    .replace(/\s*-\s*MakaUg.*$/i, '')
+    .trim();
+  const digits = withoutBusinessSuffix.replace(/\D/g, '');
+  if (digits.length >= 7) return '';
+  if (/^(makaug|makaug\.com|whatsapp|you|unknown)$/i.test(withoutBusinessSuffix)) return '';
+  if (/^https?:\/\//i.test(withoutBusinessSuffix)) return '';
+  return withoutBusinessSuffix.replace(/[^\p{L}\p{N}\s'.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+function firstNameFromSessionData(sessionData = {}) {
+  const name = cleanDisplayName(
+    sessionData.contact_name
+    || sessionData.display_name
+    || sessionData.name
+    || sessionData.profile_name
+  );
+  if (!name) return '';
+  return name.split(/\s+/)[0];
+}
+
+function timeGreetingWithName(lang, sessionData = {}) {
+  const firstName = firstNameFromSessionData(sessionData);
+  return `${timeGreeting(lang)}${firstName ? `, ${firstName}` : ''}`;
+}
+
+function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
-  return `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\n${t(code, 'welcome')}\n\nBrowse MakaUg anytime: ${HOME_URL}`;
+  return `${timeGreetingWithName(code, sessionData)} 👋 ${assistantIntro(code)}\n\n${t(code, 'welcome')}\n\nBrowse MakaUg anytime: ${HOME_URL}`;
 }
 
 function detectLanguageFromText(text) {
@@ -333,7 +363,7 @@ function detectLanguageFromText(text) {
     { code: 'ac', confidence: 0.88, re: /\b(itye|apwoyo|yeny|nongo|gang|ot|acholi)\b/ },
     { code: 'ny', confidence: 0.86, re: /\b(oraire|osiibire|webare|shaka|nyowe|runyankole)\b/ },
     { code: 'rn', confidence: 0.84, re: /\b(mwaramutse|mwiriwe|murakoze|shaka|rukiga)\b/ },
-    { code: 'en', confidence: 0.7, re: /\b(hello|hi|good morning|good afternoon|good evening|rent|buy|house|property|agent|broker|land)\b/ }
+    { code: 'en', confidence: 0.9, re: /\b(hello|hi|hey|good morning|good afternoon|good evening|search|looking|need|want|rent|buy|house|home|property|agent|broker|land|commercial|student|accommodation|hostel|apartment|flat)\b/ }
   ];
 
   for (const rule of rules) {
@@ -387,16 +417,36 @@ function isGreetingText(text) {
   ].some((rule) => rule.test(compact));
 }
 
-function friendlyGreetingReply(lang) {
+function parseLanguageChange(text) {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return '';
+  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk)\s+(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+)?(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)\b/);
+  const direct = clean.match(/^(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)$/);
+  const value = (explicit || direct || [])[1] || '';
+  const map = {
+    english: 'en',
+    luganda: 'lg',
+    kiswahili: 'sw',
+    swahili: 'sw',
+    acholi: 'ac',
+    runyankole: 'ny',
+    rukiga: 'rn',
+    lusoga: 'sm'
+  };
+  return map[value] || '';
+}
+
+function friendlyGreetingReply(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
+  const lead = timeGreetingWithName(code, sessionData);
   const messages = {
-    en: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala" or share your location.`,
-    lg: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`,
-    sw: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala" au kushare location yako.`,
-    ac: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
-    ny: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
-    rn: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
-    sm: `${timeGreeting(code)} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`
+    en: `${lead} 👋 ${assistantIntro(code)}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala" or share your location.`,
+    lg: `${lead} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`,
+    sw: `${lead} 👋 ${assistantIntro(code)}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala" au kushare location yako.`,
+    ac: `${lead} 👋 ${assistantIntro(code)}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
+    ny: `${lead} 👋 ${assistantIntro(code)}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
+    rn: `${lead} 👋 ${assistantIntro(code)}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
+    sm: `${lead} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
 }
@@ -1230,6 +1280,12 @@ async function findPropertiesByNaturalFilters(filters = {}) {
       OR area ILIKE $${qIdx}
       OR title ILIKE $${qIdx}
       OR COALESCE(address, '') ILIKE $${qIdx}
+      OR COALESCE(description, '') ILIKE $${qIdx}
+      OR COALESCE(extra_fields->>'city', '') ILIKE $${qIdx}
+      OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${qIdx}
+      OR COALESCE(extra_fields->>'street_name', '') ILIKE $${qIdx}
+      OR COALESCE(extra_fields->>'region', '') ILIKE $${qIdx}
+      OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
     )`;
   }
 
@@ -1521,7 +1577,18 @@ async function findPropertiesForWhatsapp(searchType, location) {
 
   values.push(`%${location}%`);
   const likeIdx = values.length;
-  where += ` AND (district ILIKE $${likeIdx} OR area ILIKE $${likeIdx} OR title ILIKE $${likeIdx})`;
+  where += ` AND (
+    district ILIKE $${likeIdx}
+    OR area ILIKE $${likeIdx}
+    OR title ILIKE $${likeIdx}
+    OR COALESCE(address, '') ILIKE $${likeIdx}
+    OR COALESCE(description, '') ILIKE $${likeIdx}
+    OR COALESCE(extra_fields->>'city', '') ILIKE $${likeIdx}
+    OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${likeIdx}
+    OR COALESCE(extra_fields->>'street_name', '') ILIKE $${likeIdx}
+    OR COALESCE(extra_fields->>'region', '') ILIKE $${likeIdx}
+    OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${likeIdx}
+  )`;
 
   const result = await db.query(
     `SELECT id, title, listing_type, district, area, price, price_period
@@ -1626,6 +1693,13 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
       district ILIKE $${areaIdx}
       OR area ILIKE $${areaIdx}
       OR title ILIKE $${areaIdx}
+      OR COALESCE(address, '') ILIKE $${areaIdx}
+      OR COALESCE(description, '') ILIKE $${areaIdx}
+      OR COALESCE(extra_fields->>'city', '') ILIKE $${areaIdx}
+      OR COALESCE(extra_fields->>'neighborhood', '') ILIKE $${areaIdx}
+      OR COALESCE(extra_fields->>'street_name', '') ILIKE $${areaIdx}
+      OR COALESCE(extra_fields->>'region', '') ILIKE $${areaIdx}
+      OR COALESCE(extra_fields->>'resolved_location_label', '') ILIKE $${areaIdx}
     )`;
   }
 
@@ -2001,7 +2075,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (!STEPS.includes(step)) {
     await updateSession(phone, { current_step: 'greeting' });
-    return respond(welcomeMessage(lang), 'main_menu');
+    return respond(welcomeMessage(lang, sessionData), 'main_menu');
   }
 
   if (bodyUpper === 'RESET' || bodyUpper === 'RESTART') {
@@ -2011,6 +2085,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (bodyUpper === 'LANG' || bodyUpper === 'LANGUAGE') {
     return respond(`${t(lang, 'languageUpdated')}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
+  }
+
+  const languageSwitch = parseLanguageChange(cleanBody);
+  if (languageSwitch) {
+    await updateSession(phone, { language: languageSwitch, current_step: 'main_menu' });
+    await patchSessionData(phone, {
+      language_changed_at: new Date().toISOString(),
+      language_changed_from: lang
+    });
+    return respond(welcomeMessage(languageSwitch, sessionData), 'main_menu');
   }
 
   if (['STOP', 'UNSUBSCRIBE', 'OPTOUT', 'OPT-OUT'].includes(compactUpper)) {
@@ -2032,7 +2116,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (bodyUpper === 'MENU' || bodyUpper === 'HOME') {
-    return respond(welcomeMessage(lang), 'main_menu');
+    return respond(welcomeMessage(lang, sessionData), 'main_menu');
   }
 
   if (isNoMatchChallenge(cleanBody) && sessionData.last_no_match) {
@@ -2048,7 +2132,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (isGreetingText(cleanBody)) {
     if (['greeting', 'main_menu', 'submitted'].includes(step)) {
-      return respond(friendlyGreetingReply(lang), 'main_menu');
+      return respond(friendlyGreetingReply(lang, sessionData), 'main_menu');
     }
     return respond(stepReminderMessage(lang, step), step);
   }
@@ -2137,7 +2221,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
-    return respond(`${friendlyGreetingReply(lang)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
+    return respond(`${friendlyGreetingReply(lang, sessionData)}\n\n${t(lang, 'chooseLanguage')}`, 'choose_language');
   }
 
   // CHOOSE LANGUAGE
@@ -2146,7 +2230,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const chosen = langMap[cleanBody] || 'en';
     await updateSession(phone, { language: chosen });
     await clearSessionData(phone);
-    return respond(welcomeMessage(chosen), 'main_menu');
+    if (sessionData.contact_name) {
+      await patchSessionData(phone, { contact_name: sessionData.contact_name });
+    }
+    return respond(welcomeMessage(chosen, sessionData), 'main_menu');
   }
 
   // MAIN MENU
@@ -2165,7 +2252,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
       if (isNegativeReply(cleanBody)) {
         await patchSessionData(phone, { pending_intent_confirmation: null });
-        return respond(`${welcomeMessage(lang)}\n\n${t(lang, 'menuHint')}`, 'main_menu');
+        return respond(`${welcomeMessage(lang, sessionData)}\n\n${t(lang, 'menuHint')}`, 'main_menu');
       }
 
       return respond(
@@ -2749,7 +2836,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // SUBMITTED (restart)
   if (step === 'submitted') {
     await clearSessionData(phone);
-    return respond(welcomeMessage(lang), 'main_menu');
+    return respond(welcomeMessage(lang, sessionData), 'main_menu');
   }
 
   return respond(t(lang, 'invalidInput'), step);
@@ -2762,7 +2849,8 @@ async function processInboundRuntime({
   mediaUrl = null,
   mediaType = '',
   sharedLocation = null,
-  provider = 'whatsapp'
+  provider = 'whatsapp',
+  metadata = {}
 }) {
   logger.info(
     `WhatsApp message from ${phone}: "${String(body || '').substring(0, 50)}"${
@@ -2774,6 +2862,19 @@ async function processInboundRuntime({
   const sessionLang = session.language || 'en';
   const sessionStep = session.current_step || 'greeting';
   const conversationControl = await getWhatsappConversationControl(phone);
+  const inboundMetadata = metadata && typeof metadata === 'object' ? metadata : {};
+  const contactName = cleanDisplayName(
+    inboundMetadata.contact_name
+    || inboundMetadata.contactName
+    || inboundMetadata.display_name
+    || inboundMetadata.displayName
+    || inboundMetadata.profile_name
+    || inboundMetadata.chat_title
+  );
+
+  if (contactName) {
+    await patchSessionData(phone, { contact_name: contactName });
+  }
 
   let effectiveBody = normalizeInput(body);
   let transcriptRecord = null;
@@ -2800,7 +2901,8 @@ async function processInboundRuntime({
       effectiveBody,
       mediaUrl,
       mediaType: normalizedMediaType,
-      sharedLocation
+      sharedLocation,
+      metadata: inboundMetadata
     }
   });
 
@@ -2858,7 +2960,8 @@ async function processInboundRuntime({
       metadata: {
         last_intent: intentResult.intent || 'unknown',
         last_step: sessionStep,
-        automation_paused: true
+        automation_paused: true,
+        ...(contactName ? { display_name: contactName } : {})
       }
     });
     await syncWhatsappConversationState({
@@ -2892,7 +2995,8 @@ async function processInboundRuntime({
     preferredLanguage: refreshedSession.language || runtimeLang,
     metadata: {
       last_intent: intentResult.intent || 'unknown',
-      last_step: nextStep
+      last_step: nextStep,
+      ...(contactName ? { display_name: contactName } : {})
     }
   });
 
@@ -3084,6 +3188,8 @@ router.post('/web-bridge/inbound', async (req, res) => {
   const mediaType = normalizeInput(req.body.media_type || req.body.mediaType).toLowerCase();
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
   const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
+  const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+  const contactName = cleanDisplayName(req.body.contact_name || req.body.contactName || inboundMetadata.contact_name || inboundMetadata.contactName || inboundMetadata.chat_title);
   const inboundMessageId = createBridgeMessageId({
     phone,
     body,
@@ -3118,7 +3224,8 @@ router.post('/web-bridge/inbound', async (req, res) => {
       currentUrl: req.body.current_url || null,
       stats: req.body.stats || {},
       metadata: {
-        ...(req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {}),
+        ...inboundMetadata,
+        ...(contactName ? { contact_name: contactName } : {}),
         last_inbound_message_id: inboundMessageId
       }
     });
@@ -3131,7 +3238,11 @@ router.post('/web-bridge/inbound', async (req, res) => {
     mediaUrl: mediaUrl || null,
     mediaType,
     sharedLocation,
-    provider: 'web_bridge'
+    provider: 'web_bridge',
+    metadata: {
+      ...inboundMetadata,
+      ...(contactName ? { contact_name: contactName } : {})
+    }
   });
 
   let queuedReply = null;

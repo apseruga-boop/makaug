@@ -26,6 +26,13 @@ const scenarios = [
     ]
   },
   {
+    name: 'Known contact gets a personal greeting',
+    messages: [{ body: 'Hello', metadata: { contact_name: 'Andrew B' } }],
+    expect: [
+      { step: 'main_menu', includes: ['Andrew', 'property assistant'] }
+    ]
+  },
+  {
     name: 'Luganda greeting keeps language',
     messages: ['Oli otya'],
     expect: [
@@ -44,6 +51,30 @@ const scenarios = [
     messages: ['I need a 2 bedroom house to rent'],
     expect: [
       { step: 'search_area', includes: ['area', 'district'] }
+    ]
+  },
+  {
+    name: 'Two-bed Kampala search mirrors website listings',
+    messages: ['2 bed in Kampala'],
+    expect: [
+      {
+        step: 'main_menu',
+        includesAny: ['https://makaug.com/property/', 'Best matching properties', 'Browse live listings'],
+        excludes: ['do not have an approved match']
+      }
+    ]
+  },
+  {
+    name: 'User can switch back to English mid-conversation',
+    messages: ['Oli otya', 'speak English', '2'],
+    expect: [
+      { step: 'main_menu', includes: ['MakaUg assistant'] },
+      { step: 'main_menu', includes: ['property assistant', 'Browse MakaUg'] },
+      {
+        step: 'search_type',
+        includes: ['What are you looking for?', 'For sale'],
+        excludes: ['Onoonya', 'Wandiika']
+      }
     ]
   },
   {
@@ -230,7 +261,8 @@ async function sendDirect({ phone, item, index }) {
     mediaUrl: payload.mediaUrl || null,
     mediaType: payload.mediaType || '',
     sharedLocation: payload.location || null,
-    provider: 'conversation_self_test'
+    provider: 'conversation_self_test',
+    metadata: payload.metadata || {}
   });
 }
 
@@ -252,7 +284,7 @@ async function sendLiveDryRun({ phone, item, index }) {
     shared_location: payload.location || null,
     message_id: `${phone}:${index}:${crypto.randomUUID()}`,
     dry_run: true,
-    metadata: { run_id: RUN_ID, scenario_index: index }
+    metadata: { run_id: RUN_ID, scenario_index: index, ...(payload.metadata || {}) }
   });
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
