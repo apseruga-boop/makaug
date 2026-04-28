@@ -1020,6 +1020,9 @@ const AREA_ALIASES = {
   uyenga: 'Muyenga',
   mbarara: 'Mbarara',
   mbale: 'Mbale',
+  'mbale town': 'Mbale',
+  mbali: 'Mbale',
+  bali: 'Mbale',
   gulu: 'Gulu',
   lira: 'Lira',
   arua: 'Arua',
@@ -1069,6 +1072,191 @@ const REGION_DISTRICTS = {
   ],
   'greater kampala': ['Kampala', 'Wakiso', 'Mukono']
 };
+
+const WEBSITE_PUBLIC_LISTINGS = [
+  {
+    id: 'website-seed-1',
+    title: 'Luxury Villa in Kololo',
+    area: 'Kololo',
+    district: 'Kampala',
+    listing_type: 'sale',
+    property_type: 'Villa',
+    bedrooms: 5,
+    bathrooms: 4,
+    price: 950000000,
+    price_period: '',
+    primary_image_url: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80',
+    property_url: `${HOME_URL}/#page-sale`
+  },
+  {
+    id: 'website-seed-2',
+    title: '3-Bed Apartment - Nakasero',
+    area: 'Nakasero',
+    district: 'Kampala',
+    listing_type: 'rent',
+    property_type: 'Apartment',
+    bedrooms: 3,
+    bathrooms: 2,
+    price: 5500000,
+    price_period: 'mo',
+    primary_image_url: 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=900&q=80',
+    property_url: `${HOME_URL}/#page-rent`
+  },
+  {
+    id: 'website-seed-3',
+    title: 'Kikoni Student Hostel',
+    area: 'Kikoni',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Hostel',
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 450000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  },
+  {
+    id: 'website-seed-4',
+    title: 'Office Space - Ntinda',
+    area: 'Ntinda',
+    district: 'Kampala',
+    listing_type: 'commercial',
+    property_type: 'Office',
+    bedrooms: null,
+    bathrooms: 2,
+    price: 12000000,
+    price_period: 'mo',
+    primary_image_url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=80',
+    property_url: `${HOME_URL}/#page-commercial`
+  },
+  {
+    id: 'website-seed-5',
+    title: '0.5 Acre Plot - Namugongo',
+    area: 'Namugongo',
+    district: 'Wakiso',
+    listing_type: 'land',
+    property_type: 'Residential Plot',
+    bedrooms: null,
+    bathrooms: null,
+    price: 120000000,
+    price_period: '',
+    primary_image_url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80',
+    property_url: `${HOME_URL}/#page-land`
+  },
+  {
+    id: 'website-seed-6',
+    title: '2-Bed Apartment - Ntinda',
+    area: 'Ntinda',
+    district: 'Kampala',
+    listing_type: 'rent',
+    property_type: 'Apartment',
+    bedrooms: 2,
+    bathrooms: 1,
+    price: 1800000,
+    price_period: 'mo',
+    primary_image_url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=900&q=80',
+    property_url: `${HOME_URL}/#page-rent`
+  },
+  {
+    id: 'website-seed-7',
+    title: '4-Bed Home - Muyenga',
+    area: 'Muyenga',
+    district: 'Kampala',
+    listing_type: 'sale',
+    property_type: 'House',
+    bedrooms: 4,
+    bathrooms: 3,
+    price: 480000000,
+    price_period: '',
+    primary_image_url: 'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80',
+    property_url: `${HOME_URL}/#page-sale`
+  },
+  {
+    id: 'website-seed-8',
+    title: '1-Acre Commercial Plot - Mbale',
+    area: 'Mbale Town',
+    district: 'Mbale',
+    listing_type: 'land',
+    property_type: 'Commercial Land',
+    bedrooms: null,
+    bathrooms: null,
+    price: 185000000,
+    price_period: '',
+    primary_image_url: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80',
+    property_url: `${HOME_URL}/#page-land`
+  },
+  {
+    id: 'website-seed-9',
+    title: 'Wandegeya Studio Apartment',
+    area: 'Wandegeya',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Studio',
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 800000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1494526585095-c41746248156?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  },
+  {
+    id: 'website-seed-10',
+    title: "Ntinda Girls' Hostel",
+    area: 'Ntinda',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Hostel',
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 300000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1484154218962-a197022b5858?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  },
+  {
+    id: 'website-seed-11',
+    title: 'Kisaasi Student Apartment',
+    area: 'Kisaasi',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Apartment',
+    bedrooms: 2,
+    bathrooms: 1,
+    price: 1200000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  },
+  {
+    id: 'website-seed-12',
+    title: 'Budget Shared Room - Kikoni',
+    area: 'Kikoni',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Shared Room',
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 350000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1512918728675-ed5a9ecdebfd?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  },
+  {
+    id: 'website-seed-13',
+    title: 'Male Only Hostel - Kyambogo',
+    area: 'Kyambogo',
+    district: 'Kampala',
+    listing_type: 'student',
+    property_type: 'Hostel',
+    bedrooms: 1,
+    bathrooms: 1,
+    price: 500000,
+    price_period: 'sem',
+    primary_image_url: 'https://images.unsplash.com/photo-1505691938895-1758d7feb511?w=900&q=80',
+    property_url: `${HOME_URL}/#page-students`
+  }
+];
 
 function normalizeRegionKey(value) {
   const clean = normalizeInput(value)
@@ -1391,6 +1579,81 @@ function describeNaturalFilters(filters = {}) {
   return chips.join(' • ');
 }
 
+function canonicalAreaText(value) {
+  const clean = normalizeInput(value);
+  if (!clean) return '';
+  return AREA_ALIASES[clean.toLowerCase()] || clean;
+}
+
+function listingMatchesSearchType(row, searchType) {
+  const listingType = normalizeListingType(searchType || 'any');
+  if (listingType === 'any') return true;
+  if (listingType === 'student') {
+    const haystack = [
+      row.listing_type,
+      row.title,
+      row.property_type,
+      row.description
+    ].map((v) => normalizeInput(v).toLowerCase()).join(' ');
+    return row.listing_type === 'student' || /\b(student|hostel|dorm|campus)\b/i.test(haystack);
+  }
+  return row.listing_type === listingType;
+}
+
+function listingMatchesArea(row, areaValue) {
+  const area = canonicalAreaText(areaValue);
+  if (!area || area.toLowerCase() === 'any') return true;
+  const regionDistricts = getRegionDistricts(area);
+  const rowDistrict = normalizeInput(row.district);
+  if (regionDistricts.length && regionDistricts.some((d) => d.toLowerCase() === rowDistrict.toLowerCase())) return true;
+  const q = area.toLowerCase();
+  return [
+    row.area,
+    row.district,
+    row.title,
+    row.property_type
+  ].map((v) => normalizeInput(v).toLowerCase()).some((v) => v.includes(q));
+}
+
+function listingMatchesPropertyType(row, propertyType) {
+  const clean = normalizeInput(propertyType);
+  if (!clean) return true;
+  const q = clean.toLowerCase();
+  return [
+    row.property_type,
+    row.title
+  ].map((v) => normalizeInput(v).toLowerCase()).some((v) => v.includes(q));
+}
+
+function findWebsitePublicListings(filters = {}, limit = 5) {
+  const searchType = normalizeListingType(filters.searchType || 'any');
+  const area = canonicalAreaText(filters.area || filters.preferredArea || '');
+  const propertyType = normalizeInput(filters.propertyType || '');
+  const maxBudget = Number(filters.maxBudgetUgx || 0);
+  const bedsMin = Number(filters.bedsMin || 0);
+
+  return WEBSITE_PUBLIC_LISTINGS
+    .filter((row) => listingMatchesSearchType(row, searchType))
+    .filter((row) => listingMatchesArea(row, area))
+    .filter((row) => listingMatchesPropertyType(row, propertyType))
+    .filter((row) => !Number.isFinite(maxBudget) || maxBudget <= 0 || !row.price || Number(row.price) <= maxBudget)
+    .filter((row) => !Number.isFinite(bedsMin) || bedsMin <= 0 || Number(row.bedrooms || 0) >= bedsMin)
+    .slice(0, limit);
+}
+
+function mergeSearchRows(primaryRows = [], websiteRows = [], limit = 5) {
+  const rows = [];
+  const seen = new Set();
+  [...primaryRows, ...websiteRows].forEach((row) => {
+    if (!row || rows.length >= limit) return;
+    const key = normalizeInput(row.id || `${row.title}-${row.area}-${row.district}`).toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(row);
+  });
+  return rows;
+}
+
 async function findPropertiesByNaturalFilters(filters = {}) {
   const values = ['approved'];
   let where = 'WHERE status = $1';
@@ -1482,7 +1745,8 @@ async function findPropertiesByNaturalFilters(filters = {}) {
     values
   );
 
-  return result.rows;
+  const websiteRows = findWebsitePublicListings(filters, 5);
+  return mergeSearchRows(result.rows, websiteRows, 5);
 }
 
 function normalizeOptKeyword(value) {
@@ -1843,7 +2107,11 @@ async function findPropertiesForWhatsapp(searchType, location) {
     values
   );
 
-  return result.rows;
+  const websiteRows = findWebsitePublicListings({
+    searchType,
+    area: cleanLocation
+  }, 5);
+  return mergeSearchRows(result.rows, websiteRows, 5);
 }
 
 async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
@@ -2317,7 +2585,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     }
     const previewUrl = safePublicPreviewUrl(r.primary_image_url);
     if (previewUrl) lines.push(`   🖼️ Preview: ${previewUrl}`);
-    lines.push(`   🔗 View photos, map and enquire: ${HOME_URL}/property/${r.id}`);
+    const listingUrl = safePublicPreviewUrl(r.property_url || r.url) || `${HOME_URL}/property/${r.id}`;
+    lines.push(`   🔗 View photos, map and enquire: ${listingUrl}`);
     lines.push('━━━━━━━━━━━━━━');
   });
   lines.push('✨ Tap any link to open the full MakaUg page with photos, map, and enquiry options.');

@@ -123,6 +123,28 @@ const scenarios = [
     ]
   },
   {
+    name: 'Land in Mbale mirrors the website land page',
+    messages: ['Land in Mbale'],
+    expect: [
+      {
+        step: 'main_menu',
+        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land'],
+        excludes: ['do not have an approved exact match', 'Seeta QA']
+      }
+    ]
+  },
+  {
+    name: 'Land in Bali typo resolves to Mbale listings',
+    messages: ['Land in Bali'],
+    expect: [
+      {
+        step: 'main_menu',
+        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land'],
+        excludes: ['do not have an approved exact match', 'Seeta QA']
+      }
+    ]
+  },
+  {
     name: 'Greater Kampala region search uses website district grouping',
     messages: ['Show me houses in Greater Kampala'],
     expect: [
