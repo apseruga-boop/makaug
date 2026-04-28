@@ -236,25 +236,38 @@ async function sendLiveDryRun({ phone, item, index }) {
   }
 
   const payload = typeof item === 'string' ? { body: item } : item;
-  const response = await fetch(`${LIVE_BASE_URL}/api/whatsapp/web-bridge/inbound`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-whatsapp-web-bridge-token': BRIDGE_TOKEN
-    },
-    body: JSON.stringify({
-      client_id: 'makaug-conversation-self-test',
-      operator_name: 'Conversation Self Test',
-      phone,
-      body: payload.body || payload.text || '',
-      media_url: payload.mediaUrl || '',
-      media_type: payload.mediaType || '',
-      shared_location: payload.location || null,
-      message_id: `${phone}:${index}:${crypto.randomUUID()}`,
-      dry_run: true,
-      metadata: { run_id: RUN_ID, scenario_index: index }
-    })
+  let response = null;
+  let lastError = null;
+  const body = JSON.stringify({
+    client_id: 'makaug-conversation-self-test',
+    operator_name: 'Conversation Self Test',
+    phone,
+    body: payload.body || payload.text || '',
+    media_url: payload.mediaUrl || '',
+    media_type: payload.mediaType || '',
+    shared_location: payload.location || null,
+    message_id: `${phone}:${index}:${crypto.randomUUID()}`,
+    dry_run: true,
+    metadata: { run_id: RUN_ID, scenario_index: index }
   });
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      response = await fetch(`${LIVE_BASE_URL}/api/whatsapp/web-bridge/inbound`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-whatsapp-web-bridge-token': BRIDGE_TOKEN
+        },
+        body
+      });
+      break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
 
   const json = await response.json().catch(() => ({}));
   if (!response.ok || !json.ok) {
