@@ -1987,7 +1987,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
-    && globalIntentConfidence >= 0.68;
+    && globalIntentConfidence >= 0.6;
 
   if (canSwitchFlow) {
     const next = menuRouteReply(lang, globalRoute);
@@ -2908,6 +2908,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
   const mediaUrl = normalizeInput(req.body.media_url || req.body.mediaUrl);
   const mediaType = normalizeInput(req.body.media_type || req.body.mediaType).toLowerCase();
   const sharedLocation = parseInboundLocation(req.body.shared_location || req.body.location || req.body);
+  const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
   const inboundMessageId = createBridgeMessageId({
     phone,
     body,
@@ -2959,7 +2960,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
   });
 
   let queuedReply = null;
-  if (message) {
+  if (message && !dryRun) {
     queuedReply = await queueWhatsappWebBridgeAutoReply({
       phone,
       message,
@@ -2974,6 +2975,8 @@ router.post('/web-bridge/inbound', async (req, res) => {
     data: {
       inbound_message_id: inboundMessageId,
       next_step: nextStep,
+      message,
+      dry_run: dryRun,
       queued_reply: !!queuedReply,
       queue_id: queuedReply?.id || null
     }
@@ -3118,3 +3121,8 @@ router.delete('/reset/:phone', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.__test = {
+  processInboundRuntime,
+  parseInboundLocation,
+  normalizeBridgeInboundKey
+};
