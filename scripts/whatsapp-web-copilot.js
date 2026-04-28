@@ -340,6 +340,7 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const messageId = node.closest('[data-id]')?.getAttribute('data-id')
           || node.getAttribute('data-id')
           || '';
+        const rawText = (node.innerText || node.textContent || '').trim();
         const nonEmojiImages = Array.from(node.querySelectorAll('img')).filter((img) => {
           const src = img.getAttribute('src') || '';
           const alt = img.getAttribute('alt') || '';
@@ -360,7 +361,6 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
             : node.querySelector('img')
               ? 'image'
               : 'text';
-        const rawText = (node.innerText || node.textContent || '').trim();
         const text = rawText || (mediaType === 'image'
           ? '[image]'
           : mediaType === 'voice'
