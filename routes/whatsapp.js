@@ -105,6 +105,7 @@ const T = {
     typeCommercial: 'Commercial',
     typeAny: 'Any',
     voiceNotUnderstood: "🎙️ I received your voice note, but I couldn't understand it clearly. Please send it again in a clear voice, or type the message.",
+    voiceTranscriptionUnavailable: "🎙️ I received your voice note, but voice transcription is not switched on yet. Please type the message for now.",
     voiceTranscriptEcho: '🎙️ You said: "{transcript}"',
     genericSaveError: '❌ Something went wrong saving your listing. Please try again or visit {url}',
     genericWebhookError: 'Sorry, something went wrong. Please try again or visit {url}'
@@ -172,6 +173,7 @@ const T = {
     typeCommercial: 'Byobusuubuzi',
     typeAny: 'Byonna',
     voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message yo.',
+    voiceTranscriptionUnavailable: '🎙️ Nfunye voice note yo, naye transcription tennaba kukoleezebwa. Nkwegayiridde wandiika message yo kati.',
     voiceTranscriptEcho: '🎙️ Ogambye nti: "{transcript}"',
     genericSaveError: '❌ Wabaddewo ensobi mu kutereka listing yo. Gezaako nate oba genda ku {url}',
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
@@ -280,6 +282,7 @@ Object.assign(T.sw, {
   askUniversity: '🎓 Chuo kikuu kilicho karibu ni kipi?',
   askDistance: '🚶 Mali iko umbali gani kutoka chuo kikuu kwa km? (mfano 0.5, 1, 2)',
   voiceNotUnderstood: '🎙️ Nimepokea voice note yako, lakini sikuweza kuisoma vizuri. Tafadhali tuma tena kwa sauti wazi au andika ujumbe wako.',
+  voiceTranscriptionUnavailable: '🎙️ Nimepokea voice note yako, lakini transcription bado haijawashwa. Tafadhali andika ujumbe wako kwa sasa.',
   voiceTranscriptEcho: '🎙️ Umesema: "{transcript}"'
 });
 
@@ -335,6 +338,7 @@ Object.assign(T.ac, {
   typeCommercial: 'Business',
   typeAny: 'Weng',
   voiceNotUnderstood: '🎙️ Wanongo voice note mamegi, ento pe watye ki transcription maber. Tim ber icwal doki ki dwon maleng onyo coo message.',
+  voiceTranscriptionUnavailable: '🎙️ Wanongo voice note mamegi, ento transcription pe oketo i tic pwod. Tim ber coo message kombedi.',
   voiceTranscriptEcho: '🎙️ Wawinyo ni: "{transcript}"'
 });
 
@@ -365,6 +369,7 @@ Object.assign(T.ny, {
   photosUploaded: '📸 Otumire ebishushani {count}/5. Handiika *DONE* waheza 5.',
   needExactlyFivePhotos: '❌ Tuma ebishushani 5: front, sitting room, bedroom, kitchen, bathroom.',
   voiceNotUnderstood: '🎙️ Natunga voice note yaawe, kwonka tindagihurire gye. Tuma kandi n’eiraka eririkwetegyerezibwa nari ohandiike.',
+  voiceTranscriptionUnavailable: '🎙️ Natunga voice note yaawe, kwonka transcription terikukora hati. Hati, nyabura ohandiike message yaawe.',
   voiceTranscriptEcho: '🎙️ Nahurira nti: "{transcript}"'
 });
 
@@ -395,6 +400,7 @@ Object.assign(T.rn, {
   photosUploaded: '📸 Wohereje amafoto {count}/5. Andika *DONE* umaze 5.',
   needExactlyFivePhotos: '❌ Ohereza amafoto 5: front, sitting room, bedroom, kitchen, bathroom.',
   voiceNotUnderstood: '🎙️ Nakiriye voice note yawe, ariko sinayumvise neza. Ongera uyohereze uvuga neza canke wandike ubutumwa.',
+  voiceTranscriptionUnavailable: '🎙️ Nakiriye voice note yawe, ariko transcription ntirafungurwa. Ubu, ndagusavye wandike ubutumwa bwawe.',
   voiceTranscriptEcho: '🎙️ Numvise uti: "{transcript}"'
 });
 
@@ -425,6 +431,7 @@ Object.assign(T.sm, {
   photosUploaded: '📸 Oweerezza ebifaananyi {count}/5. Wandiika *DONE* bwomala 5.',
   needExactlyFivePhotos: '❌ Weereza ebifaananyi 5: front, sitting room, bedroom, kitchen, bathroom.',
   voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message.',
+  voiceTranscriptionUnavailable: '🎙️ Nfunye voice note yo, naye transcription tennaba kukoleezebwa. Nkwegayiridde wandiika message yo kati.',
   voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"'
 });
 
@@ -4307,6 +4314,7 @@ async function processInboundRuntime({
 
   let effectiveBody = normalizeInput(body);
   let transcriptRecord = null;
+  let voiceTranscriptionUnavailable = false;
   const normalizedMediaType = String(mediaType || '').toLowerCase();
   const isAudioNote = mediaUrl && (
     normalizedMediaType.startsWith('audio/')
@@ -4333,6 +4341,7 @@ async function processInboundRuntime({
         model: 'provided_voice_transcript'
       };
     } else {
+      voiceTranscriptionUnavailable = !isLlmEnabled();
       const voiceDataUrl = normalizeInput(
         inboundMetadata.voice_audio_data_url
         || inboundMetadata.audio_data_url
@@ -4345,7 +4354,9 @@ async function processInboundRuntime({
         || normalizedMediaType
         || 'audio/ogg'
       );
-      transcriptRecord = voiceDataUrl
+      transcriptRecord = voiceTranscriptionUnavailable
+        ? null
+        : voiceDataUrl
         ? await transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType)
         : (String(mediaUrl || '').startsWith('whatsapp-web://')
           ? null
@@ -4395,11 +4406,14 @@ async function processInboundRuntime({
       currentStep: sessionStep,
       rawText: body || '[voice note]',
       transcript: null,
-      entities: { media_type: normalizedMediaType || 'voice' },
-      modelUsed: 'voice_transcription_unavailable'
+      entities: {
+        media_type: normalizedMediaType || 'voice',
+        reason: voiceTranscriptionUnavailable ? 'llm_provider_not_configured' : 'transcription_empty'
+      },
+      modelUsed: voiceTranscriptionUnavailable ? 'voice_transcription_provider_missing' : 'voice_transcription_unavailable'
     });
     return {
-      message: t(voiceLang, 'voiceNotUnderstood'),
+      message: t(voiceLang, voiceTranscriptionUnavailable ? 'voiceTranscriptionUnavailable' : 'voiceNotUnderstood'),
       nextStep: sessionStep
     };
   }

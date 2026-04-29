@@ -553,6 +553,7 @@ async function hydrateVoiceSnapshot(page, snapshot) {
       };
     }
     if (audio?.skipped) {
+      log(`voice audio DOM fetch skipped for ${normalizeChatKey(snapshot.chatKey)}: ${audio.reason || 'audio_unavailable'}`);
       return {
         ...snapshot,
         voiceAudioSkipped: audio.reason || 'audio_unavailable'
@@ -570,6 +571,7 @@ async function hydrateVoiceSnapshot(page, snapshot) {
       };
     }
     if (capturedAudio?.skipped) {
+      log(`voice audio capture skipped for ${normalizeChatKey(snapshot.chatKey)}: ${capturedAudio.reason || 'audio_unavailable'}`);
       return {
         ...snapshot,
         voiceAudioSkipped: capturedAudio.reason || 'audio_unavailable'
