@@ -887,32 +887,25 @@ Return strict JSON only:
   }
 }
 
-async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
-  if (!mediaUrl) return null;
+function audioExtensionFromType(mediaType = '') {
+  const type = String(mediaType || '').toLowerCase();
+  if (type.includes('mpeg') || type.includes('mp3')) return 'mp3';
+  if (type.includes('wav')) return 'wav';
+  if (type.includes('webm')) return 'webm';
+  if (type.includes('mp4') || type.includes('m4a')) return 'm4a';
+  return 'ogg';
+}
+
+async function transcribeAudioBuffer(buffer, mediaType = 'audio/ogg', sourceMeta = {}) {
+  if (!buffer?.length) return null;
   const client = getClient();
   if (!client) return null;
 
   let model = getTaskModel('transcribe', process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-mini-transcribe');
 
   try {
-    const headers = {};
-    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-      headers.Authorization = `Basic ${auth}`;
-    } else if (process.env.WHATSAPP_ACCESS_TOKEN) {
-      headers.Authorization = `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`;
-    }
-
-    const resp = await fetch(mediaUrl, { headers });
-    if (!resp.ok) return null;
-
-    const arrayBuffer = await resp.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (!buffer.length) return null;
-
-    const ext = String(mediaType || '').includes('mpeg') ? 'mp3' : (String(mediaType || '').includes('wav') ? 'wav' : 'ogg');
+    const ext = audioExtensionFromType(mediaType);
     const fileName = `voice-note.${ext}`;
-
     const file = await toProviderFile(buffer, fileName, { type: mediaType || 'audio/ogg' });
 
     const tx = await client.audio.transcriptions.create({
@@ -932,13 +925,68 @@ async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
     await logAiModelEvent({
       eventType: 'audio_transcription',
       source: 'whatsapp',
-      inputPayload: { mediaType },
+      inputPayload: { mediaType, ...sourceMeta },
       outputPayload: { text_length: text.length },
       modelName: model,
       language: result.language
     });
 
     return result;
+  } catch (error) {
+    logger.warn('Audio transcription failed:', error.message);
+    await logAiModelEvent({
+      eventType: 'audio_transcription_error',
+      source: 'whatsapp',
+      inputPayload: { mediaType, ...sourceMeta },
+      outputPayload: {},
+      modelName: model,
+      errorMessage: error.message
+    });
+    return null;
+  }
+}
+
+async function transcribeAudioFromDataUrl(dataUrl, mediaType = 'audio/ogg') {
+  const raw = String(dataUrl || '');
+  const match = raw.match(/^data:([^;,]+)?(?:;[^,]*)?;base64,([a-z0-9+/=\s]+)$/i);
+  if (!match) return null;
+
+  const detectedType = match[1] || mediaType || 'audio/ogg';
+  const base64 = match[2].replace(/\s+/g, '');
+  const maxBytes = Math.max(256_000, Number(process.env.WHATSAPP_VOICE_MAX_BYTES || 8_000_000));
+  const approxBytes = Math.floor((base64.length * 3) / 4);
+  if (approxBytes > maxBytes) {
+    logger.warn(`WhatsApp audio transcription skipped: ${approxBytes} bytes exceeds limit ${maxBytes}.`);
+    return null;
+  }
+
+  const buffer = Buffer.from(base64, 'base64');
+  return transcribeAudioBuffer(buffer, detectedType, { source: 'web_bridge_data_url', bytes: buffer.length });
+}
+
+async function transcribeAudioFromUrl(mediaUrl, mediaType = 'audio/ogg') {
+  if (!mediaUrl) return null;
+  if (String(mediaUrl).startsWith('data:')) {
+    return transcribeAudioFromDataUrl(mediaUrl, mediaType);
+  }
+  const client = getClient();
+  if (!client) return null;
+
+  try {
+    const headers = {};
+    if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+      const auth = Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
+      headers.Authorization = `Basic ${auth}`;
+    } else if (process.env.WHATSAPP_ACCESS_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`;
+    }
+
+    const resp = await fetch(mediaUrl, { headers });
+    if (!resp.ok) return null;
+
+    const arrayBuffer = await resp.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    return transcribeAudioBuffer(buffer, mediaType, { source: 'media_url' });
   } catch (error) {
     logger.warn('Audio transcription failed:', error.message);
     await logAiModelEvent({
@@ -1382,6 +1430,7 @@ module.exports = {
   classifyWhatsappIntent,
   extractNaturalPropertyQuery,
   transcribeAudioFromUrl,
+  transcribeAudioFromDataUrl,
   generateCampaignCopy,
   generateListingIntelligence,
   suggestWhatsappAssistantReply,

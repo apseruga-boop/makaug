@@ -438,6 +438,67 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
   }, limit);
 }
 
+async function hydrateVoiceSnapshot(page, snapshot) {
+  if (!snapshot || snapshot.mediaType !== 'voice' || snapshot.voiceAudioDataUrl) return snapshot;
+  const messageId = String(snapshot.messageId || '').trim();
+  if (!messageId) return snapshot;
+
+  try {
+    const audio = await page.evaluate(async (targetMessageId) => {
+      const nodes = Array.from(document.querySelectorAll('[data-id]'));
+      const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+      if (!root) return null;
+      const audioEl = root.querySelector('audio');
+      const sourceEl = root.querySelector('audio source, source[type^="audio/"]');
+      const src = audioEl?.currentSrc || audioEl?.src || sourceEl?.src || '';
+      if (!src) return null;
+
+      const response = await fetch(src);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      const maxBytes = 8_000_000;
+      if (!blob.size || blob.size > maxBytes) {
+        return { skipped: true, reason: `audio_size_${blob.size || 0}` };
+      }
+
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('file_reader_failed'));
+        reader.readAsDataURL(blob);
+      });
+
+      return {
+        dataUrl,
+        mimeType: blob.type || audioEl?.type || 'audio/ogg',
+        bytes: blob.size
+      };
+    }, messageId);
+
+    if (audio?.dataUrl) {
+      return {
+        ...snapshot,
+        voiceAudioDataUrl: audio.dataUrl,
+        voiceAudioMimeType: audio.mimeType || 'audio/ogg',
+        voiceAudioBytes: audio.bytes || 0
+      };
+    }
+    if (audio?.skipped) {
+      return {
+        ...snapshot,
+        voiceAudioSkipped: audio.reason || 'audio_unavailable'
+      };
+    }
+  } catch (error) {
+    return {
+      ...snapshot,
+      voiceAudioError: error.message || String(error)
+    };
+  }
+
+  return snapshot;
+}
+
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
   const mediaType = snapshot.mediaType || 'text';
@@ -473,6 +534,10 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
           chat_title: snapshot.chatKey || row.title,
           contact_name: snapshot.contactName || row.title || '',
           media_count: snapshot.mediaCount || 0,
+          voice_audio_data_url: snapshot.voiceAudioDataUrl || '',
+          voice_audio_mime_type: snapshot.voiceAudioMimeType || '',
+          voice_audio_bytes: snapshot.voiceAudioBytes || 0,
+          voice_audio_error: snapshot.voiceAudioError || snapshot.voiceAudioSkipped || '',
           unread_preview: row.preview || '',
           source
         }
@@ -505,7 +570,8 @@ async function ingestUnreadChats(page) {
 
     const snapshots = await getRecentIncomingSnapshots(page);
     for (const snapshot of snapshots) {
-      const result = await ingestSnapshot({ snapshot, row, source: 'unread_scan' });
+      const hydrated = await hydrateVoiceSnapshot(page, snapshot);
+      const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
     }
   }
@@ -520,8 +586,9 @@ async function ingestActiveChat(page) {
   const snapshots = await getRecentIncomingSnapshots(page);
   let processed = 0;
   for (const snapshot of snapshots) {
+    const hydrated = await hydrateVoiceSnapshot(page, snapshot);
     const result = await ingestSnapshot({
-      snapshot,
+      snapshot: hydrated,
       row: { title: snapshot.chatKey, preview: '' },
       source: 'active_chat'
     });

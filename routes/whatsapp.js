@@ -8,6 +8,7 @@ const {
   classifyWhatsappIntent,
   suggestWhatsappAssistantReply,
   transcribeAudioFromUrl,
+  transcribeAudioFromDataUrl,
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
@@ -4118,7 +4119,23 @@ async function processInboundRuntime({
         model: 'provided_voice_transcript'
       };
     } else {
-      transcriptRecord = await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg');
+      const voiceDataUrl = normalizeInput(
+        inboundMetadata.voice_audio_data_url
+        || inboundMetadata.audio_data_url
+        || inboundMetadata.media_data_url
+      );
+      const voiceMimeType = normalizeInput(
+        inboundMetadata.voice_audio_mime_type
+        || inboundMetadata.audio_mime_type
+        || inboundMetadata.media_mime_type
+        || normalizedMediaType
+        || 'audio/ogg'
+      );
+      transcriptRecord = voiceDataUrl
+        ? await transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType)
+        : (String(mediaUrl || '').startsWith('whatsapp-web://')
+          ? null
+          : await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg'));
     }
     if (transcriptRecord?.text) effectiveBody = transcriptRecord.text;
   }
