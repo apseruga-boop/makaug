@@ -2569,6 +2569,18 @@
             <div class="text-sm text-gray-500">Broker Reviews Needed</div>
             <div id="admin-stat-not-registered-agents" class="text-3xl font-black text-amber-600 mt-1">0</div>
           </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Ad Leads</div>
+            <div id="admin-stat-ad-leads" class="text-3xl font-black text-emerald-700 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Live Ads</div>
+            <div id="admin-stat-live-ads" class="text-3xl font-black text-fuchsia-700 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Ad Revenue</div>
+            <div id="admin-stat-ad-revenue" class="text-3xl font-black text-gray-900 mt-1">UGX 0</div>
+          </div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-3">
@@ -2577,6 +2589,7 @@
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
+            <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
@@ -2737,6 +2750,38 @@
               </div>
               <div id="admin-field-agents-table" class="space-y-3"></div>
             </div>
+          </div>
+        </div>
+
+        <div data-admin-tab-panel="ads" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Advertising Inquiries</h3>
+              <p class="text-xs text-gray-500 mt-1">Lead pipeline, package fit, payment status, campaign dates, and revenue tracking.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Ads</button>
+          </div>
+          <div id="admin-advertising-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div class="grid xl:grid-cols-[1fr,0.85fr] gap-5">
+            <div>
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <h4 class="text-lg font-bold text-gray-800">New Advertiser Leads</h4>
+                <span class="text-xs text-gray-500">Create a campaign from an inquiry, then mark paid/live.</span>
+              </div>
+              <div id="admin-ad-inquiries-table" class="space-y-3"></div>
+            </div>
+            <div>
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <h4 class="text-lg font-bold text-gray-800">Campaign Control</h4>
+                <span class="text-xs text-gray-500">Manual payment reference, live dates, and performance.</span>
+              </div>
+              <div id="admin-ad-campaigns-table" class="space-y-3"></div>
+            </div>
+          </div>
+          <div class="mt-5 border border-gray-200 bg-gray-50 rounded-2xl p-4">
+            <h4 class="text-lg font-bold text-gray-800">Package Menu</h4>
+            <p class="text-xs text-gray-500 mt-1">Default rate card. Edit prices later in the catalog service when the commercial model changes.</p>
+            <div id="admin-ad-packages-grid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
           </div>
         </div>
 
@@ -3922,6 +3967,10 @@
     let adminPropertyRequests = [];
     let adminFieldAgents = [];
     let adminCurrentCampaigns = [];
+    let adminAdvertisingPackages = [];
+    let adminAdvertisingSummary = {};
+    let adminAdvertisingInquiries = [];
+    let adminAdvertisingCampaigns = [];
     let adminWhatsappSummary = {};
     let adminWhatsappConversations = [];
     let adminWhatsappActivePhone = "";
@@ -7642,7 +7691,7 @@
     }
 
     function setAdminWorkflowTab(tab = "review") {
-      const allowed = ["review", "actioned", "live", "accounts", "whatsapp", "listings"];
+      const allowed = ["review", "actioned", "live", "accounts", "ads", "whatsapp", "listings"];
       activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
       document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -7678,7 +7727,7 @@
       if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
       if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
       if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
@@ -7688,6 +7737,10 @@
         apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
         apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }),
         apiRequest("/api/admin/campaigns?limit=20", { headers }),
+        apiRequest("/api/admin/advertising/packages", { headers }),
+        apiRequest("/api/admin/advertising/summary", { headers }),
+        apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }),
+        apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }),
         apiRequest("/api/admin/whatsapp/insights", { headers }),
         apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers })
       ]);
@@ -7704,6 +7757,10 @@
       adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
       adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
       adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
+      adminAdvertisingPackages = Array.isArray(adPackagesRes?.data) ? adPackagesRes.data : [];
+      adminAdvertisingSummary = adSummaryRes?.data || {};
+      adminAdvertisingInquiries = Array.isArray(adInquiriesRes?.data) ? adInquiriesRes.data : [];
+      adminAdvertisingCampaigns = Array.isArray(adCampaignsRes?.data) ? adCampaignsRes.data : [];
       adminWhatsappSummary = {
         ...(whatsappInsightsRes?.data || {}),
         ...(whatsappConversationsRes?.summary || {}),
@@ -7721,6 +7778,10 @@
         propertyRequests: adminPropertyRequests,
         fieldAgents: adminFieldAgents,
         campaigns: adminCurrentCampaigns,
+        advertisingPackages: adminAdvertisingPackages,
+        advertisingSummary: adminAdvertisingSummary,
+        advertisingInquiries: adminAdvertisingInquiries,
+        advertisingCampaigns: adminAdvertisingCampaigns,
         whatsappSummary: adminWhatsappSummary,
         whatsappConversations: adminWhatsappConversations
       };
@@ -8058,6 +8119,9 @@
       setText("admin-stat-save-view-ratio", `${saveToViewRatio}%`);
       setText("admin-stat-registered-agents", registeredAgents);
       setText("admin-stat-not-registered-agents", notRegisteredAgents);
+      setText("admin-stat-ad-leads", remoteSnap?.advertisingSummary?.open_inquiries ?? 0);
+      setText("admin-stat-live-ads", remoteSnap?.advertisingSummary?.live_campaigns ?? 0);
+      setText("admin-stat-ad-revenue", `UGX ${Number(remoteSnap?.advertisingSummary?.paid_revenue_ugx || 0).toLocaleString("en-UG")}`);
       if (sourceEl) sourceEl.textContent = sourceLabel;
       renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
 
@@ -8076,6 +8140,10 @@
         campaigns: remoteSnap?.campaigns || []
       });
       renderAdminCampaignRows(remoteSnap?.campaigns || []);
+      renderAdminAdvertisingOverview(remoteSnap?.advertisingSummary || {});
+      renderAdminAdvertisingPackages(remoteSnap?.advertisingPackages || []);
+      renderAdminAdvertisingInquiries(remoteSnap?.advertisingInquiries || []);
+      renderAdminAdvertisingCampaigns(remoteSnap?.advertisingCampaigns || []);
       renderAdminUsersRows(adminUsers);
       renderAdminBrokerRows(adminAgents);
       renderAdminFeaturedAgentsRows(adminAgents);
@@ -8427,6 +8495,268 @@
           <div class="text-[11px] text-gray-500 mt-1">${adminEscape(card.note)}</div>
         </div>
       `).join("");
+    }
+
+    function adMoney(value) {
+      return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
+    }
+
+    function adListText(value) {
+      const list = Array.isArray(value) ? value : [];
+      return list.length ? list.join(", ") : "-";
+    }
+
+    function adStatusBadge(status, type = "lead") {
+      const normalized = String(status || (type === "payment" ? "unpaid" : "draft")).toLowerCase();
+      const map = {
+        new: "bg-emerald-100 text-emerald-700",
+        contacted: "bg-sky-100 text-sky-700",
+        proposal_sent: "bg-fuchsia-100 text-fuchsia-700",
+        won: "bg-green-100 text-green-700",
+        lost: "bg-red-100 text-red-700",
+        archived: "bg-gray-100 text-gray-700",
+        draft: "bg-gray-100 text-gray-700",
+        awaiting_payment: "bg-amber-100 text-amber-800",
+        paid: "bg-green-100 text-green-700",
+        live: "bg-emerald-100 text-emerald-700",
+        paused: "bg-yellow-100 text-yellow-700",
+        completed: "bg-slate-100 text-slate-700",
+        cancelled: "bg-red-100 text-red-700",
+        unpaid: "bg-red-100 text-red-700",
+        invoiced: "bg-amber-100 text-amber-800",
+        refunded: "bg-gray-100 text-gray-700",
+        waived: "bg-blue-100 text-blue-700"
+      };
+      return `<span class="text-[11px] font-semibold px-2 py-1 rounded ${map[normalized] || "bg-gray-100 text-gray-700"}">${adminEscape(normalized.replace(/_/g, " "))}</span>`;
+    }
+
+    function renderAdminAdvertisingOverview(summary = {}) {
+      const wrap = document.getElementById("admin-advertising-overview");
+      if (!wrap) return;
+      const cards = [
+        ["New Leads", summary.new_inquiries || 0, "text-emerald-700"],
+        ["Open Pipeline", summary.open_inquiries || 0, "text-sky-700"],
+        ["Live Ads", summary.live_campaigns || 0, "text-green-700"],
+        ["Draft/Paid Queue", summary.pipeline_campaigns || 0, "text-amber-700"],
+        ["Paid Revenue", adMoney(summary.paid_revenue_ugx), "text-gray-900"],
+        ["Quoted Pipeline", adMoney(summary.quoted_pipeline_ugx), "text-fuchsia-700"]
+      ];
+      wrap.innerHTML = cards.map(([label, value, tone]) => `
+        <div class="rounded-xl border border-gray-200 bg-white p-3">
+          <div class="text-xs uppercase tracking-wide font-semibold text-gray-500">${adminEscape(label)}</div>
+          <div class="text-xl font-black mt-1 ${tone}">${adminEscape(value)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAdminAdvertisingPackages(packages) {
+      const wrap = document.getElementById("admin-ad-packages-grid");
+      if (!wrap) return;
+      if (!packages.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500">No package catalog loaded.</div>`;
+        return;
+      }
+      wrap.innerHTML = packages.map((pkg) => `
+        <div class="rounded-xl border border-gray-200 bg-white p-3">
+          <div class="font-bold text-gray-900">${adminEscape(pkg.label)}</div>
+          <div class="text-sm font-black text-green-700 mt-1">${adminEscape(adMoney(pkg.price_ugx))}${pkg.duration_days ? ` / ${adminEscape(pkg.duration_days)} days` : ""}</div>
+          <div class="text-xs text-gray-500 mt-2">${adminEscape(pkg.description || "")}</div>
+          <div class="text-[11px] text-gray-500 mt-2">Placements: ${adminEscape(adListText(pkg.placements || []))}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAdminAdvertisingInquiries(inquiries) {
+      const wrap = document.getElementById("admin-ad-inquiries-table");
+      if (!wrap) return;
+      adminAdvertisingInquiries = Array.isArray(inquiries) ? inquiries : [];
+      if (!canUseLiveAdminApi()) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">Sign in as admin or load ADMIN_API_KEY to manage advertising leads.</div>`;
+        return;
+      }
+      if (!adminAdvertisingInquiries.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No advertising inquiries yet. Public footer inquiries will appear here.</div>`;
+        return;
+      }
+      wrap.innerHTML = adminAdvertisingInquiries.map((item) => {
+        const idArg = adminListingIdArg(item.id);
+        const packageNames = (item.product_interests || []).map((key) => {
+          const pkg = (adminAdvertisingPackages || []).find((row) => row.key === key);
+          return pkg?.label || key;
+        });
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold text-gray-900">${adminEscape(item.business_name || item.full_name || "Advertiser")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(item.full_name || "-")} • ${adminEscape([item.email, item.phone].filter(Boolean).join(" • ") || "-")}</div>
+                <div class="text-xs text-gray-500 mt-1">Prefers ${adminEscape(item.preferred_contact_channel || "whatsapp")} • ${adminEscape(formatListingDate(item.created_at))}</div>
+              </div>
+              ${adStatusBadge(item.status, "lead")}
+            </div>
+            <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+              <div><strong>Products:</strong> ${adminEscape(packageNames.join(", ") || "-")}</div>
+              <div><strong>Targets:</strong> ${adminEscape(adListText(item.target_locations || []))} • ${adminEscape(adListText(item.target_listing_types || []))}</div>
+              <div><strong>Budget:</strong> ${adminEscape(item.budget_ugx ? adMoney(item.budget_ugx) : "-")} • <strong>Est:</strong> ${adminEscape(adMoney(item.estimated_value_ugx))}</div>
+              ${item.message ? `<div class="mt-2">${adminEscape(item.message)}</div>` : ""}
+            </div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="adminCreateAdCampaignFromInquiry(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Create Campaign</button>
+              <button onclick="adminSetAdInquiryStatus(${idArg}, 'contacted')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Contacted</button>
+              <button onclick="adminSetAdInquiryStatus(${idArg}, 'won')" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Won</button>
+              <button onclick="adminSetAdInquiryStatus(${idArg}, 'lost')" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Lost</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderAdminAdvertisingCampaigns(campaigns) {
+      const wrap = document.getElementById("admin-ad-campaigns-table");
+      if (!wrap) return;
+      adminAdvertisingCampaigns = Array.isArray(campaigns) ? campaigns : [];
+      if (!adminAdvertisingCampaigns.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No advertising campaigns yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = adminAdvertisingCampaigns.map((campaign) => {
+        const idArg = adminListingIdArg(campaign.id);
+        return `
+          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-bold text-gray-900">${adminEscape(campaign.campaign_name || "Ad campaign")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(campaign.advertiser_name || "-")} • ${adminEscape(campaign.package_label || campaign.package_key || "-")}</div>
+              </div>
+              <div class="flex gap-1 flex-wrap justify-end">${adStatusBadge(campaign.status, "campaign")} ${adStatusBadge(campaign.payment_status, "payment")}</div>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-2 mt-3 text-xs">
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Quote</div><div class="font-black">${adminEscape(adMoney(campaign.quoted_amount_ugx))}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Paid</div><div class="font-black">${adminEscape(adMoney(campaign.paid_amount_ugx))}</div></div>
+              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Clicks/Leads</div><div class="font-black">${adminEscape(campaign.clicks || 0)} / ${adminEscape(campaign.leads || 0)}</div></div>
+            </div>
+            <div class="mt-3 text-xs text-gray-500">Targets: ${adminEscape(adListText(campaign.target_locations || []))} • Placements: ${adminEscape(adListText(campaign.placements || []))}</div>
+            ${campaign.payment_url ? `<div class="mt-2 text-xs"><a href="${adminAttr(campaign.payment_url)}" target="_blank" rel="noopener noreferrer" class="text-green-700 font-semibold hover:underline">Open payment link</a></div>` : ""}
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button onclick="adminSetAdCampaignPaymentLink(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Payment Link</button>
+              <button onclick="adminMarkAdCampaignPaid(${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Paid</button>
+              <button onclick="adminSetAdCampaignStatus(${idArg}, 'live')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Live</button>
+              <button onclick="adminSetAdCampaignStatus(${idArg}, 'paused')" class="border border-yellow-300 text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Pause</button>
+              <button onclick="adminSetAdCampaignStatus(${idArg}, 'completed')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Complete</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function adminSetAdInquiryStatus(inquiryId, status) {
+      try {
+        await apiRequest(`/api/admin/advertising/inquiries/${encodeURIComponent(inquiryId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { status }
+        });
+        await renderAdminDashboard();
+        toast("Advertising inquiry updated.");
+      } catch (e) {
+        toast(`Ad inquiry update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminCreateAdCampaignFromInquiry(inquiryId) {
+      const inquiry = adminAdvertisingInquiries.find((item) => String(item.id) === String(inquiryId));
+      if (!inquiry) {
+        toast("Advertising inquiry not found.");
+        return;
+      }
+      const packageKey = (inquiry.product_interests || [])[0] || "featured_property_boost";
+      try {
+        await apiRequest("/api/admin/advertising/campaigns", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {
+            inquiry_id: inquiry.id,
+            package_key: packageKey,
+            advertiser_name: inquiry.business_name || inquiry.full_name,
+            campaign_name: `${inquiry.business_name || inquiry.full_name} - MakaUg ad`,
+            target_locations: inquiry.target_locations || [],
+            target_listing_types: inquiry.target_listing_types || []
+          }
+        });
+        await renderAdminDashboard();
+        toast("Advertising campaign created.");
+      } catch (e) {
+        toast(`Campaign create failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetAdCampaignStatus(campaignId, status) {
+      const body = { status };
+      if (status === "live") {
+        const now = new Date();
+        const campaign = adminAdvertisingCampaigns.find((item) => String(item.id) === String(campaignId)) || {};
+        const pkg = adminAdvertisingPackages.find((item) => item.key === campaign.package_key) || {};
+        const ends = new Date(now.getTime() + Math.max(1, Number(pkg.duration_days || 7)) * 24 * 60 * 60 * 1000);
+        body.starts_at = campaign.starts_at || now.toISOString();
+        body.ends_at = campaign.ends_at || ends.toISOString();
+      }
+      try {
+        await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body
+        });
+        await renderAdminDashboard();
+        toast("Advertising campaign updated.");
+      } catch (e) {
+        toast(`Campaign update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetAdCampaignPaymentLink(campaignId) {
+      const campaign = adminAdvertisingCampaigns.find((item) => String(item.id) === String(campaignId)) || {};
+      const paymentUrl = prompt("Payment link to send/store for this campaign", campaign.payment_url || "");
+      if (paymentUrl === null) return;
+      try {
+        await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: {
+            payment_url: paymentUrl.trim(),
+            status: paymentUrl.trim() ? "awaiting_payment" : campaign.status || "draft",
+            payment_status: paymentUrl.trim() ? "invoiced" : campaign.payment_status || "unpaid"
+          }
+        });
+        await renderAdminDashboard();
+        toast("Payment link updated.");
+      } catch (e) {
+        toast(`Payment link update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminMarkAdCampaignPaid(campaignId) {
+      const campaign = adminAdvertisingCampaigns.find((item) => String(item.id) === String(campaignId)) || {};
+      const reference = prompt("Payment reference or receipt number?");
+      if (reference === null) return;
+      const paidAmountRaw = prompt("Paid amount in UGX", String(campaign.quoted_amount_ugx || campaign.paid_amount_ugx || 0));
+      if (paidAmountRaw === null) return;
+      try {
+        await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: {
+            payment_status: "paid",
+            status: "paid",
+            payment_reference: reference,
+            payment_method: "manual",
+            paid_amount_ugx: parseInt(paidAmountRaw, 10) || 0
+          }
+        });
+        await renderAdminDashboard();
+        toast("Payment recorded.");
+      } catch (e) {
+        toast(`Payment update failed: ${e.message || "error"}`);
+      }
     }
 
     function renderAdminCampaignRows(campaigns) {
@@ -13536,30 +13866,46 @@
         </p>`,
       advertise: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
-        <p class="mb-3 text-sm">
-          makaug.com offers performance-focused advertising solutions for developers, agencies, mortgage providers,
-          insurers, moving services, and property-adjacent brands.
-        </p>
-        <h3 class="font-bold text-gray-800 mb-1">Available Placements</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Homepage and category-page sponsored units.</li>
-          <li>Contextual placements within sale, rent, land, and student journeys.</li>
-          <li>Featured broker and featured listing visibility products.</li>
-          <li>Seasonal campaign opportunities for launches and promotions.</li>
-        </ul>
-        <h3 class="font-bold text-gray-800 mb-1">Campaign Setup and Reporting</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Campaign planning based on target audience and district focus.</li>
-          <li>Creative review for policy compliance and relevance.</li>
-          <li>Performance tracking with agreed reporting cadence.</li>
-        </ul>
-        <h3 class="font-bold text-gray-800 mb-1">Policy Requirements</h3>
-        <p class="text-sm">
-          Advertising content must be accurate, lawful, and not misleading. Prohibited sectors, deceptive claims,
-          and non-compliant financial offers may be rejected.
-        </p>
-        <p class="text-sm mt-2">For media kits and pricing, contact info@makaug.com.</p>`,
+        <p class="text-xs text-gray-500 mb-4">Grow through MakaUg search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
+        <form id="advertising-inquiry-form" onsubmit="submitAdvertisingInquiry(event)" class="space-y-4">
+          <div class="grid md:grid-cols-2 gap-3">
+            <input name="full_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Your name" required>
+            <input name="business_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Business / brand name">
+            <input name="email" type="email" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Email">
+            <input name="phone" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="WhatsApp / phone">
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-800 mb-2">How should we contact you?</label>
+            <div class="grid sm:grid-cols-3 gap-2">
+              <label class="border border-gray-200 rounded-xl px-3 py-2 text-sm"><input type="radio" name="preferred_contact_channel" value="whatsapp" checked> WhatsApp</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2 text-sm"><input type="radio" name="preferred_contact_channel" value="email"> Email</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2 text-sm"><input type="radio" name="preferred_contact_channel" value="phone"> Phone call</label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-bold text-gray-800 mb-2">What do you want to advertise?</label>
+            <div class="grid md:grid-cols-2 gap-2 text-sm">
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="featured_property_boost"> Featured property boost - UGX 75,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="regional_search_boost"> Regional search boost - UGX 150,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="homepage_banner"> Homepage banner - UGX 250,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="agent_spotlight"> Agent spotlight - UGX 120,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="student_accommodation_push"> Student accommodation push - UGX 180,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="commercial_land_sponsor"> Commercial / land sponsor - UGX 220,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="whatsapp_chatbot_sponsor"> WhatsApp chatbot sponsor - UGX 200,000</label>
+              <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="haymaker_all_platform"> Haymaker all-platform package - UGX 950,000</label>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <input name="target_locations" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Target areas, e.g. Kampala, Mbale, Wakiso">
+            <input name="target_listing_types" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Target categories, e.g. rent, land, student">
+            <input name="budget_ugx" type="number" min="0" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Budget in UGX">
+            <input name="desired_duration_days" type="number" min="1" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="How many days?">
+          </div>
+          <textarea name="message" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Tell us the offer, audience, logo/creative needs, and any property or agent profile to boost."></textarea>
+          <div id="advertising-inquiry-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
+          <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Send advertising inquiry</button>
+          <p class="text-xs text-gray-500">MakaUg will review the request, prepare a preview, confirm payment details, then switch the ad live from the admin advertising desk.</p>
+        </form>`,
       careers: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Careers</h2>
         <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
@@ -13601,6 +13947,61 @@
       const body = document.getElementById("page-modal-body");
       if (body) body.innerHTML = html;
       openModal("page-modal");
+    }
+
+    async function submitAdvertisingInquiry(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const status = document.getElementById("advertising-inquiry-status");
+      const data = new FormData(form);
+      const products = data.getAll("product_interests").map((item) => String(item || "").trim()).filter(Boolean);
+      if (!products.length) {
+        toast("Choose at least one advertising option.");
+        return;
+      }
+      const payload = {
+        full_name: String(data.get("full_name") || "").trim(),
+        business_name: String(data.get("business_name") || "").trim(),
+        email: String(data.get("email") || "").trim(),
+        phone: normalizePhoneInput(data.get("phone") || ""),
+        preferred_contact_channel: String(data.get("preferred_contact_channel") || "whatsapp").trim(),
+        product_interests: products,
+        target_locations: String(data.get("target_locations") || "").trim(),
+        target_listing_types: String(data.get("target_listing_types") || "").trim(),
+        budget_ugx: String(data.get("budget_ugx") || "").trim(),
+        desired_duration_days: String(data.get("desired_duration_days") || "").trim(),
+        message: String(data.get("message") || "").trim(),
+        source: "website_advertise_with_us"
+      };
+      if (!payload.email && !payload.phone) {
+        toast("Add an email or phone number so MakaUg can reply.");
+        return;
+      }
+      try {
+        const submit = form.querySelector("button[type='submit']");
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = "Sending...";
+        }
+        const result = await apiRequest("/api/advertising/inquiries", {
+          method: "POST",
+          body: payload
+        });
+        if (status) {
+          status.classList.remove("hidden");
+          status.innerHTML = `Thanks. Your advertising inquiry was received.<br>Reference: <strong>${adminEscape(result?.data?.id || "-")}</strong><br>MakaUg will prepare the package, creative preview, and payment step.`;
+        }
+        form.reset();
+        toast("Advertising inquiry sent.");
+      } catch (e) {
+        toast(`Advertising inquiry failed: ${e.message || "error"}`);
+      } finally {
+        const submit = form.querySelector("button[type='submit']");
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = "Send advertising inquiry";
+        }
+      }
     }
 
     function addAdUnits() {

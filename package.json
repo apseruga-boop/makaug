@@ -26,6 +26,7 @@
     "qa:postman:render": "BASE_URL=https://makaug.onrender.com bash scripts/run-postman-qa.sh",
     "qa:create-listings": "node scripts/create-qa-listings.js",
     "qa:seed-whatsapp-inventory": "node scripts/seed-whatsapp-test-inventory.js",
+    "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "check": "node --check server.js",
     "smoke": "bash scripts/smoke-test.sh",
     "prelaunch": "bash scripts/prelaunch-check.sh"
