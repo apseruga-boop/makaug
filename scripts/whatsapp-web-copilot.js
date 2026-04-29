@@ -27,6 +27,7 @@ const PROFILE_DIR = path.resolve(
 );
 const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
+const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 
 if (!BRIDGE_TOKEN) {
@@ -64,6 +65,27 @@ function createMessageId(chatKey, text, timestampLabel = '', mediaType = 'text',
     mediaType: String(mediaType || '').trim().toLowerCase(),
     nonce: String(nonce || '').trim()
   })).digest('hex')}`;
+}
+
+function browserMessageKeyFor(snapshot = {}, row = {}) {
+  const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
+  const mediaType = snapshot.mediaType || 'text';
+  const text = isTimestampOnly(snapshot.text) && String(mediaType).includes('location')
+    ? '[shared location]'
+    : String(snapshot.text || row.preview || '').trim();
+  const stableTextKey = mediaType === 'text'
+    ? text
+    : `[${mediaType}:${snapshot.mediaCount || 1}]`;
+  return `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || stableTextKey}:${mediaType}`.slice(0, 260);
+}
+
+function rememberBrowserMessageKey(browserMessageKey) {
+  if (!browserMessageKey) return;
+  seenBrowserMessageIds.add(browserMessageKey);
+  if (seenBrowserMessageIds.size > 1000) {
+    const first = seenBrowserMessageIds.values().next().value;
+    if (first) seenBrowserMessageIds.delete(first);
+  }
 }
 
 function isTimestampOnly(value) {
@@ -504,8 +526,7 @@ async function hydrateVoiceSnapshot(page, snapshot) {
       const response = await fetch(src);
       if (!response.ok) return null;
       const blob = await response.blob();
-      const maxBytes = 8_000_000;
-      if (!blob.size || blob.size > maxBytes) {
+      if (!blob.size || blob.size > VOICE_AUDIO_MAX_BYTES) {
         return { skipped: true, reason: `audio_size_${blob.size || 0}` };
       }
 
@@ -537,6 +558,23 @@ async function hydrateVoiceSnapshot(page, snapshot) {
         voiceAudioSkipped: audio.reason || 'audio_unavailable'
       };
     }
+
+    const capturedAudio = await captureVoiceAudioFromNetwork(page, messageId);
+    if (capturedAudio?.dataUrl) {
+      log(`captured WhatsApp voice audio for ${normalizeChatKey(snapshot.chatKey)} (${capturedAudio.bytes || 0} bytes)`);
+      return {
+        ...snapshot,
+        voiceAudioDataUrl: capturedAudio.dataUrl,
+        voiceAudioMimeType: capturedAudio.mimeType || 'audio/ogg',
+        voiceAudioBytes: capturedAudio.bytes || 0
+      };
+    }
+    if (capturedAudio?.skipped) {
+      return {
+        ...snapshot,
+        voiceAudioSkipped: capturedAudio.reason || 'audio_unavailable'
+      };
+    }
   } catch (error) {
     return {
       ...snapshot,
@@ -545,6 +583,87 @@ async function hydrateVoiceSnapshot(page, snapshot) {
   }
 
   return snapshot;
+}
+
+function isLikelyVoiceAudioResponse(response) {
+  const headers = response.headers();
+  const contentType = String(headers['content-type'] || '').toLowerCase();
+  const url = String(response.url() || '').toLowerCase();
+  if (contentType.startsWith('audio/')) return true;
+  if (/\b(ogg|opus|webm)\b/.test(contentType)) return true;
+
+  const isWhatsAppMediaUrl = /(?:mmg\.whatsapp\.net|media|ptt|voice|audio)/i.test(url);
+  const isBinary = contentType.includes('application/octet-stream') || contentType.includes('binary/octet-stream');
+  return isWhatsAppMediaUrl && isBinary;
+}
+
+function audioMimeTypeFromResponse(response) {
+  const contentType = String(response.headers()['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (contentType.startsWith('audio/')) return contentType;
+  const url = String(response.url() || '').toLowerCase();
+  if (contentType.includes('webm') || url.includes('webm')) return 'audio/webm';
+  if (contentType.includes('mpeg') || url.includes('mp3')) return 'audio/mpeg';
+  return 'audio/ogg';
+}
+
+async function clickVoicePlayButton(page, messageId) {
+  return page.evaluate((targetMessageId) => {
+    const nodes = Array.from(document.querySelectorAll('[data-id]'));
+    const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+    if (!root) return false;
+    const button = root.querySelector([
+      'button[aria-label*="Play voice message" i]',
+      '[role="button"][aria-label*="Play voice message" i]',
+      'button[aria-label*="Play" i]',
+      '[role="button"][aria-label*="Play" i]',
+      'button[aria-label*="voice" i]',
+      '[role="button"][aria-label*="voice" i]'
+    ].join(','));
+    if (!button) return false;
+    button.click();
+    return true;
+  }, messageId);
+}
+
+async function pauseVoicePlayback(page, messageId) {
+  await page.evaluate((targetMessageId) => {
+    const nodes = Array.from(document.querySelectorAll('[data-id]'));
+    const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
+    const button = root?.querySelector([
+      'button[aria-label*="Pause voice message" i]',
+      '[role="button"][aria-label*="Pause voice message" i]',
+      'button[aria-label*="Pause" i]',
+      '[role="button"][aria-label*="Pause" i]'
+    ].join(','));
+    if (button) button.click();
+  }, messageId).catch(() => {});
+}
+
+async function captureVoiceAudioFromNetwork(page, messageId) {
+  const responsePromise = page.waitForResponse(
+    (response) => response.ok() && isLikelyVoiceAudioResponse(response),
+    { timeout: 5500 }
+  ).catch(() => null);
+
+  const clicked = await clickVoicePlayButton(page, messageId).catch(() => false);
+  if (!clicked) return { skipped: true, reason: 'voice_play_button_not_found' };
+
+  const response = await responsePromise;
+  await pauseVoicePlayback(page, messageId);
+  if (!response) return { skipped: true, reason: 'voice_audio_network_response_missing' };
+
+  const buffer = await response.body().catch(() => null);
+  if (!buffer?.length) return { skipped: true, reason: 'voice_audio_body_missing' };
+  if (buffer.length > VOICE_AUDIO_MAX_BYTES) {
+    return { skipped: true, reason: `audio_size_${buffer.length}` };
+  }
+
+  const mimeType = audioMimeTypeFromResponse(response);
+  return {
+    dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
+    mimeType,
+    bytes: buffer.length
+  };
 }
 
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
@@ -560,20 +679,11 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     return { processed: 0, skipped: 'unstable_active_media_without_message_id' };
   }
 
-  const stableTextKey = mediaType === 'text'
-    ? text
-    : `[${mediaType}:${snapshot.mediaCount || 1}]`;
-  const browserMessageKey = `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || stableTextKey}:${mediaType}`.slice(0, 260);
-  if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
+  const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
+  if (browserMessageKey && !snapshot.browserMessageSeen && seenBrowserMessageIds.has(browserMessageKey)) {
     return { processed: 0, duplicate: true };
   }
-  if (browserMessageKey) {
-    seenBrowserMessageIds.add(browserMessageKey);
-    if (seenBrowserMessageIds.size > 1000) {
-      const first = seenBrowserMessageIds.values().next().value;
-      if (first) seenBrowserMessageIds.delete(first);
-    }
-  }
+  rememberBrowserMessageKey(browserMessageKey);
 
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
 
@@ -624,7 +734,14 @@ async function ingestUnreadChats(page) {
 
     const snapshots = await getRecentIncomingSnapshots(page);
     for (const snapshot of snapshots) {
-      const hydrated = await hydrateVoiceSnapshot(page, snapshot);
+      const browserMessageKey = browserMessageKeyFor(snapshot, row);
+      if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
+      rememberBrowserMessageKey(browserMessageKey);
+      const hydrated = await hydrateVoiceSnapshot(page, {
+        ...snapshot,
+        browserMessageKey,
+        browserMessageSeen: true
+      });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
     }
@@ -640,10 +757,18 @@ async function ingestActiveChat(page) {
   const snapshots = await getRecentIncomingSnapshots(page);
   let processed = 0;
   for (const snapshot of snapshots) {
-    const hydrated = await hydrateVoiceSnapshot(page, snapshot);
+    const row = { title: snapshot.chatKey, preview: '' };
+    const browserMessageKey = browserMessageKeyFor(snapshot, row);
+    if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
+    rememberBrowserMessageKey(browserMessageKey);
+    const hydrated = await hydrateVoiceSnapshot(page, {
+      ...snapshot,
+      browserMessageKey,
+      browserMessageSeen: true
+    });
     const result = await ingestSnapshot({
       snapshot: hydrated,
-      row: { title: snapshot.chatKey, preview: '' },
+      row,
       source: 'active_chat'
     });
     processed += result.processed || 0;
