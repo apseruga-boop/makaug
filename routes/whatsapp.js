@@ -964,11 +964,12 @@ function normalizeBridgeInboundKey(value) {
   return raw.slice(0, 160);
 }
 
-function createBridgeDryRunKey(phone, inboundMessageId) {
+function createBridgeDryRunKey(phone, scope = '') {
   const normalizedPhone = normalizeBridgeInboundKey(phone) || 'unknown';
+  const normalizedScope = normalizeInput(scope).slice(0, 80);
   const hash = crypto
     .createHash('sha1')
-    .update(`${normalizedPhone}:${inboundMessageId || Date.now()}`)
+    .update(`${normalizedPhone}:${normalizedScope}`)
     .digest('hex')
     .slice(0, 12);
   return `dryrun:${normalizedPhone}:${hash}`;
@@ -4857,7 +4858,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     return res.status(400).json({ ok: false, error: 'body, media, or location is required' });
   }
 
-  const runtimePhone = dryRun ? createBridgeDryRunKey(phone, inboundMessageId) : phone;
+  const runtimePhone = dryRun ? createBridgeDryRunKey(phone, req.body.dry_run_session || req.body.dryRunSession || req.body.client_id || '') : phone;
   const runtimeInboundMessageId = dryRun ? `${inboundMessageId}:dryrun:${runtimePhone.split(':').pop()}` : inboundMessageId;
   const runtimeMetadata = {
     ...inboundMetadata,
