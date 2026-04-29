@@ -355,7 +355,7 @@ function heuristicIntent(text) {
   if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
-  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|near me|area|nyumba|plot|ttaka|enju|ot|ot me)/.test(t)) {
+  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|near me|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|ot|ot me)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
@@ -419,11 +419,11 @@ const QUERY_SEARCH_TYPE_RULES = [
   { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
   { type: 'student', re: /\b(student|students|hostel|dorm|campus|university)\b/i },
   { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business)\b/i },
-  { type: 'land', re: /\b(land|plot|acre|acres|farm)\b/i }
+  { type: 'land', re: /\b(land|plot|plots|acre|acres|farm|shamba|kiwanja|ardhi|ttaka)\b/i }
 ];
 
 const QUERY_PROPERTY_TYPE_RULES = [
-  { value: 'house', re: /\b(house|home)\b/i },
+  { value: 'house', re: /\b(house|home|nyumba|enju)\b/i },
   { value: 'villa', re: /\b(villa)\b/i },
   { value: 'apartment', re: /\b(apartment|flat)\b/i },
   { value: 'townhouse', re: /\b(townhouse)\b/i },
@@ -432,7 +432,8 @@ const QUERY_PROPERTY_TYPE_RULES = [
   { value: 'hostel', re: /\b(hostel|dorm|dormitory)\b/i },
   { value: 'office', re: /\b(office)\b/i },
   { value: 'warehouse', re: /\b(warehouse)\b/i },
-  { value: 'retail shop', re: /\b(retail|shop|storefront)\b/i }
+  { value: 'retail shop', re: /\b(retail|shop|storefront)\b/i },
+  { value: 'land', re: /\b(shamba|kiwanja|ardhi|ttaka)\b/i }
 ];
 
 const QUERY_WORD_NUMBERS = {

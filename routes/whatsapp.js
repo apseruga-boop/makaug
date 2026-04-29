@@ -536,7 +536,7 @@ function detectLanguageFromText(text) {
   if (!clean) return { code: '', confidence: 0 };
 
   const rules = [
-    { code: 'sw', confidence: 0.92, re: /\b(habari|mambo|niaje|tafuta|nyumba|kupangisha|kuuza|bei|asante|karibu)\b/ },
+    { code: 'sw', confidence: 0.92, re: /\b(habari|mambo|niaje|jambo|sasa|salama|natafuta|tafuta|nitafutie|nyumba|shamba|kiwanja|ardhi|kupangisha|kuuza|bei|asante|karibu)\b/ },
     { code: 'lg', confidence: 0.9, re: /\b(oli otya|wasuze|osiibye|webale|noonya|nfunira|nyumba|enju|ttaka|okupangisa)\b/ },
     { code: 'sm', confidence: 0.86, re: /\b(mirembe|noonia|amaka|ebifa|lusoga)\b/ },
     { code: 'ac', confidence: 0.88, re: /\b(itye|apwoyo|yeny|nongo|gang|ot|acholi)\b/ },
@@ -611,13 +611,17 @@ function isGreetingText(text) {
 function parseLanguageChange(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
-  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+)?(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)\b/);
-  const direct = clean.match(/^(english|luganda|kiswahili|swahili|acholi|runyankole|rukiga|lusoga)$/);
+  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry|respond|reply|answer|write)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+|with\s+)?(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga)\b/);
+  const direct = clean.match(/^(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga)$/);
   const value = (explicit || direct || [])[1] || '';
   const map = {
     english: 'en',
     luganda: 'lg',
+    lugandan: 'lg',
+    lunganda: 'lg',
+    lugand: 'lg',
     kiswahili: 'sw',
+    'ki swahili': 'sw',
     swahili: 'sw',
     acholi: 'ac',
     runyankole: 'ny',
@@ -1696,6 +1700,56 @@ function parseAreaFromText(text, sessionData = {}) {
   return null;
 }
 
+function sanitizeSearchAreaCandidate(area, originalText = '') {
+  const cleanArea = normalizeInput(area);
+  if (!cleanArea) return null;
+
+  const lowerArea = cleanArea.toLowerCase();
+  const lowerText = normalizeInput(originalText).toLowerCase();
+  const aliasMap = AREA_ALIASES;
+
+  const directAlias = aliasMap[lowerArea];
+  if (directAlias) return directAlias;
+
+  const districtHit = DISTRICTS.find((d) => lowerArea === String(d || '').toLowerCase());
+  if (districtHit) return districtHit;
+
+  const regionHit = normalizeRegionKey(lowerArea);
+  if (regionHit) return regionHit === 'greater kampala' ? 'Greater Kampala' : `${regionHit.charAt(0).toUpperCase()}${regionHit.slice(1)} Region`;
+
+  if (parseLanguageChange(cleanArea)) return null;
+  if (/^(english|luganda|lugandan|lunganda|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga)$/i.test(cleanArea)) return null;
+
+  const instructionLike = /\b(respond|reply|answer|write|language|luganda|lunganda|swahili|kiswahili|english|natafuta|tafuta|nitafutie|looking|search|find|need|want|show|property|house|nyumba|shamba|kiwanja|ardhi|land|plot|student|hostel|commercial|agent|broker)\b/i;
+  if (instructionLike.test(cleanArea)) {
+    const parsed = parseAreaFromText(originalText);
+    if (parsed && parsed.toLowerCase() !== lowerArea) return parsed;
+    return null;
+  }
+
+  if (lowerText && lowerArea === lowerText) {
+    return null;
+  }
+
+  return cleanArea;
+}
+
+function sanitizeNaturalSearchFilters(filters = {}, originalText = '') {
+  const next = { ...(filters || {}) };
+  next.area = sanitizeSearchAreaCandidate(next.area || next.district || '', originalText);
+  if (!next.area && next.district) next.district = null;
+  next.hasSignal = Boolean(
+    next.area
+    || next.district
+    || Number(next.bedsMin || 0) > 0
+    || next.propertyType
+    || Number(next.maxBudgetUgx || 0) > 0
+    || next.useSharedLocation
+    || (next.searchType && next.searchType !== 'any')
+  );
+  return next;
+}
+
 function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', sessionData = {}) {
   const clean = normalizeInput(text);
   const e = entities && typeof entities === 'object' ? entities : {};
@@ -1703,7 +1757,7 @@ function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', 
   const searchType = normalizeListingType(
     e.listing_type || e.listingType || parseSearchType(clean) || fallbackType || 'any'
   );
-  const area = normalizeInput(e.area || e.location || e.district || parseAreaFromText(clean, sessionData)) || null;
+  const area = sanitizeSearchAreaCandidate(e.area || e.location || e.district || parseAreaFromText(clean, sessionData), clean);
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
   const propertyType = normalizeInput(e.property_type || e.propertyType || parsePropertyType(clean)) || null;
   const budgetParsed = parseBudget(clean);
@@ -1777,7 +1831,10 @@ async function resolveNaturalSearchFilters({
   language = 'en',
   sessionData = {}
 } = {}) {
-  const deterministic = extractNaturalSearchFilters(text, entities, fallbackType, sessionData);
+  const deterministic = sanitizeNaturalSearchFilters(
+    extractNaturalSearchFilters(text, entities, fallbackType, sessionData),
+    text
+  );
   try {
     const aiExtract = await extractNaturalPropertyQuery({
       text,
@@ -1785,7 +1842,7 @@ async function resolveNaturalSearchFilters({
       sessionData,
       fallbackType
     });
-    const merged = mergeNaturalSearchFilters(aiExtract, deterministic);
+    const merged = sanitizeNaturalSearchFilters(mergeNaturalSearchFilters(aiExtract, deterministic), text);
     if (deterministic.searchType && deterministic.searchType !== 'any') merged.searchType = deterministic.searchType;
     if (deterministic.area) merged.area = deterministic.area;
     if (deterministic.propertyType) merged.propertyType = deterministic.propertyType;
@@ -1805,13 +1862,51 @@ async function resolveNaturalSearchFilters({
   }
 }
 
-function describeNaturalFilters(filters = {}) {
+function describeNaturalFilters(filters = {}, lang = 'en') {
   const chips = [];
-  if (filters.searchType && filters.searchType !== 'any') chips.push(typeLabel(filters.searchType, 'en'));
+  if (filters.searchType && filters.searchType !== 'any') chips.push(typeLabel(filters.searchType, lang));
   if (filters.bedsMin > 0) chips.push(`${filters.bedsMin}+ bed`);
-  if (filters.propertyType) chips.push(filters.propertyType);
+  if (filters.propertyType && String(filters.propertyType).toLowerCase() !== String(filters.searchType || '').toLowerCase()) {
+    chips.push(filters.propertyType);
+  }
   if (filters.maxBudgetUgx > 0) chips.push(`max ${formatPrice(filters.maxBudgetUgx, filters.budgetPeriod || '')}`);
   return chips.join(' • ');
+}
+
+function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
+  const code = resolveLangCode(lang);
+  const chips = describeNaturalFilters(filters, code);
+  const filterLine = chips ? {
+    en: `Filters: ${chips}\n`,
+    lg: `Filters: ${chips}\n`,
+    sw: `Vichujio: ${chips}\n`,
+    ac: `Filters: ${chips}\n`,
+    ny: `Filters: ${chips}\n`,
+    rn: `Filters: ${chips}\n`,
+    sm: `Filters: ${chips}\n`
+  }[code] || `Filters: ${chips}\n` : '';
+
+  const copy = {
+    area: {
+      en: `🔎 I can search that for you.\n${filterLine}Please share the area or district.`,
+      lg: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`,
+      sw: `🔎 Naweza kukutafutia hiyo.\n${filterLine}Tafadhali taja eneo au wilaya.`,
+      ac: `🔎 Aromo yenyoni pi in.\n${filterLine}Tim ber icwal area onyo district.`,
+      ny: `🔎 Nimbaasa kukishakira.\n${filterLine}Ngambira ekicweka nari district.`,
+      rn: `🔎 Nshobora kubishakira.\n${filterLine}Mumbwire area canke district.`,
+      sm: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
+    },
+    location: {
+      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now.`,
+      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati.`,
+      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa.`,
+      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp.`,
+      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati.`,
+      rn: `📍 Nshobora gushaka hafi yanyu.\n${filterLine}Ohereza location ya WhatsApp ubu.`,
+      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati.`
+    }
+  };
+  return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
 }
 
 function canonicalAreaText(value) {
@@ -2551,6 +2646,17 @@ function extractAgentSearchKeywords(text, sessionData = {}) {
   return Array.from(keywords).slice(0, 8);
 }
 
+function extractPrimaryAgentArea(text, sessionData = {}) {
+  const clean = normalizeInput(text);
+  if (!clean) return '';
+  const parsedArea = sanitizeSearchAreaCandidate(parseAreaFromText(clean, sessionData), clean);
+  if (parsedArea) return parsedArea;
+  const lower = clean.toLowerCase();
+  const districtHit = DISTRICTS.find((district) => lower.includes(String(district || '').toLowerCase()));
+  if (districtHit) return districtHit;
+  return '';
+}
+
 async function inferAgentSearchFromSharedLocation(sharedLocation, sessionData = {}) {
   const locationLabel = sharedLocation?.address
     || sharedLocation?.label
@@ -3177,7 +3283,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
-    const keywords = extractAgentSearchKeywords(cleanBody, sessionData);
+    const primaryArea = extractPrimaryAgentArea(cleanBody, sessionData);
+    const keywords = primaryArea
+      ? [primaryArea, ...extractAgentSearchKeywords(cleanBody, sessionData).filter((item) => item !== primaryArea)]
+      : extractAgentSearchKeywords(cleanBody, sessionData);
     const rows = await findAgentsForWhatsappKeywords(keywords);
     if (keywords.length && rows.length) {
       return respond(formatAgentSearchMessage(lang, rows, keywords[0]), 'main_menu');
@@ -3218,7 +3327,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         natural_query_text: cleanBody
       });
       return respond(
-        `📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+        naturalSearchPrompt(lang, naturalFilters, 'location'),
         'search_area'
       );
     } else if (!naturalFilters.area) {
@@ -3228,7 +3337,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         natural_query_text: cleanBody
       });
       return respond(
-        `🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+        naturalSearchPrompt(lang, naturalFilters, 'area'),
         'search_area'
       );
     } else {
@@ -3256,7 +3365,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
 
       return respond(
-        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -3360,7 +3469,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           natural_query_text: cleanBody
         });
         return respond(
-          `📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+          naturalSearchPrompt(lang, naturalFilters, 'location'),
           'search_area'
         );
       }
@@ -3371,7 +3480,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           natural_query_text: cleanBody
         });
         return respond(
-          `🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+          naturalSearchPrompt(lang, naturalFilters, 'area'),
           'search_area'
         );
       }
@@ -3403,7 +3512,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         ? '\n(Using approx FX: 1 USD = 3,800 UGX for matching.)\n'
         : '\n';
       return respond(
-        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}${fxNote}` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}${fxNote}` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -3495,7 +3604,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
       return respond(
-        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -3565,7 +3674,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         natural_query_text: cleanBody
       });
       return respond(
-        `📍 Got it.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+        naturalSearchPrompt(lang, naturalFilters, 'location'),
         'search_area'
       );
     }
@@ -3577,7 +3686,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         natural_query_text: cleanBody
       });
       return respond(
-        `🔎 Got it.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}${t(lang, 'askSearchArea')}`,
+        naturalSearchPrompt(lang, naturalFilters, 'area'),
         'search_area'
       );
     }
@@ -3606,7 +3715,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
 
     return respond(
-      `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+      `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
       'main_menu'
     );
   }
@@ -3695,7 +3804,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
       const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
       return respond(
-        `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${describeNaturalFilters(pendingFilters) ? `Filters: ${describeNaturalFilters(pendingFilters)}\n` : ''}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
+        `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${describeNaturalFilters(pendingFilters, lang) ? `Filters: ${describeNaturalFilters(pendingFilters, lang)}\n` : ''}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
         'main_menu'
       );
     }
@@ -3740,7 +3849,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
       return respond(
-        `${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
+        `${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || searchType || 'any')}`,
         'main_menu'
       );
     }
@@ -3939,14 +4048,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         const draftNote = 'I have kept your listing draft safe.';
         if (naturalFilters.useSharedLocation) {
           return respond(
-            `${draftNote}\n\n📍 I can search around you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share your WhatsApp location now.`,
+            `${draftNote}\n\n${naturalSearchPrompt(lang, naturalFilters, 'location')}`,
             'search_area'
           );
         }
 
         if (!naturalFilters.area) {
           return respond(
-            `${draftNote}\n\n🔎 I can search that for you.\n${describeNaturalFilters(naturalFilters) ? `Filters: ${describeNaturalFilters(naturalFilters)}\n` : ''}Please share the area or district.`,
+            `${draftNote}\n\n${naturalSearchPrompt(lang, naturalFilters, 'area')}`,
             'search_area'
           );
         }
@@ -3975,7 +4084,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         }
 
         return respond(
-          `${draftNote}\n\n${describeNaturalFilters(naturalFilters) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
+          `${draftNote}\n\n${describeNaturalFilters(naturalFilters, lang) ? `✅ Filters applied: ${describeNaturalFilters(naturalFilters, lang)}\n` : ''}${formatPropertySearchMessage(lang, rows, naturalFilters.area, naturalFilters.searchType || 'any')}`,
           'main_menu'
         );
       }

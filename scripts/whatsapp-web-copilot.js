@@ -212,11 +212,26 @@ async function getActiveChatSnapshot(page) {
       }
       return null;
     };
+    const hasVoiceNote = (root, text = '') => {
+      if (!root) return false;
+      if (root.querySelector('audio, source[type^="audio/"]')) return true;
+      const voiceControl = root.querySelector([
+        '[aria-label*="voice" i]',
+        '[aria-label*="audio" i]',
+        '[aria-label*="Play voice" i]',
+        '[aria-label*="Play" i]',
+        '[data-icon*="audio" i]',
+        '[data-icon*="ptt" i]',
+        '[data-testid*="audio" i]'
+      ].join(','));
+      if (voiceControl) return true;
+      return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
+    };
 
     const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
-      return !!el.querySelector('img, video, audio');
+      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, el.innerText || el.textContent || '');
     });
     const nodes = [...copyNodes, ...mediaOnlyNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
@@ -281,15 +296,16 @@ async function getActiveChatSnapshot(page) {
     const extraImageMatch = text.match(/\+(\d+)/);
     const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
     const sharedLocation = extractSharedLocation(last);
+    const voiceNote = hasVoiceNote(last, text);
     const mediaType = sharedLocation
       ? 'location'
       : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
         ? 'location_preview'
+      : voiceNote
+        ? 'voice'
       : last.querySelector('img')
       ? 'image'
-      : last.querySelector('audio')
-        ? 'voice'
-        : last.querySelector('video')
+      : last.querySelector('video')
           ? 'media'
           : 'text';
 
@@ -347,11 +363,26 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       }
       return null;
     };
+    const hasVoiceNote = (root, text = '') => {
+      if (!root) return false;
+      if (root.querySelector('audio, source[type^="audio/"]')) return true;
+      const voiceControl = root.querySelector([
+        '[aria-label*="voice" i]',
+        '[aria-label*="audio" i]',
+        '[aria-label*="Play voice" i]',
+        '[aria-label*="Play" i]',
+        '[data-icon*="audio" i]',
+        '[data-icon*="ptt" i]',
+        '[data-testid*="audio" i]'
+      ].join(','));
+      if (voiceControl) return true;
+      return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
+    };
 
     const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
-      return !!el.querySelector('img, video, audio');
+      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, el.innerText || el.textContent || '');
     });
     const nodes = [...copyNodes, ...mediaOnlyNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
@@ -387,11 +418,12 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const extraImageMatch = rawText.match(/\+(\d+)/);
         const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
         const sharedLocation = extractSharedLocation(node);
+        const voiceNote = hasVoiceNote(node, rawText);
         const mediaType = sharedLocation
           ? 'location'
           : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
             ? 'location_preview'
-            : node.querySelector('audio')
+          : voiceNote
           ? 'voice'
           : node.querySelector('video')
             ? 'media'
@@ -508,10 +540,23 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
+  if (source === 'active_chat' && mediaType !== 'text' && !snapshot.messageId) {
+    return { processed: 0, skipped: 'unstable_active_media_without_message_id' };
+  }
 
-  const browserMessageKey = `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || text}:${mediaType}`.slice(0, 260);
+  const stableTextKey = mediaType === 'text'
+    ? text
+    : `[${mediaType}:${snapshot.mediaCount || 1}]`;
+  const browserMessageKey = `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || stableTextKey}:${mediaType}`.slice(0, 260);
   if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
     return { processed: 0, duplicate: true };
+  }
+  if (browserMessageKey) {
+    seenBrowserMessageIds.add(browserMessageKey);
+    if (seenBrowserMessageIds.size > 1000) {
+      const first = seenBrowserMessageIds.values().next().value;
+      if (first) seenBrowserMessageIds.delete(first);
+    }
   }
 
   const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
@@ -543,13 +588,6 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
         }
       }
     });
-    if (browserMessageKey) {
-      seenBrowserMessageIds.add(browserMessageKey);
-      if (seenBrowserMessageIds.size > 1000) {
-        const first = seenBrowserMessageIds.values().next().value;
-        if (first) seenBrowserMessageIds.delete(first);
-      }
-    }
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
