@@ -811,7 +811,7 @@ router.get('/properties/live', async (req, res, next) => {
     const countResult = await db.query(
       `SELECT COUNT(*)::int AS total
        FROM properties p
-       WHERE p.status = 'approved'`
+       WHERE p.status IN ('approved','sold')`
     );
     const total = countResult.rows[0]?.total || 0;
 
@@ -825,6 +825,7 @@ router.get('/properties/live', async (req, res, next) => {
         p.price,
         p.price_period,
         p.status,
+        p.sold_at,
         p.inquiry_reference,
         p.lister_name,
         p.lister_phone,
@@ -849,7 +850,7 @@ router.get('/properties/live', async (req, res, next) => {
          ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
          LIMIT 1
        ) img ON true
-       WHERE p.status = 'approved'
+       WHERE p.status IN ('approved','sold')
        ORDER BY live_at DESC
        LIMIT $1
        OFFSET $2`,
@@ -1131,6 +1132,7 @@ router.get('/users', async (req, res, next) => {
         u.weekly_tips_opt_in,
         u.preferred_contact_channel,
         u.preferred_language,
+        u.profile_data,
         u.oauth_provider,
         u.last_login_at,
         u.created_at,

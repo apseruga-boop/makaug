@@ -3128,14 +3128,15 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       Number.isFinite(Number(r.bathrooms)) && Number(r.bathrooms) > 0 ? `${r.bathrooms} ${copy.bath}` : ''
     ].filter(Boolean).join(' • ');
     lines.push(`${idx + 1}. 🏡 *${r.title}*`);
+    if (r.featured === true || String(r.featured || '').toLowerCase() === 'true') {
+      lines.push('   Sponsored MakaUg placement');
+    }
     lines.push(`   📍 ${[r.area, r.district].filter(Boolean).join(', ')}`);
     lines.push(`   🏷️ ${typeLabel(r.listing_type, lang)}${meta ? ` • ${meta}` : ''}`);
     lines.push(`   💰 ${formatPrice(r.price, r.price_period)}`);
     if (Number.isFinite(Number(r.distance_km))) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }
-    const previewUrl = safePublicPreviewUrl(r.primary_image_url);
-    if (previewUrl) lines.push(`   🖼️ ${copy.preview}: ${previewUrl}`);
     const listingUrl = safePublicPreviewUrl(r.property_url || r.url) || `${HOME_URL}/property/${r.id}`;
     lines.push(`   🔗 ${copy.open}: ${listingUrl}`);
     lines.push('━━━━━━━━━━━━━━');

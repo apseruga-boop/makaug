@@ -155,6 +155,9 @@ function publicExtraFields(extraFields = {}) {
     region: extra.region || null,
     resolved_location_label: extra.resolved_location_label || null,
     public_display_name: extra.public_display_name || null,
+    preferred_contact_method: extra.preferred_contact_method || null,
+    video_url: extra.video_url || null,
+    youtube_url: extra.youtube_url || null,
     area_highlights: extra.area_highlights || '',
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
@@ -547,7 +550,11 @@ router.get('/', async (req, res, next) => {
     }
 
     if (status && status !== 'all') {
-      addFilter(filters, values, 'p.status = ?', status);
+      if (status === 'approved') {
+        addFilter(filters, values, "(p.status = 'approved' OR (p.status = 'sold' AND p.sold_at >= NOW() - INTERVAL '7 days'))");
+      } else {
+        addFilter(filters, values, 'p.status = ?', status);
+      }
     }
 
     if (minPrice != null) addFilter(filters, values, 'p.price >= ?', minPrice);
@@ -588,6 +595,7 @@ router.get('/', async (req, res, next) => {
         p.property_type,
         p.title_type,
         p.status,
+        p.sold_at,
         p.created_at,
         p.latitude,
         p.longitude,
@@ -599,6 +607,9 @@ router.get('/', async (req, res, next) => {
         p.extra_fields->>'city' AS city,
         p.extra_fields->>'neighborhood' AS neighborhood,
         p.extra_fields->>'street_name' AS street_name,
+        p.extra_fields->>'video_url' AS video_url,
+        p.extra_fields->>'youtube_url' AS youtube_url,
+        p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
         p.extra_fields->>'region' AS region,
         p.extra_fields->>'resolved_location_label' AS resolved_location_label,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
@@ -1006,6 +1017,13 @@ router.post('/', async (req, res, next) => {
 
     const amenities = asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean);
     const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
+    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
+    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
+    if (videoUrl) extraFields.video_url = videoUrl;
+    if (/youtube\.com|youtu\.be/i.test(videoUrl)) extraFields.youtube_url = videoUrl;
+    if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
+      extraFields.preferred_contact_method = preferredContactMethod;
+    }
 
     const insertResult = await db.query(
       `INSERT INTO properties (
@@ -1363,6 +1381,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
            moderation_notes = COALESCE($5::text, moderation_notes),
            moderation_reason = $3::text,
            approved_at = CASE WHEN $2 = 'approved' THEN NOW() ELSE approved_at END,
+           sold_at = CASE WHEN $2 = 'sold' THEN NOW() WHEN $2 = 'approved' THEN NULL ELSE sold_at END,
            rejected_at = CASE WHEN $2 = 'rejected' THEN NOW() ELSE rejected_at END,
            owner_edit_token_hash = CASE WHEN $9::text IS NULL THEN owner_edit_token_hash ELSE $9::text END,
            owner_edit_token_expires_at = CASE WHEN $10::timestamptz IS NULL THEN owner_edit_token_expires_at ELSE $10::timestamptz END,
@@ -1402,6 +1421,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
          SET
            status = $2,
            reviewed_at = NOW(),
+           sold_at = CASE WHEN $2 = 'sold' THEN NOW() WHEN $2 = 'approved' THEN NULL ELSE sold_at END,
            updated_at = NOW(),
            extra_fields = COALESCE(extra_fields, '{}'::jsonb)
              || jsonb_build_object(

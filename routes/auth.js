@@ -42,9 +42,32 @@ function publicUser(row) {
     weekly_tips_opt_in: row.weekly_tips_opt_in !== false,
     preferred_contact_channel: row.preferred_contact_channel || 'whatsapp',
     preferred_language: row.preferred_language || 'en',
+    profile_data: row.profile_data && typeof row.profile_data === 'object' ? row.profile_data : {},
     oauth_provider: row.oauth_provider || null,
     created_at: row.created_at
   };
+}
+
+function sanitizeProfileData(input = {}) {
+  const source = input && typeof input === 'object' ? input : {};
+  const allowed = [
+    'audience',
+    'primary_goal',
+    'preferred_areas',
+    'budget_range',
+    'moving_timeline',
+    'university',
+    'accommodation_type',
+    'agent_company',
+    'agent_districts',
+    'agent_specialities',
+    'preferred_updates'
+  ];
+  return allowed.reduce((acc, key) => {
+    const value = cleanText(source[key]);
+    if (value) acc[key] = value.slice(0, 240);
+    return acc;
+  }, {});
 }
 
 function createToken(user) {
@@ -525,6 +548,10 @@ router.post('/register', async (req, res, next) => {
     const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput) ? preferredContactInput : 'whatsapp';
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
     const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput) ? preferredLanguageInput : 'en';
+    const profileData = sanitizeProfileData({
+      ...(req.body.profile_data && typeof req.body.profile_data === 'object' ? req.body.profile_data : {}),
+      audience: req.body.profile_data?.audience || roleInput
+    });
 
     const roleMap = {
       'buyer / renter': 'buyer_renter',
@@ -595,6 +622,7 @@ router.post('/register', async (req, res, next) => {
              weekly_tips_opt_in = $9,
              preferred_contact_channel = $10,
              preferred_language = $11,
+             profile_data = COALESCE(profile_data, '{}'::jsonb) || $12::jsonb,
              updated_at = NOW()
          WHERE id = $1
          RETURNING *`,
@@ -609,7 +637,8 @@ router.post('/register', async (req, res, next) => {
           marketingOptIn,
           weeklyTipsOptIn,
           preferredContactChannel,
-          preferredLanguage
+          preferredLanguage,
+          JSON.stringify(profileData)
         ]
       );
       user = updated.rows[0];
@@ -627,10 +656,11 @@ router.post('/register', async (req, res, next) => {
           marketing_opt_in,
           weekly_tips_opt_in,
           preferred_contact_channel,
-          preferred_language
-        ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10)
+          preferred_language,
+          profile_data
+        ) VALUES ($1,$2,$3,$4,$5,$6,false,'active',$7,$8,$9,$10,$11::jsonb)
         RETURNING *`,
-        [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
+        [firstName, lastName, phone, email, role, passwordHash, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage, JSON.stringify(profileData)]
       );
       user = result.rows[0];
     }

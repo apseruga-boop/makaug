@@ -1884,6 +1884,12 @@
             </div>
           </div>
 
+          <div class="mt-5">
+            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Video / YouTube Tour (optional)</label>
+            <input id="lp-video-url" oninput="updateListPreview();renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Paste a YouTube, TikTok, Instagram, or video tour link">
+            <p class="text-xs text-gray-500 mt-1">Add a walkthrough link if one exists. It will appear on the property page after review.</p>
+          </div>
+
           <button id="lp-step1-next-btn" onclick="nextListStepFromDetails()" class="w-full mt-6 bg-green-800 hover:bg-green-700 text-white py-3.5 rounded-xl text-base font-bold">
             Continue to Photos →
           </button>
@@ -1959,6 +1965,7 @@
                 <option value="phone">Phone Call</option>
                 <option value="whatsapp">WhatsApp</option>
                 <option value="both">Phone + WhatsApp</option>
+                <option value="email">Email Enquiry</option>
               </select>
             </div>
             <div>
@@ -2866,6 +2873,7 @@
             <select id="admin-listings-status" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
               <option value="">All statuses</option>
               <option value="approved">Live</option>
+              <option value="sold">Sold</option>
               <option value="pending">Pending</option>
               <option value="hidden">Hidden</option>
               <option value="rejected">Rejected</option>
@@ -3279,6 +3287,27 @@
             <div id="auth-signup-agent-licence-wrap" class="mt-3">
               <label class="block text-sm font-medium text-gray-800 mb-1.5">AREA Licence Number (optional)</label>
               <input id="auth-signup-agent-licence" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm bg-white" placeholder="Add it if you already have one">
+            </div>
+          </div>
+
+          <div id="auth-signup-profile-wrap" class="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <label id="auth-profile-title" class="block text-sm font-bold text-gray-800">Help us personalise your account</label>
+                <p id="auth-profile-subtitle" class="text-xs text-gray-500 mt-1">A few optional details help MakaUg send better property matches and WhatsApp updates.</p>
+              </div>
+              <span class="text-[11px] bg-white border border-gray-200 rounded-full px-2 py-1 text-gray-500">Optional</span>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3 mt-3">
+              <input id="auth-profile-primary-goal" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="What are you trying to do?">
+              <input id="auth-profile-preferred-areas" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Preferred areas or districts">
+              <input id="auth-profile-budget-range" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Budget range">
+              <input id="auth-profile-moving-timeline" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Moving / campaign timeline">
+              <input id="auth-profile-university" data-profile-group="student" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="University or campus">
+              <input id="auth-profile-accommodation-type" data-profile-group="student" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Student accommodation type">
+              <input id="auth-profile-agent-company" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Agency / brokerage name">
+              <input id="auth-profile-agent-districts" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Districts you cover">
+              <input id="auth-profile-agent-specialities" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Specialities, e.g. land, rentals, commercial">
             </div>
           </div>
 
@@ -7033,7 +7062,53 @@
         fieldNote.classList.add("hidden");
         if (agentRegWrap) agentRegWrap.classList.add("hidden");
       }
+      syncAuthProfileSignupForm();
       syncAuthAgentSignupForm();
+    }
+
+    function syncAuthProfileSignupForm() {
+      const title = document.getElementById("auth-profile-title");
+      const subtitle = document.getElementById("auth-profile-subtitle");
+      document.querySelectorAll("[data-profile-group]").forEach((el) => {
+        const group = el.getAttribute("data-profile-group");
+        el.classList.toggle("hidden", group !== authSignUpAudience && !(authSignUpAudience === "finder" && group === "student"));
+      });
+      const goal = document.getElementById("auth-profile-primary-goal");
+      const areas = document.getElementById("auth-profile-preferred-areas");
+      const budget = document.getElementById("auth-profile-budget-range");
+      const timeline = document.getElementById("auth-profile-moving-timeline");
+      if (authSignUpAudience === "agent") {
+        if (title) title.textContent = "Tell us about your agency";
+        if (subtitle) subtitle.textContent = "This helps MakaUg route quality enquiries and verification follow-up to the right agents.";
+        if (goal) goal.placeholder = "Main goal, e.g. get leads, manage listings";
+        if (areas) areas.placeholder = "Primary areas / districts";
+        if (budget) budget.placeholder = "Typical property price/rent range";
+        if (timeline) timeline.placeholder = "How quickly can you respond to leads?";
+      } else {
+        if (title) title.textContent = "Help us personalise your account";
+        if (subtitle) subtitle.textContent = "A few optional details help MakaUg send better property matches and WhatsApp updates.";
+        if (goal) goal.placeholder = "Buying, renting, student room, land, commercial...";
+        if (areas) areas.placeholder = "Preferred areas or districts";
+        if (budget) budget.placeholder = "Budget range";
+        if (timeline) timeline.placeholder = "When do you want to move?";
+      }
+    }
+
+    function collectAuthProfileData() {
+      const get = (id) => (document.getElementById(id)?.value || "").trim();
+      return {
+        audience: authSignUpAudience,
+        primary_goal: get("auth-profile-primary-goal"),
+        preferred_areas: get("auth-profile-preferred-areas"),
+        budget_range: get("auth-profile-budget-range"),
+        moving_timeline: get("auth-profile-moving-timeline"),
+        university: get("auth-profile-university"),
+        accommodation_type: get("auth-profile-accommodation-type"),
+        agent_company: get("auth-profile-agent-company"),
+        agent_districts: get("auth-profile-agent-districts"),
+        agent_specialities: get("auth-profile-agent-specialities"),
+        preferred_updates: document.getElementById("auth-signup-weekly-tips")?.checked === false ? "essential only" : "weekly tips and WhatsApp updates"
+      };
     }
 
     function syncAuthAgentSignupForm() {
@@ -7403,6 +7478,7 @@
     function normalizeModerationStatus(status) {
       const raw = String(status || "").toLowerCase();
       if (["approved", "live", "published"].includes(raw)) return "approved";
+      if (["sold", "completed"].includes(raw)) return "sold";
       if (["rejected", "declined", "fraud"].includes(raw)) return "rejected";
       if (["pending", "under_review", "submitted"].includes(raw)) return "pending";
       if (["hidden", "off_market", "paused", "archived"].includes(raw)) return "hidden";
@@ -7411,7 +7487,8 @@
     }
 
     function isListingPublicVisible(property) {
-      return normalizeModerationStatus(property?.status) === "approved";
+      const status = normalizeModerationStatus(property?.status);
+      return status === "approved" || status === "sold";
     }
 
     function getPublicListings() {
@@ -7677,6 +7754,7 @@
     function adminStatusBadge(status) {
       const st = normalizeModerationStatus(status);
       if (st === "approved") return { cls: "bg-green-100 text-green-700", label: "Live" };
+      if (st === "sold") return { cls: "bg-blue-100 text-blue-700", label: "Sold" };
       if (st === "pending") return { cls: "bg-amber-100 text-amber-700", label: "Pending" };
       if (st === "rejected") return { cls: "bg-red-100 text-red-700", label: "Rejected" };
       if (st === "hidden") return { cls: "bg-yellow-100 text-yellow-800", label: "Hidden" };
@@ -7746,7 +7824,7 @@
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
-      let liveListings = allListings.filter((p) => normalizeModerationStatus(p.status) === "approved");
+      let liveListings = allListings.filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status)));
       try {
         const liveRes = await apiRequest("/api/admin/properties/live?limit=100", { headers });
         liveListings = (liveRes?.data || []).map(normalizeRemoteAdminListing);
@@ -7825,7 +7903,7 @@
       const wrap = document.getElementById("admin-actioned-table");
       if (!wrap) return;
       const view = [...(listings || [])]
-        .filter((p) => ["approved", "rejected", "hidden", "deleted"].includes(normalizeModerationStatus(p.status)))
+        .filter((p) => ["approved", "sold", "rejected", "hidden", "deleted"].includes(normalizeModerationStatus(p.status)))
         .sort((a, b) => {
           const ad = parseDateSafe(a.reviewed_at || a.approved_at || a.updated_at || a.created_at)?.getTime() || 0;
           const bd = parseDateSafe(b.reviewed_at || b.approved_at || b.updated_at || b.created_at)?.getTime() || 0;
@@ -7864,7 +7942,7 @@
               ${status === "approved" ? `<button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Owner Message</button>` : ""}
               ${status === "rejected" ? `<button onclick="openAdminRejectedListingWhatsApp(${idArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Lister</button>` : ""}
               ${status === "rejected" || status === "deleted" ? `<button onclick="adminSetListingStatus(${idArg}, 'pending', ${idArg})" class="border border-amber-300 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore to Pending</button>` : ""}
-              ${status === "hidden" ? `<button onclick="adminSetListingStatus(${idArg}, 'approved', ${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore Live</button>` : ""}
+              ${status === "hidden" || status === "sold" ? `<button onclick="adminSetListingStatus(${idArg}, 'approved', ${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Restore Live</button>` : ""}
               ${status === "approved" ? `<button onclick="adminSetListingStatus(${idArg}, 'deleted', ${idArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Remove from Site</button>` : ""}
             </div>
           </div>`;
@@ -7939,7 +8017,7 @@
     function renderAdminLiveListingsRows(listings) {
       const wrap = document.getElementById("admin-live-listings-table");
       if (!wrap) return;
-      const view = [...(listings || [])].filter((p) => normalizeModerationStatus(p.status) === "approved").slice(0, 50);
+      const view = [...(listings || [])].filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
       if (!view.length) {
         wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
         return;
@@ -7962,6 +8040,7 @@
             <div class="mt-3 flex flex-wrap gap-2">
               <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Live Listing</button>
               <button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Follow-up</button>
+              <button onclick="adminSetListingStatus(${idArg}, 'sold', ${idArg})" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Sold</button>
               <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>
               <button onclick="adminSetListingStatus(${idArg}, 'hidden', ${idArg})" class="bg-yellow-500 hover:bg-yellow-400 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Hide</button>
               <button onclick="adminSetListingStatus(${idArg}, 'deleted', ${idArg})" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Remove from Site</button>
@@ -8424,6 +8503,10 @@
       if (Number(user.property_saves_count || 0) > 0) interests.push("Saving homes");
       if (Number(user.route_events_count || 0) > 0) interests.push("Checks routes");
       if (Number(user.property_views_count || 0) > 3) interests.push("Browsing heavily");
+      const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+      if (profile.primary_goal) interests.push(profile.primary_goal);
+      if (profile.university) interests.push(`Student: ${profile.university}`);
+      if (profile.agent_specialities) interests.push(`Agent: ${profile.agent_specialities}`);
       if (!interests.length) return "New or low-activity account";
       return interests.slice(0, 2).join(" • ");
     }
@@ -10941,6 +11024,7 @@
             marketing_opt_in: weeklyTipsOptIn,
             preferred_contact_channel: "whatsapp",
             preferred_language: preferredLanguage,
+            profile_data: collectAuthProfileData(),
             registration_status: authSignUpAudience === "agent" ? registrationStatus : undefined,
             area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined
           }
@@ -12767,6 +12851,8 @@
       const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
       const fieldAgentId = lpVal("lp-field-agent-id") || null;
       const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
+      const videoUrl = lpVal("lp-video-url");
+      const contactPref = lpVal("lp-contact-pref") || "both";
       const inquiryReference = lpInquiryReference || generateListingInquiryRef();
       lpInquiryReference = inquiryReference;
       const newUntil = new Date(Date.now() + LISTING_NEW_WINDOW_MS).toISOString();
@@ -12792,6 +12878,8 @@
         lister_phone: normalizePhoneInput(lpVal("lp-verify-phone")) || null,
         lister_email: (lpVal("lp-verify-email") || "").toLowerCase() || null,
         lister_type: "owner",
+        preferred_contact_method: contactPref,
+        video_url: videoUrl || null,
         students_welcome: studentsWelcome,
         latitude: lat,
         longitude: lng,
@@ -12824,6 +12912,9 @@
           map_pin_confirmed: !!document.getElementById("lp-location-confirm")?.checked,
           resolved_location_label: lpResolvedLocationLabel || null,
           public_display_name: publicDisplayName || null,
+          preferred_contact_method: contactPref,
+          video_url: videoUrl || null,
+          youtube_url: /youtube\.com|youtu\.be/i.test(videoUrl) ? videoUrl : null,
           area_highlights: areaHighlights,
           ownership_verification_requested: ownerVerificationRequested,
           lister_registration_status: "not_registered",
@@ -13559,6 +13650,10 @@
     }
 
     function openListPropertyOptions() {
+      if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+        window.open("https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20list%20my%20property", "_blank", "noopener");
+        return;
+      }
       openModal("list-choice-modal");
     }
 
@@ -13867,6 +13962,52 @@
       advertise: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
         <p class="text-xs text-gray-500 mb-4">Grow through MakaUg search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
+        <div class="grid md:grid-cols-4 gap-3 mb-5">
+          <div class="rounded-xl border border-green-100 bg-green-50 p-3 text-sm"><strong>1. Send inquiry</strong><br><span class="text-gray-600">Tell us your audience, area, product, and campaign goal.</span></div>
+          <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm"><strong>2. Pay & brief</strong><br><span class="text-gray-600">Send a logo, offer, images, or a property/profile to boost.</span></div>
+          <div class="rounded-xl border border-green-100 bg-white p-3 text-sm"><strong>3. Preview</strong><br><span class="text-gray-600">MakaUg creates the ad and shares a preview for approval.</span></div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm"><strong>4. Go live</strong><br><span class="text-gray-600">Approved ads go live with daily, weekly, and post-campaign reporting options.</span></div>
+        </div>
+        <div class="rounded-2xl border border-green-100 bg-white p-4 mb-5">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h3 class="font-black text-gray-800">Ad placement previews</h3>
+            <span class="text-[11px] uppercase tracking-wide bg-green-700 text-white rounded-full px-2 py-1">Creative by MakaUg</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <div class="rounded-xl border border-gray-200 overflow-hidden">
+              <div class="bg-green-900 text-white px-4 py-3">
+                <div class="text-[11px] uppercase tracking-wide text-green-100">Sponsored homepage banner</div>
+                <div class="text-lg font-black">Move faster with Nile Bank mortgages</div>
+                <div class="text-xs text-green-100">Visible on high-traffic discovery pages.</div>
+              </div>
+              <div class="p-3 text-xs text-gray-600">Best for national brands, banks, developers, insurance, utilities, and home services.</div>
+            </div>
+            <div class="rounded-xl border border-gray-200 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Sponsored regional result</div>
+              <div class="mt-2 rounded-lg bg-green-50 border border-green-100 p-3">
+                <div class="font-black text-gray-800">Featured in Kampala searches</div>
+                <div class="text-xs text-gray-600">Target buyers and tenants by district, area, property type, and intent.</div>
+              </div>
+            </div>
+            <div class="rounded-xl border border-gray-200 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-green-700 font-bold">WhatsApp sponsored match</div>
+              <div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-3 text-sm">
+                <strong>Sponsored</strong> - Verified agent in Wakiso<br>
+                <span class="text-gray-600">Profile, rating, and booking link shown inside chatbot journeys.</span>
+              </div>
+            </div>
+            <div class="rounded-xl border border-gray-200 p-3">
+              <div class="text-[11px] uppercase tracking-wide text-green-700 font-bold">Advertiser dashboard add-on</div>
+              <div class="mt-2 grid grid-cols-3 gap-2 text-center text-xs">
+                <div class="rounded-lg bg-green-50 p-2"><strong>12.4k</strong><br>Views</div>
+                <div class="rounded-lg bg-amber-50 p-2"><strong>827</strong><br>Clicks</div>
+                <div class="rounded-lg bg-gray-50 p-2"><strong>6.7%</strong><br>CTR</div>
+              </div>
+              <p class="text-xs text-gray-500 mt-2">Paid dashboard access gives real-time graphs, campaign exports, and performance history.</p>
+            </div>
+          </div>
+          <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. MakaUg prepares the creative, shares the preview, and publishes only after approval.</p>
+        </div>
         <form id="advertising-inquiry-form" onsubmit="submitAdvertisingInquiry(event)" class="space-y-4">
           <div class="grid md:grid-cols-2 gap-3">
             <input name="full_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Your name" required>
@@ -13900,6 +14041,17 @@
             <input name="target_listing_types" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Target categories, e.g. rent, land, student">
             <input name="budget_ugx" type="number" min="0" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Budget in UGX">
             <input name="desired_duration_days" type="number" min="1" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="How many days?">
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            <select name="reporting_cadence" class="border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white">
+              <option value="weekly">Weekly performance report</option>
+              <option value="daily">Daily performance report</option>
+              <option value="post_campaign">Post-campaign report only</option>
+            </select>
+            <label class="border border-gray-200 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+              <input type="checkbox" name="wants_dashboard_access" value="yes" class="accent-green-700">
+              Add paid real-time advertiser dashboard
+            </label>
           </div>
           <textarea name="message" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Tell us the offer, audience, logo/creative needs, and any property or agent profile to boost."></textarea>
           <div id="advertising-inquiry-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
@@ -13970,7 +14122,15 @@
         target_listing_types: String(data.get("target_listing_types") || "").trim(),
         budget_ugx: String(data.get("budget_ugx") || "").trim(),
         desired_duration_days: String(data.get("desired_duration_days") || "").trim(),
-        message: String(data.get("message") || "").trim(),
+        audience_segments: [
+          `Reporting: ${String(data.get("reporting_cadence") || "weekly").trim()}`,
+          data.get("wants_dashboard_access") ? "Paid dashboard access requested" : "No dashboard access requested"
+        ],
+        message: [
+          String(data.get("message") || "").trim(),
+          `Reporting cadence: ${String(data.get("reporting_cadence") || "weekly").trim()}`,
+          data.get("wants_dashboard_access") ? "Advertiser wants paid real-time dashboard access." : "Advertiser does not need dashboard access yet."
+        ].filter(Boolean).join("\n"),
         source: "website_advertise_with_us"
       };
       if (!payload.email && !payload.phone) {
@@ -14017,10 +14177,10 @@
           <div class="max-w-7xl mx-auto px-4 py-3">
             <div class="ad-unit">
               <span class="ad-tag"><i class="fas fa-bullhorn"></i> Sponsored</span>
-              <span class="text-sm text-green-900 font-semibold">Advertise on makaug.com • Reach active property seekers on ${pageName}</span>
+              <span class="text-sm text-green-900 font-semibold">Sponsored MakaUg placement • Reach active property seekers on ${pageName}</span>
               ${hasLiveAds
                 ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
-                : `<a href="https://ads.google.com/" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-green-700 hover:underline">Google Ads</a>`
+                : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline">Book this slot</button>`
               }
             </div>
           </div>`;
@@ -14086,14 +14246,14 @@
       return `
         <div class="max-w-7xl mx-auto px-0 py-4">
           <div class="ad-unit">
-            <span class="ad-tag"><i class="fas fa-bullhorn"></i> Google Ads</span>
+            <span class="ad-tag"><i class="fas fa-bullhorn"></i> Sponsored</span>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-bold text-green-900">Sponsored placement reserved on ${adminEscape(context || "makaug.com")}</div>
-              <div class="text-xs text-gray-500 mt-1">This slot is ready for Google Ads monetization and campaign placements.</div>
+              <div class="text-xs text-gray-500 mt-1">This slot is ready for in-house MakaUg campaigns, boosts, and regional sponsors.</div>
             </div>
             ${hasLiveAds
               ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
-              : `<a href="https://ads.google.com/" target="_blank" rel="noopener noreferrer" class="text-sm font-bold text-green-700 hover:underline whitespace-nowrap">Google Ads Placeholder</a>`
+              : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline whitespace-nowrap">Advertise here</button>`
             }
           </div>
         </div>`;
@@ -16037,6 +16197,7 @@
         lat: Number(p?.latitude ?? p?.lat),
         lng: Number(p?.longitude ?? p?.lng),
         status: p?.status || "pending",
+        sold_at: p?.sold_at || null,
         moderation_status: normalizeModerationStatus(p?.status),
         featured: p?.featured === true || String(p?.extra_fields?.featured || "").toLowerCase() === "true",
         featured_at: p?.featured_at || p?.extra_fields?.featured_at || null,
@@ -16051,6 +16212,9 @@
         neighborhood: p?.neighborhood || p?.extra_fields?.neighborhood || "",
         region: p?.region || p?.extra_fields?.region || "",
         street_name: p?.street_name || p?.extra_fields?.street_name || "",
+        preferred_contact_method: p?.preferred_contact_method || p?.extra_fields?.preferred_contact_method || "both",
+        video_url: p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.youtube_url || "",
+        youtube_url: p?.youtube_url || p?.extra_fields?.youtube_url || "",
         resolved_location_label: p?.resolved_location_label || p?.extra_fields?.resolved_location_label || "",
         nearby_places: Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : []),
         images: imageItems,
@@ -19633,6 +19797,7 @@
       const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
       const addedMeta = listingDateMeta(p);
       const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
+      const isSoldListing = normalizeModerationStatus(p.status) === "sold";
       const detailPhotos = getPropertyGalleryPhotos(p);
       const primaryPhoto = detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") };
       detailGalleryPhotos = detailPhotos.length ? detailPhotos : [primaryPhoto];
@@ -19642,7 +19807,16 @@
       const detailLocation = getPropertyLocationDisplay(p);
       const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
       const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
-      const ownerWhatsAppUrl = ownerPhone ? buildWhatsAppUrl(ownerPhone, `Hello MakaUg, ${translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" })}`) : "";
+      const ownerEmail = p.lister_email || p.contact_email || "";
+      const contactPref = String(p.preferred_contact_method || p.extra_fields?.preferred_contact_method || "both").toLowerCase();
+      const allowCall = !!ownerPhoneHref && (contactPref === "phone" || contactPref === "both" || !contactPref);
+      const allowWhatsApp = !!ownerPhone && (contactPref === "whatsapp" || contactPref === "both" || !contactPref);
+      const allowEmail = !!ownerEmail && contactPref === "email";
+      const contactMessage = `Hello, I am contacting you from MakaUg about ${p.title || "this property"}. ${getPropertyShareUrl(p)}`;
+      const ownerWhatsAppUrl = allowWhatsApp ? buildWhatsAppUrl(ownerPhone, contactMessage) : "";
+      const ownerEmailUrl = allowEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`MakaUg enquiry: ${p.title || "Property"}`)}&body=${encodeURIComponent(contactMessage)}` : "";
+      const videoUrl = String(p.video_url || p.youtube_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || "").trim();
+      const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
       const directionsUrl = propertyDirectionsUrl(p);
       const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
       const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
@@ -19675,6 +19849,7 @@
                   <div>
                     <div class="flex items-center gap-2 flex-wrap">
                       <span class="${badgeColor(p.type)} text-white text-xs font-bold px-2 py-1 rounded">${badgeLabel(p.type)}</span>
+                      ${isSoldListing ? `<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">SOLD</span>` : ""}
                       <span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>
                       ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
                     </div>
@@ -19704,6 +19879,10 @@
                 </div>
                 ` : ""}
                 <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
+                ${safeVideoUrl ? `<div class="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-3">
+                  <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-1">Video tour</div>
+                  <a href="${adminAttr(safeVideoUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-green-700 font-semibold text-sm hover:underline"><i class="fab fa-youtube"></i> Watch property video</a>
+                </div>` : ""}
                 <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
                   <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
                   <p class="text-sm text-gray-700">${localizedHighlights}</p>
@@ -19753,8 +19932,9 @@
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
                 <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
-                ${ownerPhoneHref ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
+                ${allowCall ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : ""}
                 ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+                ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
               `}
               <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
               <div class="mt-4 pt-4 border-t border-gray-100">
