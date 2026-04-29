@@ -75,7 +75,7 @@ function browserMessageKeyFor(snapshot = {}, row = {}) {
     : String(snapshot.text || row.preview || '').trim();
   const stableTextKey = mediaType === 'text'
     ? text
-    : `[${mediaType}:${snapshot.mediaCount || 1}]`;
+    : (snapshot.mediaFingerprint || `[${mediaType}:${snapshot.mediaCount || 1}]`);
   return `${chatKey}:${snapshot.messageId || snapshot.timestampLabel || stableTextKey}:${mediaType}`.slice(0, 260);
 }
 
@@ -301,6 +301,16 @@ async function getActiveChatSnapshot(page) {
       ? headerTitle
       : (headerDigits ? senderLabel : (fallbackContactName || headerTitle || senderLabel));
     const text = (last.innerText || last.textContent || '').trim();
+    const mediaFingerprint = [
+      nodes.indexOf(last),
+      ...Array.from(last.querySelectorAll('img, video, a')).map((el) => (
+        el.getAttribute('src')
+        || el.getAttribute('href')
+        || el.getAttribute('alt')
+        || el.getAttribute('aria-label')
+        || ''
+      ))
+    ].filter(Boolean).join('|').slice(0, 500);
     const messageId = last.closest('[data-id]')?.getAttribute('data-id')
       || last.getAttribute('data-id')
       || '';
@@ -341,7 +351,8 @@ async function getActiveChatSnapshot(page) {
       mediaType,
       mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
       sharedLocation,
-      mediaCount
+      mediaCount,
+      mediaFingerprint
     };
   });
 }
@@ -431,6 +442,16 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           || node.getAttribute('data-id')
           || '';
         const rawText = (node.innerText || node.textContent || '').trim();
+        const mediaFingerprint = [
+          nodes.indexOf(node),
+          ...Array.from(node.querySelectorAll('img, video, a')).map((el) => (
+            el.getAttribute('src')
+            || el.getAttribute('href')
+            || el.getAttribute('alt')
+            || el.getAttribute('aria-label')
+            || ''
+          ))
+        ].filter(Boolean).join('|').slice(0, 500);
         const nonEmojiImages = Array.from(node.querySelectorAll('img')).filter((img) => {
           const src = img.getAttribute('src') || '';
           const alt = img.getAttribute('alt') || '';
@@ -480,7 +501,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
           mediaType,
           mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
           sharedLocation,
-          mediaCount
+          mediaCount,
+          mediaFingerprint
         });
       });
     return snapshots
@@ -677,7 +699,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
-  if (source === 'active_chat' && mediaType !== 'text' && !snapshot.messageId) {
+  if (source === 'active_chat' && mediaType !== 'text' && !snapshot.messageId && !snapshot.mediaFingerprint) {
     return { processed: 0, skipped: 'unstable_active_media_without_message_id' };
   }
 
@@ -687,7 +709,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   }
   rememberBrowserMessageKey(browserMessageKey);
 
-  const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || '');
+  const messageId = createMessageId(chatKey, text, snapshot.timestampLabel, mediaType, snapshot.messageId || snapshot.mediaFingerprint || '');
 
   try {
     const result = await apiRequest('/api/whatsapp/web-bridge/inbound', {

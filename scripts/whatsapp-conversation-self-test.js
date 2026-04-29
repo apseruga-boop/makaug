@@ -411,8 +411,7 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://living-room', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://bedroom', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
-      { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
-      'DONE'
+      { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' }
     ],
     expectLast: { step: 'ask_public_name', includesAny: ['public contact name', 'Amina'] }
   },
@@ -464,8 +463,7 @@ const scenarios = [
       '250000000',
       '3',
       'A bright family home with parking, security, kitchen, and garden.',
-      { mediaUrl: 'whatsapp-web://album', mediaType: 'image', mediaCount: 5 },
-      'DONE'
+      { mediaUrl: 'whatsapp-web://album', mediaType: 'image', mediaCount: 5 }
     ],
     expectLast: { step: 'ask_public_name', includesAny: ['public contact name', 'Amina'] }
   },
@@ -486,7 +484,6 @@ const scenarios = [
       { mediaUrl: 'whatsapp-web://bedroom', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
       { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
-      'DONE',
       'Amina',
       '1',
       '+256760112587',

@@ -4216,7 +4216,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       }
       await patchDraft(phone, { photos });
       const count = photos.length;
-      if (count >= 5) return respond(`${tt(lang, 'photosUploaded', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
+      if (count >= 5) {
+        return respond(`${tt(lang, 'photosUploaded', { count })}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
+      }
       return respond(`${tt(lang, 'photoReceived', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
     }
     return respond(t(lang, 'invalidInput') + '\n\n' + photoNextPrompt(lang, (draft.photos || []).length), 'photos');
