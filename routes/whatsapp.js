@@ -741,6 +741,21 @@ function photoNextPrompt(lang, count = 0) {
   return prompts[code] || prompts.en;
 }
 
+function photoCompletePrompt(lang, count = 5) {
+  const code = resolveLangCode(lang);
+  const safeCount = Math.max(5, Number(count) || 5);
+  const messages = {
+    en: `📸 ${safeCount} photos received. I have the key listing photos.`,
+    lg: `📸 Ebifaananyi ${safeCount}/5 bifuniddwa. Ebifaananyi ebikulu biriwo.`,
+    sw: `📸 Picha ${safeCount}/5 zimepokelewa. Nina picha muhimu za tangazo.`,
+    ac: `📸 Photos ${safeCount}/5 onongo. Atye ki photos ma pire tek pi listing.`,
+    ny: `📸 Ebishushani ${safeCount}/5 byatunga. Ebishushani bikuru biriho.`,
+    rn: `📸 Amafoto ${safeCount}/5 yakiriwe. Amafoto y'ingenzi arahari.`,
+    sm: `📸 Ebifaananyi ${safeCount}/5 bifuniddwa. Ebifaananyi ebikulu biriwo.`
+  };
+  return messages[code] || messages.en;
+}
+
 function friendlyGreetingReply(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
@@ -4217,7 +4232,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       await patchDraft(phone, { photos });
       const count = photos.length;
       if (count >= 5) {
-        return respond(`${tt(lang, 'photosUploaded', { count })}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
+        return respond(`${photoCompletePrompt(lang, count)}\n\n${t(lang, 'askPublicName')}`, 'ask_public_name');
       }
       return respond(`${tt(lang, 'photoReceived', { count })}\n${photoNextPrompt(lang, count)}`, 'photos');
     }
