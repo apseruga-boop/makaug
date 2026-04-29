@@ -19,6 +19,7 @@
     "ai:export-training": "node scripts/export-ai-training-data.js",
     "ai:export-foundation": "node scripts/export-llm-foundation-data.js",
     "ai:run-agents": "node scripts/run-ai-agents.js",
+    "ai:verify-whatsapp": "node scripts/verify-whatsapp-ai-provider.js",
     "test:whatsapp-conversations": "node scripts/whatsapp-conversation-self-test.js",
     "test:whatsapp-conversations:live": "WHATSAPP_SELF_TEST_BASE_URL=https://makaug.com node scripts/whatsapp-conversation-self-test.js",
     "qa:postman": "bash scripts/run-postman-qa.sh",

@@ -6,6 +6,7 @@ const logger = require('../config/logger');
 const { DISTRICTS } = require('../utils/constants');
 const {
   classifyWhatsappIntent,
+  detectWhatsappLanguage,
   suggestWhatsappAssistantReply,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
@@ -578,6 +579,8 @@ function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeti
   const currentLang = resolveLangCode(sessionLang || 'en');
   if (!nextLang || nextLang === currentLang) return false;
   if (detectedLanguage.source === 'intent_entity') return true;
+  if (detectedLanguage.source === 'ai_explicit_language') return true;
+  if (detectedLanguage.source === 'ai_language' && Number(detectedLanguage.confidence || 0) >= 0.92) return true;
   if (detectedLanguage.source === 'voice_transcription') return true;
   if (detectedLanguage.source === 'voice_transcript_text') return true;
   if (Number(detectedLanguage.confidence || 0) < 0.9) return false;
@@ -673,6 +676,24 @@ function resolveVoiceDetectedLanguage(transcriptRecord, transcriptText, sessionL
   const fromText = detectLanguageFromText(transcriptText);
   if (fromText.code) return { ...fromText, source: 'voice_transcript_text' };
   return { code: resolveLangCode(sessionLang), confidence: 0.5, source: 'session' };
+}
+
+function mergeAiLanguageDetection(baseLanguage = {}, aiLanguage = {}) {
+  const aiCode = resolveLangCode(aiLanguage.language || aiLanguage.code || '');
+  if (!aiCode) return baseLanguage;
+
+  const aiConfidence = Number(aiLanguage.confidence || 0);
+  const baseConfidence = Number(baseLanguage.confidence || 0);
+  if (aiLanguage.explicitSwitch || aiConfidence >= Math.max(0.86, baseConfidence)) {
+    return {
+      code: aiCode,
+      confidence: aiConfidence || 0.9,
+      source: aiLanguage.explicitSwitch ? 'ai_explicit_language' : 'ai_language',
+      reason: aiLanguage.reason || ''
+    };
+  }
+
+  return baseLanguage;
 }
 
 function photoRequirementLabel(index, lang = 'en') {
@@ -4425,7 +4446,15 @@ async function processInboundRuntime({
       sessionLang,
       intentResult: null
     });
-  const classifierLanguage = preliminaryLanguage.code || sessionLang;
+  const aiLanguage = transcriptRecord?.text
+    ? null
+    : await detectWhatsappLanguage({
+      text: effectiveBody,
+      sessionLanguage: preliminaryLanguage.code || sessionLang,
+      step: sessionStep
+    });
+  const classifierLanguageResult = mergeAiLanguageDetection(preliminaryLanguage, aiLanguage);
+  const classifierLanguage = classifierLanguageResult.code || preliminaryLanguage.code || sessionLang;
 
   const intentResult = await classifyWhatsappIntent({
     text: effectiveBody,
@@ -4433,13 +4462,16 @@ async function processInboundRuntime({
     step: sessionStep,
     sessionData: session.session_data || {}
   });
-  const detectedLanguage = transcriptRecord?.text
+  const baseDetectedLanguage = transcriptRecord?.text
     ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
     : resolveDetectedLanguage({
       text: effectiveBody,
       sessionLang,
       intentResult
     });
+  const detectedLanguage = transcriptRecord?.text
+    ? baseDetectedLanguage
+    : mergeAiLanguageDetection(baseDetectedLanguage, aiLanguage);
   const runtimeLang = detectedLanguage.code || sessionLang;
   const adoptDetectedLanguage = shouldAdoptDetectedLanguage({ sessionLang, sessionStep, detectedLanguage });
   const activeLang = adoptDetectedLanguage ? runtimeLang : sessionLang;

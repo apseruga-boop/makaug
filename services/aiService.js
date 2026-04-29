@@ -695,6 +695,96 @@ function heuristicNaturalPropertyQuery({ text = '', fallbackType = 'any' } = {})
   );
 }
 
+async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step = '' } = {}) {
+  const clean = cleanText(text, 1200);
+  const fallback = {
+    language: normalizeLanguageCode(sessionLanguage),
+    confidence: 0.5,
+    explicitSwitch: false,
+    reason: 'session_fallback',
+    model: 'heuristic'
+  };
+
+  if (!clean) return fallback;
+
+  const client = getClient();
+  if (!client) return fallback;
+
+  const model = getTaskModel('language', process.env.OPENAI_LANGUAGE_MODEL || process.env.OPENAI_INTENT_MODEL || 'gpt-4.1-mini');
+
+  try {
+    const completion = await createChatCompletionResilient(client, {
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content: `You detect the user's language for MakaUg WhatsApp.
+Supported languages: ${JSON.stringify(SUPPORTED_AI_LANGUAGES)}.
+Return strict JSON only:
+{
+  "language": "en|lg|sw|ac|ny|rn|sm",
+  "confidence": number 0..1,
+  "explicitSwitch": boolean,
+  "reason": "short explanation"
+}
+Rules:
+- Detect the language the user is actually using, not the country, district, or property location.
+- If the user says "respond in English/Luganda/Kiswahili/etc", set explicitSwitch true and use that requested language.
+- If text mixes languages, choose the language of the user's request.
+- Never treat a language name as a property search area.
+- If uncertain, keep the current session language with lower confidence.`
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            text: clean,
+            currentSessionLanguage: normalizeLanguageCode(sessionLanguage),
+            step
+          })
+        }
+      ]
+    }, { preferJson: true });
+
+    const raw = completion?.choices?.[0]?.message?.content || '{}';
+    const parsed = safeJsonParse(raw, {});
+    const language = normalizeLanguageCode(parsed.language || fallback.language);
+    const confidence = clamp(parsed.confidence || 0, 0, 1) || fallback.confidence;
+    const output = {
+      language,
+      confidence,
+      explicitSwitch: Boolean(parsed.explicitSwitch),
+      reason: cleanText(parsed.reason || 'ai_detected', 300),
+      model
+    };
+
+    await logAiModelEvent({
+      eventType: 'language_detection',
+      source: 'whatsapp',
+      inputPayload: { text: clean, sessionLanguage: normalizeLanguageCode(sessionLanguage), step },
+      outputPayload: output,
+      modelName: model,
+      language,
+      qualityScore: output.confidence
+    });
+
+    return output;
+  } catch (error) {
+    logger.warn('AI language detection failed, using session language.', error.message);
+    await logAiModelEvent({
+      eventType: 'language_detection_error',
+      source: 'whatsapp',
+      inputPayload: { text: clean, sessionLanguage: normalizeLanguageCode(sessionLanguage), step },
+      outputPayload: fallback,
+      modelName: model,
+      language: fallback.language,
+      qualityScore: fallback.confidence,
+      errorMessage: error.message
+    });
+    return fallback;
+  }
+}
+
 async function extractNaturalPropertyQuery({ text = '', language = 'en', sessionData = {}, fallbackType = 'any' } = {}) {
   const fallback = heuristicNaturalPropertyQuery({ text, fallbackType });
   const client = getClient();
@@ -734,7 +824,10 @@ Return strict JSON only:
 }
 Rules:
 - Detect natural queries like "2 bed in Muyenga under $20k per month".
+- Detect Uganda language queries such as "Natafuta shamba Mbale", "Noonya enju eya rent e Kampala", and "Funa agent e Wakiso".
 - Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
+- Treat Kampala, Wakiso, Mukono, Mbale, Jinja, Mbarara, Gulu, etc. as places, never as property types.
+- Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga as languages, never as search areas.
 - Never invent impossible numbers.
 - If uncertain, set low confidence and leave field empty rather than hallucinating.`
         },
@@ -832,7 +925,13 @@ Return strict JSON only:
     - bedrooms: number
     - property_type: house | villa | apartment | townhouse | bungalow | studio | office | warehouse | retail shop | hostel
     - language: en | lg | sw | ac | ny | rn | sm
-}`
+}
+Rules:
+- Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
+- Agent search includes "find me an agent/broker" and equivalents in supported languages.
+- Language change requests like "respond in Luganda" should set entities.language and intent unknown unless another action is also requested.
+- Never treat language names as districts or areas.
+- If the user is mid-flow, use step/sessionData to preserve the flow unless the new message clearly starts a different action.`
         },
         {
           role: 'user',
@@ -1429,6 +1528,7 @@ module.exports = {
   INTENTS,
   SUPPORTED_AI_LANGUAGES,
   classifyWhatsappIntent,
+  detectWhatsappLanguage,
   extractNaturalPropertyQuery,
   transcribeAudioFromUrl,
   transcribeAudioFromDataUrl,
