@@ -105,7 +105,7 @@ const T = {
     typeCommercial: 'Commercial',
     typeAny: 'Any',
     voiceNotUnderstood: "🎙️ I received your voice note, but I couldn't understand it clearly. Please send it again in a clear voice, or type the message.",
-    voiceTranscriptEcho: '🎙️ I heard: "{transcript}"',
+    voiceTranscriptEcho: '🎙️ You said: "{transcript}"',
     genericSaveError: '❌ Something went wrong saving your listing. Please try again or visit {url}',
     genericWebhookError: 'Sorry, something went wrong. Please try again or visit {url}'
   },
@@ -172,7 +172,7 @@ const T = {
     typeCommercial: 'Byobusuubuzi',
     typeAny: 'Byonna',
     voiceNotUnderstood: '🎙️ Nfunye voice note yo naye sitegedde bulungi. Ddamu ogyogere bulungi oba wandiika message yo.',
-    voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"',
+    voiceTranscriptEcho: '🎙️ Ogambye nti: "{transcript}"',
     genericSaveError: '❌ Wabaddewo ensobi mu kutereka listing yo. Gezaako nate oba genda ku {url}',
     genericWebhookError: 'Wabaddewo ensobi. Gezaako nate oba genda ku {url}'
   },
@@ -227,7 +227,7 @@ const T = {
     typeStudent: 'Wanafunzi',
     typeCommercial: 'Biashara',
     typeAny: 'Yoyote',
-    voiceTranscriptEcho: '🎙️ Nimesikia: "{transcript}"',
+    voiceTranscriptEcho: '🎙️ Umesema: "{transcript}"',
     genericSaveError: '❌ Hitilafu imetokea wakati wa kuhifadhi tangazo lako. Jaribu tena au tembelea {url}',
     genericWebhookError: 'Samahani, hitilafu imetokea. Jaribu tena au tembelea {url}'
   },
@@ -280,7 +280,7 @@ Object.assign(T.sw, {
   askUniversity: '🎓 Chuo kikuu kilicho karibu ni kipi?',
   askDistance: '🚶 Mali iko umbali gani kutoka chuo kikuu kwa km? (mfano 0.5, 1, 2)',
   voiceNotUnderstood: '🎙️ Nimepokea voice note yako, lakini sikuweza kuisoma vizuri. Tafadhali tuma tena kwa sauti wazi au andika ujumbe wako.',
-  voiceTranscriptEcho: '🎙️ Nimesikia: "{transcript}"'
+  voiceTranscriptEcho: '🎙️ Umesema: "{transcript}"'
 });
 
 Object.assign(T.ac, {
@@ -779,6 +779,12 @@ function friendlyUnknownReply(lang) {
     sm: `Nsobola okukuyamba. Mpandiikira ky'oyagala mu sentence emu, oba londa:\n1️⃣ Listing y'ennyumba\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent`
   };
   return `${messages[code] || messages.en}\n\n${HOME_URL}`;
+}
+
+function formatVoiceTranscriptEcho(lang, transcript) {
+  const transcriptText = normalizeInput(transcript).slice(0, 1000);
+  if (!transcriptText) return '';
+  return tt(lang, 'voiceTranscriptEcho', { transcript: transcriptText });
 }
 
 function isNoMatchChallenge(text) {
@@ -4468,7 +4474,11 @@ async function processInboundRuntime({
       }
     });
 
-    return { message: humanHandoffAck(activeLang), nextStep: sessionStep };
+    const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord?.text);
+    return {
+      message: [transcriptEcho, humanHandoffAck(activeLang)].filter(Boolean).join('\n\n'),
+      nextStep: sessionStep
+    };
   }
 
   let { message, nextStep } = await processMessage(
@@ -4486,10 +4496,8 @@ async function processInboundRuntime({
   );
 
   if (transcriptRecord?.text) {
-    const transcriptText = normalizeInput(transcriptRecord.text).slice(0, 220);
-    if (transcriptText) {
-      message = `${tt(activeLang, 'voiceTranscriptEcho', { transcript: transcriptText })}\n\n${message}`;
-    }
+    const transcriptEcho = formatVoiceTranscriptEcho(activeLang, transcriptRecord.text);
+    if (transcriptEcho) message = `${transcriptEcho}\n\n${message}`;
   }
 
   const runtimeLatencyMs = Math.max(0, Date.now() - runtimeStartedAt);

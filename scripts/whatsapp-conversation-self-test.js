@@ -496,7 +496,7 @@ const scenarios = [
     expectLast: { step: 'main_menu', includesAny: ['voice note', 'sauti', 'andika'], excludes: ['Sorry, something went wrong'] }
   },
   {
-    name: 'Voice note transcript stays in detected language',
+    name: 'Voice note transcript is echoed then answered in detected language',
     messages: [
       {
         mediaUrl: 'whatsapp-web://voice-note-transcribed',
@@ -507,7 +507,10 @@ const scenarios = [
         }
       }
     ],
-    expectLast: { includes: ['Nimesikia'], excludes: ['I heard', 'Sorry, something went wrong'] }
+    expectLast: {
+      includes: ['Umesema', 'Natafuta nyumba ya kupangisha Kampala'],
+      excludes: ['You said', 'I heard', 'Sorry, something went wrong']
+    }
   },
   {
     name: 'Commercial listing reaches commercial details',

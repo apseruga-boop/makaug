@@ -480,9 +480,25 @@ async function hydrateVoiceSnapshot(page, snapshot) {
       const nodes = Array.from(document.querySelectorAll('[data-id]'));
       const root = nodes.find((el) => el.getAttribute('data-id') === targetMessageId);
       if (!root) return null;
-      const audioEl = root.querySelector('audio');
-      const sourceEl = root.querySelector('audio source, source[type^="audio/"]');
-      const src = audioEl?.currentSrc || audioEl?.src || sourceEl?.src || '';
+      let audioEl = root.querySelector('audio');
+      let sourceEl = root.querySelector('audio source, source[type^="audio/"]');
+      let src = audioEl?.currentSrc || audioEl?.src || sourceEl?.src || '';
+      if (!src) {
+        const playButton = root.querySelector([
+          'button[aria-label*="Play" i]',
+          '[role="button"][aria-label*="Play" i]',
+          'button[aria-label*="voice" i]',
+          '[role="button"][aria-label*="voice" i]'
+        ].join(','));
+        if (playButton) {
+          playButton.click();
+          await new Promise((resolve) => setTimeout(resolve, 650));
+          audioEl = root.querySelector('audio');
+          sourceEl = root.querySelector('audio source, source[type^="audio/"]');
+          src = audioEl?.currentSrc || audioEl?.src || sourceEl?.src || '';
+          if (audioEl && typeof audioEl.pause === 'function') audioEl.pause();
+        }
+      }
       if (!src) return null;
 
       const response = await fetch(src);
