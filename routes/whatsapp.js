@@ -2787,29 +2787,128 @@ async function formatNoMatchOrFallbackReply({
 
   if (!fallbackRows.length) return formatNoMatchReply(lang, preferredArea === 'any' ? 'any area' : preferredArea);
 
+  const code = resolveLangCode(lang);
   const exactLabel = typeLabel(normalizedSearchType, lang);
   const locationLabel = preferredArea === 'any' ? 'any area' : preferredArea;
+  const copy = {
+    en: [
+      `I do not have an approved exact match for *${exactLabel}* in *${locationLabel}* right now.`,
+      'I have saved this request so MakaUg can follow up when a matching listing appears.',
+      'While we look, here are live MakaUg listings that may still help:'
+    ],
+    lg: [
+      `Sirina exact match ekakasiddwa ya *${exactLabel}* mu *${locationLabel}* kati.`,
+      'Nterese okusaba kuno MakaUg esobole okukugoberera nga listing ekwatagana evuddeyo.',
+      'Nga tunoonya, zino live listings za MakaUg eziyinza okukuyamba:'
+    ],
+    sw: [
+      `Sina match kamili iliyoidhinishwa ya *${exactLabel}* katika *${locationLabel}* kwa sasa.`,
+      'Nimehifadhi ombi hili ili MakaUg iweze kukufuatilia listing inayolingana ikipatikana.',
+      'Tukiendelea kutafuta, hizi ni live listings za MakaUg zinazoweza kusaidia:'
+    ],
+    ac: [
+      `Pe atye ki exact match ma kimoko pi *${exactLabel}* i *${locationLabel}* kombedi.`,
+      'Atyeko gwoko kwac man wek MakaUg orom lubo ka listing ma rwate onen.',
+      'Kadi watye ka yeny, man aye live listings pa MakaUg ma romo konyi:'
+    ],
+    ny: [
+      `Tinsangire exact match eyikirizibwe ya *${exactLabel}* omuri *${locationLabel}* hati.`,
+      'Nabika okusaba oku kugira ngu MakaUg ekugarukiremu listing erikwesimire yaaba ebonekire.',
+      'Tukishaka, ezi ni live listings za MakaUg ezirikubaasa kukuhwera:'
+    ],
+    rn: [
+      `Nta exact match yemejwe ya *${exactLabel}* muri *${locationLabel}* ubu.`,
+      'Nabitse iki gisabwa kugira MakaUg izobakurikirane listing ijanye ibonetse.',
+      'Tukiriko turarondera, izi ni live listings za MakaUg zishobora kubafasha:'
+    ],
+    sm: [
+      `Sirina exact match ekakasiddwa ya *${exactLabel}* mu *${locationLabel}* kati.`,
+      'Nterese okusaba kuno MakaUg esobole okukugoberera nga listing ekwatagana evuddeyo.',
+      'Nga tunoonya, zino live listings za MakaUg eziyinza okukuyamba:'
+    ]
+  };
+  const lines = copy[code] || copy.en;
   return [
-    `I do not have an approved exact match for *${exactLabel}* in *${locationLabel}* right now.`,
-    'I have saved this request so MakaUg can follow up when a matching listing appears.',
+    lines[0],
+    lines[1],
     '',
-    'While we look, here are live MakaUg listings that may still help:',
+    lines[2],
     '',
     formatPropertySearchMessage(lang, fallbackRows, preferredArea === 'any' ? 'Any area' : preferredArea, 'any')
   ].join('\n');
 }
 
 function formatPropertySearchMessage(lang, rows, location, searchType) {
+  const code = resolveLangCode(lang);
+  const cardCopy = {
+    en: {
+      filter: 'Filter',
+      bed: 'bed',
+      bath: 'bath',
+      preview: 'Preview',
+      open: 'View photos, map and enquire',
+      footer: 'Tap any link to open the full MakaUg page with photos, map, and enquiry options.'
+    },
+    lg: {
+      filter: 'Filter',
+      bed: 'ekisenge',
+      bath: 'bathroom',
+      preview: 'Ekifaananyi',
+      open: 'Laba ebifaananyi, map, era obuuze',
+      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.'
+    },
+    sw: {
+      filter: 'Kichujio',
+      bed: 'chumba',
+      bath: 'bafu',
+      preview: 'Picha',
+      open: 'Fungua picha, ramani na kuuliza',
+      footer: 'Bonyeza link yoyote kufungua ukurasa kamili wa MakaUg wenye picha, ramani, na sehemu ya kuuliza.'
+    },
+    ac: {
+      filter: 'Filter',
+      bed: 'bedroom',
+      bath: 'bathroom',
+      preview: 'Cal',
+      open: 'Nen cal, map, ki penyo',
+      footer: 'Dii link mo keken me yabo pot buk MakaUg ma tye ki cal, map, ki yoo me penyo.'
+    },
+    ny: {
+      filter: 'Filter',
+      bed: 'bedroom',
+      bath: 'bathroom',
+      preview: 'Ekishushani',
+      open: 'Reeba ebishushani, map, kandi obuuze',
+      footer: 'Kanda link yoona kuguraho page ya MakaUg erimu ebishushani, map, n\'okubuuza.'
+    },
+    rn: {
+      filter: 'Filter',
+      bed: 'bedroom',
+      bath: 'bathroom',
+      preview: 'Ifoto',
+      open: 'Raba amafoto, map, hanyuma ubaze',
+      footer: 'Kanda link yose gufungura page ya MakaUg irimwo amafoto, map, n\'aho kubaza.'
+    },
+    sm: {
+      filter: 'Filter',
+      bed: 'ekisenge',
+      bath: 'bathroom',
+      preview: 'Ekifaananyi',
+      open: 'Laba ebifaananyi, map, era obuuze',
+      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.'
+    }
+  };
+  const copy = cardCopy[code] || cardCopy.en;
   const lines = [];
   lines.push('🟩🟨 *MakaUg Matchboard* 🟨🟩');
   lines.push(`🔎 *${t(lang, 'searchHeader')}*`);
-  lines.push(`🎯 Filter: ${typeLabel(searchType, lang)} • ${location}`);
+  lines.push(`🎯 ${copy.filter}: ${typeLabel(searchType, lang)} • ${location}`);
   lines.push('━━━━━━━━━━━━━━');
   rows.forEach((r, idx) => {
     const meta = [
       r.property_type,
-      Number.isFinite(Number(r.bedrooms)) && Number(r.bedrooms) > 0 ? `${r.bedrooms} bed` : '',
-      Number.isFinite(Number(r.bathrooms)) && Number(r.bathrooms) > 0 ? `${r.bathrooms} bath` : ''
+      Number.isFinite(Number(r.bedrooms)) && Number(r.bedrooms) > 0 ? `${r.bedrooms} ${copy.bed}` : '',
+      Number.isFinite(Number(r.bathrooms)) && Number(r.bathrooms) > 0 ? `${r.bathrooms} ${copy.bath}` : ''
     ].filter(Boolean).join(' • ');
     lines.push(`${idx + 1}. 🏡 *${r.title}*`);
     lines.push(`   📍 ${[r.area, r.district].filter(Boolean).join(', ')}`);
@@ -2819,12 +2918,12 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }
     const previewUrl = safePublicPreviewUrl(r.primary_image_url);
-    if (previewUrl) lines.push(`   🖼️ Preview: ${previewUrl}`);
+    if (previewUrl) lines.push(`   🖼️ ${copy.preview}: ${previewUrl}`);
     const listingUrl = safePublicPreviewUrl(r.property_url || r.url) || `${HOME_URL}/property/${r.id}`;
-    lines.push(`   🔗 View photos, map and enquire: ${listingUrl}`);
+    lines.push(`   🔗 ${copy.open}: ${listingUrl}`);
     lines.push('━━━━━━━━━━━━━━');
   });
-  lines.push('✨ Tap any link to open the full MakaUg page with photos, map, and enquiry options.');
+  lines.push(`✨ ${copy.footer}`);
   lines.push(t(lang, 'menuHint'));
   lines.push(t(lang, 'replySearchAgain'));
   return lines.join('\n');
