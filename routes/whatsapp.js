@@ -918,6 +918,40 @@ function bridgeUnauthorized(res) {
   return res.status(401).json({ ok: false, error: 'Invalid WhatsApp Web bridge token' });
 }
 
+function asyncRoute(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch((error) => {
+      logger.error('WhatsApp route failed', {
+        path: req.originalUrl,
+        error: error.message || String(error)
+      });
+      if (res.headersSent) return next(error);
+      return res.status(500).json({
+        ok: false,
+        error: 'whatsapp_route_failed',
+        message: process.env.NODE_ENV === 'production' ? 'WhatsApp processing failed' : (error.message || String(error))
+      });
+    });
+  };
+}
+
+async function withTimeout(promise, timeoutMs, fallbackValue = null, label = 'operation') {
+  let timer = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timer = setTimeout(() => {
+          logger.warn(`${label} timed out after ${timeoutMs}ms`);
+          resolve(fallbackValue);
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function normalizeBridgeInboundKey(value) {
   const raw = normalizeInput(value);
   if (!raw) return '';
@@ -4375,13 +4409,19 @@ async function processInboundRuntime({
         || normalizedMediaType
         || 'audio/ogg'
       );
-      transcriptRecord = voiceTranscriptionUnavailable
-        ? null
+      const transcriptionPromise = voiceTranscriptionUnavailable
+        ? Promise.resolve(null)
         : voiceDataUrl
-        ? await transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType)
-        : (String(mediaUrl || '').startsWith('whatsapp-web://')
-          ? null
-          : await transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg'));
+          ? transcribeAudioFromDataUrl(voiceDataUrl, voiceMimeType)
+          : (String(mediaUrl || '').startsWith('whatsapp-web://')
+            ? Promise.resolve(null)
+            : transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg'));
+      transcriptRecord = await withTimeout(
+        transcriptionPromise,
+        Math.max(4000, Number(process.env.WHATSAPP_VOICE_TRANSCRIBE_TIMEOUT_MS || 12000)),
+        null,
+        'WhatsApp voice transcription'
+      );
     }
     if (transcriptRecord?.text) effectiveBody = transcriptRecord.text;
   }
@@ -4744,7 +4784,7 @@ router.post('/web-bridge/heartbeat', async (req, res) => {
 });
 
 // POST /api/whatsapp/web-bridge/inbound
-router.post('/web-bridge/inbound', async (req, res) => {
+router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
@@ -4848,7 +4888,7 @@ router.post('/web-bridge/inbound', async (req, res) => {
       queue_id: queuedReply?.id || null
     }
   });
-});
+}));
 
 // GET /api/whatsapp/web-bridge/outbox
 router.get('/web-bridge/outbox', async (req, res) => {
