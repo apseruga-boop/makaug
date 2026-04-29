@@ -513,7 +513,8 @@ function cleanDisplayName(value) {
     .trim();
   const digits = withoutBusinessSuffix.replace(/\D/g, '');
   if (digits.length >= 7) return '';
-  if (/^(makaug|makaug\.com|whatsapp|you|unknown)$/i.test(withoutBusinessSuffix)) return '';
+  if (/^(makaug|makaug\.com|whatsapp|you|unknown|codex)$/i.test(withoutBusinessSuffix)) return '';
+  if (/\bcodex\b/i.test(withoutBusinessSuffix)) return '';
   if (/^https?:\/\//i.test(withoutBusinessSuffix)) return '';
   return withoutBusinessSuffix.replace(/[^\p{L}\p{N}\s'.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
 }
@@ -961,6 +962,16 @@ function normalizeBridgeInboundKey(value) {
   const digits = raw.replace(/\D/g, '');
   if (digits.length >= 9) return digits;
   return raw.slice(0, 160);
+}
+
+function createBridgeDryRunKey(phone, inboundMessageId) {
+  const normalizedPhone = normalizeBridgeInboundKey(phone) || 'unknown';
+  const hash = crypto
+    .createHash('sha1')
+    .update(`${normalizedPhone}:${inboundMessageId || Date.now()}`)
+    .digest('hex')
+    .slice(0, 12);
+  return `dryrun:${normalizedPhone}:${hash}`;
 }
 
 function createBridgeMessageId({ phone, body, createdAt, providerMessageId, mediaType }) {
@@ -4821,15 +4832,23 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     return res.status(400).json({ ok: false, error: 'body, media, or location is required' });
   }
 
+  const runtimePhone = dryRun ? createBridgeDryRunKey(phone, inboundMessageId) : phone;
+  const runtimeInboundMessageId = dryRun ? `${inboundMessageId}:dryrun:${runtimePhone.split(':').pop()}` : inboundMessageId;
+  const runtimeMetadata = {
+    ...inboundMetadata,
+    media_count: mediaCount,
+    ...(contactName && !dryRun ? { contact_name: contactName } : {})
+  };
+
   const alreadySeen = await db.query(
     'SELECT 1 FROM whatsapp_messages WHERE wa_message_id = $1 LIMIT 1',
-    [inboundMessageId]
+    [runtimeInboundMessageId]
   );
   if (alreadySeen.rows.length) {
-    return res.json({ ok: true, duplicate: true, inbound_message_id: inboundMessageId });
+    return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
   }
 
-  if (req.body.client_id) {
+  if (req.body.client_id && !dryRun) {
     await upsertWhatsappWebBridgeClient({
       clientId: req.body.client_id,
       operatorName: req.body.operator_name || null,
@@ -4852,24 +4871,20 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     if (minutes > 0) {
       await db.query(
         "UPDATE whatsapp_sessions SET last_message_at = NOW() - ($2::text || ' minutes')::interval WHERE phone = $1",
-        [phone, String(minutes)]
+        [runtimePhone, String(minutes)]
       );
     }
   }
 
   const { message, nextStep } = await processInboundRuntime({
-    phone,
-    inboundMessageId,
+    phone: runtimePhone,
+    inboundMessageId: runtimeInboundMessageId,
     body,
     mediaUrl: mediaUrl || null,
     mediaType,
     sharedLocation,
     provider: 'web_bridge',
-    metadata: {
-      ...inboundMetadata,
-      media_count: mediaCount,
-      ...(contactName ? { contact_name: contactName } : {})
-    }
+    metadata: runtimeMetadata
   });
 
   let queuedReply = null;
@@ -4886,10 +4901,11 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   return res.json({
     ok: true,
     data: {
-      inbound_message_id: inboundMessageId,
+      inbound_message_id: runtimeInboundMessageId,
       next_step: nextStep,
       message,
       dry_run: dryRun,
+      ...(dryRun ? { dry_run_session: runtimePhone } : {}),
       queued_reply: !!queuedReply,
       queue_id: queuedReply?.id || null
     }
