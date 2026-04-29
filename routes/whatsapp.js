@@ -679,6 +679,7 @@ function resolveVoiceDetectedLanguage(transcriptRecord, transcriptText, sessionL
 }
 
 function mergeAiLanguageDetection(baseLanguage = {}, aiLanguage = {}) {
+  if (!aiLanguage || typeof aiLanguage !== 'object') return baseLanguage;
   const aiCode = resolveLangCode(aiLanguage.language || aiLanguage.code || '');
   if (!aiCode) return baseLanguage;
 
