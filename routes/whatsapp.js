@@ -926,10 +926,12 @@ function asyncRoute(handler) {
         error: error.message || String(error)
       });
       if (res.headersSent) return next(error);
+      const dryRun = ['1', 'true', 'yes'].includes(String(req.body?.dry_run || req.body?.dryRun || '').trim().toLowerCase());
       return res.status(500).json({
         ok: false,
         error: 'whatsapp_route_failed',
-        message: process.env.NODE_ENV === 'production' ? 'WhatsApp processing failed' : (error.message || String(error))
+        message: process.env.NODE_ENV === 'production' && !dryRun ? 'WhatsApp processing failed' : (error.message || String(error)),
+        ...(dryRun ? { stack: String(error.stack || '').split('\n').slice(0, 6) } : {})
       });
     });
   };
