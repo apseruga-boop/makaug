@@ -2707,6 +2707,19 @@ async function findAgentsForWhatsapp(location) {
   return result.rows;
 }
 
+async function findAllAgentsForWhatsapp(limit = 5) {
+  const result = await db.query(
+    `SELECT id, full_name, company_name, phone, whatsapp, rating, districts_covered
+     FROM agents
+     WHERE status = 'approved'
+     ORDER BY rating DESC NULLS LAST, created_at DESC
+     LIMIT $1`,
+    [Math.max(1, Math.min(10, Number(limit) || 5))]
+  );
+
+  return result.rows;
+}
+
 function extractAgentSearchKeywords(text, sessionData = {}) {
   const clean = normalizeInput(text);
   if (!clean) return [];
@@ -3455,6 +3468,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
+    && globalRoute !== step
     && !(globalRoute === 'search_type' && ['search_type', 'search_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
     && (
@@ -3988,6 +4002,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         `${t(lang, 'askAgentArea')}\n\n📍 Or share your WhatsApp location to find brokers near you.`,
         'agent_area'
       );
+    }
+
+    if (isAnyAreaReply(cleanBody)) {
+      const rows = await findAllAgentsForWhatsapp(5);
+      if (!rows.length) {
+        return respond(
+          `${t(lang, 'noAgentsFound')}\n\n${tt(lang, 'seeAllAgents', { url: `${HOME_URL}/#page-brokers` })}\n${t(lang, 'menuHint')}`,
+          'main_menu'
+        );
+      }
+      return respond(formatAgentSearchMessage(lang, rows, t(lang, 'typeAny')), 'main_menu');
     }
 
     const keywords = extractAgentSearchKeywords(cleanBody, sessionData);

@@ -363,6 +363,14 @@ const scenarios = [
     ]
   },
   {
+    name: 'Agent search accepts any area instead of looping',
+    messages: ['Looking for an agent', 'Any'],
+    expect: [
+      { step: 'agent_area', includesAny: ['agent', 'district', 'area'] },
+      { step: 'main_menu', includesAny: ['/agents/', 'Profile:', 'verified agent', 'No verified'], excludes: ['Which district or area', 'Call:', 'WhatsApp:', 'wa.me'] }
+    ]
+  },
+  {
     name: 'Find me an agent in Kampala is not treated as property search',
     messages: ['Find me an agent in Kampala'],
     expect: [
