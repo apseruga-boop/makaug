@@ -4417,7 +4417,10 @@ async function processInboundRuntime({
             ? Promise.resolve(null)
             : transcribeAudioFromUrl(mediaUrl, normalizedMediaType || 'audio/ogg'));
       transcriptRecord = await withTimeout(
-        transcriptionPromise,
+        transcriptionPromise.catch((error) => {
+          logger.warn('WhatsApp voice transcription failed:', error.message || String(error));
+          return null;
+        }),
         Math.max(4000, Number(process.env.WHATSAPP_VOICE_TRANSCRIBE_TIMEOUT_MS || 12000)),
         null,
         'WhatsApp voice transcription'
