@@ -25,6 +25,7 @@ const {
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
+const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
 
 const router = express.Router();
@@ -4929,6 +4930,32 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     sharedLocation,
     provider: 'web_bridge',
     metadata: runtimeMetadata
+  });
+
+  await captureLearningEvent({
+    eventName: 'whatsapp_conversation_turn',
+    source: 'whatsapp',
+    channel: 'whatsapp',
+    sessionId: runtimePhone,
+    externalUserId: phone,
+    language: runtimeMetadata.language || runtimeMetadata.detected_language || 'auto',
+    inputText: body || `[${mediaType || (sharedLocation ? 'location' : 'message')}]`,
+    responseText: message || '',
+    entities: {
+      phone,
+      media_type: mediaType || null,
+      has_media: !!mediaUrl,
+      has_location: !!sharedLocation,
+      next_step: nextStep || null
+    },
+    payload: {
+      provider: 'web_bridge',
+      dry_run: dryRun,
+      media_count: mediaCount,
+      metadata: runtimeMetadata
+    },
+    outcome: message ? 'responded' : 'received',
+    dedupeKey: `whatsapp:${runtimeInboundMessageId}`
   });
 
   let queuedReply = null;

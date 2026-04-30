@@ -9,6 +9,7 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "dev:whatsapp-web": "node scripts/whatsapp-web-copilot.js",
+    "dev:whatsapp-agent": "node scripts/whatsapp-web-agent.js",
     "dev:bot": "tsx watch src/server.ts",
     "start:bot": "node dist/server.js",
     "build:bot": "tsc -p tsconfig.json",

@@ -1612,7 +1612,7 @@
           </a>
           <div class="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
             <div class="font-bold">WhatsApp connection readiness</div>
-            <div class="mt-1 text-green-800">The website points users to 0760112587 and the backend webhook is ready for Meta WhatsApp Cloud API credentials.</div>
+            <div class="mt-1 text-green-800">The website points users to 0760112587. For the live web bridge, keep Chrome connected and run <span class="font-mono font-bold">npm run dev:whatsapp-agent</span> so the local agent restarts the WhatsApp responder if it drops.</div>
           </div>
         </div>
       </div>
@@ -1776,6 +1776,49 @@
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-2-title" class="text-gray-900">Media checks</strong><p id="fraud-monitor-2-sub" class="text-gray-600 mt-1">Stolen images, repeated images, poor or suspicious uploads.</p></div>
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-3-title" class="text-gray-900">Identity integrity</strong><p id="fraud-monitor-3-sub" class="text-gray-600 mt-1">NIN format mismatch, OTP mismatch, impossible contact patterns.</p></div>
           <div class="p-3 rounded-xl bg-gray-50 border border-gray-100"><strong id="fraud-monitor-4-title" class="text-gray-900">Behavior risk</strong><p id="fraud-monitor-4-sub" class="text-gray-600 mt-1">Bulk spam, repeated complaint signals, repeat fraud patterns.</p></div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-[0.85fr,1.15fr] gap-6 items-stretch">
+        <div class="rounded-3xl overflow-hidden border border-green-100 bg-gray-900 text-white min-h-[360px] relative">
+          <img src="https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?auto=format&fit=crop&w=1200&q=80" alt="MakaUg moderation team reviewing property safety checks" class="absolute inset-0 w-full h-full object-cover opacity-70">
+          <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
+          <div class="relative z-10 h-full flex flex-col justify-end p-6">
+            <div class="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">MakaUg Safety Desk</div>
+            <h2 class="text-2xl md:text-3xl font-black serif mt-3">Fraud reports are treated as urgent cases, not ordinary support tickets.</h2>
+            <p class="text-sm text-green-50 mt-2 max-w-xl">Screenshots, payment references, chat history, duplicate listings, and location mismatches are grouped into one review record so the team can act quickly.</p>
+          </div>
+        </div>
+        <div class="bg-white border border-green-100 rounded-3xl p-6">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wide text-green-700">Verification examples</div>
+              <h2 class="text-2xl font-bold text-gray-900 mt-1">How MakaUg reduces risk before users meet or pay</h2>
+            </div>
+            <button onclick="openModal('report-modal')" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Report Suspicion</button>
+          </div>
+          <div class="mt-5 grid md:grid-cols-2 gap-4">
+            <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
+              <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-fingerprint"></i></div>
+              <h3 class="font-bold text-gray-900">Account and contact consistency</h3>
+              <p class="text-sm text-gray-600 mt-1">We compare account details, OTP verification, listed contact method, and repeated phone or email patterns.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
+              <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-map-location-dot"></i></div>
+              <h3 class="font-bold text-gray-900">Location and title checks</h3>
+              <p class="text-sm text-gray-600 mt-1">Map pins, district, area, street name, title type, and owner-verification requests are reviewed together.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
+              <div class="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-images"></i></div>
+              <h3 class="font-bold text-gray-900">Photo and video evidence</h3>
+              <p class="text-sm text-gray-600 mt-1">Required photo slots, repeated images, poor uploads, and YouTube tour links are checked before approval.</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
+              <div class="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-ban"></i></div>
+              <h3 class="font-bold text-gray-900">Block, hold, or escalate</h3>
+              <p class="text-sm text-gray-600 mt-1">Admins can hold listings, request more proof, block accounts, or escalate repeat suspicious behavior.</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2040,12 +2083,6 @@
             </div>
           </div>
 
-          <div class="mt-5">
-            <label class="block text-sm font-semibold text-gray-700 mb-1.5">Video / YouTube Tour (optional)</label>
-            <input id="lp-video-url" oninput="updateListPreview();renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Paste a YouTube, TikTok, Instagram, or video tour link">
-            <p class="text-xs text-gray-500 mt-1">Add a walkthrough link if one exists. It will appear on the property page after review.</p>
-          </div>
-
           <button id="lp-step1-next-btn" onclick="nextListStepFromDetails()" class="w-full mt-6 bg-green-800 hover:bg-green-700 text-white py-3.5 rounded-xl text-base font-bold">
             Continue to Photos →
           </button>
@@ -2076,6 +2113,18 @@
           <p class="mt-2 text-xs text-gray-500">Choose one image as the <strong>main photo</strong>. This will appear first in search results.</p>
           <div id="lp-photo-gallery" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           <div id="lp-photo-quality" class="mt-3 text-sm"></div>
+
+          <div class="mt-5 bg-white border border-green-100 rounded-2xl p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-1.5">Video / YouTube Tour (optional)</label>
+                <p class="text-xs text-gray-500">Paste a YouTube walkthrough beside the photos so viewers can play it on the property page.</p>
+              </div>
+              <span class="inline-flex items-center gap-1 rounded-full bg-red-50 text-red-700 px-2.5 py-1 text-[11px] font-bold"><i class="fab fa-youtube"></i> Playable preview</span>
+            </div>
+            <input id="lp-video-url" oninput="renderLpVideoPreview();updateListPreview();renderListReviewSummary()" class="mt-3 w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Paste a YouTube, TikTok, Instagram, or video tour link">
+            <div id="lp-video-preview" class="mt-3"></div>
+          </div>
 
           <div class="flex gap-3 mt-6">
             <button onclick="setListWizardStep(1)" class="flex-1 border border-gray-300 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-50">← Back</button>
@@ -13120,6 +13169,72 @@
       return true;
     }
 
+    function getYouTubeEmbedUrl(url) {
+      const raw = String(url || "").trim();
+      if (!raw) return "";
+      try {
+        const parsed = new URL(raw);
+        const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+        let id = "";
+        if (host === "youtu.be") {
+          id = parsed.pathname.split("/").filter(Boolean)[0] || "";
+        } else if (host.endsWith("youtube.com")) {
+          if (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/embed/")) {
+            id = parsed.pathname.split("/").filter(Boolean)[1] || "";
+          } else {
+            id = parsed.searchParams.get("v") || "";
+          }
+        }
+        if (!/^[a-zA-Z0-9_-]{6,}$/.test(id)) return "";
+        return `https://www.youtube.com/embed/${id}`;
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function renderVideoEmbedCard(url, options = {}) {
+      const safeUrl = String(url || "").trim();
+      if (!/^https?:\/\//i.test(safeUrl)) return "";
+      const embedUrl = getYouTubeEmbedUrl(safeUrl);
+      const title = options.title || translateListingLabel("Video tour");
+      const sub = options.sub || translateListingLabel("Play the walkthrough without leaving this page.");
+      if (embedUrl) {
+        return `
+          <div class="rounded-2xl border border-red-100 bg-red-50/50 overflow-hidden">
+            <div class="flex items-center justify-between gap-3 p-3">
+              <div>
+                <div class="text-sm font-bold text-gray-900"><i class="fab fa-youtube text-red-600"></i> ${title}</div>
+                <div class="text-xs text-gray-500 mt-0.5">${sub}</div>
+              </div>
+              <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-red-700 hover:underline">${translateListingLabel("Open YouTube")}</a>
+            </div>
+            <div class="aspect-video bg-black">
+              <iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+            </div>
+          </div>
+        `;
+      }
+      return `
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-3">
+          <div class="text-sm font-bold text-gray-900">${title}</div>
+          <p class="text-xs text-gray-600 mt-1">${translateListingLabel("This link will be reviewed and shown on the property page.")}</p>
+          <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="mt-2 inline-flex items-center gap-2 text-green-700 font-semibold text-sm hover:underline"><i class="fas fa-play-circle"></i>${translateListingLabel("Open video link")}</a>
+        </div>
+      `;
+    }
+
+    function renderLpVideoPreview() {
+      const wrap = document.getElementById("lp-video-preview");
+      if (!wrap) return;
+      const url = lpVal("lp-video-url");
+      wrap.innerHTML = url
+        ? renderVideoEmbedCard(url, {
+            title: translateListingLabel("Video preview"),
+            sub: translateListingLabel("This is how the video tour will appear after review.")
+          })
+        : `<div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">${translateListingLabel("Add a YouTube walkthrough link to show an embedded preview here.")}</div>`;
+    }
+
     function validateListStep3() {
       clearLpValidationErrors("#lp-step-3");
       const name = lpVal("lp-verify-name");
@@ -13439,6 +13554,7 @@
             <div class="text-sm font-semibold text-gray-800 mt-1">${photoCount} ${translateListingLabel("selected")}</div>
             <div class="text-xs text-gray-500 mt-1">${quality}</div>
             <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Main photo")}: ${lpSelectedPhotos[lpMainPhotoIndex]?.name || "-"}</div>
+            <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Video tour")}: ${payload.video_url ? translateListingLabel("Attached") : translateListingLabel("Not set")}</div>
           </div>
           <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
             <div class="text-xs uppercase text-gray-500 font-semibold">${translateListingLabel("Verification")}</div>
@@ -13498,6 +13614,8 @@
         status: payload.status || "pending",
         agent: null,
         period,
+        video_url: payload.video_url || payload.extra_fields?.video_url || "",
+        youtube_url: payload.extra_fields?.youtube_url || "",
         amenities: payload.amenities || [],
         area_highlights: payload?.extra_fields?.area_highlights || "",
         nearby_places: Array.isArray(payload?.extra_fields?.nearby_facilities) ? payload.extra_fields.nearby_facilities : [],
@@ -16740,6 +16858,7 @@
           lpAddressManualOverride = false;
           const success = document.getElementById("lp-success-box");
           if (success) success.classList.add("hidden");
+          renderLpVideoPreview();
         }
         ensureListPinMap();
         refreshListPinMapFromInputs();
@@ -20474,10 +20593,10 @@
                 </div>
                 ` : ""}
                 <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
-                ${safeVideoUrl ? `<div class="mt-4 bg-gray-50 border border-gray-200 rounded-xl p-3">
-                  <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-1">Video tour</div>
-                  <a href="${adminAttr(safeVideoUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 text-green-700 font-semibold text-sm hover:underline"><i class="fab fa-youtube"></i> Watch property video</a>
-                </div>` : ""}
+                ${safeVideoUrl ? `<div class="mt-4">${renderVideoEmbedCard(safeVideoUrl, {
+                  title: translateListingLabel("Video tour"),
+                  sub: translateListingLabel("Watch the walkthrough before you enquire.")
+                })}</div>` : ""}
                 <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
                   <div class="text-xs uppercase tracking-wide text-green-700 font-semibold mb-1">${translateListingLabel("Area Highlights")}</div>
                   <p class="text-sm text-gray-700">${localizedHighlights}</p>
