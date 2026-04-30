@@ -210,6 +210,7 @@ function buildAutomatedListingReview({
   const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
     ? listing.price != null
     : Number(listing.price || 0) > 0;
+  const minRequiredImages = String(listing.listing_type || '').toLowerCase() === 'land' ? 3 : 5;
   const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
   const hasViewableIdDocument = isUsableMediaUrl(idDocumentUrl, { allowPdf: true });
   const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
@@ -269,16 +270,16 @@ function buildAutomatedListingReview({
     ),
     checkResult(
       'image_count_checked',
-      usableImageUrls.length >= 5 ? 'pass' : 'fail',
-      usableImageUrls.length >= 5 ? 'At least five viewable property photos are attached.' : 'Fewer than five viewable property photos are attached.',
-      { image_count: images.length, usable_image_count: usableImageUrls.length }
+      usableImageUrls.length >= minRequiredImages ? 'pass' : 'fail',
+      usableImageUrls.length >= minRequiredImages ? `At least ${minRequiredImages} viewable property photos are attached.` : `Fewer than ${minRequiredImages} viewable property photos are attached.`,
+      { image_count: images.length, usable_image_count: usableImageUrls.length, minimum_required: minRequiredImages }
     ),
     checkResult(
       'image_quality_checked',
-      usableImageUrls.length >= 5 && uniqueUsableImageUrls.size === usableImageUrls.length && !reusedImages.length ? 'pass' : 'fail',
+      usableImageUrls.length >= minRequiredImages && uniqueUsableImageUrls.size === usableImageUrls.length && !reusedImages.length ? 'pass' : 'fail',
       reusedImages.length
         ? 'One or more image URLs are reused by another listing.'
-        : (usableImageUrls.length >= 5 && uniqueUsableImageUrls.size === usableImageUrls.length ? 'Image URLs are present, viewable, and unique.' : 'Image URLs are missing, duplicated, or not viewable.'),
+        : (usableImageUrls.length >= minRequiredImages && uniqueUsableImageUrls.size === usableImageUrls.length ? 'Image URLs are present, viewable, and unique.' : 'Image URLs are missing, duplicated, or not viewable.'),
       {
         image_url_count: imageUrls.length,
         usable_image_url_count: usableImageUrls.length,

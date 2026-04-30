@@ -38,6 +38,23 @@ router.get('/packages', (_req, res) => {
   });
 });
 
+router.get('/placements', async (_req, res, next) => {
+  try {
+    const rows = await db.query(
+      `SELECT key, label, page_key, slot_type, size_label, is_premium, base_price_ugx, preview_image_url, notes
+       FROM advertising_placements
+       WHERE is_active = true
+       ORDER BY sort_order ASC, label ASC`
+    );
+    return res.json({ ok: true, data: rows.rows });
+  } catch (error) {
+    if (String(error.message || '').includes('advertising_placements')) {
+      return res.json({ ok: true, data: [] });
+    }
+    return next(error);
+  }
+});
+
 router.post('/inquiries', async (req, res, next) => {
   try {
     const fullName = cleanText(req.body.full_name || req.body.name);

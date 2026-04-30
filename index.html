@@ -285,7 +285,7 @@
     .ad-wrap { width: 100%; }
     .ad-unit {
       border: 1px dashed #86efac;
-      background: #f0fdf4;
+      background: linear-gradient(135deg, #f0fdf4 0%, #fff7ed 100%);
       border-radius: 12px;
       padding: 10px 14px;
       display: flex;
@@ -322,6 +322,30 @@
       display: block;
       width: 100%;
       min-height: 90px;
+    }
+    .inhouse-ad-preview {
+      min-width: min(100%, 320px);
+      flex: 1;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(22, 101, 52, 0.16);
+      background: #ffffff;
+      display: grid;
+      grid-template-columns: minmax(90px, 32%) 1fr;
+      min-height: 110px;
+    }
+    .inhouse-ad-preview img {
+      width: 100%;
+      height: 100%;
+      min-height: 110px;
+      object-fit: cover;
+    }
+    .inhouse-ad-preview-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
     }
     .chatbot-phone {
       width: min(360px, 100%);
@@ -556,6 +580,9 @@
       }
       .ad-unit {
         align-items: flex-start;
+      }
+      .inhouse-ad-preview {
+        grid-template-columns: 1fr;
       }
       .lang-spotlight-select {
         width: 100%;
@@ -853,6 +880,16 @@
         <div class="listing-map-shell">
           <div id="map-sale" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
+        <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
+          <div class="font-bold text-green-900">Can't find what you're looking for?</div>
+          <p class="text-xs text-green-800 mt-1">Tell MakaUg what you need and we will follow up with matching homes or agents.</p>
+          <div class="grid gap-2 mt-2">
+            <input data-map-assist-name="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+            <input data-map-assist-phone="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+            <textarea data-map-assist-details="sale" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
+            <button type="button" onclick="submitMapAssistRequest('sale')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -936,6 +973,16 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-rent" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
+        </div>
+        <div class="map-assist-card mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm">
+          <div class="font-bold text-blue-900">Can't find the right rental?</div>
+          <p class="text-xs text-blue-800 mt-1">Send your budget, area, and must-haves. We will track it for follow-up.</p>
+          <div class="grid gap-2 mt-2">
+            <input data-map-assist-name="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+            <input data-map-assist-phone="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+            <textarea data-map-assist-details="rent" rows="2" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
+            <button type="button" onclick="submitMapAssistRequest('rent')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1034,6 +1081,16 @@
           <div class="listing-map-shell">
             <div id="map-students" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
           </div>
+          <div class="map-assist-card mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm">
+            <div class="font-bold text-purple-900">Need student accommodation help?</div>
+            <p class="text-xs text-purple-800 mt-1">Share university, budget, and move-in date. MakaUg will save the request.</p>
+            <div class="grid gap-2 mt-2">
+              <input data-map-assist-name="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+              <input data-map-assist-phone="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+              <textarea data-map-assist-details="students" rows="2" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, room type, budget..."></textarea>
+              <button type="button" onclick="submitMapAssistRequest('students')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1109,6 +1166,16 @@
         <div class="listing-map-shell">
           <div id="map-commercial" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
+        <div class="map-assist-card mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm">
+          <div class="font-bold text-amber-900">Need a commercial space?</div>
+          <p class="text-xs text-amber-800 mt-1">Tell us the business type, size, area, and budget.</p>
+          <div class="grid gap-2 mt-2">
+            <input data-map-assist-name="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+            <input data-map-assist-phone="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+            <textarea data-map-assist-details="commercial" rows="2" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Office, shop, warehouse, location..."></textarea>
+            <button type="button" onclick="submitMapAssistRequest('commercial')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1181,6 +1248,16 @@
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
           <div id="map-land" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
+        </div>
+        <div class="map-assist-card mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm">
+          <div class="font-bold text-emerald-900">Looking for land?</div>
+          <p class="text-xs text-emerald-800 mt-1">Send acreage, title preference, area, and budget. We will save it for follow-up.</p>
+          <div class="grid gap-2 mt-2">
+            <input data-map-assist-name="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+            <input data-map-assist-phone="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+            <textarea data-map-assist-details="land" rows="2" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Acres, district, road access, title..."></textarea>
+            <button type="button" onclick="submitMapAssistRequest('land')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2769,6 +2846,35 @@
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Ads</button>
           </div>
           <div id="admin-advertising-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div class="grid xl:grid-cols-[0.95fr,1.05fr] gap-5 mb-5">
+            <div class="border border-green-100 bg-green-50 rounded-2xl p-4">
+              <h4 class="text-lg font-bold text-gray-800">Campaign Builder</h4>
+              <p class="text-xs text-gray-500 mt-1">Create a bespoke ad, choose placements, set price, approval stage, and reporting cadence.</p>
+              <div class="grid sm:grid-cols-2 gap-2 mt-3">
+                <input id="admin-ad-builder-advertiser" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Advertiser / brand">
+                <input id="admin-ad-builder-campaign" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Campaign name">
+                <input id="admin-ad-builder-headline" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Ad headline">
+                <input id="admin-ad-builder-cta" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="CTA, e.g. Book viewing">
+                <input id="admin-ad-builder-image" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Creative / image preview URL">
+                <input id="admin-ad-builder-url" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Click-through URL">
+                <input id="admin-ad-builder-quote" type="number" min="0" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Quoted UGX">
+                <select id="admin-ad-builder-report" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white">
+                  <option value="weekly">Weekly reports</option>
+                  <option value="daily">Daily reports</option>
+                  <option value="post_campaign">Post-campaign report only</option>
+                  <option value="dashboard">Paid live dashboard</option>
+                </select>
+                <textarea id="admin-ad-builder-body" rows="3" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Short body copy / offer"></textarea>
+              </div>
+              <div id="admin-ad-builder-placements" class="grid sm:grid-cols-2 gap-2 mt-3 text-xs"></div>
+              <button onclick="adminCreateAdCampaignFromBuilder()" class="mt-3 w-full bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold">Create Campaign Draft</button>
+            </div>
+            <div class="border border-gray-200 bg-white rounded-2xl p-4">
+              <h4 class="text-lg font-bold text-gray-800">Placement Control Room</h4>
+              <p class="text-xs text-gray-500 mt-1">Every ad slot can be priced, activated, paused, and sold from here.</p>
+              <div id="admin-ad-placements-grid" class="grid sm:grid-cols-2 gap-3 mt-3"></div>
+            </div>
+          </div>
           <div class="grid xl:grid-cols-[1fr,0.85fr] gap-5">
             <div>
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
@@ -2787,7 +2893,7 @@
           </div>
           <div class="mt-5 border border-gray-200 bg-gray-50 rounded-2xl p-4">
             <h4 class="text-lg font-bold text-gray-800">Package Menu</h4>
-            <p class="text-xs text-gray-500 mt-1">Default rate card. Edit prices later in the catalog service when the commercial model changes.</p>
+            <p class="text-xs text-gray-500 mt-1">Default rate card. Live placement prices are now controlled above so pricing changes can be made without code edits.</p>
             <div id="admin-ad-packages-grid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
           </div>
         </div>
@@ -3064,7 +3170,7 @@
               <i class="fab fa-facebook-f"></i>
             </a>
           </div>
-          <div class="text-xs text-green-300" id="footer-growth-note">Google Ads ready and SEO-indexing enabled for growth campaigns.</div>
+          <div class="text-xs text-green-300" id="footer-growth-note">In-house sponsored placements and SEO indexing enabled for growth campaigns.</div>
         </div>
         <div id="footer-copyright" class="text-xs text-green-400 mt-3">
           © 2026 Uganda Property. All rights reserved.
@@ -3299,6 +3405,10 @@
               <span class="text-[11px] bg-white border border-gray-200 rounded-full px-2 py-1 text-gray-500">Optional</span>
             </div>
             <div class="grid sm:grid-cols-2 gap-3 mt-3">
+              <select id="auth-profile-account-kind" onchange="syncAuthProfileSignupForm()" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2">
+                <option value="finder">I am looking for a property</option>
+                <option value="student">I am a student looking for accommodation</option>
+              </select>
               <input id="auth-profile-primary-goal" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="What are you trying to do?">
               <input id="auth-profile-preferred-areas" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Preferred areas or districts">
               <input id="auth-profile-budget-range" class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Budget range">
@@ -4000,6 +4110,7 @@
     let adminAdvertisingSummary = {};
     let adminAdvertisingInquiries = [];
     let adminAdvertisingCampaigns = [];
+    let adminAdvertisingPlacements = [];
     let adminWhatsappSummary = {};
     let adminWhatsappConversations = [];
     let adminWhatsappActivePhone = "";
@@ -4030,6 +4141,7 @@
     let lpPreviewMapProvider = "";
     let lpPreviewInfoWindow = null;
     const LP_MIN_UPLOAD_PHOTOS = 5;
+    const LP_LAND_MIN_UPLOAD_PHOTOS = 3;
     const LP_MAX_UPLOAD_PHOTOS = 20;
     const LP_OTHER_PHOTO_SLOT = "other";
     let lpSelectedPhotos = [];
@@ -4220,7 +4332,7 @@
         listingPrivate: "Private Listed",
         listingRegistered: "Registered",
         listingNotRegistered: "",
-        footerGrowth: "Google Ads ready and SEO-indexing enabled for growth campaigns.",
+        footerGrowth: "In-house sponsored placements and SEO indexing enabled for growth campaigns.",
         languageSet: "Language set"
       },
       lg: {
@@ -4281,7 +4393,7 @@
         listingPrivate: "Eteekeddwako Nnyiniyo",
         listingRegistered: "Akwatiddwa",
         listingNotRegistered: "",
-        footerGrowth: "Google Ads zitegekeddwa era SEO indexing etegeke okuyamba okukula.",
+        footerGrowth: "Ebifo bya MakaUg eby'obulango ne SEO bitegekeddwa okuyamba okukula.",
         languageSet: "Olulimi lulondeddwa"
       },
       sw: {
@@ -4342,7 +4454,7 @@
         listingPrivate: "Imeorodheshwa na Mmiliki",
         listingRegistered: "Amesajiliwa",
         listingNotRegistered: "",
-        footerGrowth: "Google Ads iko tayari na SEO indexing imewezeshwa kwa ukuaji.",
+        footerGrowth: "Matangazo ya ndani ya MakaUg na SEO vimewezeshwa kwa ukuaji.",
         languageSet: "Lugha imewekwa"
       },
       ac: {
@@ -4578,7 +4690,7 @@
         badgeStudent: "Joyot",
         badgeCommercial: "Curu",
         badgeLand: "Lobo",
-        footerGrowth: "Google Ads ki SEO indexing tye ayera me yubo dong."
+        footerGrowth: "Kabedo me sponsorship pa MakaUg ki SEO indexing tye ayera me yubo dong."
       },
       ny: {
         siteTitle: "makaug.com | Pulatifoomu ya Property omu Uganda",
@@ -4632,7 +4744,7 @@
         badgeStudent: "Omunyeshomesa",
         badgeCommercial: "Obusuubuzi",
         badgeLand: "Eitaka",
-        footerGrowth: "Google Ads na SEO indexing byetegire kukuzya omutindo."
+        footerGrowth: "Ebitundu by'oburango bya MakaUg na SEO byetegire kukuzya omutindo."
       },
       rn: {
         siteTitle: "makaug.com | Omukutu gwa Property omuri Uganda",
@@ -4686,7 +4798,7 @@
         badgeStudent: "Omunyeshuuri",
         badgeCommercial: "Obushuubuzi",
         badgeLand: "Eitaka",
-        footerGrowth: "Google Ads hamwe na SEO indexing bitegire kukuzya omutindo."
+        footerGrowth: "Ebitundu by'oburango bya MakaUg hamwe na SEO bitegire kukuzya omutindo."
       },
       sm: {
         siteTitle: "makaug.com | Pulatifoomu ya Property mu Uganda",
@@ -4740,7 +4852,7 @@
         badgeStudent: "Muisomesa",
         badgeCommercial: "Obusuubuzi",
         badgeLand: "Itaka",
-        footerGrowth: "Google Ads ne SEO indexing bitezeddwa okukuza omutindo."
+        footerGrowth: "Eifo ly'obulango bwa MakaUg ne SEO bitezeddwa okukuza omutindo."
       }
     };
 
@@ -7069,9 +7181,16 @@
     function syncAuthProfileSignupForm() {
       const title = document.getElementById("auth-profile-title");
       const subtitle = document.getElementById("auth-profile-subtitle");
+      const accountKindEl = document.getElementById("auth-profile-account-kind");
+      const accountKind = authSignUpAudience === "agent"
+        ? "agent"
+        : String(accountKindEl?.value || "finder").toLowerCase();
+      if (accountKindEl) {
+        accountKindEl.classList.toggle("hidden", authSignUpAudience !== "finder");
+      }
       document.querySelectorAll("[data-profile-group]").forEach((el) => {
         const group = el.getAttribute("data-profile-group");
-        el.classList.toggle("hidden", group !== authSignUpAudience && !(authSignUpAudience === "finder" && group === "student"));
+        el.classList.toggle("hidden", group !== authSignUpAudience && !(authSignUpAudience === "finder" && accountKind === "student" && group === "student"));
       });
       const goal = document.getElementById("auth-profile-primary-goal");
       const areas = document.getElementById("auth-profile-preferred-areas");
@@ -7085,19 +7204,23 @@
         if (budget) budget.placeholder = "Typical property price/rent range";
         if (timeline) timeline.placeholder = "How quickly can you respond to leads?";
       } else {
-        if (title) title.textContent = "Help us personalise your account";
-        if (subtitle) subtitle.textContent = "A few optional details help MakaUg send better property matches and WhatsApp updates.";
-        if (goal) goal.placeholder = "Buying, renting, student room, land, commercial...";
+        if (title) title.textContent = accountKind === "student" ? "Tell us about your student search" : "Help us personalise your account";
+        if (subtitle) subtitle.textContent = accountKind === "student" ? "This helps MakaUg match you to safer accommodation near your campus." : "A few optional details help MakaUg send better property matches and WhatsApp updates.";
+        if (goal) goal.placeholder = accountKind === "student" ? "Hostel, studio, shared room, apartment..." : "Buying, renting, land, commercial...";
         if (areas) areas.placeholder = "Preferred areas or districts";
-        if (budget) budget.placeholder = "Budget range";
-        if (timeline) timeline.placeholder = "When do you want to move?";
+        if (budget) budget.placeholder = accountKind === "student" ? "Budget per semester / month" : "Budget range";
+        if (timeline) timeline.placeholder = accountKind === "student" ? "Move-in date / semester" : "When do you want to move?";
       }
     }
 
     function collectAuthProfileData() {
       const get = (id) => (document.getElementById(id)?.value || "").trim();
+      const accountKind = authSignUpAudience === "finder"
+        ? String(document.getElementById("auth-profile-account-kind")?.value || "finder").trim()
+        : authSignUpAudience;
       return {
         audience: authSignUpAudience,
+        account_kind: accountKind,
         primary_goal: get("auth-profile-primary-goal"),
         preferred_areas: get("auth-profile-preferred-areas"),
         budget_range: get("auth-profile-budget-range"),
@@ -7805,7 +7928,7 @@
       if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
       if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
       if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
@@ -7816,6 +7939,7 @@
         apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }),
         apiRequest("/api/admin/campaigns?limit=20", { headers }),
         apiRequest("/api/admin/advertising/packages", { headers }),
+        apiRequest("/api/admin/advertising/placements", { headers }),
         apiRequest("/api/admin/advertising/summary", { headers }),
         apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }),
         apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }),
@@ -7836,6 +7960,7 @@
       adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
       adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
       adminAdvertisingPackages = Array.isArray(adPackagesRes?.data) ? adPackagesRes.data : [];
+      adminAdvertisingPlacements = Array.isArray(adPlacementsRes?.data) ? adPlacementsRes.data : [];
       adminAdvertisingSummary = adSummaryRes?.data || {};
       adminAdvertisingInquiries = Array.isArray(adInquiriesRes?.data) ? adInquiriesRes.data : [];
       adminAdvertisingCampaigns = Array.isArray(adCampaignsRes?.data) ? adCampaignsRes.data : [];
@@ -7857,6 +7982,7 @@
         fieldAgents: adminFieldAgents,
         campaigns: adminCurrentCampaigns,
         advertisingPackages: adminAdvertisingPackages,
+        advertisingPlacements: adminAdvertisingPlacements,
         advertisingSummary: adminAdvertisingSummary,
         advertisingInquiries: adminAdvertisingInquiries,
         advertisingCampaigns: adminAdvertisingCampaigns,
@@ -8221,6 +8347,7 @@
       renderAdminCampaignRows(remoteSnap?.campaigns || []);
       renderAdminAdvertisingOverview(remoteSnap?.advertisingSummary || {});
       renderAdminAdvertisingPackages(remoteSnap?.advertisingPackages || []);
+      renderAdminAdvertisingPlacements(remoteSnap?.advertisingPlacements || []);
       renderAdminAdvertisingInquiries(remoteSnap?.advertisingInquiries || []);
       renderAdminAdvertisingCampaigns(remoteSnap?.advertisingCampaigns || []);
       renderAdminUsersRows(adminUsers);
@@ -8622,7 +8749,9 @@
         ["Live Ads", summary.live_campaigns || 0, "text-green-700"],
         ["Draft/Paid Queue", summary.pipeline_campaigns || 0, "text-amber-700"],
         ["Paid Revenue", adMoney(summary.paid_revenue_ugx), "text-gray-900"],
-        ["Quoted Pipeline", adMoney(summary.quoted_pipeline_ugx), "text-fuchsia-700"]
+        ["Quoted Pipeline", adMoney(summary.quoted_pipeline_ugx), "text-fuchsia-700"],
+        ["Active Slots", summary.active_placements || 0, "text-green-700"],
+        ["Premium Slots", summary.premium_placements || 0, "text-amber-700"]
       ];
       wrap.innerHTML = cards.map(([label, value, tone]) => `
         <div class="rounded-xl border border-gray-200 bg-white p-3">
@@ -8630,6 +8759,47 @@
           <div class="text-xl font-black mt-1 ${tone}">${adminEscape(value)}</div>
         </div>
       `).join("");
+    }
+
+    function renderAdminAdvertisingPlacements(placements) {
+      const grid = document.getElementById("admin-ad-placements-grid");
+      const builder = document.getElementById("admin-ad-builder-placements");
+      adminAdvertisingPlacements = Array.isArray(placements) ? placements : [];
+      const rows = adminAdvertisingPlacements.length ? adminAdvertisingPlacements : [
+        { key: "sitewide_top_leaderboard", label: "Sitewide Top Leaderboard", page_key: "all", slot_type: "leaderboard", size_label: "970x250", is_premium: true, is_active: true, base_price_ugx: 650000 },
+        { key: "sale_inline_native", label: "For Sale Inline Sponsored Card", page_key: "sale", slot_type: "native_card", size_label: "Grid card", is_premium: false, is_active: true, base_price_ugx: 180000 },
+        { key: "whatsapp_sponsored_match", label: "WhatsApp Sponsored Match", page_key: "whatsapp", slot_type: "chatbot_native", size_label: "Assistant card", is_premium: true, is_active: true, base_price_ugx: 200000 }
+      ];
+      if (builder) {
+        builder.innerHTML = rows.map((slot) => `
+          <label class="border border-green-100 bg-white rounded-xl px-3 py-2 flex items-start gap-2">
+            <input type="checkbox" name="admin-ad-builder-placement" value="${adminAttr(slot.key)}" class="mt-0.5 accent-green-700" ${slot.is_active ? "" : "disabled"}>
+            <span><strong>${adminEscape(slot.label)}</strong><br><span class="text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(adMoney(slot.base_price_ugx))}</span></span>
+          </label>
+        `).join("");
+      }
+      if (!grid) return;
+      grid.innerHTML = rows.map((slot) => {
+        const keyArg = adminListingIdArg(slot.key);
+        return `
+          <div class="rounded-xl border ${slot.is_active ? "border-green-100 bg-green-50" : "border-gray-200 bg-gray-50"} p-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="font-bold text-gray-900">${adminEscape(slot.label)}</div>
+                <div class="text-[11px] text-gray-500 mt-1">${adminEscape(slot.page_key)} • ${adminEscape(slot.slot_type)} • ${adminEscape(slot.size_label || "-")}</div>
+              </div>
+              <span class="text-[11px] rounded-full px-2 py-1 ${slot.is_premium ? "bg-amber-100 text-amber-800" : "bg-white text-gray-600"}">${slot.is_premium ? "Premium" : "Standard"}</span>
+            </div>
+            ${slot.preview_image_url ? `<img src="${adminAttr(slot.preview_image_url)}" alt="${adminAttr(slot.label)}" class="mt-2 w-full h-20 object-cover rounded-lg border border-white">` : ""}
+            <div class="mt-2 text-sm font-black text-green-800">${adminEscape(adMoney(slot.base_price_ugx))}</div>
+            <div class="mt-1 text-xs text-gray-500">${adminEscape(slot.notes || "")}</div>
+            <div class="mt-3 flex gap-2 flex-wrap">
+              <button onclick="adminUpdateAdPlacementPrice(${keyArg})" class="border border-green-300 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Change Price</button>
+              <button onclick="adminToggleAdPlacement(${keyArg}, ${slot.is_active ? "false" : "true"})" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">${slot.is_active ? "Pause Slot" : "Activate Slot"}</button>
+            </div>
+          </div>
+        `;
+      }).join("");
     }
 
     function renderAdminAdvertisingPackages(packages) {
@@ -8719,6 +8889,15 @@
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Clicks/Leads</div><div class="font-black">${adminEscape(campaign.clicks || 0)} / ${adminEscape(campaign.leads || 0)}</div></div>
             </div>
             <div class="mt-3 text-xs text-gray-500">Targets: ${adminEscape(adListText(campaign.target_locations || []))} • Placements: ${adminEscape(adListText(campaign.placements || []))}</div>
+            <div class="mt-1 text-xs text-gray-500">Approval: ${adminEscape(campaign.advertiser_approval_status || "draft")} • Reports: ${adminEscape(campaign.report_cadence || "weekly")}</div>
+            ${campaign.creative_preview_url || campaign.ai_copy?.headline ? `
+              <div class="mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
+                ${campaign.creative_preview_url ? `<img src="${adminAttr(campaign.creative_preview_url)}" alt="${adminAttr(campaign.campaign_name || "Campaign creative")}" class="w-full h-24 object-cover rounded-lg border border-white mb-2">` : ""}
+                <div class="text-[11px] uppercase tracking-wide text-green-700 font-bold">Creative preview</div>
+                <div class="font-black text-gray-900">${adminEscape(campaign.ai_copy?.headline || campaign.campaign_name || "MakaUg sponsored placement")}</div>
+                <div class="text-xs text-gray-600">${adminEscape(campaign.ai_copy?.body || campaign.creative_brief || "")}</div>
+              </div>
+            ` : ""}
             ${campaign.payment_url ? `<div class="mt-2 text-xs"><a href="${adminAttr(campaign.payment_url)}" target="_blank" rel="noopener noreferrer" class="text-green-700 font-semibold hover:underline">Open payment link</a></div>` : ""}
             <div class="mt-3 flex flex-wrap gap-2">
               <button onclick="adminSetAdCampaignPaymentLink(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Payment Link</button>
@@ -8726,6 +8905,8 @@
               <button onclick="adminSetAdCampaignStatus(${idArg}, 'live')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Set Live</button>
               <button onclick="adminSetAdCampaignStatus(${idArg}, 'paused')" class="border border-yellow-300 text-yellow-700 hover:bg-yellow-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Pause</button>
               <button onclick="adminSetAdCampaignStatus(${idArg}, 'completed')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Complete</button>
+              <button onclick="adminSetAdCampaignApproval(${idArg}, 'sent')" class="border border-blue-300 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Send Preview</button>
+              <button onclick="adminSetAdCampaignApproval(${idArg}, 'approved')" class="border border-emerald-300 text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Advertiser Approved</button>
             </div>
           </div>
         `;
@@ -8770,6 +8951,98 @@
         toast("Advertising campaign created.");
       } catch (e) {
         toast(`Campaign create failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminCreateAdCampaignFromBuilder() {
+      const selectedPlacements = Array.from(document.querySelectorAll("input[name='admin-ad-builder-placement']:checked")).map((el) => el.value);
+      const advertiser = (document.getElementById("admin-ad-builder-advertiser")?.value || "").trim();
+      const campaign = (document.getElementById("admin-ad-builder-campaign")?.value || "").trim();
+      const headline = (document.getElementById("admin-ad-builder-headline")?.value || "").trim();
+      const body = (document.getElementById("admin-ad-builder-body")?.value || "").trim();
+      const image = (document.getElementById("admin-ad-builder-image")?.value || "").trim();
+      const cta = (document.getElementById("admin-ad-builder-cta")?.value || "").trim();
+      const url = (document.getElementById("admin-ad-builder-url")?.value || "").trim();
+      const quote = (document.getElementById("admin-ad-builder-quote")?.value || "").trim();
+      const report = (document.getElementById("admin-ad-builder-report")?.value || "weekly").trim();
+      if (!advertiser || !campaign || !selectedPlacements.length) {
+        toast("Add advertiser, campaign name, and at least one placement.");
+        return;
+      }
+      try {
+        await apiRequest("/api/admin/advertising/campaigns", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {
+            advertiser_name: advertiser,
+            campaign_name: campaign,
+            placements: selectedPlacements,
+            target_pages: selectedPlacements.map((key) => (adminAdvertisingPlacements.find((slot) => slot.key === key)?.page_key || "all")),
+            quoted_amount_ugx: quote || undefined,
+            creative_headline: headline || campaign,
+            creative_body: body || "Sponsored MakaUg campaign created in the admin control room.",
+            creative_cta: cta || "View on MakaUg",
+            creative_cta_url: url || "https://makaug.com",
+            creative_preview_url: image || "",
+            report_cadence: report,
+            advertiser_approval_status: "draft"
+          }
+        });
+        ["admin-ad-builder-advertiser", "admin-ad-builder-campaign", "admin-ad-builder-headline", "admin-ad-builder-body", "admin-ad-builder-image", "admin-ad-builder-cta", "admin-ad-builder-url", "admin-ad-builder-quote"].forEach((id) => {
+          const el = document.getElementById(id);
+          if (el) el.value = "";
+        });
+        document.querySelectorAll("input[name='admin-ad-builder-placement']").forEach((el) => { el.checked = false; });
+        await renderAdminDashboard();
+        toast("Campaign draft created.");
+      } catch (e) {
+        toast(`Campaign create failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminUpdateAdPlacementPrice(placementKey) {
+      const slot = adminAdvertisingPlacements.find((item) => String(item.key) === String(placementKey)) || {};
+      const next = window.prompt(`New price for ${slot.label || placementKey} in UGX`, String(slot.base_price_ugx || 0));
+      if (next == null) return;
+      const amount = Math.max(0, parseInt(next, 10) || 0);
+      try {
+        await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { base_price_ugx: amount }
+        });
+        await renderAdminDashboard();
+        toast("Placement price updated.");
+      } catch (e) {
+        toast(`Placement update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminToggleAdPlacement(placementKey, isActive) {
+      try {
+        await apiRequest(`/api/admin/advertising/placements/${encodeURIComponent(placementKey)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { is_active: !!isActive }
+        });
+        await renderAdminDashboard();
+        toast(isActive ? "Placement activated." : "Placement paused.");
+      } catch (e) {
+        toast(`Placement update failed: ${e.message || "error"}`);
+      }
+    }
+
+    async function adminSetAdCampaignApproval(campaignId, advertiser_approval_status) {
+      try {
+        await apiRequest(`/api/admin/advertising/campaigns/${encodeURIComponent(campaignId)}`, {
+          method: "PATCH",
+          headers: adminAuthHeaders(),
+          body: { advertiser_approval_status }
+        });
+        await renderAdminDashboard();
+        toast("Advertiser approval status updated.");
+      } catch (e) {
+        toast(`Campaign approval update failed: ${e.message || "error"}`);
       }
     }
 
@@ -11177,9 +11450,7 @@
         return [
           { key: "front", label: "Front/entry of plot", hint: "Capture road-side view and access point." },
           { key: "boundary", label: "Boundary markers", hint: "Show visible boundary points." },
-          { key: "access", label: "Road access", hint: "Show road condition and approach to the plot." },
-          { key: "landscape", label: "Land surface", hint: "Show the main usable part of the land." },
-          { key: "docs", label: "Title/plot document photo", hint: "Optional watermark allowed on sensitive sections." }
+          { key: "access", label: "Road access", hint: "Show road condition and approach to the plot." }
         ];
       }
       if (type === "commercial") {
@@ -11209,13 +11480,19 @@
       ];
     }
 
+    function getLpMinUploadPhotos(type = getListType()) {
+      return type === "land" ? LP_LAND_MIN_UPLOAD_PHOTOS : LP_MIN_UPLOAD_PHOTOS;
+    }
+
     function updateLpPhotoRequirements() {
       const wrap = document.getElementById("lp-photo-required-list");
       if (!wrap) return;
       const type = getListType();
       const checklist = getLpPhotoChecklist(type);
+      const minPhotos = getLpMinUploadPhotos(type);
       wrap.innerHTML = `
         <div class="font-semibold text-gray-800">${translateListingLabel("Required photo coverage")}</div>
+        <p class="text-xs text-gray-500 mt-1">${translateListingLabel(type === "land" ? "Land needs at least 3 clear photos: entry, boundaries, and access road." : "At least 5 photos are required for homes and buildings.")}</p>
         <ul class="list-disc pl-5 space-y-1">
           ${checklist.map((item) => `<li><strong>${translateListingLabel(item.label)}</strong> - <span class="text-xs text-gray-500">${translateListingLabel(item.hint)}</span></li>`).join("")}
         </ul>
@@ -12677,10 +12954,11 @@
 
     function validateListStep2() {
       clearLpValidationErrors("#lp-step-2");
-      if (lpSelectedPhotos.length < LP_MIN_UPLOAD_PHOTOS) {
-        markLpFieldError("lp-photo-dropzone", `Upload at least ${LP_MIN_UPLOAD_PHOTOS} photos.`);
+      const minPhotos = getLpMinUploadPhotos(getListType());
+      if (lpSelectedPhotos.length < minPhotos) {
+        markLpFieldError("lp-photo-dropzone", `Upload at least ${minPhotos} photos.`);
         markLpFieldError("lp-upload-label");
-        toast(`Upload at least ${LP_MIN_UPLOAD_PHOTOS} photos to continue.`);
+        toast(`Upload at least ${minPhotos} photos to continue.`);
         return false;
       }
       if (lpSelectedPhotos.length > LP_MAX_UPLOAD_PHOTOS) {
@@ -12963,6 +13241,10 @@
         payload.title_type = extra.title_type || null;
         payload.land_size_value = landParsed.value;
         payload.land_size_unit = landParsed.unit;
+        payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
+        payload.extra_fields.land_verification_help_requested = extra.land_verification_help === "yes";
+        payload.extra_fields.land_boundary_notes = extra.boundary_notes || null;
+        payload.extra_fields.ownership_verification_requested = ownerVerificationRequested || extra.land_verification_help === "yes";
       }
 
       if (type === "commercial") {
@@ -13249,6 +13531,42 @@
         toast(error.message || "Could not submit request.");
       } finally {
         setButtonLoading("looking-submit-btn", false, "Submit Request");
+      }
+    }
+
+    async function submitMapAssistRequest(kind) {
+      const normalized = String(kind || currentTab || "sale").trim();
+      const name = (document.querySelector(`[data-map-assist-name="${normalized}"]`)?.value || "").trim();
+      const phone = (document.querySelector(`[data-map-assist-phone="${normalized}"]`)?.value || "").trim();
+      const details = (document.querySelector(`[data-map-assist-details="${normalized}"]`)?.value || "").trim();
+      const listingType = normalized === "students" ? "student" : normalized;
+      const locationValue = (
+        document.getElementById(`${normalized === "students" ? "student-q" : normalized}-f`)?.value
+        || document.getElementById(`${normalized}-location-f`)?.value
+        || document.getElementById(`${normalized}-q-f`)?.value
+        || ""
+      ).trim();
+      if (!name || !phone || !details) {
+        toast("Please add your name, WhatsApp/phone, and what you need.");
+        return;
+      }
+      try {
+        await apiRequest("/api/contact/looking-for-property", {
+          method: "POST",
+          body: {
+            name,
+            phone: normalizePhoneInput(phone),
+            preferred_locations: locationValue,
+            listing_type: listingType,
+            requirements: details,
+            source: `map_assist_${normalized}`
+          }
+        });
+        await trackEvent("map_assist_request_submit", { type: listingType, preferred_location: locationValue || "" });
+        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
+        toast("Request saved. MakaUg will follow up with matching options.");
+      } catch (error) {
+        toast(error.message || "Could not submit request.");
       }
     }
 
@@ -13974,19 +14292,25 @@
             <span class="text-[11px] uppercase tracking-wide bg-green-700 text-white rounded-full px-2 py-1">Creative by MakaUg</span>
           </div>
           <div class="grid md:grid-cols-2 gap-3">
-            <div class="rounded-xl border border-gray-200 overflow-hidden">
-              <div class="bg-green-900 text-white px-4 py-3">
-                <div class="text-[11px] uppercase tracking-wide text-green-100">Sponsored homepage banner</div>
-                <div class="text-lg font-black">Move faster with Nile Bank mortgages</div>
-                <div class="text-xs text-green-100">Visible on high-traffic discovery pages.</div>
+            <div class="rounded-xl border border-gray-200 overflow-hidden bg-gray-950 text-white">
+              <div class="h-36 bg-cover bg-center relative" style="background-image:url('https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&q=80')">
+                <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent"></div>
+                <div class="absolute left-4 top-4 right-4">
+                  <div class="text-[11px] uppercase tracking-wide text-green-100 font-bold">Sponsored homepage banner</div>
+                  <div class="text-xl font-black mt-1">Own your first home faster</div>
+                  <button type="button" class="mt-3 bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Learn more</button>
+                </div>
               </div>
-              <div class="p-3 text-xs text-gray-600">Best for national brands, banks, developers, insurance, utilities, and home services.</div>
+              <div class="p-3 text-xs text-gray-300">Premium homepage, sale, rent, and district visibility.</div>
             </div>
-            <div class="rounded-xl border border-gray-200 p-3">
+            <div class="rounded-xl border border-gray-200 p-3 bg-white">
               <div class="text-[11px] uppercase tracking-wide text-amber-700 font-bold">Sponsored regional result</div>
-              <div class="mt-2 rounded-lg bg-green-50 border border-green-100 p-3">
-                <div class="font-black text-gray-800">Featured in Kampala searches</div>
-                <div class="text-xs text-gray-600">Target buyers and tenants by district, area, property type, and intent.</div>
+              <div class="mt-2 rounded-lg border border-green-100 overflow-hidden">
+                <img src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80" alt="Sponsored listing preview" class="w-full h-24 object-cover">
+                <div class="p-3">
+                  <div class="font-black text-gray-800">Featured in Kampala searches</div>
+                  <div class="text-xs text-gray-600">Target by district, area, property type, and intent.</div>
+                </div>
               </div>
             </div>
             <div class="rounded-xl border border-gray-200 p-3">
@@ -14009,6 +14333,10 @@
           <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. MakaUg prepares the creative, shares the preview, and publishes only after approval.</p>
         </div>
         <form id="advertising-inquiry-form" onsubmit="submitAdvertisingInquiry(event)" class="space-y-4">
+          <div id="advertising-live-rate-card" class="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm">
+            <div class="font-bold text-gray-800">Live placement menu</div>
+            <div class="text-xs text-gray-500 mt-1">Loading current MakaUg placement options...</div>
+          </div>
           <div class="grid md:grid-cols-2 gap-3">
             <input name="full_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Your name" required>
             <input name="business_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Business / brand name">
@@ -14099,6 +14427,33 @@
       const body = document.getElementById("page-modal-body");
       if (body) body.innerHTML = html;
       openModal("page-modal");
+      if (page === "advertise") hydrateAdvertisePricingPreview();
+    }
+
+    async function hydrateAdvertisePricingPreview() {
+      const wrap = document.getElementById("advertising-live-rate-card");
+      if (!wrap) return;
+      try {
+        const res = await apiRequest("/api/advertising/placements");
+        const rows = Array.isArray(res?.data) ? res.data : [];
+        if (!rows.length) {
+          wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Ask MakaUg for current placement availability and pricing.</div>`;
+          return;
+        }
+        wrap.innerHTML = `
+          <div class="font-bold text-gray-800">Live placement menu</div>
+          <div class="grid sm:grid-cols-2 gap-2 mt-2">
+            ${rows.slice(0, 8).map((slot) => `
+              <div class="rounded-xl border border-white bg-white p-2">
+                <div class="text-xs font-bold text-gray-900">${adminEscape(slot.label)}</div>
+                <div class="text-[11px] text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.size_label || slot.slot_type || "")}</div>
+                <div class="text-xs font-black text-green-700 mt-1">From ${adminEscape(adMoney(slot.base_price_ugx))}</div>
+              </div>
+            `).join("")}
+          </div>`;
+      } catch (error) {
+        wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Current prices can be confirmed by MakaUg after inquiry.</div>`;
+      }
     }
 
     async function submitAdvertisingInquiry(event) {
@@ -14240,16 +14595,85 @@
       { anchorId: "detail-content", slotKey: "property-detail", context: "Property Detail" }
     ];
 
+    const INHOUSE_AD_SAMPLES = {
+      "home-featured": {
+        image: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=900&q=80",
+        label: "Premium homepage sponsor",
+        headline: "Own the first impression",
+        body: "Hero visibility for banks, developers, insurers, and home brands."
+      },
+      "sale-grid": {
+        image: "https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=900&q=80",
+        label: "Sponsored sale result",
+        headline: "Featured where buyers search",
+        body: "Promote a listing, agency, mortgage offer, or launch by district."
+      },
+      "rent-grid": {
+        image: "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=900&q=80",
+        label: "Rental sponsor",
+        headline: "Reach active tenants",
+        body: "Target renters by area, budget, and move-in intent."
+      },
+      "student-grid": {
+        image: "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80",
+        label: "Student sponsor",
+        headline: "Campus-ready visibility",
+        body: "Hostels, student services, transport, data, and essentials."
+      },
+      "commercial-grid": {
+        image: "https://images.unsplash.com/photo-1497366216548-37526070297c?w=900&q=80",
+        label: "Commercial sponsor",
+        headline: "Find business movers",
+        body: "Offices, shops, warehouses, fit-out, finance, and insurance."
+      },
+      "land-grid": {
+        image: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=900&q=80",
+        label: "Land sponsor",
+        headline: "Reach land buyers",
+        body: "Surveyors, title support, developers, plots, and agricultural services."
+      },
+      "brokers-grid": {
+        image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=900&q=80",
+        label: "Broker spotlight",
+        headline: "Stand out in the agent directory",
+        body: "Promote a verified broker, agency, or regional expert."
+      },
+      "mortgage-results": {
+        image: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
+        label: "Finance sponsor",
+        headline: "Be seen when budgets are being planned",
+        body: "Mortgage, savings, insurance, valuation, and legal partners."
+      },
+      "property-detail": {
+        image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=900&q=80",
+        label: "Property detail MPU",
+        headline: "Advertise beside high-intent views",
+        body: "A contextual placement beside photos, maps, and enquiry actions."
+      },
+      default: {
+        image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=900&q=80",
+        label: "MakaUg sponsored placement",
+        headline: "Book this ad slot",
+        body: "A live in-house placement ready for campaigns and boosts."
+      }
+    };
+
     function buildRevenuePlacementMarkup(slotKey, context) {
       const adSlot = String(GOOGLE_ADSENSE_SLOTS[slotKey] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
       const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
+      const sample = INHOUSE_AD_SAMPLES[slotKey] || INHOUSE_AD_SAMPLES.default;
       return `
         <div class="max-w-7xl mx-auto px-0 py-4">
           <div class="ad-unit">
             <span class="ad-tag"><i class="fas fa-bullhorn"></i> Sponsored</span>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-bold text-green-900">Sponsored placement reserved on ${adminEscape(context || "makaug.com")}</div>
-              <div class="text-xs text-gray-500 mt-1">This slot is ready for in-house MakaUg campaigns, boosts, and regional sponsors.</div>
+            <div class="inhouse-ad-preview">
+              <img src="${adminAttr(sample.image)}" alt="${adminAttr(sample.label)}">
+              <div class="inhouse-ad-preview-body">
+                <div class="text-[11px] uppercase tracking-wide text-green-700 font-black">${adminEscape(sample.label)}</div>
+                <div class="text-sm font-black text-gray-900">${adminEscape(sample.headline)}</div>
+                <div class="text-xs text-gray-600">${adminEscape(sample.body)}</div>
+                <div class="text-[11px] text-gray-400">Slot: ${adminEscape(context || "makaug.com")}</div>
+              </div>
             </div>
             ${hasLiveAds
               ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
@@ -18557,9 +18981,12 @@
         extras: [
           { key: "title_type", label: "Title Type", type: "select", options: ["Freehold", "Leasehold", "Mailo", "Customary"], info: "title_types" },
           { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
-          { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] }
+          { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
+          { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
+          { key: "land_verification_help", label: "Need MakaUg help with owner/title verification?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - contact me about verification" }] },
+          { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
         ],
-        previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }],
+        previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }],
         amenities: [
           { value: "road", label: "🛣️ Road Access" },
           { value: "water", label: "🌊 Water Nearby" },

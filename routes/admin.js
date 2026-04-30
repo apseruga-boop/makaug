@@ -1395,6 +1395,56 @@ router.get('/advertising/packages', (_req, res) => {
   return res.json({ ok: true, data: getAdvertisingPackages() });
 });
 
+router.get('/advertising/placements', async (_req, res, next) => {
+  try {
+    const rows = await db.query(
+      `SELECT *
+       FROM advertising_placements
+       ORDER BY sort_order ASC, label ASC`
+    );
+    return res.json({ ok: true, data: rows.rows });
+  } catch (error) {
+    if (String(error.message || '').includes('advertising_placements')) {
+      return res.json({ ok: true, data: [] });
+    }
+    return next(error);
+  }
+});
+
+router.patch('/advertising/placements/:key', async (req, res, next) => {
+  try {
+    const placementKey = String(req.params.key || '').trim();
+    const updates = [];
+    const values = [];
+    const add = (column, value) => {
+      values.push(value);
+      updates.push(`${column} = $${values.length}`);
+    };
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'is_active')) add('is_active', !!req.body.is_active);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'base_price_ugx')) add('base_price_ugx', Math.max(0, parseInt(req.body.base_price_ugx, 10) || 0));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'notes')) add('notes', String(req.body.notes || '').trim() || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'preview_image_url')) add('preview_image_url', String(req.body.preview_image_url || '').trim() || null);
+
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'No placement updates provided' });
+
+    values.push(placementKey);
+    const updated = await db.query(
+      `UPDATE advertising_placements
+       SET ${updates.join(', ')},
+           updated_at = NOW()
+       WHERE key = $${values.length}
+       RETURNING *`,
+      values
+    );
+    if (!updated.rows.length) return res.status(404).json({ ok: false, error: 'Advertising placement not found' });
+    await writeAudit('advertising_placement_updated', { placement_key: placementKey }, adminActorId(req));
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/advertising/summary', async (_req, res, next) => {
   try {
     const rows = await db.query(
@@ -1407,10 +1457,31 @@ router.get('/advertising/summary', async (_req, res, next) => {
         (SELECT COALESCE(SUM(quoted_amount_ugx),0)::bigint FROM advertising_campaigns WHERE status NOT IN ('cancelled')) AS quoted_pipeline_ugx,
         (SELECT COALESCE(SUM(impressions),0)::bigint FROM advertising_campaigns) AS impressions,
         (SELECT COALESCE(SUM(clicks),0)::bigint FROM advertising_campaigns) AS clicks,
-        (SELECT COALESCE(SUM(leads),0)::bigint FROM advertising_campaigns) AS leads`
+        (SELECT COALESCE(SUM(leads),0)::bigint FROM advertising_campaigns) AS leads,
+        (SELECT COUNT(*)::int FROM advertising_placements WHERE is_active = true) AS active_placements,
+        (SELECT COUNT(*)::int FROM advertising_placements WHERE is_premium = true AND is_active = true) AS premium_placements`
     );
     return res.json({ ok: true, data: rows.rows[0] || {} });
   } catch (error) {
+    if (String(error.message || '').includes('advertising_placements')) {
+      try {
+        const rows = await db.query(
+          `SELECT
+            (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status = 'new') AS new_inquiries,
+            (SELECT COUNT(*)::int FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')) AS open_inquiries,
+            (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status = 'live') AS live_campaigns,
+            (SELECT COUNT(*)::int FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid')) AS pipeline_campaigns,
+            (SELECT COALESCE(SUM(paid_amount_ugx),0)::bigint FROM advertising_campaigns WHERE payment_status = 'paid') AS paid_revenue_ugx,
+            (SELECT COALESCE(SUM(quoted_amount_ugx),0)::bigint FROM advertising_campaigns WHERE status NOT IN ('cancelled')) AS quoted_pipeline_ugx,
+            (SELECT COALESCE(SUM(impressions),0)::bigint FROM advertising_campaigns) AS impressions,
+            (SELECT COALESCE(SUM(clicks),0)::bigint FROM advertising_campaigns) AS clicks,
+            (SELECT COALESCE(SUM(leads),0)::bigint FROM advertising_campaigns) AS leads`
+        );
+        return res.json({ ok: true, data: { ...(rows.rows[0] || {}), active_placements: 0, premium_placements: 0 } });
+      } catch (fallbackError) {
+        return next(fallbackError);
+      }
+    }
     return next(error);
   }
 });
@@ -1546,6 +1617,7 @@ router.post('/advertising/campaigns', async (req, res, next) => {
     const placements = normalizeJsonList(req.body.placements).length
       ? normalizeJsonList(req.body.placements)
       : (pkg?.placements || []);
+    const targetPages = normalizeJsonList(req.body.target_pages || req.body.pages);
     const targetLocations = normalizeJsonList(req.body.target_locations).length
       ? normalizeJsonList(req.body.target_locations)
       : safeJsonb(inquiry?.target_locations, []);
@@ -1557,6 +1629,16 @@ router.post('/advertising/campaigns', async (req, res, next) => {
       : safeJsonb(inquiry?.audience_segments, []);
     const quotedAmount = Math.max(0, parseInt(req.body.quoted_amount_ugx, 10) || Number(pkg?.price_ugx || estimateAdvertisingQuote(safeJsonb(inquiry?.product_interests, []))) || 0);
     const durationDays = Math.max(0, parseInt(req.body.duration_days, 10) || Number(pkg?.duration_days || inquiry?.desired_duration_days || 7));
+    const reportCadence = ['none', 'daily', 'weekly', 'post_campaign', 'dashboard'].includes(String(req.body.report_cadence || '').trim())
+      ? String(req.body.report_cadence).trim()
+      : 'weekly';
+    const approvalStatus = ['draft', 'sent', 'approved', 'changes_requested', 'rejected'].includes(String(req.body.advertiser_approval_status || '').trim())
+      ? String(req.body.advertiser_approval_status).trim()
+      : 'draft';
+    const headline = String(req.body.creative_headline || '').trim();
+    const body = String(req.body.creative_body || '').trim();
+    const cta = String(req.body.creative_cta || 'View on MakaUg').trim();
+    const ctaUrl = String(req.body.creative_cta_url || '').trim();
 
     const inserted = await db.query(
       `INSERT INTO advertising_campaigns (
@@ -1576,12 +1658,15 @@ router.post('/advertising/campaigns', async (req, res, next) => {
         logo_url,
         creative_preview_url,
         ai_copy,
+        advertiser_approval_status,
+        report_cadence,
+        target_pages,
         pricing_model,
         quoted_amount_ugx,
         status,
         starts_at,
         ends_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16::jsonb,$17,$18,'draft',NULL,NULL)
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12,$13,$14,$15,$16::jsonb,$17,$18,$19::jsonb,$20,$21,'draft',NULL,NULL)
       RETURNING *`,
       [
         inquiryId,
@@ -1600,10 +1685,14 @@ router.post('/advertising/campaigns', async (req, res, next) => {
         String(req.body.logo_url || '').trim() || null,
         String(req.body.creative_preview_url || '').trim() || null,
         JSON.stringify({
-          headline: `${pkg?.label || 'MakaUg advertising'} for ${targetLocations.join(', ') || 'Uganda'}`,
-          body: pkg?.description || 'Reach active property seekers on MakaUg.',
-          call_to_action: 'View on MakaUg'
+          headline: headline || `${pkg?.label || 'MakaUg advertising'} for ${targetLocations.join(', ') || 'Uganda'}`,
+          body: body || pkg?.description || 'Reach active property seekers on MakaUg.',
+          call_to_action: cta || 'View on MakaUg',
+          cta_url: ctaUrl || null
         }),
+        approvalStatus,
+        reportCadence,
+        JSON.stringify(targetPages),
         pkg?.pricing_model || 'fixed_days',
         quotedAmount
       ]
@@ -1626,12 +1715,23 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
     const allowedStatuses = ['draft', 'awaiting_payment', 'paid', 'live', 'paused', 'completed', 'cancelled'];
     const allowedPaymentStatuses = ['unpaid', 'invoiced', 'paid', 'refunded', 'waived'];
     const allowedCreativeStatuses = ['brief_needed', 'draft', 'review', 'approved', 'live_asset'];
+    const allowedApprovalStatuses = ['draft', 'sent', 'approved', 'changes_requested', 'rejected'];
+    const allowedReportCadences = ['none', 'daily', 'weekly', 'post_campaign', 'dashboard'];
     const updates = [];
     const values = [];
     const add = (column, value, cast = '') => {
       values.push(value);
       updates.push(`${column} = $${values.length}${cast}`);
     };
+    const previousResult = await db.query(
+      `SELECT *
+       FROM advertising_campaigns
+       WHERE id = $1
+       LIMIT 1`,
+      [campaignId]
+    );
+    const previousCampaign = previousResult.rows[0] || null;
+    if (!previousCampaign) return res.status(404).json({ ok: false, error: 'Advertising campaign not found' });
 
     if (req.body.status) {
       const status = String(req.body.status).trim().toLowerCase();
@@ -1648,6 +1748,16 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
       const status = String(req.body.creative_status).trim().toLowerCase();
       if (!allowedCreativeStatuses.includes(status)) return res.status(400).json({ ok: false, error: 'Invalid creative status' });
       add('creative_status', status);
+    }
+    if (req.body.advertiser_approval_status) {
+      const status = String(req.body.advertiser_approval_status).trim().toLowerCase();
+      if (!allowedApprovalStatuses.includes(status)) return res.status(400).json({ ok: false, error: 'Invalid advertiser approval status' });
+      add('advertiser_approval_status', status);
+    }
+    if (req.body.report_cadence) {
+      const cadence = String(req.body.report_cadence).trim().toLowerCase();
+      if (!allowedReportCadences.includes(cadence)) return res.status(400).json({ ok: false, error: 'Invalid report cadence' });
+      add('report_cadence', cadence);
     }
 
     [
@@ -1668,17 +1778,25 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'impressions')) add('impressions', Math.max(0, parseInt(req.body.impressions, 10) || 0));
     if (Object.prototype.hasOwnProperty.call(req.body, 'clicks')) add('clicks', Math.max(0, parseInt(req.body.clicks, 10) || 0));
     if (Object.prototype.hasOwnProperty.call(req.body, 'leads')) add('leads', Math.max(0, parseInt(req.body.leads, 10) || 0));
+    if (Object.prototype.hasOwnProperty.call(req.body, 'placements')) add('placements', JSON.stringify(normalizeJsonList(req.body.placements)), '::jsonb');
+    if (Object.prototype.hasOwnProperty.call(req.body, 'target_pages')) add('target_pages', JSON.stringify(normalizeJsonList(req.body.target_pages)), '::jsonb');
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, 'creative_headline')
+      || Object.prototype.hasOwnProperty.call(req.body, 'creative_body')
+      || Object.prototype.hasOwnProperty.call(req.body, 'creative_cta')
+      || Object.prototype.hasOwnProperty.call(req.body, 'creative_cta_url')
+    ) {
+      const previousAiCopy = safeJsonb(previousCampaign.ai_copy, {});
+      add('ai_copy', JSON.stringify({
+        ...previousAiCopy,
+        headline: Object.prototype.hasOwnProperty.call(req.body, 'creative_headline') ? String(req.body.creative_headline || '').trim() : previousAiCopy.headline,
+        body: Object.prototype.hasOwnProperty.call(req.body, 'creative_body') ? String(req.body.creative_body || '').trim() : previousAiCopy.body,
+        call_to_action: Object.prototype.hasOwnProperty.call(req.body, 'creative_cta') ? String(req.body.creative_cta || 'View on MakaUg').trim() : (previousAiCopy.call_to_action || 'View on MakaUg'),
+        cta_url: Object.prototype.hasOwnProperty.call(req.body, 'creative_cta_url') ? String(req.body.creative_cta_url || '').trim() || null : (previousAiCopy.cta_url || null)
+      }), '::jsonb');
+    }
 
     if (!updates.length) return res.status(400).json({ ok: false, error: 'No updates provided' });
-    const previousResult = await db.query(
-      `SELECT *
-       FROM advertising_campaigns
-       WHERE id = $1
-       LIMIT 1`,
-      [campaignId]
-    );
-    const previousCampaign = previousResult.rows[0] || null;
-    if (!previousCampaign) return res.status(404).json({ ok: false, error: 'Advertising campaign not found' });
 
     values.push(campaignId);
     const updated = await db.query(
