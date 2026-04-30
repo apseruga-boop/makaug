@@ -42,7 +42,9 @@ const T = {
     welcome: "🏠 Welcome to *MakaUg* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3",
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
-    askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am a registered agent',
+    askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
+    askFieldAgent: '🤝 Has a MakaUg field agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
+    askFieldAgentDetails: 'Please send the field agent name or phone number so we can credit the right person.',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? (e.g. Kampala, Wakiso, Mukono, Jinja...)',
     askArea: '🗺️ What area or neighbourhood? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -70,8 +72,9 @@ const T = {
     askDistance: '🚶 How far is the property from the university (in km)? (e.g. 0.5, 1, 2)',
     askSearchType: '🔎 What are you looking for?\n1️⃣ For sale\n2️⃣ To rent\n3️⃣ Land\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Anything',
     askSearchArea: '📍 Which area or district are you looking in? You can also share your WhatsApp location.',
-    locationSharedReceived: '📍 Location received. Searching nearby properties...',
+    locationSharedReceived: '📍 Location received. I am searching within 5 miles of you first.',
     searchNoNearbyResults: 'No approved listings found within 5 miles. Showing the nearest available options.',
+    widenNearbySearch: 'Reply *WIDEN* if you want me to expand the search area.',
     kmAway: 'km away',
     searchNoResults: 'I do not have an approved matching listing right now.',
     askAgentArea: '👔 Which district or area do you need an agent for? (for example Kampala, Wakiso, Mbarara). You can also share your location.',
@@ -117,6 +120,8 @@ const T = {
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
+    askFieldAgent: '🤝 Waliwo field agent wa MakaUg eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
+    askFieldAgentDetails: 'Mpandiikira erinnya oba ennamba ya field agent tumumanye bulungi.',
     askTitle: '✏️ Nyumba yoyo ejjiire etya? (e.g. "Enyumba esatu Ntinda Kampala"):',
     askDistrict: '📍 Ensi eno eri mu kitundu ki? (e.g. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Ekitundu ekitonotono ki? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -138,8 +143,9 @@ const T = {
     askDistance: '🚶 Mulenda gwa emiita mingaana ukola nga oyebase? (km)',
     askSearchType: '🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Ezikodizibwa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw\'abayiizi\n5️⃣ Ebyobusuubuzi\n6️⃣ Byonna',
     askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso), oba share location yo ku WhatsApp:',
-    locationSharedReceived: '📍 Location yo efuniddwa. Tunoonya listings eziri okumpi naawe...',
+    locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 5 ezikuli okumpi okusooka...',
     searchNoNearbyResults: 'Tewali listings ezikkiriziddwa munda wa miles 5. Tukulaga eziri okumpi eziriwo.',
+    widenNearbySearch: 'Ddamu *WIDEN* bwoyagala ngaziye ekitundu kyokunoonya.',
     kmAway: 'km okuva awo',
     searchNoResults: 'Tewali listings ezikkiriziddwa ezifaanana n\'onoonyezza wo kati.',
     askAgentArea: '👔 Weetaaga agent mu district oba kitundu ki? (nga Kampala, Wakiso, Mbarara)',
@@ -195,8 +201,9 @@ const T = {
     otpFailed: '❌ Nambari si sahihi. Jaribu tena.',
     askSearchType: '🔎 Unatafuta nini?\n1️⃣ Ya kuuza\n2️⃣ Ya kupangisha\n3️⃣ Ardhi\n4️⃣ Makazi ya wanafunzi\n5️⃣ Biashara\n6️⃣ Mali yoyote',
     askSearchArea: '📍 Andika eneo, wilaya au mahali unapotafuta (mf. Ntinda, Kampala, Wakiso), au tuma location yako kwenye WhatsApp:',
-    locationSharedReceived: '📍 Location yako imepokelewa. Tunatafuta mali zilizo karibu nawe...',
+    locationSharedReceived: '📍 Location yako imepokelewa. Natafuta kwanza ndani ya maili 5 karibu nawe...',
     searchNoNearbyResults: 'Hakuna mali zilizoidhinishwa ndani ya maili 5. Tunaonyesha chaguo za karibu zilizopo.',
+    widenNearbySearch: 'Jibu *WIDEN* kama unataka nipanue eneo la utafutaji.',
     kmAway: 'km kutoka hapo',
     searchNoResults: 'Hakuna mali iliyoidhinishwa inayolingana na utafutaji wako sasa.',
     askAgentArea: '👔 Unahitaji wakala katika wilaya/eneo gani? (mf. Kampala, Wakiso, Mbarara)',
@@ -268,7 +275,9 @@ const T = {
 Object.assign(T.sw, {
   languageUpdated: '✅ Lugha imesasishwa.',
   restarted: '🔄 Mazungumzo yameanza upya.',
-  askOwnership: '✅ Wewe ndiye mmiliki wa mali hii, au ni wakala?\n1️⃣ Mimi ni mmiliki\n2️⃣ Mimi ni wakala aliyesajiliwa',
+  askOwnership: '✅ Wewe ndiye mmiliki wa mali hii, au ni wakala?\n1️⃣ Mimi ni mmiliki\n2️⃣ Mimi ni wakala',
+  askFieldAgent: '🤝 Je, field agent wa MakaUg amekusaidia na tangazo hili?\n1️⃣ Ndiyo\n2️⃣ Hapana',
+  askFieldAgentDetails: 'Tuma jina au namba ya field agent ili tumtambue vizuri.',
   askBedrooms: '🛏 Mali ina vyumba vingapi vya kulala? (Andika nambari, au 0 kama haihusiki)',
   askDescription: '📝 Eleza mali yako kwa sentensi chache (eneo, vipengele, hali...)',
   askPublicName: '👤 Jina gani lionekane kwenye tangazo? (mfano Amina, Amina Properties, au Private Owner)',
@@ -290,7 +299,9 @@ Object.assign(T.sw, {
 
 Object.assign(T.ac, {
   askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business',
-  askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent ma registered',
+  askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent',
+  askFieldAgent: '🤝 Field agent pa MakaUg okonyi ki listing man?\n1️⃣ Eyo\n2️⃣ Pe',
+  askFieldAgentDetails: 'Coo nying onyo namba pa field agent wek wangeye maber.',
   askTitle: '✏️ Coo nying property macek:',
   askDistrict: '📍 Property man tye i district mene?',
   askArea: '🗺️ Kabedo/neighbourhood mene?',
@@ -316,7 +327,8 @@ Object.assign(T.ac, {
   askDistance: '🚶 Bor-ne ki university i km rom mene?',
   askSearchType: '🔎 Itye kayenyo ngo?\n1️⃣ Me acata\n2️⃣ Me rent\n3️⃣ Ngom\n4️⃣ Kabedo me students\n5️⃣ Business\n6️⃣ Weng',
   askSearchArea: '📍 Coo area onyo district ma iyenyo iye, onyo share location mamegi.',
-  locationSharedReceived: '📍 Location onongo. Wayenyo properties ma cok...',
+  locationSharedReceived: '📍 Location onongo. Wayenyo properties i miles 5 ma cok kwedi mukwongo.',
+  widenNearbySearch: 'Dwog *WIDEN* ka imito ni warwak kabedo me yeny.',
   searchNoNearbyResults: 'Pe wanongo listings ma approved i miles 5. Wanyuto ma cok.',
   searchNoResults: 'Pe wanongo listing ma approved ma rwate kombedi.',
   askAgentArea: '👔 Imito agent i district/area mene?',
@@ -346,7 +358,9 @@ Object.assign(T.ac, {
 
 Object.assign(T.ny, {
   askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property',
-  askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent owahandiikirwe',
+  askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent',
+  askFieldAgent: '🤝 Hari field agent wa MakaUg owakuhwereire ahari listing egi?\n1️⃣ Eego\n2️⃣ Ngaaha',
+  askFieldAgentDetails: 'Handiika eizina nari namba ya field agent kugira tumumanye gye.',
   askTitle: '✏️ Ha property yaawe omutwe mugufi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -356,6 +370,9 @@ Object.assign(T.ny, {
   askPhotos: '📸 Tuma ekishushani kya *front/outside* kubanza.',
   askSearchType: '🔎 Noshaka ki?\n1️⃣ Ebyokugurisha\n2️⃣ Ebyokukodisa\n3️⃣ Itaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Byona',
   askSearchArea: '📍 Handiika area nari district eyi orikushakiramu, nari share location yaawe.',
+  locationSharedReceived: '📍 Location yaawe yatunga. Ninyanza kushaka omu miles 5 eziri haihi naiwe.',
+  widenNearbySearch: 'Garukamu *WIDEN* waaba noyenda nyongyereho ahokushakira.',
+  searchNoNearbyResults: 'Tinsangire listings ezikirizibwe omu miles 5. Ninyija kukwereka ezirikubaasa kukuhwera.',
   menuHint: 'Handiika MENU obwire bwona kugaruka aha main menu.',
   searchHeader: 'Properties ezirikukwatagana munonga',
   agentHeader: 'Agents abahamibwa',
@@ -377,7 +394,9 @@ Object.assign(T.ny, {
 
 Object.assign(T.rn, {
   askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property',
-  askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent yanditswe',
+  askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent',
+  askFieldAgent: '🤝 Hari field agent wa MakaUg yabafashije kuri iyi listing?\n1️⃣ Ego\n2️⃣ Oya',
+  askFieldAgentDetails: 'Andika izina canke namba ya field agent kugira tumumenye neza.',
   askTitle: '✏️ Andika umutwe mugufi wa property:',
   askDistrict: '📍 Property iri muri district iyihe?',
   askArea: '🗺️ Area/neighbourhood iyihe?',
@@ -387,6 +406,9 @@ Object.assign(T.rn, {
   askPhotos: '📸 Ohereza ifoto ya *front/outside* mbere.',
   askSearchType: '🔎 Urashaka iki?\n1️⃣ Kugurisha\n2️⃣ Gukodesha\n3️⃣ Ubutaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Vyose',
   askSearchArea: '📍 Andika area canke district uronderamwo, canke share location yawe.',
+  locationSharedReceived: '📍 Location yawe yakiriwe. Ntanguye kurondera mu miles 5 hafi yawe.',
+  widenNearbySearch: 'Subiza *WIDEN* nimba ushaka nagure aho kurondera.',
+  searchNoNearbyResults: 'Nta listings zemejwe nabonye mu miles 5. Ndakwereka izindi zishobora gufasha.',
   menuHint: 'Andika MENU igihe cose gusubira kuri main menu.',
   searchHeader: 'Properties zihuye cane',
   agentHeader: 'Agents bemejwe',
@@ -408,7 +430,9 @@ Object.assign(T.rn, {
 
 Object.assign(T.sm, {
   askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property",
-  askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent registered',
+  askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent',
+  askFieldAgent: '🤝 Waliwo field agent wa MakaUg eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
+  askFieldAgentDetails: 'Mpandiikira erinnya oba ennamba ya field agent tumumanye bulungi.',
   askTitle: '✏️ Wa property yo omutwe omumpi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -418,6 +442,9 @@ Object.assign(T.sm, {
   askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
   askSearchType: "🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Eby'okukodisa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial\n6️⃣ Byonna",
   askSearchArea: '📍 Wandiika area oba district gyonoonya, oba share location yo.',
+  locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 5 ezikuli okumpi okusooka.',
+  widenNearbySearch: 'Ddamu *WIDEN* bwoyagala ngaziye ekitundu kyokunoonya.',
+  searchNoNearbyResults: 'Sirabye listings ezikakasiddwa mu miles 5. Nja kukulaga ezirala eziyinza okukuyamba.',
   menuHint: 'Wandiika MENU anytime okudda ku main menu.',
   searchHeader: 'Properties ezisinga okukwatagana',
   agentHeader: 'Agents abakakasiddwa',
@@ -760,16 +787,31 @@ function photoCompletePrompt(lang, count = 5) {
 function friendlyGreetingReply(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
   const lead = timeGreetingWithName(code, sessionData);
+  const languageLine = languageComfortLine(code);
   const messages = {
-    en: `${lead} 👋 ${assistantIntro(code)}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala" or share your location.`,
-    lg: `${lead} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`,
-    sw: `${lead} 👋 ${assistantIntro(code)}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala" au kushare location yako.`,
-    ac: `${lead} 👋 ${assistantIntro(code)}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
-    ny: `${lead} 👋 ${assistantIntro(code)}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
-    rn: `${lead} 👋 ${assistantIntro(code)}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
-    sm: `${lead} 👋 ${assistantIntro(code)}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda" oba okusindika location yo.`
+    en: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala", "student room near me", or share your location.`,
+    lg: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda", "abayizi okumpi nange", oba okusindika location yo.`,
+    sw: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala", "student room karibu nami", au kushare location yako.`,
+    ac: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
+    ny: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
+    rn: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
+    sm: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda", "abayizi okumpi nange", oba okusindika location yo.`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function languageComfortLine(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: 'You can speak to me in English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, or Lusoga. I will keep replying in the language you use.',
+    lg: 'Osobola okunjogerera mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwokozesa.',
+    sw: 'Unaweza kuzungumza nami kwa English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga au Lusoga. Nitajibu kwa lugha unayotumia.',
+    ac: 'I romo loko kweda i English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga onyo Lusoga. Abino dwoko i leb ma itiyo kwede.',
+    ny: 'Noobaasa kugamba nanje omu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga nari Lusoga. Ninyija kugarukamu omu rurimi orikukozesa.',
+    rn: 'Mushobora kuvugana nanje mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga canke Lusoga. Nzasubiza mu rurimi mukoresha.',
+    sm: 'Osobola okunjogerera mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwokozesa.'
+  };
+  return messages[code] || messages.en;
 }
 
 function stepReminderMessage(lang, step) {
@@ -797,6 +839,8 @@ function stepReminderMessage(lang, step) {
     ask_phone: t(code, 'askPhone'),
     search_type: t(code, 'askSearchType'),
     search_area: t(code, 'askSearchArea'),
+    ask_field_agent: t(code, 'askFieldAgent'),
+    ask_field_agent_details: t(code, 'askFieldAgentDetails'),
     agent_area: t(code, 'askAgentArea'),
     verify_otp: t(code, 'verifyOTP')
   };
@@ -1996,13 +2040,13 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
       sm: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
     },
     location: {
-      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now.`,
-      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati.`,
-      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa.`,
-      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp.`,
-      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati.`,
-      rn: `📍 Nshobora gushaka hafi yanyu.\n${filterLine}Ohereza location ya WhatsApp ubu.`,
-      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati.`
+      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now. I will start within 5 miles, then you can reply WIDEN if you want more options.`,
+      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 5, olwo oddemu WIDEN bwoyagala ebisingawo.`,
+      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa. Nitaanza ndani ya maili 5, kisha ujibu WIDEN ukitaka chaguo zaidi.`,
+      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp. Abicako i miles 5, dok iromo dwoko WIDEN pi me yaro.`,
+      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati. Ninyija kutandika omu miles 5, kandi wangarukamu WIDEN waba noyenda ebindi.`,
+      rn: `📍 Nshobora gushaka hafi yanyu.\n${filterLine}Ohereza location ya WhatsApp ubu. Ndatangura muri miles 5, hanyuma wandike WIDEN nimba mushaka ibindi.`,
+      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 5, olwo oddemu WIDEN bwoyagala ebisingawo.`
     }
   };
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
@@ -2158,7 +2202,7 @@ async function findPropertiesByNaturalFilters(filters = {}) {
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -2520,7 +2564,7 @@ async function findPropertiesForWhatsapp(searchType, location) {
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -2543,7 +2587,7 @@ async function findPropertiesForWhatsapp(searchType, location) {
   return mergeSearchRows(result.rows, websiteRows, 5);
 }
 
-async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
+async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMiles = 5) {
   const values = ['approved'];
   let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
 
@@ -2553,7 +2597,7 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.latitude, p.longitude,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.latitude, p.longitude, p.extra_fields,
             p.bedrooms, p.bathrooms, p.property_type, img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -2582,15 +2626,16 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation) {
     .filter(Boolean)
     .sort((a, b) => a.distance_km - b.distance_km);
 
-  const withinFiveMilesKm = 8.04672;
-  const nearby = rowsWithDistance.filter((row) => row.distance_km <= withinFiveMilesKm);
+  const radiusKm = Math.max(1, Number(radiusMiles) || 5) * 1.609344;
+  const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
   return {
     rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
-    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0
+    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
+    radiusMiles: Math.max(1, Number(radiusMiles) || 5)
   };
 }
 
-async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null) {
+async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null, radiusMiles = 5) {
   const f = filters && typeof filters === 'object' ? filters : {};
   const values = ['approved'];
   let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
@@ -2666,7 +2711,7 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.latitude, p.longitude,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.latitude, p.longitude, p.extra_fields,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -2695,11 +2740,12 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
     .filter(Boolean)
     .sort((a, b) => a.distance_km - b.distance_km);
 
-  const withinFiveMilesKm = 8.04672;
-  const nearby = rowsWithDistance.filter((row) => row.distance_km <= withinFiveMilesKm);
+  const radiusKm = Math.max(1, Number(radiusMiles) || 5) * 1.609344;
+  const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
   return {
     rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
-    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0
+    usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
+    radiusMiles: Math.max(1, Number(radiusMiles) || 5)
   };
 }
 
@@ -2947,6 +2993,63 @@ function safePublicPreviewUrl(value) {
   return url;
 }
 
+function getExtraField(row, key) {
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return extra[key];
+}
+
+function isSponsoredWhatsappRow(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return row.featured === true
+    || row.is_sponsored === true
+    || row.sponsored === true
+    || String(extra.sponsored || '').toLowerCase() === 'true'
+    || String(extra.whatsapp_sponsored || '').toLowerCase() === 'true'
+    || String(extra.ad_placement || '').toLowerCase().includes('sponsor');
+}
+
+function sponsoredBadge(lang) {
+  const code = resolveLangCode(lang);
+  const labels = {
+    en: '💚 Sponsored MakaUg pick',
+    lg: '💚 MakaUg sponsored pick',
+    sw: '💚 Chaguo la MakaUg lililodhaminiwa',
+    ac: '💚 MakaUg pick ma sponsored',
+    ny: '💚 MakaUg pick erikushagikwa',
+    rn: '💚 MakaUg pick yishyuwe',
+    sm: '💚 MakaUg sponsored pick'
+  };
+  return labels[code] || labels.en;
+}
+
+function widenedNearbyIntro(lang, miles = 15) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `📍 I widened the search to ${miles} miles.`,
+    lg: `📍 Ngaziyizza okunoonya okutuuka ku miles ${miles}.`,
+    sw: `📍 Nimepanua utafutaji hadi maili ${miles}.`,
+    ac: `📍 Ayaro yeny me oo i miles ${miles}.`,
+    ny: `📍 Ningazire okushaka kuhika aha miles ${miles}.`,
+    rn: `📍 Naguriye ukurondera gushika kuri miles ${miles}.`,
+    sm: `📍 Ngaziyizza okunoonya okutuuka ku miles ${miles}.`
+  };
+  return messages[code] || messages.en;
+}
+
+function listingDraftSavedNote(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: 'I have kept your listing draft safe.',
+    lg: 'Nterese draft ya listing yo bulungi.',
+    sw: 'Nimehifadhi draft ya tangazo lako salama.',
+    ac: 'Agwoko draft me listing mamegi maber.',
+    ny: 'Nabika draft ya listing yaawe gye.',
+    rn: 'Nabitse draft ya listing yanyu neza.',
+    sm: 'Nterese draft ya listing yo bulungi.'
+  };
+  return messages[code] || messages.en;
+}
+
 async function findBroaderPropertyFallback(filters = {}) {
   const searchType = normalizeListingType(filters.searchType || 'any');
   const area = normalizeInput(filters.area || filters.preferredArea || '');
@@ -3065,7 +3168,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bath',
       preview: 'Preview',
       open: 'View photos, map and enquire',
-      footer: 'Tap any link to open the full MakaUg page with photos, map, and enquiry options.'
+      available: 'Available',
+      footer: 'Tap any link to open the full MakaUg page with photos, map, and enquiry options.',
+      opensOnMakaUg: 'Every result opens on MakaUg with photos, map and enquiry options.'
     },
     lg: {
       filter: 'Filter',
@@ -3073,7 +3178,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bathroom',
       preview: 'Ekifaananyi',
       open: 'Laba ebifaananyi, map, era obuuze',
-      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.'
+      available: 'Kisobola okufunibwa',
+      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.',
+      opensOnMakaUg: 'Buli result eggulawo ku MakaUg n\'ebifaananyi, map, n\'engeri y\'okubuuza.'
     },
     sw: {
       filter: 'Kichujio',
@@ -3081,7 +3188,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bafu',
       preview: 'Picha',
       open: 'Fungua picha, ramani na kuuliza',
-      footer: 'Bonyeza link yoyote kufungua ukurasa kamili wa MakaUg wenye picha, ramani, na sehemu ya kuuliza.'
+      available: 'Inapatikana',
+      footer: 'Bonyeza link yoyote kufungua ukurasa kamili wa MakaUg wenye picha, ramani, na sehemu ya kuuliza.',
+      opensOnMakaUg: 'Kila matokeo hufunguka MakaUg na picha, ramani na njia ya kuuliza.'
     },
     ac: {
       filter: 'Filter',
@@ -3089,7 +3198,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bathroom',
       preview: 'Cal',
       open: 'Nen cal, map, ki penyo',
-      footer: 'Dii link mo keken me yabo pot buk MakaUg ma tye ki cal, map, ki yoo me penyo.'
+      available: 'Tye',
+      footer: 'Dii link mo keken me yabo pot buk MakaUg ma tye ki cal, map, ki yoo me penyo.',
+      opensOnMakaUg: 'Result acel acel yabo i MakaUg ki cal, map, ki yoo me penyo.'
     },
     ny: {
       filter: 'Filter',
@@ -3097,7 +3208,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bathroom',
       preview: 'Ekishushani',
       open: 'Reeba ebishushani, map, kandi obuuze',
-      footer: 'Kanda link yoona kuguraho page ya MakaUg erimu ebishushani, map, n\'okubuuza.'
+      available: 'Kiraboneka',
+      footer: 'Kanda link yoona kuguraho page ya MakaUg erimu ebishushani, map, n\'okubuuza.',
+      opensOnMakaUg: 'Buri result neegura ahari MakaUg erimu ebishushani, map, n\'okubuuza.'
     },
     rn: {
       filter: 'Filter',
@@ -3105,7 +3218,9 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bathroom',
       preview: 'Ifoto',
       open: 'Raba amafoto, map, hanyuma ubaze',
-      footer: 'Kanda link yose gufungura page ya MakaUg irimwo amafoto, map, n\'aho kubaza.'
+      available: 'Irahari',
+      footer: 'Kanda link yose gufungura page ya MakaUg irimwo amafoto, map, n\'aho kubaza.',
+      opensOnMakaUg: 'Buri result yuguruka kuri MakaUg irimwo amafoto, map, n\'aho kubaza.'
     },
     sm: {
       filter: 'Filter',
@@ -3113,34 +3228,39 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       bath: 'bathroom',
       preview: 'Ekifaananyi',
       open: 'Laba ebifaananyi, map, era obuuze',
-      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.'
+      available: 'Kisobola okufunibwa',
+      footer: 'Nyiga link yonna okuggulawo page ya MakaUg eriko ebifaananyi, map, n\'engeri y\'okubuuza.',
+      opensOnMakaUg: 'Buli result eggulawo ku MakaUg n\'ebifaananyi, map, n\'engeri y\'okubuuza.'
     }
   };
   const copy = cardCopy[code] || cardCopy.en;
   const lines = [];
   lines.push('🟩🟨 *MakaUg Matchboard* 🟨🟩');
+  lines.push('━━━━━━━━━━━━━━━━');
   lines.push(`🔎 *${t(lang, 'searchHeader')}*`);
   lines.push(`🎯 ${copy.filter}: ${typeLabel(searchType, lang)} • ${location}`);
-  lines.push('━━━━━━━━━━━━━━');
+  lines.push(copy.opensOnMakaUg || cardCopy.en.opensOnMakaUg);
+  lines.push('━━━━━━━━━━━━━━━━');
   rows.forEach((r, idx) => {
     const meta = [
       r.property_type,
       Number.isFinite(Number(r.bedrooms)) && Number(r.bedrooms) > 0 ? `${r.bedrooms} ${copy.bed}` : '',
       Number.isFinite(Number(r.bathrooms)) && Number(r.bathrooms) > 0 ? `${r.bathrooms} ${copy.bath}` : ''
     ].filter(Boolean).join(' • ');
-    lines.push(`${idx + 1}. 🏡 *${r.title}*`);
-    if (r.featured === true || String(r.featured || '').toLowerCase() === 'true') {
-      lines.push('   Sponsored MakaUg placement');
-    }
+    const sponsor = isSponsoredWhatsappRow(r);
+    lines.push(`${idx + 1}. ${sponsor ? '⭐' : '🏡'} *${r.title}*`);
+    if (sponsor) lines.push(`   ${sponsoredBadge(lang)}`);
     lines.push(`   📍 ${[r.area, r.district].filter(Boolean).join(', ')}`);
     lines.push(`   🏷️ ${typeLabel(r.listing_type, lang)}${meta ? ` • ${meta}` : ''}`);
     lines.push(`   💰 ${formatPrice(r.price, r.price_period)}`);
+    const availability = normalizeInput(getExtraField(r, 'available_from') || getExtraField(r, 'availability'));
+    if (availability) lines.push(`   📅 ${copy.available || cardCopy.en.available}: ${availability}`);
     if (Number.isFinite(Number(r.distance_km))) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }
     const listingUrl = safePublicPreviewUrl(r.property_url || r.url) || `${HOME_URL}/property/${r.id}`;
     lines.push(`   🔗 ${copy.open}: ${listingUrl}`);
-    lines.push('━━━━━━━━━━━━━━');
+    lines.push('━━━━━━━━━━━━━━━━');
   });
   lines.push(`✨ ${copy.footer}`);
   lines.push(t(lang, 'menuHint'));
@@ -3260,7 +3380,7 @@ function intentMenuRoute(intent) {
 
 // Step machine
 const STEPS = [
-  'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'title', 'district',
+  'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value',
   'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
@@ -3490,7 +3610,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && !(globalRoute === 'search_type' && ['search_type', 'search_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
     && (
-      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos'].includes(step)
+      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
       && !['ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number', 'ask_selfie'].includes(step)
       || ['agent_area', 'support', 'account_help', 'report_listing', 'mortgage_help'].includes(globalRoute)
     )
@@ -3556,6 +3676,49 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     if (cleanBody === '2') return respond(t(lang, 'askSearchType'), 'search_type');
     if (cleanBody === '3') return respond(t(lang, 'askAgentArea'), 'agent_area');
     if (cleanBody === '9') return respond(t(lang, 'chooseLanguage'), 'choose_language');
+
+    if (compactUpper === 'WIDEN' && Number.isFinite(Number(sessionData.search_lat)) && Number.isFinite(Number(sessionData.search_lng))) {
+      const widenedLocation = {
+        lat: Number(sessionData.search_lat),
+        lng: Number(sessionData.search_lng),
+        address: sessionData.search_location_label || null,
+        label: sessionData.search_location_label || null
+      };
+      const widenedType = sessionData.search_type || 'any';
+      const widenedFilters = sessionData.last_nearby_search_filters && typeof sessionData.last_nearby_search_filters === 'object'
+        ? sessionData.last_nearby_search_filters
+        : { searchType: widenedType };
+      const widened = await findPropertiesNearWhatsappWithFilters(
+        widenedType,
+        widenedLocation,
+        widenedFilters,
+        15
+      );
+      await logPropertySearchRequest({
+        userPhone: phone,
+        searchType: widenedFilters.searchType || widenedType,
+        queryText: 'widen_nearby_search',
+        location: widenedLocation,
+        resultRows: widened.rows,
+        usedNearestFallback: widened.usedNearestFallback
+      });
+      if (!widened.rows.length) {
+        const reply = await formatNoMatchOrFallbackReply({
+          lang,
+          userPhone: phone,
+          searchType: widenedFilters.searchType || widenedType,
+          area: sessionData.search_location_label || 'near me',
+          queryText: 'widen_nearby_search',
+          filters: widenedFilters,
+          notes: 'No approved listings found from widened WhatsApp location search.'
+        });
+        return respond(reply, 'main_menu');
+      }
+      return respond(
+        `${widenedNearbyIntro(lang, 15)}\n\n${formatPropertySearchMessage(lang, widened.rows, sessionData.search_location_label || 'near me', widenedFilters.searchType || widenedType)}`,
+        'main_menu'
+      );
+    }
 
     let naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
@@ -3882,6 +4045,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         search_lat: Number(sharedLocation.lat),
         search_lng: Number(sharedLocation.lng),
         search_location_label: sharedLocation.address || sharedLocation.label || null,
+        search_type: pendingFilters?.searchType || searchType,
+        last_nearby_search_filters: pendingFilters || { searchType },
+        last_nearby_search_at: new Date().toISOString(),
         pending_search_filters: null
       });
 
@@ -3916,7 +4082,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         return respond(reply, 'main_menu');
       }
 
-      const extra = near.usedNearestFallback ? `\n${t(lang, 'searchNoNearbyResults')}\n` : '\n';
+      const extra = near.usedNearestFallback
+        ? `\n${t(lang, 'searchNoNearbyResults')}\n${t(lang, 'widenNearbySearch')}\n`
+        : `\n${t(lang, 'widenNearbySearch')}\n`;
       return respond(
         `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${describeNaturalFilters(pendingFilters, lang) ? `Filters: ${describeNaturalFilters(pendingFilters, lang)}\n` : ''}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
         'main_menu'
@@ -4060,6 +4228,28 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const chosen = ownerMap[cleanBody.toLowerCase()];
     if (!chosen) return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askOwnership'), 'ownership');
     await patchDraft(phone, { lister_type: chosen });
+    return respond(t(lang, 'askFieldAgent'), 'ask_field_agent');
+  }
+
+  // FIELD AGENT CREDIT
+  if (step === 'ask_field_agent') {
+    if (isAffirmativeReply(cleanBody)) {
+      await patchDraft(phone, { assisted_by_field_agent: true });
+      return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
+    }
+    if (isNegativeReply(cleanBody)) {
+      await patchDraft(phone, { assisted_by_field_agent: false });
+      return respond(t(lang, 'askTitle'), 'title');
+    }
+    return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgent'), 'ask_field_agent');
+  }
+
+  if (step === 'ask_field_agent_details') {
+    if (cleanBody.length < 2) return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
+    await patchDraft(phone, {
+      assisted_by_field_agent: true,
+      field_agent_reference: cleanBody
+    });
     return respond(t(lang, 'askTitle'), 'title');
   }
 
@@ -4170,7 +4360,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           natural_query_text: cleanBody
         });
 
-        const draftNote = 'I have kept your listing draft safe.';
+        const draftNote = listingDraftSavedNote(lang);
         if (naturalFilters.useSharedLocation) {
           return respond(
             `${draftNote}\n\n${naturalSearchPrompt(lang, naturalFilters, 'location')}`,
@@ -4348,7 +4538,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             contact_display_name: d.contact_display_name || d.lister_name || null,
             preferred_contact_channel: d.preferred_contact_channel || 'phone',
             whatsapp_listing_flow: true,
-            verification_channel: d.otp_channel || 'phone'
+            verification_channel: d.otp_channel || 'phone',
+            assisted_by_field_agent: d.assisted_by_field_agent === true,
+            field_agent_reference: d.field_agent_reference || null
           },
           expiresAt
         ]
