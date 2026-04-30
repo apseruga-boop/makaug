@@ -19,6 +19,7 @@ const {
   sendOwnerListingSubmissionNotifications
 } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
+const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -1017,10 +1018,12 @@ router.post('/', async (req, res, next) => {
 
     const amenities = asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean);
     const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
-    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
-    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
-    if (videoUrl) extraFields.video_url = videoUrl;
-    if (/youtube\.com|youtu\.be/i.test(videoUrl)) extraFields.youtube_url = videoUrl;
+	    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
+	    const availableFrom = cleanText(body.available_from || extraFields.available_from);
+	    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
+	    if (videoUrl) extraFields.video_url = videoUrl;
+	    if (/youtube\.com|youtu\.be/i.test(videoUrl)) extraFields.youtube_url = videoUrl;
+	    if (availableFrom) extraFields.available_from = availableFrom;
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
     }
@@ -1135,6 +1138,37 @@ router.post('/', async (req, res, next) => {
     );
 
     const propertyId = insertResult.rows[0].id;
+    captureLearningEvent({
+      eventName: 'property_listing_submitted',
+      source: cleanText(body.source) || 'website',
+      channel: 'web',
+      sessionId: `property_listing:${propertyId}`,
+      externalUserId: listerPhone || listerEmailNormalized || cleanText(body.lister_name) || propertyId,
+      inputText: [title, description, district, area].filter(Boolean).join(' | '),
+      responseText: 'Listing submitted for MakaUg admin review.',
+      payload: {
+        id: propertyId,
+        listing_type: listingType,
+        title,
+        district,
+        area,
+        price,
+        price_period: cleanText(body.price_period) || null,
+        property_type: cleanText(body.property_type) || null,
+        available_from: extraFields.available_from || null,
+        lister_type: cleanText(body.lister_type) || 'owner',
+        image_count: submittedImages.length,
+        inquiry_reference: inquiryReference
+      },
+      entities: {
+        location: [area, district].filter(Boolean).join(', '),
+        listing_type: listingType,
+        budget_ugx: price
+      },
+      dedupeKey: `property_listing:${propertyId}`,
+      requestIp: req.ip,
+      userAgent: req.get('user-agent')
+    });
 
     const imageItems = submittedImageItems.slice(0, enforceOtp ? websiteMaxImages : 20);
     const imageUrls = imageItems.map((item) => item.url);

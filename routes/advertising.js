@@ -4,6 +4,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { asArray, cleanText, isValidEmail, isValidPhone, toNullableInt } = require('../middleware/validation');
 const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
+const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const {
   estimateAdvertisingQuote,
   getAdvertisingPackages,
@@ -128,6 +129,34 @@ router.post('/inquiries', async (req, res, next) => {
     );
 
     const inquiry = inserted.rows[0];
+    captureLearningEvent({
+      eventName: 'advertising_inquiry_submitted',
+      source,
+      channel: preferredContactChannel,
+      sessionId: `advertising_inquiry:${inquiry.id}`,
+      externalUserId: phone || email || fullName,
+      inputText: message || `${businessName || fullName} wants advertising: ${productInterests.join(', ')}`,
+      responseText: 'Advertising inquiry saved for MakaUg proposal and creative preview.',
+      payload: {
+        id: inquiry.id,
+        full_name: fullName,
+        business_name: businessName || null,
+        product_interests: productInterests,
+        target_locations: targetLocations,
+        target_listing_types: targetListingTypes,
+        audience_segments: audienceSegments,
+        estimated_value_ugx: estimatedValue,
+        preferred_contact_channel: preferredContactChannel
+      },
+      entities: {
+        products: productInterests,
+        locations: targetLocations,
+        budget_ugx: budgetUgx
+      },
+      dedupeKey: `advertising_inquiry:${inquiry.id}`,
+      requestIp: req.ip,
+      userAgent: req.get('user-agent')
+    });
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
     const labels = packageLabels(productInterests);

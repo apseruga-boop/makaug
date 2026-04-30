@@ -4,6 +4,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { cleanText, toNullableInt, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
+const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 
 const router = express.Router();
 
@@ -131,7 +132,36 @@ async function handleLookingForProperty(req, res, next) {
       ]
     );
 
-    return res.status(201).json({ ok: true, data: inserted.rows[0] });
+    const request = inserted.rows[0];
+    captureLearningEvent({
+      eventName: 'property_request_submitted',
+      source: cleanText(req.body.source) || 'website',
+      channel: 'web',
+      sessionId: `property_request:${request.id}`,
+      externalUserId: phone || email || fullName,
+      inputText: requirements,
+      responseText: 'Property request saved for MakaUg follow-up.',
+      payload: {
+        id: request.id,
+        full_name: fullName,
+        phone,
+        email: email || null,
+        preferred_locations: cleanText(req.body.preferred_locations) || null,
+        listing_type: cleanText(req.body.listing_type) || null,
+        max_budget: toNullableInt(req.body.max_budget),
+        source: cleanText(req.body.source) || 'website'
+      },
+      entities: {
+        location: cleanText(req.body.preferred_locations) || null,
+        budget_ugx: toNullableInt(req.body.max_budget),
+        listing_type: cleanText(req.body.listing_type) || null
+      },
+      dedupeKey: `property_request:${request.id}`,
+      requestIp: req.ip,
+      userAgent: req.get('user-agent')
+    });
+
+    return res.status(201).json({ ok: true, data: request });
   } catch (error) {
     return next(error);
   }

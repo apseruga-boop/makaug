@@ -183,20 +183,55 @@
     #map-home.map-h { height: 560px; }
     .map-h-sm { height: 280px; width: 100%; }
     .listing-map-col {
-      position: relative;
+      position: sticky;
+      top: 5.5rem;
       z-index: 0;
       align-self: start;
       min-width: 0;
+      max-height: calc(100vh - 6.5rem);
+      overflow-y: auto;
+      padding-bottom: 1rem;
     }
     .listing-map-shell {
-      position: sticky;
-      top: 8rem;
+      position: relative;
+      top: auto;
       z-index: 0;
       background: transparent;
       isolation: isolate;
     }
     .listing-map-shell .map-h {
       height: min(70vh, 420px);
+    }
+    .map-assist-card select,
+    .map-assist-card input,
+    .map-assist-card textarea {
+      color: #111827;
+    }
+    .property-gallery-hero {
+      height: clamp(320px, 52vh, 560px);
+    }
+    #detail-photo-modal .modal-box,
+    #preview-photo-modal .modal-box {
+      max-width: min(1180px, calc(100vw - 24px));
+      width: min(1180px, calc(100vw - 24px));
+      max-height: calc(100vh - 24px);
+      padding: 16px;
+      border-radius: 12px;
+    }
+    @media (max-width: 1023px) {
+      .listing-map-col {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding-bottom: 0;
+      }
+      #detail-photo-modal .modal-box,
+      #preview-photo-modal .modal-box {
+        width: 100vw;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+      }
     }
     .page .leaflet-container {
       position: relative;
@@ -881,14 +916,22 @@
           <div id="map-sale" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
         <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
-          <div class="font-bold text-green-900">Can't find what you're looking for?</div>
-          <p class="text-xs text-green-800 mt-1">Tell MakaUg what you need and we will follow up with matching homes or agents.</p>
-          <div class="grid gap-2 mt-2">
-            <input data-map-assist-name="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
-            <input data-map-assist-phone="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
-            <textarea data-map-assist-details="sale" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
-            <button type="button" onclick="submitMapAssistRequest('sale')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
-          </div>
+	          <div class="font-bold text-green-900">Can't find what you're looking for?</div>
+	          <p class="text-xs text-green-800 mt-1">Tell MakaUg what you need and we will follow up with matching homes or agents.</p>
+	          <div class="grid gap-2 mt-2">
+	            <input data-map-assist-name="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+	            <input data-map-assist-phone="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <select data-map-assist-need="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="House for sale">House for sale</option>
+	              <option value="Apartment for sale">Apartment for sale</option>
+	              <option value="Land for sale">Land for sale</option>
+	              <option value="Agent support">Find me an agent</option>
+	            </select>
+	            <input data-map-assist-location="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
+	            <input data-map-assist-budget="sale" type="number" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
+	            <textarea data-map-assist-details="sale" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
+	            <button type="button" onclick="submitMapAssistRequest('sale')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+	          </div>
         </div>
       </div>
     </div>
@@ -975,14 +1018,22 @@
           <div id="map-rent" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
         <div class="map-assist-card mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm">
-          <div class="font-bold text-blue-900">Can't find the right rental?</div>
-          <p class="text-xs text-blue-800 mt-1">Send your budget, area, and must-haves. We will track it for follow-up.</p>
-          <div class="grid gap-2 mt-2">
-            <input data-map-assist-name="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
-            <input data-map-assist-phone="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
-            <textarea data-map-assist-details="rent" rows="2" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
-            <button type="button" onclick="submitMapAssistRequest('rent')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
-          </div>
+	          <div class="font-bold text-blue-900">Can't find the right rental?</div>
+	          <p class="text-xs text-blue-800 mt-1">Send your budget, area, and must-haves. We will track it for follow-up.</p>
+	          <div class="grid gap-2 mt-2">
+	            <input data-map-assist-name="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+	            <input data-map-assist-phone="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <select data-map-assist-need="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="House to rent">House to rent</option>
+	              <option value="Apartment to rent">Apartment to rent</option>
+	              <option value="Studio to rent">Studio to rent</option>
+	              <option value="Short let">Short let</option>
+	            </select>
+	            <input data-map-assist-location="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
+	            <input data-map-assist-budget="rent" type="number" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Monthly budget (USh)">
+	            <textarea data-map-assist-details="rent" rows="2" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What are you looking for?"></textarea>
+	            <button type="button" onclick="submitMapAssistRequest('rent')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+	          </div>
         </div>
       </div>
     </div>
@@ -1082,14 +1133,22 @@
             <div id="map-students" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
           </div>
           <div class="map-assist-card mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-sm">
-            <div class="font-bold text-purple-900">Need student accommodation help?</div>
-            <p class="text-xs text-purple-800 mt-1">Share university, budget, and move-in date. MakaUg will save the request.</p>
-            <div class="grid gap-2 mt-2">
-              <input data-map-assist-name="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
-              <input data-map-assist-phone="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
-              <textarea data-map-assist-details="students" rows="2" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, room type, budget..."></textarea>
-              <button type="button" onclick="submitMapAssistRequest('students')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
-            </div>
+	          <div class="font-bold text-purple-900">Need student accommodation help?</div>
+	          <p class="text-xs text-purple-800 mt-1">Share university, budget, and move-in date. MakaUg will save the request.</p>
+	          <div class="grid gap-2 mt-2">
+	            <input data-map-assist-name="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+	            <input data-map-assist-phone="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <select data-map-assist-need="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="Student hostel">Student hostel</option>
+	              <option value="Studio near campus">Studio near campus</option>
+	              <option value="Shared room">Shared room</option>
+	              <option value="Self-contained room">Self-contained room</option>
+	            </select>
+	            <input data-map-assist-location="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, area or street">
+	            <input data-map-assist-budget="students" type="number" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget per semester (USh)">
+	            <textarea data-map-assist-details="students" rows="2" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="University, room type, budget..."></textarea>
+	            <button type="button" onclick="submitMapAssistRequest('students')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+	          </div>
           </div>
         </div>
       </div>
@@ -1167,14 +1226,22 @@
           <div id="map-commercial" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
         <div class="map-assist-card mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm">
-          <div class="font-bold text-amber-900">Need a commercial space?</div>
-          <p class="text-xs text-amber-800 mt-1">Tell us the business type, size, area, and budget.</p>
-          <div class="grid gap-2 mt-2">
-            <input data-map-assist-name="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
-            <input data-map-assist-phone="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
-            <textarea data-map-assist-details="commercial" rows="2" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Office, shop, warehouse, location..."></textarea>
-            <button type="button" onclick="submitMapAssistRequest('commercial')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
-          </div>
+	          <div class="font-bold text-amber-900">Need a commercial space?</div>
+	          <p class="text-xs text-amber-800 mt-1">Tell us the business type, size, area, and budget.</p>
+	          <div class="grid gap-2 mt-2">
+	            <input data-map-assist-name="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+	            <input data-map-assist-phone="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <select data-map-assist-need="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="Office space">Office space</option>
+	              <option value="Shop / retail">Shop / retail</option>
+	              <option value="Warehouse">Warehouse</option>
+	              <option value="Restaurant / hospitality">Restaurant / hospitality</option>
+	            </select>
+	            <input data-map-assist-location="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
+	            <input data-map-assist-budget="commercial" type="number" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
+	            <textarea data-map-assist-details="commercial" rows="2" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Office, shop, warehouse, location..."></textarea>
+	            <button type="button" onclick="submitMapAssistRequest('commercial')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+	          </div>
         </div>
       </div>
     </div>
@@ -1250,14 +1317,22 @@
           <div id="map-land" class="map-h rounded-xl border border-gray-200 overflow-hidden"></div>
         </div>
         <div class="map-assist-card mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm">
-          <div class="font-bold text-emerald-900">Looking for land?</div>
-          <p class="text-xs text-emerald-800 mt-1">Send acreage, title preference, area, and budget. We will save it for follow-up.</p>
-          <div class="grid gap-2 mt-2">
-            <input data-map-assist-name="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
-            <input data-map-assist-phone="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
-            <textarea data-map-assist-details="land" rows="2" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Acres, district, road access, title..."></textarea>
-            <button type="button" onclick="submitMapAssistRequest('land')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
-          </div>
+	          <div class="font-bold text-emerald-900">Looking for land?</div>
+	          <p class="text-xs text-emerald-800 mt-1">Send acreage, title preference, area, and budget. We will save it for follow-up.</p>
+	          <div class="grid gap-2 mt-2">
+	            <input data-map-assist-name="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+	            <input data-map-assist-phone="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <select data-map-assist-need="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="Residential plot">Residential plot</option>
+	              <option value="Commercial land">Commercial land</option>
+	              <option value="Agricultural land">Agricultural land</option>
+	              <option value="Lease land">Lease land</option>
+	            </select>
+	            <input data-map-assist-location="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Location, district or street">
+	            <input data-map-assist-budget="land" type="number" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Budget (USh)">
+	            <textarea data-map-assist-details="land" rows="2" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Acres, district, road access, title..."></textarea>
+	            <button type="button" onclick="submitMapAssistRequest('land')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+	          </div>
         </div>
       </div>
     </div>
@@ -1909,12 +1984,16 @@
               <label id="lp-price-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Price (USh) *</label>
               <input id="lp-price" type="number" oninput="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 250000000">
             </div>
-            <div>
-              <label id="lp-period-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Price Period</label>
-              <select id="lp-period" onchange="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
-            </div>
+	            <div>
+	              <label id="lp-period-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Price Period</label>
+	              <select id="lp-period" onchange="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
+	            </div>
+	            <div id="lp-available-from-wrap">
+	              <label id="lp-available-from-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Available From</label>
+	              <input id="lp-available-from" type="date" onchange="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+	            </div>
 
-            <div id="lp-beds-baths-row-wrap" class="md:col-span-2 grid md:grid-cols-2 gap-4">
+	            <div id="lp-beds-baths-row-wrap" class="md:col-span-2 grid md:grid-cols-2 gap-4">
               <div>
                 <label id="lp-beds-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Bedrooms</label>
                 <select id="lp-beds" onchange="updateListPreview();updateLpPhotoRequirements()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
@@ -2789,8 +2868,16 @@
             </div>
             <div id="admin-campaigns-table" class="space-y-3"></div>
           </div>
-          <div class="grid md:grid-cols-[1fr,180px,180px] gap-2 mb-3">
-            <input id="admin-users-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search users, phone, email...">
+          <div class="border border-gray-200 rounded-2xl p-4 bg-white mb-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h4 class="text-lg font-bold text-gray-800">Contacts & Account Control</h4>
+                <p class="text-xs text-gray-500 mt-1">Clean database of registered users and known contacts. Block, delete, email, or WhatsApp directly from here.</p>
+              </div>
+              <span class="text-[11px] font-bold px-2 py-1 rounded bg-green-100 text-green-700">Feeds AI profile learning</span>
+            </div>
+            <div class="grid md:grid-cols-[1fr,180px,180px] gap-2 mb-3">
+              <input id="admin-users-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search users, phone, email...">
             <select id="admin-users-role" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
               <option value="">All roles</option>
               <option value="buyer_renter">Buyer / Renter</option>
@@ -2803,8 +2890,9 @@
               <option value="">All users</option>
               <option value="weekly">Weekly tips only</option>
             </select>
+            </div>
+            <div id="admin-users-table" class="space-y-3"></div>
           </div>
-          <div id="admin-users-table" class="space-y-3"></div>
 
           <div class="grid xl:grid-cols-3 gap-5 mt-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
@@ -8872,24 +8960,30 @@
         wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No advertising campaigns yet.</div>`;
         return;
       }
-      wrap.innerHTML = adminAdvertisingCampaigns.map((campaign) => {
-        const idArg = adminListingIdArg(campaign.id);
-        return `
-          <div class="border border-gray-200 rounded-xl p-4 bg-white">
+	      wrap.innerHTML = adminAdvertisingCampaigns.map((campaign) => {
+	        const idArg = adminListingIdArg(campaign.id);
+	        const quote = Number(campaign.quoted_amount_ugx || 0) || 0;
+	        const paid = Number(campaign.paid_amount_ugx || 0) || 0;
+	        const outstanding = Math.max(0, quote - paid);
+	        const sponsored = (Array.isArray(campaign.placements) && campaign.placements.length) || String(campaign.package_key || "").includes("boost");
+	        return `
+	          <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="font-bold text-gray-900">${adminEscape(campaign.campaign_name || "Ad campaign")}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape(campaign.advertiser_name || "-")} • ${adminEscape(campaign.package_label || campaign.package_key || "-")}</div>
               </div>
-              <div class="flex gap-1 flex-wrap justify-end">${adStatusBadge(campaign.status, "campaign")} ${adStatusBadge(campaign.payment_status, "payment")}</div>
-            </div>
-            <div class="grid sm:grid-cols-3 gap-2 mt-3 text-xs">
-              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Quote</div><div class="font-black">${adminEscape(adMoney(campaign.quoted_amount_ugx))}</div></div>
-              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Paid</div><div class="font-black">${adminEscape(adMoney(campaign.paid_amount_ugx))}</div></div>
-              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Clicks/Leads</div><div class="font-black">${adminEscape(campaign.clicks || 0)} / ${adminEscape(campaign.leads || 0)}</div></div>
-            </div>
-            <div class="mt-3 text-xs text-gray-500">Targets: ${adminEscape(adListText(campaign.target_locations || []))} • Placements: ${adminEscape(adListText(campaign.placements || []))}</div>
-            <div class="mt-1 text-xs text-gray-500">Approval: ${adminEscape(campaign.advertiser_approval_status || "draft")} • Reports: ${adminEscape(campaign.report_cadence || "weekly")}</div>
+	              <div class="flex gap-1 flex-wrap justify-end">${adStatusBadge(campaign.status, "campaign")} ${adStatusBadge(campaign.payment_status, "payment")} <span class="text-[11px] font-semibold px-2 py-1 rounded ${sponsored ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}">${sponsored ? "Sponsored" : "Standard"}</span></div>
+	            </div>
+	            <div class="grid sm:grid-cols-4 gap-2 mt-3 text-xs">
+	              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Quote</div><div class="font-black">${adminEscape(adMoney(campaign.quoted_amount_ugx))}</div></div>
+	              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Paid</div><div class="font-black">${adminEscape(adMoney(campaign.paid_amount_ugx))}</div></div>
+	              <div class="rounded-lg bg-amber-50 border border-amber-100 p-2"><div class="text-amber-700">Outstanding</div><div class="font-black text-amber-800">${adminEscape(adMoney(outstanding))}</div></div>
+	              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Clicks/Leads</div><div class="font-black">${adminEscape(campaign.clicks || 0)} / ${adminEscape(campaign.leads || 0)}</div></div>
+	            </div>
+	            <div class="mt-3 text-xs text-gray-500">Targets: ${adminEscape(adListText(campaign.target_locations || []))} • Placements: ${adminEscape(adListText(campaign.placements || []))}</div>
+	            <div class="mt-1 text-xs text-gray-500">Money tracker: ${paid > 0 ? "payment received" : "awaiting payment"}${outstanding ? ` • ${adminEscape(adMoney(outstanding))} still due` : " • fully paid or no quote set"}</div>
+	            <div class="mt-1 text-xs text-gray-500">Approval: ${adminEscape(campaign.advertiser_approval_status || "draft")} • Reports: ${adminEscape(campaign.report_cadence || "weekly")}</div>
             ${campaign.creative_preview_url || campaign.ai_copy?.headline ? `
               <div class="mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
                 ${campaign.creative_preview_url ? `<img src="${adminAttr(campaign.creative_preview_url)}" alt="${adminAttr(campaign.campaign_name || "Campaign creative")}" class="w-full h-24 object-cover rounded-lg border border-white mb-2">` : ""}
@@ -9157,12 +9251,14 @@
       }).join("");
     }
 
-    async function adminSetUserStatus(userId, status) {
-      if (!canUseLiveAdminApi()) {
-        toast("Sign in as admin or set ADMIN_API_KEY first.");
-        return;
-      }
-      try {
+	    async function adminSetUserStatus(userId, status) {
+	      if (!canUseLiveAdminApi()) {
+	        toast("Sign in as admin or set ADMIN_API_KEY first.");
+	        return;
+	      }
+	      if (status === "deleted" && !window.confirm("Delete this account from the active admin view? This keeps audit history but removes access.")) return;
+	      if (status === "suspended" && !window.confirm("Block this account from using the portal?")) return;
+	      try {
         await apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, {
           method: "PATCH",
           headers: adminAuthHeaders(),
@@ -9347,11 +9443,12 @@
             </div>
             <div class="mt-3 flex gap-2 flex-wrap">
               <button onclick="openAdminUserTipsWhatsApp(${userIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Tips</button>
-              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Contact</a>` : ""}
-              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
-              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
-            </div>
-          </div>`;
+	              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Contact</a>` : ""}
+	              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+	              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Block Account"}</button>` : ""}
+	              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, 'deleted')" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Account</button>` : ""}
+	            </div>
+	          </div>`;
       }).join("");
     }
 
@@ -12059,23 +12156,52 @@
       return normalizeStreetCandidate([streetNumber, route || premise].filter(Boolean).join(" ") || route || premise);
     }
 
-    function extractStreetNameFromNominatimAddress(address = {}) {
-      return normalizeStreetCandidate(
-        address?.road
-        || address?.residential
-        || address?.pedestrian
-        || address?.footway
-        || address?.path
-        || address?.street
-      );
-    }
+	    function extractStreetNameFromNominatimAddress(address = {}) {
+	      return normalizeStreetCandidate(
+	        address?.road
+	        || address?.residential
+	        || address?.pedestrian
+	        || address?.footway
+	        || address?.path
+	        || address?.street
+	      );
+	    }
 
-    function populateListAddressSuggestions({ district = "", city = "", neighborhood = "", area = "" } = {}) {
-      const areaEl = document.getElementById("lp-area-suggestions");
-      const streetEl = document.getElementById("lp-street-suggestions");
-      const addrEl = document.getElementById("lp-address-suggestions");
-      const hasLocationScope = !!(district || city || neighborhood || area);
-      const scopedProperties = getLocationScopedProperties({ district, city, neighborhood, area });
+	    const AREA_STREET_SUGGESTIONS = {
+	      kololo: ["Acacia Avenue", "John Babiha Avenue", "Kololo Hill Drive", "Mabua Road", "Wampewo Avenue", "Yusuf Lule Road", "Prince Charles Drive"],
+	      nakasero: ["Nakasero Road", "Plot 8A Nile Avenue", "Yusuf Lule Road", "Kampala Road", "Lumumba Avenue", "Buganda Road"],
+	      bugolobi: ["Luthuli Avenue", "Spring Road", "Bandali Rise", "Port Bell Road", "Ntinda View Crescent"],
+	      ntinda: ["Ntinda Road", "Kiwatule Road", "Stretcher Road", "Martyrs Way", "Ministers Village Road"],
+	      muyenga: ["Tank Hill Road", "Muyenga Road", "Bukasa Road", "Kansanga Road", "Kiwafu Road"],
+	      makerere: ["Makerere Hill Road", "Kikoni Road", "Sir Apollo Kaggwa Road", "Bombo Road"],
+	      wandegeya: ["Bombo Road", "Makerere Hill Road", "Sir Apollo Kaggwa Road"],
+	      kisaasi: ["Kisaasi Road", "Kulambiro Ring Road", "Bahai Road", "Kyanja Ring Road"],
+	      kira: ["Kira Road", "Kira-Najjera Road", "Mamerito Road", "Kyaliwajjala Road"],
+	      namugongo: ["Namugongo Road", "Sonde Road", "Kireka-Namugongo Road"],
+	      kyambogo: ["Kyambogo Road", "Jinja Road", "Kireka Road"],
+	      mbale: ["Republic Street", "Cathedral Avenue", "Naboa Road", "Pallisa Road", "Kumi Road"],
+	      mbarara: ["High Street", "Buremba Road", "Mbaguta Street", "Bishop Willis Road"],
+	      gulu: ["Acholi Road", "Ring Road", "Jomo Kenyatta Road", "Lacor Road"],
+	      jinja: ["Main Street", "Nalufenya Road", "Bell Avenue", "Clive Road East"],
+	      entebbe: ["Kampala-Entebbe Road", "Portal Road", "Circular Road", "Berkeley Road"]
+	    };
+
+	    function getCuratedStreetSuggestions({ district = "", city = "", neighborhood = "", area = "" } = {}) {
+	      const keys = [neighborhood, area, city, district].map((value) => String(value || "").toLowerCase());
+	      const matches = [];
+	      Object.entries(AREA_STREET_SUGGESTIONS).forEach(([key, streets]) => {
+	        if (keys.some((value) => value.includes(key))) matches.push(...streets);
+	      });
+	      return Array.from(new Set(matches.map(normalizeStreetCandidate).filter(Boolean)));
+	    }
+
+	    function populateListAddressSuggestions({ district = "", city = "", neighborhood = "", area = "" } = {}) {
+	      const areaEl = document.getElementById("lp-area-suggestions");
+	      const streetEl = document.getElementById("lp-street-suggestions");
+	      const addrEl = document.getElementById("lp-address-suggestions");
+	      const hasLocationScope = !!(district || city || neighborhood || area);
+	      const scopedProperties = getLocationScopedProperties({ district, city, neighborhood, area });
+	      const curatedStreets = getCuratedStreetSuggestions({ district, city, neighborhood, area });
       if (areaEl) {
         const hierarchyAreas = [];
         DISTRICTS.forEach((district) => {
@@ -12089,18 +12215,21 @@
         areaEl.innerHTML = areas.map((name) => `<option value="${name}"></option>`).join("");
       }
       if (streetEl) {
-        const streetNames = Array.from(new Set(
-          (hasLocationScope ? scopedProperties : PROPERTIES).flatMap((property) => {
-            const extra = property?.extra_fields || {};
-            const addressParts = String(property?.address || "").split(",").map((part) => normalizeStreetCandidate(part));
-            return [
-              normalizeStreetCandidate(property?.street_name || extra.street_name || ""),
-              addressParts[0] || ""
-            ].filter(Boolean);
-          })
-        )).slice(0, 250);
-        streetEl.innerHTML = streetNames.map((name) => `<option value="${name}"></option>`).join("");
-      }
+	        const streetNames = Array.from(new Set(
+	          [
+	            ...curatedStreets,
+	            ...(hasLocationScope ? scopedProperties : PROPERTIES).flatMap((property) => {
+	            const extra = property?.extra_fields || {};
+	            const addressParts = String(property?.address || "").split(",").map((part) => normalizeStreetCandidate(part));
+	            return [
+	              normalizeStreetCandidate(property?.street_name || extra.street_name || ""),
+	              addressParts[0] || ""
+	            ].filter(Boolean);
+	            })
+	          ]
+	        )).slice(0, 250);
+	        streetEl.innerHTML = streetNames.map((name) => `<option value="${name}"></option>`).join("");
+	      }
       if (addrEl) {
         const examples = Array.from(new Set([
           ...(hasLocationScope ? scopedProperties : PROPERTIES).map((p) => p?.address || `${p.area}, ${p.district}`).filter(Boolean),
@@ -13129,9 +13258,10 @@
       const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
       const fieldAgentId = lpVal("lp-field-agent-id") || null;
       const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
-      const videoUrl = lpVal("lp-video-url");
-      const contactPref = lpVal("lp-contact-pref") || "both";
-      const inquiryReference = lpInquiryReference || generateListingInquiryRef();
+	      const videoUrl = lpVal("lp-video-url");
+	      const contactPref = lpVal("lp-contact-pref") || "both";
+	      const availableFrom = lpVal("lp-available-from");
+	      const inquiryReference = lpInquiryReference || generateListingInquiryRef();
       lpInquiryReference = inquiryReference;
       const newUntil = new Date(Date.now() + LISTING_NEW_WINDOW_MS).toISOString();
 
@@ -13156,8 +13286,9 @@
         lister_phone: normalizePhoneInput(lpVal("lp-verify-phone")) || null,
         lister_email: (lpVal("lp-verify-email") || "").toLowerCase() || null,
         lister_type: "owner",
-        preferred_contact_method: contactPref,
-        video_url: videoUrl || null,
+	          preferred_contact_method: contactPref,
+	          available_from: availableFrom || null,
+	          video_url: videoUrl || null,
         students_welcome: studentsWelcome,
         latitude: lat,
         longitude: lng,
@@ -13534,39 +13665,51 @@
       }
     }
 
-    async function submitMapAssistRequest(kind) {
-      const normalized = String(kind || currentTab || "sale").trim();
-      const name = (document.querySelector(`[data-map-assist-name="${normalized}"]`)?.value || "").trim();
-      const phone = (document.querySelector(`[data-map-assist-phone="${normalized}"]`)?.value || "").trim();
-      const details = (document.querySelector(`[data-map-assist-details="${normalized}"]`)?.value || "").trim();
-      const listingType = normalized === "students" ? "student" : normalized;
-      const locationValue = (
-        document.getElementById(`${normalized === "students" ? "student-q" : normalized}-f`)?.value
-        || document.getElementById(`${normalized}-location-f`)?.value
-        || document.getElementById(`${normalized}-q-f`)?.value
-        || ""
-      ).trim();
-      if (!name || !phone || !details) {
-        toast("Please add your name, WhatsApp/phone, and what you need.");
-        return;
-      }
-      try {
-        await apiRequest("/api/contact/looking-for-property", {
+	    async function submitMapAssistRequest(kind) {
+	      const normalized = String(kind || currentTab || "sale").trim();
+	      const name = (document.querySelector(`[data-map-assist-name="${normalized}"]`)?.value || "").trim();
+	      const phone = (document.querySelector(`[data-map-assist-phone="${normalized}"]`)?.value || "").trim();
+	      const need = (document.querySelector(`[data-map-assist-need="${normalized}"]`)?.value || "").trim();
+	      const locationManual = (document.querySelector(`[data-map-assist-location="${normalized}"]`)?.value || "").trim();
+	      const budget = parseIntSafe(document.querySelector(`[data-map-assist-budget="${normalized}"]`)?.value || "");
+	      const details = (document.querySelector(`[data-map-assist-details="${normalized}"]`)?.value || "").trim();
+	      const listingType = normalized === "students" ? "student" : normalized;
+	      const locationValue = (
+	        locationManual
+	        ||
+	        document.getElementById(`${normalized === "students" ? "student-q" : normalized}-f`)?.value
+	        || document.getElementById(`${normalized}-location-f`)?.value
+	        || document.getElementById(`${normalized}-q-f`)?.value
+	        || ""
+	      ).trim();
+	      const requirementParts = [
+	        need ? `Need: ${need}` : "",
+	        locationValue ? `Location: ${locationValue}` : "",
+	        budget ? `Budget: USh ${budget.toLocaleString()}` : "",
+	        details ? `Notes: ${details}` : ""
+	      ].filter(Boolean);
+	      if (!name || !phone || !requirementParts.length) {
+	        toast("Please add your name, WhatsApp/phone, what you need, and location or budget.");
+	        return;
+	      }
+	      try {
+	        await apiRequest("/api/contact/looking-for-property", {
           method: "POST",
           body: {
-            name,
-            phone: normalizePhoneInput(phone),
-            preferred_locations: locationValue,
-            listing_type: listingType,
-            requirements: details,
-            source: `map_assist_${normalized}`
-          }
-        });
-        await trackEvent("map_assist_request_submit", { type: listingType, preferred_location: locationValue || "" });
-        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
-        toast("Request saved. MakaUg will follow up with matching options.");
-      } catch (error) {
-        toast(error.message || "Could not submit request.");
+	            name,
+	            phone: normalizePhoneInput(phone),
+	            preferred_locations: locationValue,
+	            listing_type: listingType,
+	            max_budget: budget || null,
+	            requirements: requirementParts.join("\n"),
+	            source: `map_assist_${normalized}`
+	          }
+	        });
+	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null });
+	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
+	        toast("Request saved. MakaUg will follow up with matching options.");
+	      } catch (error) {
+	        toast(error.message || "Could not submit request.");
       }
     }
 
@@ -16237,14 +16380,23 @@
       }
     }
 
-    function propCard(p) {
+	    function propertyAvailabilityText(p) {
+	      const value = p?.available_from || p?.extra_fields?.available_from || "";
+	      if (!value) return "";
+	      const dt = parseDateSafe(value);
+	      const display = dt ? dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : String(value);
+	      return `${translateListingLabel("Available From")}: ${display}`;
+	    }
+
+	    function propCard(p) {
       const idArg = propertyIdArg(p.id);
       const saved = isPropertySaved(p.id);
       const broker = findBrokerById(p.agent);
       const source = listingSourceMeta(p);
-      const registration = listingRegistrationMeta(p);
-      const showNew = isListingNew(p);
-      const addedMeta = listingDateMeta(p);
+	      const registration = listingRegistrationMeta(p);
+	      const showNew = isListingNew(p);
+	      const addedMeta = listingDateMeta(p);
+	      const availability = propertyAvailabilityText(p);
       return `
         <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openDetail(${idArg})">
           <div class="h-48 relative overflow-hidden">
@@ -16272,7 +16424,8 @@
               ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
               ${p.size ? `<span><i class="fas fa-vector-square text-green-600"></i> ${p.size}</span>` : ""}
             </div>
-            <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : translateListingLabel("Private Owner")}</div>
+	            ${availability ? `<div class="mt-3 text-xs font-semibold text-green-700"><i class="fas fa-calendar-check mr-1"></i>${availability}</div>` : ""}
+	            <div class="mt-3 text-xs text-gray-500">${broker ? broker.name : translateListingLabel("Private Owner")}</div>
             <div class="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
               <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
               <div class="flex items-center gap-1">
@@ -16344,8 +16497,9 @@
       const saved = isPropertySaved(p.id);
       const source = listingSourceMeta(p);
       const registration = listingRegistrationMeta(p);
-      const addedMeta = listingDateMeta(p);
-      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
+	      const addedMeta = listingDateMeta(p);
+	      const availability = propertyAvailabilityText(p);
+	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
       const uniTags = (p.student_universities && p.student_universities.length)
         ? p.student_universities.slice(0, 3)
         : (p.nearest_university ? [p.nearest_university] : []);
@@ -16380,9 +16534,10 @@
                 <i class="${registration.icon} text-[10px]"></i> ${registration.label}
               </span>` : ""}
             </div>
-            ${uniTags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="bg-indigo-600 text-white text-xs font-semibold px-2 py-1 rounded">${u}</span>`).join("")}</div>` : ""}
-            ${amenities.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${amenities.map((a) => `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded inline-flex items-center gap-1"><i class="${studentAmenityIcon(a)} text-[10px]"></i>${a}</span>`).join("")}</div>` : ""}
-            <div class="flex items-center justify-between mt-4 text-sm">
+	            ${uniTags.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${uniTags.map((u) => `<span class="bg-indigo-600 text-white text-xs font-semibold px-2 py-1 rounded">${u}</span>`).join("")}</div>` : ""}
+	            ${amenities.length ? `<div class="flex flex-wrap gap-1.5 mt-3">${amenities.map((a) => `<span class="bg-gray-100 text-gray-700 text-xs px-2 py-1 rounded inline-flex items-center gap-1"><i class="${studentAmenityIcon(a)} text-[10px]"></i>${a}</span>`).join("")}</div>` : ""}
+	            ${availability ? `<div class="mt-3 text-xs font-semibold text-purple-700"><i class="fas fa-calendar-check mr-1"></i>${availability}</div>` : ""}
+	            <div class="flex items-center justify-between mt-4 text-sm">
               <span class="text-gray-500">${bottomText}</span>
               <span class="font-semibold text-gray-800">Details</span>
             </div>
@@ -19195,8 +19350,8 @@
       if (modeSel) modeSel.value = currentMode;
 
       const periodLabelEl = document.getElementById("lp-period-label");
-      if (currentMode === "rent") {
-        if (periodLabelEl) periodLabelEl.textContent = translateListingLabel("Rent Period");
+	      if (currentMode === "rent") {
+	        if (periodLabelEl) periodLabelEl.textContent = translateListingLabel("Rent Period");
         setSelectOptions("lp-period", [
           { value: "mo", label: "Per Month" },
           { value: "yr", label: "Per Year" },
@@ -19208,10 +19363,12 @@
           { value: "once", label: "Total / Sale Price" },
           { value: "neg", label: "Negotiable" }
         ], "once");
-      }
+	      }
+	      const availableFromWrap = document.getElementById("lp-available-from-wrap");
+	      if (availableFromWrap) availableFromWrap.classList.toggle("hidden", currentMode !== "rent");
 
-      updateLpDependentFields();
-    }
+	      updateLpDependentFields();
+	    }
 
     function renderLpAmenities(type, preserveExisting = true) {
       const cfg = LP_CONFIG[type] || LP_CONFIG.sale;
@@ -19256,8 +19413,10 @@
       const sizeLabelEl = document.getElementById("lp-size-label");
       const sizeEl = document.getElementById("lp-size");
       const sizeWrapEl = document.getElementById("lp-size-wrap");
-      const periodLabelEl = document.getElementById("lp-period-label");
-      const bedsLabelEl = document.getElementById("lp-beds-label");
+	      const periodLabelEl = document.getElementById("lp-period-label");
+	      const availableFromWrap = document.getElementById("lp-available-from-wrap");
+	      const availableFromLabel = document.getElementById("lp-available-from-label");
+	      const bedsLabelEl = document.getElementById("lp-beds-label");
       const bathsLabelEl = document.getElementById("lp-baths-label");
       const bedsRow = document.getElementById("lp-beds-baths-row-wrap");
       const amenitiesLabelEl = document.getElementById("lp-amenities-label");
@@ -19278,8 +19437,13 @@
         if (bedsEl) bedsEl.value = "";
         if (bathsEl) bathsEl.value = "";
       }
-      if (periodLabelEl) periodLabelEl.textContent = translateListingLabel(cfg.periodLabel);
-      if (bedsLabelEl) bedsLabelEl.textContent = translateListingLabel(cfg.bedsLabel);
+	      if (periodLabelEl) periodLabelEl.textContent = translateListingLabel(cfg.periodLabel);
+	      const showAvailableFrom = selected === "rent" || selected === "student" || selected === "land" || (selected === "commercial" && (document.getElementById("lp-extra-commercial_mode")?.value || "") === "rent");
+	      if (availableFromWrap) availableFromWrap.classList.toggle("hidden", !showAvailableFrom);
+	      if (availableFromLabel) {
+	        availableFromLabel.textContent = translateListingLabel(selected === "land" ? "Available / Lease Starts From" : "Available From");
+	      }
+	      if (bedsLabelEl) bedsLabelEl.textContent = translateListingLabel(cfg.bedsLabel);
       if (bathsLabelEl) bathsLabelEl.textContent = translateListingLabel(cfg.bathsLabel);
       if (amenitiesLabelEl) amenitiesLabelEl.textContent = selected === "land" ? translateListingLabel("Land Features") : translateListingLabel("Amenities");
       if (continueBtn) continueBtn.textContent = translateListingLabel(cfg.continueLabel);
@@ -19288,7 +19452,7 @@
       setSelectOptions("lp-subtype", cfg.subtypes || [], (cfg.subtypes || [])[0]?.value, true);
       setSelectOptions("lp-period", cfg.periods || [], (cfg.periods || [])[0]?.value, true);
       renderLpExtraFields(selected, preserveTypeSpecificValues);
-      if (selected === "commercial") syncCommercialMode();
+	      if (selected === "commercial") syncCommercialMode();
       renderLpAmenities(selected, preserveTypeSpecificValues);
       updateLpPhotoRequirements();
       updateListPreview();
@@ -19340,10 +19504,10 @@
       locationParts.push(district);
       if (locEl) locEl.textContent = locationParts.filter(Boolean).join(", ");
 
-      const priceNum = lpNum("lp-price");
-      const periodRaw = lpVal("lp-period");
-      const periodVal = (periodRaw === "once" || periodRaw === "neg") ? "" : periodRaw;
-      if (priceEl) priceEl.textContent = priceNum ? fmtP(priceNum, periodVal) : translateListingLabel("Price on request");
+	      const priceNum = lpNum("lp-price");
+	      const periodRaw = lpVal("lp-period");
+	      const periodVal = (periodRaw === "once" || periodRaw === "neg") ? "" : periodRaw;
+	      if (priceEl) priceEl.textContent = priceNum ? fmtP(priceNum, periodVal) : translateListingLabel("Price on request");
 
       const metaParts = [];
       const subtype = document.getElementById("lp-subtype")?.selectedOptions?.[0]?.textContent || cfg.badge;
@@ -19351,12 +19515,14 @@
       const size = lpVal("lp-size");
       if (cfg.showSize !== false && size) metaParts.push(size);
 
-      if (cfg.showBedsBaths) {
-        const beds = lpVal("lp-beds");
-        const baths = lpVal("lp-baths");
-        if (beds) metaParts.push(`${beds} ${cfg.bedsSuffix}`);
-        if (baths) metaParts.push(`${baths} ${cfg.bathsSuffix}`);
-      }
+	      if (cfg.showBedsBaths) {
+	        const beds = lpVal("lp-beds");
+	        const baths = lpVal("lp-baths");
+	        if (beds) metaParts.push(`${beds} ${cfg.bedsSuffix}`);
+	        if (baths) metaParts.push(`${baths} ${cfg.bathsSuffix}`);
+	      }
+	      const availableFrom = lpVal("lp-available-from");
+	      if (availableFrom) metaParts.push(`${translateListingLabel("Available From")}: ${availableFrom}`);
 
       (cfg.previewExtras || []).forEach((item) => {
         const fieldEl = document.getElementById(`lp-extra-${item.key}`);
@@ -20222,8 +20388,9 @@
         : getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
       const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
       const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
-      const addedMeta = listingDateMeta(p);
-      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
+	      const addedMeta = listingDateMeta(p);
+	      const availability = propertyAvailabilityText(p);
+	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
       const isSoldListing = normalizeModerationStatus(p.status) === "sold";
       const detailPhotos = getPropertyGalleryPhotos(p);
       const primaryPhoto = detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") };
@@ -20254,7 +20421,7 @@
         <div class="grid lg:grid-cols-3 gap-6">
           <div class="lg:col-span-2">
             <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <button type="button" onclick="openDetailGalleryLightbox(${detailGalleryPhotoIndex})" class="block w-full h-72 relative overflow-hidden group">
+	              <button type="button" onclick="openDetailGalleryLightbox(${detailGalleryPhotoIndex})" class="block w-full property-gallery-hero relative overflow-hidden group">
                 <img src="${primaryPhoto?.url || p.img}" alt="${p.title}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
                 <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
                   <i class="fas fa-images"></i> ${detailGalleryPhotos.length} ${photoCountLabel}
@@ -20282,9 +20449,10 @@
                     </div>
                     <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${p.title}</h1>
                     <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${detailLocation || [p.area, p.district].filter(Boolean).join(", ")}</p>
-                    <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
-                      <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
-                    </div>
+	                    <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
+	                      <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
+	                      ${availability ? `<span class="inline-flex items-center gap-1 text-green-700 font-semibold"><i class="fas fa-calendar-check"></i>${availability}</span>` : ""}
+	                    </div>
                   </div>
                   <div class="text-right">
                     <div class="text-3xl font-black text-green-700">${fmtP(p.price, p.period)}</div>
