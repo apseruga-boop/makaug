@@ -479,6 +479,89 @@
       padding: 7px 12px;
       margin-bottom: 14px;
     }
+    .lp-wizard-shell {
+      --lp-accent: #166534;
+      --lp-accent-2: #16a34a;
+      --lp-soft: #f0fdf4;
+      --lp-border: #bbf7d0;
+      --lp-ink: #14532d;
+      position: relative;
+      overflow: hidden;
+      border-color: var(--lp-border) !important;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+    }
+    .lp-wizard-shell::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 7px;
+      background: linear-gradient(90deg, var(--lp-accent), var(--lp-accent-2));
+    }
+    .lp-theme-sale { --lp-accent: #166534; --lp-accent-2: #22c55e; --lp-soft: #f0fdf4; --lp-border: #bbf7d0; --lp-ink: #14532d; }
+    .lp-theme-rent { --lp-accent: #b45309; --lp-accent-2: #f59e0b; --lp-soft: #fffbeb; --lp-border: #fde68a; --lp-ink: #92400e; }
+    .lp-theme-land { --lp-accent: #047857; --lp-accent-2: #84cc16; --lp-soft: #ecfdf5; --lp-border: #a7f3d0; --lp-ink: #065f46; }
+    .lp-theme-commercial { --lp-accent: #9a3412; --lp-accent-2: #ea580c; --lp-soft: #fff7ed; --lp-border: #fed7aa; --lp-ink: #7c2d12; }
+    .lp-theme-student { --lp-accent: #1d4ed8; --lp-accent-2: #06b6d4; --lp-soft: #eff6ff; --lp-border: #bfdbfe; --lp-ink: #1e3a8a; }
+    .lp-mode-hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 14px;
+      align-items: center;
+      margin: 8px 0 24px;
+      padding: 18px;
+      border: 1px solid var(--lp-border);
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--lp-accent-2) 18%, transparent), transparent 34%),
+        linear-gradient(135deg, var(--lp-soft), #ffffff);
+    }
+    .lp-mode-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      background: var(--lp-accent);
+      color: #fff;
+      font-size: 26px;
+      box-shadow: 0 12px 24px color-mix(in srgb, var(--lp-accent) 25%, transparent);
+    }
+    .lp-mode-kicker {
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--lp-ink);
+      font-weight: 900;
+      font-size: 11px;
+    }
+    .lp-mode-title {
+      color: #111827;
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.15;
+    }
+    .lp-mode-copy {
+      color: #4b5563;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .lp-address-priority {
+      border: 1px solid var(--lp-border);
+      background: linear-gradient(135deg, var(--lp-soft), #fff);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .lp-address-priority input:focus {
+      outline: none;
+      border-color: var(--lp-accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-accent-2) 18%, transparent);
+    }
+    .lp-address-priority button {
+      background: var(--lp-accent);
+    }
+    .lp-address-priority button:hover {
+      filter: brightness(1.08);
+    }
     .lang-spotlight-select {
       background: #ffffff;
       border: 1px solid #86efac;
@@ -921,6 +1004,11 @@
 	          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <input data-map-assist-email="sale" type="email" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+	            <select data-map-assist-whatsapp="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="yes">This phone is on WhatsApp</option>
+	              <option value="no">Use phone/email only</option>
+	            </select>
 	            <select data-map-assist-need="sale" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white">
 	              <option value="House for sale">House for sale</option>
 	              <option value="Apartment for sale">Apartment for sale</option>
@@ -1023,6 +1111,11 @@
 	          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <input data-map-assist-email="rent" type="email" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+	            <select data-map-assist-whatsapp="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="yes">This phone is on WhatsApp</option>
+	              <option value="no">Use phone/email only</option>
+	            </select>
 	            <select data-map-assist-need="rent" class="border border-blue-100 rounded-lg px-3 py-2 text-xs bg-white">
 	              <option value="House to rent">House to rent</option>
 	              <option value="Apartment to rent">Apartment to rent</option>
@@ -1138,6 +1231,11 @@
 	          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <input data-map-assist-email="students" type="email" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+	            <select data-map-assist-whatsapp="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="yes">This phone is on WhatsApp</option>
+	              <option value="no">Use phone/email only</option>
+	            </select>
 	            <select data-map-assist-need="students" class="border border-purple-100 rounded-lg px-3 py-2 text-xs bg-white">
 	              <option value="Student hostel">Student hostel</option>
 	              <option value="Studio near campus">Studio near campus</option>
@@ -1231,6 +1329,11 @@
 	          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <input data-map-assist-email="commercial" type="email" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+	            <select data-map-assist-whatsapp="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="yes">This phone is on WhatsApp</option>
+	              <option value="no">Use phone/email only</option>
+	            </select>
 	            <select data-map-assist-need="commercial" class="border border-amber-100 rounded-lg px-3 py-2 text-xs bg-white">
 	              <option value="Office space">Office space</option>
 	              <option value="Shop / retail">Shop / retail</option>
@@ -1322,6 +1425,11 @@
 	          <div class="grid gap-2 mt-2">
 	            <input data-map-assist-name="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
 	            <input data-map-assist-phone="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+	            <input data-map-assist-email="land" type="email" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+	            <select data-map-assist-whatsapp="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white">
+	              <option value="yes">This phone is on WhatsApp</option>
+	              <option value="no">Use phone/email only</option>
+	            </select>
 	            <select data-map-assist-need="land" class="border border-emerald-100 rounded-lg px-3 py-2 text-xs bg-white">
 	              <option value="Residential plot">Residential plot</option>
 	              <option value="Commercial land">Commercial land</option>
@@ -1373,6 +1481,28 @@
           <div class="listing-map-shell">
             <div id="map-brokers" class="map-h rounded-xl border border-gray-200 overflow-hidden shadow-sm"></div>
             <p class="mt-2 text-xs text-gray-500">Hover or click marker to view broker details.</p>
+          </div>
+          <div class="map-assist-card mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-sm">
+            <div class="font-bold text-green-900">Need help finding a broker?</div>
+            <p class="text-xs text-green-800 mt-1">Tell us the district, property type, and how to reach you. MakaUg will help match you.</p>
+            <div class="grid gap-2 mt-2">
+              <input data-map-assist-name="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Your name">
+              <input data-map-assist-phone="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="WhatsApp / phone">
+              <input data-map-assist-email="brokers" type="email" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="Email address">
+              <select data-map-assist-whatsapp="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white">
+                <option value="yes">This phone is on WhatsApp</option>
+                <option value="no">Use phone/email only</option>
+              </select>
+              <select data-map-assist-need="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white">
+                <option value="Broker in my area">Broker in my area</option>
+                <option value="Student housing broker">Student housing broker</option>
+                <option value="Commercial broker">Commercial broker</option>
+                <option value="Land specialist">Land specialist</option>
+              </select>
+              <input data-map-assist-location="brokers" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="District or area">
+              <textarea data-map-assist-details="brokers" rows="2" class="border border-green-100 rounded-lg px-3 py-2 text-xs bg-white" placeholder="What should the broker help with?"></textarea>
+              <button type="button" onclick="submitMapAssistRequest('brokers')" class="bg-green-700 hover:bg-green-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Ask MakaUg to help</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1862,7 +1992,7 @@
         </div>
       </div>
 
-      <div class="bg-white border border-green-100 rounded-2xl p-6 md:p-8">
+      <div id="lp-wizard-shell" class="lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
         <div id="lp-success-box" class="hidden mb-6 bg-green-50 border border-green-200 rounded-2xl p-5">
           <h3 id="lp-success-title" class="text-xl font-black text-green-900 mb-1">Listing submitted successfully</h3>
           <p id="lp-success-sub" class="text-sm text-green-800">Thanks. Your listing is now in review. We will contact you once it has been approved.</p>
@@ -1887,6 +2017,14 @@
         </div>
 
         <div id="lp-step-1" data-lp-step-panel="1">
+          <div id="lp-mode-hero" class="lp-mode-hero">
+            <div id="lp-mode-icon" class="lp-mode-icon">🏠</div>
+            <div>
+              <div id="lp-mode-kicker" class="lp-mode-kicker">Listing mode</div>
+              <div id="lp-mode-title" class="lp-mode-title">Property for sale</div>
+              <p id="lp-mode-copy" class="lp-mode-copy">You are creating a sale listing. The form will ask for ownership, location, photos, and contact verification.</p>
+            </div>
+          </div>
           <div class="flex flex-wrap items-start justify-between gap-3 mb-6">
             <h2 id="lp-step1-title" class="text-3xl md:text-5xl font-black serif text-gray-800">Property Details</h2>
             <button id="lp-reset-form-btn" type="button" onclick="clearListPropertyDraft()" class="inline-flex items-center gap-2 border border-red-200 text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl text-sm font-semibold">
@@ -1940,6 +2078,17 @@
               <label id="lp-title-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Title *</label>
               <input id="lp-title" oninput="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 3-Bedroom House in Ntinda">
             </div>
+            <div class="md:col-span-2 lp-address-priority">
+              <label id="lp-address-search-top-label" class="block text-xs uppercase tracking-wide font-black mb-2" style="color: var(--lp-ink);">Find address</label>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <input id="lp-address-search-top" type="search" oninput="syncLpTopAddressInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchLpAddressPinFromTop();}" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Type street, building, landmark, village, or area">
+                <button id="lp-address-search-top-btn" type="button" onclick="searchLpAddressPinFromTop()" class="inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-xl text-sm font-bold">
+                  <i class="fas fa-location-crosshairs"></i><span>Find on map</span>
+                </button>
+              </div>
+              <p id="lp-address-search-top-help" class="text-xs text-gray-600 mt-2">Start here. We will move the map pin and fill the nearest location details where possible.</p>
+              <div id="lp-address-search-top-status" class="hidden mt-2 text-xs font-semibold"></div>
+            </div>
             <div>
               <label id="lp-region-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Region *</label>
               <select id="lp-region" onchange="onLpRegionChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
@@ -1981,11 +2130,11 @@
             </div>
             <div class="md:col-span-2 bg-gray-50 border border-green-100 rounded-2xl p-4">
               <h3 id="lp-pin-title" class="text-base font-bold text-gray-800">Pin Property Location</h3>
-              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">Due to limited formal addresses, place a map pin for best search accuracy. District/city/neighbourhood info recenters the map automatically.</p>
+              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.</p>
               <div class="mt-3 rounded-2xl border border-green-100 bg-white p-3">
                 <label id="lp-address-search-label" class="block text-xs uppercase tracking-wide text-green-800 font-bold mb-2">Find address</label>
                 <div class="flex flex-col sm:flex-row gap-2">
-                  <input id="lp-address-search" type="search" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Type street, building, landmark, or village">
+                  <input id="lp-address-search" type="search" oninput="syncLpNestedAddressToTop()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchLpAddressPin();}" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Type street, building, landmark, or village">
                   <button id="lp-address-search-btn" type="button" onclick="searchLpAddressPin()" class="inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold">
                     <i class="fas fa-location-crosshairs"></i><span>Find on map</span>
                   </button>
@@ -3628,11 +3777,26 @@
   <div id="looking-modal" class="modal-overlay">
     <div class="modal-box">
       <button onclick="closeModal('looking-modal')" class="absolute top-3 right-3 text-gray-400">✕</button>
-      <h2 class="text-xl font-bold mb-2">Looking For a Property?</h2>
-      <p class="text-sm text-gray-500 mb-4">Tell us what you need and we'll contact you with matching listings.</p>
+      <h2 id="looking-modal-title" class="text-xl font-bold mb-2">Looking For a Property?</h2>
+      <p id="looking-modal-sub" class="text-sm text-gray-500 mb-4">Tell us what you need and we'll contact you with matching listings.</p>
       <div class="space-y-3">
         <input id="looking-name" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Your name">
-        <input id="looking-phone" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+        <div class="grid md:grid-cols-2 gap-3">
+          <input id="looking-phone" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+          <input id="looking-email" type="email" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Email address">
+        </div>
+        <div class="grid md:grid-cols-2 gap-3">
+          <select id="looking-contact-method" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm bg-white">
+            <option value="whatsapp">WhatsApp</option>
+            <option value="phone">Phone call</option>
+            <option value="email">Email</option>
+          </select>
+          <select id="looking-phone-is-whatsapp" onchange="toggleLookingWhatsappAlt()" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm bg-white">
+            <option value="yes">This is my WhatsApp number</option>
+            <option value="no">I use a different WhatsApp number</option>
+          </select>
+        </div>
+        <input id="looking-whatsapp-alt" class="hidden w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Alternative WhatsApp number">
         <select id="looking-need" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm bg-white">
           <option value="">What are you looking for?</option>
           <option value="For sale">For sale</option>
@@ -6281,6 +6445,19 @@
         const el = document.getElementById(id);
         if (el) el.textContent = translateListingLabel(text);
       });
+      updateListingModeHero(getListType());
+      const topAddressLabel = document.getElementById("lp-address-search-top-label");
+      if (topAddressLabel) topAddressLabel.textContent = translateListingLabel("Find address");
+      const topAddressInput = document.getElementById("lp-address-search-top");
+      if (topAddressInput && !topAddressInput.value) {
+        topAddressInput.placeholder = translateListingLabel("Type street, building, landmark, village, or area");
+      }
+      const topAddressBtn = document.getElementById("lp-address-search-top-btn");
+      if (topAddressBtn) {
+        topAddressBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i><span>${translateListingLabel("Find on map")}</span>`;
+      }
+      setTextById("lp-address-search-top-help", translateListingLabel("Start here. We will move the map pin and fill the nearest location details where possible."));
+      applyLookingModalLanguageUI();
       const stepLabelMap = {
         "1": "Property Details",
         "2": "Photos & Media",
@@ -6306,7 +6483,7 @@
         label.textContent = translateListingLabel(typeChipMap[key]);
       });
       const sub1 = document.getElementById("lp-pin-sub");
-      if (sub1) sub1.textContent = translateListingLabel("Due to limited formal addresses, place a map pin for best search accuracy. District/city/neighbourhood info recenters the map automatically.");
+      if (sub1) sub1.textContent = translateListingLabel("Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.");
       const sub2 = document.getElementById("lp-step2-sub");
       if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
       const sub3 = document.getElementById("lp-step3-sub");
@@ -6449,6 +6626,60 @@
         setListType(getListType());
       }
       applyPremiumFormLabels();
+    }
+
+    function applyLookingModalLanguageUI() {
+      setTextById("looking-modal-title", translateListingLabel("Looking For a Property?"));
+      setTextById("looking-modal-sub", translateListingLabel("Tell us what you need and we'll contact you with matching listings."));
+      const name = document.getElementById("looking-name");
+      if (name && !name.value) name.placeholder = translateListingLabel("Your name");
+      const phone = document.getElementById("looking-phone");
+      if (phone && !phone.value) phone.placeholder = translateListingLabel("+256 7XX XXX XXX");
+      const email = document.getElementById("looking-email");
+      if (email && !email.value) email.placeholder = translateListingLabel("Email address");
+      const location = document.getElementById("looking-location");
+      if (location && !location.value) location.placeholder = translateListingLabel("Preferred location");
+      const budget = document.getElementById("looking-budget");
+      if (budget && !budget.value) budget.placeholder = translateListingLabel("Budget (USh)");
+      const details = document.getElementById("looking-details");
+      if (details && !details.value) details.placeholder = translateListingLabel("Describe the property you want");
+      const alt = document.getElementById("looking-whatsapp-alt");
+      if (alt && !alt.value) alt.placeholder = translateListingLabel("Alternative WhatsApp number");
+      const contact = document.getElementById("looking-contact-method");
+      if (contact) {
+        const current = contact.value || "whatsapp";
+        contact.innerHTML = [
+          `<option value="whatsapp">${translateListingLabel("WhatsApp")}</option>`,
+          `<option value="phone">${translateListingLabel("Phone call")}</option>`,
+          `<option value="email">${translateListingLabel("Email")}</option>`
+        ].join("");
+        contact.value = ["whatsapp", "phone", "email"].includes(current) ? current : "whatsapp";
+      }
+      const wa = document.getElementById("looking-phone-is-whatsapp");
+      if (wa) {
+        const current = wa.value || "yes";
+        wa.innerHTML = [
+          `<option value="yes">${translateListingLabel("This is my WhatsApp number")}</option>`,
+          `<option value="no">${translateListingLabel("I use a different WhatsApp number")}</option>`
+        ].join("");
+        wa.value = current === "no" ? "no" : "yes";
+      }
+      const need = document.getElementById("looking-need");
+      if (need) {
+        const current = need.value || "";
+        const options = [
+          ["", "What are you looking for?"],
+          ["For sale", "For sale"],
+          ["To rent", "To rent"],
+          ["Student accommodation", "Student accommodation"],
+          ["Commercial property", "Commercial property"],
+          ["Land", "Land"],
+          ["Agent", "Agent"]
+        ];
+        need.innerHTML = options.map(([value, label]) => `<option value="${value}">${translateListingLabel(label)}</option>`).join("");
+        need.value = current;
+      }
+      setTextById("looking-submit-btn", translateListingLabel("Submit Request"));
     }
 
     function applyPremiumFormLabels() {
@@ -6738,6 +6969,63 @@
       applyMortgageLanguageUI();
       applyAiChatbotLanguageUI();
       applyFraudLanguageUI();
+      applyMapAssistLanguageUI();
+    }
+
+    function applyMapAssistLanguageUI() {
+      const pageLabels = {
+        sale: "sale properties",
+        rent: "rental properties",
+        students: "student accommodation",
+        commercial: "commercial property",
+        land: "land",
+        brokers: "brokers"
+      };
+      Object.keys(pageLabels).forEach((kind) => {
+        const card = document.querySelector(`[data-map-assist-name="${kind}"]`)?.closest(".map-assist-card");
+        if (card) {
+          const title = card.querySelector(".font-bold");
+          const copy = card.querySelector("p");
+          const btn = card.querySelector("button");
+          if (title) title.textContent = translateListingLabel(kind === "brokers" ? "Need help finding a broker?" : "Can't find what you're looking for?");
+          if (copy) copy.textContent = translateListingLabel(kind === "brokers" ? "Tell us the district, property type, and how to reach you. MakaUg will help match you." : "Tell MakaUg what you need and we will follow up with matching homes or agents.");
+          if (btn) btn.textContent = translateListingLabel("Ask MakaUg to help");
+        }
+        const setPlaceholder = (selector, text) => {
+          const el = document.querySelector(selector);
+          if (el && !el.value) el.placeholder = translateListingLabel(text);
+        };
+        setPlaceholder(`[data-map-assist-name="${kind}"]`, "Your name");
+        setPlaceholder(`[data-map-assist-phone="${kind}"]`, "WhatsApp / phone");
+        setPlaceholder(`[data-map-assist-email="${kind}"]`, "Email address");
+        setPlaceholder(`[data-map-assist-location="${kind}"]`, kind === "brokers" ? "District or area" : "Location, district or street");
+        setPlaceholder(`[data-map-assist-budget="${kind}"]`, kind === "rent" ? "Monthly budget (USh)" : kind === "students" ? "Budget per semester (USh)" : "Budget (USh)");
+        setPlaceholder(`[data-map-assist-details="${kind}"]`, kind === "brokers" ? "What should the broker help with?" : "What are you looking for?");
+        const wa = document.querySelector(`[data-map-assist-whatsapp="${kind}"]`);
+        if (wa) {
+          const current = wa.value || "yes";
+          wa.innerHTML = [
+            `<option value="yes">${translateListingLabel("This is my WhatsApp number")}</option>`,
+            `<option value="no">${translateListingLabel("I use a different WhatsApp number")}</option>`
+          ].join("");
+          wa.value = current === "no" ? "no" : "yes";
+        }
+        const need = document.querySelector(`[data-map-assist-need="${kind}"]`);
+        if (need) {
+          const current = need.value || "";
+          const options = [
+            ["", "What are you looking for?"],
+            ["For sale", "For sale"],
+            ["To rent", "To rent"],
+            ["Student accommodation", "Student accommodation"],
+            ["Commercial property", "Commercial property"],
+            ["Land", "Land"],
+            ["Agent", "Agent"]
+          ];
+          need.innerHTML = options.map(([value, label]) => `<option value="${value}">${translateListingLabel(label)}</option>`).join("");
+          need.value = options.some(([value]) => value === current) ? current : "";
+        }
+      });
     }
 
     function formatCompact(v) {
@@ -6769,6 +7057,8 @@
       try { localStorage.setItem("makaug_lang", currentLang); } catch (e) {}
 
       applyLanguageUI();
+      document.querySelectorAll(".ad-wrap").forEach((el) => el.remove());
+      addAdUnits();
       const keepRegion = lpVal("lp-region");
       const keepDistrict = lpVal("list-district-sel");
       const keepCity = lpVal("lp-city");
@@ -12884,15 +13174,91 @@
 
     function setLpAddressSearchStatus(message = "", type = "info") {
       const el = document.getElementById("lp-address-search-status");
-      if (!el) return;
-      if (!message) {
-        el.classList.add("hidden");
-        el.textContent = "";
-        return;
+      const topEl = document.getElementById("lp-address-search-top-status");
+      const apply = (target) => {
+        if (!target) return;
+        if (!message) {
+          target.classList.add("hidden");
+          target.textContent = "";
+          return;
+        }
+        target.classList.remove("hidden", "text-green-800", "text-red-700", "text-amber-700");
+        target.classList.add(type === "error" ? "text-red-700" : type === "warn" ? "text-amber-700" : "text-green-800");
+        target.textContent = message;
+      };
+      apply(el);
+      apply(topEl);
+    }
+
+    function syncLpTopAddressInput() {
+      const top = document.getElementById("lp-address-search-top");
+      const nested = document.getElementById("lp-address-search");
+      const fullAddress = document.getElementById("lp-address");
+      const value = (top?.value || "").trim();
+      if (nested && document.activeElement === top) nested.value = value;
+      if (fullAddress && value && (!fullAddress.value.trim() || fullAddress.dataset.auto === "1")) {
+        fullAddress.value = value;
+        fullAddress.dataset.auto = "1";
       }
-      el.classList.remove("hidden", "text-green-800", "text-red-700", "text-amber-700");
-      el.classList.add(type === "error" ? "text-red-700" : type === "warn" ? "text-amber-700" : "text-green-800");
-      el.textContent = message;
+      updateListPreview();
+    }
+
+    async function searchLpAddressPinFromTop() {
+      const top = document.getElementById("lp-address-search-top");
+      const nested = document.getElementById("lp-address-search");
+      if (nested && top) nested.value = top.value;
+      await searchLpAddressPin();
+    }
+
+    function syncLpNestedAddressToTop() {
+      const top = document.getElementById("lp-address-search-top");
+      const nested = document.getElementById("lp-address-search");
+      if (top && nested && document.activeElement === nested) top.value = nested.value;
+    }
+
+    function applyResolvedAddressHierarchy(label = "") {
+      const text = String(label || "").toLowerCase();
+      if (!text) return;
+      const district = DISTRICTS.find((item) => {
+        const key = item.toLowerCase();
+        return text.includes(key);
+      });
+      if (!district) return;
+      const region = regionForDistrict(district);
+      const regionEl = document.getElementById("lp-region");
+      const districtEl = document.getElementById("list-district-sel");
+      if (regionEl && region) {
+        populateLpRegionOptions(region);
+        regionEl.value = region;
+      }
+      populateLpDistrictOptions(region, district);
+      if (districtEl) districtEl.value = district;
+      const tree = getDistrictLocationTree(district);
+      const cityMatch = tree.find((item) => text.includes(String(item.city || "").toLowerCase()));
+      populateLpCityOptions(district, cityMatch?.city || "");
+      if (cityMatch?.city) {
+        const cityEl = document.getElementById("lp-city");
+        if (cityEl) cityEl.value = cityMatch.city;
+        const nMatch = (cityMatch.neighborhoods || []).find((item) => text.includes(String(item.name || "").toLowerCase()));
+        populateLpNeighborhoodOptions(district, cityMatch.city, nMatch?.name || "");
+        if (nMatch?.name) {
+          const nEl = document.getElementById("lp-neighborhood");
+          if (nEl) nEl.value = nMatch.name;
+        }
+      } else {
+        populateLpNeighborhoodOptions(district, "", "");
+      }
+      const areaEl = document.getElementById("lp-area");
+      if (areaEl && !areaEl.value.trim()) {
+        areaEl.value = cityMatch?.city || district;
+      }
+      populateListAddressSuggestions({
+        region,
+        district,
+        city: lpVal("lp-city"),
+        neighborhood: lpVal("lp-neighborhood"),
+        area: lpVal("lp-area")
+      });
     }
 
     async function geocodeAddressWithNominatim(query) {
@@ -12917,6 +13283,8 @@
     async function searchLpAddressPin() {
       const input = document.getElementById("lp-address-search");
       const raw = (input?.value || "").trim();
+      const top = document.getElementById("lp-address-search-top");
+      if (top && raw && top.value.trim() !== raw) top.value = raw;
       if (raw.length < 3) {
         setLpAddressSearchStatus(translateListingLabel("Type at least 3 characters to find an address."), "error");
         if (input) input.focus();
@@ -12948,9 +13316,11 @@
         addressEl.dataset.auto = "0";
         lpAddressManualOverride = true;
       }
+      applyResolvedAddressHierarchy(point.label || raw);
       setListPinCoords(point.lat, point.lng, true);
       setLpResolvedLocationLabel(point.label || raw);
       hydrateStreetSuggestionsForSelection(point);
+      if (top && point.label) top.value = point.label;
       setLpAddressSearchStatus(translateListingLabel("Address found. Move the pin if needed, then confirm this location."));
       toast(translateListingLabel("Address found. Confirm the pin before continuing."));
     }
@@ -12979,6 +13349,7 @@
           const googleLabel = await reverseGeocodeWithGoogle(lat, lng);
           if (googleLabel) {
             setLpResolvedLocationLabel(googleLabel);
+            applyResolvedAddressHierarchy(googleLabel);
             hydrateStreetSuggestionsForSelection({ lat: Number(lat), lng: Number(lng) });
             return;
           }
@@ -12994,6 +13365,7 @@
             addr.city || addr.town || addr.county || addr.state_district,
             addr.state || addr.country
           ].filter(Boolean).join(", ");
+          applyResolvedAddressHierarchy(label || data?.display_name || "");
           setLpResolvedLocationLabel(label || data?.display_name || translateListingLabel("Location resolved"));
         } catch (error) {
           const fallback = [lpVal("lp-neighborhood"), lpVal("lp-city"), lpVal("list-district-sel")].filter(Boolean).join(", ");
@@ -13980,13 +14352,21 @@
     async function submitLookingRequest() {
       const name = (document.getElementById("looking-name")?.value || "").trim();
       const phone = (document.getElementById("looking-phone")?.value || "").trim();
+      const email = (document.getElementById("looking-email")?.value || "").trim();
+      const preferredContact = (document.getElementById("looking-contact-method")?.value || "whatsapp").trim();
+      const phoneIsWhatsapp = (document.getElementById("looking-phone-is-whatsapp")?.value || "yes").trim();
+      const whatsappAltPhone = (document.getElementById("looking-whatsapp-alt")?.value || "").trim();
       const need = (document.getElementById("looking-need")?.value || "").trim();
       const preferredLocation = (document.getElementById("looking-location")?.value || "").trim();
       const budget = parseIntSafe(document.getElementById("looking-budget")?.value || "");
       const details = (document.getElementById("looking-details")?.value || "").trim();
 
-      if (!name || !phone || (!need && !details)) {
-        toast("Please complete name, phone and what you are looking for.");
+      if (!name || (!phone && !email) || (!need && !details)) {
+        toast(translateListingLabel("Please add your name, phone or email, and what you are looking for."));
+        return;
+      }
+      if (preferredContact === "whatsapp" && phoneIsWhatsapp === "no" && !whatsappAltPhone) {
+        toast(translateListingLabel("Please add the WhatsApp number you want us to use."));
         return;
       }
 
@@ -13996,28 +14376,47 @@
           method: "POST",
           body: {
             name,
-            phone,
+            phone: normalizePhoneInput(phone),
+            email,
+            preferred_contact_channel: preferredContact,
+            phone_is_whatsapp: phoneIsWhatsapp === "yes",
+            whatsapp_phone: normalizePhoneInput(phoneIsWhatsapp === "yes" ? phone : whatsappAltPhone),
             preferred_locations: preferredLocation,
             listing_type: need || (currentTab === "students" ? "student" : currentTab),
             max_budget: budget || null,
-            requirements: [need ? `Need: ${need}` : "", budget ? `Budget: USh ${budget.toLocaleString()}` : "", details].filter(Boolean).join("\n"),
+            requirements: [
+              need ? `Need: ${need}` : "",
+              preferredLocation ? `Location: ${preferredLocation}` : "",
+              budget ? `Budget: USh ${budget.toLocaleString()}` : "",
+              preferredContact ? `Preferred contact: ${preferredContact}` : "",
+              phoneIsWhatsapp === "no" && whatsappAltPhone ? `WhatsApp: ${whatsappAltPhone}` : "",
+              details
+            ].filter(Boolean).join("\n"),
             source: "looking_modal"
           }
         });
         await trackEvent("property_request_submit", { preferred_location: preferredLocation || "", tab: currentTab });
-        toast("Request submitted. We will contact you shortly.");
+        toast(translateListingLabel("Request submitted. We will contact you shortly."));
         closeModal("looking-modal");
       } catch (error) {
-        toast(error.message || "Could not submit request.");
+        toast(error.message || translateListingLabel("Could not submit request."));
       } finally {
         setButtonLoading("looking-submit-btn", false, "Submit Request");
       }
+    }
+
+    function toggleLookingWhatsappAlt() {
+      const mode = document.getElementById("looking-phone-is-whatsapp")?.value || "yes";
+      const alt = document.getElementById("looking-whatsapp-alt");
+      if (alt) alt.classList.toggle("hidden", mode !== "no");
     }
 
 	    async function submitMapAssistRequest(kind) {
 	      const normalized = String(kind || currentTab || "sale").trim();
 	      const name = (document.querySelector(`[data-map-assist-name="${normalized}"]`)?.value || "").trim();
 	      const phone = (document.querySelector(`[data-map-assist-phone="${normalized}"]`)?.value || "").trim();
+	      const email = (document.querySelector(`[data-map-assist-email="${normalized}"]`)?.value || "").trim();
+	      const phoneIsWhatsapp = (document.querySelector(`[data-map-assist-whatsapp="${normalized}"]`)?.value || "yes").trim();
 	      const need = (document.querySelector(`[data-map-assist-need="${normalized}"]`)?.value || "").trim();
 	      const locationManual = (document.querySelector(`[data-map-assist-location="${normalized}"]`)?.value || "").trim();
 	      const budget = parseIntSafe(document.querySelector(`[data-map-assist-budget="${normalized}"]`)?.value || "");
@@ -14037,8 +14436,8 @@
 	        budget ? `Budget: USh ${budget.toLocaleString()}` : "",
 	        details ? `Notes: ${details}` : ""
 	      ].filter(Boolean);
-	      if (!name || !phone || !requirementParts.length) {
-	        toast("Please add your name, WhatsApp/phone, what you need, and location or budget.");
+	      if (!name || (!phone && !email) || !requirementParts.length) {
+	        toast(translateListingLabel("Please add your name, phone or email, what you need, and location or budget."));
 	        return;
 	      }
 	      try {
@@ -14047,16 +14446,23 @@
           body: {
 	            name,
 	            phone: normalizePhoneInput(phone),
+	            email,
+	            preferred_contact_channel: phone ? (phoneIsWhatsapp === "yes" ? "whatsapp" : "phone") : "email",
+	            phone_is_whatsapp: phoneIsWhatsapp === "yes",
+	            whatsapp_phone: phoneIsWhatsapp === "yes" ? normalizePhoneInput(phone) : "",
 	            preferred_locations: locationValue,
 	            listing_type: listingType,
 	            max_budget: budget || null,
-	            requirements: requirementParts.join("\n"),
+	            requirements: requirementParts.concat([
+	              email ? `Email: ${email}` : "",
+	              phone ? `Phone is WhatsApp: ${phoneIsWhatsapp === "yes" ? "Yes" : "No"}` : ""
+	            ].filter(Boolean)).join("\n"),
 	            source: `map_assist_${normalized}`
 	          }
 	        });
 	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null });
-	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
-	        toast("Request saved. MakaUg will follow up with matching options.");
+	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-email="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
+	        toast(translateListingLabel("Request saved. MakaUg will follow up with matching options."));
 	      } catch (error) {
 	        toast(error.message || "Could not submit request.");
       }
@@ -14879,34 +15285,33 @@
           <p class="text-xs text-gray-500">MakaUg will review the request, prepare a preview, confirm payment details, then switch the ad live from the admin advertising desk.</p>
         </form>`,
       careers: `
-        <h2 class="text-2xl font-bold text-gray-800 mb-1">Careers</h2>
+        <div class="rounded-2xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-5 mb-5">
+          <h2 class="text-3xl font-black mb-1">Careers</h2>
+          <p class="text-green-50 text-sm max-w-2xl">Help build the trusted property layer for Uganda: search, listing, safety, maps, WhatsApp support, and market data.</p>
+        </div>
         <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
-        <p class="mb-3 text-sm">
-          We are building practical technology for Uganda's real estate ecosystem. Our teams work across product,
-          engineering, operations, trust and safety, customer support, and market growth.
-        </p>
+        <div class="grid md:grid-cols-3 gap-3 mb-5">
+          <div class="rounded-xl border border-green-100 bg-green-50 p-3"><strong>Product & Engineering</strong><p class="text-xs text-gray-600 mt-1">Build fast, useful tools for property discovery and listing.</p></div>
+          <div class="rounded-xl border border-amber-100 bg-amber-50 p-3"><strong>Trust & Safety</strong><p class="text-xs text-gray-600 mt-1">Reduce fraud, improve verification, and protect users.</p></div>
+          <div class="rounded-xl border border-blue-100 bg-blue-50 p-3"><strong>Market Growth</strong><p class="text-xs text-gray-600 mt-1">Work with owners, brokers, students, advertisers, and partners.</p></div>
+        </div>
         <h3 class="font-bold text-gray-800 mb-1">What We Look For</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
+        <ul class="list-disc pl-5 space-y-1 text-sm mb-4">
           <li>Strong execution, accountability, and clear communication.</li>
           <li>User-first thinking with real understanding of local market needs.</li>
           <li>Integrity in handling regulated, sensitive, and customer-critical workflows.</li>
           <li>Comfort working in fast-moving, data-informed product environments.</li>
         </ul>
-        <h3 class="font-bold text-gray-800 mb-1">Recruitment Process</h3>
-        <ol class="list-decimal pl-5 space-y-1 text-sm mb-3">
-          <li>Application screening against role criteria.</li>
-          <li>Introductory call and role-fit review.</li>
-          <li>Technical or practical assessment (role dependent).</li>
-          <li>Final interview and reference checks.</li>
-          <li>Offer and onboarding.</li>
-        </ol>
-        <h3 class="font-bold text-gray-800 mb-1">How to Apply</h3>
-        <p class="text-sm">
-          Send your CV, role of interest, and short motivation to info@makaug.com. Use subject format:
-          Application - Role Name - Full Name.
-        </p>
-        <p class="text-sm mt-2">
-          makaug.com is committed to fair hiring and equal opportunity based on merit and role requirements.
+        <div class="rounded-2xl border border-green-100 bg-white p-4">
+          <h3 class="font-black text-gray-800 mb-2">Send your details</h3>
+          <p class="text-sm text-gray-600 mb-3">We may not have every role open today, but we are always looking for sharp, kind, serious people. Send your CV, role of interest, and a short note.</p>
+          <div class="grid md:grid-cols-2 gap-3">
+            <a class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold" href="mailto:info@makaug.com?subject=Application%20-%20Role%20Name%20-%20Full%20Name">Email CV to MakaUg</a>
+            <a class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
+          </div>
+        </div>
+        <p class="text-sm mt-4 text-gray-600">
+          makaug.com is committed to fair hiring and equal opportunity based on merit, role requirements, and practical impact.
         </p>`
     };
 
@@ -14918,8 +15323,34 @@
       }
       const body = document.getElementById("page-modal-body");
       if (body) body.innerHTML = html;
+      if (body) localizePageModalContent(body);
       openModal("page-modal");
       if (page === "advertise") hydrateAdvertisePricingPreview();
+    }
+
+    function localizePageModalContent(root) {
+      if (!root || (currentLang || "en") === "en") return;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      while (walker.nextNode()) nodes.push(walker.currentNode);
+      nodes.forEach((node) => {
+        const raw = node.nodeValue || "";
+        const trimmed = raw.trim();
+        if (!trimmed || trimmed.length > 90) return;
+        const translated = translateListingLabel(trimmed);
+        if (translated && translated !== trimmed) {
+          node.nodeValue = raw.replace(trimmed, translated);
+        }
+      });
+      root.querySelectorAll("input[placeholder], textarea[placeholder]").forEach((el) => {
+        const placeholder = el.getAttribute("placeholder") || "";
+        el.setAttribute("placeholder", translateListingLabel(placeholder));
+      });
+      root.querySelectorAll("button, a").forEach((el) => {
+        if (el.children.length) return;
+        const text = (el.textContent || "").trim();
+        if (text && text.length < 60) el.textContent = translateListingLabel(text);
+      });
     }
 
     async function hydrateAdvertisePricingPreview() {
@@ -15018,16 +15449,20 @@
         const pageName = (page.id || "").replace("page-", "").replace(/-/g, " ").trim() || "page";
         const adSlot = String(GOOGLE_ADSENSE_SLOTS[page.id] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
         const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
+        const sponsoredLabel = translateListingLabel("Sponsored");
+        const placementLabel = translateListingLabel("Sponsored MakaUg placement");
+        const reachLabel = translateListingLabel("Reach active property seekers on");
+        const bookSlotLabel = translateListingLabel("Book this slot");
         const wrap = document.createElement("div");
         wrap.className = "ad-wrap";
         wrap.innerHTML = `
           <div class="max-w-7xl mx-auto px-4 py-3">
             <div class="ad-unit">
-              <span class="ad-tag"><i class="fas fa-bullhorn"></i> Sponsored</span>
-              <span class="text-sm text-green-900 font-semibold">Sponsored MakaUg placement • Reach active property seekers on ${pageName}</span>
+              <span class="ad-tag"><i class="fas fa-bullhorn"></i> ${sponsoredLabel}</span>
+              <span class="text-sm text-green-900 font-semibold">${placementLabel} • ${reachLabel} ${translateListingLabel(pageName)}</span>
               ${hasLiveAds
                 ? `<div class="ad-slot" data-adsense-client="${GOOGLE_ADSENSE_CLIENT}" data-adsense-slot="${adSlot}" data-ads-loaded="0"></div>`
-                : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline">Book this slot</button>`
+                : `<button type="button" onclick="openPageMod('advertise')" class="text-sm font-bold text-green-700 hover:underline">${bookSlotLabel}</button>`
               }
             </div>
           </div>`;
@@ -19389,6 +19824,134 @@
           "Main photo": "Ekifaananyi ekikulu"
         }
       };
+      const sharedLabels = {
+        lg: {
+          "Listing mode": "Engeri y'okulista",
+          "Property for sale": "Property etundibwa",
+          "Rental property": "Property y'okupangisa",
+          "Land listing": "Listing y'ettaka",
+          "Commercial property": "Property ya business",
+          "Student accommodation": "Obusulo bw'abayizi",
+          "You are creating a sale listing. The form will ask for ownership, location, photos, and contact verification.": "Okola listing y'okutunda. Ffoomu ejja kukusaba obwannannyini, ekifo, ebifaananyi, n'okukakasa contact.",
+          "You are creating a rental listing. We will capture availability, rent terms, photos, and contact details.": "Okola listing y'okupangisa. Tujja kukwata ddi lwe kibeerawo, ebisale, ebifaananyi, n'ebikwata ku contact.",
+          "You are listing land. The flow focuses on acreage, tenure, map pin accuracy, and ownership verification.": "Olaga ttaka. Enkola essira erissa ku acreage, title, map pin entuufu, n'okukakasa obwannannyini.",
+          "You are listing commercial space. We will capture size, business use, facilities, access, and availability.": "Olaga ekifo kya business. Tujja kukwata obunene, business use, facilities, access, n'okubeerawo.",
+          "You are listing student accommodation. The flow highlights campus access, room setup, services, and availability.": "Olaga obusulo bw'abayizi. Enkola eraga campus access, ebisenge, services, n'okubeerawo.",
+          "Type street, building, landmark, village, or area": "Wandiika oluguudo, ekizimbe, landmark, ekyalo oba area",
+          "Start here. We will move the map pin and fill the nearest location details where possible.": "Tandikira wano. Tujja kutambuza pin ku maapu era tujjuze ebikwata ku kifo ekiri okumpi bwe kisoboka.",
+          "Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.": "Teeka pin ya maapu ku property. Kozesa Noonya address okusooka, oluvannyuma kakasa oba tambuza pin bwe kiba kyetaagisa.",
+          "Looking For a Property?": "Onoonya property?",
+          "Tell us what you need and we'll contact you with matching listings.": "Tubuulire ky'oyagala era tujja kukutuukirira n'ebintu ebikwatagana.",
+          "Email address": "Email address",
+          "Preferred location": "Ekifo ky'oyagala",
+          "Budget (USh)": "Budget (USh)",
+          "Describe the property you want": "Nyonyola property gy'oyagala",
+          "This is my WhatsApp number": "Eno ye nnamba yange ya WhatsApp",
+          "I use a different WhatsApp number": "Nkozesa nnamba ya WhatsApp endala",
+          "Alternative WhatsApp number": "Nnamba ya WhatsApp endala",
+          "Submit Request": "Weereza okusaba",
+          "Phone call": "Okukuba essimu",
+          "Email": "Email",
+          "What are you looking for?": "Onoonya ki?",
+          "Please add your name, phone or email, and what you are looking for.": "Teekamu erinnya lyo, essimu oba email, n'ekyo ky'oyagala.",
+          "Please add the WhatsApp number you want us to use.": "Teekamu nnamba ya WhatsApp gy'oyagala tukozese.",
+          "Sponsored": "Sponsored",
+          "Sponsored MakaUg placement": "Ekifo kya MakaUg ekyasasuliddwa",
+          "Reach active property seekers on": "Tuuka ku bantu abanoonya property ku",
+          "Book this slot": "Bookinga ekifo kino",
+          "Can't find what you're looking for?": "Tosobodde kufuna ky'onoonya?",
+          "Tell MakaUg what you need and we will follow up with matching homes or agents.": "Tegeeza MakaUg ky'oyagala, tujja kukuddamu n'amayumba oba agents ebikwatagana.",
+          "Need help finding a broker?": "Weetaaga okuyambibwa okufuna broker?",
+          "Tell us the district, property type, and how to reach you. MakaUg will help match you.": "Tubuulire district, ekika kya property, n'engeri gye tukutuukirira. MakaUg ejja kukuyamba okukufuna akukwatagana.",
+          "Ask MakaUg to help": "Saba MakaUg ekuyambe",
+          "WhatsApp / phone": "WhatsApp / essimu",
+          "Location, district or street": "Ekifo, district oba oluguudo",
+          "District or area": "District oba area",
+          "Monthly budget (USh)": "Budget ya buli mwezi (USh)",
+          "Budget per semester (USh)": "Budget ya semester (USh)",
+          "What should the broker help with?": "Broker akuyambe ku ki?",
+          "sale properties": "property ezitundibwa",
+          "rental properties": "property z'okupangisa",
+          "brokers": "brokers",
+          "About Us": "Ebikwata ku ffe",
+          "How It Works": "Engeri gye kikolamu",
+          "Terms & Conditions": "Amateeka n'obukwakkulizo",
+          "Privacy Policy": "Enkola y'obukuumi bw'ebikwata ku muntu",
+          "Cookie Policy": "Enkola ya cookies",
+          "Anti-Fraud Policy": "Enkola y'okulwanyisa obufere",
+          "Help Centre": "Aw'okufuna obuyambi",
+          "Safety Tips": "Amagezi g'obukuumi",
+          "Careers": "Emirimu",
+          "Email CV to MakaUg": "Weereza CV ku MakaUg",
+          "Message on WhatsApp": "Wandiika ku WhatsApp"
+        },
+        sw: {
+          "Listing mode": "Njia ya kutangaza",
+          "Property for sale": "Mali ya kuuza",
+          "Rental property": "Mali ya kupangisha",
+          "Land listing": "Tangazo la ardhi",
+          "Commercial property": "Mali ya biashara",
+          "Student accommodation": "Makazi ya wanafunzi",
+          "You are creating a sale listing. The form will ask for ownership, location, photos, and contact verification.": "Unaweka tangazo la kuuza. Fomu itaomba umiliki, eneo, picha, na uthibitisho wa mawasiliano.",
+          "You are creating a rental listing. We will capture availability, rent terms, photos, and contact details.": "Unaweka tangazo la kupangisha. Tutachukua upatikanaji, masharti ya kodi, picha, na mawasiliano.",
+          "You are listing land. The flow focuses on acreage, tenure, map pin accuracy, and ownership verification.": "Unaweka ardhi. Mtiririko unazingatia ukubwa, hati, usahihi wa ramani, na uthibitisho wa umiliki.",
+          "You are listing commercial space. We will capture size, business use, facilities, access, and availability.": "Unaweka nafasi ya biashara. Tutachukua ukubwa, matumizi, huduma, ufikivu, na upatikanaji.",
+          "You are listing student accommodation. The flow highlights campus access, room setup, services, and availability.": "Unaweka makazi ya wanafunzi. Mtiririko unaonyesha ukaribu na chuo, vyumba, huduma, na upatikanaji.",
+          "Type street, building, landmark, village, or area": "Andika barabara, jengo, alama, kijiji, au eneo",
+          "Start here. We will move the map pin and fill the nearest location details where possible.": "Anza hapa. Tutasogeza pin ya ramani na kujaza maelezo ya eneo la karibu inapowezekana.",
+          "Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.": "Weka pin ya ramani kwenye mali. Tumia Tafuta anwani kwanza, kisha thibitisha au sogeza pin ikihitajika.",
+          "Looking For a Property?": "Unatafuta mali?",
+          "Tell us what you need and we'll contact you with matching listings.": "Tuambie unachohitaji na tutawasiliana na matangazo yanayofanana.",
+          "Email address": "Barua pepe",
+          "Preferred location": "Eneo unalopendelea",
+          "Budget (USh)": "Bajeti (USh)",
+          "Describe the property you want": "Eleza mali unayotaka",
+          "This is my WhatsApp number": "Hii ndiyo namba yangu ya WhatsApp",
+          "I use a different WhatsApp number": "Natumia namba nyingine ya WhatsApp",
+          "Alternative WhatsApp number": "Namba mbadala ya WhatsApp",
+          "Submit Request": "Tuma ombi",
+          "Phone call": "Simu",
+          "Email": "Barua pepe",
+          "What are you looking for?": "Unatafuta nini?",
+          "Please add your name, phone or email, and what you are looking for.": "Weka jina lako, simu au barua pepe, na unachotafuta.",
+          "Please add the WhatsApp number you want us to use.": "Weka namba ya WhatsApp unayotaka tutumie.",
+          "Sponsored": "Imedhaminiwa",
+          "Sponsored MakaUg placement": "Nafasi ya MakaUg iliyodhaminiwa",
+          "Reach active property seekers on": "Fikia watafutaji mali kwenye",
+          "Book this slot": "Hifadhi nafasi hii",
+          "Can't find what you're looking for?": "Hupati unachotafuta?",
+          "Tell MakaUg what you need and we will follow up with matching homes or agents.": "Iambie MakaUg unachohitaji na tutafuatilia kwa nyumba au mawakala wanaofaa.",
+          "Need help finding a broker?": "Unahitaji msaada kupata broker?",
+          "Tell us the district, property type, and how to reach you. MakaUg will help match you.": "Tuambie wilaya, aina ya mali, na jinsi ya kukufikia. MakaUg itakusaidia kupata anayefaa.",
+          "Ask MakaUg to help": "Omba MakaUg ikusaidie",
+          "WhatsApp / phone": "WhatsApp / simu",
+          "Location, district or street": "Eneo, wilaya au barabara",
+          "District or area": "Wilaya au eneo",
+          "Monthly budget (USh)": "Bajeti ya mwezi (USh)",
+          "Budget per semester (USh)": "Bajeti kwa muhula (USh)",
+          "What should the broker help with?": "Broker akusaidie nini?",
+          "sale properties": "mali za kuuza",
+          "rental properties": "mali za kupangisha",
+          "brokers": "madalali",
+          "About Us": "Kuhusu Sisi",
+          "How It Works": "Jinsi Inavyofanya Kazi",
+          "Terms & Conditions": "Sheria na Masharti",
+          "Privacy Policy": "Sera ya Faragha",
+          "Cookie Policy": "Sera ya Cookies",
+          "Anti-Fraud Policy": "Sera ya Kuzuia Udanganyifu",
+          "Help Centre": "Kituo cha Msaada",
+          "Safety Tips": "Vidokezo vya Usalama",
+          "Careers": "Ajira",
+          "Email CV to MakaUg": "Tuma CV kwa MakaUg",
+          "Message on WhatsApp": "Tuma ujumbe WhatsApp"
+        }
+      };
+      ["ac", "ny", "rn", "sm"].forEach((lang) => {
+        sharedLabels[lang] = { ...(sharedLabels[lang] || {}), ...sharedLabels.lg };
+      });
+      Object.entries(sharedLabels).forEach(([lang, labels]) => {
+        Object.assign(extraListingLabels[lang] ||= {}, labels);
+      });
       Object.entries(extraListingLabels).forEach(([lang, labels]) => {
         Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
       });
@@ -20056,6 +20619,56 @@
       });
     }
 
+    const LP_MODE_META = {
+      sale: {
+        theme: "lp-theme-sale",
+        icon: "🏠",
+        title: "Property for sale",
+        copy: "You are creating a sale listing. We will capture ownership, location, photos, and contact verification."
+      },
+      rent: {
+        theme: "lp-theme-rent",
+        icon: "🔑",
+        title: "Rental property",
+        copy: "You are creating a rental listing. Add availability, rent period, amenities, photos, and contact details."
+      },
+      land: {
+        theme: "lp-theme-land",
+        icon: "🌿",
+        title: "Land listing",
+        copy: "You are creating a land listing. Focus on title type, acres, map pin, tenure, and verification options."
+      },
+      commercial: {
+        theme: "lp-theme-commercial",
+        icon: "🏢",
+        title: "Commercial property",
+        copy: "You are creating a commercial listing. We will capture business use, size, lease or sale terms, and location."
+      },
+      student: {
+        theme: "lp-theme-student",
+        icon: "🎓",
+        title: "Student accommodation",
+        copy: "You are creating student housing. Add campus proximity, room setup, facilities, rules, and availability."
+      }
+    };
+
+    function updateListingModeHero(type) {
+      const meta = LP_MODE_META[type] || LP_MODE_META.sale;
+      const shell = document.getElementById("lp-wizard-shell");
+      if (shell) {
+        shell.classList.remove("lp-theme-sale", "lp-theme-rent", "lp-theme-land", "lp-theme-commercial", "lp-theme-student");
+        shell.classList.add(meta.theme);
+      }
+      const icon = document.getElementById("lp-mode-icon");
+      const title = document.getElementById("lp-mode-title");
+      const copy = document.getElementById("lp-mode-copy");
+      const kicker = document.getElementById("lp-mode-kicker");
+      if (icon) icon.textContent = meta.icon;
+      if (title) title.textContent = translateListingLabel(meta.title);
+      if (copy) copy.textContent = translateListingLabel(meta.copy);
+      if (kicker) kicker.textContent = translateListingLabel("Listing mode");
+    }
+
     function setListType(type) {
       const previousType = lpCurrentFormType || getListType();
       if (type) {
@@ -20067,6 +20680,7 @@
       const preserveTypeSpecificValues = previousType === selected;
 
       updateListTypeChips(selected);
+      updateListingModeHero(selected);
 
       const titleEl = document.getElementById("lp-title");
       const areaEl = document.getElementById("lp-area");
