@@ -562,6 +562,55 @@
     .lp-address-priority button:hover {
       filter: brightness(1.08);
     }
+    .lp-title-example-strip {
+      min-height: 24px;
+      margin-top: 8px;
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      color: #4b5563;
+      font-size: 12px;
+    }
+    .lp-title-example-text {
+      color: var(--lp-ink);
+      font-weight: 900;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .lp-title-example-text.is-switching {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    .lp-location-intro {
+      border: 1px solid var(--lp-border);
+      background: linear-gradient(135deg, var(--lp-soft), #ffffff);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .lp-location-step-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--lp-ink);
+      background: #ffffff;
+      border: 1px solid var(--lp-border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #page-list-property select:disabled,
+    #page-list-property input:disabled {
+      background: #f9fafb;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
+    #page-list-property .lp-guided-disabled {
+      opacity: .72;
+    }
     .lang-spotlight-select {
       background: #ffffff;
       border: 1px solid #86efac;
@@ -2074,20 +2123,21 @@
           </div>
 
           <div class="grid md:grid-cols-2 gap-4">
-            <div>
+            <div class="md:col-span-2">
               <label id="lp-title-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Title *</label>
-              <input id="lp-title" oninput="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 3-Bedroom House in Ntinda">
+              <input id="lp-title" oninput="updateListPreview(); updateLpTitleExampleState()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 4-Bedroom Family House in Muyenga">
+              <p id="lp-title-example-helper" class="lp-title-example-strip">
+                <span id="lp-title-example-prefix">Try a title like</span>
+                <span id="lp-title-example-text" class="lp-title-example-text">4-Bedroom Family House in Muyenga</span>
+              </p>
             </div>
-            <div class="md:col-span-2 lp-address-priority">
-              <label id="lp-address-search-top-label" class="block text-xs uppercase tracking-wide font-black mb-2" style="color: var(--lp-ink);">Find address</label>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <input id="lp-address-search-top" type="search" oninput="syncLpTopAddressInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchLpAddressPinFromTop();}" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Type street, building, landmark, village, or area">
-                <button id="lp-address-search-top-btn" type="button" onclick="searchLpAddressPinFromTop()" class="inline-flex items-center justify-center gap-2 text-white px-4 py-3 rounded-xl text-sm font-bold">
-                  <i class="fas fa-location-crosshairs"></i><span>Find on map</span>
-                </button>
+            <div id="lp-location-intro" class="md:col-span-2 lp-location-intro">
+              <div class="lp-location-step-chip">
+                <i class="fas fa-map-location-dot"></i>
+                <span id="lp-location-intro-kicker">Property location</span>
               </div>
-              <p id="lp-address-search-top-help" class="text-xs text-gray-600 mt-2">Start here. We will move the map pin and fill the nearest location details where possible.</p>
-              <div id="lp-address-search-top-status" class="hidden mt-2 text-xs font-semibold"></div>
+              <h3 id="lp-location-intro-title" class="text-lg font-black text-gray-900">Tell us where the property is</h3>
+              <p id="lp-location-intro-copy" class="text-sm text-gray-600 mt-1">Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.</p>
             </div>
             <div>
               <label id="lp-region-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Region *</label>
@@ -2097,54 +2147,43 @@
             </div>
             <div>
               <label id="lp-district-label" class="block text-sm font-semibold text-gray-700 mb-1.5">District *</label>
-              <select id="list-district-sel" onchange="onLpDistrictChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+              <select id="list-district-sel" onchange="onLpDistrictChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
                 <option value="">Select district</option>
               </select>
             </div>
             <div>
               <label id="lp-city-label" class="block text-sm font-semibold text-gray-700 mb-1.5">City / Town *</label>
-              <select id="lp-city" onchange="onLpCityChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+              <select id="lp-city" onchange="onLpCityChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
                 <option value="">Select city / town</option>
               </select>
             </div>
             <div>
               <label id="lp-neighborhood-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Neighbourhood / Zone *</label>
-              <select id="lp-neighborhood" onchange="onLpNeighborhoodChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+              <select id="lp-neighborhood" onchange="onLpNeighborhoodChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
                 <option value="">Select neighbourhood</option>
               </select>
             </div>
             <div class="md:col-span-2">
               <label id="lp-area-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Area / Neighbourhood *</label>
-              <input id="lp-area" list="lp-area-suggestions" oninput="onLpAreaManualInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Auto-filled from district/city/neighbourhood">
+              <input id="lp-area" list="lp-area-suggestions" oninput="onLpAreaManualInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Auto-filled from district/city/neighbourhood" disabled>
               <datalist id="lp-area-suggestions"></datalist>
             </div>
             <div class="md:col-span-2">
               <label id="lp-street-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Street / Road</label>
-              <input id="lp-street-name" list="lp-street-suggestions" oninput="onLpStreetInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kira Road">
+              <input id="lp-street-name" list="lp-street-suggestions" oninput="onLpStreetInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kira Road" disabled>
               <datalist id="lp-street-suggestions"></datalist>
             </div>
             <div class="md:col-span-2">
               <label id="lp-address-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Full Address</label>
-              <input id="lp-address" list="lp-address-suggestions" oninput="onLpAddressInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, etc.">
+              <input id="lp-address" list="lp-address-suggestions" oninput="onLpAddressInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, etc." disabled>
               <datalist id="lp-address-suggestions"></datalist>
             </div>
             <div class="md:col-span-2 bg-gray-50 border border-green-100 rounded-2xl p-4">
               <h3 id="lp-pin-title" class="text-base font-bold text-gray-800">Pin Property Location</h3>
-              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.</p>
-              <div class="mt-3 rounded-2xl border border-green-100 bg-white p-3">
-                <label id="lp-address-search-label" class="block text-xs uppercase tracking-wide text-green-800 font-bold mb-2">Find address</label>
-                <div class="flex flex-col sm:flex-row gap-2">
-                  <input id="lp-address-search" type="search" oninput="syncLpNestedAddressToTop()" onkeydown="if(event.key==='Enter'){event.preventDefault();searchLpAddressPin();}" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Type street, building, landmark, or village">
-                  <button id="lp-address-search-btn" type="button" onclick="searchLpAddressPin()" class="inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold">
-                    <i class="fas fa-location-crosshairs"></i><span>Find on map</span>
-                  </button>
-                </div>
-                <p id="lp-address-search-help" class="text-xs text-gray-500 mt-2">Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.</p>
-                <div id="lp-address-search-status" class="hidden mt-2 text-xs font-semibold text-green-800"></div>
-              </div>
+              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">The map follows your selected location. Move the pin if needed, then confirm.</p>
               <div class="mt-2">
                 <button id="lp-map-sync-btn" type="button" onclick="syncMapToHierarchy()" class="inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">
-                  <i class="fas fa-location-crosshairs"></i> Sync map to selected area
+                  <i class="fas fa-location-crosshairs"></i> Center map to selected location
                 </button>
               </div>
               <div id="lp-pin-map" class="map-h-sm rounded-xl border border-gray-200 overflow-hidden mt-3"></div>
@@ -6392,6 +6431,11 @@
         ["lp-price-label", "Price (USh) *"],
         ["lp-description-label", "Description *"],
         ["lp-pin-title", "Pin Property Location"],
+        ["lp-title-example-prefix", "Try a title like"],
+        ["lp-location-intro-kicker", "Property location"],
+        ["lp-location-intro-title", "Tell us where the property is"],
+        ["lp-location-intro-copy", "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin."],
+        ["lp-pin-sub", "The map follows your selected location. Move the pin if needed, then confirm."],
         ["lp-location-guide-title", "Location setup (step-by-step)"],
         ["lp-location-step-1", "1. Select region, then district."],
         ["lp-location-step-2", "2. Select city/town, then neighbourhood/zone."],
@@ -6446,17 +6490,6 @@
         if (el) el.textContent = translateListingLabel(text);
       });
       updateListingModeHero(getListType());
-      const topAddressLabel = document.getElementById("lp-address-search-top-label");
-      if (topAddressLabel) topAddressLabel.textContent = translateListingLabel("Find address");
-      const topAddressInput = document.getElementById("lp-address-search-top");
-      if (topAddressInput && !topAddressInput.value) {
-        topAddressInput.placeholder = translateListingLabel("Type street, building, landmark, village, or area");
-      }
-      const topAddressBtn = document.getElementById("lp-address-search-top-btn");
-      if (topAddressBtn) {
-        topAddressBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i><span>${translateListingLabel("Find on map")}</span>`;
-      }
-      setTextById("lp-address-search-top-help", translateListingLabel("Start here. We will move the map pin and fill the nearest location details where possible."));
       applyLookingModalLanguageUI();
       const stepLabelMap = {
         "1": "Property Details",
@@ -6482,8 +6515,6 @@
         if (!label || !typeChipMap[key]) return;
         label.textContent = translateListingLabel(typeChipMap[key]);
       });
-      const sub1 = document.getElementById("lp-pin-sub");
-      if (sub1) sub1.textContent = translateListingLabel("Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.");
       const sub2 = document.getElementById("lp-step2-sub");
       if (sub2) sub2.textContent = translateListingLabel("Upload clear photos. At least 5 photos are required, and you can upload up to 20. Better quality images increase trust and enquiries.");
       const sub3 = document.getElementById("lp-step3-sub");
@@ -6556,18 +6587,8 @@
       }
       const mapSyncBtn = document.getElementById("lp-map-sync-btn");
       if (mapSyncBtn) {
-        mapSyncBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${translateListingLabel("Sync map to selected area")}`;
+        mapSyncBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${translateListingLabel("Center map to selected location")}`;
       }
-      setTextById("lp-address-search-label", translateListingLabel("Find address"));
-      const addressSearchInput = document.getElementById("lp-address-search");
-      if (addressSearchInput && !addressSearchInput.value) {
-        addressSearchInput.placeholder = translateListingLabel("Type street, building, landmark, or village");
-      }
-      const addressSearchBtn = document.getElementById("lp-address-search-btn");
-      if (addressSearchBtn) {
-        addressSearchBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i><span>${translateListingLabel("Find on map")}</span>`;
-      }
-      setTextById("lp-address-search-help", translateListingLabel("Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves."));
       const resetFormBtn = document.getElementById("lp-reset-form-btn");
       if (resetFormBtn) {
         resetFormBtn.innerHTML = `<i class="fas fa-rotate-left"></i> ${translateListingLabel("Clear & Start Again")}`;
@@ -6625,6 +6646,8 @@
       if (document.getElementById("lp-subtype")) {
         setListType(getListType());
       }
+      updateLpTitleExamplesForType(getListType(), true);
+      updateLpLocationStepLocks();
       applyPremiumFormLabels();
     }
 
@@ -13136,27 +13159,52 @@
       const confirmEl = document.getElementById("lp-location-confirm");
       if (confirmEl && !preserveConfirm) confirmEl.checked = false;
       updateLpLocationConfirmButton();
+      updateLpLocationStepLocks();
       resolveListPinLocation(nLat, nLng);
       resolveListPinElevation(nLat, nLng);
       updateListPreview();
       renderListReviewSummary();
     }
 
+    function canConfirmLpLocation() {
+      const lat = parseFloatSafe(lpVal("lp-lat"));
+      const lng = parseFloatSafe(lpVal("lp-lng"));
+      return !!lpVal("lp-region")
+        && !!lpVal("list-district-sel")
+        && !!lpVal("lp-city")
+        && !!lpVal("lp-neighborhood")
+        && lat != null
+        && lng != null;
+    }
+
     function updateLpLocationConfirmButton() {
       const btn = document.getElementById("lp-location-confirm-btn");
       const label = document.getElementById("lp-location-confirm-label");
       const confirmed = !!document.getElementById("lp-location-confirm")?.checked;
+      const ready = canConfirmLpLocation();
       if (btn) {
-        btn.className = confirmed
-          ? "mt-2 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg text-xs font-semibold"
-          : "mt-2 inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold";
+        btn.disabled = !ready;
+        btn.className = !ready
+          ? "mt-2 inline-flex items-center gap-2 bg-gray-200 text-gray-500 px-3 py-2 rounded-lg text-xs font-semibold cursor-not-allowed"
+          : confirmed
+            ? "mt-2 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg text-xs font-semibold"
+            : "mt-2 inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold";
       }
-      if (label) label.textContent = confirmed
-        ? translateListingLabel("Location confirmed")
-        : translateListingLabel("Confirm this location");
+      if (label) {
+        label.textContent = !ready
+          ? translateListingLabel("Complete location steps first")
+          : confirmed
+            ? translateListingLabel("Location confirmed")
+            : translateListingLabel("Confirm this location");
+      }
     }
 
     function confirmLpLocationPin() {
+      if (!canConfirmLpLocation()) {
+        markLpFieldError("lp-pin-map", "Complete the location steps before confirming the map pin.");
+        toast(translateListingLabel("Complete the location steps before confirming the map pin."));
+        return;
+      }
       const lat = parseFloatSafe(lpVal("lp-lat"));
       const lng = parseFloatSafe(lpVal("lp-lng"));
       if (lat == null || lng == null) {
@@ -13259,6 +13307,7 @@
         neighborhood: lpVal("lp-neighborhood"),
         area: lpVal("lp-area")
       });
+      updateLpLocationStepLocks();
     }
 
     async function geocodeAddressWithNominatim(query) {
@@ -13563,10 +13612,15 @@
     }
 
     function syncMapToHierarchy() {
+      if (!lpVal("lp-region") || !lpVal("list-district-sel")) {
+        toast(translateListingLabel("Select a region and district before centering the map."));
+        return;
+      }
       const confirmEl = document.getElementById("lp-location-confirm");
       if (confirmEl) confirmEl.checked = false;
       refreshListPinMapFromInputs();
-      toast(translateListingLabel("Map synced to selected region/district/neighbourhood."));
+      updateLpLocationStepLocks();
+      toast(translateListingLabel("Map synced to selected location."));
     }
 
     function setListWizardStep(step) {
@@ -15680,6 +15734,37 @@
       return UG_REGION_CENTERS[region] || null;
     }
 
+    function setLpGuidedFieldState(id, enabled, placeholder = "") {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = !enabled;
+      el.classList.toggle("lp-guided-disabled", !enabled);
+      if (!enabled && placeholder && !el.value && "placeholder" in el) {
+        el.placeholder = translateListingLabel(placeholder);
+      }
+    }
+
+    function updateLpLocationStepLocks() {
+      const hasRegion = !!lpVal("lp-region");
+      const hasDistrict = !!lpVal("list-district-sel");
+      const hasCity = !!lpVal("lp-city");
+      const hasNeighborhood = !!lpVal("lp-neighborhood");
+      setLpGuidedFieldState("list-district-sel", hasRegion);
+      setLpGuidedFieldState("lp-city", hasDistrict);
+      setLpGuidedFieldState("lp-neighborhood", hasCity);
+      setLpGuidedFieldState("lp-area", hasNeighborhood, "Select a neighbourhood first");
+      setLpGuidedFieldState("lp-street-name", hasNeighborhood, "Select a neighbourhood first");
+      setLpGuidedFieldState("lp-address", hasNeighborhood, "Select a neighbourhood first");
+      const syncBtn = document.getElementById("lp-map-sync-btn");
+      const canSync = hasRegion && hasDistrict;
+      if (syncBtn) {
+        syncBtn.disabled = !canSync;
+        syncBtn.classList.toggle("opacity-60", !canSync);
+        syncBtn.classList.toggle("cursor-not-allowed", !canSync);
+      }
+      updateLpLocationConfirmButton();
+    }
+
     function populateLpRegionOptions(keepRegion = "") {
       const regionEl = document.getElementById("lp-region");
       if (!regionEl) return;
@@ -15691,6 +15776,7 @@
       } else if (!regionEl.value) {
         regionEl.value = "";
       }
+      updateLpLocationStepLocks();
     }
 
     function populateLpDistrictOptions(region, keepDistrict = "") {
@@ -15702,6 +15788,7 @@
         .join("");
       if (keepDistrict && districts.includes(keepDistrict)) districtEl.value = keepDistrict;
       else districtEl.value = "";
+      updateLpLocationStepLocks();
     }
 
     function getDistrictLocationTree(district) {
@@ -15728,6 +15815,7 @@
         .join("");
       if (keepCity && tree.some((item) => item.city === keepCity)) cityEl.value = keepCity;
       else cityEl.value = "";
+      updateLpLocationStepLocks();
     }
 
     function populateLpNeighborhoodOptions(district, city, keepNeighborhood = "") {
@@ -15741,6 +15829,7 @@
         .join("");
       if (keepNeighborhood && list.some((item) => item.name === keepNeighborhood)) nEl.value = keepNeighborhood;
       else nEl.value = "";
+      updateLpLocationStepLocks();
     }
 
     function getNeighborhoodPoint(district, city, neighborhood) {
@@ -15775,6 +15864,7 @@
       }
       populateListAddressSuggestions({ district, city, neighborhood, area: areaEl.value.trim() || autoArea, region });
       syncLpAddressFromHierarchy();
+      updateLpLocationStepLocks();
     }
 
     function onLpAreaManualInput() {
@@ -15787,6 +15877,7 @@
       });
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpStreetInput() {
@@ -15794,6 +15885,7 @@
       syncLpAddressFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpAddressInput() {
@@ -15802,6 +15894,7 @@
       if (addressEl) addressEl.dataset.auto = "0";
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpAreaHighlightsInput() {
@@ -15902,6 +15995,7 @@
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpDistrictChange() {
@@ -15922,6 +16016,7 @@
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpCityChange() {
@@ -15938,6 +16033,7 @@
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function onLpNeighborhoodChange() {
@@ -15951,6 +16047,7 @@
       syncLpAreaFromHierarchy();
       updateListPreview();
       refreshListPinMapFromInputs();
+      updateLpLocationStepLocks();
     }
 
     function clearListPropertyDraft() {
@@ -16010,6 +16107,7 @@
         radio.checked = radio.value === selectedType;
       });
       setListType(selectedType);
+      updateLpLocationStepLocks();
       setListWizardStep(1);
       renderLpPhotoFeedback();
       updateListPreview();
@@ -19839,6 +19937,42 @@
           "You are listing student accommodation. The flow highlights campus access, room setup, services, and availability.": "Olaga obusulo bw'abayizi. Enkola eraga campus access, ebisenge, services, n'okubeerawo.",
           "Type street, building, landmark, village, or area": "Wandiika oluguudo, ekizimbe, landmark, ekyalo oba area",
           "Start here. We will move the map pin and fill the nearest location details where possible.": "Tandikira wano. Tujja kutambuza pin ku maapu era tujjuze ebikwata ku kifo ekiri okumpi bwe kisoboka.",
+          "Try a title like": "Gezako title nga",
+          "Property location": "Ekifo kya property",
+          "Tell us where the property is": "Tubuulire property eri wa",
+          "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.": "Londa ekifo mutendera ku mutendera. Maapu ejja kugoberera buli ky'olonze, oluvannyuma okakase pin entuufu.",
+          "The map follows your selected location. Move the pin if needed, then confirm.": "Maapu egoberera ekifo ky'olonze. Tambuza pin bwe kiba kyetaagisa, oluvannyuma okakase.",
+          "Center map to selected location": "Twala maapu ku kifo ky'olonze",
+          "Complete location steps first": "Sooka omalirize emitendera gy'ekifo",
+          "Complete the location steps before confirming the map pin.": "Maliriza emitendera gy'ekifo nga tonnakakasa pin ya maapu.",
+          "Select a neighbourhood first": "Sooka olonde neighbourhood",
+          "Select a region and district before centering the map.": "Sooka olonde region ne district nga tonnatwala maapu ku kifo.",
+          "Map synced to selected location.": "Maapu etwaliddwa ku kifo ky'olonze.",
+          "4-Bedroom Family House in Muyenga": "Ennyumba y'amaka ya bedrooms 4 e Muyenga",
+          "3-Bedroom Bungalow in Ntinda": "Bungalow ya bedrooms 3 e Ntinda",
+          "Modern Home for Sale in Entebbe": "Ennyumba empya etundibwa e Entebbe",
+          "Family House with Garden in Kololo": "Ennyumba y'amaka erina garden e Kololo",
+          "Newly Built Home in Wakiso": "Ennyumba empya ezimbiddwa e Wakiso",
+          "2-Bedroom Apartment to Rent in Kira": "Apartment ya bedrooms 2 y'okupangisa e Kira",
+          "Self-Contained Room in Makerere": "Ekisenge self-contained e Makerere",
+          "Family House to Rent in Najjera": "Ennyumba y'amaka y'okupangisa e Najjera",
+          "Furnished Apartment in Bugolobi": "Apartment erimu ebintu e Bugolobi",
+          "Affordable Rental in Mukono": "Rental ey'ebbeeyi ennungi e Mukono",
+          "1-Acre Plot in Mbale Town": "Plot ya acre 1 mu Mbale Town",
+          "Residential Land in Namugongo": "Ettaka ly'amaka e Namugongo",
+          "Commercial Plot on Main Road": "Plot ya business ku luguudo olukulu",
+          "Farm Land with Road Access": "Ettaka ly'obulimi eririna oluguudo",
+          "Titled Land near Trading Centre": "Ettaka eririna title okumpi ne trading centre",
+          "Office Space in Ntinda": "Office space e Ntinda",
+          "Retail Shop on Kampala Road": "Dduuka ku Kampala Road",
+          "Warehouse Space in Namanve": "Warehouse space e Namanve",
+          "Restaurant Space in Muyenga": "Ekifo kya restaurant e Muyenga",
+          "Commercial Building in Mbarara": "Ekizimbe kya business e Mbarara",
+          "Student Hostel near Makerere": "Hostel y'abayizi okumpi ne Makerere",
+          "Single Room near Kyambogo": "Ekisenge kimu okumpi ne Kyambogo",
+          "Shared Student Apartment in Kikoni": "Apartment y'abayizi bagabana e Kikoni",
+          "Affordable Hostel in Wandegeya": "Hostel ey'ebbeeyi ennungi e Wandegeya",
+          "Student Studio near MUBS": "Studio y'abayizi okumpi ne MUBS",
           "Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.": "Teeka pin ya maapu ku property. Kozesa Noonya address okusooka, oluvannyuma kakasa oba tambuza pin bwe kiba kyetaagisa.",
           "Looking For a Property?": "Onoonya property?",
           "Tell us what you need and we'll contact you with matching listings.": "Tubuulire ky'oyagala era tujja kukutuukirira n'ebintu ebikwatagana.",
@@ -19899,6 +20033,42 @@
           "You are listing student accommodation. The flow highlights campus access, room setup, services, and availability.": "Unaweka makazi ya wanafunzi. Mtiririko unaonyesha ukaribu na chuo, vyumba, huduma, na upatikanaji.",
           "Type street, building, landmark, village, or area": "Andika barabara, jengo, alama, kijiji, au eneo",
           "Start here. We will move the map pin and fill the nearest location details where possible.": "Anza hapa. Tutasogeza pin ya ramani na kujaza maelezo ya eneo la karibu inapowezekana.",
+          "Try a title like": "Jaribu kichwa kama",
+          "Property location": "Eneo la mali",
+          "Tell us where the property is": "Tuambie mali iko wapi",
+          "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.": "Chagua eneo hatua kwa hatua. Ramani itafuata kila chaguo, kisha uthibitishe pin sahihi.",
+          "The map follows your selected location. Move the pin if needed, then confirm.": "Ramani inafuata eneo ulilochagua. Sogeza pin ikihitajika, kisha uthibitishe.",
+          "Center map to selected location": "Leta ramani kwenye eneo ulilochagua",
+          "Complete location steps first": "Kamilisha hatua za eneo kwanza",
+          "Complete the location steps before confirming the map pin.": "Kamilisha hatua za eneo kabla ya kuthibitisha pin ya ramani.",
+          "Select a neighbourhood first": "Chagua mtaa kwanza",
+          "Select a region and district before centering the map.": "Chagua mkoa na wilaya kabla ya kuweka ramani katikati.",
+          "Map synced to selected location.": "Ramani imewekwa kwenye eneo ulilochagua.",
+          "4-Bedroom Family House in Muyenga": "Nyumba ya familia ya vyumba 4 Muyenga",
+          "3-Bedroom Bungalow in Ntinda": "Bungalow ya vyumba 3 Ntinda",
+          "Modern Home for Sale in Entebbe": "Nyumba ya kisasa ya kuuza Entebbe",
+          "Family House with Garden in Kololo": "Nyumba ya familia yenye bustani Kololo",
+          "Newly Built Home in Wakiso": "Nyumba mpya iliyojengwa Wakiso",
+          "2-Bedroom Apartment to Rent in Kira": "Apartment ya vyumba 2 ya kupangisha Kira",
+          "Self-Contained Room in Makerere": "Chumba self-contained Makerere",
+          "Family House to Rent in Najjera": "Nyumba ya familia ya kupangisha Najjera",
+          "Furnished Apartment in Bugolobi": "Apartment yenye samani Bugolobi",
+          "Affordable Rental in Mukono": "Nyumba ya kupanga ya bei nafuu Mukono",
+          "1-Acre Plot in Mbale Town": "Kiwanja cha ekari 1 Mbale Town",
+          "Residential Land in Namugongo": "Ardhi ya makazi Namugongo",
+          "Commercial Plot on Main Road": "Kiwanja cha biashara kwenye barabara kuu",
+          "Farm Land with Road Access": "Ardhi ya kilimo yenye njia ya barabara",
+          "Titled Land near Trading Centre": "Ardhi yenye hati karibu na kituo cha biashara",
+          "Office Space in Ntinda": "Nafasi ya ofisi Ntinda",
+          "Retail Shop on Kampala Road": "Duka la rejareja Kampala Road",
+          "Warehouse Space in Namanve": "Nafasi ya ghala Namanve",
+          "Restaurant Space in Muyenga": "Nafasi ya mgahawa Muyenga",
+          "Commercial Building in Mbarara": "Jengo la biashara Mbarara",
+          "Student Hostel near Makerere": "Hostel ya wanafunzi karibu na Makerere",
+          "Single Room near Kyambogo": "Chumba kimoja karibu na Kyambogo",
+          "Shared Student Apartment in Kikoni": "Apartment ya wanafunzi ya kushiriki Kikoni",
+          "Affordable Hostel in Wandegeya": "Hostel ya bei nafuu Wandegeya",
+          "Student Studio near MUBS": "Studio ya mwanafunzi karibu na MUBS",
           "Place the map pin on the property. Use Find address first, then confirm or move the pin if needed.": "Weka pin ya ramani kwenye mali. Tumia Tafuta anwani kwanza, kisha thibitisha au sogeza pin ikihitajika.",
           "Looking For a Property?": "Unatafuta mali?",
           "Tell us what you need and we'll contact you with matching listings.": "Tuambie unachohitaji na tutawasiliana na matangazo yanayofanana.",
@@ -20652,6 +20822,89 @@
       }
     };
 
+    const LP_TITLE_EXAMPLES = {
+      sale: [
+        "4-Bedroom Family House in Muyenga",
+        "3-Bedroom Bungalow in Ntinda",
+        "Modern Home for Sale in Entebbe",
+        "Family House with Garden in Kololo",
+        "Newly Built Home in Wakiso"
+      ],
+      rent: [
+        "2-Bedroom Apartment to Rent in Kira",
+        "Self-Contained Room in Makerere",
+        "Family House to Rent in Najjera",
+        "Furnished Apartment in Bugolobi",
+        "Affordable Rental in Mukono"
+      ],
+      land: [
+        "1-Acre Plot in Mbale Town",
+        "Residential Land in Namugongo",
+        "Commercial Plot on Main Road",
+        "Farm Land with Road Access",
+        "Titled Land near Trading Centre"
+      ],
+      commercial: [
+        "Office Space in Ntinda",
+        "Retail Shop on Kampala Road",
+        "Warehouse Space in Namanve",
+        "Restaurant Space in Muyenga",
+        "Commercial Building in Mbarara"
+      ],
+      student: [
+        "Student Hostel near Makerere",
+        "Single Room near Kyambogo",
+        "Shared Student Apartment in Kikoni",
+        "Affordable Hostel in Wandegeya",
+        "Student Studio near MUBS"
+      ]
+    };
+    let lpTitleExampleIndex = 0;
+    let lpTitleExampleTimer = null;
+
+    function getLpTitleExamples(type = getListType()) {
+      return LP_TITLE_EXAMPLES[type] || LP_TITLE_EXAMPLES.sale;
+    }
+
+    function renderLpTitleExample(example, animate = true) {
+      const titleEl = document.getElementById("lp-title");
+      const exampleEl = document.getElementById("lp-title-example-text");
+      const apply = () => {
+        const text = translateListingLabel(example);
+        if (titleEl && !titleEl.value.trim()) titleEl.placeholder = `e.g. ${text}`;
+        if (exampleEl) exampleEl.textContent = text;
+      };
+      if (animate && exampleEl) {
+        exampleEl.classList.add("is-switching");
+        window.setTimeout(() => {
+          apply();
+          exampleEl.classList.remove("is-switching");
+        }, 160);
+      } else {
+        apply();
+      }
+    }
+
+    function updateLpTitleExamplesForType(type = getListType(), restart = false) {
+      const examples = getLpTitleExamples(type);
+      lpTitleExampleIndex = Math.min(lpTitleExampleIndex, examples.length - 1);
+      renderLpTitleExample(examples[lpTitleExampleIndex] || examples[0], false);
+      if (restart) startLpTitleExampleRotation(type);
+    }
+
+    function startLpTitleExampleRotation(type = getListType()) {
+      if (lpTitleExampleTimer) clearInterval(lpTitleExampleTimer);
+      const examples = getLpTitleExamples(type);
+      lpTitleExampleTimer = window.setInterval(() => {
+        lpTitleExampleIndex = (lpTitleExampleIndex + 1) % examples.length;
+        renderLpTitleExample(examples[lpTitleExampleIndex]);
+      }, 2800);
+    }
+
+    function updateLpTitleExampleState() {
+      updateLpTitleExamplesForType(getListType(), false);
+    }
+
     function updateListingModeHero(type) {
       const meta = LP_MODE_META[type] || LP_MODE_META.sale;
       const shell = document.getElementById("lp-wizard-shell");
@@ -20699,7 +20952,7 @@
       const amenitiesLabelEl = document.getElementById("lp-amenities-label");
       const continueBtn = document.getElementById("lp-step1-next-btn");
 
-      if (titleEl) titleEl.placeholder = translateListingLabel(cfg.titlePlaceholder);
+      updateLpTitleExamplesForType(selected, true);
       if (areaEl) areaEl.placeholder = translateListingLabel("Auto-filled from district/city/neighbourhood");
       if (descEl) descEl.placeholder = translateListingLabel(cfg.descPlaceholder);
       if (areaLabelEl) areaLabelEl.textContent = translateListingLabel(cfg.areaLabel);
@@ -20741,6 +20994,7 @@
         populateLpNeighborhoodOptions(lpVal("list-district-sel"), lpVal("lp-city"), lpVal("lp-neighborhood"));
       }
       syncLpPublicNameSuggestion();
+      updateLpLocationStepLocks();
       refreshListPinMapFromInputs();
       lpCurrentFormType = selected;
     }
