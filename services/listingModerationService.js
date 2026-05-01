@@ -414,7 +414,6 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
   }
 
   if (String(status || '').toLowerCase() === 'rejected') {
-    const previewUrl = listing.owner_edit_token ? getOwnerPreviewUrl(listing, listing.owner_edit_token) : '';
     return {
       subject: `[MakaUg] Listing rejected • ${title}`,
       text: [
@@ -425,7 +424,6 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Title: ${title}`,
         'The listing has been rejected during review.',
         reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
-        previewUrl ? `Preview/edit link: ${previewUrl}` : '',
         '',
         `Please resend the correct information or contact ${supportEmail} for help.`,
         'Thank you for using MakaUg.'
@@ -435,7 +433,7 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `Ref: ${reference}`,
         `Title: ${title}`,
         reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
-        previewUrl ? `Preview/edit: ${previewUrl}` : `Contact ${supportEmail} for help.`
+        `Contact ${supportEmail} for help.`
       ].filter(Boolean).join('\n')
     };
   }
@@ -464,8 +462,8 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
 function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
   const reference = getListingReference(listing);
   const title = listing.title || 'Your property listing';
-  const previewUrl = getOwnerPreviewUrl(listing, token);
   const supportEmail = getSupportEmail();
+  const siteUrl = getPublicSiteUrl();
 
   return {
     subject: `[MakaUg] Listing received for review • ${title}`,
@@ -476,17 +474,18 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
       `Listing reference: ${reference}`,
       `Title: ${title}`,
       '',
-      `Preview/edit link: ${previewUrl}`,
-      'You can use this private link to review the listing and update wording while it is pending.',
+      'Our team will check the details, media, location, and verification information before it goes live.',
+      'We will contact you if anything needs updating.',
       '',
       `If you need help, contact ${supportEmail}.`,
+      `Browse MakaUg: ${siteUrl}`,
       'Thank you for using MakaUg.'
     ].join('\n'),
     whatsapp: [
       'MakaUg: your listing is pending review.',
       `Ref: ${reference}`,
       `Title: ${title}`,
-      `Preview/edit: ${previewUrl}`
+      'We will contact you after review or if we need more information.'
     ].join('\n')
   };
 }

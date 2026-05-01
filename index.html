@@ -1610,10 +1610,6 @@
           <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+makaug,+I+want+to+use+the+AI+chatbot" target="_blank" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold">
             <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
           </a>
-          <div class="mt-5 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">
-            <div class="font-bold">WhatsApp connection readiness</div>
-            <div class="mt-1 text-green-800">The website points users to 0760112587. For the live web bridge, keep Chrome connected and run <span class="font-mono font-bold">npm run dev:whatsapp-agent</span> so the local agent restarts the WhatsApp responder if it drops.</div>
-          </div>
         </div>
       </div>
     </div>
@@ -1784,39 +1780,39 @@
           <img src="https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?auto=format&fit=crop&w=1200&q=80" alt="MakaUg moderation team reviewing property safety checks" class="absolute inset-0 w-full h-full object-cover opacity-70">
           <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent"></div>
           <div class="relative z-10 h-full flex flex-col justify-end p-6">
-            <div class="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">MakaUg Safety Desk</div>
-            <h2 class="text-2xl md:text-3xl font-black serif mt-3">Fraud reports are treated as urgent cases, not ordinary support tickets.</h2>
-            <p class="text-sm text-green-50 mt-2 max-w-xl">Screenshots, payment references, chat history, duplicate listings, and location mismatches are grouped into one review record so the team can act quickly.</p>
+            <div id="fraud-safety-pill" class="inline-flex w-fit items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-bold backdrop-blur">MakaUg Safety Desk</div>
+            <h2 id="fraud-urgent-title" class="text-2xl md:text-3xl font-black serif mt-3">Fraud reports are treated as urgent cases, not ordinary support tickets.</h2>
+            <p id="fraud-urgent-sub" class="text-sm text-green-50 mt-2 max-w-xl">Screenshots, payment references, chat history, duplicate listings, and location mismatches are grouped into one AI-assisted review record so the team can act quickly.</p>
           </div>
         </div>
         <div class="bg-white border border-green-100 rounded-3xl p-6">
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
-              <div class="text-xs font-bold uppercase tracking-wide text-green-700">Verification examples</div>
-              <h2 class="text-2xl font-bold text-gray-900 mt-1">How MakaUg reduces risk before users meet or pay</h2>
+              <div id="fraud-examples-kicker" class="text-xs font-bold uppercase tracking-wide text-green-700">Verification examples</div>
+              <h2 id="fraud-examples-title" class="text-2xl font-bold text-gray-900 mt-1">How MakaUg reduces risk before users meet or pay</h2>
             </div>
-            <button onclick="openModal('report-modal')" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Report Suspicion</button>
+            <button id="fraud-examples-report-btn" onclick="openModal('report-modal')" class="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-bold">Report Suspicion</button>
           </div>
           <div class="mt-5 grid md:grid-cols-2 gap-4">
             <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
               <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-fingerprint"></i></div>
-              <h3 class="font-bold text-gray-900">Account and contact consistency</h3>
-              <p class="text-sm text-gray-600 mt-1">We compare account details, OTP verification, listed contact method, and repeated phone or email patterns.</p>
+              <h3 id="fraud-example-1-title" class="font-bold text-gray-900">Account and contact consistency</h3>
+              <p id="fraud-example-1-sub" class="text-sm text-gray-600 mt-1">We compare account details, OTP verification, listed contact method, and repeated phone or email patterns.</p>
             </div>
             <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
               <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-map-location-dot"></i></div>
-              <h3 class="font-bold text-gray-900">Location and title checks</h3>
-              <p class="text-sm text-gray-600 mt-1">Map pins, district, area, street name, title type, and owner-verification requests are reviewed together.</p>
+              <h3 id="fraud-example-2-title" class="font-bold text-gray-900">Location and title checks</h3>
+              <p id="fraud-example-2-sub" class="text-sm text-gray-600 mt-1">Map pins, district, area, street name, title type, and owner-verification requests are reviewed together.</p>
             </div>
             <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
               <div class="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-images"></i></div>
-              <h3 class="font-bold text-gray-900">Photo and video evidence</h3>
-              <p class="text-sm text-gray-600 mt-1">Required photo slots, repeated images, poor uploads, and YouTube tour links are checked before approval.</p>
+              <h3 id="fraud-example-3-title" class="font-bold text-gray-900">Photo and video evidence</h3>
+              <p id="fraud-example-3-sub" class="text-sm text-gray-600 mt-1">Required photo slots, repeated images, poor uploads, and YouTube tour links are checked before approval.</p>
             </div>
             <div class="rounded-2xl border border-gray-200 p-4 bg-gray-50">
               <div class="w-12 h-12 rounded-2xl bg-red-100 text-red-700 flex items-center justify-center text-xl mb-3"><i class="fas fa-ban"></i></div>
-              <h3 class="font-bold text-gray-900">Block, hold, or escalate</h3>
-              <p class="text-sm text-gray-600 mt-1">Admins can hold listings, request more proof, block accounts, or escalate repeat suspicious behavior.</p>
+              <h3 id="fraud-example-4-title" class="font-bold text-gray-900">Block, hold, or escalate</h3>
+              <p id="fraud-example-4-sub" class="text-sm text-gray-600 mt-1">Admins can hold listings, request more proof, block accounts, or escalate repeat suspicious behavior.</p>
             </div>
           </div>
         </div>
@@ -1986,6 +1982,17 @@
             <div class="md:col-span-2 bg-gray-50 border border-green-100 rounded-2xl p-4">
               <h3 id="lp-pin-title" class="text-base font-bold text-gray-800">Pin Property Location</h3>
               <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">Due to limited formal addresses, place a map pin for best search accuracy. District/city/neighbourhood info recenters the map automatically.</p>
+              <div class="mt-3 rounded-2xl border border-green-100 bg-white p-3">
+                <label id="lp-address-search-label" class="block text-xs uppercase tracking-wide text-green-800 font-bold mb-2">Find address</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                  <input id="lp-address-search" type="search" class="flex-1 border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Type street, building, landmark, or village">
+                  <button id="lp-address-search-btn" type="button" onclick="searchLpAddressPin()" class="inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-3 rounded-xl text-sm font-bold">
+                    <i class="fas fa-location-crosshairs"></i><span>Find on map</span>
+                  </button>
+                </div>
+                <p id="lp-address-search-help" class="text-xs text-gray-500 mt-2">Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.</p>
+                <div id="lp-address-search-status" class="hidden mt-2 text-xs font-semibold text-green-800"></div>
+              </div>
               <div class="mt-2">
                 <button id="lp-map-sync-btn" type="button" onclick="syncMapToHierarchy()" class="inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">
                   <i class="fas fa-location-crosshairs"></i> Sync map to selected area
@@ -1995,10 +2002,10 @@
               <div class="mt-3 p-3 rounded-xl border border-gray-200 bg-white">
                 <div id="lp-resolved-map-label" class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-1">Resolved Map Location</div>
                 <div id="lp-location-resolved" class="text-sm text-gray-700">Set a pin to resolve the nearest location label.</div>
-                <label class="mt-2 inline-flex items-start gap-2 text-sm text-gray-700">
-                  <input id="lp-location-confirm" type="checkbox" class="mt-1 accent-green-700">
-                  <span id="lp-location-confirm-label">I confirm this pin matches my property location.</span>
-                </label>
+                <input id="lp-location-confirm" type="checkbox" class="hidden">
+                <button id="lp-location-confirm-btn" type="button" onclick="confirmLpLocationPin()" class="mt-2 inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">
+                  <i class="fas fa-check-circle"></i><span id="lp-location-confirm-label">Confirm this location</span>
+                </button>
               </div>
               <div class="grid md:grid-cols-2 gap-3 mt-3">
                 <div>
@@ -2100,17 +2107,17 @@
               <input id="lp-photo-files" type="file" accept="image/*" multiple class="hidden" onchange="handleLpPhotoSelection(event)">
               <input id="lp-photo-file-single" type="file" accept="image/*" class="hidden" onchange="handleLpPhotoSelection(event)">
               <div class="text-4xl mb-3">📷</div>
-              <p class="text-xl md:text-2xl font-bold text-gray-800">Drag & Drop Photos or Click to Browse</p>
-              <p class="text-sm text-gray-500 mt-1">JPG, PNG or WEBP - up to 10MB each</p>
+              <p id="lp-photo-drop-title" class="text-xl md:text-2xl font-bold text-gray-800">Drag & Drop Photos or Click to Browse</p>
+              <p id="lp-photo-drop-sub" class="text-sm text-gray-500 mt-1">JPG, PNG or WEBP - up to 10MB each</p>
             </label>
             <div class="mt-3 flex flex-wrap gap-2">
-              <button type="button" onclick="triggerLpSinglePhotoPicker()" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Add one photo</button>
-              <button type="button" onclick="document.getElementById('lp-photo-files')?.click()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Add multiple photos</button>
+              <button id="lp-add-one-photo-btn" type="button" onclick="triggerLpSinglePhotoPicker()" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Add one photo</button>
+              <button id="lp-add-multiple-photo-btn" type="button" onclick="document.getElementById('lp-photo-files')?.click()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Add multiple photos</button>
             </div>
           </div>
 
           <div id="lp-photo-file-list" class="mt-4 text-sm text-gray-700"></div>
-          <p class="mt-2 text-xs text-gray-500">Choose one image as the <strong>main photo</strong>. This will appear first in search results.</p>
+          <p id="lp-main-photo-help" class="mt-2 text-xs text-gray-500">Choose one image as the <strong>main photo</strong>. This will appear first in search results.</p>
           <div id="lp-photo-gallery" class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
           <div id="lp-photo-quality" class="mt-3 text-sm"></div>
 
@@ -2174,22 +2181,9 @@
               </select>
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent assisted?</label>
-              <select id="lp-field-agent-assisted" onchange="toggleLpFieldAgentId();renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </select>
-              <p class="text-xs text-gray-500 mt-1">A Field Agent is someone who helped you fill this form.</p>
-            </div>
-            <div>
               <label id="lp-verify-email-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Email *</label>
               <input id="lp-verify-email" type="email" oninput="onLpVerifyEmailInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="you@email.com">
-              <p id="lp-verify-email-msg" class="text-xs text-gray-500 mt-1">Enter a valid email address.</p>
-            </div>
-            <div id="lp-field-agent-id-wrap" class="hidden">
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
-              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-1042">
-              <p class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
+              <p id="lp-verify-email-msg" class="text-xs text-gray-500 mt-1">Provide your email so we can send review updates. If you choose email OTP, the 6-digit code goes here.</p>
             </div>
             <div>
               <label id="lp-verify-nin-label" class="block text-sm font-semibold text-gray-700 mb-1.5">National ID Number (NIN) *</label>
@@ -2201,6 +2195,19 @@
               <input id="lp-verify-id-file" type="file" accept="image/*,.pdf" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="handleLpIdentityFile(event)">
               <p id="lp-verify-id-file-name" class="text-xs text-gray-500 mt-1">No file selected.</p>
               <div id="lp-verify-id-preview" class="mt-3"></div>
+            </div>
+            <div>
+              <label id="lp-field-agent-assisted-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent assisted?</label>
+              <select id="lp-field-agent-assisted" onchange="toggleLpFieldAgentId();renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+              <p id="lp-field-agent-assisted-help" class="text-xs text-gray-500 mt-1">A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.</p>
+            </div>
+            <div id="lp-field-agent-id-wrap" class="hidden">
+              <label id="lp-field-agent-id-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
+              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-1042">
+              <p id="lp-field-agent-id-help" class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
             </div>
           </div>
 
@@ -3626,7 +3633,17 @@
       <div class="space-y-3">
         <input id="looking-name" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Your name">
         <input id="looking-phone" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+        <select id="looking-need" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm bg-white">
+          <option value="">What are you looking for?</option>
+          <option value="For sale">For sale</option>
+          <option value="To rent">To rent</option>
+          <option value="Student accommodation">Student accommodation</option>
+          <option value="Commercial property">Commercial property</option>
+          <option value="Land">Land</option>
+          <option value="Agent">Agent</option>
+        </select>
         <input id="looking-location" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Preferred location">
+        <input id="looking-budget" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Budget (USh)">
         <textarea id="looking-details" rows="4" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Describe the property you want"></textarea>
         <button id="looking-submit-btn" onclick="submitLookingRequest()" class="w-full bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Request</button>
       </div>
@@ -4114,9 +4131,9 @@
     };
 
     const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
-    const MAP_DEFAULT_CENTER = { lat: 0.347596, lng: 32.58252 };
+    const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
     const MAP_UGANDA_OVERVIEW_CENTER = { lat: 1.3733, lng: 32.2903 };
-    const MAP_DEFAULT_ZOOM = 11;
+    const MAP_DEFAULT_ZOOM = 7;
     const MAP_HOME_MIN_ZOOM = 8;
     const MAP_HOME_MAX_ZOOM = 12;
     const MAP_CITY_ZOOM = 15;
@@ -5883,7 +5900,7 @@
     const FRAUD_I18N = {
       en: {
         title: "Fraud Prevention",
-        sub: "We use layered verification, AI checks, and manual moderation to keep makaug safer for buyers, renters, brokers, and property listers.",
+        sub: "We use layered verification, AI-powered fraud detection, and manual moderation to keep MakaUg safer for buyers, renters, brokers, and property listers.",
         card1Title: "Identity Verification",
         card1Sub: "OTP + National ID checks before listing submission and publishing review.",
         card2Title: "AI Fraud Signals",
@@ -6120,12 +6137,69 @@
       }
     };
 
+    const FRAUD_EXTRA_I18N = {
+      en: {
+        safetyPill: "MakaUg Safety Desk",
+        urgentTitle: "Fraud reports are treated as urgent cases, not ordinary support tickets.",
+        urgentSub: "Screenshots, payment references, chat history, duplicate listings, and location mismatches are grouped into one AI-assisted review record so the team can act quickly.",
+        examplesKicker: "Verification examples",
+        examplesTitle: "How MakaUg reduces risk before users meet or pay",
+        examplesReportBtn: "Report Suspicion",
+        example1Title: "Account and contact consistency",
+        example1Sub: "We compare account details, OTP verification, listed contact method, and repeated phone or email patterns.",
+        example2Title: "Location and title checks",
+        example2Sub: "Map pins, district, area, street name, title type, and owner-verification requests are reviewed together.",
+        example3Title: "Photo and video evidence",
+        example3Sub: "Required photo slots, repeated images, poor uploads, and YouTube tour links are checked before approval.",
+        example4Title: "Block, hold, or escalate",
+        example4Sub: "Admins can hold listings, request more proof, block accounts, or escalate repeat suspicious behavior."
+      },
+      lg: {
+        safetyPill: "MakaUg Safety Desk",
+        urgentTitle: "Reports z'obubbaanyi tuzikolako nga cases ez'amangu, si support tickets eza bulijjo.",
+        urgentSub: "Screenshots, payment references, chat history, duplicate listings, n'ebifo ebitalaga bulungi bigattibwa mu record emu eyambibwako AI team esobole okukola mangu.",
+        examplesKicker: "Ebyokulabirako by'okukakasa",
+        examplesTitle: "Engeri MakaUg ekendeezaamu obulabe abantu nga tebannasisinkana oba okusasula",
+        examplesReportBtn: "Loopa Ekiteeberezebwa",
+        example1Title: "Account ne contact bikwatagana",
+        example1Sub: "Tugeraageranya account details, OTP verification, contact method, n'emisono gya phone oba email egiddibwamu.",
+        example2Title: "Okukebera ekifo n'omutwe",
+        example2Sub: "Map pins, district, area, street name, title type, n'okukakasa owner bitunuulirwa wamu.",
+        example3Title: "Ebifaananyi ne video evidence",
+        example3Sub: "Photo slots ezeetaagisa, ebifaananyi ebiddibwamu, uploads ezitali nnungi, ne YouTube tour links bikeberebwa nga approval tennabaawo.",
+        example4Title: "Block, hold, oba escalate",
+        example4Sub: "Admins basobola okukwata listings, okusaba proof endala, okublockinga accounts, oba okulinnyisa suspicious behavior."
+      },
+      sw: {
+        safetyPill: "Dawati ya Usalama MakaUg",
+        urgentTitle: "Ripoti za ulaghai hushughulikiwa kama kesi za dharura, si tiketi za kawaida za msaada.",
+        urgentSub: "Screenshots, rejea za malipo, historia ya chat, listings zilizorudiwa, na tofauti za eneo huwekwa kwenye rekodi moja inayosaidiwa na AI ili timu ichukue hatua haraka.",
+        examplesKicker: "Mifano ya uthibitishaji",
+        examplesTitle: "Jinsi MakaUg hupunguza hatari kabla ya watu kukutana au kulipa",
+        examplesReportBtn: "Ripoti Shaka",
+        example1Title: "Ulinganifu wa akaunti na mawasiliano",
+        example1Sub: "Tunalinganisha maelezo ya akaunti, OTP, njia ya mawasiliano iliyowekwa, na mifumo ya simu au barua pepe inayojirudia.",
+        example2Title: "Ukaguzi wa eneo na kichwa",
+        example2Sub: "Pin za ramani, wilaya, eneo, jina la barabara, aina ya title, na maombi ya uthibitisho wa mmiliki hukaguliwa pamoja.",
+        example3Title: "Ushahidi wa picha na video",
+        example3Sub: "Slots za picha zinazohitajika, picha zinazojirudia, uploads duni, na viungo vya YouTube hukaguliwa kabla ya idhini.",
+        example4Title: "Zuia, shikilia, au pandisha",
+        example4Sub: "Admins wanaweza kushikilia listings, kuomba ushahidi zaidi, kuzuia akaunti, au kupandisha tabia inayotia shaka."
+      }
+    };
+    ["ac", "ny", "rn", "sm"].forEach((lang) => {
+      FRAUD_EXTRA_I18N[lang] = FRAUD_EXTRA_I18N[LANG_FALLBACK[lang] || "en"] || FRAUD_EXTRA_I18N.en;
+    });
+
     function fraudTr(key) {
       const lang = currentLang || "en";
       const fallback = LANG_FALLBACK[lang] || "en";
       return FRAUD_I18N[lang]?.[key]
+        || FRAUD_EXTRA_I18N[lang]?.[key]
         || FRAUD_I18N[fallback]?.[key]
+        || FRAUD_EXTRA_I18N[fallback]?.[key]
         || FRAUD_I18N.en?.[key]
+        || FRAUD_EXTRA_I18N.en?.[key]
         || key;
     }
 
@@ -6186,7 +6260,7 @@
         ["lp-area-highlights-edit-label", "Listing Area Summary (editable)"],
         ["lp-area-highlights-edit-help", "You can adjust this text to improve the final listing description."],
         ["lp-preview-map-label", "Location Preview"],
-        ["lp-location-confirm-label", "I confirm this pin matches my property location."],
+        ["lp-location-confirm-label", "Confirm this location"],
         ["lp-page-title", "List Your Property - Free"],
         ["lp-resolved-map-label", "Resolved Map Location"],
         ["lp-lat-label", "Latitude"],
@@ -6249,6 +6323,16 @@
       if (improveDescBtn) {
         improveDescBtn.innerHTML = `<i class="fas fa-wand-magic-sparkles"></i> ${translatePropertyUi("AI Write Description")}`;
       }
+      setTextById("lp-photo-drop-title", translateListingLabel("Drag & Drop Photos or Click to Browse"));
+      setTextById("lp-photo-drop-sub", translateListingLabel("JPG, PNG or WEBP - up to 10MB each"));
+      setTextById("lp-add-one-photo-btn", translateListingLabel("Add one photo"));
+      setTextById("lp-add-multiple-photo-btn", translateListingLabel("Add multiple photos"));
+      const mainPhotoHelp = document.getElementById("lp-main-photo-help");
+      if (mainPhotoHelp) mainPhotoHelp.innerHTML = `${translateListingLabel("Choose one image as the")} <strong>${translateListingLabel("main photo")}</strong>. ${translateListingLabel("This will appear first in search results.")}`;
+      setTextById("lp-field-agent-assisted-label", translateListingLabel("Field Agent assisted?"));
+      setTextById("lp-field-agent-assisted-help", translateListingLabel("A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you."));
+      setTextById("lp-field-agent-id-label", translateListingLabel("Field Agent ID"));
+      setTextById("lp-field-agent-id-help", translateListingLabel("Only fill this if a Field Agent assisted you."));
       const langTip = document.querySelector("#lp-language-tip span");
       if (langTip) langTip.textContent = translateListingLabel("You can change language any time from the language bar above.");
       setTextById("lp-success-title", translateListingLabel("Listing submitted successfully"));
@@ -6283,6 +6367,7 @@
       const streetInput = document.getElementById("lp-street-name");
       if (streetInput && !streetInput.value) streetInput.placeholder = translateListingLabel("e.g. Kira Road");
       const addressInput = document.getElementById("lp-address");
+      updateLpLocationConfirmButton();
       if (addressInput && !addressInput.value) addressInput.placeholder = translateListingLabel("Street name, plot number, etc.");
       const areaHighlightsInput = document.getElementById("lp-area-highlights-edit");
       if (areaHighlightsInput && !areaHighlightsInput.value) {
@@ -6296,6 +6381,16 @@
       if (mapSyncBtn) {
         mapSyncBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${translateListingLabel("Sync map to selected area")}`;
       }
+      setTextById("lp-address-search-label", translateListingLabel("Find address"));
+      const addressSearchInput = document.getElementById("lp-address-search");
+      if (addressSearchInput && !addressSearchInput.value) {
+        addressSearchInput.placeholder = translateListingLabel("Type street, building, landmark, or village");
+      }
+      const addressSearchBtn = document.getElementById("lp-address-search-btn");
+      if (addressSearchBtn) {
+        addressSearchBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i><span>${translateListingLabel("Find on map")}</span>`;
+      }
+      setTextById("lp-address-search-help", translateListingLabel("Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves."));
       const resetFormBtn = document.getElementById("lp-reset-form-btn");
       if (resetFormBtn) {
         resetFormBtn.innerHTML = `<i class="fas fa-rotate-left"></i> ${translateListingLabel("Clear & Start Again")}`;
@@ -6524,6 +6619,20 @@
       setTextById("fraud-monitor-3-sub", fraudTr("monitor3Sub"));
       setTextById("fraud-monitor-4-title", fraudTr("monitor4Title"));
       setTextById("fraud-monitor-4-sub", fraudTr("monitor4Sub"));
+      setTextById("fraud-safety-pill", fraudTr("safetyPill"));
+      setTextById("fraud-urgent-title", fraudTr("urgentTitle"));
+      setTextById("fraud-urgent-sub", fraudTr("urgentSub"));
+      setTextById("fraud-examples-kicker", fraudTr("examplesKicker"));
+      setTextById("fraud-examples-title", fraudTr("examplesTitle"));
+      setTextById("fraud-examples-report-btn", fraudTr("examplesReportBtn"));
+      setTextById("fraud-example-1-title", fraudTr("example1Title"));
+      setTextById("fraud-example-1-sub", fraudTr("example1Sub"));
+      setTextById("fraud-example-2-title", fraudTr("example2Title"));
+      setTextById("fraud-example-2-sub", fraudTr("example2Sub"));
+      setTextById("fraud-example-3-title", fraudTr("example3Title"));
+      setTextById("fraud-example-3-sub", fraudTr("example3Sub"));
+      setTextById("fraud-example-4-title", fraudTr("example4Title"));
+      setTextById("fraud-example-4-sub", fraudTr("example4Sub"));
     }
 
     function applyLanguageUI() {
@@ -6684,6 +6793,9 @@
         }
       }
       updateListPreview();
+      renderLpVideoPreview();
+      updateLpPhotoRequirements();
+      renderLpPhotoFeedback();
       renderListReviewSummary();
       renderMortgageFinder();
       if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
@@ -8158,7 +8270,7 @@
               <button onclick="openAdminListingReview(${reviewArg})" class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Open Review</button>
               <button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
             </div>
-        </div>`;
+          </div>`;
       }).join("");
     }
 
@@ -11709,10 +11821,10 @@
       const checklist = getLpPhotoChecklist(getListType());
       if (listEl) {
         if (!lpSelectedPhotos.length) {
-          listEl.innerHTML = `<div class="text-sm text-gray-500">No photos selected yet.</div>`;
+          listEl.innerHTML = `<div class="text-sm text-gray-500">${translateListingLabel("No photos selected yet.")}</div>`;
         } else {
           const items = lpSelectedPhotos.map((file) => `<li>${file.name} <span class="text-gray-400">(${Math.round(file.size / 1024)} KB)</span></li>`).join("");
-          listEl.innerHTML = `<div class="font-semibold text-gray-700 mb-1">Selected photos: ${lpSelectedPhotos.length}</div><ul class="list-disc pl-5 space-y-1 text-sm">${items}</ul>`;
+          listEl.innerHTML = `<div class="font-semibold text-gray-700 mb-1">${translateListingLabel("Selected photos")}: ${lpSelectedPhotos.length}</div><ul class="list-disc pl-5 space-y-1 text-sm">${items}</ul>`;
         }
       }
       if (galleryEl) {
@@ -11757,7 +11869,7 @@
         if (!lpSelectedPhotos.length) {
           qualityEl.innerHTML = "";
         } else if (!lpPhotoQualityIssues.length) {
-          qualityEl.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-xl p-3 text-green-800 text-sm">✅ Photo quality check passed. Files are suitable for review.</div>`;
+          qualityEl.innerHTML = `<div class="bg-green-50 border border-green-200 rounded-xl p-3 text-green-800 text-sm">✅ ${translateListingLabel("Photo quality check passed. Files are suitable for review.")}</div>`;
         } else {
           qualityEl.innerHTML = `<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-800 text-sm"><strong>Quality flags:</strong><ul class="list-disc pl-5 mt-1">${lpPhotoQualityIssues.map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
         }
@@ -12733,10 +12845,114 @@
       }
       const confirmEl = document.getElementById("lp-location-confirm");
       if (confirmEl && !preserveConfirm) confirmEl.checked = false;
+      updateLpLocationConfirmButton();
       resolveListPinLocation(nLat, nLng);
       resolveListPinElevation(nLat, nLng);
       updateListPreview();
       renderListReviewSummary();
+    }
+
+    function updateLpLocationConfirmButton() {
+      const btn = document.getElementById("lp-location-confirm-btn");
+      const label = document.getElementById("lp-location-confirm-label");
+      const confirmed = !!document.getElementById("lp-location-confirm")?.checked;
+      if (btn) {
+        btn.className = confirmed
+          ? "mt-2 inline-flex items-center gap-2 bg-green-50 border border-green-200 text-green-800 px-3 py-2 rounded-lg text-xs font-semibold"
+          : "mt-2 inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold";
+      }
+      if (label) label.textContent = confirmed
+        ? translateListingLabel("Location confirmed")
+        : translateListingLabel("Confirm this location");
+    }
+
+    function confirmLpLocationPin() {
+      const lat = parseFloatSafe(lpVal("lp-lat"));
+      const lng = parseFloatSafe(lpVal("lp-lng"));
+      if (lat == null || lng == null) {
+        markLpFieldError("lp-pin-map", "Place or sync the pin so location coordinates are captured.");
+        toast(translateListingLabel("Set property pin on the map."));
+        return;
+      }
+      const confirmEl = document.getElementById("lp-location-confirm");
+      if (confirmEl) confirmEl.checked = true;
+      updateLpLocationConfirmButton();
+      updateListPreview();
+      renderListReviewSummary();
+      toast(translateListingLabel("Location confirmed"));
+    }
+
+    function setLpAddressSearchStatus(message = "", type = "info") {
+      const el = document.getElementById("lp-address-search-status");
+      if (!el) return;
+      if (!message) {
+        el.classList.add("hidden");
+        el.textContent = "";
+        return;
+      }
+      el.classList.remove("hidden", "text-green-800", "text-red-700", "text-amber-700");
+      el.classList.add(type === "error" ? "text-red-700" : type === "warn" ? "text-amber-700" : "text-green-800");
+      el.textContent = message;
+    }
+
+    async function geocodeAddressWithNominatim(query) {
+      if (!query) return null;
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=ug&q=${encodeURIComponent(query)}`;
+        const response = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const row = Array.isArray(rows) ? rows[0] : null;
+        const lat = Number(row?.lat);
+        const lng = Number(row?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const streetName = extractStreetNameFromNominatimAddress(row?.address || {});
+        if (streetName) setLpStreetName(streetName);
+        return { lat, lng, label: row?.display_name || query };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    async function searchLpAddressPin() {
+      const input = document.getElementById("lp-address-search");
+      const raw = (input?.value || "").trim();
+      if (raw.length < 3) {
+        setLpAddressSearchStatus(translateListingLabel("Type at least 3 characters to find an address."), "error");
+        if (input) input.focus();
+        return;
+      }
+
+      setLpAddressSearchStatus(translateListingLabel("Searching for address..."));
+      const region = lpVal("lp-region");
+      const district = lpVal("list-district-sel");
+      const city = lpVal("lp-city");
+      const neighborhood = lpVal("lp-neighborhood");
+      const area = lpVal("lp-area");
+      const hierarchyAnchor = await resolveHierarchyMapAnchor({ region, district, city, neighborhood, area });
+      const query = uniqueTextParts([raw, neighborhood, city, district, region, "Uganda"]).join(", ");
+      let point = await geocodeWithGoogle(query, {
+        bounds: hierarchyAnchor ? buildGoogleBoundsFromCenter(hierarchyAnchor, 35) : null
+      });
+      if (!point || !pointMatchesHierarchyAnchor(point, hierarchyAnchor, 85)) {
+        point = await geocodeAddressWithNominatim(query);
+      }
+      if (!point || !pointMatchesHierarchyAnchor(point, hierarchyAnchor, 110)) {
+        setLpAddressSearchStatus(translateListingLabel("I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village."), "error");
+        return;
+      }
+
+      const addressEl = document.getElementById("lp-address");
+      if (addressEl && (!addressEl.value.trim() || addressEl.dataset.auto === "1")) {
+        addressEl.value = point.label || raw;
+        addressEl.dataset.auto = "0";
+        lpAddressManualOverride = true;
+      }
+      setListPinCoords(point.lat, point.lng, true);
+      setLpResolvedLocationLabel(point.label || raw);
+      hydrateStreetSuggestionsForSelection(point);
+      setLpAddressSearchStatus(translateListingLabel("Address found. Move the pin if needed, then confirm this location."));
+      toast(translateListingLabel("Address found. Confirm the pin before continuing."));
     }
 
     function setLpResolvedLocationLabel(text) {
@@ -13186,7 +13402,14 @@
           }
         }
         if (!/^[a-zA-Z0-9_-]{6,}$/.test(id)) return "";
-        return `https://www.youtube.com/embed/${id}`;
+        const params = new URLSearchParams({
+          rel: "0",
+          modestbranding: "1",
+          playsinline: "1"
+        });
+        const origin = window.location?.origin && window.location.origin !== "null" ? window.location.origin : "";
+        if (origin) params.set("origin", origin);
+        return `https://www.youtube-nocookie.com/embed/${id}?${params.toString()}`;
       } catch (error) {
         return "";
       }
@@ -13209,7 +13432,7 @@
               <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-red-700 hover:underline">${translateListingLabel("Open YouTube")}</a>
             </div>
             <div class="aspect-video bg-black">
-              <iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+              <iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
             </div>
           </div>
         `;
@@ -13570,7 +13793,11 @@
             )}</div>
             <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Field Agent assisted?")}: ${fieldAgentTag}</div>
           </div>
-        </div>`;
+        </div>
+        ${payload.video_url ? `<div class="mt-3">${renderVideoEmbedCard(payload.video_url, {
+          title: translateListingLabel("Video tour"),
+          sub: translateListingLabel("This is how the video tour will appear after approval.")
+        })}</div>` : ""}`;
     }
 
     function applySubmittedListingToLocal(payload, apiData = {}) {
@@ -13753,11 +13980,13 @@
     async function submitLookingRequest() {
       const name = (document.getElementById("looking-name")?.value || "").trim();
       const phone = (document.getElementById("looking-phone")?.value || "").trim();
+      const need = (document.getElementById("looking-need")?.value || "").trim();
       const preferredLocation = (document.getElementById("looking-location")?.value || "").trim();
+      const budget = parseIntSafe(document.getElementById("looking-budget")?.value || "");
       const details = (document.getElementById("looking-details")?.value || "").trim();
 
-      if (!name || !phone || !details) {
-        toast("Please complete name, phone and request details.");
+      if (!name || !phone || (!need && !details)) {
+        toast("Please complete name, phone and what you are looking for.");
         return;
       }
 
@@ -13769,8 +13998,10 @@
             name,
             phone,
             preferred_locations: preferredLocation,
-            listing_type: currentTab === "students" ? "student" : currentTab,
-            requirements: details
+            listing_type: need || (currentTab === "students" ? "student" : currentTab),
+            max_budget: budget || null,
+            requirements: [need ? `Need: ${need}` : "", budget ? `Budget: USh ${budget.toLocaleString()}` : "", details].filter(Boolean).join("\n"),
+            source: "looking_modal"
           }
         });
         await trackEvent("property_request_submit", { preferred_location: preferredLocation || "", tab: currentTab });
@@ -18852,11 +19083,324 @@
       }
     };
 
+    const LISTING_LABEL_I18N_SUPPLEMENTAL = {
+      lg: {
+        "Drag & Drop Photos or Click to Browse": "Sika ebifaananyi oba koona okulonda",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG oba WEBP - buli kimu tekisukka 10MB",
+        "Add one photo": "Yongera ekifaananyi kimu",
+        "Add multiple photos": "Yongera ebifaananyi ebingi",
+        "Choose one image as the": "Londa ekifaananyi kimu nga",
+        "main photo": "ekifaananyi ekikulu",
+        "This will appear first in search results.": "Kino kye kinaasooka okulabika mu by'okunoonya.",
+        "Video tour": "Video y'okulambula",
+        "Video preview": "Okulaba video nga tennatumibwa",
+        "This is how the video tour will appear after review.": "Bwe video y'okulambula ejja okulabika ng'emaze okwekebejjebwa.",
+        "This is how the video tour will appear after approval.": "Bwe video y'okulambula ejja okulabika ng'ekiriziddwa.",
+        "Play the walkthrough without leaving this page.": "Laba walkthrough nga tova ku page eno.",
+        "Open YouTube": "Ggulawo YouTube",
+        "Open video link": "Ggulawo link ya video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Teeka link ya YouTube walkthrough okulaga preview wano.",
+        "Field Agent assisted?": "Field Agent yakuyambye?",
+        "Field Agent ID": "ID ya Field Agent",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa MakaUg oba assistant wa broker yakuyambye.",
+        "Only fill this if a Field Agent assisted you.": "Jjuza kino singa Field Agent yakuyambye yokka."
+        ,"Confirm this location": "Kakasa ekifo kino",
+        "Location confirmed": "Ekifo kikakasiddwa"
+        ,"No photos selected yet.": "Tonnalonda bifaananyi.",
+        "Selected photos": "Ebifaananyi ebirondeddwa",
+        "Photo quality check passed. Files are suitable for review.": "Okukebera omutindo gw'ebifaananyi kuyise. Files zisaanira review."
+      },
+      sw: {
+        "Drag & Drop Photos or Click to Browse": "Buruta picha au bofya kuchagua",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG au WEBP - hadi 10MB kila moja",
+        "Add one photo": "Ongeza picha moja",
+        "Add multiple photos": "Ongeza picha nyingi",
+        "Choose one image as the": "Chagua picha moja kama",
+        "main photo": "picha kuu",
+        "This will appear first in search results.": "Hii itaonekana kwanza kwenye matokeo ya utafutaji.",
+        "Video tour": "Ziara ya video",
+        "Video preview": "Muonekano wa video",
+        "This is how the video tour will appear after review.": "Hivi ndivyo ziara ya video itaonekana baada ya ukaguzi.",
+        "This is how the video tour will appear after approval.": "Hivi ndivyo ziara ya video itaonekana baada ya kuidhinishwa.",
+        "Play the walkthrough without leaving this page.": "Cheza ziara bila kuondoka kwenye ukurasa huu.",
+        "Open YouTube": "Fungua YouTube",
+        "Open video link": "Fungua kiungo cha video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Ongeza kiungo cha YouTube ili kuonyesha muonekano hapa.",
+        "Field Agent assisted?": "Umesaidiwa na wakala wa eneo?",
+        "Field Agent ID": "Kitambulisho cha wakala wa eneo",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Wakala wa eneo ni mtu aliyekusaidia kujaza fomu hii. Chagua ndiyo tu kama MakaUg au msaidizi wa broker alikusaidia.",
+        "Only fill this if a Field Agent assisted you.": "Jaza hii tu kama ulisaidiwa na wakala wa eneo.",
+        "Confirm this location": "Thibitisha eneo hili",
+        "Location confirmed": "Eneo limethibitishwa"
+        ,"No photos selected yet.": "Hakuna picha zilizochaguliwa bado.",
+        "Selected photos": "Picha zilizochaguliwa",
+        "Photo quality check passed. Files are suitable for review.": "Ukaguzi wa ubora wa picha umepita. Faili zinafaa kukaguliwa."
+      },
+      ac: {
+        "Drag & Drop Photos or Click to Browse": "Ywayo cal onyo dii me yero",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG onyo WEBP - naka 10MB acel acel",
+        "Add one photo": "Med cal acel",
+        "Add multiple photos": "Med cal mapol",
+        "Choose one image as the": "Yer cal acel calo",
+        "main photo": "cal madit",
+        "This will appear first in search results.": "Man bino nen mokwongo i adwogi me yeny.",
+        "Video tour": "Video me limo",
+        "Video preview": "Neno video mapwud pe kiketo",
+        "This is how the video tour will appear after review.": "Kit ma video me limo bino nen kwede inge nono.",
+        "This is how the video tour will appear after approval.": "Kit ma video me limo bino nen kwede ka kimoko.",
+        "Play the walkthrough without leaving this page.": "Tuk video labongo weko potbuk man.",
+        "Open YouTube": "Yab YouTube",
+        "Open video link": "Yab link me video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Med link pa YouTube me nyuto video kany.",
+        "Field Agent assisted?": "Field Agent okonyi?",
+        "Field Agent ID": "ID pa Field Agent",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent obedo dano ma okonyi pongo form man. Yer ee ka MakaUg onyo lakony broker okonyi.",
+        "Only fill this if a Field Agent assisted you.": "Pong man ka Field Agent okonyi keken.",
+        "Confirm this location": "Mok kabedo man",
+        "Location confirmed": "Kimoko kabedo"
+        ,"No photos selected yet.": "Pwud pe kiyero cal.",
+        "Selected photos": "Cal ma kiyero",
+        "Photo quality check passed. Files are suitable for review.": "Nono ber pa cal okato. Fail tye maber me nono."
+      },
+      ny: {
+        "Drag & Drop Photos or Click to Browse": "Hurura ebishushani nari okoreho kuronda",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG nari WEBP - obwingi 10MB buri kimwe",
+        "Add one photo": "Ongyera ekishushani kimwe",
+        "Add multiple photos": "Ongyera ebishushani bingi",
+        "Choose one image as the": "Toorana ekishushani kimwe nk'",
+        "main photo": "ekishushani ekikuru",
+        "This will appear first in search results.": "Kino nikyo kirabanza kureebeka omu by'okusherura.",
+        "Video tour": "Video y'okurambura",
+        "Video preview": "Okureeba video etakahikire",
+        "This is how the video tour will appear after review.": "Oku niko video y'okurambura eraareebekyemu bw'eramala kushwijumwa.",
+        "This is how the video tour will appear after approval.": "Oku niko video y'okurambura eraareebekyemu bw'eramala kwikirizibwa.",
+        "Play the walkthrough without leaving this page.": "Zaana walkthrough otarugire kuri page egi.",
+        "Open YouTube": "Guraho YouTube",
+        "Open video link": "Guraho link ya video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Taamu link ya YouTube walkthrough kworeka preview aha.",
+        "Field Agent assisted?": "Field Agent yaakuyambiire?",
+        "Field Agent ID": "ID ya Field Agent",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku MakaUg nari omuyambi wa broker yaakuyambiire.",
+        "Only fill this if a Field Agent assisted you.": "Kijwuzemu ku Field Agent yaakuyambiire.",
+        "Confirm this location": "Hamya omwanya ogu",
+        "Location confirmed": "Omwanya guhamizibwe"
+        ,"No photos selected yet.": "Tihari bishushani byatorainwe.",
+        "Selected photos": "Ebishushani byatorainwe",
+        "Photo quality check passed. Files are suitable for review.": "Okushwijuma omutindo gw'ebishushani kuhikire. Files nishemereire review."
+      },
+      rn: {
+        "Drag & Drop Photos or Click to Browse": "Hurura ebishushani nari okoreho kuronda",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG nari WEBP - obwingi 10MB buri kimwe",
+        "Add one photo": "Ongyera ekishushani kimwe",
+        "Add multiple photos": "Ongyera ebishushani bingi",
+        "Choose one image as the": "Toorana ekishushani kimwe nk'",
+        "main photo": "ekishushani ekikuru",
+        "This will appear first in search results.": "Kino nikyo kirabanza kureebeka omu by'okusherura.",
+        "Video tour": "Video y'okurambura",
+        "Video preview": "Okureeba video etakahikire",
+        "This is how the video tour will appear after review.": "Oku niko video y'okurambura eraareebekyemu bw'eramala kushwijumwa.",
+        "This is how the video tour will appear after approval.": "Oku niko video y'okurambura eraareebekyemu bw'eramala kwikirizibwa.",
+        "Play the walkthrough without leaving this page.": "Zaana walkthrough otarugire kuri page egi.",
+        "Open YouTube": "Guraho YouTube",
+        "Open video link": "Guraho link ya video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Taamu link ya YouTube walkthrough kworeka preview aha.",
+        "Field Agent assisted?": "Field Agent yaakuyambiire?",
+        "Field Agent ID": "ID ya Field Agent",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku MakaUg nari omuyambi wa broker yaakuyambiire.",
+        "Only fill this if a Field Agent assisted you.": "Kijwuzemu ku Field Agent yaakuyambiire.",
+        "Confirm this location": "Hamya ahantu aha",
+        "Location confirmed": "Ahantu hahamizibwa"
+        ,"No photos selected yet.": "Tihari bishushani byatorainwe.",
+        "Selected photos": "Ebishushani byatorainwe",
+        "Photo quality check passed. Files are suitable for review.": "Okushwijuma omutindo gw'ebishushani kuhikire. Files nishemereire review."
+      },
+      sm: {
+        "Drag & Drop Photos or Click to Browse": "Sika ebifaananyi oba koona okulonda",
+        "JPG, PNG or WEBP - up to 10MB each": "JPG, PNG oba WEBP - buli kimu tekisukka 10MB",
+        "Add one photo": "Yongera ekifaananyi kimu",
+        "Add multiple photos": "Yongera ebifaananyi ebingi",
+        "Choose one image as the": "Londa ekifaananyi kimu nga",
+        "main photo": "ekifaananyi ekikulu",
+        "This will appear first in search results.": "Kino kye kinaasooka okulabika mu by'okunoonya.",
+        "Video tour": "Video y'okulambula",
+        "Video preview": "Okulaba video nga tennatumibwa",
+        "This is how the video tour will appear after review.": "Bwe video y'okulambula ejja okulabika ng'emaze okwekebejjebwa.",
+        "This is how the video tour will appear after approval.": "Bwe video y'okulambula ejja okulabika ng'ekiriziddwa.",
+        "Play the walkthrough without leaving this page.": "Laba walkthrough nga tova ku page eno.",
+        "Open YouTube": "Ggulawo YouTube",
+        "Open video link": "Ggulawo link ya video",
+        "Add a YouTube walkthrough link to show an embedded preview here.": "Teeka link ya YouTube walkthrough okulaga preview wano.",
+        "Field Agent assisted?": "Field Agent yakuyambye?",
+        "Field Agent ID": "ID ya Field Agent",
+        "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa MakaUg oba assistant wa broker yakuyambye.",
+        "Only fill this if a Field Agent assisted you.": "Jjuza kino singa Field Agent yakuyambye yokka.",
+        "Confirm this location": "Kakasa ekifo kino",
+        "Location confirmed": "Ekifo kikakasiddwa"
+        ,"No photos selected yet.": "Tonnalonda bifaananyi.",
+        "Selected photos": "Ebifaananyi ebirondeddwa",
+        "Photo quality check passed. Files are suitable for review.": "Okukebera omutindo gw'ebifaananyi kuyise. Files zisaanira review."
+      }
+    };
+
+    (() => {
+      const extraListingLabels = {
+        lg: {
+          "Find address": "Noonya address",
+          "Type street, building, landmark, or village": "Wandiika oluguudo, ekizimbe, landmark oba ekyalo",
+          "Find on map": "Kizuule ku maapu",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Kozesa oluguudo, landmark, ekyalo oba trading centre ekiri okumpi. Kakasa pin ng'emaze okutambula.",
+          "Type at least 3 characters to find an address.": "Wandiika ennukuta waakiri 3 okuzuula address.",
+          "Searching for address...": "Noonya address...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Sisobodde kuteeka address eyo. Gezaako oluguudo, trading centre, essomero, muzikiti, kkanisa oba ekyalo ekiri okumpi.",
+          "Address found. Move the pin if needed, then confirm this location.": "Address ezuliddwa. Tambuza pin bwe kiba kyetaagisa, oluvannyuma okakase ekifo kino.",
+          "Address found. Confirm the pin before continuing.": "Address ezuliddwa. Kakasa pin nga tonnagenda mu maaso.",
+          "Front of property": "Ekifaananyi ky'ebbali ery'omu maaso",
+          "Living room": "Ekisenge ky'okutuula",
+          "Kitchen": "Eddiiro",
+          "Bedroom": "Ekisenge ky'okwebaka",
+          "Bathroom": "Ekinaabiro",
+          "Primary exterior image.": "Ekifaananyi ekikulu eky'ebweru.",
+          "Wide, well-lit shot.": "Ekifaananyi ekigazi era ekirina ekitangaala.",
+          "Show fittings and worktops.": "Laga fittings n'eby'okukolerako.",
+          "At least one bedroom clearly shown.": "Laga waakiri ekisenge kimu eky'okwebaka bulungi.",
+          "At least one bathroom image.": "Teekawo waakiri ekifaananyi kimu eky'ekinaabiro.",
+          "Choose photo category": "Londa ekika ky'ekifaananyi",
+          "Set as main": "Kifuule ekikulu",
+          "Main photo": "Ekifaananyi ekikulu"
+        },
+        sw: {
+          "Find address": "Tafuta anwani",
+          "Type street, building, landmark, or village": "Andika barabara, jengo, alama, au kijiji",
+          "Find on map": "Tafuta kwenye ramani",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Tumia barabara, alama, kijiji, au kituo cha biashara kilicho karibu. Thibitisha pin baada ya kusogea.",
+          "Type at least 3 characters to find an address.": "Andika angalau herufi 3 kutafuta anwani.",
+          "Searching for address...": "Inatafuta anwani...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Sijaweza kuweka anwani hiyo. Jaribu barabara, kituo cha biashara, shule, msikiti, kanisa, au kijiji cha karibu.",
+          "Address found. Move the pin if needed, then confirm this location.": "Anwani imepatikana. Sogeza pin ikihitajika, kisha thibitisha eneo hili.",
+          "Address found. Confirm the pin before continuing.": "Anwani imepatikana. Thibitisha pin kabla ya kuendelea.",
+          "Front of property": "Mbele ya mali",
+          "Living room": "Sebule",
+          "Kitchen": "Jikoni",
+          "Bedroom": "Chumba cha kulala",
+          "Bathroom": "Bafu",
+          "Primary exterior image.": "Picha kuu ya nje.",
+          "Wide, well-lit shot.": "Picha pana yenye mwanga mzuri.",
+          "Show fittings and worktops.": "Onyesha fittings na sehemu za kazi.",
+          "At least one bedroom clearly shown.": "Onyesha angalau chumba kimoja cha kulala wazi.",
+          "At least one bathroom image.": "Weka angalau picha moja ya bafu.",
+          "Choose photo category": "Chagua aina ya picha",
+          "Set as main": "Weka kama kuu",
+          "Main photo": "Picha kuu"
+        },
+        ac: {
+          "Find address": "Yeny address",
+          "Type street, building, landmark, or village": "Coo yoo, gedo, landmark, onyo gang",
+          "Find on map": "Nong i map",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Tii ki yoo, landmark, gang, onyo trading centre ma cok. Mok pin ka otyeko wot.",
+          "Type at least 3 characters to find an address.": "Coo nukuta 3 me yeny address.",
+          "Searching for address...": "Tye ka yeny address...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Pe atwero keto address meno. Tem yoo, trading centre, school, mosque, church, onyo gang ma cok.",
+          "Address found. Move the pin if needed, then confirm this location.": "Address ononge. Wot ki pin ka mite, eka mok kabedo man.",
+          "Address found. Confirm the pin before continuing.": "Address ononge. Mok pin mapwod pe imede.",
+          "Front of property": "Anyim property",
+          "Living room": "Kabedo me bedo",
+          "Kitchen": "Jiko",
+          "Bedroom": "Bur ot idwogi",
+          "Bathroom": "Kabedo me lwok",
+          "Primary exterior image.": "Cal madit me woko.",
+          "Wide, well-lit shot.": "Cal malac ma ler maber.",
+          "Show fittings and worktops.": "Nyut fittings ki kabedo me tic.",
+          "At least one bedroom clearly shown.": "Nyut bur ot acel maleng.",
+          "At least one bathroom image.": "Ket cal acel pa bathroom.",
+          "Choose photo category": "Yer kit cal",
+          "Set as main": "Ket calo madit",
+          "Main photo": "Cal madit"
+        },
+        ny: {
+          "Find address": "Sherura address",
+          "Type street, building, landmark, or village": "Handika omuhanda, ekizimbe, landmark, nari ekyaro",
+          "Find on map": "Kisherure aha maapu",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Kozesa omuhanda, landmark, ekyaro, nari trading centre eri haihi. Hamya pin bw'emara kwimuka.",
+          "Type at least 3 characters to find an address.": "Handika waakiri enyuguta 3 kusherura address.",
+          "Searching for address...": "Ninsherura address...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Tinsoboire kuta address egyo. Gezaho omuhanda, trading centre, ishure, mosque, kanisa, nari ekyaro ekiri haihi.",
+          "Address found. Move the pin if needed, then confirm this location.": "Address ebonetse. Imura pin kyaba nikyetaagisa, hanyuma ohamye omwanya ogu.",
+          "Address found. Confirm the pin before continuing.": "Address ebonetse. Hamya pin otakagumizamu.",
+          "Front of property": "Aha maisho ga property",
+          "Living room": "Ekyumba ky'okushutama",
+          "Kitchen": "Ekiyungu",
+          "Bedroom": "Ekyumba ky'okwebaka",
+          "Bathroom": "Bathroom",
+          "Primary exterior image.": "Ekishushani ekikuru eky'aheeru.",
+          "Wide, well-lit shot.": "Ekishushani ekigazi kandi kirikwaka gye.",
+          "Show fittings and worktops.": "Yoreka fittings n'aha kukorera.",
+          "At least one bedroom clearly shown.": "Yoreka waakiri ekyumba kimwe ky'okwebaka gye.",
+          "At least one bathroom image.": "Taaho waakiri ekishushani kimwe kya bathroom.",
+          "Choose photo category": "Toorana ekika ky'ekishushani",
+          "Set as main": "Kigire ekikuru",
+          "Main photo": "Ekishushani ekikuru"
+        },
+        rn: {
+          "Find address": "Sherura address",
+          "Type street, building, landmark, or village": "Handika omuhanda, ekizimbe, landmark, nari ekyaro",
+          "Find on map": "Kisherure aha maapu",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Kozesa omuhanda, landmark, ekyaro, nari trading centre eri haihi. Hamya pin bw'emara kwimuka.",
+          "Type at least 3 characters to find an address.": "Handika waakiri enyuguta 3 kusherura address.",
+          "Searching for address...": "Ninsherura address...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Tinsoboire kuta address egyo. Gezaho omuhanda, trading centre, ishure, mosque, kanisa, nari ekyaro ekiri haihi.",
+          "Address found. Move the pin if needed, then confirm this location.": "Address ebonetse. Imura pin kyaba nikyetaagisa, hanyuma ohamye ahantu aha.",
+          "Address found. Confirm the pin before continuing.": "Address ebonetse. Hamya pin otakagumizamu.",
+          "Front of property": "Aha maisho ga property",
+          "Living room": "Ekyumba ky'okushutama",
+          "Kitchen": "Ekiyungu",
+          "Bedroom": "Ekyumba ky'okwebaka",
+          "Bathroom": "Bathroom",
+          "Primary exterior image.": "Ekishushani ekikuru eky'aheeru.",
+          "Wide, well-lit shot.": "Ekishushani ekigazi kandi kirikwaka gye.",
+          "Show fittings and worktops.": "Yoreka fittings n'aha kukorera.",
+          "At least one bedroom clearly shown.": "Yoreka waakiri ekyumba kimwe ky'okwebaka gye.",
+          "At least one bathroom image.": "Taaho waakiri ekishushani kimwe kya bathroom.",
+          "Choose photo category": "Toorana ekika ky'ekishushani",
+          "Set as main": "Kigire ekikuru",
+          "Main photo": "Ekishushani ekikuru"
+        },
+        sm: {
+          "Find address": "Noonya address",
+          "Type street, building, landmark, or village": "Wandiika oluguudo, ekizimbe, landmark oba ekyalo",
+          "Find on map": "Kizuule ku maapu",
+          "Use the closest street, landmark, village, or trading centre. Confirm the pin after it moves.": "Kozesa oluguudo, landmark, ekyalo oba trading centre ekiri okumpi. Kakasa pin ng'emaze okutambula.",
+          "Type at least 3 characters to find an address.": "Wandiika ennukuta waakiri 3 okuzuula address.",
+          "Searching for address...": "Noonya address...",
+          "I could not place that address. Try a nearby road, trading centre, school, mosque, church, or village.": "Sisobodde kuteeka address eyo. Gezaako oluguudo, trading centre, essomero, muzikiti, kkanisa oba ekyalo ekiri okumpi.",
+          "Address found. Move the pin if needed, then confirm this location.": "Address ezuliddwa. Tambuza pin bwe kiba kyetaagisa, oluvannyuma okakase ekifo kino.",
+          "Address found. Confirm the pin before continuing.": "Address ezuliddwa. Kakasa pin nga tonnagenda mu maaso.",
+          "Front of property": "Ekifaananyi ky'ebbali ery'omu maaso",
+          "Living room": "Ekisenge ky'okutuula",
+          "Kitchen": "Eddiiro",
+          "Bedroom": "Ekisenge ky'okwebaka",
+          "Bathroom": "Ekinaabiro",
+          "Primary exterior image.": "Ekifaananyi ekikulu eky'ebweru.",
+          "Wide, well-lit shot.": "Ekifaananyi ekigazi era ekirina ekitangaala.",
+          "Show fittings and worktops.": "Laga fittings n'eby'okukolerako.",
+          "At least one bedroom clearly shown.": "Laga waakiri ekisenge kimu eky'okwebaka bulungi.",
+          "At least one bathroom image.": "Teekawo waakiri ekifaananyi kimu eky'ekinaabiro.",
+          "Choose photo category": "Londa ekika ky'ekifaananyi",
+          "Set as main": "Kifuule ekikulu",
+          "Main photo": "Ekifaananyi ekikulu"
+        }
+      };
+      Object.entries(extraListingLabels).forEach(([lang, labels]) => {
+        Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+      });
+    })();
+
     function translateListingLabel(text) {
       const lang = currentLang || "en";
       const fallback = LANG_FALLBACK[lang] || "en";
       return LISTING_LABEL_I18N[lang]?.[text]
+        || LISTING_LABEL_I18N_SUPPLEMENTAL[lang]?.[text]
         || LISTING_LABEL_I18N[fallback]?.[text]
+        || LISTING_LABEL_I18N_SUPPLEMENTAL[fallback]?.[text]
         || LISTING_LABEL_I18N.en?.[text]
         || text;
     }
@@ -20891,7 +21435,7 @@
       const infoWindow = new google.maps.InfoWindow();
       (list || []).forEach((p) => {
         const point = getListingMapPoint(p);
-        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
+        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng) || !isLikelyUgandaCoordinate(point.lat, point.lng)) return;
         const marker = new google.maps.Marker({
           position: { lat: point.lat, lng: point.lng },
           map,
@@ -21100,7 +21644,7 @@
       if (!window.L) return;
       list.forEach((p) => {
         const point = getListingMapPoint(p);
-        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) return;
+        if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng) || !isLikelyUgandaCoordinate(point.lat, point.lng)) return;
         const marker = L.marker([point.lat, point.lng]).addTo(maps[mapId]);
         marker.bindPopup(buildMapListingPopupHtml(p));
         marker.on("mouseover", () => marker.openPopup());
