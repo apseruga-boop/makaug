@@ -2029,7 +2029,7 @@
           <p id="lp-success-contact" class="text-sm text-green-800 mt-2">We will contact you by WhatsApp or email once this listing is approved.</p>
           <p id="lp-success-status" class="text-xs text-green-700 mt-2"></p>
           <div class="mt-3 text-sm text-green-900">
-            <div><strong id="lp-success-ref-label">Inquiry Number:</strong> <span id="lp-success-ref">-</span></div>
+            <div><strong id="lp-success-ref-label">Inquiry Number:</strong> <span id="lp-success-ref">Pending reference</span></div>
             <div><strong id="lp-success-support-label">Support:</strong> info@makaug.com</div>
           </div>
           <div class="mt-4 bg-white border border-green-200 rounded-xl p-4">
@@ -2099,13 +2099,8 @@
               <input id="lp-title" oninput="updateListPreview(); updateLpTitleExampleState()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 4-Bedroom Family House in Muyenga">
             </div>
             <div class="md:col-span-2 bg-white border border-green-100 rounded-2xl p-4">
-              <h3 id="lp-location-guide-title" class="text-sm font-bold text-gray-800 mb-2">Location setup (step-by-step)</h3>
-              <ol class="space-y-1.5 text-sm text-gray-700">
-                <li id="lp-location-step-1"><strong>1.</strong> Select region, then district.</li>
-                <li id="lp-location-step-2"><strong>2.</strong> Select city/town, then neighbourhood/zone.</li>
-                <li id="lp-location-step-3"><strong>3.</strong> Confirm area, street, and optionally type full address.</li>
-                <li id="lp-location-step-4"><strong>4.</strong> Confirm the map pin matches your property location.</li>
-              </ol>
+              <h3 id="lp-location-guide-title" class="text-sm font-bold text-gray-800 mb-2">Find address or place</h3>
+              <p id="lp-location-guide-copy" class="text-sm text-gray-700">Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.</p>
             </div>
             <div id="lp-location-intro" class="md:col-span-2 lp-location-intro">
               <div class="lp-location-step-chip">
@@ -2888,6 +2883,122 @@
     </div>
   </div>
 
+  <div id="page-advertiser-dashboard" class="page">
+    <div class="bg-amber-700 py-8 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <h1 class="text-3xl font-black serif">Advertiser Dashboard</h1>
+        <p class="text-amber-100 mt-1">Campaign requests, placements, invoices, payment links, and performance follow-up</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <div id="advertiser-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
+        <div class="text-4xl mb-3">📣</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Advertiser sign in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Sign in as an advertiser to create campaigns and track advertising follow-up.</p>
+        <div class="flex justify-center gap-3 flex-wrap">
+          <button onclick="openAuthSignIn('advertiser')" class="bg-amber-700 hover:bg-amber-600 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Advertiser</button>
+          <button onclick="openAuthSignUp('advertiser')" class="border border-amber-700 text-amber-800 hover:bg-amber-50 px-6 py-2.5 rounded-xl font-semibold">Create Advertiser Account</button>
+        </div>
+      </div>
+
+      <div id="advertiser-body" class="hidden space-y-6">
+        <div class="bg-white border border-amber-100 rounded-2xl p-6">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h2 id="advertiser-dashboard-name" class="text-2xl font-black text-gray-900">Advertiser Account</h2>
+              <p id="advertiser-dashboard-status" class="text-sm text-gray-500 mt-1">Submit campaigns, request payment links, and monitor MakaUg follow-up.</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="showPage('about'); openPageMod('advertise')" class="bg-amber-700 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">View Packages</button>
+              <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Campaign Requests</div>
+            <div id="advertiser-stat-campaigns" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Payment Status</div>
+            <div id="advertiser-stat-payment" class="text-lg font-black text-amber-700 mt-2">Pending setup</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Leads</div>
+            <div id="advertiser-stat-leads" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Clicks</div>
+            <div id="advertiser-stat-clicks" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Spend</div>
+            <div id="advertiser-stat-spend" class="text-xl font-black text-gray-900 mt-2">UGX 0</div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800">Create Campaign Request</h2>
+            <p class="text-sm text-gray-500 mt-1 mb-4">This sends a structured advertiser lead to MakaUg. Payment links and campaign approval are completed after review.</p>
+            <form id="advertiser-dashboard-campaign-form" onsubmit="submitAdvertiserDashboardCampaign(event)" class="space-y-3">
+              <input name="business_name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Business / brand name" required>
+              <div class="grid md:grid-cols-2 gap-3">
+                <input name="full_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Contact name" required>
+                <input name="phone" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="WhatsApp / phone">
+                <input name="email" type="email" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Email">
+                <input name="budget_ugx" type="number" min="0" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Budget in UGX">
+              </div>
+              <select name="goal" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="listing_promotion">Promote property listing</option>
+                <option value="broker_spotlight">Broker spotlight</option>
+                <option value="student_housing">Student accommodation sponsor</option>
+                <option value="commercial_land">Commercial / land campaign</option>
+                <option value="mortgage_partner">Mortgage partner leads</option>
+              </select>
+              <div class="grid md:grid-cols-2 gap-3">
+                <input name="target_locations" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Target areas, e.g. Kampala, Wakiso">
+                <input name="desired_duration_days" type="number" min="1" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Duration in days">
+              </div>
+              <textarea name="message" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Describe the audience, listing, creative, offer, or campaign objective."></textarea>
+              <div id="advertiser-dashboard-campaign-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
+              <button type="submit" class="w-full bg-amber-700 hover:bg-amber-600 text-white py-3 rounded-xl font-bold">Submit Campaign Request</button>
+            </form>
+          </div>
+
+          <div class="space-y-5">
+            <div class="bg-white border border-gray-200 rounded-2xl p-5">
+              <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="text-xl font-bold text-gray-800">Current Placement Options</h2>
+                <button onclick="hydrateAdvertiserDashboardPlacements()" class="text-sm font-semibold text-amber-700">Refresh</button>
+              </div>
+              <div id="advertiser-dashboard-placements" class="grid sm:grid-cols-2 gap-3 text-sm">
+                <div class="text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">Loading placement options...</div>
+              </div>
+            </div>
+
+            <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+              <h2 class="text-xl font-bold text-amber-950">Invoices & Payment Links</h2>
+              <p class="text-sm text-amber-900 mt-2">Payment links are generated after MakaUg reviews the campaign request and confirms package pricing. Provider payments are logged safely; if payment providers are not configured, admins can mark manual payments in the advertising desk.</p>
+              <div id="advertiser-dashboard-payments" class="mt-3 text-sm text-amber-900 font-semibold">No payment link has been issued yet.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <h2 class="text-xl font-bold text-gray-800 mb-3">Reports</h2>
+          <div id="advertiser-dashboard-reports" class="grid md:grid-cols-4 gap-3 text-sm">
+            <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Impressions</strong><br><span class="text-gray-500">Available after campaign launch.</span></div>
+            <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Clicks</strong><br><span class="text-gray-500">Tracked on approved placements.</span></div>
+            <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>WhatsApp Leads</strong><br><span class="text-gray-500">Reported when CTA tracking is enabled.</span></div>
+            <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Revenue</strong><br><span class="text-gray-500">Visible to admin and advertiser account.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="page-admin-dashboard" class="page">
     <div class="bg-gray-900 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
@@ -3662,7 +3773,7 @@
       <div class="mt-4 grid sm:grid-cols-2 gap-3">
         <div class="bg-green-50 border border-green-100 rounded-xl p-3">
           <div class="text-xs uppercase tracking-wide text-green-700 font-semibold" id="listing-submit-ref-label">Inquiry Number</div>
-          <div id="listing-submit-ref" class="text-lg font-black text-green-900 mt-1">-</div>
+          <div id="listing-submit-ref" class="text-lg font-black text-green-900 mt-1">Pending reference</div>
         </div>
         <div class="bg-green-50 border border-green-100 rounded-xl p-3">
           <div class="text-xs uppercase tracking-wide text-green-700 font-semibold" id="listing-submit-status-label">Status</div>
@@ -3725,10 +3836,12 @@
 
       <div id="auth-panel-signin">
         <label class="block text-sm font-medium text-gray-800 mb-2">Sign in as</label>
-        <div class="bg-gray-100 rounded-xl p-1 flex gap-1 mb-4">
+        <div class="bg-gray-100 rounded-xl p-1 grid grid-cols-2 md:grid-cols-5 gap-1 mb-4">
           <button id="auth-audience-finder" title="Property Finder: someone searching for properties to buy or rent." type="button" onclick="setAuthSignInAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
+          <button id="auth-audience-student" title="Student: someone searching for student accommodation." type="button" onclick="setAuthSignInAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-audience-agent" title="Broker: a property professional who lists and manages properties." type="button" onclick="setAuthSignInAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
           <button id="auth-audience-field" title="Field Agent: signs up owners/brokers/properties and tracks approved output." type="button" onclick="setAuthSignInAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-audience-advertiser" title="Advertiser: creates campaign requests and tracks advertising follow-up." type="button" onclick="setAuthSignInAudience('advertiser')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Advertiser</button>
           <button id="auth-audience-admin" data-private-admin="1" title="Admin: internal control access for approvals, moderation, and platform operations." type="button" onclick="setAuthSignInAudience('admin')" class="hidden flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Admin</button>
         </div>
         <p id="auth-audience-help" class="text-xs text-gray-500 mb-4">
@@ -3765,11 +3878,12 @@
 
       <div id="auth-panel-signup" class="hidden">
         <label class="block text-sm font-medium text-gray-800 mb-2">Create account as</label>
-        <div class="bg-gray-100 rounded-xl p-1 grid grid-cols-2 md:grid-cols-4 gap-1 mb-3">
+        <div class="bg-gray-100 rounded-xl p-1 grid grid-cols-2 md:grid-cols-5 gap-1 mb-3">
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
           <button id="auth-signup-audience-student" title="Create account for student accommodation search, alerts, and viewings." type="button" onclick="setAuthSignUpAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
           <button id="auth-signup-audience-field" title="Apply to become a MakaUg Field Agent." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-signup-audience-advertiser" title="Create advertiser account for campaign requests." type="button" onclick="setAuthSignUpAudience('advertiser')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Advertiser</button>
         </div>
         <p id="auth-signup-help" class="text-xs text-gray-500 mb-4">
           Property Finder: create an account to save properties, get alerts, and track searches.
@@ -6520,11 +6634,8 @@
         ["lp-location-intro-title", "Tell us where the property is"],
         ["lp-location-intro-copy", "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin."],
         ["lp-pin-sub", "The map follows your selected location. Move the pin if needed, then confirm."],
-        ["lp-location-guide-title", "Location setup (step-by-step)"],
-        ["lp-location-step-1", "1. Select region, then district."],
-        ["lp-location-step-2", "2. Select city/town, then neighbourhood/zone."],
-        ["lp-location-step-3", "3. Confirm area, street, and optionally type full address."],
-        ["lp-location-step-4", "4. Confirm the map pin matches your property location."],
+        ["lp-location-guide-title", "Find address or place"],
+        ["lp-location-guide-copy", "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located."],
         ["lp-alt-label", "Altitude (m)"],
         ["lp-step2-title", "Photos & Media"],
         ["lp-upload-label", "Upload Photos (min 5, max 20) *"],
@@ -7362,11 +7473,13 @@
       if (preferred === "admin") return "admin";
       if (preferred === "field_agent" || preferred === "field") return "field_agent";
       if (preferred === "agent") return "agent";
+      if (preferred === "advertiser") return "advertiser";
       if (preferred === "student") return "student";
       if (preferred === "finder") return "finder";
       if (user?.role === "admin") return "admin";
       if (user?.role === "field_agent") return "field_agent";
       if (user?.role === "agent_broker") return "agent";
+      if (profileData.account_kind === "advertiser" || profileData.audience === "advertiser") return "advertiser";
       if (profileData.account_kind === "student" || profileData.seeker_type === "student") return "student";
       return "finder";
     }
@@ -7759,6 +7872,14 @@
           if (audienceHelp) audienceHelp.textContent = "Broker: licensed or active property professional who lists and manages properties.";
           if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
           if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or broker@email.com";
+        } else if (authSignInAudience === "student") {
+          if (audienceHelp) audienceHelp.textContent = "Student: for campus accommodation matches, saved rooms, alerts, and viewing support.";
+          if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
+          if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or student@email.com";
+        } else if (authSignInAudience === "advertiser") {
+          if (audienceHelp) audienceHelp.textContent = "Advertiser: for campaigns, payment links, creative review, and performance follow-up.";
+          if (identifierLabel) identifierLabel.textContent = "Advertiser Phone or Email";
+          if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or ads@email.com";
         } else {
           if (audienceHelp) audienceHelp.textContent = "Property Finder: for people searching properties to buy or rent.";
           if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
@@ -7787,14 +7908,22 @@
         ? "admin"
         : (normalized === "agent"
           ? "agent"
-          : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"));
+          : (normalized === "student"
+            ? "student"
+            : (normalized === "advertiser"
+              ? "advertiser"
+              : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
       setAudienceButtonState(
         authSignInAudience === "admin"
           ? "auth-audience-admin"
           : (authSignInAudience === "agent"
             ? "auth-audience-agent"
-            : (authSignInAudience === "field_agent" ? "auth-audience-field" : "auth-audience-finder")),
-        ["auth-audience-finder", "auth-audience-agent", "auth-audience-field", "auth-audience-admin"]
+            : (authSignInAudience === "student"
+              ? "auth-audience-student"
+              : (authSignInAudience === "advertiser"
+                ? "auth-audience-advertiser"
+                : (authSignInAudience === "field_agent" ? "auth-audience-field" : "auth-audience-finder")))),
+        ["auth-audience-finder", "auth-audience-student", "auth-audience-agent", "auth-audience-field", "auth-audience-advertiser", "auth-audience-admin"]
       );
       updateAdminAccessEntrypoints();
       updateAuthSignInUi();
@@ -7816,6 +7945,12 @@
         if (agentRegWrap) agentRegWrap.classList.remove("hidden");
       } else if (authSignUpAudience === "student") {
         help.textContent = "Student: create an account for campus accommodation matches, saved rooms, alerts, and viewing support.";
+        roleInput.value = "Buyer / Renter";
+        formWrap.classList.remove("hidden");
+        fieldNote.classList.add("hidden");
+        if (agentRegWrap) agentRegWrap.classList.add("hidden");
+      } else if (authSignUpAudience === "advertiser") {
+        help.textContent = "Advertiser: create an account to request campaigns, payment links, creative review, and reports.";
         roleInput.value = "Buyer / Renter";
         formWrap.classList.remove("hidden");
         fieldNote.classList.add("hidden");
@@ -7845,7 +7980,9 @@
         ? "agent"
         : (authSignUpAudience === "field_agent"
           ? "field_agent"
-          : String(accountKindEl?.value || "finder").toLowerCase());
+          : (authSignUpAudience === "advertiser"
+            ? "advertiser"
+            : String(accountKindEl?.value || "finder").toLowerCase()));
       if (accountKindEl) {
         accountKindEl.classList.toggle("hidden", authSignUpAudience !== "finder");
       }
@@ -7871,6 +8008,13 @@
         if (areas) areas.placeholder = "Primary operation areas";
         if (budget) budget.placeholder = "Transport / coverage notes";
         if (timeline) timeline.placeholder = "When can you start?";
+      } else if (authSignUpAudience === "advertiser") {
+        if (title) title.textContent = "Tell us about your advertising goals";
+        if (subtitle) subtitle.textContent = "This helps MakaUg prepare the right campaign package, placement, and payment follow-up.";
+        if (goal) goal.placeholder = "Campaign goal, e.g. promote listings, broker spotlight";
+        if (areas) areas.placeholder = "Target areas or audiences";
+        if (budget) budget.placeholder = "Monthly or campaign budget";
+        if (timeline) timeline.placeholder = "Campaign timing";
       } else {
         if (title) title.textContent = accountKind === "student" ? "Tell us about your student search" : "Help us personalise your account";
         if (subtitle) subtitle.textContent = accountKind === "student" ? "This helps MakaUg match you to safer accommodation near your campus." : "A few optional details help MakaUg send better property matches and WhatsApp updates.";
@@ -7889,7 +8033,7 @@
       return {
         audience: authSignUpAudience,
         account_kind: accountKind,
-        seeker_type: accountKind === "student" ? "student" : (authSignUpAudience === "agent" ? "broker" : "casual_browser"),
+        seeker_type: accountKind === "student" ? "student" : (authSignUpAudience === "agent" ? "broker" : (authSignUpAudience === "advertiser" ? "advertiser" : "casual_browser")),
         onboarding_source: authSignUpAudience || "finder",
         student_campus: get("auth-profile-university"),
         student_university: get("auth-profile-university"),
@@ -7930,14 +8074,18 @@
         ? "agent"
         : (normalized === "student"
           ? "student"
-          : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"));
+          : (normalized === "advertiser"
+            ? "advertiser"
+            : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")));
       setAudienceButtonState(
         authSignUpAudience === "agent"
           ? "auth-signup-audience-agent"
           : (authSignUpAudience === "student"
             ? "auth-signup-audience-student"
-            : (authSignUpAudience === "field_agent" ? "auth-signup-audience-field" : "auth-signup-audience-finder")),
-        ["auth-signup-audience-finder", "auth-signup-audience-student", "auth-signup-audience-agent", "auth-signup-audience-field"]
+            : (authSignUpAudience === "advertiser"
+              ? "auth-signup-audience-advertiser"
+              : (authSignUpAudience === "field_agent" ? "auth-signup-audience-field" : "auth-signup-audience-finder"))),
+        ["auth-signup-audience-finder", "auth-signup-audience-student", "auth-signup-audience-agent", "auth-signup-audience-field", "auth-signup-audience-advertiser"]
       );
       updateAuthSignUpUi();
     }
@@ -7957,6 +8105,9 @@
       } else if (mode === "field_agent") {
         showPage("field-dashboard");
         renderFieldDashboard();
+      } else if (mode === "advertiser") {
+        showPage("advertiser-dashboard");
+        renderAdvertiserDashboard();
       } else if (mode === "student") {
         showPage("student-dashboard");
         renderStudentDashboard();
@@ -8375,6 +8526,103 @@
       }
     }
 
+    async function hydrateAdvertiserDashboardPlacements() {
+      const wrap = document.getElementById("advertiser-dashboard-placements");
+      if (!wrap) return;
+      try {
+        const res = await apiRequest("/api/advertising/placements");
+        const rows = Array.isArray(res?.data) ? res.data : [];
+        if (!rows.length) {
+          wrap.innerHTML = `<div class="sm:col-span-2 text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live placement catalogue is available yet. MakaUg will confirm package availability after inquiry.</div>`;
+          return;
+        }
+        wrap.innerHTML = rows.slice(0, 8).map((slot) => `
+          <div class="rounded-xl border border-gray-200 bg-white p-3">
+            <div class="text-xs font-black text-gray-900">${adminEscape(slot.label || slot.key || "Advertising placement")}</div>
+            <div class="text-[11px] text-gray-500 mt-1">${adminEscape(slot.page_key || "makaug")} • ${adminEscape(slot.size_label || slot.slot_type || "placement")}</div>
+            <div class="text-sm font-black text-amber-700 mt-2">From ${adminEscape(adMoney(slot.base_price_ugx || 0))}</div>
+          </div>
+        `).join("");
+      } catch (error) {
+        wrap.innerHTML = `<div class="sm:col-span-2 text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">Placement catalogue unavailable. Campaign requests still submit safely and admins can price them from Advertising Desk.</div>`;
+      }
+    }
+
+    async function renderAdvertiserDashboard() {
+      const gate = document.getElementById("advertiser-auth-gate");
+      const body = document.getElementById("advertiser-body");
+      if (!gate || !body) return;
+
+      const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+      if (!authState?.user || mode !== "advertiser") {
+        gate.classList.remove("hidden");
+        body.classList.add("hidden");
+        return;
+      }
+
+      gate.classList.add("hidden");
+      body.classList.remove("hidden");
+      const user = authState.user || {};
+      setTextById("advertiser-dashboard-name", `${user.first_name || "Advertiser"} ${user.last_name || ""}`.trim() || "Advertiser Account");
+      setTextById("advertiser-dashboard-status", "Campaign requests are reviewed by MakaUg before payment links, invoices, and live placement approval.");
+      setTextById("advertiser-stat-campaigns", "0");
+      setTextById("advertiser-stat-payment", "Awaiting first campaign");
+      setTextById("advertiser-stat-leads", "0");
+      setTextById("advertiser-stat-clicks", "0");
+      setTextById("advertiser-stat-spend", "UGX 0");
+      await hydrateAdvertiserDashboardPlacements();
+    }
+
+    async function submitAdvertiserDashboardCampaign(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const status = document.getElementById("advertiser-dashboard-campaign-status");
+      const data = new FormData(form);
+      const goal = String(data.get("goal") || "listing_promotion");
+      const payload = {
+        full_name: String(data.get("full_name") || "").trim(),
+        business_name: String(data.get("business_name") || "").trim(),
+        email: String(data.get("email") || authState?.user?.email || "").trim(),
+        phone: normalizePhoneInput(data.get("phone") || authState?.user?.phone || ""),
+        preferred_contact_channel: "whatsapp",
+        product_interests: [goal],
+        target_locations: String(data.get("target_locations") || "").trim(),
+        target_listing_types: goal,
+        budget_ugx: String(data.get("budget_ugx") || "").trim(),
+        desired_duration_days: String(data.get("desired_duration_days") || "").trim(),
+        message: String(data.get("message") || "").trim(),
+        source: "advertiser_dashboard"
+      };
+      if (!payload.email && !payload.phone) {
+        toast("Add an email or WhatsApp number so MakaUg can reply.");
+        return;
+      }
+      try {
+        const submit = form.querySelector("button[type='submit']");
+        if (submit) {
+          submit.disabled = true;
+          submit.textContent = "Submitting...";
+        }
+        const result = await apiRequest("/api/advertising/inquiries", { method: "POST", body: payload });
+        if (status) {
+          status.classList.remove("hidden");
+          status.innerHTML = `Campaign request received.<br>Reference: <strong>${adminEscape(result?.data?.id || "pending")}</strong><br>MakaUg will prepare the package, payment link, and approval step.`;
+        }
+        setTextById("advertiser-stat-campaigns", "1");
+        setTextById("advertiser-stat-payment", "Pending review");
+        toast("Advertising campaign request submitted.");
+        form.reset();
+      } catch (e) {
+        toast(`Campaign request failed: ${e.message || "error"}`);
+      } finally {
+        const submit = form.querySelector("button[type='submit']");
+        if (submit) {
+          submit.disabled = false;
+          submit.textContent = "Submit Campaign Request";
+        }
+      }
+    }
+
     function normalizeModerationStatus(status) {
       const raw = String(status || "").toLowerCase();
       if (["approved", "live", "published"].includes(raw)) return "approved";
@@ -8610,7 +8858,11 @@
     }
 
     function adminAuthHeaders() {
-      return adminApiKey ? { "x-api-key": adminApiKey } : {};
+      if (adminApiKey) return { "x-api-key": adminApiKey };
+      if (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin") {
+        return { Authorization: `Bearer ${authState.token}` };
+      }
+      return {};
     }
 
     function canUseLiveAdminApi() {
@@ -14207,9 +14459,13 @@
     }
 
     function generateListingInquiryRef() {
-      const ts = Date.now().toString(36).toUpperCase();
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      return `MKU-${ts}-${rand}`;
+      const yyyymmdd = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let suffix = "";
+      for (let i = 0; i < 5; i += 1) {
+        suffix += alphabet[Math.floor(Math.random() * alphabet.length)];
+      }
+      return `MK-${yyyymmdd}-${suffix}`;
     }
 
     function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
@@ -14543,8 +14799,10 @@
       if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Received");
       if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("Your property has been submitted");
       if (modalSubEl) modalSubEl.textContent = translateListingLabel("Next step: MakaUg runs automated checks on your photos, ID details, location, and duplicates. Review is normally completed within 24 hours.");
-      if (refEl) refEl.textContent = reference || "-";
-      if (modalRefEl) modalRefEl.textContent = reference || "-";
+      const resolvedReference = reference || payload?.inquiry_reference || generateListingInquiryRef();
+      if (!lpInquiryReference) lpInquiryReference = resolvedReference;
+      if (refEl) refEl.textContent = resolvedReference;
+      if (modalRefEl) modalRefEl.textContent = resolvedReference;
       if (contactEl) contactEl.textContent = contactCopy;
       if (modalContactEl) {
         modalContactEl.className = "text-sm text-green-700 font-semibold mt-2";
@@ -15158,7 +15416,13 @@
       const normalized = String(audience || "").toLowerCase();
       const resolved = normalized === "admin"
         ? "admin"
-        : (normalized === "agent" ? "agent" : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"));
+        : (normalized === "agent"
+          ? "agent"
+          : (normalized === "student"
+            ? "student"
+            : (normalized === "advertiser"
+              ? "advertiser"
+              : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
       openModal("auth-modal");
       setAuthModalTab("signin");
       setAuthSignInAudience(resolved);
@@ -15166,7 +15430,13 @@
 
     function openAuthSignUp(audience = "finder") {
       const normalized = String(audience || "").toLowerCase();
-      const resolved = normalized === "agent" ? "agent" : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder");
+      const resolved = normalized === "agent"
+        ? "agent"
+        : (normalized === "student"
+          ? "student"
+          : (normalized === "advertiser"
+            ? "advertiser"
+            : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")));
       openModal("auth-modal");
       setAuthModalTab("signup");
       setAuthSignUpAudience(resolved);
@@ -17829,6 +18099,7 @@
       renderStudentDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
+      renderAdvertiserDashboard();
       ensureRevenuePlacements();
     }
 
@@ -17856,6 +18127,7 @@
       if (page === "saved") renderSaved();
       if (page === "agent-dashboard") renderAgentDashboard();
       if (page === "field-dashboard") renderFieldDashboard();
+      if (page === "advertiser-dashboard") renderAdvertiserDashboard();
       if (page === "admin-dashboard") renderAdminDashboard();
       if (page === "list-property") {
         if (previousPage !== "list-property") {
@@ -18128,6 +18400,61 @@
         } else {
           openAuthSignIn("admin");
         }
+        return true;
+      }
+
+      if (path === "/advertiser-dashboard") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "advertiser") {
+          showPage("advertiser-dashboard");
+          renderAdvertiserDashboard();
+        } else {
+          openAuthSignIn("advertiser");
+        }
+        return true;
+      }
+
+      if (path === "/dashboard") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "finder") {
+          showPage("finder-dashboard");
+          renderFinderDashboard();
+        } else {
+          openAuthSignIn("finder");
+        }
+        return true;
+      }
+
+      if (path === "/student-dashboard") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "student") {
+          showPage("student-dashboard");
+          renderStudentDashboard();
+        } else {
+          openAuthSignIn("student");
+        }
+        return true;
+      }
+
+      if (path === "/broker-dashboard") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "agent") {
+          showPage("agent-dashboard");
+          renderAgentDashboard();
+        } else {
+          openAuthSignIn("agent");
+        }
+        return true;
+      }
+
+      if (path === "/field-agent-dashboard") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "field_agent") {
+          showPage("field-dashboard");
+          renderFieldDashboard();
+        } else {
+          openAuthSignIn("field_agent");
+        }
+        return true;
+      }
+
+      if (path === "/advertiser-signup") {
+        openAuthSignUp("advertiser");
         return true;
       }
 
@@ -18796,11 +19123,8 @@
         "Description *": "Ennyonnyola *",
         "Amenities": "Ebiriwo",
         "Pin Property Location": "Laga Ekifo ku Maapu",
-        "Location setup (step-by-step)": "Okutegeka Ekifo (omutendera ku mutendera)",
-        "1. Select region, then district.": "1. Londa region, oluvannyuma district.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, oluvannyuma neighbourhood/zone.",
-        "3. Confirm area, street, and optionally type full address.": "3. Kakasa area, ekkubo, era oyinza okuwandiika endagiriro yonna.",
-        "4. Confirm the map pin matches your property location.": "4. Kakasa nti map pin ekwatagana n'ekifo kya property yo.",
+        "Find address or place": "Noonya endagiriro oba ekifo",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ekifo, oluguudo, landmark, oba area esinga okumpi, oluvannyuma oteeke pin ya maapu awali property.",
         "Sync map to selected area": "Tereza maapu ku kitundu ekirondeddwa",
         "Continue to Photos →": "Genda ku Bifaananyi →",
         "Photos & Media": "Bifaananyi & Media",
@@ -19196,11 +19520,8 @@
         "Description *": "Maelezo *",
         "Amenities": "Huduma",
         "Pin Property Location": "Weka Pin ya Eneo la Mali",
-        "Location setup (step-by-step)": "Mpangilio wa Eneo (hatua kwa hatua)",
-        "1. Select region, then district.": "1. Chagua kanda, kisha wilaya.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Chagua mji/town, kisha mtaa/zone.",
-        "3. Confirm area, street, and optionally type full address.": "3. Thibitisha eneo, barabara, na kwa hiari andika anwani kamili.",
-        "4. Confirm the map pin matches your property location.": "4. Thibitisha pin ya ramani inalingana na eneo la mali yako.",
+        "Find address or place": "Tafuta anwani au eneo",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Tafuta eneo, barabara, alama maarufu, au mtaa ulio karibu, kisha weka pini ya ramani mahali mali ilipo.",
         "Sync map to selected area": "Sawazisha ramani na eneo ulilochagua",
         "Continue to Photos →": "Endelea kwa Picha →",
         "Photos & Media": "Picha na Media",
@@ -19588,11 +19909,8 @@
         "Description *": "Lok me nyuto *",
         "Amenities": "Jami ma tye",
         "Pin Property Location": "Ket pin pa kabedo pa property",
-        "Location setup (step-by-step)": "Tero kabedo (nyig nyig)",
-        "1. Select region, then district.": "1. Yer region, ka dong district.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Yer city/town, ka dong neighbourhood/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Cik area, ka i mito i ket full street address.",
-        "4. Confirm the map pin matches your property location.": "4. Cik ni pin i map rwate ki kabedo pa property ni.",
+        "Find address or place": "Nong address onyo kabedo",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Nong kabedo, yoo, landmark, onyo area ma cok, ka dong ket pin i map ka property tye iye.",
         "Sync map to selected area": "Lok map obed ka area ma i yero",
         "Continue to Photos →": "Dhi i Cal →",
         "Photos & Media": "Cal ki Media",
@@ -19665,11 +19983,8 @@
         "Description *": "Enyonyora *",
         "Amenities": "Eby'okorora",
         "Pin Property Location": "Taho pin y'aho property eri",
-        "Location setup (step-by-step)": "Okuteeka location (step-by-step)",
-        "1. Select region, then district.": "1. Londa region, hanyuma disiturikiti.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, hanyuma neighbourhood/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Kakasa area kandi noobaasa kwandika full street address.",
-        "4. Confirm the map pin matches your property location.": "4. Kakasa ngu map pin erikwatana n'aho property yaawe eri.",
+        "Find address or place": "Noonya address nari ahantu",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ahantu, omuhanda, landmark, nari area eri haihi, hanyuma oteeke pin ya map ahari property.",
         "Sync map to selected area": "Teerana map n'area erirondoorwe",
         "Continue to Photos →": "Gyenda aha Bifaananyi →",
         "Photos & Media": "Bifaananyi na Media",
@@ -19742,11 +20057,8 @@
         "Description *": "Enshoborora *",
         "Amenities": "Eby'okworora",
         "Pin Property Location": "Taho pin y'aho property eri",
-        "Location setup (step-by-step)": "Okutegeka ahantu (step-by-step)",
-        "1. Select region, then district.": "1. Londa region, hanyuma disiturikiti.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, hanyuma neighbourhood/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Kakasa area kandi nooshobora kuhandika full street address.",
-        "4. Confirm the map pin matches your property location.": "4. Kakasa ngu map pin nekwatana n'aho property yawe eri.",
+        "Find address or place": "Noonya address nari ahantu",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ahantu, omuhanda, landmark, nari area eri haihi, hanyuma oteeke pin ya map ahari property.",
         "Sync map to selected area": "Tereza map n'area erirondoorwe",
         "Continue to Photos →": "Gyenda aha Bifaananyi →",
         "Photos & Media": "Bifaananyi na Media",
@@ -19819,11 +20131,8 @@
         "Description *": "Ennyonnyola *",
         "Amenities": "Ebyetaago by'ekifo",
         "Pin Property Location": "Teeka pin y'ekifo kya property",
-        "Location setup (step-by-step)": "Okutegeka ekifo (step-by-step)",
-        "1. Select region, then district.": "1. Londa region, oluvannyuma district.",
-        "2. Select city/town, then neighbourhood/zone.": "2. Londa city/town, oluvannyuma neighbourhood/zone.",
-        "3. Confirm area and optionally type full street address.": "3. Kakasa area era oyinza okuwandiika full street address.",
-        "4. Confirm the map pin matches your property location.": "4. Kakasa nti map pin etuukana n'ekifo kya property yo.",
+        "Find address or place": "Noonya address oba ekifo",
+        "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.": "Noonya ekifo, oluguudo, landmark, oba area esinga okumpi, oluvannyuma oteeke pin ya map awali property.",
         "Sync map to selected area": "Tereeza map ku area olondedde",
         "Continue to Photos →": "Genda ku Bifaananyi →",
         "Photos & Media": "Bifaananyi & Media",

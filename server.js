@@ -172,7 +172,7 @@ function sendPublicIndex(req, res, next) {
     res.type('html');
     res.set('Cache-Control', 'no-store');
     res.set('X-MakaUg-Public-Sanitized', '1');
-    return res.send(sanitizePublicHtml(html));
+    return res.send(sanitizePublicHtml(html, { pathname: req.path }));
   } catch (error) {
     return next(error);
   }

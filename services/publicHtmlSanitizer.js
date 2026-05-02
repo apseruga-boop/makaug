@@ -18,6 +18,17 @@ const PROTECTED_ROUTE_PREFIXES = [
 ];
 
 const PUBLIC_FORBIDDEN_STRINGS = [
+  'My Account',
+  'Sign in required',
+  'Profile Information',
+  'Security',
+  'Current Password',
+  'Update Password',
+  'Property Finder Dashboard',
+  'Student Dashboard',
+  'Broker Dashboard',
+  'Field Agent Dashboard',
+  'Advertiser Dashboard',
   'Admin Dashboard',
   'Admin API Key',
   'Platform control access',
@@ -30,15 +41,30 @@ const PUBLIC_FORBIDDEN_STRINGS = [
   'Recent Users',
   'Recent Brokers',
   'Recent Reports',
-  'Broker Dashboard',
   'Field Broker Dashboard',
-  'Field Agent Dashboard',
-  'Student Dashboard',
-  'Property Finder Dashboard',
+  'CRM',
+  'Lead Centre',
   'Data source: local browser data',
   'Paste ADMIN_API_KEY',
+  'Inquiry Number: -',
+  'Location setup (step-by-step)',
   'dashboard metrics',
   'internal metrics'
+];
+
+const PUBLIC_MODAL_START_MARKERS = [
+  '<div id="admin-evidence-modal"',
+  '<div id="admin-whatsapp-modal"',
+  '<div id="list-choice-modal"',
+  '<div id="listing-submit-modal"',
+  '<div id="save-property-modal"',
+  '<div id="auth-modal"',
+  '<div id="looking-modal"',
+  '<div id="report-modal"',
+  '<div id="broker-reg-modal"',
+  '<div id="page-modal"',
+  '<div id="preview-photo-modal"',
+  '<div id="detail-photo-modal"'
 ];
 
 function normalizePath(pathname = '/') {
@@ -78,16 +104,40 @@ function removeBetweenMarkers(html, startMarker, endMarker) {
 
 function stripProtectedPageBlocks(html) {
   let output = String(html || '');
+  output = removeBetweenMarkers(output, '<div id="page-account"', '<div id="page-finder-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-finder-dashboard"', '<div id="page-student-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-student-dashboard"', '<div id="page-agent-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-agent-dashboard"', '<div id="page-field-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-field-dashboard"', '<div id="page-admin-dashboard"');
-  output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="list-choice-modal"');
+  output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="page-about"');
+  output = removeBetweenMarkers(output, '<div id="admin-evidence-modal"', '<script>');
   return output;
 }
 
-function sanitizePublicHtml(html) {
+function stripPublicModalBlocks(html, pathname = '/') {
+  const pathName = normalizePath(pathname).toLowerCase();
+  const isAuthRoute = [
+    '/login',
+    '/signup',
+    '/student-signup',
+    '/broker-signup',
+    '/field-agent-signup',
+    '/advertiser-signup',
+    '/forgot-password',
+    '/verify-email'
+  ].some((route) => pathName === route || pathName.startsWith(`${route}/`));
+  if (isAuthRoute) return html;
+  let output = String(html || '');
+  for (const marker of PUBLIC_MODAL_START_MARKERS) {
+    output = removeBetweenMarkers(output, marker, '<script>');
+  }
+  return output;
+}
+
+function sanitizePublicHtml(html, options = {}) {
+  const pathname = typeof options === 'string' ? options : options?.pathname;
   let output = stripProtectedPageBlocks(html);
+  output = stripPublicModalBlocks(output, pathname || '/');
   for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) {
     output = output.split(forbidden).join('');
   }
@@ -99,7 +149,7 @@ function renderProtectedLoginShell(pathname = '/', options = {}) {
   const next = normalizePath(pathname);
   const safeNext = /moderation/i.test(next) ? '/admin' : next;
   const loginUrl = `/login?next=${encodeURIComponent(safeNext)}`;
-  const title = String(options.title || 'Sign in required');
+  const title = String(options.title || 'Private MakaUg area');
   const message = String(options.message || 'This MakaUg workspace is private. Sign in with the right account to continue.');
   return `<!doctype html>
 <html lang="en">

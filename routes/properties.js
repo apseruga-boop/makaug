@@ -20,6 +20,7 @@ const {
 } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
+const { buildListingReference } = require('../services/listingReferenceService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
@@ -948,7 +949,7 @@ router.post('/', async (req, res, next) => {
     const longitude = toNullableFloat(body.longitude);
     const studentsWelcome = parseBooleanLike(body.students_welcome, false);
     const verificationTermsAccepted = parseBooleanLike(body.verification_terms_accepted, false);
-    const inquiryReference = cleanText(body.inquiry_reference) || null;
+    const inquiryReference = cleanText(body.inquiry_reference) || buildListingReference();
     const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
     const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
 
