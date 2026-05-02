@@ -42,21 +42,26 @@ function publicUser(row) {
     weekly_tips_opt_in: row.weekly_tips_opt_in !== false,
     preferred_contact_channel: row.preferred_contact_channel || 'whatsapp',
     preferred_language: row.preferred_language || 'en',
-    profile_data: row.profile_data && typeof row.profile_data === 'object' ? row.profile_data : {},
+    profile_data: row.profile_data && typeof row.profile_data === 'object' && !Array.isArray(row.profile_data) ? row.profile_data : {},
     oauth_provider: row.oauth_provider || null,
     created_at: row.created_at
   };
 }
 
 function sanitizeProfileData(input = {}) {
-  const source = input && typeof input === 'object' ? input : {};
+  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const allowed = [
     'audience',
+    'account_kind',
+    'seeker_type',
+    'onboarding_source',
     'primary_goal',
     'preferred_areas',
     'budget_range',
     'moving_timeline',
     'university',
+    'student_campus',
+    'student_university',
     'accommodation_type',
     'agent_company',
     'agent_districts',

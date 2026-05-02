@@ -2658,6 +2658,98 @@
     </div>
   </div>
 
+  <div id="page-student-dashboard" class="page">
+    <div class="bg-blue-900 py-8 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <h1 class="text-3xl font-black serif">Student Dashboard</h1>
+        <p class="text-blue-100 mt-1">Campus matches, saved rooms, alerts, and safety support</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <div id="student-dashboard-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
+        <div class="text-4xl mb-3">🎓</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Student sign in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Please sign in or create a student account to track campus accommodation.</p>
+        <div class="flex justify-center gap-3 flex-wrap">
+          <button onclick="openAuthSignIn('finder')" class="bg-blue-800 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In</button>
+          <button onclick="openAuthSignUp('student')" class="border border-blue-800 text-blue-800 hover:bg-blue-50 px-6 py-2.5 rounded-xl font-semibold">Create Student Account</button>
+        </div>
+      </div>
+
+      <div id="student-dashboard-body" class="hidden space-y-6">
+        <div class="bg-white border border-blue-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div id="student-dashboard-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
+              <p id="student-dashboard-greeting-sub" class="text-sm text-gray-500 mt-1">Your student accommodation matches, saved rooms, and recent views live here.</p>
+            </div>
+            <button onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20student%20accommodation%20on%20MakaUg','_blank')" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">WhatsApp MakaUg</button>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-4">
+          <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">
+            <div class="text-xs uppercase tracking-wide text-blue-700 font-bold">Campus</div>
+            <div id="student-dashboard-campus" class="text-lg font-black text-gray-900 mt-1">Add your campus</div>
+            <p class="text-xs text-gray-500 mt-2">Used for nearby room recommendations.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Budget</div>
+            <div id="student-dashboard-budget" class="text-lg font-black text-gray-900 mt-1">Set your budget</div>
+            <p class="text-xs text-gray-500 mt-2">Monthly or semester pricing can be tracked.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-xs uppercase tracking-wide text-gray-500 font-bold">Room Preference</div>
+            <div id="student-dashboard-room" class="text-lg font-black text-gray-900 mt-1">Any room</div>
+            <p class="text-xs text-gray-500 mt-2">Self-contained, hostel, studio, or shared.</p>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-3 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Saved Student Options</div>
+            <div id="student-dashboard-stat-saved" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Recommended Rooms</div>
+            <div id="student-dashboard-stat-recommended" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Saved Alerts</div>
+            <div id="student-dashboard-stat-alerts" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h2 class="text-xl font-bold text-gray-800">Best Student Matches</h2>
+              <p class="text-sm text-gray-500">Recommendations use your saved preferences when available.</p>
+            </div>
+            <button onclick="showPage('students')" class="border border-blue-800 text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Students Page</button>
+          </div>
+          <div id="student-dashboard-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-3">Recently Viewed</h2>
+            <div id="student-dashboard-recent-grid" class="grid gap-4"></div>
+          </div>
+          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-green-900 mb-3">Student Safety Checklist</h2>
+            <ul class="text-sm text-green-950 space-y-2 list-disc pl-5">
+              <li>View the room or hostel before sending money.</li>
+              <li>Confirm water, security, Wi-Fi, rules, and curfew.</li>
+              <li>Share your viewing plan with a parent, guardian, or friend.</li>
+              <li>Use traceable payments and keep receipts.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="page-agent-dashboard" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
@@ -3673,8 +3765,9 @@
 
       <div id="auth-panel-signup" class="hidden">
         <label class="block text-sm font-medium text-gray-800 mb-2">Create account as</label>
-        <div class="bg-gray-100 rounded-xl p-1 flex gap-1 mb-3">
+        <div class="bg-gray-100 rounded-xl p-1 grid grid-cols-2 md:grid-cols-4 gap-1 mb-3">
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
+          <button id="auth-signup-audience-student" title="Create account for student accommodation search, alerts, and viewings." type="button" onclick="setAuthSignUpAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
           <button id="auth-signup-audience-field" title="Field Agents are onboarded manually by operations." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
         </div>
@@ -7249,13 +7342,17 @@
 
     function derivePortalMode(user, preferredAudience = "") {
       const preferred = String(preferredAudience || "").toLowerCase();
+      const profileData = user?.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
       if (preferred === "admin") return "admin";
       if (preferred === "field_agent" || preferred === "field") return "field_agent";
       if (preferred === "agent") return "agent";
+      if (preferred === "student") return "student";
       if (preferred === "finder") return "finder";
       if (user?.role === "admin") return "admin";
       if (user?.role === "field_agent") return "field_agent";
-      return user?.role === "agent_broker" ? "agent" : "finder";
+      if (user?.role === "agent_broker") return "agent";
+      if (profileData.account_kind === "student" || profileData.seeker_type === "student") return "student";
+      return "finder";
     }
 
     function timeOfDayGreeting() {
@@ -7408,6 +7505,7 @@
       saveDashboardState();
       renderAll();
       renderFinderDashboard();
+      renderStudentDashboard();
       renderAgentDashboard();
       updateDetailSaveButton(propertyId || activeDetailPropertyId);
     }
@@ -7698,6 +7796,12 @@
         formWrap.classList.remove("hidden");
         fieldNote.classList.add("hidden");
         if (agentRegWrap) agentRegWrap.classList.remove("hidden");
+      } else if (authSignUpAudience === "student") {
+        help.textContent = "Student: create an account for campus accommodation matches, saved rooms, alerts, and viewing support.";
+        roleInput.value = "Buyer / Renter";
+        formWrap.classList.remove("hidden");
+        fieldNote.classList.add("hidden");
+        if (agentRegWrap) agentRegWrap.classList.add("hidden");
       } else if (authSignUpAudience === "field_agent") {
         help.textContent = "Field Agent: onboarding is reviewed manually before credentials are issued.";
         roleInput.value = "Field Agent";
@@ -7758,6 +7862,10 @@
       return {
         audience: authSignUpAudience,
         account_kind: accountKind,
+        seeker_type: accountKind === "student" ? "student" : (authSignUpAudience === "agent" ? "broker" : "casual_browser"),
+        onboarding_source: authSignUpAudience || "finder",
+        student_campus: get("auth-profile-university"),
+        student_university: get("auth-profile-university"),
         primary_goal: get("auth-profile-primary-goal"),
         preferred_areas: get("auth-profile-preferred-areas"),
         budget_range: get("auth-profile-budget-range"),
@@ -7784,10 +7892,18 @@
 
     function setAuthSignUpAudience(mode) {
       const normalized = String(mode || "").toLowerCase();
-      authSignUpAudience = normalized === "agent" ? "agent" : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder");
+      authSignUpAudience = normalized === "agent"
+        ? "agent"
+        : (normalized === "student"
+          ? "student"
+          : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"));
       setAudienceButtonState(
-        authSignUpAudience === "agent" ? "auth-signup-audience-agent" : (authSignUpAudience === "field_agent" ? "auth-signup-audience-field" : "auth-signup-audience-finder"),
-        ["auth-signup-audience-finder", "auth-signup-audience-agent", "auth-signup-audience-field"]
+        authSignUpAudience === "agent"
+          ? "auth-signup-audience-agent"
+          : (authSignUpAudience === "student"
+            ? "auth-signup-audience-student"
+            : (authSignUpAudience === "field_agent" ? "auth-signup-audience-field" : "auth-signup-audience-finder")),
+        ["auth-signup-audience-finder", "auth-signup-audience-student", "auth-signup-audience-agent", "auth-signup-audience-field"]
       );
       updateAuthSignUpUi();
     }
@@ -7807,6 +7923,9 @@
       } else if (mode === "field_agent") {
         showPage("field-dashboard");
         renderFieldDashboard();
+      } else if (mode === "student") {
+        showPage("student-dashboard");
+        renderStudentDashboard();
       } else {
         showPage("finder-dashboard");
         renderFinderDashboard();
@@ -7912,6 +8031,93 @@
         } else {
           recentGrid.innerHTML = recentViewed.map(renderDashboardCard).join("");
         }
+      }
+    }
+
+    function normalizeStudentDashboardProperty(item) {
+      const property = item?.property || item || {};
+      return {
+        ...property,
+        id: property.id || item?.listing_id || item?.listingId || "",
+        title: property.title || item?.title || "Student accommodation",
+        area: property.area || property.location || property.neighborhood || property.neighbourhood || "",
+        district: property.district || "",
+        price: property.price || property.price_per_month || property.pricePerMonth || 0,
+        period: property.period || property.price_period || property.pricePeriod || "month"
+      };
+    }
+
+    async function renderStudentDashboard() {
+      const gate = document.getElementById("student-dashboard-auth-gate");
+      const body = document.getElementById("student-dashboard-body");
+      if (!gate || !body) return;
+
+      const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+      if (!authState?.user || mode !== "student") {
+        gate.classList.remove("hidden");
+        body.classList.add("hidden");
+        return;
+      }
+
+      gate.classList.add("hidden");
+      body.classList.remove("hidden");
+
+      const first = authState.user.first_name || "there";
+      setTextById("student-dashboard-greeting", `${timeOfDayGreeting()}, ${first}`);
+      setTextById("student-dashboard-greeting-sub", "Your campus accommodation matches, saved rooms, alerts, and recent views are kept here.");
+
+      let payload = null;
+      if (authState?.token && !authState?.user?.is_demo) {
+        try {
+          const res = await apiRequest("/api/student/dashboard");
+          payload = res?.data || res || null;
+        } catch (e) {
+          console.warn("Student dashboard backend unavailable", e);
+        }
+      }
+
+      const pref = payload?.preference || {};
+      const localStudentListings = getPublicListings().filter((p) => isStudentDiscoverable(p));
+      const recommendedRaw = Array.isArray(payload?.recommendations) ? payload.recommendations : [];
+      const recommendations = (recommendedRaw.length ? recommendedRaw.map(normalizeStudentDashboardProperty) : localStudentListings)
+        .filter(Boolean)
+        .slice(0, 8);
+      const savedRaw = Array.isArray(payload?.savedListings) ? payload.savedListings : [];
+      const savedItems = (savedRaw.length ? savedRaw.map(normalizeStudentDashboardProperty) : localStudentListings.filter((p) => isPropertySaved(p.id)))
+        .filter(Boolean);
+      const alertCount = Array.isArray(payload?.savedSearches) ? payload.savedSearches.length : 0;
+      const recentRaw = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed : [];
+      const localRecent = (getCurrentUserActivity().recentViewed || [])
+        .map((id) => findPropertyForUi(id))
+        .filter((p) => p && isListingPublicVisible(p) && isStudentDiscoverable(p));
+      const recentItems = (recentRaw.length ? recentRaw.map(normalizeStudentDashboardProperty) : localRecent)
+        .filter(Boolean)
+        .slice(0, 4);
+
+      const budgetParts = [];
+      const minBudget = parseInt(pref.min_budget || pref.minBudget || 0, 10) || 0;
+      const maxBudget = parseInt(pref.max_budget || pref.maxBudget || 0, 10) || 0;
+      if (minBudget) budgetParts.push(`from ${fmtP(minBudget, "month")}`);
+      if (maxBudget) budgetParts.push(`up to ${fmtP(maxBudget, "month")}`);
+      setTextById("student-dashboard-campus", pref.campus || pref.university || authState.user.profile_data?.student_campus || "Add your campus");
+      setTextById("student-dashboard-budget", budgetParts.length ? budgetParts.join(" ") : "Set your budget");
+      setTextById("student-dashboard-room", pref.room_type || pref.roomType || pref.shared_or_self_contained || "Any room");
+      setTextById("student-dashboard-stat-saved", String(savedItems.length));
+      setTextById("student-dashboard-stat-recommended", String(recommendations.length));
+      setTextById("student-dashboard-stat-alerts", String(alertCount));
+
+      const grid = document.getElementById("student-dashboard-grid");
+      if (grid) {
+        grid.innerHTML = recommendations.length
+          ? recommendations.map(renderDashboardCard).join("")
+          : `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No student accommodation matches yet. Tell MakaUg what you need and we will help source options.</div>`;
+      }
+
+      const recentGrid = document.getElementById("student-dashboard-recent-grid");
+      if (recentGrid) {
+        recentGrid.innerHTML = recentItems.length
+          ? recentItems.map(renderDashboardCard).join("")
+          : `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No student rooms viewed yet.</div>`;
       }
     }
 
@@ -11471,6 +11677,7 @@
       const pendingSaveId = applyPendingSaveAfterAuth();
       applyAuthUi();
       renderFinderDashboard();
+      renderStudentDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
       renderAdminDashboard();
@@ -11488,6 +11695,7 @@
       applyAuthUi();
       hydrateAccountForm();
       renderFinderDashboard();
+      renderStudentDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
       renderAdminDashboard();
@@ -17504,6 +17712,7 @@
       document.getElementById("rent-count").textContent = publicListings.filter((p) => normalizeType(p.type) === "rent").length;
       renderSaved();
       renderFinderDashboard();
+      renderStudentDashboard();
       renderAgentDashboard();
       renderFieldDashboard();
       ensureRevenuePlacements();
@@ -17529,6 +17738,7 @@
         trackEvent("page_view", { page });
       }
       if (page === "finder-dashboard") renderFinderDashboard();
+      if (page === "student-dashboard") renderStudentDashboard();
       if (page === "saved") renderSaved();
       if (page === "agent-dashboard") renderAgentDashboard();
       if (page === "field-dashboard") renderFieldDashboard();

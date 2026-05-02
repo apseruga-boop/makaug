@@ -21,6 +21,8 @@ const mortgageRoutes = require('./routes/mortgage');
 const aiRoutes = require('./routes/ai');
 const aiCoreRoutes = require('./routes/ai-core');
 const adminAiAgentsRoutes = require('./routes/admin-agents');
+const propertySeekerRoutes = require('./routes/property-seeker');
+const studentRoutes = require('./routes/student');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 
@@ -78,6 +80,8 @@ app.use('/api/mortgage-rates', mortgageRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/ai-core', aiCoreRoutes);
 app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
+app.use('/api/property-seeker', propertySeekerRoutes);
+app.use('/api/student', studentRoutes);
 
 // Never expose local/private operator tools on public host.
 app.use('/private-local', (_req, res) => {
