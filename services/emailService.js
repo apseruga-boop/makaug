@@ -108,7 +108,7 @@ function buildBrandedEmailHtml({ subject, text }) {
                 <div style="font-size:28px;font-weight:900;letter-spacing:.2px;line-height:1;">
                   <span style="color:#ffffff;">makaug</span><span style="color:#d6a62a;">.com</span>
                 </div>
-                <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Uganda Property</div>
+                <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">MakaUg</div>
               </td>
             </tr>
             <tr>

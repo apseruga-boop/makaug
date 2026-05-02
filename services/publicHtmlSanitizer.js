@@ -67,6 +67,49 @@ const PUBLIC_MODAL_START_MARKERS = [
   '<div id="detail-photo-modal"'
 ];
 
+const PUBLIC_PAGE_IDS = [
+  'page-home',
+  'page-sale',
+  'page-rent',
+  'page-students',
+  'page-commercial',
+  'page-land',
+  'page-brokers',
+  'page-mortgage',
+  'page-ai-chatbot',
+  'page-fraud',
+  'page-broker-profile',
+  'page-detail',
+  'page-list-property',
+  'page-about',
+  'page-saved'
+];
+
+const PUBLIC_ROUTE_PAGE_MAP = {
+  '/': ['page-home'],
+  '/for-sale': ['page-sale'],
+  '/sale': ['page-sale'],
+  '/to-rent': ['page-rent'],
+  '/rent': ['page-rent'],
+  '/students': ['page-students'],
+  '/student-accommodation': ['page-students'],
+  '/commercial': ['page-commercial'],
+  '/land': ['page-land'],
+  '/brokers': ['page-brokers'],
+  '/find-brokers': ['page-brokers'],
+  '/mortgage': ['page-mortgage'],
+  '/mortgage-finder': ['page-mortgage'],
+  '/discover-ai-chatbot': ['page-ai-chatbot'],
+  '/ai-chatbot': ['page-ai-chatbot'],
+  '/fraud': ['page-fraud'],
+  '/anti-fraud': ['page-fraud'],
+  '/safety': ['page-fraud'],
+  '/report-fraud': ['page-fraud'],
+  '/list-property': ['page-list-property'],
+  '/about': ['page-about'],
+  '/saved': ['page-saved']
+};
+
 function normalizePath(pathname = '/') {
   const raw = String(pathname || '/').split('?')[0].split('#')[0] || '/';
   return raw.length > 1 ? raw.replace(/\/+$/, '') : raw;
@@ -98,6 +141,57 @@ function removeBetweenMarkers(html, startMarker, endMarker) {
     if (end === -1) break;
     output = `${output.slice(0, start)}${output.slice(end)}`;
     start = output.indexOf(startMarker);
+  }
+  return output;
+}
+
+function getPageBlockBounds(html, pageId) {
+  const startMarker = `<div id="${pageId}"`;
+  const start = String(html || '').indexOf(startMarker);
+  if (start === -1) return null;
+  const restStart = start + startMarker.length;
+  const nextPage = String(html || '').indexOf('<div id="page-', restStart);
+  const footer = String(html || '').indexOf('<footer', restStart);
+  const script = String(html || '').indexOf('<script>', restStart);
+  const candidates = [nextPage, footer, script].filter((idx) => idx !== -1);
+  const end = candidates.length ? Math.min(...candidates) : String(html || '').length;
+  return { start, end };
+}
+
+function removePageBlockById(html, pageId) {
+  let output = String(html || '');
+  const bounds = getPageBlockBounds(output, pageId);
+  if (!bounds) return output;
+  return `${output.slice(0, bounds.start)}${output.slice(bounds.end)}`;
+}
+
+function getPublicPageIdsForRoute(pathname = '/') {
+  const pathName = normalizePath(pathname).toLowerCase();
+  if (pathName.startsWith('/property/')) return ['page-detail'];
+  if (pathName.startsWith('/agents/') || pathName.startsWith('/broker/')) return ['page-broker-profile'];
+  return PUBLIC_ROUTE_PAGE_MAP[pathName] || ['page-home'];
+}
+
+function stripUnneededPublicPageBlocks(html, pathname = '/') {
+  const pathName = normalizePath(pathname).toLowerCase();
+  const isAuthRoute = [
+    '/login',
+    '/signup',
+    '/student-signup',
+    '/broker-signup',
+    '/field-agent-signup',
+    '/advertiser-signup',
+    '/forgot-password',
+    '/verify-email'
+  ].some((route) => pathName === route || pathName.startsWith(`${route}/`));
+  if (isAuthRoute) return html;
+
+  const keep = new Set(getPublicPageIdsForRoute(pathName));
+  let output = String(html || '');
+  for (const pageId of PUBLIC_PAGE_IDS) {
+    if (!keep.has(pageId)) {
+      output = removePageBlockById(output, pageId);
+    }
   }
   return output;
 }
@@ -137,6 +231,7 @@ function stripPublicModalBlocks(html, pathname = '/') {
 function sanitizePublicHtml(html, options = {}) {
   const pathname = typeof options === 'string' ? options : options?.pathname;
   let output = stripProtectedPageBlocks(html);
+  output = stripUnneededPublicPageBlocks(output, pathname || '/');
   output = stripPublicModalBlocks(output, pathname || '/');
   for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) {
     output = output.split(forbidden).join('');

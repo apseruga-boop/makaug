@@ -868,7 +868,7 @@
               <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area">
             </div>
             <select id="hero-district" class="hidden">
-              <option value="">This area only</option>
+              <option value=""></option>
             </select>
             <select id="hero-radius-f" class="hero-field px-4">
               <option value="0">This area only</option>
@@ -948,7 +948,7 @@
             </div>
 
             <select id="sale-district-f" onchange="filterListings('sale')" class="hidden">
-              <option value="">This area only</option>
+              <option value=""></option>
             </select>
 
             <select id="sale-radius-f" onchange="filterListings('sale')" class="h-11 rounded-xl border border-white/25 bg-green-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-green-400/40">
@@ -1070,7 +1070,7 @@
               <input id="rent-location-f" autocomplete="off" oninput="filterListings('rent')" placeholder="Search by location or keyword" class="w-full h-11 pl-10 pr-3 rounded-xl border border-white/30 bg-white text-gray-900 text-sm outline-none focus:ring-2 focus:ring-blue-500/40" />
             </div>
             <select id="rent-district-f" onchange="filterListings('rent')" class="hidden">
-              <option value="">This area only</option>
+              <option value=""></option>
             </select>
             <select id="rent-radius-f" onchange="filterListings('rent')" class="h-11 rounded-xl border border-white/25 bg-blue-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
               <option value="0">This area only</option>
@@ -1298,7 +1298,7 @@
               <input id="commercial-q-f" autocomplete="off" oninput="filterCommercial()" class="w-full h-11 pl-10 pr-3 rounded-xl border border-white/30 bg-white text-gray-900 text-sm outline-none focus:ring-2 focus:ring-amber-500/40" placeholder="Type, area, keyword">
             </div>
             <select id="commercial-district-f" onchange="filterCommercial()" class="hidden">
-              <option value="">This area only</option>
+              <option value=""></option>
             </select>
             <select id="commercial-radius-f" onchange="filterCommercial()" class="h-11 rounded-xl border border-white/25 bg-amber-900/35 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
               <option value="0">This area only</option>
@@ -1395,7 +1395,7 @@
               <input id="land-q-f" autocomplete="off" oninput="filterLand()" class="w-full h-11 pl-10 pr-3 rounded-xl border border-white/30 bg-white text-gray-900 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40" placeholder="Area, title type, keyword">
             </div>
             <select id="land-district-f" onchange="filterLand()" class="hidden">
-              <option value="">This area only</option>
+              <option value=""></option>
             </select>
             <select id="land-radius-f" onchange="filterLand()" class="h-11 rounded-xl border border-white/25 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
               <option value="0">This area only</option>
@@ -2024,12 +2024,12 @@
 
       <div id="lp-wizard-shell" class="lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
         <div id="lp-success-box" class="hidden mb-6 bg-green-50 border border-green-200 rounded-2xl p-5">
-          <h3 id="lp-success-title" class="text-xl font-black text-green-900 mb-1">Listing submitted successfully</h3>
-          <p id="lp-success-sub" class="text-sm text-green-800">Thanks. Your listing is now in review. We will contact you once it has been approved.</p>
-          <p id="lp-success-contact" class="text-sm text-green-800 mt-2">We will contact you by WhatsApp or email once this listing is approved.</p>
+          <h3 id="lp-success-title" class="text-xl font-black text-green-900 mb-1"></h3>
+          <p id="lp-success-sub" class="text-sm text-green-800"></p>
+          <p id="lp-success-contact" class="text-sm text-green-800 mt-2"></p>
           <p id="lp-success-status" class="text-xs text-green-700 mt-2"></p>
           <div class="mt-3 text-sm text-green-900">
-            <div><strong id="lp-success-ref-label">Inquiry Number:</strong> <span id="lp-success-ref">Pending reference</span></div>
+            <div><strong id="lp-success-ref-label"></strong> <span id="lp-success-ref"></span></div>
             <div><strong id="lp-success-support-label">Support:</strong> info@makaug.com</div>
           </div>
           <div class="mt-4 bg-white border border-green-200 rounded-xl p-4">
@@ -2098,63 +2098,26 @@
               <label id="lp-title-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Title *</label>
               <input id="lp-title" oninput="updateListPreview(); updateLpTitleExampleState()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. 4-Bedroom Family House in Muyenga">
             </div>
-            <div class="md:col-span-2 bg-white border border-green-100 rounded-2xl p-4">
-              <h3 id="lp-location-guide-title" class="text-sm font-bold text-gray-800 mb-2">Find address or place</h3>
+            <div id="lp-address-first-card" class="md:col-span-2 bg-green-50 border border-green-100 rounded-2xl p-4">
+              <h3 id="lp-location-guide-title" class="text-sm font-bold text-gray-900 mb-2">Find address or place</h3>
               <p id="lp-location-guide-copy" class="text-sm text-gray-700">Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.</p>
-            </div>
-            <div id="lp-location-intro" class="md:col-span-2 lp-location-intro">
-              <div class="lp-location-step-chip">
-                <i class="fas fa-map-location-dot"></i>
-                <span id="lp-location-intro-kicker">Property location</span>
+              <div class="mt-3 grid md:grid-cols-[1fr,160px] gap-2">
+                <div class="relative">
+                  <i class="fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-green-700 text-sm"></i>
+                  <input id="lp-address-search" autocomplete="off" oninput="onLpAddressSearchInput()" onkeydown="onLpAddressSearchKeydown(event)" class="w-full border border-green-200 rounded-xl pl-10 pr-4 py-3 text-sm bg-white" placeholder="Type road, landmark, village, town, or district">
+                </div>
+                <button id="lp-address-search-btn" type="button" onclick="findLpAddressOrPlace()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-bold">
+                  <i class="fas fa-location-crosshairs"></i> Find on map
+                </button>
               </div>
-              <h3 id="lp-location-intro-title" class="text-lg font-black text-gray-900">Tell us where the property is</h3>
-              <p id="lp-location-intro-copy" class="text-sm text-gray-600 mt-1">Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.</p>
-            </div>
-            <div>
-              <label id="lp-region-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Region *</label>
-              <select id="lp-region" onchange="onLpRegionChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-                <option value="">Select region</option>
-              </select>
-            </div>
-            <div>
-              <label id="lp-district-label" class="block text-sm font-semibold text-gray-700 mb-1.5">District *</label>
-              <select id="list-district-sel" onchange="onLpDistrictChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
-                <option value="">Select district</option>
-              </select>
-            </div>
-            <div>
-              <label id="lp-city-label" class="block text-sm font-semibold text-gray-700 mb-1.5">City / Town *</label>
-              <select id="lp-city" onchange="onLpCityChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
-                <option value="">Select city / town</option>
-              </select>
-            </div>
-            <div>
-              <label id="lp-neighborhood-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Neighbourhood / Zone *</label>
-              <select id="lp-neighborhood" onchange="onLpNeighborhoodChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
-                <option value="">Select neighbourhood</option>
-              </select>
-            </div>
-            <div class="md:col-span-2">
-              <label id="lp-area-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Area / Neighbourhood *</label>
-              <input id="lp-area" list="lp-area-suggestions" oninput="onLpAreaManualInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Auto-filled from district/city/neighbourhood" disabled>
-              <datalist id="lp-area-suggestions"></datalist>
-            </div>
-            <div class="md:col-span-2">
-              <label id="lp-street-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Street / Road</label>
-              <input id="lp-street-name" list="lp-street-suggestions" oninput="onLpStreetInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kira Road" disabled>
-              <datalist id="lp-street-suggestions"></datalist>
-            </div>
-            <div class="md:col-span-2">
-              <label id="lp-address-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Full Address</label>
-              <input id="lp-address" list="lp-address-suggestions" oninput="onLpAddressInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, etc." disabled>
-              <datalist id="lp-address-suggestions"></datalist>
+              <p id="lp-address-search-status" class="text-xs text-green-800 mt-2">Google Places is used when configured. If it is unavailable, enter the nearest landmark and place the pin manually.</p>
             </div>
             <div class="md:col-span-2 bg-gray-50 border border-green-100 rounded-2xl p-4">
               <h3 id="lp-pin-title" class="text-base font-bold text-gray-800">Pin Property Location</h3>
-              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">The map follows your selected location. Move the pin if needed, then confirm.</p>
+              <p id="lp-pin-sub" class="text-sm text-gray-500 mt-1">The map follows the address or place you select. Move the pin if needed, then confirm.</p>
               <div class="mt-2">
                 <button id="lp-map-sync-btn" type="button" onclick="syncMapToHierarchy()" class="inline-flex items-center gap-2 border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">
-                  <i class="fas fa-location-crosshairs"></i> Center map to selected location
+                  <i class="fas fa-location-crosshairs"></i> Center map to address/place
                 </button>
               </div>
               <div id="lp-pin-map" class="map-h-sm rounded-xl border border-gray-200 overflow-hidden mt-3"></div>
@@ -2165,6 +2128,14 @@
                 <button id="lp-location-confirm-btn" type="button" onclick="confirmLpLocationPin()" class="mt-2 inline-flex items-center gap-2 bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">
                   <i class="fas fa-check-circle"></i><span id="lp-location-confirm-label">Confirm this location</span>
                 </button>
+              </div>
+              <div class="mt-3">
+                <label id="lp-location-privacy-label" class="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">Location privacy</label>
+                <select id="lp-location-privacy" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white">
+                  <option value="exact">Show exact location after approval</option>
+                  <option value="approximate">Show approximate area publicly</option>
+                  <option value="hidden">Hide exact location from public listing</option>
+                </select>
               </div>
               <div class="grid md:grid-cols-2 gap-3 mt-3">
                 <div>
@@ -2180,7 +2151,57 @@
                   <input id="lp-alt" readonly class="w-full border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Auto-detected after pin placement">
                 </div>
               </div>
+              <input id="lp-place-id" type="hidden">
+              <input id="lp-plus-code" type="hidden">
+              <input id="lp-geocoding-provider" type="hidden">
+              <input id="lp-geocoded-at" type="hidden">
+              <input id="lp-location-confidence" type="hidden">
             </div>
+            <details id="lp-location-advanced" class="md:col-span-2 border border-gray-200 rounded-2xl p-4 bg-white">
+              <summary class="cursor-pointer text-sm font-bold text-gray-800">Advanced location details</summary>
+              <p class="text-xs text-gray-500 mt-2 mb-3">These fields are auto-filled from the selected address where possible. You can adjust them if the provider misses local detail.</p>
+              <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label id="lp-region-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Region</label>
+                  <select id="lp-region" onchange="onLpRegionChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                    <option value="">Select region</option>
+                  </select>
+                </div>
+                <div>
+                  <label id="lp-district-label" class="block text-sm font-semibold text-gray-700 mb-1.5">District</label>
+                  <select id="list-district-sel" onchange="onLpDistrictChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
+                    <option value="">Select district</option>
+                  </select>
+                </div>
+                <div>
+                  <label id="lp-city-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Town / City</label>
+                  <select id="lp-city" onchange="onLpCityChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
+                    <option value="">Select town / city</option>
+                  </select>
+                </div>
+                <div>
+                  <label id="lp-neighborhood-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Neighbourhood / Area</label>
+                  <select id="lp-neighborhood" onchange="onLpNeighborhoodChange()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" disabled>
+                    <option value="">Select neighbourhood</option>
+                  </select>
+                </div>
+                <div class="md:col-span-2">
+                  <label id="lp-area-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Area / Neighbourhood</label>
+                  <input id="lp-area" list="lp-area-suggestions" oninput="onLpAreaManualInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Auto-filled from selected address" disabled>
+                  <datalist id="lp-area-suggestions"></datalist>
+                </div>
+                <div class="md:col-span-2">
+                  <label id="lp-street-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Street / Road</label>
+                  <input id="lp-street-name" list="lp-street-suggestions" oninput="onLpStreetInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kira Road" disabled>
+                  <datalist id="lp-street-suggestions"></datalist>
+                </div>
+                <div class="md:col-span-2">
+                  <label id="lp-address-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Full Address</label>
+                  <input id="lp-address" list="lp-address-suggestions" oninput="onLpAddressInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Street name, plot number, landmark, etc." disabled>
+                  <datalist id="lp-address-suggestions"></datalist>
+                </div>
+              </div>
+            </details>
             <div>
               <label id="lp-subtype-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Property Category *</label>
               <select id="lp-subtype" onchange="updateListPreview()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
@@ -2649,6 +2670,52 @@
           <h2 class="text-xl font-bold text-gray-800 mb-4">Recently Viewed</h2>
           <div id="finder-recent-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">My Property Brief</h2>
+            <p class="text-sm text-gray-500">Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.</p>
+            <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Edit Preferences</button>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Recommended For You</h2>
+            <p class="text-sm text-gray-500">Exact, close, nearby, verified, new, and sponsored matches will appear here with clear reasons.</p>
+            <button onclick="showPage('for-sale')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Matches</button>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Saved Searches and Alerts</h2>
+            <p class="text-sm text-gray-500">Save searches, choose WhatsApp/email/SMS/in-app alerts, and pause or edit alerts any time.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Enquiries and WhatsApp Contacts</h2>
+            <p class="text-sm text-gray-500">Listing enquiries, WhatsApp clicks, broker/owner context, and follow-up status will be tracked here.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Viewing Bookings</h2>
+            <p class="text-sm text-gray-500">Pending, confirmed, rescheduled, cancelled, and completed viewings will appear here.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Callback Requests</h2>
+            <p class="text-sm text-gray-500">Track requested, contacted, missed, and closed callbacks from MakaUg or property contacts.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Compare Properties</h2>
+            <p class="text-sm text-gray-500">Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
+            <p class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
+          </div>
+          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-green-900 mb-2">Safety and Trust Centre</h2>
+            <p class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
+          </div>
+          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-green-900 mb-2">Area Watch</h2>
+            <p class="text-sm text-green-950">Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.</p>
+            <button onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20property%20on%20MakaUg','_blank')" class="mt-4 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Help / WhatsApp MakaUg</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2739,6 +2806,33 @@
               <li>Share your viewing plan with a parent, guardian, or friend.</li>
               <li>Use traceable payments and keep receipts.</li>
             </ul>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Saved Student Searches</h2>
+            <p class="text-sm text-gray-500">Campus, budget, room type, Wi-Fi, water, security, and distance alerts will appear here.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Viewing Bookings</h2>
+            <p class="text-sm text-gray-500">Track requested, confirmed, rescheduled, cancelled, and completed room viewings.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Callback Requests</h2>
+            <p class="text-sm text-gray-500">Requests to hostel managers, owners, or MakaUg support will be grouped here.</p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Enquiry History and WhatsApp Requests</h2>
+            <p class="text-sm text-gray-500">Every student accommodation enquiry keeps the listing, campus, contact, and next action together.</p>
+          </div>
+          <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-blue-950 mb-2">Contact MakaUg</h2>
+            <p class="text-sm text-blue-950">Ask for student accommodation support, update your language, or share your campus search on WhatsApp.</p>
+          </div>
+          <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">
+            <h2 class="text-xl font-bold text-blue-950 mb-2">Language Preference</h2>
+            <p class="text-sm text-blue-950">Student alerts and dashboard guidance follow your selected MakaUg language where available.</p>
           </div>
         </div>
       </div>
@@ -2938,10 +3032,31 @@
           </div>
         </div>
 
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <h2 class="text-xl font-bold text-gray-800 mb-3">Overview</h2>
+          <div class="grid md:grid-cols-4 gap-3 text-sm">
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Campaigns</strong><br><span class="text-gray-500">Draft, submitted, pending payment, pending approval, active, paused, completed, and rejected requests.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Creatives</strong><br><span class="text-gray-500">Upload details, preview copy, and track approval or rejection notes.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Packages</strong><br><span class="text-gray-500">Choose sponsored listings, broker spotlight, student sponsor, mortgage partner, or map placements.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Contact MakaUg</strong><br><span class="text-gray-500">Get campaign help by WhatsApp, phone, or email before payment.</span></div>
+          </div>
+        </div>
+
         <div class="grid lg:grid-cols-2 gap-5">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800">Create Campaign Request</h2>
+            <h2 class="text-xl font-bold text-gray-800">Create Campaign</h2>
             <p class="text-sm text-gray-500 mt-1 mb-4">This sends a structured advertiser lead to MakaUg. Payment links and campaign approval are completed after review.</p>
+            <ol class="grid sm:grid-cols-3 gap-2 text-xs text-amber-950 mb-4">
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>1.</strong> Campaign goal</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>2.</strong> Audience</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>3.</strong> Placement</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>4.</strong> Targeting</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>5.</strong> Budget/package</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>6.</strong> Creative details</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>7.</strong> Preview</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>8.</strong> Submit for review</li>
+              <li class="rounded-lg bg-amber-50 border border-amber-100 p-2"><strong>9.</strong> Payment link</li>
+            </ol>
             <form id="advertiser-dashboard-campaign-form" onsubmit="submitAdvertiserDashboardCampaign(event)" class="space-y-3">
               <input name="business_name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Business / brand name" required>
               <div class="grid md:grid-cols-2 gap-3">
@@ -2979,7 +3094,7 @@
             </div>
 
             <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5">
-              <h2 class="text-xl font-bold text-amber-950">Invoices & Payment Links</h2>
+              <h2 class="text-xl font-bold text-amber-950">Payments / Invoices</h2>
               <p class="text-sm text-amber-900 mt-2">Payment links are generated after MakaUg reviews the campaign request and confirms package pricing. Provider payments are logged safely; if payment providers are not configured, admins can mark manual payments in the advertising desk.</p>
               <div id="advertiser-dashboard-payments" class="mt-3 text-sm text-amber-900 font-semibold">No payment link has been issued yet.</div>
             </div>
@@ -2987,7 +3102,7 @@
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 class="text-xl font-bold text-gray-800 mb-3">Reports</h2>
+          <h2 class="text-xl font-bold text-gray-800 mb-3">Performance Reports</h2>
           <div id="advertiser-dashboard-reports" class="grid md:grid-cols-4 gap-3 text-sm">
             <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Impressions</strong><br><span class="text-gray-500">Available after campaign launch.</span></div>
             <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Clicks</strong><br><span class="text-gray-500">Tracked on approved placements.</span></div>
@@ -3039,6 +3154,27 @@
             <button onclick="saveAdminApiKeyAndRefresh()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Save & Refresh</button>
           </div>
           <p id="admin-summary-note" class="text-xs text-gray-500 mt-2">Data source: local browser data.</p>
+        </div>
+
+        <div id="admin-crm-shell" class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">CRM Lead Centre</h3>
+              <p class="text-sm text-gray-500 mt-1">A protected control area for enquiries, WhatsApp leads, property needs, viewings, callbacks, mortgage leads, student demand, advertiser leads, and follow-up tasks.</p>
+            </div>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Admin only</span>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3 text-sm">
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Overview</strong><br><span class="text-gray-500">Total, hot, unassigned, overdue, and high-value leads.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Pipeline</strong><br><span class="text-gray-500">New, contacted, qualified, viewing booked, won, lost, dormant, and spam.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Lead Table</strong><br><span class="text-gray-500">Filter by source, category, location, status, assignee, and SLA.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Follow-up Tasks</strong><br><span class="text-gray-500">Calls, WhatsApp, email, viewing, callback, and admin notes.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Demand Intelligence</strong><br><span class="text-gray-500">No-results demand, saved searches, high-demand areas, campus demand, and supply gaps.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Revenue Opportunities</strong><br><span class="text-gray-500">Mortgage, advertiser, student, broker, land/title, and commercial opportunities.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>WhatsApp Lead Sources</strong><br><span class="text-gray-500">Listing card/detail clicks, no-results help, student requests, and routed conversations.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Mortgage Leads</strong><br><span class="text-gray-500">Requests from listing mortgage widgets, mortgage page, WhatsApp, and callbacks.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Advertiser Leads</strong><br><span class="text-gray-500">Advertiser signup, campaign requests, payments, and package interest.</span></div>
+          </div>
         </div>
 
         <div class="bg-white border border-green-100 rounded-2xl p-5">
@@ -3613,7 +3749,7 @@
     <div class="max-w-7xl mx-auto px-4">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <div>
-          <div class="text-2xl font-black serif" id="footer-brand-title">Uganda Property</div>
+          <div class="text-2xl font-black serif" id="footer-brand-title">MakaUg</div>
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
             Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
           </p>
@@ -3684,7 +3820,7 @@
           <div class="text-xs text-green-300" id="footer-growth-note">In-house sponsored placements and SEO indexing enabled for growth campaigns.</div>
         </div>
         <div id="footer-copyright" class="text-xs text-green-400 mt-3">
-          © 2026 Uganda Property. All rights reserved.
+          © 2026 MakaUg. All rights reserved.
         </div>
       </div>
     </div>
@@ -3767,13 +3903,13 @@
         <i class="fas fa-circle-check"></i>
         <span id="listing-submit-pill">Submission Received</span>
       </div>
-      <h2 id="listing-submit-title" class="text-2xl font-black text-gray-800 serif">Your ad has been submitted</h2>
-      <p id="listing-submit-sub" class="text-sm text-gray-600 mt-2">Thank you. We will review your listing within 24 hours.</p>
-      <p id="listing-submit-contact" class="text-sm text-green-700 font-semibold mt-2">We will WhatsApp you once it's approved, and we can also follow up by email.</p>
+      <h2 id="listing-submit-title" class="text-2xl font-black text-gray-800 serif"></h2>
+      <p id="listing-submit-sub" class="text-sm text-gray-600 mt-2"></p>
+      <p id="listing-submit-contact" class="text-sm text-green-700 font-semibold mt-2"></p>
       <div class="mt-4 grid sm:grid-cols-2 gap-3">
         <div class="bg-green-50 border border-green-100 rounded-xl p-3">
-          <div class="text-xs uppercase tracking-wide text-green-700 font-semibold" id="listing-submit-ref-label">Inquiry Number</div>
-          <div id="listing-submit-ref" class="text-lg font-black text-green-900 mt-1">Pending reference</div>
+          <div class="text-xs uppercase tracking-wide text-green-700 font-semibold" id="listing-submit-ref-label"></div>
+          <div id="listing-submit-ref" class="text-lg font-black text-green-900 mt-1"></div>
         </div>
         <div class="bg-green-50 border border-green-100 rounded-xl p-3">
           <div class="text-xs uppercase tracking-wide text-green-700 font-semibold" id="listing-submit-status-label">Status</div>
@@ -6622,8 +6758,8 @@
         ["lp-title-label", "Title *"],
         ["lp-region-label", "Region *"],
         ["lp-district-label", "District *"],
-        ["lp-city-label", "Location / Town *"],
-        ["lp-neighborhood-label", "Neighbourhood / Zone *"],
+        ["lp-city-label", "Town / City"],
+        ["lp-neighborhood-label", "Neighbourhood / Area"],
         ["lp-area-label", "Area / Neighbourhood *"],
         ["lp-street-label", "Street / Road"],
         ["lp-address-label", "Full Address"],
@@ -6632,8 +6768,7 @@
         ["lp-pin-title", "Pin Property Location"],
         ["lp-location-intro-kicker", "Property location"],
         ["lp-location-intro-title", "Tell us where the property is"],
-        ["lp-location-intro-copy", "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin."],
-        ["lp-pin-sub", "The map follows your selected location. Move the pin if needed, then confirm."],
+        ["lp-pin-sub", "The map follows the address or place you select. Move the pin if needed, then confirm."],
         ["lp-location-guide-title", "Find address or place"],
         ["lp-location-guide-copy", "Search for the nearest place, road, landmark, or area, then place the map pin where the property is located."],
         ["lp-alt-label", "Altitude (m)"],
@@ -7166,7 +7301,7 @@
       setTextById("footer-link-help", translateListingLabel("Help Centre"));
       setTextById("footer-link-report", translateListingLabel("Report a Listing"));
       setTextById("footer-link-safety", translateListingLabel("Safety Tips"));
-      setTextById("footer-copyright", translateListingLabel("© 2026 Uganda Property. All rights reserved."));
+      setTextById("footer-copyright", translateListingLabel("© 2026 MakaUg. All rights reserved."));
       applyHomeAssistantLanguageUI();
 
       setPageHeading("page-sale", tr("pageSale"));
@@ -13400,6 +13535,139 @@
       });
     }
 
+    function setLpAddressSearchStatus(message = "", tone = "info") {
+      const el = document.getElementById("lp-address-search-status");
+      if (!el) return;
+      const color = tone === "error" ? "text-red-700" : tone === "success" ? "text-green-800" : "text-green-800";
+      el.className = `text-xs ${color} mt-2`;
+      el.textContent = message || translateListingLabel("Search for the nearest place, road, landmark, or area, then place the map pin where the property is located.");
+    }
+
+    function setLpHiddenValue(id, value = "") {
+      const el = document.getElementById(id);
+      if (el) el.value = value || "";
+    }
+
+    async function geocodeWithNominatim(query) {
+      const q = uniqueTextParts([query, "Uganda"]).join(", ");
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=ug&q=${encodeURIComponent(q)}`;
+        const response = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!response.ok) return null;
+        const rows = await response.json();
+        const row = Array.isArray(rows) ? rows[0] : null;
+        const lat = Number(row?.lat);
+        const lng = Number(row?.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const streetName = extractStreetNameFromNominatimAddress(row?.address || {});
+        if (streetName) setLpStreetName(streetName);
+        return {
+          lat,
+          lng,
+          label: row?.display_name || query,
+          placeId: row?.place_id ? `osm:${row.place_id}` : "",
+          provider: "nominatim",
+          confidence: row?.importance ? Math.min(0.95, Math.max(0.35, Number(row.importance))) : 0.45
+        };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function applyLpAddressPlaceResult(point, query = "") {
+      if (!point || !Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return false;
+      const label = point.label || query || "";
+      const addressEl = document.getElementById("lp-address");
+      const searchEl = document.getElementById("lp-address-search");
+      if (searchEl && label) searchEl.value = label;
+      if (addressEl && label) {
+        addressEl.disabled = false;
+        addressEl.value = label;
+        addressEl.dataset.auto = "1";
+      }
+      setLpHiddenValue("lp-place-id", point.placeId || "");
+      setLpHiddenValue("lp-plus-code", point.plusCode || "");
+      setLpHiddenValue("lp-geocoding-provider", point.provider || "google");
+      setLpHiddenValue("lp-geocoded-at", new Date().toISOString());
+      setLpHiddenValue("lp-location-confidence", point.confidence != null ? String(point.confidence) : "0.65");
+      setLpResolvedLocationLabel(label);
+      applyResolvedAddressHierarchy(label, point);
+      setListPinCoords(point.lat, point.lng, true, true);
+      const confirmEl = document.getElementById("lp-location-confirm");
+      if (confirmEl) confirmEl.checked = false;
+      updateLpLocationConfirmButton();
+      updateListPreview();
+      renderListReviewSummary();
+      setLpAddressSearchStatus(translateListingLabel("Address found. Check the pin and confirm the location."), "success");
+      return true;
+    }
+
+    function onLpAddressSearchInput() {
+      const input = document.getElementById("lp-address-search");
+      const query = (input?.value || "").trim();
+      if (query.length >= 3) {
+        renderTypeahead(input, getLocationSuggestionPool(true), (value) => {
+          if (input) input.value = value;
+          findLpAddressOrPlace();
+        });
+      } else {
+        closeTypeahead();
+      }
+    }
+
+    function onLpAddressSearchKeydown(event) {
+      handleTypeaheadKeydown(event, () => getLocationSuggestionPool(true), () => findLpAddressOrPlace());
+      if (event.key === "Enter" && !event.defaultPrevented) {
+        event.preventDefault();
+        findLpAddressOrPlace();
+      }
+    }
+
+    async function findLpAddressOrPlace() {
+      const input = document.getElementById("lp-address-search");
+      const query = (input?.value || "").trim();
+      if (query.length < 3) {
+        markLpFieldError("lp-address-search", "Type at least 3 characters to find an address or place.");
+        setLpAddressSearchStatus(translateListingLabel("Type at least 3 characters to find an address or place."), "error");
+        return false;
+      }
+      clearLpValidationErrors("#lp-step-1");
+      setLpAddressSearchStatus(translateListingLabel("Finding the nearest matching place in Uganda..."));
+      ensureListPinMap();
+      let point = null;
+      try {
+        point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+        if (point) {
+          point.provider = "google";
+          point.confidence = 0.75;
+        }
+      } catch (error) {
+        point = null;
+      }
+      if (!point) {
+        point = await geocodeWithNominatim(query);
+      }
+      if (!point) {
+        const region = lpVal("lp-region");
+        const district = lpVal("list-district-sel") || guessDistrictFromText(query);
+        const fallback = getDistrictCenter(district) || getRegionCenter(region) || MAP_DEFAULT_CENTER;
+        setListPinCoords(fallback.lat, fallback.lng, true, true);
+        const addressEl = document.getElementById("lp-address");
+        if (addressEl) {
+          addressEl.disabled = false;
+          addressEl.value = query;
+          addressEl.dataset.auto = "0";
+        }
+        setLpHiddenValue("lp-geocoding-provider", "manual_fallback");
+        setLpHiddenValue("lp-geocoded-at", new Date().toISOString());
+        setLpHiddenValue("lp-location-confidence", "0.25");
+        setLpResolvedLocationLabel(query);
+        setLpAddressSearchStatus(translateListingLabel("We could not find an exact match. The map is ready for you to place the pin manually."), "error");
+        return false;
+      }
+      return applyLpAddressPlaceResult(point, query);
+    }
+
     async function reverseGeocodeGoogleResult(lat, lng) {
       const geocoder = await getGoogleGeocoder();
       if (!geocoder) return null;
@@ -13725,12 +13993,8 @@
     function canConfirmLpLocation() {
       const lat = parseFloatSafe(lpVal("lp-lat"));
       const lng = parseFloatSafe(lpVal("lp-lng"));
-      return !!lpVal("lp-region")
-        && !!lpVal("list-district-sel")
-        && !!lpVal("lp-city")
-        && !!lpVal("lp-neighborhood")
-        && lat != null
-        && lng != null;
+      const hasAddressContext = !!(lpVal("lp-address") || lpResolvedLocationLabel || lpVal("lp-address-search") || lpVal("lp-area") || lpVal("list-district-sel"));
+      return hasAddressContext && lat != null && lng != null;
     }
 
     function updateLpLocationConfirmButton() {
@@ -13748,7 +14012,7 @@
       }
       if (label) {
         label.textContent = !ready
-          ? translateListingLabel("Complete location steps first")
+          ? translateListingLabel("Find address/place or move the pin first")
           : confirmed
             ? translateListingLabel("Location confirmed")
             : translateListingLabel("Confirm this location");
@@ -13759,8 +14023,8 @@
       const lat = parseFloatSafe(lpVal("lp-lat"));
       const lng = parseFloatSafe(lpVal("lp-lng"));
       if (!canConfirmLpLocation()) {
-        markLpFieldError("lp-pin-map", "Complete the location steps before confirming the map pin.");
-        toast(translateListingLabel("Complete the location steps before confirming the map pin."));
+        markLpFieldError("lp-pin-map", "Find an address/place or place the pin before confirming.");
+        toast(translateListingLabel("Find an address/place or place the pin before confirming."));
         return;
       }
       if (lat == null || lng == null) {
@@ -14091,15 +14355,20 @@
     }
 
     function syncMapToHierarchy() {
-      if (!lpVal("lp-region") || !lpVal("list-district-sel") || !lpVal("lp-city") || !lpVal("lp-neighborhood")) {
-        toast(translateListingLabel("Complete the location steps before confirming the map pin."));
+      const searchValue = lpVal("lp-address-search") || lpVal("lp-address");
+      if (searchValue) {
+        findLpAddressOrPlace();
+        return;
+      }
+      if (!lpVal("lp-region") && !lpVal("list-district-sel") && !lpVal("lp-area")) {
+        toast(translateListingLabel("Find an address/place or place the pin before confirming."));
         return;
       }
       const confirmEl = document.getElementById("lp-location-confirm");
       if (confirmEl) confirmEl.checked = false;
       refreshListPinMapFromInputs();
       updateLpLocationStepLocks();
-      toast(translateListingLabel("Map synced to selected location."));
+      toast(translateListingLabel("Map centered to the selected address/place."));
     }
 
     function setListWizardStep(step) {
@@ -14210,21 +14479,9 @@
         missing.push("Title");
         markLpFieldError("lp-title", "Title is required.");
       }
-      if (!lpVal("lp-region")) {
-        missing.push("Region");
-        markLpFieldError("lp-region", "Select a region.");
-      }
-      if (!lpVal("list-district-sel")) {
-        missing.push("District");
-        markLpFieldError("list-district-sel", "Select a district.");
-      }
-      if (!lpVal("lp-city")) {
-        missing.push("Location/Town");
-        markLpFieldError("lp-city", "Select a city or town.");
-      }
-      if (!lpVal("lp-neighborhood")) {
-        missing.push("Neighbourhood");
-        markLpFieldError("lp-neighborhood", "Select a neighbourhood/zone.");
+      if (!lpVal("lp-address") && !lpResolvedLocationLabel && !lpVal("lp-address-search")) {
+        missing.push("Address/place");
+        markLpFieldError("lp-address-search", "Find the nearest address, road, landmark, or area.");
       }
       if (!lpVal("lp-description")) {
         missing.push("Description");
@@ -14490,6 +14747,28 @@
       const lat = parseFloatSafe(lpVal("lp-lat"));
       const lng = parseFloatSafe(lpVal("lp-lng"));
       const altitudeM = parseFloatSafe(lpVal("lp-alt"));
+      const locationObject = {
+        query: lpVal("lp-address-search") || null,
+        placeId: lpVal("lp-place-id") || null,
+        fullAddress: lpVal("lp-address") || lpResolvedLocationLabel || null,
+        street: streetName || null,
+        area: area || null,
+        neighborhood: neighborhood || null,
+        parish: null,
+        town: city || null,
+        city: city || null,
+        district: district || null,
+        region: region || null,
+        country: "Uganda",
+        latitude: lat,
+        longitude: lng,
+        plusCode: lpVal("lp-plus-code") || null,
+        radius: null,
+        locationConfidence: parseFloatSafe(lpVal("lp-location-confidence")),
+        locationPrivacy: lpVal("lp-location-privacy") || "exact",
+        geocodingProvider: lpVal("lp-geocoding-provider") || null,
+        geocodedAt: lpVal("lp-geocoded-at") || null
+      };
       const publicDisplayName = getPublicDisplayName();
       const nearbyFacilities = getNearbyAmenitySuggestions({ lat, lng, district, city, area });
       const autoAreaHighlights = buildLocationHighlightsText({
@@ -14517,7 +14796,7 @@
         title,
         district,
         area,
-        address: lpVal("lp-address") || null,
+        address: locationObject.fullAddress,
         description,
         price,
         price_period: lpVal("lp-period") || null,
@@ -14564,6 +14843,13 @@
           city: city || null,
           neighborhood: neighborhood || null,
           street_name: streetName || null,
+          place_id: locationObject.placeId,
+          plus_code: locationObject.plusCode,
+          geocoding_provider: locationObject.geocodingProvider,
+          geocoded_at: locationObject.geocodedAt,
+          location_confidence: locationObject.locationConfidence,
+          location_privacy: locationObject.locationPrivacy,
+          location: locationObject,
           altitude_m: altitudeM,
           map_pin_confirmed: !!document.getElementById("lp-location-confirm")?.checked,
           resolved_location_label: lpResolvedLocationLabel || null,
@@ -14784,6 +15070,10 @@
       const modalRefEl = document.getElementById("listing-submit-ref");
       const modalContactEl = document.getElementById("listing-submit-contact");
       const modalStatusEl = document.getElementById("listing-submit-status");
+      const successTitleEl = document.getElementById("lp-success-title");
+      const successSubEl = document.getElementById("lp-success-sub");
+      const successRefLabelEl = document.getElementById("lp-success-ref-label");
+      const modalRefLabelEl = document.getElementById("listing-submit-ref-label");
       const contactPref = payload?.extra_fields?.verify?.contact_preference || "both";
       const ownerEmailSent = options.owner_email_sent || options.ownerNotification?.email?.sent === true;
       const ownerWhatsAppReady = !!(options.owner_whatsapp_url || options.ownerNotification?.whatsapp?.manual_url);
@@ -14799,6 +15089,10 @@
       if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Received");
       if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("Your property has been submitted");
       if (modalSubEl) modalSubEl.textContent = translateListingLabel("Next step: MakaUg runs automated checks on your photos, ID details, location, and duplicates. Review is normally completed within 24 hours.");
+      if (successTitleEl) successTitleEl.textContent = translateListingLabel("Listing submitted successfully");
+      if (successSubEl) successSubEl.textContent = translateListingLabel("Thanks. Your listing is now in review. We will contact you once it has been approved.");
+      if (successRefLabelEl) successRefLabelEl.textContent = translateListingLabel("Reference:");
+      if (modalRefLabelEl) modalRefLabelEl.textContent = translateListingLabel("Reference");
       const resolvedReference = reference || payload?.inquiry_reference || generateListingInquiryRef();
       if (!lpInquiryReference) lpInquiryReference = resolvedReference;
       if (refEl) refEl.textContent = resolvedReference;
@@ -14822,8 +15116,8 @@
           ? translateListingLabel("Submitted in offline mode. We will sync this listing once connection returns.")
           : translateListingLabel("Submitted online and sent for verification.");
       }
-      if (successBox) successBox.classList.add("hidden");
-      openModal("listing-submit-modal");
+      if (successBox) successBox.classList.remove("hidden");
+      if (document.getElementById("listing-submit-modal")) openModal("listing-submit-modal");
     }
 
     function showListSubmissionError(message) {
@@ -16329,7 +16623,7 @@
       const cityEl = document.getElementById("lp-city");
       if (!cityEl) return;
       const tree = getDistrictLocationTree(district);
-      cityEl.innerHTML = [`<option value="">${translateListingLabel("Select city / town")}</option>`]
+      cityEl.innerHTML = [`<option value="">${translateListingLabel("Select town / city")}</option>`]
         .concat(tree.map((item) => `<option value="${item.city}">${item.city}</option>`))
         .join("");
       selectFirstLpOptionIfNeeded(cityEl, keepCity, false);
@@ -17214,6 +17508,7 @@
       wireInputTypeahead("land-q-f", () => getLocationSuggestionPool(false), () => filterLand());
       wireInputTypeahead("student-q-f", () => getLocationSuggestionPool(true), () => filterStudents());
       wireInputTypeahead("broker-q-f", () => getBrokerSuggestionPool(), (value) => filterBrokers(value));
+      wireInputTypeahead("lp-address-search", () => getLocationSuggestionPool(true), () => findLpAddressOrPlace());
     }
 
     function badgeColor(type) {
@@ -18103,6 +18398,31 @@
       ensureRevenuePlacements();
     }
 
+    function routeForPage(page) {
+      const routes = {
+        home: "/",
+        sale: "/for-sale",
+        rent: "/to-rent",
+        students: "/students",
+        commercial: "/commercial",
+        land: "/land",
+        brokers: "/brokers",
+        mortgage: "/mortgage",
+        "ai-chatbot": "/discover-ai-chatbot",
+        fraud: "/fraud",
+        "list-property": "/list-property",
+        about: "/about",
+        saved: "/saved",
+        "finder-dashboard": "/dashboard",
+        "student-dashboard": "/student-dashboard",
+        "agent-dashboard": "/broker-dashboard",
+        "field-dashboard": "/field-agent-dashboard",
+        "advertiser-dashboard": "/advertiser-dashboard",
+        "admin-dashboard": "/admin"
+      };
+      return routes[page] || "";
+    }
+
     function showPage(page) {
       const previousPage = currentPage;
       document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
@@ -18112,6 +18432,12 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
         lastPage = currentPage;
         currentPage = page;
+      } else {
+        const route = routeForPage(page);
+        if (route && window.location.pathname !== route) {
+          window.location.href = route;
+          return;
+        }
       }
       closeMobile();
       setTimeout(() => {
@@ -18455,6 +18781,35 @@
 
       if (path === "/advertiser-signup") {
         openAuthSignUp("advertiser");
+        return true;
+      }
+
+      const publicRoutePage = {
+        "/": "home",
+        "/for-sale": "sale",
+        "/sale": "sale",
+        "/to-rent": "rent",
+        "/rent": "rent",
+        "/students": "students",
+        "/student-accommodation": "students",
+        "/commercial": "commercial",
+        "/land": "land",
+        "/brokers": "brokers",
+        "/find-brokers": "brokers",
+        "/mortgage": "mortgage",
+        "/mortgage-finder": "mortgage",
+        "/discover-ai-chatbot": "ai-chatbot",
+        "/ai-chatbot": "ai-chatbot",
+        "/fraud": "fraud",
+        "/anti-fraud": "fraud",
+        "/safety": "fraud",
+        "/report-fraud": "fraud",
+        "/list-property": "list-property",
+        "/about": "about",
+        "/saved": "saved"
+      }[path];
+      if (publicRoutePage) {
+        showPage(publicRoutePage);
         return true;
       }
 
@@ -19101,11 +19456,11 @@
         "District *": "Disitulikiti *",
         "City / Town *": "Ekibuga / Tawuni *",
         "Location / Town *": "Ekifo / Tawuni *",
-        "Neighbourhood / Zone *": "Ekifo / Zone *",
+        "Neighbourhood / Area": "Ekitundu / Area",
         "Altitude (m)": "Obuwanvu (m)",
         "Select region": "Londa region",
         "Select district": "Londa disitulikiti",
-        "Select city / town": "Londa ekibuga / tawuni",
+        "Select town / city": "Londa tawuni / ekibuga",
         "Select neighbourhood": "Londa ekifo",
         "Central": "Central",
         "Eastern": "Eastern",
@@ -19152,7 +19507,7 @@
         "Additional photo": "Ekifaananyi ekirala",
         "Land Features": "Ebikwata ku ttaka",
         "Select district": "Londa disitulikiti",
-        "Select city / town": "Londa ekibuga / tawuni",
+        "Select town / city": "Londa tawuni / ekibuga",
         "Select neighbourhood": "Londa ekifo",
         "Continue to Photos →": "Genda ku Bifaananyi →",
         "Auto-filled from district/city/neighbourhood": "Ejjula yokka okuva ku disitulikiti/ekibuga/ekifo",
@@ -19426,7 +19781,7 @@
         "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola property — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
         "📍 Kampala, Uganda": "📍 Kampala, Uganda",
         "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu ya property ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
-        "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Eddembe lyonna likuumiddwa.",
+        "© 2026 MakaUg. All rights reserved.": "© 2026 MakaUg. Eddembe lyonna likuumiddwa.",
         "quality flag(s)": "obubaka bw'omutindo",
         "No quality flags": "Tewali buzibu bwa mutindo",
         "Accepted": "Kikkiriziddwa",
@@ -19498,11 +19853,11 @@
         "District *": "Wilaya *",
         "City / Town *": "Mji / Town *",
         "Location / Town *": "Eneo / Town *",
-        "Neighbourhood / Zone *": "Mtaa / Zone *",
+        "Neighbourhood / Area": "Mtaa / Eneo",
         "Altitude (m)": "Urefu (m)",
         "Select region": "Chagua kanda",
         "Select district": "Chagua wilaya",
-        "Select city / town": "Chagua mji / town",
+        "Select town / city": "Chagua town / mji",
         "Select neighbourhood": "Chagua mtaa",
         "Central": "Kati",
         "Eastern": "Mashariki",
@@ -19549,7 +19904,7 @@
         "Additional photo": "Picha ya ziada",
         "Land Features": "Vipengele vya Ardhi",
         "Select district": "Chagua wilaya",
-        "Select city / town": "Chagua mji / town",
+        "Select town / city": "Chagua town / mji",
         "Select neighbourhood": "Chagua mtaa",
         "Continue to Photos →": "Endelea kwa Picha →",
         "Auto-filled from district/city/neighbourhood": "Hujazwa moja kwa moja kutoka wilaya/mji/mtaa",
@@ -19823,7 +20178,7 @@
         "Describe the property — key features, condition, neighbourhood highlights...": "Elezea mali — vipengele muhimu, hali yake, na vivutio vya eneo...",
         "📍 Kampala, Uganda": "📍 Kampala, Uganda",
         "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Jukwaa la kwanza kabisa la mali nchini Uganda lisilo na malipo. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.",
-        "© 2026 Uganda Property. All rights reserved.": "© 2026 Uganda Property. Haki zote zimehifadhiwa.",
+        "© 2026 MakaUg. All rights reserved.": "© 2026 MakaUg. Haki zote zimehifadhiwa.",
         "quality flag(s)": "alama za ubora",
         "No quality flags": "Hakuna alama za ubora",
         "Accepted": "Imekubaliwa",
@@ -19895,11 +20250,11 @@
         "District *": "District *",
         "City / Town *": "Kibuga / Town *",
         "Location / Town *": "Kabedo / Town *",
-        "Neighbourhood / Zone *": "Kino ma i but / Zone *",
+        "Neighbourhood / Area": "Kino ma i but / Area",
         "Altitude (m)": "Altitude (m)",
         "Select region": "Yer region",
         "Select district": "Yer district",
-        "Select city / town": "Yer city / town",
+        "Select town / city": "Yer town / city",
         "Select neighbourhood": "Yer neighbourhood",
         "Area / Neighbourhood *": "Kabedo / Neighbourhood *",
         "Full Address": "Address weng",
@@ -19969,11 +20324,11 @@
         "District *": "Disiturikiti *",
         "City / Town *": "Ekyibuga / Town *",
         "Location / Town *": "Eifo / Town *",
-        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Neighbourhood / Area": "Ekitundu / Area",
         "Altitude (m)": "Oburaingwa (m)",
         "Select region": "Londa region",
         "Select district": "Londa disiturikiti",
-        "Select city / town": "Londa ekyibuga / town",
+        "Select town / city": "Londa town / ekyibuga",
         "Select neighbourhood": "Londa ekitundu",
         "Area / Neighbourhood *": "Akarere / Ekitundu *",
         "Full Address": "Address yoona",
@@ -20043,11 +20398,11 @@
         "District *": "Disiturikiti *",
         "City / Town *": "Ekyibuga / Town *",
         "Location / Town *": "Ahantu / Town *",
-        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Neighbourhood / Area": "Ekitundu / Area",
         "Altitude (m)": "Oburaingwa (m)",
         "Select region": "Londa region",
         "Select district": "Londa disiturikiti",
-        "Select city / town": "Londa ekyibuga / town",
+        "Select town / city": "Londa town / ekyibuga",
         "Select neighbourhood": "Londa ekitundu",
         "Area / Neighbourhood *": "Akarere / Ekitundu *",
         "Full Address": "Address yoona",
@@ -20117,11 +20472,11 @@
         "District *": "Disitulikiti *",
         "City / Town *": "Ekibuga / Town *",
         "Location / Town *": "Ekifo / Town *",
-        "Neighbourhood / Zone *": "Ekitundu / Zone *",
+        "Neighbourhood / Area": "Ekitundu / Area",
         "Altitude (m)": "Obuwanvu (m)",
         "Select region": "Londa region",
         "Select district": "Londa disitulikiti",
-        "Select city / town": "Londa ekibuga / town",
+        "Select town / city": "Londa town / ekibuga",
         "Select neighbourhood": "Londa ekitundu",
         "Area / Neighbourhood *": "Ekitundu / Neighbourhood *",
         "Full Address": "Address yonna",
@@ -20448,11 +20803,10 @@
           "Start here. We will move the map pin and fill the nearest location details where possible.": "Tandikira wano. Tujja kutambuza pin ku maapu era tujjuze ebikwata ku kifo ekiri okumpi bwe kisoboka.",
           "Property location": "Ekifo kya property",
           "Tell us where the property is": "Tubuulire property eri wa",
-          "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.": "Londa ekifo mutendera ku mutendera. Maapu ejja kugoberera buli ky'olonze, oluvannyuma okakase pin entuufu.",
-          "The map follows your selected location. Move the pin if needed, then confirm.": "Maapu egoberera ekifo ky'olonze. Tambuza pin bwe kiba kyetaagisa, oluvannyuma okakase.",
+          "The map follows the address or place you select. Move the pin if needed, then confirm.": "Maapu egoberera endagiriro oba ekifo ky'olonze. Tambuza pin bwe kiba kyetaagisa, oluvannyuma okakase.",
           "Center map to selected location": "Twala maapu ku kifo ky'olonze",
           "Complete location steps first": "Sooka omalirize emitendera gy'ekifo",
-          "Complete the location steps before confirming the map pin.": "Maliriza emitendera gy'ekifo nga tonnakakasa pin ya maapu.",
+          "Find address/place or move the pin first": "Noonya address/ekifo oba tambuza pin okusooka.",
           "Select a neighbourhood first": "Sooka olonde neighbourhood",
           "Select a region and district before centering the map.": "Sooka olonde region ne district nga tonnatwala maapu ku kifo.",
           "Map synced to selected location.": "Maapu etwaliddwa ku kifo ky'olonze.",
@@ -20542,11 +20896,10 @@
           "Start here. We will move the map pin and fill the nearest location details where possible.": "Anza hapa. Tutasogeza pin ya ramani na kujaza maelezo ya eneo la karibu inapowezekana.",
           "Property location": "Eneo la mali",
           "Tell us where the property is": "Tuambie mali iko wapi",
-          "Choose the location step by step. The map will follow each selection, then you can confirm the exact pin.": "Chagua eneo hatua kwa hatua. Ramani itafuata kila chaguo, kisha uthibitishe pin sahihi.",
-          "The map follows your selected location. Move the pin if needed, then confirm.": "Ramani inafuata eneo ulilochagua. Sogeza pin ikihitajika, kisha uthibitishe.",
+          "The map follows the address or place you select. Move the pin if needed, then confirm.": "Ramani inafuata anwani au eneo ulilochagua. Sogeza pin ikihitajika, kisha uthibitishe.",
           "Center map to selected location": "Leta ramani kwenye eneo ulilochagua",
           "Complete location steps first": "Kamilisha hatua za eneo kwanza",
-          "Complete the location steps before confirming the map pin.": "Kamilisha hatua za eneo kabla ya kuthibitisha pin ya ramani.",
+          "Find address/place or move the pin first": "Tafuta anwani/eneo au sogeza pin kwanza.",
           "Select a neighbourhood first": "Chagua mtaa kwanza",
           "Select a region and district before centering the map.": "Chagua mkoa na wilaya kabla ya kuweka ramani katikati.",
           "Map synced to selected location.": "Ramani imewekwa kwenye eneo ulilochagua.",
