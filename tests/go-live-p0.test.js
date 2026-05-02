@@ -40,7 +40,8 @@ const PUBLIC_ROUTES = [
   '/privacy-policy',
   '/cookie-policy',
   '/terms',
-  '/report-fraud'
+  '/report-fraud',
+  '/list-property'
 ];
 
 const FORBIDDEN_PUBLIC_IDS = [
