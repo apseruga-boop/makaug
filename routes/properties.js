@@ -20,6 +20,7 @@ const {
 } = require('../services/listingModerationService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -1235,6 +1236,63 @@ router.post('/', async (req, res, next) => {
       logger.error('Property submission owner notification failed:', error.message);
     }
 
+    await Promise.allSettled([
+      logNotification(db, {
+        recipientEmail: listerEmailNormalized || null,
+        recipientPhone: listerPhone || null,
+        channel: 'email',
+        type: 'listing_submitted',
+        status: notificationStatusFromDelivery(ownerNotification.email),
+        payloadSummary: {
+          title,
+          inquiry_reference: inquiryReference,
+          status,
+          delivery: ownerNotification.email || {}
+        },
+        relatedListingId: propertyId,
+        sentAt: ownerNotification.email?.sent ? new Date() : null,
+        failureReason: ownerNotification.email?.error || ownerNotification.email?.reason || null
+      }),
+      logNotification(db, {
+        recipientPhone: listerPhone || null,
+        channel: 'whatsapp',
+        type: 'listing_submitted',
+        status: notificationStatusFromDelivery(ownerNotification.whatsapp),
+        payloadSummary: {
+          title,
+          inquiry_reference: inquiryReference,
+          status,
+          manual_url_available: Boolean(ownerNotification.whatsapp?.manual_url)
+        },
+        relatedListingId: propertyId,
+        sentAt: ownerNotification.whatsapp?.sent ? new Date() : null,
+        failureReason: ownerNotification.whatsapp?.error || ownerNotification.whatsapp?.reason || null
+      }),
+      logNotification(db, {
+        recipientEmail: process.env.SUPPORT_EMAIL || 'info@makaug.com',
+        channel: 'email',
+        type: 'new_listing_pending_review',
+        status: notificationStatusFromDelivery(supportEmailNotification),
+        payloadSummary: {
+          title,
+          inquiry_reference: inquiryReference,
+          status,
+          category: listingType,
+          location: [area, district].filter(Boolean).join(', ')
+        },
+        relatedListingId: propertyId,
+        sentAt: supportEmailNotification?.sent ? new Date() : null,
+        failureReason: supportEmailNotification?.error || supportEmailNotification?.reason || null
+      }),
+      logNotification(db, {
+        channel: 'in_app',
+        type: 'listing_pending_review',
+        status: 'logged',
+        payloadSummary: { title, inquiry_reference: inquiryReference, status },
+        relatedListingId: propertyId
+      })
+    ]);
+
     return res.status(201).json({
       ok: true,
       data: {
@@ -1254,6 +1312,72 @@ router.post('/', async (req, res, next) => {
         support_email: process.env.SUPPORT_EMAIL || 'info@makaug.com'
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/:id/whatsapp-click', async (req, res, next) => {
+  try {
+    const propertyId = req.params.id;
+    const source = cleanText(req.body.source) || 'listing_detail_whatsapp';
+    const ctaLocation = cleanText(req.body.cta_location) || source;
+    const message = cleanText(req.body.message) || 'WhatsApp contact initiated from MakaUg';
+    const contactName = cleanText(req.body.contact_name) || 'WhatsApp contact initiated';
+    const contactPhone = cleanText(req.body.contact_phone);
+    const contactEmail = cleanText(req.body.contact_email);
+    const targetPhone = cleanText(req.body.target_phone);
+    const language = cleanText(req.body.language) || 'en';
+
+    if (contactPhone && !isValidPhone(contactPhone)) {
+      return res.status(400).json({ ok: false, error: 'contact_phone is invalid' });
+    }
+    if (contactEmail && !isValidEmail(contactEmail)) {
+      return res.status(400).json({ ok: false, error: 'contact_email is invalid' });
+    }
+
+    const exists = await db.query(
+      `SELECT id, title, inquiry_reference, status
+       FROM properties
+       WHERE id = $1
+         AND status IN ('approved','sold')
+       LIMIT 1`,
+      [propertyId]
+    );
+    if (!exists.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const inserted = await db.query(
+      `INSERT INTO property_inquiries (
+        property_id,
+        contact_name,
+        contact_phone,
+        contact_email,
+        message,
+        channel
+      ) VALUES ($1,$2,$3,$4,$5,$6)
+      RETURNING id, created_at`,
+      [propertyId, contactName, contactPhone || null, contactEmail || null, message, 'whatsapp']
+    );
+
+    await logNotification(db, {
+      recipientPhone: targetPhone || null,
+      channel: 'in_app',
+      type: 'whatsapp_contact_initiated',
+      status: 'logged',
+      payloadSummary: {
+        source,
+        cta_location: ctaLocation,
+        language,
+        property_title: exists.rows[0].title,
+        inquiry_reference: exists.rows[0].inquiry_reference,
+        inquiry_id: inserted.rows[0].id
+      },
+      relatedListingId: propertyId
+    });
+
+    return res.status(201).json({ ok: true, data: inserted.rows[0] });
   } catch (error) {
     return next(error);
   }

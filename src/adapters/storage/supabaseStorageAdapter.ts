@@ -19,7 +19,7 @@ export class SupabaseStorageAdapter implements MediaStorageAdapter {
         'Content-Type': input.mimeType,
         'x-upsert': 'true'
       },
-      body: input.bytes
+      body: new Uint8Array(input.bytes) as BodyInit
     });
 
     if (!response.ok) {

@@ -4,6 +4,7 @@ npm-debug.log*
 *.log
 .DS_Store
 coverage/
+dist/
 private-local/
 qa-output/
 .whatsapp-web-copilot-profile/

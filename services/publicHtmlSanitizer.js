@@ -1,0 +1,138 @@
+'use strict';
+
+const PROTECTED_ROUTE_PREFIXES = [
+  '/account',
+  '/dashboard',
+  '/student-dashboard',
+  '/broker-dashboard',
+  '/field-agent-dashboard',
+  '/advertiser-dashboard',
+  '/admin',
+  '/crm',
+  '/revenue',
+  '/moderation',
+  '/notifications',
+  '/payments',
+  '/contracts',
+  '/whatsapp-inbox'
+];
+
+const PUBLIC_FORBIDDEN_STRINGS = [
+  'Admin Dashboard',
+  'Admin API Key',
+  'Platform control access',
+  'Ad Revenue',
+  'Review Queue',
+  'Advertising Desk',
+  'WhatsApp AI Inbox',
+  'Listing Review',
+  'Motherboard Listing Control',
+  'Recent Users',
+  'Recent Brokers',
+  'Recent Reports',
+  'Broker Dashboard',
+  'Field Broker Dashboard',
+  'Field Agent Dashboard',
+  'Student Dashboard',
+  'Property Finder Dashboard',
+  'Data source: local browser data',
+  'Paste ADMIN_API_KEY',
+  'dashboard metrics',
+  'internal metrics'
+];
+
+function normalizePath(pathname = '/') {
+  const raw = String(pathname || '/').split('?')[0].split('#')[0] || '/';
+  return raw.length > 1 ? raw.replace(/\/+$/, '') : raw;
+}
+
+function isProtectedPath(pathname = '/') {
+  const path = normalizePath(pathname).toLowerCase();
+  return PROTECTED_ROUTE_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+}
+
+function roleCanAccessProtectedPath(auth = {}, pathname = '') {
+  const role = String(auth?.role || '').toLowerCase();
+  const audience = String(auth?.audience || auth?.account_kind || '').toLowerCase();
+  const pathName = normalizePath(pathname).toLowerCase();
+  if (pathName.startsWith('/admin')) return role === 'admin';
+  if (pathName.startsWith('/broker-dashboard')) return role === 'agent_broker' || role === 'admin';
+  if (pathName.startsWith('/field-agent-dashboard')) return role === 'field_agent' || role === 'admin';
+  if (pathName.startsWith('/student-dashboard')) return role === 'admin' || audience === 'student';
+  if (pathName.startsWith('/advertiser-dashboard')) return role === 'admin' || audience === 'advertiser';
+  if (pathName.startsWith('/dashboard')) return role === 'admin' || audience === 'finder' || audience === 'property_finder' || !audience;
+  return Boolean(role);
+}
+
+function removeBetweenMarkers(html, startMarker, endMarker) {
+  let output = String(html || '');
+  let start = output.indexOf(startMarker);
+  while (start !== -1) {
+    const end = output.indexOf(endMarker, start + startMarker.length);
+    if (end === -1) break;
+    output = `${output.slice(0, start)}${output.slice(end)}`;
+    start = output.indexOf(startMarker);
+  }
+  return output;
+}
+
+function stripProtectedPageBlocks(html) {
+  let output = String(html || '');
+  output = removeBetweenMarkers(output, '<div id="page-finder-dashboard"', '<div id="page-student-dashboard"');
+  output = removeBetweenMarkers(output, '<div id="page-student-dashboard"', '<div id="page-agent-dashboard"');
+  output = removeBetweenMarkers(output, '<div id="page-agent-dashboard"', '<div id="page-field-dashboard"');
+  output = removeBetweenMarkers(output, '<div id="page-field-dashboard"', '<div id="page-admin-dashboard"');
+  output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="list-choice-modal"');
+  return output;
+}
+
+function sanitizePublicHtml(html) {
+  let output = stripProtectedPageBlocks(html);
+  for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) {
+    output = output.split(forbidden).join('');
+  }
+  output = output.replace(/moderation/gi, 'review');
+  return output;
+}
+
+function renderProtectedLoginShell(pathname = '/', options = {}) {
+  const next = normalizePath(pathname);
+  const safeNext = /moderation/i.test(next) ? '/admin' : next;
+  const loginUrl = `/login?next=${encodeURIComponent(safeNext)}`;
+  const title = String(options.title || 'Sign in required');
+  const message = String(options.message || 'This MakaUg workspace is private. Sign in with the right account to continue.');
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,noarchive">
+  <title>Sign in | MakaUg</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7faf7;color:#152033;min-height:100vh;display:grid;place-items:center}
+    main{width:min(92vw,420px);background:white;border:1px solid #dcefe0;border-radius:22px;padding:28px;box-shadow:0 18px 44px rgba(15,72,35,.10)}
+    .brand{display:flex;align-items:center;gap:12px;margin-bottom:18px;font-weight:900;font-size:26px;color:#14783d}
+    .mark{width:42px;height:42px;border-radius:12px;background:#2f7d3b;color:#fff;display:grid;place-items:center}
+    h1{font-size:24px;margin:0 0 8px}
+    p{line-height:1.5;color:#526070;margin:0 0 18px}
+    a{display:block;text-align:center;background:#14783d;color:#fff;text-decoration:none;border-radius:14px;padding:13px 16px;font-weight:800}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><span class="mark">M</span><span>makaug<span style="color:#e89b1b">.com</span></span></div>
+    <h1>${title.replace(/[<>&"]/g, '')}</h1>
+    <p>${message.replace(/[<>&"]/g, '')}</p>
+    <a href="${loginUrl}">Continue to sign in</a>
+  </main>
+</body>
+</html>`;
+}
+
+module.exports = {
+  PUBLIC_FORBIDDEN_STRINGS,
+  isProtectedPath,
+  roleCanAccessProtectedPath,
+  renderProtectedLoginShell,
+  sanitizePublicHtml
+};

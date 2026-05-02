@@ -6,6 +6,14 @@ const db = require('../config/database');
 const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
+const {
+  buildOtpSuccessPayload,
+  dashboardForUser,
+  ensurePostVerificationRecords,
+  normalizeSignupAudience,
+  roleForSignup
+} = require('../services/authFlowService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const {
   parseBooleanLike,
@@ -17,6 +25,22 @@ const {
 } = require('../utils/adminOtpOverride');
 
 const router = express.Router();
+
+function authCookieOptions(req) {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.secure || req.get('x-forwarded-proto') === 'https' || process.env.NODE_ENV === 'production',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    path: '/'
+  };
+}
+
+function setAuthCookie(req, res, token) {
+  if (token) {
+    res.cookie('makaug_auth_token', token, authCookieOptions(req));
+  }
+}
 
 function isValidUgPhone(phone) {
   return /^\+256\d{9}$/.test(phone);
@@ -66,7 +90,18 @@ function sanitizeProfileData(input = {}) {
     'agent_company',
     'agent_districts',
     'agent_specialities',
-    'preferred_updates'
+    'preferred_updates',
+    'field_agent_territory',
+    'field_agent_areas',
+    'field_agent_languages',
+    'field_agent_experience',
+    'field_agent_availability',
+    'field_agent_reason',
+    'field_agent_application_status',
+    'broker_review_status',
+    'business_name',
+    'business_type',
+    'campaign_interest'
   ];
   return allowed.reduce((acc, key) => {
     const value = cleanText(source[key]);
@@ -80,16 +115,46 @@ function createToken(user) {
   if (!secret) {
     throw new Error('JWT_SECRET is not configured');
   }
+  const profile = user.profile_data && typeof user.profile_data === 'object' && !Array.isArray(user.profile_data)
+    ? user.profile_data
+    : {};
 
   return jwt.sign(
     {
       sub: user.id,
       phone: user.phone,
-      role: user.role
+      role: user.role,
+      audience: profile.audience || profile.account_kind || '',
+      account_kind: profile.account_kind || profile.audience || ''
     },
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+}
+
+async function notifyAdminSignup({ user, eventType }) {
+  try {
+    await logNotification(db, {
+      channel: 'in_app',
+      type: eventType,
+      status: 'logged',
+      payloadSummary: {
+        user_id: user?.id,
+        role: user?.role,
+        profile_data: user?.profile_data || {}
+      }
+    });
+  } catch (_) {}
+}
+
+function accountCreatedEventType(user = {}) {
+  const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
+  const audience = normalizeSignupAudience(profile.audience || profile.account_kind || profile.seeker_type);
+  if (audience === 'student') return 'account_created_student';
+  if (audience === 'agent') return 'account_created_broker';
+  if (audience === 'field_agent') return 'field_agent_application_received';
+  if (audience === 'advertiser') return 'advertiser_signup_received';
+  return 'account_created_property_finder';
 }
 
 function getBaseUrl(req) {
@@ -380,6 +445,15 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       configError.status = 400;
       throw configError;
     }
+    await logNotification(db, {
+      recipientEmail: identifier,
+      channel: 'email',
+      type: 'otp_sent',
+      status: notificationStatusFromDelivery(delivery),
+      payloadSummary: { purpose, expires_minutes: expiresMinutes },
+      sentAt: delivery?.sent ? new Date() : null,
+      failureReason: delivery?.error || delivery?.reason || null
+    });
   } else {
     let delivery = null;
     try {
@@ -403,6 +477,15 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       configError.status = 400;
       throw configError;
     }
+    await logNotification(db, {
+      recipientPhone: identifier,
+      channel: 'sms',
+      type: 'otp_sent',
+      status: notificationStatusFromDelivery(delivery),
+      payloadSummary: { purpose, expires_minutes: expiresMinutes },
+      sentAt: delivery?.success || delivery?.sent ? new Date() : null,
+      failureReason: delivery?.error || delivery?.reason || null
+    });
   }
 
   return {
@@ -540,11 +623,12 @@ router.post('/register', async (req, res, next) => {
   try {
     client = await db.getClient();
     const firstName = cleanText(req.body.first_name);
-    const lastName = cleanText(req.body.last_name);
+    const lastName = cleanText(req.body.last_name) || '';
     const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email) || null;
     const roleInput = cleanText(req.body.role).toLowerCase();
     const password = cleanText(req.body.password);
+    const confirmPassword = cleanText(req.body.confirm_password);
     const otpChannelInput = cleanText(req.body.otp_channel).toLowerCase();
     const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
     const marketingOptIn = parseBooleanLike(req.body.marketing_opt_in, true);
@@ -553,36 +637,32 @@ router.post('/register', async (req, res, next) => {
     const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput) ? preferredContactInput : 'whatsapp';
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
     const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput) ? preferredLanguageInput : 'en';
+    const audience = normalizeSignupAudience(req.body.audience || req.body.profile_data?.audience || roleInput);
     const profileData = sanitizeProfileData({
       ...(req.body.profile_data && typeof req.body.profile_data === 'object' ? req.body.profile_data : {}),
-      audience: req.body.profile_data?.audience || roleInput
+      audience,
+      account_kind: req.body.profile_data?.account_kind || audience,
+      field_agent_application_status: audience === 'field_agent' ? 'pending_review' : req.body.profile_data?.field_agent_application_status,
+      broker_review_status: audience === 'agent' ? 'pending_review' : req.body.profile_data?.broker_review_status
     });
 
-    const roleMap = {
-      'buyer / renter': 'buyer_renter',
-      buyer: 'buyer_renter',
-      renter: 'buyer_renter',
-      buyer_renter: 'buyer_renter',
-      'property owner': 'property_owner',
-      owner: 'property_owner',
-      property_owner: 'property_owner',
-      'agent / broker': 'agent_broker',
-      agent: 'agent_broker',
-      broker: 'agent_broker',
-      agent_broker: 'agent_broker'
-    };
-
-    const role = roleMap[roleInput] || 'buyer_renter';
+    const role = roleForSignup({ roleInput, audience });
 
     const errors = [];
     if (!firstName) errors.push('first_name is required');
-    if (!lastName) errors.push('last_name is required');
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
+    if (confirmPassword && confirmPassword !== password) errors.push('confirm_password must match password');
+    if (req.body.terms_accepted === false || req.body.terms_accepted === 'false') errors.push('terms_accepted is required');
+    if (req.body.privacy_accepted === false || req.body.privacy_accepted === 'false') errors.push('privacy_accepted is required');
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
     if (phone && !isValidUgPhone(phone)) errors.push('phone must be a valid Uganda number');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
     if (otpChannel === 'email' && !email) errors.push('email is required when otp_channel is email');
+    if (audience === 'agent' && !email) errors.push('email is required for broker signup');
+    if (audience === 'field_agent' && !profileData.field_agent_territory && !profileData.field_agent_areas) {
+      errors.push('field agent territory or areas are required');
+    }
 
     if (errors.length) {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
@@ -682,6 +762,14 @@ router.post('/register', async (req, res, next) => {
     await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
     await client.query('COMMIT');
 
+    if (audience === 'field_agent') {
+      await notifyAdminSignup({ user, eventType: 'new_field_agent_application' });
+    } else if (audience === 'agent') {
+      await notifyAdminSignup({ user, eventType: 'new_broker_verification_request' });
+    } else if (audience === 'advertiser') {
+      await notifyAdminSignup({ user, eventType: 'new_advertiser_signup' });
+    }
+
     return res.status(201).json({
       ok: true,
       data: {
@@ -740,11 +828,17 @@ router.post('/login', async (req, res, next) => {
 
     const token = createToken(user);
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    setAuthCookie(req, res, token);
 
     return res.json({ ok: true, data: { token, user: publicUser(user) } });
   } catch (error) {
     return next(error);
   }
+});
+
+router.post('/logout', (req, res) => {
+  res.clearCookie('makaug_auth_token', { ...authCookieOptions(req), maxAge: undefined });
+  return res.json({ ok: true, data: { logged_out: true } });
 });
 
 router.post('/request-otp', async (req, res, next) => {
@@ -990,23 +1084,70 @@ router.post('/verify-otp', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'Account not found' });
     }
 
-    const user = userResult.rows[0];
+    let user = userResult.rows[0];
+    try {
+      await ensurePostVerificationRecords(db, user);
+      const refreshed = await db.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [user.id]);
+      if (refreshed.rows.length) user = refreshed.rows[0];
+    } catch (profileError) {
+      logger.warn('Post-verification profile setup failed', { userId: user.id, error: profileError.message });
+    }
+
     const token = createToken(user);
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    setAuthCookie(req, res, token);
 
     if (purpose === 'signup' && user.email) {
       try {
-        await sendWelcomeEmail({ to: user.email, user });
+        const welcomeDelivery = await sendWelcomeEmail({ to: user.email, user });
+        await logNotification(db, {
+          userId: user.id,
+          recipientEmail: user.email,
+          channel: 'email',
+          type: accountCreatedEventType(user),
+          status: notificationStatusFromDelivery(welcomeDelivery),
+          payloadSummary: { redirect_url: dashboardForUser(user), purpose },
+          sentAt: welcomeDelivery?.sent ? new Date() : null,
+          failureReason: welcomeDelivery?.error || welcomeDelivery?.reason || null
+        });
       } catch (emailError) {
         logger.warn('Welcome email delivery failed after signup verification', {
           userId: user.id,
           email: user.email,
           error: emailError.message
         });
+        await logNotification(db, {
+          userId: user.id,
+          recipientEmail: user.email,
+          channel: 'email',
+          type: accountCreatedEventType(user),
+          status: 'failed',
+          payloadSummary: { redirect_url: dashboardForUser(user), purpose },
+          failureReason: emailError.message
+        });
       }
     }
 
-    return res.json({ ok: true, data: { token, user: publicUser(user) } });
+    const publicPayload = publicUser(user);
+    await logNotification(db, {
+      userId: user.id,
+      recipientPhone: channel === 'phone' ? identifier : user.phone,
+      recipientEmail: channel === 'email' ? identifier : user.email,
+      channel: 'in_app',
+      type: 'otp_verified',
+      status: 'logged',
+      payloadSummary: { purpose, redirect_url: dashboardForUser(user), contact_channel: channel }
+    });
+
+    return res.json({
+      ok: true,
+      data: buildOtpSuccessPayload({
+        token,
+        user: publicPayload,
+        preferredAudience: publicPayload.profile_data?.audience || '',
+        message: 'Verification complete. Opening your MakaUg dashboard.'
+      })
+    });
   } catch (error) {
     return next(error);
   }

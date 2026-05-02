@@ -42,7 +42,7 @@ export class S3PresignedAdapter implements MediaStorageAdapter {
         'Content-Type': input.mimeType,
         ...(presign.headers || {})
       },
-      body: input.bytes
+      body: new Uint8Array(input.bytes) as BodyInit
     });
 
     if (!uploadResp.ok) {

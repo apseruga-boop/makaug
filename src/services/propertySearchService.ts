@@ -19,7 +19,7 @@ export class PropertySearchService {
   constructor(private readonly urls = new UrlBuilderService()) {}
 
   async search(payload: PropertySearchPayload): Promise<{ results: SearchResult[]; requestId: string }> {
-    const requestId = await repositories.search.saveRequest(payload);
+    const requestId = await repositories.search.saveRequest(payload as unknown as Record<string, unknown>);
 
     const results = await repositories.propertyAdapter.search({
       category: payload.category,

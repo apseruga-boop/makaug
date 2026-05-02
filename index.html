@@ -3769,7 +3769,7 @@
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
           <button id="auth-signup-audience-student" title="Create account for student accommodation search, alerts, and viewings." type="button" onclick="setAuthSignUpAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
-          <button id="auth-signup-audience-field" title="Field Agents are onboarded manually by operations." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-signup-audience-field" title="Apply to become a MakaUg Field Agent." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
         </div>
         <p id="auth-signup-help" class="text-xs text-gray-500 mb-4">
           Property Finder: create an account to save properties, get alerts, and track searches.
@@ -3777,11 +3777,8 @@
         <input id="auth-signup-role" type="hidden" value="Buyer / Renter">
 
         <div id="auth-field-signup-note" class="hidden mb-4 bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800">
-          Field Agent onboarding is managed manually.
-          <div class="mt-1">Email <strong>info@makaug.com</strong> with: Full Name, Phone, Districts of operation, and prior field experience.</div>
-          <a href="mailto:info@makaug.com?subject=Field%20Agent%20Onboarding%20-%20makaug&body=Full%20Name:%0APhone:%0ADistricts%20of%20Operation:%0AExperience:%0A" class="inline-flex items-center gap-2 mt-3 bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">
-            <i class="fas fa-envelope"></i> Email onboarding team
-          </a>
+          Field Agent applications are reviewed by MakaUg operations before work access is activated.
+          <div class="mt-1">Complete the form below with your territory, languages, availability, and experience. You will see a pending-review status after OTP verification.</div>
         </div>
 
         <div id="auth-signup-form-wrap">
@@ -3819,6 +3816,12 @@
               <input id="auth-profile-agent-company" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Agency / brokerage name">
               <input id="auth-profile-agent-districts" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Districts you cover">
               <input id="auth-profile-agent-specialities" data-profile-group="agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Specialities, e.g. land, rentals, commercial">
+              <input id="auth-profile-field-territory" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Main territory / district">
+              <input id="auth-profile-field-areas" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Areas you can cover">
+              <input id="auth-profile-field-languages" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Languages spoken">
+              <input id="auth-profile-field-availability" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Availability, e.g. weekdays / weekends">
+              <input id="auth-profile-field-experience" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Relevant property, sales, or field experience">
+              <input id="auth-profile-field-reason" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Why do you want to become a MakaUg Field Agent?">
             </div>
           </div>
 
@@ -3865,7 +3868,20 @@
           </div>
 
           <label class="block text-sm font-medium text-gray-800 mb-2">Password</label>
-          <input id="auth-signup-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-5" placeholder="Min 8 characters">
+          <input id="auth-signup-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-3" placeholder="Min 8 characters">
+
+          <label class="block text-sm font-medium text-gray-800 mb-2">Confirm Password</label>
+          <input id="auth-signup-confirm-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-4" placeholder="Repeat your password">
+
+          <label class="flex items-start gap-2 text-sm text-gray-700 mb-3">
+            <input id="auth-signup-terms" type="checkbox" class="mt-1 accent-green-700">
+            <span>I agree to MakaUg Terms & Conditions.</span>
+          </label>
+
+          <label class="flex items-start gap-2 text-sm text-gray-700 mb-4">
+            <input id="auth-signup-privacy" type="checkbox" class="mt-1 accent-green-700">
+            <span>I agree to MakaUg Privacy Policy.</span>
+          </label>
 
           <label class="flex items-start gap-2 text-sm text-gray-700 mb-5">
             <input id="auth-signup-weekly-tips" type="checkbox" checked class="mt-1 accent-green-700">
@@ -7728,8 +7744,10 @@
 
       if (authSignInAudience === "field_agent") {
         if (audienceHelp) audienceHelp.textContent = "Field Agent: operational user who signs up owners/brokers/properties in the field and tracks approved output.";
-        if (standardWrap) standardWrap.classList.add("hidden");
-        if (fieldWrap) fieldWrap.classList.remove("hidden");
+        if (fieldWrap) fieldWrap.classList.add("hidden");
+        if (standardWrap) standardWrap.classList.remove("hidden");
+        if (identifierLabel) identifierLabel.textContent = "Field Agent Phone or Email";
+        if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or field@email.com";
       } else {
         if (fieldWrap) fieldWrap.classList.add("hidden");
         if (standardWrap) standardWrap.classList.remove("hidden");
@@ -7803,9 +7821,9 @@
         fieldNote.classList.add("hidden");
         if (agentRegWrap) agentRegWrap.classList.add("hidden");
       } else if (authSignUpAudience === "field_agent") {
-        help.textContent = "Field Agent: onboarding is reviewed manually before credentials are issued.";
+        help.textContent = "Field Agent: submit an application for MakaUg operations review after OTP verification.";
         roleInput.value = "Field Agent";
-        formWrap.classList.add("hidden");
+        formWrap.classList.remove("hidden");
         fieldNote.classList.remove("hidden");
         if (agentRegWrap) agentRegWrap.classList.add("hidden");
       } else {
@@ -7825,7 +7843,9 @@
       const accountKindEl = document.getElementById("auth-profile-account-kind");
       const accountKind = authSignUpAudience === "agent"
         ? "agent"
-        : String(accountKindEl?.value || "finder").toLowerCase();
+        : (authSignUpAudience === "field_agent"
+          ? "field_agent"
+          : String(accountKindEl?.value || "finder").toLowerCase());
       if (accountKindEl) {
         accountKindEl.classList.toggle("hidden", authSignUpAudience !== "finder");
       }
@@ -7844,6 +7864,13 @@
         if (areas) areas.placeholder = "Primary areas / districts";
         if (budget) budget.placeholder = "Typical property price/rent range";
         if (timeline) timeline.placeholder = "How quickly can you respond to leads?";
+      } else if (authSignUpAudience === "field_agent") {
+        if (title) title.textContent = "Field Agent application";
+        if (subtitle) subtitle.textContent = "Tell MakaUg where you can work and what experience you bring. Operations will review before activation.";
+        if (goal) goal.placeholder = "Main goal, e.g. submit verified listings";
+        if (areas) areas.placeholder = "Primary operation areas";
+        if (budget) budget.placeholder = "Transport / coverage notes";
+        if (timeline) timeline.placeholder = "When can you start?";
       } else {
         if (title) title.textContent = accountKind === "student" ? "Tell us about your student search" : "Help us personalise your account";
         if (subtitle) subtitle.textContent = accountKind === "student" ? "This helps MakaUg match you to safer accommodation near your campus." : "A few optional details help MakaUg send better property matches and WhatsApp updates.";
@@ -7875,6 +7902,13 @@
         agent_company: get("auth-profile-agent-company"),
         agent_districts: get("auth-profile-agent-districts"),
         agent_specialities: get("auth-profile-agent-specialities"),
+        field_agent_territory: get("auth-profile-field-territory"),
+        field_agent_areas: get("auth-profile-field-areas"),
+        field_agent_languages: get("auth-profile-field-languages"),
+        field_agent_experience: get("auth-profile-field-experience"),
+        field_agent_availability: get("auth-profile-field-availability"),
+        field_agent_reason: get("auth-profile-field-reason"),
+        field_agent_application_status: authSignUpAudience === "field_agent" ? "pending_review" : "",
         preferred_updates: document.getElementById("auth-signup-weekly-tips")?.checked === false ? "essential only" : "weekly tips and WhatsApp updates"
       };
     }
@@ -9260,6 +9294,75 @@
       const recipient = normalizeWhatsAppRecipient(phone);
       if (!recipient) return "";
       return `https://wa.me/${recipient}?text=${encodeURIComponent(String(message || "").trim())}`;
+    }
+
+    function cleanWhatsappValue(value) {
+      const raw = String(value ?? "").trim();
+      if (!raw || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null") return "";
+      return raw.replace(/\s+/g, " ");
+    }
+
+    function getListingWhatsappRef(p = {}) {
+      return cleanWhatsappValue(p.inquiry_reference || p.reference || p.listing_ref || p.id || "");
+    }
+
+    function getListingWhatsappCategory(p = {}) {
+      const type = normalizeType(p.type || p.listing_type || p.category || "");
+      if (type === "rent") return "rent";
+      if (type === "land") return "land";
+      if (type === "student") return "student";
+      if (type === "commercial") return "commercial";
+      return "sale";
+    }
+
+    function getListingWhatsappLocation(p = {}) {
+      return [p.campus ? `near ${p.campus}` : "", p.area, p.neighbourhood, p.city, p.district, p.region]
+        .map(cleanWhatsappValue)
+        .filter(Boolean)
+        .filter((item, idx, arr) => arr.indexOf(item) === idx)
+        .join(", ") || "the listed location";
+    }
+
+    function buildListingWhatsappMessageForUi(p = {}) {
+      const title = cleanWhatsappValue(p.title) || "this property";
+      const category = getListingWhatsappCategory(p);
+      const location = getListingWhatsappLocation(p);
+      const ref = getListingWhatsappRef(p);
+      const url = getPropertyShareUrl(p);
+      const price = p.price ? fmtP(p.price, p.period) : "";
+      let message = "";
+      if (category === "rent") {
+        message = `Hi, I'm contacting you about this rental property on MakaUg: ${title} in ${location}. Is it still available for rent?`;
+      } else if (category === "land") {
+        message = `Hi, I'm contacting you about this land listing on MakaUg: ${title} in ${location}. Is it still available, and what is the title/tenure status?`;
+      } else if (category === "student") {
+        message = `Hi, I'm contacting you about this student accommodation on MakaUg: ${title} near ${location}. Is it still available?`;
+      } else if (category === "commercial") {
+        message = `Hi, I'm contacting you about this commercial property on MakaUg: ${title} in ${location}. Is it still available?`;
+      } else {
+        message = `Hi, I'm contacting you about this property for sale on MakaUg: ${title} in ${location}. Is it still available?`;
+      }
+      return [message, price ? `Price: ${price}` : "", ref ? `Ref: ${ref}` : "", url].filter(Boolean).join(" ");
+    }
+
+    async function recordListingWhatsappClick(propertyId, message = "", targetPhone = "", source = "listing_detail_whatsapp") {
+      try {
+        await apiRequest(`/api/properties/${encodeURIComponent(String(propertyId))}/whatsapp-click`, {
+          method: "POST",
+          body: {
+            source,
+            cta_location: source,
+            message,
+            target_phone: targetPhone,
+            contact_name: authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "",
+            contact_phone: authState?.user?.phone || "",
+            contact_email: authState?.user?.email || "",
+            language: currentLang || "en"
+          }
+        });
+      } catch (error) {
+        console.warn("WhatsApp lead tracking failed", error.message || error);
+      }
     }
 
     function openAdminWhatsAppMessageModal({ title = "Send WhatsApp message", listingLabel = "-", phone = "", message = "", manualUrl = "" } = {}) {
@@ -11880,6 +11983,7 @@
 
     function signOut() {
       trackEvent("auth_sign_out", {});
+      apiRequest("/api/auth/logout", { method: "POST", body: {} }).catch(() => {});
       clearAuthState();
       showPage("home");
       toast("Signed out");
@@ -11913,7 +12017,7 @@
       hydrateAccountForm();
       closeModal("auth-modal");
       await trackEvent("auth_success", { source, role: user.role || "" });
-      toast(`Welcome, ${user.first_name || "user"}`);
+      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
       openSignedInDashboard();
     }
 
@@ -11971,9 +12075,9 @@
       }
 
       let authIdentifier = identifierRaw;
-      if (audience === "field_agent") {
+      if (audience === "field_agent" && !identifierRaw) {
         if (!employeeNumber || !agentNumber) {
-          toast("Enter employee number, broker number, and password.");
+          toast("Enter phone/email and password.");
           return;
         }
         authIdentifier = `${employeeNumber}|${agentNumber}`;
@@ -11982,14 +12086,9 @@
         return;
       }
 
-      if (audience === "field_agent") {
-        toast("Field Agent accounts are provisioned manually by operations. Contact info@makaug.com for activation.");
-        return;
-      }
-
-      const isEmailLogin = identifierRaw.includes("@");
-      const phone = isEmailLogin ? "" : normalizePhoneInput(identifierRaw);
-      const email = isEmailLogin ? identifierRaw.toLowerCase() : "";
+      const isEmailLogin = authIdentifier.includes("@");
+      const phone = isEmailLogin ? "" : normalizePhoneInput(authIdentifier);
+      const email = isEmailLogin ? authIdentifier.toLowerCase() : "";
 
       setButtonLoading("auth-signin-btn", true);
       try {
@@ -12006,25 +12105,32 @@
     }
 
     async function submitAuthSignUp() {
-      if (authSignUpAudience === "field_agent") {
-        toast("Field Agent onboarding is manual. Please email info@makaug.com to receive credentials.");
-        return;
-      }
-
       const firstName = (document.getElementById("auth-signup-first-name")?.value || "").trim();
       const lastName = (document.getElementById("auth-signup-last-name")?.value || "").trim();
       const phone = normalizePhoneInput(document.getElementById("auth-signup-phone")?.value);
       const email = (document.getElementById("auth-signup-email")?.value || "").trim();
       const role = (document.getElementById("auth-signup-role")?.value || "").trim();
       const password = (document.getElementById("auth-signup-password")?.value || "").trim();
+      const confirmPassword = (document.getElementById("auth-signup-confirm-password")?.value || "").trim();
       const otpChannel = authSignUpOtpChannel === "email" ? "email" : "phone";
       const registrationStatus = "not_registered";
       const areaLicenceNumber = (document.getElementById("auth-signup-agent-licence")?.value || "").trim();
       const weeklyTipsOptIn = document.getElementById("auth-signup-weekly-tips")?.checked !== false;
       const preferredLanguage = (document.getElementById("auth-signup-preferred-language")?.value || currentLang || "en").trim();
+      const termsAccepted = document.getElementById("auth-signup-terms")?.checked === true;
+      const privacyAccepted = document.getElementById("auth-signup-privacy")?.checked === true;
+      const profileData = collectAuthProfileData();
 
-      if (!firstName || !lastName || !phone || !password) {
+      if (!firstName || !phone || !password) {
         toast("Please complete all required signup fields.");
+        return;
+      }
+      if (password !== confirmPassword) {
+        toast("Passwords do not match.");
+        return;
+      }
+      if (!termsAccepted || !privacyAccepted) {
+        toast("Please accept the Terms and Privacy Policy to continue.");
         return;
       }
       if (otpChannel === "email" && !email) {
@@ -12033,6 +12139,10 @@
       }
       if (authSignUpAudience === "agent" && !email) {
         toast("Broker account signup requires an email address.");
+        return;
+      }
+      if (authSignUpAudience === "field_agent" && !profileData.field_agent_territory && !profileData.field_agent_areas) {
+        toast("Add your Field Agent territory or areas you can cover.");
         return;
       }
       setButtonLoading("auth-signup-btn", true);
@@ -12046,12 +12156,16 @@
             email,
             role,
             password,
+            confirm_password: confirmPassword,
             otp_channel: otpChannel,
+            audience: authSignUpAudience,
+            terms_accepted: termsAccepted,
+            privacy_accepted: privacyAccepted,
             weekly_tips_opt_in: weeklyTipsOptIn,
             marketing_opt_in: weeklyTipsOptIn,
             preferred_contact_channel: "whatsapp",
             preferred_language: preferredLanguage,
-            profile_data: collectAuthProfileData(),
+            profile_data: profileData,
             registration_status: authSignUpAudience === "agent" ? registrationStatus : undefined,
             area_licence_number: authSignUpAudience === "agent" ? areaLicenceNumber : undefined
           }
@@ -22009,9 +22123,12 @@
       const allowCall = !!ownerPhoneHref && (contactPref === "phone" || contactPref === "both" || !contactPref);
       const allowWhatsApp = !!ownerPhone && (contactPref === "whatsapp" || contactPref === "both" || !contactPref);
       const allowEmail = !!ownerEmail && contactPref === "email";
-      const contactMessage = `Hello, I am contacting you from MakaUg about ${p.title || "this property"}. ${getPropertyShareUrl(p)}`;
+      const contactMessage = buildListingWhatsappMessageForUi(p);
       const ownerWhatsAppUrl = allowWhatsApp ? buildWhatsAppUrl(ownerPhone, contactMessage) : "";
       const ownerEmailUrl = allowEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`MakaUg enquiry: ${p.title || "Property"}`)}&body=${encodeURIComponent(contactMessage)}` : "";
+      const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
+      const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
+      const brokerWhatsAppArg = adminAttr(JSON.stringify(broker?.whatsapp || ""));
       const videoUrl = String(p.video_url || p.youtube_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || "").trim();
       const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
       const directionsUrl = propertyDirectionsUrl(p);
@@ -22124,14 +22241,14 @@
                 <p class="font-semibold text-gray-800">${broker.name}</p>
                 <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
                 <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>
-                <a href="https://wa.me/${broker.whatsapp}" target="_blank" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
+                <a href="${adminAttr(buildWhatsAppUrl(broker.whatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
                 <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
                 <button onclick="openBrokerProfile(${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">${translatePropertyUi("View Broker")}</button>
               ` : `
                 <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
                 <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
                 ${allowCall ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : ""}
-                ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+                ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
                 ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
               `}
               <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>

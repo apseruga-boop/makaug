@@ -1,10 +1,12 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
 
 const logger = require('./config/logger');
 const healthRoutes = require('./routes/health');
@@ -25,6 +27,12 @@ const propertySeekerRoutes = require('./routes/property-seeker');
 const studentRoutes = require('./routes/student');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
+const {
+  isProtectedPath,
+  roleCanAccessProtectedPath,
+  renderProtectedLoginShell,
+  sanitizePublicHtml
+} = require('./services/publicHtmlSanitizer');
 
 const app = express();
 // Required on Render so rate limiting uses the forwarded client IP correctly.
@@ -110,11 +118,83 @@ app.get('/config.js', (_req, res) => {
 });
 
 const staticRoot = __dirname;
-app.use(express.static(staticRoot, { extensions: ['html'] }));
+const indexPath = path.join(staticRoot, 'index.html');
+
+function parseCookies(header = '') {
+  return String(header || '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const idx = part.indexOf('=');
+      if (idx === -1) return acc;
+      acc[decodeURIComponent(part.slice(0, idx).trim())] = decodeURIComponent(part.slice(idx + 1).trim());
+      return acc;
+    }, {});
+}
+
+function authFromCookie(req) {
+  const token = parseCookies(req.headers.cookie || '').makaug_auth_token;
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (_) {
+    return null;
+  }
+}
+
+function sendPublicIndex(req, res, next) {
+  if (req.path.startsWith('/api/')) return next();
+  if (isProtectedPath(req.path)) {
+    const auth = authFromCookie(req);
+    res.set('X-Robots-Tag', 'noindex, noarchive');
+    res.set('X-MakaUg-Protected-Route', '1');
+    if (!auth) {
+      return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || req.path)}`);
+    }
+    if (!roleCanAccessProtectedPath(auth, req.path)) {
+      return res.status(403).send(renderProtectedLoginShell('/login?access=denied', {
+        title: 'Access denied',
+        message: 'This MakaUg area belongs to a different account type. Sign in with the right account to continue.'
+      }));
+    }
+    try {
+      const html = fs.readFileSync(indexPath, 'utf8');
+      res.type('html');
+      res.set('Cache-Control', 'no-store');
+      return res.send(html);
+    } catch (error) {
+      return next(error);
+    }
+  }
+  try {
+    const html = fs.readFileSync(indexPath, 'utf8');
+    res.type('html');
+    res.set('Cache-Control', 'no-store');
+    res.set('X-MakaUg-Public-Sanitized', '1');
+    return res.send(sanitizePublicHtml(html));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function shouldServeIndex(req) {
+  if (!['GET', 'HEAD'].includes(req.method)) return false;
+  if (req.path.startsWith('/api/') || req.path === '/config.js' || req.path.startsWith('/private-local')) return false;
+  if (req.path === '/' || req.path === '/index.html') return true;
+  return !path.extname(req.path);
+}
+
+app.use((req, res, next) => {
+  if (!shouldServeIndex(req)) return next();
+  return sendPublicIndex(req, res, next);
+});
+
+app.use(express.static(staticRoot, { index: false }));
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
-  return res.sendFile(path.join(staticRoot, 'index.html'));
+  return sendPublicIndex(req, res, next);
 });
 
 app.use(notFound);
