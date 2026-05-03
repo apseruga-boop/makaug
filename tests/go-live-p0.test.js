@@ -160,6 +160,7 @@ function run() {
   const listingModerationService = fs.readFileSync(path.join(__dirname, '..', 'services', 'listingModerationService.js'), 'utf8');
   const emailLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailLogService.js'), 'utf8');
   const whatsappMessageLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappMessageLogService.js'), 'utf8');
+  const clickProbeScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'probe-click-actions.js'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
@@ -484,6 +485,15 @@ function run() {
   for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial', 'save_search', 'create_alert', 'book_viewing', 'request_callback', 'list_property', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'ask_help', 'advertiser_interest', 'language_change', 'human_handoff']) {
     assert(sourceHtml.includes(`value="${intent}"`) || sourceHtml.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
   }
+  assert(sourceHtml.includes('data-map-property-link="1"'), 'map listing popups should expose real property detail links');
+  assert(sourceHtml.includes('href="${adminAttr(detailPath)}"'), 'map listing popup should have a real /property fallback URL');
+  assert(sourceHtml.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');
+  assert(sourceHtml.includes('data-map-broker-link="1"'), 'broker map popups should expose real broker profile links');
+  assert(sourceHtml.includes('openMapBrokerProfile(event'), 'broker map popup should use a delegated broker click handler');
+  assert(sourceHtml.includes('recordRemoteRecentlyViewed'), 'property detail opens should record backend recently-viewed events when possible');
+  assert(sourceHtml.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
+  assert(sourceHtml.includes('map_property_click'), 'map View Property click should emit analytics');
+  assert(clickProbeScript.includes('map popup View Property did not open a listing detail route/view'), 'click probe should fail if map View Property does not open detail');
 
   for (const expected of [
     'GET /api/property-seeker/dashboard',

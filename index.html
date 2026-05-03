@@ -2216,7 +2216,7 @@
 
   <div id="page-detail" class="page">
     <div class="max-w-7xl mx-auto px-4 py-6">
-      <button id="detail-back-results-btn" onclick="showPage(lastPage || 'home')" class="mb-4 text-green-700 text-sm font-semibold"><i class="fas fa-arrow-left"></i> Back to results</button>
+      <button id="detail-back-results-btn" onclick="returnToLastPageFromDetail()" class="mb-4 text-green-700 text-sm font-semibold"><i class="fas fa-arrow-left"></i> Back to results</button>
       <div id="detail-content"></div>
     </div>
   </div>
@@ -8530,13 +8530,29 @@
       saveDashboardState();
     }
 
-    function recordUserPropertyView(propertyId) {
+    function recordRemoteRecentlyViewed(propertyId, source = "property_detail") {
+      const pid = String(propertyId || "");
+      if (!isUuidLike(pid)) return;
+      apiRequest("/api/property-seeker/recently-viewed", {
+        method: "POST",
+        body: {
+          listing_id: pid,
+          guest_session_id: getAnalyticsClientId(),
+          source
+        }
+      }).catch((error) => {
+        console.warn("Unable to record recently viewed listing", error?.message || error);
+      });
+    }
+
+    function recordUserPropertyView(propertyId, source = "property_detail") {
       const pid = String(propertyId);
       siteMetrics.propertyViews[pid] = (parseInt(siteMetrics.propertyViews[pid] || 0, 10) || 0) + 1;
       const act = getCurrentUserActivity();
       act.viewed[pid] = (parseInt(act.viewed[pid] || 0, 10) || 0) + 1;
       act.recentViewed = [propertyId, ...(act.recentViewed || []).filter((x) => String(x) !== String(propertyId))].slice(0, 24);
       saveDashboardState();
+      recordRemoteRecentlyViewed(propertyId, source);
     }
 
     function recordUserPropertyInquiry(propertyId) {
@@ -8912,7 +8928,7 @@
       const idArg = propertyIdArg(p.id);
       return `
         <div class="border border-gray-200 rounded-xl p-3 bg-white">
-          <button onclick="openDetail(${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
+          <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
           <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
           <div class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</div>
           <div class="mt-2 text-xs text-gray-500 flex gap-3">
@@ -9394,7 +9410,7 @@
             const badgeLabel = p.review_status === "approved" ? "Approved" : (p.review_status === "rejected" ? "Rejected" : "Pending");
             return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
               <div class="flex items-start justify-between gap-2">
-                <button onclick="openDetail(${idArg})" class="text-left font-bold text-gray-800 hover:text-green-700 line-clamp-1">${p.title}</button>
+                <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 hover:text-green-700 line-clamp-1">${p.title}</button>
                 <span class="text-xs font-semibold px-2 py-1 rounded ${badgeClass}">${badgeLabel}</span>
               </div>
               <p class="text-xs text-gray-500 mt-1">${p.area || "-"}, ${p.district || "-"}</p>
@@ -20186,17 +20202,30 @@
       return String(b?.id || "").localeCompare(String(a?.id || ""));
     }
 
+    function getPropertyDetailPath(propertyOrId) {
+      const rawId = typeof propertyOrId === "object"
+        ? (propertyOrId?.backend_id || propertyOrId?.id)
+        : propertyOrId;
+      const id = String(rawId || "").trim();
+      return id ? `/property/${encodeURIComponent(id)}` : "/property";
+    }
+
+    function getBrokerProfilePath(brokerOrId) {
+      const rawId = typeof brokerOrId === "object" ? brokerOrId?.id : brokerOrId;
+      const id = String(rawId || "").trim();
+      return id ? `/agents/${encodeURIComponent(id)}` : "/brokers";
+    }
+
     function getPropertyShareUrl(property) {
       if (!property?.id) return window.location.href;
       const origin = window.location.origin || "https://makaug.com";
-      const shareId = encodeURIComponent(String(property.backend_id || property.id));
-      return `${origin}/property/${shareId}`;
+      return `${origin}${getPropertyDetailPath(property)}`;
     }
 
     function getBrokerShareUrl(broker) {
       if (!broker?.id) return window.location.href;
       const origin = window.location.origin || "https://makaug.com";
-      return `${origin}/agents/${broker.id}`;
+      return `${origin}${getBrokerProfilePath(broker)}`;
     }
 
     async function copyTextToClipboard(text) {
@@ -20379,19 +20408,91 @@
       const title = property?.title || translatePropertyUi("Property");
       const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
       const photoUrl = getPropertyPreviewPhotoUrl(property);
+      const detailPath = getPropertyDetailPath(property);
       return `
         <div data-map-marker-popup="listing" style="min-width:220px;max-width:240px">
           <img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />
-          <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
+          <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;text-decoration:none;">
             ${adminEscape(title)}
-          </button>
+          </a>
           <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">${adminEscape(location)}</div>
           <div style="font-weight:700;color:#166534;margin-bottom:8px;">${adminEscape(fmtP(property?.price, property?.period))}</div>
-          <button type="button" onclick="openDetail(${idArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+          <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;width:100%;box-sizing:border-box;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">
             ${adminEscape(translatePropertyUi("View Property"))}
-          </button>
+          </a>
         </div>
       `;
+    }
+
+    function setCanonicalDetailUrl(propertyOrId, source = "property_detail") {
+      const path = getPropertyDetailPath(propertyOrId);
+      if (!path || path === "/property") return;
+      try {
+        if (window.location.pathname !== path) {
+          window.history.pushState({
+            page: "detail",
+            propertyId: String(typeof propertyOrId === "object" ? (propertyOrId?.backend_id || propertyOrId?.id || "") : propertyOrId || ""),
+            source
+          }, "", path);
+        }
+      } catch (error) {}
+    }
+
+    function canRenderInlinePropertyDetail() {
+      return !!(document.getElementById("page-detail") && document.getElementById("detail-content"));
+    }
+
+    function openPropertyLinkDetail(event, id, source = "property_link") {
+      const anchor = event?.currentTarget?.closest?.("a[href]") || event?.target?.closest?.("a[href]");
+      if (!canRenderInlinePropertyDetail()) {
+        if (anchor) return true;
+        if (event) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        window.location.href = getPropertyDetailPath(id);
+        return false;
+      }
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      Promise.resolve(openDetail(id, { source })).then((ok) => {
+        if (ok) {
+          const property = findPropertyForUi(id) || { id };
+          setCanonicalDetailUrl(property, source);
+          return;
+        }
+        window.location.href = getPropertyDetailPath(id);
+      });
+      return false;
+    }
+
+    function openMapPropertyDetail(event, id) {
+      trackEvent("map_property_click", { property_id: id, source: "map_popup" });
+      recordUserPropertyRoute(id);
+      return openPropertyLinkDetail(event, id, "map_popup");
+    }
+
+    function openPropertyCardDetail(event, id) {
+      trackEvent("property_card_click", { property_id: id, source: "property_card" });
+      return openPropertyLinkDetail(event, id, "property_card");
+    }
+
+    function openMapBrokerProfile(event, id) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      trackEvent("map_broker_click", { broker_id: id, source: "map_popup" });
+      openBrokerProfile(id);
+      try {
+        const path = getBrokerProfilePath(id);
+        if (path && window.location.pathname !== path) {
+          window.history.pushState({ page: "broker-profile", brokerId: String(id || ""), source: "map_popup" }, "", path);
+        }
+      } catch (error) {}
+      return false;
     }
 
     function getAmenityDisplayLabel(value, listingType = "sale") {
@@ -20583,7 +20684,7 @@
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
       return `
-        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openDetail(${idArg})">
+        <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
           <div class="h-48 relative overflow-hidden">
             <img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}" alt="${p.title}" class="w-full h-full object-cover">
             <div class="absolute top-2 left-2 flex flex-col gap-1.5">
@@ -20730,7 +20831,7 @@
       const bottomText = p.student_walk_text || "Near campus";
       const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
       return `
-        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openDetail(${idArg})">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
           <div class="relative h-48 overflow-hidden">
             <img src="${p.img}" alt="${p.title}" class="w-full h-full object-cover">
             ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
@@ -21024,6 +21125,18 @@
           maybeOpenListPropertyChoiceModal();
         }
       }
+    }
+
+    function returnToLastPageFromDetail() {
+      const target = lastPage || "home";
+      showPage(target);
+      const route = routeForPage(target) || "/";
+      try {
+        if (route && window.location.pathname !== route) {
+          window.history.pushState({ page: target, source: "detail_back" }, "", route);
+        }
+      } catch (error) {}
+      return false;
     }
 
     function mapRemotePropertyForUi(p, options = {}) {
@@ -25396,21 +25509,22 @@
         </div>`;
     }
 
-    async function openDetail(id) {
+    async function openDetail(id, options = {}) {
       let p = findPropertyForUi(id);
-      if (!p) return;
+      if (!p) return false;
       p = await hydratePropertyDetailForUi(p);
-      if (!p) return;
+      if (!p) return false;
       activeDetailPropertyId = String(p.id || id || "");
       const isAdminViewer = !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
       const isOwnerPreviewViewer = p.owner_preview_visible === true;
       if (!isListingPublicVisible(p) && !isAdminViewer && !isOwnerPreviewViewer) {
         toast("This listing is currently not publicly available.");
-        return;
+        return false;
       }
-      recordUserPropertyView(p.id);
+      recordUserPropertyView(p.backend_id || p.id, options.source || "property_detail");
       trackEvent("property_open", {
         property_id: p.id,
+        source: options.source || "property_detail",
         listing_type: normalizeType(p.type),
         district: p.district,
         area: p.area
@@ -25615,6 +25729,7 @@
         initDetailMap(p);
         if (showMortgageWidget) renderDetailMortgageWidget(p.id);
       }, 150);
+      return true;
     }
 
     function openBrokerProfile(id) {
@@ -25900,6 +26015,7 @@
         const infoWindow = new google.maps.InfoWindow();
         points.forEach(({ broker, point }) => {
           const brokerIdArg = adminListingIdArg(broker.id);
+          const brokerPath = getBrokerProfilePath(broker);
           const marker = new google.maps.Marker({
             position: { lat: point.lat, lng: point.lng },
             map,
@@ -25911,9 +26027,9 @@
                 <div style="font-weight:700;color:#111827;margin-bottom:2px">${adminEscape(broker.name || "Broker")}</div>
                 <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${adminEscape(broker.company || "")}</div>
                 <div style="font-size:12px;color:#374151;margin-bottom:8px">Location: ${adminEscape(broker.area || "")}</div>
-                <button type="button" onclick="openBrokerProfile(${brokerIdArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+                <a href="${adminAttr(brokerPath)}" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});" style="display:block;width:100%;box-sizing:border-box;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">
                   View Broker
-                </button>
+                </a>
               </div>
             `);
             infoWindow.open(map, marker);
@@ -25946,6 +26062,7 @@
 
       points.forEach(({ broker, point }) => {
         const brokerIdArg = adminListingIdArg(broker.id);
+        const brokerPath = getBrokerProfilePath(broker);
         const marker = L.marker([point.lat, point.lng]).addTo(map);
 
         marker.bindPopup(`
@@ -25957,9 +26074,9 @@
               <span style="font-weight:600;color:#166534">⭐ ${broker.rating}</span>
               <span style="color:#4b5563">${broker.listings} listings</span>
             </div>
-            <button type="button" onclick="openBrokerProfile(${brokerIdArg}); return false;" style="width:100%;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+            <a href="${adminAttr(brokerPath)}" data-map-broker-link="1" data-broker-id="${adminAttr(broker.id)}" onclick="return openMapBrokerProfile(event, ${brokerIdArg});" style="display:block;width:100%;box-sizing:border-box;background:#166534;color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer;text-align:center;text-decoration:none;">
               View Broker
-            </button>
+            </a>
           </div>
         `);
 

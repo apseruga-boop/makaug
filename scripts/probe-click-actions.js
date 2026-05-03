@@ -57,6 +57,89 @@ async function visibleText(page) {
   return page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim());
 }
 
+async function waitForMapIfPresent(page) {
+  const hasMap = await page.locator('#map-home:visible, #map-sale:visible, #map-rent:visible, #map-students:visible, #map-commercial:visible, #map-land:visible, #map-brokers:visible').count();
+  if (!hasMap) return false;
+  await page.evaluate(() => {
+    const map = document.querySelector('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers');
+    if (map) map.scrollIntoView({ block: 'center', inline: 'center' });
+  }).catch(() => {});
+  await page.waitForTimeout(3400);
+  return true;
+}
+
+async function clickGoogleMarkerCandidate(page) {
+  const candidates = await page.evaluate(() => {
+    const blocked = /^(Map|Satellite)$|keyboard|terms|report|fullscreen|street view|zoom|pegman|map data|imagery/i;
+    return Array.from(document.querySelectorAll('.gm-style [role="button"], .gm-style img[alt], .gm-style [title]'))
+      .map((el) => {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const label = (el.getAttribute('title') || el.getAttribute('aria-label') || el.getAttribute('alt') || el.textContent || '').replace(/\s+/g, ' ').trim();
+        const src = el.getAttribute('src') || '';
+        return {
+          label,
+          src,
+          visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width >= 8 && rect.height >= 8,
+          width: rect.width,
+          height: rect.height,
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2
+        };
+      })
+      .filter((item) => {
+        if (!item.visible) return false;
+        if (item.width > 90 || item.height > 90) return false;
+        if (blocked.test(item.label)) return false;
+        return item.label || /marker|spotlight|red|maps\.gstatic\.com\/mapfiles/i.test(item.src);
+      })
+      .slice(0, 14);
+  });
+  for (const candidate of candidates) {
+    await page.mouse.click(candidate.x, candidate.y).catch(() => {});
+    await page.waitForSelector('.gm-style-iw:visible, [data-map-marker-popup]:visible', { timeout: 1300 }).catch(() => {});
+    const opened = await page.locator('.gm-style-iw:visible, [data-map-marker-popup]:visible').count();
+    if (opened) return true;
+  }
+  return false;
+}
+
+async function clickPopupDetailOrBrokerAction(page, checks) {
+  const popupLink = page.locator([
+    '[data-map-property-link]:visible',
+    '.gm-style-iw a[href*="/property/"]:visible',
+    '.leaflet-popup a[href*="/property/"]:visible',
+    '[data-map-broker-link]:visible',
+    '.gm-style-iw a[href*="/agents/"]:visible',
+    '.leaflet-popup a[href*="/agents/"]:visible',
+    '.gm-style-iw button:has-text("View Property"):visible',
+    '.leaflet-popup button:has-text("View Property"):visible',
+    '.gm-style-iw button:has-text("View Broker"):visible',
+    '.leaflet-popup button:has-text("View Broker"):visible'
+  ].join(', ')).first();
+  if (!(await popupLink.count())) {
+    checks.push('map popup opened but has no View Property/View Broker action');
+    return;
+  }
+  const href = await popupLink.getAttribute('href').catch(() => '') || '';
+  const label = await popupLink.innerText().catch(() => '') || '';
+  await popupLink.click({ timeout: 8000 }).catch((error) => {
+    checks.push(`map popup detail click failed: ${error.message}`);
+  });
+  await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const text = await visibleText(page);
+  const path = new URL(page.url()).pathname;
+  const expectedProperty = href.includes('/property/') || /View Property/i.test(label);
+  const expectedBroker = href.includes('/agents/') || /View Broker/i.test(label);
+  if (expectedProperty && !path.startsWith('/property/') && !/Back to results|Book Viewing|Request Callback|WhatsApp Contact|Send enquiry/i.test(text)) {
+    checks.push(`map popup View Property did not open a listing detail route/view (path ${path})`);
+  }
+  if (expectedBroker && !path.startsWith('/agents/') && !/Back to Brokers|Broker profile|Verified broker|Share Broker Card/i.test(text)) {
+    checks.push(`map popup View Broker did not open a broker profile route/view (path ${path})`);
+  }
+}
+
 async function auditVisibleActions(page) {
   return page.evaluate(() => {
     return Array.from(document.querySelectorAll('a,button,[role="button"],[onclick]'))
@@ -97,6 +180,7 @@ async function auditCardsAndMarkers(page, route) {
     }
     await go(page, route);
   }
+  const hasMap = await waitForMapIfPresent(page);
   const markerCount = await page.locator('.leaflet-marker-icon:visible, [data-map-marker]:visible').count();
   if (markerCount) {
     const markerIndex = await page.evaluate(() => {
@@ -128,6 +212,15 @@ async function auditCardsAndMarkers(page, route) {
     await page.waitForSelector('.leaflet-popup:visible, #detail-content:visible, [data-map-marker-popup]:visible', { timeout: 1500 }).catch(() => {});
     const popupOrDetail = await page.locator('.leaflet-popup:visible, #detail-content:visible, [data-map-marker-popup]:visible').count();
     if (!popupOrDetail) checks.push('map marker did not open popup/detail');
+    else await clickPopupDetailOrBrokerAction(page, checks);
+  } else if (hasMap) {
+    const googlePopupOpened = await clickGoogleMarkerCandidate(page);
+    if (googlePopupOpened) {
+      await clickPopupDetailOrBrokerAction(page, checks);
+    } else {
+      const visibleCards = await page.locator('.property-card:visible, [data-property-card]:visible, .broker-grid-card:visible').count();
+      if (visibleCards) checks.push('map has listing/broker cards but no clickable marker popup was found');
+    }
   }
   return checks;
 }
