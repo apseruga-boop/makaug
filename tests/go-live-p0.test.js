@@ -148,11 +148,14 @@ function run() {
   const propertySeekerRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'property-seeker.js'), 'utf8');
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
+  const authRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
+  const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
   const propertiesRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
   const contactRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'contact.js'), 'utf8');
+  const mortgageRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'mortgage.js'), 'utf8');
   const listingModerationService = fs.readFileSync(path.join(__dirname, '..', 'services', 'listingModerationService.js'), 'utf8');
   const emailLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailLogService.js'), 'utf8');
   const whatsappMessageLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappMessageLogService.js'), 'utf8');
@@ -257,6 +260,10 @@ function run() {
   assert(propertiesRoutes.includes('logEmailEvent'), 'property submission should create EmailLog entries');
   assert(propertiesRoutes.includes('logWhatsAppMessage'), 'property submission should create WhatsAppMessageLog entries');
   assert(propertiesRoutes.includes('listing_submitted'), 'property submission should log listing_submitted event');
+  assert(propertiesRoutes.includes("source: 'listing_submission'"), 'property submission should create a CRM lead source');
+  assert(propertiesRoutes.includes("leadType: 'listing_owner'"), 'property submission should create listing-owner CRM lead');
+  assert(propertiesRoutes.includes("activityType: 'whatsapp_contact_initiated'"), 'WhatsApp listing click should create CRM lead activity');
+  assert(propertiesRoutes.includes("activityType: 'property_enquiry_created'"), 'property enquiry should create CRM lead activity');
   assert(listingModerationService.includes('Your MakaUg property listing has been submitted'), 'property submitted email subject should be MakaUg branded');
   assert(listingModerationService.includes('Status: Pending Review'), 'property submitted email should include pending-review status');
   assert(listingModerationService.includes('WhatsApp support'), 'property submitted email should include WhatsApp support');
@@ -311,6 +318,9 @@ function run() {
   }
   assert(contactRoutes.includes("router.post('/help-request'"), 'help request API should exist');
   assert(contactRoutes.includes('help_request_submitted'), 'help request should log an email/notification event');
+  assert(contactRoutes.includes('fraud_report_received'), 'fraud reports should create notification/email coverage');
+  assert(contactRoutes.includes('property_need_request_created'), 'tell-MakaUg property need requests should create CRM/log events');
+  assert(contactRoutes.includes('createLead'), 'help/fraud/property need contact routes should create CRM leads');
   assert(howItWorksText.includes('How MakaUg Works'), '/how-it-works should show route heading');
   for (const expected of ['Search property', 'Use filters', 'Save options', 'Create alerts', 'WhatsApp contact', 'Book viewing', 'List property', 'Review checks', 'Use dashboards', 'Report suspicious']) {
     assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
@@ -423,6 +433,8 @@ function run() {
   }
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
   assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
+  assert(sourceHtml.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
+  assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
   for (const expected of [
     'Public Route Health',
@@ -446,6 +458,10 @@ function run() {
   assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
   assert(sourceHtml.includes('data-ai-chatbot-live-panel="1"'), 'AI chatbot route should expose a connected live task panel');
   assert(sourceHtml.includes('submitAiChatbotPrompt'), 'AI chatbot prompt should be wired to a safe API/fallback flow');
+  assert(aiRoutes.includes('captureLearningEvent'), 'AI assistant API should capture conversation events');
+  assert(aiRoutes.includes('conversation_logged'), 'AI assistant API should report that backend logging happened');
+  assert(aiRoutes.includes('human_handoff_required'), 'AI assistant API should log human handoff events');
+  assert(aiRoutes.includes('createLead'), 'AI assistant API should create CRM leads for handoff/fraud/mortgage/advertiser intents');
   for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial', 'save_search', 'create_alert', 'book_viewing', 'request_callback', 'list_property', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'ask_help', 'advertiser_interest', 'language_change', 'human_handoff']) {
     assert(sourceHtml.includes(`value="${intent}"`) || sourceHtml.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
   }
@@ -520,6 +536,13 @@ function run() {
   assert(superAdminScript.includes('SUPER_ADMIN_INITIAL_PASSWORD'), 'super admin bootstrap must use one-time password env');
   assert(superAdminScript.includes('bcrypt.hash'), 'super admin bootstrap must hash the password');
   assert(!superAdminScript.includes('console.log(password'), 'super admin bootstrap must not print the password');
+  assert(authRoutes.includes("if (!email) errors.push('email is required')"), 'backend registration should require email for account creation');
+  assert(authRoutes.includes("if (!phone) errors.push('phone is required')"), 'backend registration should require phone/WhatsApp for account creation');
+  assert(authRoutes.includes('recordAdminLogin'), 'admin/super_admin login should be audited');
+  assert(authRoutes.includes('recordAdminPasswordChange'), 'admin/super_admin password changes should be audited');
+  assert(mortgageRoutes.includes('mortgage_lead_received'), 'mortgage enquiry should create/log mortgage lead events');
+  assert(mortgageRoutes.includes('createLead'), 'mortgage enquiry should create CRM leads');
+  assert(mortgageRoutes.includes('logEmailEvent'), 'mortgage enquiry should create EmailLog entries');
 
   for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/docs', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);

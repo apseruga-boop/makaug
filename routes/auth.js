@@ -655,6 +655,7 @@ router.post('/register', async (req, res, next) => {
 
     const errors = [];
     if (!firstName) errors.push('first_name is required');
+    if (!email) errors.push('email is required');
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
     if (confirmPassword && confirmPassword !== password) errors.push('confirm_password must match password');

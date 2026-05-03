@@ -4069,6 +4069,16 @@
         <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/content-i18n-audit.md</code>
       </article>
       <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">Backend Traceability Matrix</h2>
+        <p class="text-sm text-gray-600 mt-2">Maps every launch-critical frontend action to APIs, services, database records, logs, dashboards, analytics, tests, and status.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/backend-traceability-matrix.md</code>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">CTA Matrix and Performance Audit</h2>
+        <p class="text-sm text-gray-600 mt-2">Launch QA references for working buttons, links, public probes, route speed, console errors, and owner action items.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/cta-action-matrix.md<br>docs/performance-audit.md</code>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 class="text-xl font-bold text-gray-900">Operating Rules</h2>
         <p class="text-sm text-gray-600 mt-2">Codex operating rules for production-safe MakaUg changes and completion proof.</p>
         <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">AGENTS.md</code>
@@ -15018,6 +15028,9 @@
 
     async function resolveListPinElevation(lat, lng) {
       setLpResolvedAltitude(null);
+      if (window.MAKAUG_ENABLE_ELEVATION_LOOKUP !== true) {
+        return;
+      }
       try {
         const url = `https://api.open-elevation.com/api/v1/lookup?locations=${encodeURIComponent(`${lat},${lng}`)}`;
         const response = await fetch(url, { headers: { Accept: "application/json" } });

@@ -1,7 +1,11 @@
 const express = require('express');
 
+const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat } = require('../middleware/validation');
+const { captureLearningEvent } = require('../services/aiLearningCaptureService');
+const { createLead } = require('../services/leadService');
+const { logNotification } = require('../services/notificationLogService');
 const {
   SUPPORTED_AI_LANGUAGES,
   generateListingIntelligence,
@@ -11,6 +15,88 @@ const {
 } = require('../services/aiService');
 
 const router = express.Router();
+
+function normalizeAssistantIntent(value = '') {
+  const intent = cleanText(value).toLowerCase();
+  const aliases = {
+    search_rent: 'search_property',
+    search_sale: 'search_property',
+    search_student: 'search_property',
+    search_land: 'search_property',
+    search_commercial: 'search_property',
+    ask_mortgage: 'mortgage_help',
+    ask_help: 'support',
+    report_fraud: 'report_listing',
+    list_property_whatsapp: 'property_listing',
+    list_property: 'property_listing',
+    advertiser_interest: 'advertiser'
+  };
+  return aliases[intent] || intent || 'unknown';
+}
+
+async function recordAssistantBackendTrace(req, { userMessage, intent, language, response }) {
+  const normalizedIntent = normalizeAssistantIntent(intent);
+  const context = req.body?.context && typeof req.body.context === 'object' ? req.body.context : {};
+  await captureLearningEvent({
+    eventName: `ai_chatbot_${normalizedIntent}`,
+    source: cleanText(req.body?.source) || 'discover_ai_chatbot',
+    channel: 'web',
+    sessionId: cleanText(req.body?.session_id || context.sessionId) || `ai_chatbot:${Date.now()}`,
+    externalUserId: cleanText(context.userId || context.phone || context.email) || null,
+    language,
+    inputText: userMessage,
+    responseText: response?.text || '',
+    payload: {
+      intent: normalizedIntent,
+      provider_model: response?.model || 'unknown',
+      route: context.route || '/discover-ai-chatbot'
+    },
+    entities: context.entities || {},
+    outcome: 'responded',
+    requestIp: req.ip,
+    userAgent: req.get('user-agent')
+  });
+
+  const leadTypeByIntent = {
+    report_listing: 'fraud',
+    mortgage_help: 'mortgage',
+    advertiser: 'advertiser',
+    human_handoff: 'support',
+    support: 'support',
+    property_listing: 'listing_owner'
+  };
+  const leadType = leadTypeByIntent[normalizedIntent];
+  if (leadType) {
+    const lead = await createLead(db, {
+      source: 'ai_chatbot',
+      leadType,
+      category: normalizedIntent,
+      message: userMessage,
+      contact: {
+        name: cleanText(context.name) || 'AI chatbot user',
+        email: cleanText(context.email) || null,
+        phone: cleanText(context.phone) || null,
+        preferredContactChannel: cleanText(context.preferredContactChannel) || 'whatsapp',
+        preferredLanguage: language,
+        roleType: leadType
+      },
+      activityType: `ai_${normalizedIntent}`,
+      metadata: {
+        route: context.route || '/discover-ai-chatbot',
+        model: response?.model || 'unknown'
+      }
+    });
+    await logNotification(db, {
+      recipientEmail: cleanText(context.email) || null,
+      recipientPhone: cleanText(context.phone) || null,
+      channel: 'in_app',
+      type: normalizedIntent === 'human_handoff' ? 'human_handoff_required' : `ai_${normalizedIntent}`,
+      status: 'logged',
+      payloadSummary: { intent: normalizedIntent, model: response?.model || 'unknown' },
+      relatedLeadId: lead?.id || null
+    });
+  }
+}
 
 function parseBooleanLike(value, fallback = false) {
   if (typeof value === 'boolean') return value;
@@ -138,15 +224,26 @@ router.post('/assistant-reply', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'message is required' });
     }
 
+    const language = normalizeLanguageCode(body.language || 'en');
+    const intent = cleanText(body.intent).toLowerCase() || 'unknown';
     const response = await suggestWhatsappAssistantReply({
       userMessage,
-      intent: cleanText(body.intent).toLowerCase() || 'unknown',
-      language: normalizeLanguageCode(body.language || 'en'),
+      intent,
+      language,
       context: body.context && typeof body.context === 'object' ? body.context : {},
       source: 'api_assistant_reply'
     });
 
-    return res.json({ ok: true, data: response });
+    await recordAssistantBackendTrace(req, { userMessage, intent, language, response });
+
+    return res.json({
+      ok: true,
+      data: {
+        ...response,
+        intent: normalizeAssistantIntent(intent),
+        conversation_logged: true
+      }
+    });
   } catch (error) {
     return next(error);
   }

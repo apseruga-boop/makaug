@@ -3,6 +3,10 @@ const express = require('express');
 const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { cleanText, toNullableFloat, toNullableInt } = require('../middleware/validation');
+const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const { createLead } = require('../services/leadService');
 
 const router = express.Router();
 
@@ -274,6 +278,102 @@ router.post('/enquiry', async (req, res, next) => {
     );
     const id = String(saved.rows[0]?.id || "");
     const reference = id ? `MF-${id.slice(0, 8).toUpperCase()}` : fallbackRef;
+    const lead = await createLead(db, {
+      source: 'mortgage_widget',
+      leadType: 'mortgage',
+      category: propertyPurpose,
+      budget: amountToBorrow,
+      message: `Mortgage help requested: ${reference}`,
+      contact: {
+        name,
+        email: email || null,
+        phone,
+        preferredContactChannel: payload.contactMethod,
+        roleType: 'mortgage'
+      },
+      activityType: 'mortgage_lead_received',
+      metadata: {
+        mortgage_enquiry_id: id || null,
+        reference,
+        amount_to_borrow: amountToBorrow,
+        preferred_term_years: termYears
+      }
+    });
+    const supportEmail = getSupportEmail();
+    const whatsappUrl = getSupportWhatsappUrl();
+    let userDelivery = { sent: false, reason: 'not_attempted' };
+    let adminDelivery = { sent: false, reason: 'not_attempted' };
+
+    try {
+      if (email) {
+        userDelivery = await sendSupportEmail({
+          to: email,
+          subject: 'We received your MakaUg mortgage request',
+          text: [
+            `Hello ${name},`,
+            '',
+            'Thank you for requesting mortgage help on MakaUg.',
+            `Reference: ${reference}`,
+            `Amount to borrow: UGX ${Number(amountToBorrow).toLocaleString('en-UG')}`,
+            'Our team will contact you using your preferred channel.',
+            `WhatsApp support: ${whatsappUrl}`,
+            '',
+            'MakaUg'
+          ].join('\n')
+        });
+      }
+      adminDelivery = await sendSupportEmail({
+        to: supportEmail,
+        subject: `[MakaUg] Mortgage lead received • ${reference}`,
+        text: [
+          'A mortgage help request was submitted.',
+          '',
+          `Reference: ${reference}`,
+          `Name: ${name}`,
+          `Phone: ${phone}`,
+          `Email: ${email || '-'}`,
+          `Amount to borrow: UGX ${Number(amountToBorrow).toLocaleString('en-UG')}`,
+          `Preferred contact: ${payload.contactMethod}`
+        ].join('\n'),
+        replyTo: email || undefined
+      });
+    } catch (_) {}
+
+    await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'mortgage_lead_received',
+        recipientEmail: email || null,
+        recipientRole: 'user',
+        templateKey: 'mortgage_lead_received',
+        subject: 'We received your MakaUg mortgage request',
+        status: notificationStatusFromDelivery(userDelivery),
+        relatedLeadId: lead?.id || null,
+        relatedMortgageLeadId: id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'new_mortgage_lead',
+        recipientEmail: supportEmail,
+        recipientRole: 'admin',
+        templateKey: 'admin_alert',
+        subject: `[MakaUg] Mortgage lead received • ${reference}`,
+        status: notificationStatusFromDelivery(adminDelivery),
+        relatedLeadId: lead?.id || null,
+        relatedMortgageLeadId: id || null,
+        failureReason: adminDelivery?.error || adminDelivery?.reason || null,
+        sentAt: adminDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: email || null,
+        recipientPhone: phone,
+        channel: 'in_app',
+        type: 'mortgage_lead_received',
+        status: 'logged',
+        payloadSummary: { reference, amount_to_borrow: amountToBorrow },
+        relatedLeadId: lead?.id || null
+      })
+    ]);
 
     return res.json({
       ok: true,

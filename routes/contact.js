@@ -45,9 +45,31 @@ async function handleReportListing(req, res, next) {
     const report = result.rows[0];
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
+    const lead = await createLead(db, {
+      source: cleanText(req.body.source) || 'fraud_report',
+      leadType: 'fraud',
+      category: reason,
+      message: details || `Fraud or suspicious listing report: ${propertyReference}`,
+      priority: 'high',
+      contact: {
+        name: reporterContact || 'Fraud reporter',
+        email: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
+        phone: reporterContact && isValidPhone(reporterContact) ? reporterContact : null,
+        preferredContactChannel: reporterContact && isValidEmail(reporterContact) ? 'email' : 'whatsapp',
+        roleType: 'fraud_reporter'
+      },
+      activityType: 'fraud_report_received',
+      metadata: {
+        report_id: report.id,
+        property_reference: propertyReference,
+        reason
+      }
+    });
+    let adminDelivery = { sent: false, reason: 'not_attempted' };
+    let userDelivery = { sent: false, reason: 'not_attempted' };
 
     try {
-      await sendSupportEmail({
+      adminDelivery = await sendSupportEmail({
         to: supportEmail,
         subject: `[MakaUg] Listing report received • ${reason}`,
         text: [
@@ -65,7 +87,7 @@ async function handleReportListing(req, res, next) {
       });
 
       if (reporterContact && isValidEmail(reporterContact)) {
-        await sendSupportEmail({
+        userDelivery = await sendSupportEmail({
           to: reporterContact,
           subject: 'We received your MakaUg listing report',
           text: [
@@ -88,6 +110,48 @@ async function handleReportListing(req, res, next) {
         error: emailError.message || 'email_failed'
       });
     }
+
+    await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'fraud_report_received',
+        recipientEmail: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
+        recipientRole: 'reporter',
+        templateKey: 'fraud_report_received',
+        subject: 'We received your MakaUg listing report',
+        status: notificationStatusFromDelivery(userDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'new_fraud_report',
+        recipientEmail: supportEmail,
+        recipientRole: 'admin',
+        templateKey: 'admin_alert',
+        subject: `[MakaUg] Listing report received • ${reason}`,
+        status: notificationStatusFromDelivery(adminDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: adminDelivery?.error || adminDelivery?.reason || null,
+        sentAt: adminDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
+        recipientPhone: reporterContact && isValidPhone(reporterContact) ? reporterContact : null,
+        channel: 'in_app',
+        type: 'fraud_report_received',
+        status: 'logged',
+        payloadSummary: { report_id: report.id, property_reference: propertyReference, reason },
+        relatedLeadId: lead?.id || null
+      }),
+      logNotification(db, {
+        recipientEmail: supportEmail,
+        channel: 'in_app',
+        type: 'new_fraud_report',
+        status: 'logged',
+        payloadSummary: { report_id: report.id, property_reference: propertyReference, reason },
+        relatedLeadId: lead?.id || null
+      })
+    ]);
 
     return res.status(201).json({ ok: true, data: report });
   } catch (error) {
@@ -136,6 +200,28 @@ async function handleLookingForProperty(req, res, next) {
     );
 
     const request = inserted.rows[0];
+    const lead = await createLead(db, {
+      source: cleanText(req.body.source) || 'property_need_request',
+      leadType: 'enquiry',
+      category: cleanText(req.body.listing_type) || null,
+      location: cleanText(req.body.preferred_locations) || null,
+      budget: toNullableInt(req.body.max_budget),
+      message: requirements,
+      contact: {
+        name: fullName,
+        phone,
+        email: email || null,
+        preferredContactChannel: 'whatsapp',
+        roleType: 'property_seeker',
+        locationInterest: cleanText(req.body.preferred_locations) || null,
+        categoryInterest: cleanText(req.body.listing_type) || null,
+        budgetRange: cleanText(req.body.max_budget) || null
+      },
+      activityType: 'property_need_request_created',
+      metadata: {
+        property_request_id: request.id
+      }
+    });
     captureLearningEvent({
       eventName: 'property_request_submitted',
       source: cleanText(req.body.source) || 'website',
@@ -162,6 +248,20 @@ async function handleLookingForProperty(req, res, next) {
       dedupeKey: `property_request:${request.id}`,
       requestIp: req.ip,
       userAgent: req.get('user-agent')
+    });
+
+    await logNotification(db, {
+      recipientPhone: phone,
+      recipientEmail: email || null,
+      channel: 'in_app',
+      type: 'property_need_request_created',
+      status: 'logged',
+      payloadSummary: {
+        property_request_id: request.id,
+        listing_type: cleanText(req.body.listing_type) || null,
+        preferred_locations: cleanText(req.body.preferred_locations) || null
+      },
+      relatedLeadId: lead?.id || null
     });
 
     return res.status(201).json({ ok: true, data: request });

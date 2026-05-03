@@ -44,6 +44,16 @@ Use this checklist against the running preview/live app after deploy.
 - Confirm `/admin`, `/admin/docs`, `/admin/crm`, `/admin/leads`, `/admin/advertising`, `/admin/revenue`, `/admin/notifications`, `/admin/emails`, `/admin/whatsapp-inbox`, `/admin/viewings`, `/admin/callbacks`, `/admin/field-agents`, `/admin/payments`, `/admin/contracts`, `/admin/fraud`, and `/admin/data-protection` are accessible.
 - Confirm admin login, bootstrap, password change, manual payment, and retry actions create audit rows.
 
+## Backend Connection Audit
+
+- Open `docs/backend-traceability-matrix.md` or `/admin/docs` as super admin.
+- Confirm every launch-critical public CTA and form has an API/service/table/log/admin visibility row.
+- Confirm no item marked `Partial` is described as complete in launch messaging.
+- Run `npm run test:go-live-p0` and confirm backend wiring checks pass.
+- Check `/api/health/migrations` and confirm migrations `033_task3_engagement_crm.sql` and `034_task4_super_admin_alerts_payments.sql` are applied.
+- In preview/test mode, submit one property and confirm the same reference appears in `properties`, `email_logs`, `whatsapp_message_logs`, `notifications`, CRM leads, and admin moderation.
+- Confirm provider-missing states are visible for email, WhatsApp, SMS, payment, Google Places, and OpenAI/LLM if credentials are absent.
+
 ## Dashboards
 
 - Property seeker can open `/dashboard`.

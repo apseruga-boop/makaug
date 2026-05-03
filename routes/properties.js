@@ -25,6 +25,7 @@ const { matchListingToSavedSearches } = require('../services/alertSchedulerServi
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const { createLead } = require('../services/leadService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -1186,6 +1187,33 @@ router.post('/', async (req, res, next) => {
       );
     }
 
+    const submissionLead = await createLead(db, {
+      listingId: propertyId,
+      contact: {
+        name: cleanText(body.lister_name) || 'Listing owner',
+        phone: listerPhone || null,
+        email: listerEmailNormalized || null,
+        preferredContactChannel: preferredContactMethod || 'whatsapp',
+        preferredLanguage: normalizePreferredLanguage(body.preferred_language),
+        roleType: cleanText(body.lister_type) || 'listing_owner',
+        locationInterest: [area, district].filter(Boolean).join(', '),
+        categoryInterest: listingType,
+        budgetRange: price ? String(price) : ''
+      },
+      source: 'listing_submission',
+      leadType: 'listing_owner',
+      category: listingType,
+      location: [area, district].filter(Boolean).join(', '),
+      budget: price,
+      message: `Property submitted for review: ${title}`,
+      activityType: 'listing_submitted',
+      metadata: {
+        inquiry_reference: inquiryReference,
+        image_count: imageUrls.length,
+        listed_via: listedVia || 'website'
+      }
+    });
+
     let supportEmailNotification = { sent: false, mocked: true };
     try {
       supportEmailNotification = await sendPropertySubmissionNotification({
@@ -1252,6 +1280,7 @@ router.post('/', async (req, res, next) => {
         provider: ownerNotification.email?.provider || null,
         providerMessageId: ownerNotification.email?.messageId || ownerNotification.email?.provider_message_id || null,
         relatedListingId: propertyId,
+        relatedLeadId: submissionLead?.id || null,
         failureReason: ownerNotification.email?.error || ownerNotification.email?.reason || null,
         sentAt: ownerNotification.email?.sent ? new Date() : null
       }),
@@ -1274,6 +1303,7 @@ router.post('/', async (req, res, next) => {
         language: normalizePreferredLanguage(body.preferred_language),
         status: notificationStatusFromDelivery(ownerNotification.whatsapp),
         relatedListingId: propertyId,
+        relatedLeadId: submissionLead?.id || null,
         failureReason: ownerNotification.whatsapp?.error || ownerNotification.whatsapp?.reason || null,
         sentAt: ownerNotification.whatsapp?.sent ? new Date() : null
       }),
@@ -1329,7 +1359,8 @@ router.post('/', async (req, res, next) => {
         type: 'listing_pending_review',
         status: 'logged',
         payloadSummary: { title, inquiry_reference: inquiryReference, status },
-        relatedListingId: propertyId
+        relatedListingId: propertyId,
+        relatedLeadId: submissionLead?.id || null
       })
     ]);
 
@@ -1401,6 +1432,28 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
       [propertyId, contactName, contactPhone || null, contactEmail || null, message, 'whatsapp']
     );
 
+    const lead = await createLead(db, {
+      listingId: propertyId,
+      contact: {
+        name: contactName,
+        phone: contactPhone || null,
+        email: contactEmail || null,
+        preferredContactChannel: 'whatsapp',
+        preferredLanguage: language,
+        roleType: 'property_seeker'
+      },
+      source,
+      leadType: 'enquiry',
+      message,
+      activityType: 'whatsapp_contact_initiated',
+      metadata: {
+        cta_location: ctaLocation,
+        target_phone_present: Boolean(targetPhone),
+        property_reference: exists.rows[0].inquiry_reference || null,
+        property_inquiry_id: inserted.rows[0].id
+      }
+    });
+
     await logNotification(db, {
       recipientPhone: targetPhone || null,
       channel: 'in_app',
@@ -1414,7 +1467,8 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
         inquiry_reference: exists.rows[0].inquiry_reference,
         inquiry_id: inserted.rows[0].id
       },
-      relatedListingId: propertyId
+      relatedListingId: propertyId,
+      relatedLeadId: lead?.id || null
     });
 
     return res.status(201).json({ ok: true, data: inserted.rows[0] });
@@ -1465,6 +1519,35 @@ router.post('/:id/inquiries', async (req, res, next) => {
         cleanText(req.body.channel) || 'web'
       ]
     );
+
+    const lead = await createLead(db, {
+      listingId: propertyId,
+      contact: {
+        name: contactName,
+        phone: contactPhone || null,
+        email: contactEmail || null,
+        preferredContactChannel: cleanText(req.body.channel) || 'web',
+        roleType: 'property_seeker'
+      },
+      source: cleanText(req.body.channel) || 'web',
+      leadType: 'enquiry',
+      message: message || 'Property enquiry submitted from MakaUg.',
+      activityType: 'property_enquiry_created',
+      metadata: {
+        property_inquiry_id: inserted.rows[0].id
+      }
+    });
+
+    await logNotification(db, {
+      recipientPhone: contactPhone || null,
+      recipientEmail: contactEmail || null,
+      channel: 'in_app',
+      type: 'enquiry_sent',
+      status: 'logged',
+      payloadSummary: { inquiry_id: inserted.rows[0].id },
+      relatedListingId: propertyId,
+      relatedLeadId: lead?.id || null
+    });
 
     return res.status(201).json({ ok: true, data: inserted.rows[0] });
   } catch (error) {
