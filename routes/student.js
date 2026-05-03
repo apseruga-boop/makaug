@@ -60,6 +60,16 @@ function safeJson(value, fallback) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
 }
 
+function normalizeAlertChannels(value) {
+  const channels = asArray(value).map((channel) => asContactChannel(channel, '')).filter(Boolean);
+  return channels.length ? [...new Set(channels)] : ['in_app'];
+}
+
+function normalizeAlertFrequency(value, fallback = 'weekly') {
+  const frequency = asText(value, fallback).toLowerCase();
+  return ['instant', 'daily', 'weekly', 'off'].includes(frequency) ? frequency : fallback;
+}
+
 function propertyUrl(id) {
   const base = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
   return `${base}/property/${id}`;
@@ -436,6 +446,85 @@ router.get('/recommendations', requireAuth, async (req, res, next) => {
     const preference = await upsertPreference(req.userAuth, {});
     const recommendations = await fetchStudentRecommendations(req.userAuth.id, preference, asNumber(req.query.limit, 12));
     return res.json({ ok: true, data: { recommendations } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/saved-searches', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT *
+       FROM saved_searches
+       WHERE user_id = $1
+         AND status = 'active'
+         AND (category = 'student' OR student_campus IS NOT NULL)
+       ORDER BY updated_at DESC
+       LIMIT 50`,
+      [req.userAuth.id]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/saved-searches', requireAuth, async (req, res, next) => {
+  try {
+    const preference = await upsertPreference(req.userAuth, {
+      campus: req.body.campus,
+      university: req.body.university,
+      preferred_locations: req.body.preferred_locations || req.body.locations,
+      max_budget: req.body.max_budget || req.body.maxBudget || req.body.budget,
+      room_type: req.body.room_type || req.body.roomType,
+      alert_channels: req.body.alert_channels || req.body.alertChannels,
+      alert_frequency: req.body.alert_frequency || req.body.alertFrequency
+    });
+    const campus = asText(req.body.campus || preference.campus || preference.university) || null;
+    const locations = asArray(req.body.preferred_locations || req.body.locations || preference.preferred_locations);
+    const location = locations[0] || campus || null;
+    const channels = normalizeAlertChannels(req.body.alert_channels || req.body.alertChannels || preference.alert_channels);
+    const result = await db.query(
+      `INSERT INTO saved_searches (
+         user_id, category, filters, label, location, max_price, currency,
+         property_type, amenities, student_campus, student_distance,
+         alert_frequency, alert_channels, language_preference, created_from
+       )
+       VALUES ($1,'student',$2::jsonb,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12::jsonb,$13,'student_dashboard')
+       RETURNING *`,
+      [
+        req.userAuth.id,
+        JSON.stringify({
+          campus,
+          locations,
+          room_type: preference.room_type,
+          wifi_required: preference.wifi_required,
+          security_required: preference.security_required,
+          water_required: preference.water_required
+        }),
+        asText(req.body.label) || [campus || location, preference.room_type || 'student accommodation'].filter(Boolean).join(' - ') || 'Student accommodation alert',
+        location,
+        asBigIntNumber(req.body.max_budget || req.body.maxBudget || req.body.budget || preference.max_budget),
+        preference.currency || 'UGX',
+        preference.room_type || null,
+        JSON.stringify([
+          preference.wifi_required ? 'Wi-Fi' : '',
+          preference.security_required ? 'Security' : '',
+          preference.water_required ? 'Water' : ''
+        ].filter(Boolean)),
+        campus,
+        asNumber(req.body.student_distance || req.body.studentDistance || preference.max_distance_to_campus),
+        normalizeAlertFrequency(req.body.alert_frequency || req.body.alertFrequency || preference.alert_frequency),
+        JSON.stringify(channels),
+        preference.preferred_language || 'en'
+      ]
+    );
+    await db.query(
+      `INSERT INTO property_seeker_activities (user_id, activity_type, search_id, metadata)
+       VALUES ($1,'student_saved_search_created',$2,$3::jsonb)`,
+      [req.userAuth.id, result.rows[0].id, JSON.stringify({ campus, channels })]
+    );
+    return res.status(201).json({ ok: true, data: result.rows[0] });
   } catch (error) {
     return next(error);
   }

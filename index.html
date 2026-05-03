@@ -770,8 +770,9 @@
           <option value="EUR">€ (EUR)</option>
         </select>
         <a id="top-saved-link" onclick="showPage('saved')" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
+        <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"><i class="fas fa-table-cells-large text-green-300"></i> Dashboard</a>
         <a id="top-signin-link" onclick="openAuthSignIn('finder')" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
-        <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"><i class="fas fa-right-from-bracket text-green-300"></i> Sign Out</a>
+        <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
       </div>
     </div>
   </div>
@@ -842,7 +843,7 @@
           <div id="hero-badge" class="inline-flex items-center gap-2 bg-white/15 border border-white/30 rounded-full px-4 py-1.5 text-xs font-bold tracking-wide uppercase mb-4">
             <i class="fas fa-check-circle text-green-300"></i> Uganda's #1 Free Property Platform
           </div>
-          <h1 id="hero-title" class="text-3xl md:text-5xl font-black leading-tight mb-1.5">Discover your perfect <span class="text-green-300">maka</span></h1>
+          <h1 id="hero-title" class="text-3xl md:text-5xl font-black leading-tight mb-1.5">Find your next home, land, rental, or student room</h1>
           <p id="hero-subtitle" class="text-base md:text-xl text-white/90 font-semibold">Your home search starts here. Find properties to rent, buy or invest.</p>
         </div>
 
@@ -2675,28 +2676,35 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">My Property Brief</h2>
             <p class="text-sm text-gray-500">Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.</p>
+            <div id="finder-brief" class="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">Complete your profile to personalize recommendations.</div>
             <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Edit Preferences</button>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Recommended For You</h2>
             <p class="text-sm text-gray-500">Exact, close, nearby, verified, new, and sponsored matches will appear here with clear reasons.</p>
+            <div id="finder-recommendations-grid" class="grid gap-3 mt-3"></div>
             <button onclick="showPage('for-sale')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Matches</button>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Saved Searches and Alerts</h2>
             <p class="text-sm text-gray-500">Save searches, choose WhatsApp/email/SMS/in-app alerts, and pause or edit alerts any time.</p>
+            <div id="finder-saved-searches" class="mt-3 space-y-2 text-sm"></div>
+            <button onclick="saveCurrentDashboardSearch()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Save Current Search</button>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Enquiries and WhatsApp Contacts</h2>
             <p class="text-sm text-gray-500">Listing enquiries, WhatsApp clicks, broker/owner context, and follow-up status will be tracked here.</p>
+            <div id="finder-contact-history" class="mt-3 space-y-2 text-sm"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Viewing Bookings</h2>
             <p class="text-sm text-gray-500">Pending, confirmed, rescheduled, cancelled, and completed viewings will appear here.</p>
+            <div id="finder-viewings" class="mt-3 space-y-2 text-sm"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Callback Requests</h2>
             <p class="text-sm text-gray-500">Track requested, contacted, missed, and closed callbacks from MakaUg or property contacts.</p>
+            <div id="finder-callbacks" class="mt-3 space-y-2 text-sm"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-gray-800 mb-2">Compare Properties</h2>
@@ -3313,6 +3321,7 @@
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
             <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
+            <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
             <button type="button" data-admin-tab-button="listings" onclick="setAdminWorkflowTab('listings')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">All Listings</button>
           </div>
         </div>
@@ -3600,6 +3609,54 @@
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-4">
             <div id="admin-whatsapp-detail" class="text-sm text-gray-500">Select a conversation to open the full thread, reply with AI help, and control the workflow.</div>
+          </div>
+        </div>
+
+        <div data-admin-tab-panel="notifications" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Lead, Email & Notification Control</h3>
+              <p class="text-xs text-gray-500 mt-1">Track CRM leads, failed follow-ups, email logs, WhatsApp logs, and missed operational tasks from one admin view.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Logs</button>
+          </div>
+          <div id="admin-crm-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div class="grid xl:grid-cols-[1.1fr,0.9fr] gap-5">
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">CRM Leads</h4>
+                  <p class="text-xs text-gray-500 mt-1">Latest leads from WhatsApp, saved searches, viewings, callbacks, advertising, support, and no-results flows.</p>
+                </div>
+              </div>
+              <div id="admin-crm-leads-table" class="space-y-3"></div>
+            </div>
+            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
+              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <h4 class="text-lg font-bold text-gray-800">Follow-up Tasks</h4>
+                  <p class="text-xs text-gray-500 mt-1">Open and overdue lead tasks that need admin action.</p>
+                </div>
+              </div>
+              <div id="admin-crm-tasks-table" class="space-y-3"></div>
+            </div>
+          </div>
+          <div class="grid xl:grid-cols-3 gap-5 mt-5">
+            <div class="border border-gray-200 rounded-2xl p-4 bg-white">
+              <h4 class="text-lg font-bold text-gray-800 mb-1">Notification Log</h4>
+              <p class="text-xs text-gray-500 mb-3">Queued, sent, failed, and skipped follow-ups across channels.</p>
+              <div id="admin-notification-log" class="space-y-3"></div>
+            </div>
+            <div class="border border-gray-200 rounded-2xl p-4 bg-white">
+              <h4 class="text-lg font-bold text-gray-800 mb-1">Email Log</h4>
+              <p class="text-xs text-gray-500 mb-3">Transactional emails, provider failures, and safe dev-mode logs.</p>
+              <div id="admin-email-log" class="space-y-3"></div>
+            </div>
+            <div class="border border-gray-200 rounded-2xl p-4 bg-white">
+              <h4 class="text-lg font-bold text-gray-800 mb-1">WhatsApp Message Log</h4>
+              <p class="text-xs text-gray-500 mb-3">Template/freeform messages, failed sends, and related listing or lead references.</p>
+              <div id="admin-whatsapp-log" class="space-y-3"></div>
+            </div>
           </div>
         </div>
 
@@ -4805,6 +4862,12 @@
     let adminAdvertisingPlacements = [];
     let adminWhatsappSummary = {};
     let adminWhatsappConversations = [];
+    let adminCrmSummary = {};
+    let adminCrmLeads = [];
+    let adminCrmTasks = [];
+    let adminNotificationLogs = [];
+    let adminEmailLogs = [];
+    let adminWhatsappLogs = [];
     let adminWhatsappActivePhone = "";
     let adminWhatsappActiveConversation = null;
     let adminWhatsappReplyDraft = "";
@@ -4959,7 +5022,7 @@
         navAI: "Discover AI Chatbot",
         navFraud: "Fraud",
         heroBadge: "Uganda's #1 Free Property Platform",
-        heroTitleHtml: "Discover your perfect <span class=\"text-green-300\">maka</span>",
+        heroTitleHtml: "Find your next home, land, rental, or student room",
         heroSubtitle: "Your home search starts here. Find properties to rent, buy or invest.",
         heroRent: "Rent",
         heroBuy: "Buy",
@@ -7228,7 +7291,7 @@
       const signEl = document.getElementById("top-signin-link");
       if (signEl) signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
       const signOutEl = document.getElementById("top-signout-link");
-      if (signOutEl) signOutEl.innerHTML = `<i class="fas fa-right-from-bracket text-green-300"></i> ${translateListingLabel("Sign Out")}`;
+      if (signOutEl) signOutEl.innerHTML = authState?.user ? `<i class="fas fa-right-from-bracket text-green-300"></i> ${translateListingLabel("Sign Out")}` : "";
       const topLangEl = document.getElementById("top-language-label");
       if (topLangEl) topLangEl.innerHTML = `<i class="fas fa-language text-green-200"></i> ${tr("langLabel")}`;
       setTextById("lang-spotlight-copy", tr("langBanner"));
@@ -8284,7 +8347,57 @@
       `;
     }
 
-    function renderFinderDashboard() {
+    function normalizeDashboardProperty(item) {
+      const property = item?.property || item || {};
+      return {
+        ...property,
+        id: property.id || property.listing_id || property.listingId || "",
+        title: property.title || "MakaUg listing",
+        area: property.area || property.location || property.neighbourhood || "",
+        district: property.district || "",
+        price: property.price || 0,
+        period: property.period || property.price_period || property.pricePeriod || ""
+      };
+    }
+
+    function renderCompactDashboardRows(targetId, rows, emptyText, renderer) {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) {
+        target.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">${emptyText}</div>`;
+        return;
+      }
+      target.innerHTML = list.slice(0, 5).map(renderer).join("");
+    }
+
+    async function saveCurrentDashboardSearch() {
+      if (!authState?.token) {
+        openAuthSignIn("finder");
+        return;
+      }
+      const currentLocation = document.getElementById("home-location")?.value || "";
+      const currentCategory = document.getElementById("home-search-type")?.value || "sale";
+      try {
+        await apiRequest("/api/property-seeker/saved-searches", {
+          method: "POST",
+          body: {
+            category: currentCategory,
+            label: currentLocation ? `${currentCategory} in ${currentLocation}` : `${currentCategory} search`,
+            location: { query: currentLocation, fullAddress: currentLocation },
+            alert_channels: ["in_app", "whatsapp"],
+            alert_frequency: "weekly",
+            created_from: "dashboard"
+          }
+        });
+        toast("Saved search created.");
+        renderFinderDashboard();
+      } catch (error) {
+        toast(`Could not save search: ${error.message || "error"}`);
+      }
+    }
+
+    async function renderFinderDashboard() {
       const gate = document.getElementById("finder-auth-gate");
       const body = document.getElementById("finder-body");
       if (!gate || !body) return;
@@ -8297,6 +8410,16 @@
 
       gate.classList.add("hidden");
       body.classList.remove("hidden");
+
+      let payload = null;
+      if (authState?.token && !authState?.user?.is_demo) {
+        try {
+          const res = await apiRequest("/api/property-seeker/dashboard");
+          payload = res?.data || null;
+        } catch (error) {
+          console.warn("Property seeker dashboard backend unavailable", error);
+        }
+      }
 
       const activity = getCurrentUserActivity();
       const greetingEl = document.getElementById("finder-greeting");
@@ -8318,11 +8441,18 @@
         greetingSubEl.textContent = `We will use ${languageLabel} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.`;
       }
       const viewedIds = Object.keys(activity.viewed || {});
-      const savedList = getPublicListings().filter((p) => isPropertySaved(p.id));
-      const recentViewed = (activity.recentViewed || [])
+      const backendSaved = Array.isArray(payload?.savedListings) ? payload.savedListings.map(normalizeDashboardProperty) : [];
+      const backendRecent = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed.map(normalizeDashboardProperty) : [];
+      const backendRecommendations = Array.isArray(payload?.recommendations) ? payload.recommendations.map(normalizeDashboardProperty) : [];
+      const savedList = backendSaved.length ? backendSaved : getPublicListings().filter((p) => isPropertySaved(p.id));
+      const recentViewed = backendRecent.length ? backendRecent : (activity.recentViewed || [])
         .map((id) => PROPERTIES.find((p) => String(p.id) === String(id)))
         .filter((item) => item && isListingPublicVisible(item))
         .slice(0, 6);
+      const savedSearches = Array.isArray(payload?.savedSearches) ? payload.savedSearches : [];
+      const viewings = Array.isArray(payload?.viewings) ? payload.viewings : [];
+      const callbacks = Array.isArray(payload?.callbacks) ? payload.callbacks : [];
+      const needs = Array.isArray(payload?.needRequests) ? payload.needRequests : [];
 
       const savedStat = document.getElementById("finder-stat-saved");
       const viewedStat = document.getElementById("finder-stat-viewed");
@@ -8333,7 +8463,7 @@
       if (viewedStat) viewedStat.textContent = String(viewedIds.length);
       if (inquiriesStat) inquiriesStat.textContent = String(Object.keys(activity.inquiries || {}).length);
       if (routesStat) routesStat.textContent = String(Object.keys(activity.routes || {}).length);
-      if (searchesStat) searchesStat.textContent = String(parseInt(activity.searchCount || 0, 10) || 0);
+      if (searchesStat) searchesStat.textContent = String(savedSearches.length || parseInt(activity.searchCount || 0, 10) || 0);
 
       const savedGrid = document.getElementById("finder-saved-grid");
       if (savedGrid) {
@@ -8352,6 +8482,44 @@
           recentGrid.innerHTML = recentViewed.map(renderDashboardCard).join("");
         }
       }
+
+      const brief = document.getElementById("finder-brief");
+      if (brief) {
+        const pref = payload?.preferences || {};
+        const profile = payload?.profile || {};
+        const categories = Array.isArray(pref.categories) ? pref.categories.join(", ") : "Not set";
+        const locations = Array.isArray(pref.preferred_locations) ? pref.preferred_locations.join(", ") : "Not set";
+        const budget = pref.max_budget ? `up to UGX ${Number(pref.max_budget).toLocaleString("en-UG")}` : "Budget not set";
+        brief.innerHTML = `<strong>${adminEscape(profile.current_goal || categories || "Property search")}</strong><br>${adminEscape(locations || "Add a preferred area")} • ${adminEscape(budget)} • ${adminEscape(profile.preferred_contact_channel || authState.user.preferred_contact_channel || "WhatsApp")}`;
+      }
+
+      const recGrid = document.getElementById("finder-recommendations-grid");
+      if (recGrid) {
+        recGrid.innerHTML = backendRecommendations.length
+          ? backendRecommendations.slice(0, 4).map(renderDashboardCard).join("")
+          : `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">No personalized matches yet. Save a search or browse listings to improve recommendations.</div>`;
+      }
+
+      renderCompactDashboardRows("finder-saved-searches", savedSearches, "No saved searches yet. Save one to start alerting MakaUg about what you need.", (item) => `
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div class="font-bold text-gray-900">${adminEscape(item.label || item.category || "Saved search")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(Array.isArray(item.alert_channels) ? item.alert_channels.join(", ") : "in-app")}</div>
+        </div>`);
+      renderCompactDashboardRows("finder-viewings", viewings, "No viewing bookings yet.", (item) => `
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div class="font-bold text-gray-900">${adminEscape(item.title || "Viewing request")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_date || "date pending")} ${adminEscape(item.preferred_time || "")}</div>
+        </div>`);
+      renderCompactDashboardRows("finder-callbacks", callbacks, "No callback requests yet.", (item) => `
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div class="font-bold text-gray-900">${adminEscape(item.title || "Callback request")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_callback_time || "time pending")}</div>
+        </div>`);
+      renderCompactDashboardRows("finder-contact-history", needs, "No property need requests or WhatsApp contact history yet.", (item) => `
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div class="font-bold text-gray-900">${adminEscape(item.category || "Property need")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any area")} • ${adminEscape(item.status || "new")}</div>
+        </div>`);
     }
 
     function normalizeStudentDashboardProperty(item) {
@@ -8700,11 +8868,30 @@
       const user = authState.user || {};
       setTextById("advertiser-dashboard-name", `${user.first_name || "Advertiser"} ${user.last_name || ""}`.trim() || "Advertiser Account");
       setTextById("advertiser-dashboard-status", "Campaign requests are reviewed by MakaUg before payment links, invoices, and live placement approval.");
-      setTextById("advertiser-stat-campaigns", "0");
-      setTextById("advertiser-stat-payment", "Awaiting first campaign");
-      setTextById("advertiser-stat-leads", "0");
-      setTextById("advertiser-stat-clicks", "0");
-      setTextById("advertiser-stat-spend", "UGX 0");
+      try {
+        const res = await apiRequest("/api/advertising/dashboard");
+        const data = res?.data || {};
+        const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+        const invoices = Array.isArray(data.invoices) ? data.invoices : [];
+        const paid = invoices.filter((item) => String(item.status || "").toLowerCase() === "paid").reduce((sum, item) => sum + (parseInt(item.amount || 0, 10) || 0), 0);
+        setTextById("advertiser-stat-campaigns", String(campaigns.length));
+        setTextById("advertiser-stat-payment", invoices.length ? `${data.summary?.unpaidInvoices || 0} unpaid invoice(s)` : "Awaiting first campaign");
+        setTextById("advertiser-stat-leads", String(campaigns.reduce((sum, item) => sum + (parseInt(item.leads || 0, 10) || 0), 0)));
+        setTextById("advertiser-stat-clicks", String(campaigns.reduce((sum, item) => sum + (parseInt(item.clicks || 0, 10) || 0), 0)));
+        setTextById("advertiser-stat-spend", `UGX ${Number(paid || 0).toLocaleString("en-UG")}`);
+        const payments = document.getElementById("advertiser-dashboard-payments");
+        if (payments) {
+          payments.textContent = invoices.length
+            ? `${invoices.length} invoice(s), ${data.paymentLinks?.length || 0} payment link request(s).`
+            : "No payment link has been issued yet.";
+        }
+      } catch (error) {
+        setTextById("advertiser-stat-campaigns", "0");
+        setTextById("advertiser-stat-payment", "Awaiting first campaign");
+        setTextById("advertiser-stat-leads", "0");
+        setTextById("advertiser-stat-clicks", "0");
+        setTextById("advertiser-stat-spend", "UGX 0");
+      }
       await hydrateAdvertiserDashboardPlacements();
     }
 
@@ -8738,10 +8925,35 @@
           submit.disabled = true;
           submit.textContent = "Submitting...";
         }
-        const result = await apiRequest("/api/advertising/inquiries", { method: "POST", body: payload });
+        const result = await apiRequest("/api/advertising/campaigns", {
+          method: "POST",
+          body: {
+            ...payload,
+            campaign_name: `${payload.business_name || payload.full_name || "Advertiser"} MakaUg campaign`,
+            package_key: goal,
+            creative_brief: payload.message
+          }
+        });
+        let paymentState = "";
+        try {
+          const campaignId = result?.data?.campaign?.id;
+          if (campaignId) {
+            const payment = await apiRequest(`/api/advertising/campaigns/${encodeURIComponent(campaignId)}/payment-link`, {
+              method: "POST",
+              body: { amount: payload.budget_ugx || result?.data?.campaign?.quoted_amount_ugx || 0 }
+            });
+            paymentState = payment?.data?.providerMissing
+              ? "<br>Payment: provider not configured yet, manual invoice logged for admin."
+              : `<br>Payment link: <a class="underline font-bold" href="${adminAttr(payment?.data?.paymentLink?.checkout_url || "#")}" target="_blank" rel="noopener noreferrer">Open payment</a>`;
+            const payments = document.getElementById("advertiser-dashboard-payments");
+            if (payments) payments.innerHTML = payment?.data?.providerMissing ? "Manual invoice logged. MakaUg will confirm payment instructions." : "Payment link generated.";
+          }
+        } catch (paymentError) {
+          paymentState = "<br>Payment: request logged; MakaUg will confirm payment details.";
+        }
         if (status) {
           status.classList.remove("hidden");
-          status.innerHTML = `Campaign request received.<br>Reference: <strong>${adminEscape(result?.data?.id || "pending")}</strong><br>MakaUg will prepare the package, payment link, and approval step.`;
+          status.innerHTML = `Campaign request received.<br>Reference: <strong>${adminEscape(result?.data?.campaign?.id || result?.data?.inquiry?.id || "pending")}</strong>${paymentState}<br>MakaUg will review the creative before any placement goes live.`;
         }
         setTextById("advertiser-stat-campaigns", "1");
         setTextById("advertiser-stat-payment", "Pending review");
@@ -9056,7 +9268,7 @@
     }
 
     function setAdminWorkflowTab(tab = "review") {
-      const allowed = ["review", "actioned", "live", "accounts", "ads", "whatsapp", "listings"];
+      const allowed = ["review", "actioned", "live", "accounts", "ads", "whatsapp", "notifications", "listings"];
       activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
       document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
         panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -9092,7 +9304,7 @@
       if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
       if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
       if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes] = await Promise.all([
+      const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
         apiRequest("/api/admin/summary", { headers }),
         apiRequest("/api/admin/recent", { headers }),
         apiRequest("/api/properties?status=pending&limit=100", { headers }),
@@ -9108,7 +9320,12 @@
         apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }),
         apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }),
         apiRequest("/api/admin/whatsapp/insights", { headers }),
-        apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers })
+        apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }),
+        apiRequest("/api/admin/crm/summary", { headers }),
+        apiRequest("/api/admin/leads?limit=50", { headers }),
+        apiRequest("/api/admin/notifications?limit=50", { headers }),
+        apiRequest("/api/admin/emails?limit=50", { headers }),
+        apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
       ]);
       const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
       const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
@@ -9134,6 +9351,12 @@
         webBridge: whatsappInsightsRes?.data?.webBridge || {}
       };
       adminWhatsappConversations = Array.isArray(whatsappConversationsRes?.data) ? whatsappConversationsRes.data : [];
+      adminCrmSummary = crmSummaryRes?.data || {};
+      adminCrmLeads = Array.isArray(crmLeadsRes?.data) ? crmLeadsRes.data : [];
+      adminCrmTasks = Array.isArray(crmSummaryRes?.data?.openTasks) ? crmSummaryRes.data.openTasks : [];
+      adminNotificationLogs = Array.isArray(notificationsRes?.data) ? notificationsRes.data : [];
+      adminEmailLogs = Array.isArray(emailsRes?.data) ? emailsRes.data : [];
+      adminWhatsappLogs = Array.isArray(whatsappLogsRes?.data) ? whatsappLogsRes.data : [];
       return {
         summary: summaryRes?.data || {},
         recent: recentRes?.data || {},
@@ -9151,7 +9374,13 @@
         advertisingInquiries: adminAdvertisingInquiries,
         advertisingCampaigns: adminAdvertisingCampaigns,
         whatsappSummary: adminWhatsappSummary,
-        whatsappConversations: adminWhatsappConversations
+        whatsappConversations: adminWhatsappConversations,
+        crmSummary: adminCrmSummary,
+        crmLeads: adminCrmLeads,
+        crmTasks: adminCrmTasks,
+        notificationLogs: adminNotificationLogs,
+        emailLogs: adminEmailLogs,
+        whatsappLogs: adminWhatsappLogs
       };
     }
 
@@ -9406,6 +9635,115 @@
       el.innerHTML = items.map(renderer).join("");
     }
 
+    function renderAdminCrmOverview(summary = {}) {
+      const wrap = document.getElementById("admin-crm-overview");
+      if (!wrap) return;
+      const leadTotal = Number(summary.leads?.total || adminCrmLeads.length || 0);
+      const openLeads = Number(summary.leads?.open || 0);
+      const hotLeads = Number(summary.leads?.hot || 0);
+      const unassigned = Number(summary.leads?.unassigned || 0);
+      const overdueTasks = Number(summary.tasks?.overdue || 0);
+      const failedNotifications = Number(summary.notifications?.failed || adminNotificationLogs.filter((row) => String(row.status || "").toLowerCase() === "failed").length || 0);
+      const stat = (label, value, tone = "gray") => {
+        const tones = {
+          green: "bg-green-50 border-green-100 text-green-800",
+          amber: "bg-amber-50 border-amber-100 text-amber-800",
+          red: "bg-red-50 border-red-100 text-red-700",
+          gray: "bg-gray-50 border-gray-200 text-gray-900"
+        };
+        return `<div class="rounded-2xl border ${tones[tone] || tones.gray} p-4">
+          <div class="text-[11px] uppercase tracking-wide font-bold opacity-70">${adminEscape(label)}</div>
+          <div class="text-2xl font-black mt-1">${adminEscape(value)}</div>
+        </div>`;
+      };
+      wrap.innerHTML = [
+        stat("Total Leads", leadTotal, "green"),
+        stat("Open Leads", openLeads, "amber"),
+        stat("Hot Leads", hotLeads, "red"),
+        stat("Unassigned", unassigned, "amber"),
+        stat("Overdue Tasks", overdueTasks, overdueTasks ? "red" : "gray"),
+        stat("Failed Notices", failedNotifications, failedNotifications ? "red" : "gray")
+      ].join("");
+    }
+
+    function renderAdminCrmLeadsRows(leads = []) {
+      const wrap = document.getElementById("admin-crm-leads-table");
+      if (!wrap) return;
+      const rows = Array.isArray(leads) ? leads : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No CRM leads in this snapshot yet. New WhatsApp clicks, saved searches, viewings, callbacks, property needs, advertiser signups, and mortgage requests will appear here.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.slice(0, 25).map((lead) => {
+        const score = Number(lead.lead_score || 0);
+        const hot = score >= 50 || String(lead.priority || "").toLowerCase() === "urgent";
+        return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="font-bold text-gray-800">${adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
+              <div class="text-xs text-gray-500 mt-1">${adminEscape(lead.contact_name || "Unknown contact")} • ${adminEscape(lead.contact_phone || lead.contact_email || "-")}</div>
+              <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
+              ${lead.message ? `<div class="text-xs text-gray-700 mt-2">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
+            </div>
+            <span class="text-xs font-bold px-2 py-1 rounded-full ${hot ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}">Score ${adminEscape(score)}</span>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    function renderAdminCrmTasksRows(tasks = []) {
+      const wrap = document.getElementById("admin-crm-tasks-table");
+      if (!wrap) return;
+      const rows = Array.isArray(tasks) ? tasks : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No open follow-up tasks yet.</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.slice(0, 15).map((task) => `
+        <div class="border border-gray-200 rounded-xl p-3 bg-white">
+          <div class="font-bold text-gray-800">${adminEscape(task.task_type || "Follow-up")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(task.title || task.note || "Lead follow-up")} • ${adminEscape(task.due_at ? formatListingDate(task.due_at) : "No due date")}</div>
+          <div class="text-xs text-gray-500 mt-1">Status: ${adminEscape(task.status || "open")} • Lead: ${adminEscape(task.lead_id || "-")}</div>
+        </div>`).join("");
+    }
+
+    function adminLogStatusClass(status) {
+      const st = String(status || "").toLowerCase();
+      if (["failed", "bounced", "error"].includes(st)) return "bg-red-100 text-red-700";
+      if (["queued", "pending"].includes(st)) return "bg-amber-100 text-amber-800";
+      if (["sent", "delivered", "read", "logged"].includes(st)) return "bg-green-100 text-green-700";
+      if (["skipped", "duplicate"].includes(st)) return "bg-gray-100 text-gray-700";
+      return "bg-gray-100 text-gray-700";
+    }
+
+    function renderAdminLogRows(id, logs = [], options = {}) {
+      const wrap = document.getElementById(id);
+      if (!wrap) return;
+      const rows = Array.isArray(logs) ? logs : [];
+      if (!rows.length) {
+        wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">${adminEscape(options.empty || "No log entries in this snapshot.")}</div>`;
+        return;
+      }
+      wrap.innerHTML = rows.slice(0, 20).map((row) => {
+        const event = row.event_type || row.type || row.template_key || row.templateKey || row.message_type || row.channel || "event";
+        const status = row.status || "logged";
+        const target = row.recipient_email_masked || row.recipient_phone_masked || row.recipient_email || row.recipient_phone || row.recipientPhoneMasked || row.related_lead_id || row.relatedListingId || row.related_listing_id || "-";
+        const failure = row.failure_reason || row.failureReason || "";
+        const ref = row.related_listing_id || row.relatedListingId || row.related_lead_id || row.relatedLeadId || row.related_campaign_id || row.relatedCampaignId || "";
+        return `<div class="border border-gray-200 rounded-xl p-3 bg-white">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <div class="font-bold text-gray-800 break-words">${adminEscape(event)}</div>
+              <div class="text-xs text-gray-500 mt-1">${adminEscape(target)}${ref ? ` • Ref: ${adminEscape(ref)}` : ""}</div>
+              ${failure ? `<div class="text-xs text-red-700 mt-1">${adminEscape(failure)}</div>` : ""}
+              <div class="text-[11px] text-gray-400 mt-1">${adminEscape(formatListingDate(row.created_at || row.sent_at || row.createdAt || row.sentAt || new Date().toISOString()))}</div>
+            </div>
+            <span class="shrink-0 text-[11px] font-bold px-2 py-1 rounded-full ${adminLogStatusClass(status)}">${adminEscape(status)}</span>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
     async function renderAdminDashboard() {
       const gate = document.getElementById("admin-auth-gate");
       const body = document.getElementById("admin-body");
@@ -9522,6 +9860,12 @@
       renderAdminWhatsappOverview(remoteSnap?.whatsappSummary || localSnap.whatsappSummary || {});
       renderAdminWhatsappConversationList(remoteSnap?.whatsappConversations || localSnap.whatsappConversations || []);
       renderAdminAllListingsRows(remoteSnap?.allListings || localSnap.allListings);
+      renderAdminCrmOverview(remoteSnap?.crmSummary || {});
+      renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
+      renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
+      renderAdminLogRows("admin-notification-log", remoteSnap?.notificationLogs || [], { empty: "No notification records yet. Failed sends and safe provider-missing logs will appear here." });
+      renderAdminLogRows("admin-email-log", remoteSnap?.emailLogs || [], { empty: "No email log records yet. Listing submissions, OTPs, account events, and failure logs will appear here." });
+      renderAdminLogRows("admin-whatsapp-log", remoteSnap?.whatsappLogs || [], { empty: "No WhatsApp message log records yet. Template/freeform send attempts will appear here." });
       setAdminWorkflowTab(activeAdminWorkflowTab);
       await ensureAdminWhatsappConversationLoaded();
       renderAdminList("admin-recent-users", remoteSnap?.recent?.recentUsers || localSnap.recentUsers, (u) => `
@@ -12193,17 +12537,32 @@
 
     function applyAuthUi() {
       const signEl = document.getElementById("top-signin-link");
+      const dashboardEl = document.getElementById("top-dashboard-link");
       const signOutEl = document.getElementById("top-signout-link");
       if (!signEl) return;
       if (authState?.user) {
-        const first = authState.user.first_name || "Account";
-        signEl.innerHTML = `<i class="fas fa-user-check text-green-300"></i> ${first}`;
-        signEl.onclick = () => openSignedInDashboard();
-        if (signOutEl) signOutEl.classList.remove("hidden");
+        signEl.classList.add("hidden");
+        if (dashboardEl) {
+          dashboardEl.innerHTML = `<i class="fas fa-table-cells-large text-green-300"></i> Dashboard`;
+          dashboardEl.onclick = () => openSignedInDashboard();
+          dashboardEl.classList.remove("hidden");
+        }
+        if (signOutEl) {
+          signOutEl.innerHTML = `<i class="fas fa-right-from-bracket text-green-300"></i> ${translateListingLabel("Sign Out")}`;
+          signOutEl.classList.remove("hidden");
+        }
       } else {
+        signEl.classList.remove("hidden");
         signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
         signEl.onclick = () => openAuthSignIn("finder");
-        if (signOutEl) signOutEl.classList.add("hidden");
+        if (dashboardEl) {
+          dashboardEl.innerHTML = "";
+          dashboardEl.classList.add("hidden");
+        }
+        if (signOutEl) {
+          signOutEl.innerHTML = "";
+          signOutEl.classList.add("hidden");
+        }
       }
       hydrateAccountForm();
     }

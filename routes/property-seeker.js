@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const logger = require('../config/logger');
 const { cleanText } = require('../middleware/validation');
+const { createLead } = require('../services/leadService');
+const { logNotification } = require('../services/notificationLogService');
 
 const router = express.Router();
 
@@ -99,6 +101,76 @@ function propertyToCard(row, reason = 'Recommended for your saved preferences') 
     url: propertyUrl(row.id),
     reason
   };
+}
+
+function normalizeLocationObject(value) {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const out = {};
+    [
+      'query',
+      'placeId',
+      'fullAddress',
+      'street',
+      'area',
+      'neighbourhood',
+      'parish',
+      'town',
+      'city',
+      'district',
+      'region',
+      'country',
+      'latitude',
+      'longitude',
+      'plusCode',
+      'radius',
+      'locationConfidence',
+      'locationPrivacy'
+    ].forEach((key) => {
+      if (value[key] !== undefined && value[key] !== null && value[key] !== '') out[key] = value[key];
+    });
+    return out;
+  }
+  const query = asText(value);
+  return query ? { query, fullAddress: query } : {};
+}
+
+function locationLabel(location = {}) {
+  if (typeof location === 'string') return asText(location) || null;
+  return asText(
+    location.fullAddress
+      || [location.neighbourhood, location.town || location.city, location.district, location.region].filter(Boolean).join(', ')
+      || location.query
+  ) || null;
+}
+
+function normalizeAlertFrequency(value, fallback = 'weekly') {
+  const frequency = asText(value, fallback).toLowerCase();
+  return ['instant', 'daily', 'weekly', 'off'].includes(frequency) ? frequency : fallback;
+}
+
+function normalizeAlertChannels(value) {
+  const channels = asArray(value).map((channel) => asContactChannel(channel, '')).filter(Boolean);
+  return channels.length ? [...new Set(channels)] : ['in_app'];
+}
+
+async function logActivity(userId, activityType, metadata = {}, extra = {}) {
+  try {
+    await db.query(
+      `INSERT INTO property_seeker_activities (user_id, guest_session_id, activity_type, listing_id, search_id, lead_id, metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+      [
+        userId || null,
+        extra.guestSessionId || null,
+        activityType,
+        extra.listingId || null,
+        extra.searchId || null,
+        extra.leadId || null,
+        JSON.stringify(metadata || {})
+      ]
+    );
+  } catch (error) {
+    logger.warn('Property seeker activity log failed', { activityType, error: error.message });
+  }
 }
 
 async function loadUserFromToken(token) {
@@ -421,7 +493,7 @@ async function fetchRecommendations(userId, preferences = {}, limit = 12) {
 async function dashboardPayload(user) {
   const profile = await upsertProfile(user, {});
   const preferences = await upsertPreferences(user.id, {});
-  const [recommendations, saved, recent, searches, needRequests] = await Promise.all([
+  const [recommendations, saved, recent, searches, needRequests, notes, comparisons, viewings, callbacks] = await Promise.all([
     fetchRecommendations(user.id, preferences, 12),
     db.query(
       `SELECT sl.*, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
@@ -450,7 +522,27 @@ async function dashboardPayload(user) {
       [user.id]
     ),
     db.query('SELECT * FROM saved_searches WHERE user_id = $1 AND status = $2 ORDER BY updated_at DESC LIMIT 20', [user.id, 'active']),
-    db.query('SELECT * FROM property_need_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10', [user.id])
+    db.query('SELECT * FROM property_need_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10', [user.id]),
+    db.query('SELECT * FROM listing_notes WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 50', [user.id]),
+    db.query('SELECT * FROM property_comparisons WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 10', [user.id]),
+    db.query(
+      `SELECT vb.*, p.title, p.listing_type, p.district, p.area
+       FROM viewing_bookings vb
+       LEFT JOIN properties p ON p.id = vb.listing_id
+       WHERE vb.user_id = $1
+       ORDER BY vb.created_at DESC
+       LIMIT 20`,
+      [user.id]
+    ),
+    db.query(
+      `SELECT cb.*, p.title, p.listing_type, p.district, p.area
+       FROM callback_requests cb
+       LEFT JOIN properties p ON p.id = cb.listing_id
+       WHERE cb.user_id = $1
+       ORDER BY cb.created_at DESC
+       LIMIT 20`,
+      [user.id]
+    )
   ]);
 
   const nextActions = [];
@@ -474,6 +566,10 @@ async function dashboardPayload(user) {
     recentlyViewed: recent.rows.map((row) => propertyToCard(row, `Viewed ${new Date(row.viewed_at).toLocaleDateString('en-GB')}`)),
     savedSearches: searches.rows,
     needRequests: needRequests.rows,
+    notes: notes.rows,
+    comparisons: comparisons.rows,
+    viewings: viewings.rows,
+    callbacks: callbacks.rows,
     nextActions,
     insights: {
       message: 'MakaUg is using your saved preferences, searches, views, and WhatsApp-ready demand data to improve matches safely.'
@@ -688,6 +784,30 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         asLanguage(req.body.language || req.body.preferred_language)
       ]
     );
+    const item = result.rows[0];
+    const lead = await createLead(db, {
+      userId: req.userAuth?.id || null,
+      contact: {
+        userId: req.userAuth?.id || null,
+        name: req.userAuth ? [req.userAuth.first_name, req.userAuth.last_name].filter(Boolean).join(' ') : asText(req.body.name),
+        phone: asText(req.body.phone || req.userAuth?.phone) || null,
+        email: asText(req.body.email || req.userAuth?.email) || null,
+        preferredContactChannel: item.preferred_contact_channel,
+        preferredLanguage: item.language,
+        roleType: 'property_seeker',
+        locationInterest: item.location,
+        categoryInterest: item.category,
+        budgetRange: item.budget ? String(item.budget) : ''
+      },
+      source: item.source || 'property_need_request',
+      leadType: 'property_need_request',
+      category: item.category,
+      location: item.location,
+      budget: item.budget,
+      message: item.message,
+      metadata: { property_need_request_id: item.id }
+    });
+    await logActivity(req.userAuth?.id || null, 'property_need_request_created', { property_need_request_id: item.id }, { leadId: lead?.id || null });
     return res.status(201).json({ ok: true, data: result.rows[0] });
   } catch (error) {
     return next(error);
@@ -701,6 +821,185 @@ router.get('/need-request', requireAuth, async (req, res, next) => {
       [req.userAuth.id]
     );
     return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/saved-searches', requireAuth, async (req, res, next) => {
+  try {
+    const status = asText(req.query.status, 'active');
+    const result = await db.query(
+      `SELECT *
+       FROM saved_searches
+       WHERE user_id = $1
+         AND ($2::text = 'all' OR status = $2)
+       ORDER BY updated_at DESC
+       LIMIT 100`,
+      [req.userAuth.id, status]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/saved-searches', requireAuth, async (req, res, next) => {
+  try {
+    const locationObject = normalizeLocationObject(req.body.location || req.body.locationObject || req.body.filters?.location || req.body.query);
+    const category = normalizeCategory(req.body.category || req.body.listing_type || req.body.listingType) || 'any';
+    const filters = {
+      ...safeJson(req.body.filters, {}),
+      location: locationObject,
+      category
+    };
+    const alertChannels = normalizeAlertChannels(req.body.alert_channels || req.body.alertChannels);
+    const result = await db.query(
+      `INSERT INTO saved_searches (
+         user_id, guest_session_id, phone, category, filters, label, location,
+         min_price, max_price, currency, bedrooms, bathrooms, property_type,
+         amenities, verification_preference, student_campus, student_distance,
+         land_title_type, land_size, commercial_subtype, alert_frequency,
+         alert_channels, language_preference, status, created_from
+       )
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23,$24,$25)
+       RETURNING *`,
+      [
+        req.userAuth.id,
+        asText(req.body.guest_session_id || req.body.guestSessionId) || null,
+        asText(req.body.phone || req.userAuth.phone) || null,
+        category,
+        JSON.stringify(filters),
+        asText(req.body.label || req.body.title) || [category, locationLabel(locationObject)].filter(Boolean).join(' in ') || 'MakaUg saved search',
+        locationLabel(locationObject),
+        asBigIntNumber(req.body.min_price || req.body.minPrice || req.body.minBudget),
+        asBigIntNumber(req.body.max_price || req.body.maxPrice || req.body.maxBudget || req.body.budget),
+        asText(req.body.currency, 'UGX').toUpperCase().slice(0, 8),
+        asInteger(req.body.bedrooms),
+        asInteger(req.body.bathrooms),
+        asText(req.body.property_type || req.body.propertyType) || null,
+        JSON.stringify(asArray(req.body.amenities)),
+        asText(req.body.verification_preference || req.body.verificationPreference) || null,
+        asText(req.body.student_campus || req.body.studentCampus || req.body.campus) || null,
+        asInteger(req.body.student_distance || req.body.studentDistance),
+        asText(req.body.land_title_type || req.body.landTitleType) || null,
+        asText(req.body.land_size || req.body.landSize) || null,
+        asText(req.body.commercial_subtype || req.body.commercialSubtype) || null,
+        normalizeAlertFrequency(req.body.alert_frequency || req.body.alertFrequency),
+        JSON.stringify(alertChannels),
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth.preferred_language),
+        'active',
+        asText(req.body.created_from || req.body.createdFrom, 'web')
+      ]
+    );
+    const savedSearch = result.rows[0];
+    await logActivity(req.userAuth.id, 'saved_search_created', { saved_search_id: savedSearch.id, filters }, { searchId: savedSearch.id });
+    await logNotification(db, {
+      userId: req.userAuth.id,
+      recipientPhone: req.userAuth.phone,
+      recipientEmail: req.userAuth.email,
+      channel: 'in_app',
+      type: 'saved_search_created',
+      status: 'logged',
+      relatedSavedSearchId: savedSearch.id,
+      payloadSummary: {
+        label: savedSearch.label,
+        category: savedSearch.category,
+        location: savedSearch.location,
+        alert_channels: alertChannels
+      }
+    });
+    await createLead(db, {
+      userId: req.userAuth.id,
+      contact: {
+        userId: req.userAuth.id,
+        name: [req.userAuth.first_name, req.userAuth.last_name].filter(Boolean).join(' '),
+        phone: req.userAuth.phone,
+        email: req.userAuth.email,
+        preferredContactChannel: req.userAuth.preferred_contact_channel,
+        preferredLanguage: req.userAuth.preferred_language,
+        roleType: 'property_seeker',
+        locationInterest: savedSearch.location,
+        categoryInterest: savedSearch.category,
+        budgetRange: savedSearch.max_price ? String(savedSearch.max_price) : ''
+      },
+      source: 'saved_search',
+      leadType: 'saved_search',
+      category: savedSearch.category,
+      location: savedSearch.location,
+      budget: savedSearch.max_price,
+      message: `Saved search created: ${savedSearch.label || savedSearch.category}`,
+      metadata: { saved_search_id: savedSearch.id }
+    });
+    return res.status(201).json({ ok: true, data: savedSearch });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/saved-searches/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid saved search id' });
+    const updates = [];
+    const values = [req.userAuth.id, id];
+    const add = (field, value, cast = '') => {
+      values.push(value);
+      updates.push(`${field} = $${values.length}${cast}`);
+    };
+    if (Object.prototype.hasOwnProperty.call(req.body, 'label')) add('label', asText(req.body.label) || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'status')) {
+      const status = asText(req.body.status, 'active').toLowerCase();
+      if (!['active', 'paused', 'deleted'].includes(status)) return res.status(400).json({ ok: false, error: 'Invalid saved search status' });
+      add('status', status);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'alert_frequency') || Object.prototype.hasOwnProperty.call(req.body, 'alertFrequency')) {
+      add('alert_frequency', normalizeAlertFrequency(req.body.alert_frequency || req.body.alertFrequency));
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'alert_channels') || Object.prototype.hasOwnProperty.call(req.body, 'alertChannels')) {
+      add('alert_channels', JSON.stringify(normalizeAlertChannels(req.body.alert_channels || req.body.alertChannels)), '::jsonb');
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'location') || Object.prototype.hasOwnProperty.call(req.body, 'filters')) {
+      const current = await db.query('SELECT filters FROM saved_searches WHERE user_id = $1 AND id = $2 LIMIT 1', [req.userAuth.id, id]);
+      if (!current.rows.length) return res.status(404).json({ ok: false, error: 'Saved search not found' });
+      const locationObject = normalizeLocationObject(req.body.location || req.body.filters?.location);
+      const filters = {
+        ...safeJson(current.rows[0].filters, {}),
+        ...safeJson(req.body.filters, {}),
+        ...(Object.keys(locationObject).length ? { location: locationObject } : {})
+      };
+      add('filters', JSON.stringify(filters), '::jsonb');
+      if (Object.keys(locationObject).length) add('location', locationLabel(locationObject));
+    }
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'No saved search updates provided' });
+    const result = await db.query(
+      `UPDATE saved_searches
+       SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      values
+    );
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Saved search not found' });
+    await logActivity(req.userAuth.id, 'saved_search_updated', { saved_search_id: id }, { searchId: id });
+    return res.json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/saved-searches/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid saved search id' });
+    const result = await db.query(
+      `UPDATE saved_searches
+       SET status = 'deleted', updated_at = NOW()
+       WHERE user_id = $1 AND id = $2
+       RETURNING id`,
+      [req.userAuth.id, id]
+    );
+    await logActivity(req.userAuth.id, 'saved_search_deleted', { saved_search_id: id }, { searchId: id });
+    return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
   } catch (error) {
     return next(error);
   }
@@ -744,6 +1043,7 @@ router.post('/saved-listings', requireAuth, async (req, res, next) => {
         asText(req.body.status, 'saved')
       ]
     );
+    await logActivity(req.userAuth.id, 'save_listing', { saved_listing_id: result.rows[0]?.id }, { listingId });
     return res.status(201).json({ ok: true, data: result.rows[0] });
   } catch (error) {
     return next(error);
@@ -755,6 +1055,7 @@ router.delete('/saved-listings/:id', requireAuth, async (req, res, next) => {
     const id = req.params.id;
     if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid saved listing id' });
     const result = await db.query('DELETE FROM saved_listings WHERE user_id = $1 AND id = $2 RETURNING id', [req.userAuth.id, id]);
+    await logActivity(req.userAuth.id, 'saved_listing_removed', { saved_listing_id: id });
     return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
   } catch (error) {
     return next(error);
@@ -772,6 +1073,7 @@ router.post('/listing-notes', requireAuth, async (req, res, next) => {
        RETURNING *`,
       [req.userAuth.id, listingId, note]
     );
+    await logActivity(req.userAuth.id, 'add_note', { note_id: result.rows[0]?.id }, { listingId });
     return res.status(201).json({ ok: true, data: result.rows[0] });
   } catch (error) {
     return next(error);
@@ -782,6 +1084,150 @@ router.get('/listing-notes', requireAuth, async (req, res, next) => {
   try {
     const result = await db.query('SELECT * FROM listing_notes WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 100', [req.userAuth.id]);
     return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/listing-notes/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const note = asText(req.body.note);
+    if (!isUuid(id) || !note) return res.status(400).json({ ok: false, error: 'Valid note id and note are required' });
+    const result = await db.query(
+      `UPDATE listing_notes
+       SET note = $3, updated_at = NOW()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      [req.userAuth.id, id, note]
+    );
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Listing note not found' });
+    await logActivity(req.userAuth.id, 'note_updated', { note_id: id }, { listingId: result.rows[0].listing_id });
+    return res.json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/listing-notes/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid note id' });
+    const result = await db.query('DELETE FROM listing_notes WHERE user_id = $1 AND id = $2 RETURNING listing_id', [req.userAuth.id, id]);
+    await logActivity(req.userAuth.id, 'note_deleted', { note_id: id }, { listingId: result.rows[0]?.listing_id || null });
+    return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/hidden-listings', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT h.*, p.title, p.listing_type, p.district, p.area
+       FROM hidden_listings h
+       JOIN properties p ON p.id = h.listing_id
+       WHERE h.user_id = $1
+       ORDER BY h.created_at DESC`,
+      [req.userAuth.id]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/hidden-listings', requireAuth, async (req, res, next) => {
+  try {
+    const listingId = req.body.listing_id || req.body.listingId;
+    if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
+    const result = await db.query(
+      `INSERT INTO hidden_listings (user_id, listing_id, reason)
+       VALUES ($1,$2,$3)
+       ON CONFLICT (user_id, listing_id)
+       DO UPDATE SET reason = EXCLUDED.reason
+       RETURNING *`,
+      [req.userAuth.id, listingId, asText(req.body.reason) || null]
+    );
+    await logActivity(req.userAuth.id, 'hide_listing', { reason: result.rows[0]?.reason || null }, { listingId });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/hidden-listings/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid hidden listing id' });
+    const result = await db.query('DELETE FROM hidden_listings WHERE user_id = $1 AND id = $2 RETURNING listing_id', [req.userAuth.id, id]);
+    await logActivity(req.userAuth.id, 'unhide_listing', { hidden_listing_id: id }, { listingId: result.rows[0]?.listing_id || null });
+    return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/property-comparison', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query('SELECT * FROM property_comparisons WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 20', [req.userAuth.id]);
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/property-comparison', requireAuth, async (req, res, next) => {
+  try {
+    const listingIds = asArray(req.body.listing_ids || req.body.listingIds).filter(isUuid).slice(0, 4);
+    if (!listingIds.length) return res.status(400).json({ ok: false, error: 'At least one valid listing id is required' });
+    const result = await db.query(
+      `INSERT INTO property_comparisons (user_id, listing_ids, name)
+       VALUES ($1,$2::jsonb,$3)
+       RETURNING *`,
+      [req.userAuth.id, JSON.stringify(listingIds), asText(req.body.name) || null]
+    );
+    await logActivity(req.userAuth.id, 'compare_listing', { comparison_id: result.rows[0]?.id, listing_ids: listingIds });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/property-comparison/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid comparison id' });
+    const listingIds = asArray(req.body.listing_ids || req.body.listingIds).filter(isUuid).slice(0, 4);
+    const result = await db.query(
+      `UPDATE property_comparisons
+       SET listing_ids = COALESCE($3::jsonb, listing_ids),
+           name = COALESCE($4, name),
+           updated_at = NOW()
+       WHERE user_id = $1 AND id = $2
+       RETURNING *`,
+      [
+        req.userAuth.id,
+        id,
+        listingIds.length ? JSON.stringify(listingIds) : null,
+        Object.prototype.hasOwnProperty.call(req.body, 'name') ? asText(req.body.name) || null : null
+      ]
+    );
+    if (!result.rows.length) return res.status(404).json({ ok: false, error: 'Comparison not found' });
+    await logActivity(req.userAuth.id, 'compare_updated', { comparison_id: id, listing_ids: listingIds });
+    return res.json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/property-comparison/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!isUuid(id)) return res.status(400).json({ ok: false, error: 'Invalid comparison id' });
+    const result = await db.query('DELETE FROM property_comparisons WHERE user_id = $1 AND id = $2 RETURNING id', [req.userAuth.id, id]);
+    await logActivity(req.userAuth.id, 'compare_deleted', { comparison_id: id });
+    return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
   } catch (error) {
     return next(error);
   }
@@ -812,6 +1258,291 @@ router.get('/recently-viewed', requireAuth, async (req, res, next) => {
        WHERE rv.user_id = $1
        ORDER BY rv.viewed_at DESC
        LIMIT 50`,
+      [req.userAuth.id]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/viewing-config/:listingId', optionalAuth, async (req, res, next) => {
+  try {
+    const listingId = req.params.listingId;
+    if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Invalid listing id' });
+    const result = await db.query(
+      `SELECT *
+       FROM viewing_configs
+       WHERE listing_id = $1
+       LIMIT 1`,
+      [listingId]
+    );
+    return res.json({
+      ok: true,
+      data: result.rows[0] || {
+        listing_id: listingId,
+        accepts_viewings: false,
+        booking_mode: 'disabled',
+        contact_method: 'whatsapp'
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/viewing-config', requireAuth, async (req, res, next) => {
+  try {
+    const listingId = req.body.listing_id || req.body.listingId;
+    if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
+    const bookingMode = asText(req.body.booking_mode || req.body.bookingMode, req.body.accepts_viewings === false ? 'disabled' : 'request_only').toLowerCase();
+    const allowedModes = ['request_only', 'manual_confirm', 'auto_confirm_slots', 'open_house_only', 'callback_only', 'disabled'];
+    const mode = allowedModes.includes(bookingMode) ? bookingMode : 'request_only';
+    const result = await db.query(
+      `INSERT INTO viewing_configs (
+         listing_id, accepts_viewings, booking_mode, manager_type, manager_user_id,
+         contact_method, available_days, available_time_windows, notice_period_hours,
+         max_bookings_per_slot, blackout_dates, open_house_enabled,
+         public_instructions, private_instructions, language_preference
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11::jsonb,$12,$13,$14,$15)
+       ON CONFLICT (listing_id)
+       DO UPDATE SET
+         accepts_viewings = EXCLUDED.accepts_viewings,
+         booking_mode = EXCLUDED.booking_mode,
+         manager_type = EXCLUDED.manager_type,
+         manager_user_id = EXCLUDED.manager_user_id,
+         contact_method = EXCLUDED.contact_method,
+         available_days = EXCLUDED.available_days,
+         available_time_windows = EXCLUDED.available_time_windows,
+         notice_period_hours = EXCLUDED.notice_period_hours,
+         max_bookings_per_slot = EXCLUDED.max_bookings_per_slot,
+         blackout_dates = EXCLUDED.blackout_dates,
+         open_house_enabled = EXCLUDED.open_house_enabled,
+         public_instructions = EXCLUDED.public_instructions,
+         private_instructions = EXCLUDED.private_instructions,
+         language_preference = EXCLUDED.language_preference,
+         updated_at = NOW()
+       RETURNING *`,
+      [
+        listingId,
+        mode !== 'disabled' && asBoolean(req.body.accepts_viewings ?? req.body.acceptsViewings, true),
+        mode,
+        asText(req.body.manager_type || req.body.managerType, 'owner'),
+        req.body.manager_user_id || req.body.managerUserId || req.userAuth.id,
+        asContactChannel(req.body.contact_method || req.body.contactMethod, 'whatsapp'),
+        JSON.stringify(asArray(req.body.available_days || req.body.availableDays)),
+        JSON.stringify(safeJson(req.body.available_time_windows || req.body.availableTimeWindows, [])),
+        asInteger(req.body.notice_period_hours || req.body.noticePeriodHours, 24),
+        asInteger(req.body.max_bookings_per_slot || req.body.maxBookingsPerSlot, 1),
+        JSON.stringify(asArray(req.body.blackout_dates || req.body.blackoutDates)),
+        asBoolean(req.body.open_house_enabled || req.body.openHouseEnabled, false),
+        asText(req.body.public_instructions || req.body.publicInstructions) || null,
+        asText(req.body.private_instructions || req.body.privateInstructions) || null,
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth.preferred_language)
+      ]
+    );
+    await logActivity(req.userAuth.id, 'viewing_config_updated', { viewing_config_id: result.rows[0]?.id, booking_mode: mode }, { listingId });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/viewings', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT vb.*, p.title, p.listing_type, p.district, p.area
+       FROM viewing_bookings vb
+       LEFT JOIN properties p ON p.id = vb.listing_id
+       WHERE vb.user_id = $1
+       ORDER BY vb.created_at DESC
+       LIMIT 100`,
+      [req.userAuth.id]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/viewings', optionalAuth, async (req, res, next) => {
+  try {
+    const listingId = req.body.listing_id || req.body.listingId;
+    if (!isUuid(listingId)) return res.status(400).json({ ok: false, error: 'Valid listing_id is required' });
+    const config = await db.query('SELECT * FROM viewing_configs WHERE listing_id = $1 LIMIT 1', [listingId]);
+    const viewingConfig = config.rows[0] || null;
+    if (viewingConfig && (viewingConfig.accepts_viewings === false || viewingConfig.booking_mode === 'disabled' || viewingConfig.booking_mode === 'callback_only')) {
+      return res.status(409).json({ ok: false, error: 'This listing is not accepting viewing bookings. Request a callback instead.' });
+    }
+    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'MakaUg user');
+    const phone = asText(req.body.phone || req.userAuth?.phone) || null;
+    const email = asText(req.body.email || req.userAuth?.email) || null;
+    if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
+    const lead = await createLead(db, {
+      userId: req.userAuth?.id || null,
+      listingId,
+      contact: {
+        userId: req.userAuth?.id || null,
+        name,
+        phone,
+        email,
+        preferredContactChannel: req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel,
+        preferredLanguage: req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language,
+        roleType: 'property_seeker'
+      },
+      source: req.body.source || 'viewing_booking',
+      leadType: 'viewing',
+      message: req.body.message || 'Viewing requested from MakaUg dashboard/web.',
+      metadata: { preferred_date: req.body.preferred_date || req.body.preferredDate, preferred_time: req.body.preferred_time || req.body.preferredTime }
+    });
+    const result = await db.query(
+      `INSERT INTO viewing_bookings (
+         listing_id, user_id, name, phone, email, preferred_date, preferred_time,
+         contact_method, message, status, source, language_preference, lead_id
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'requested',$10,$11,$12)
+       RETURNING *`,
+      [
+        listingId,
+        req.userAuth?.id || null,
+        name,
+        phone,
+        email,
+        asText(req.body.preferred_date || req.body.preferredDate) || null,
+        asText(req.body.preferred_time || req.body.preferredTime) || null,
+        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
+        asText(req.body.message) || null,
+        asText(req.body.source, 'web'),
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language),
+        lead?.id || null
+      ]
+    );
+    await logActivity(req.userAuth?.id || null, 'book_viewing', { viewing_booking_id: result.rows[0]?.id }, { listingId, leadId: lead?.id || null });
+    await logNotification(db, {
+      userId: req.userAuth?.id || null,
+      recipientPhone: phone,
+      recipientEmail: email,
+      channel: 'in_app',
+      type: 'viewing_requested',
+      status: 'logged',
+      relatedListingId: listingId,
+      relatedLeadId: lead?.id || null,
+      payloadSummary: { viewing_booking_id: result.rows[0]?.id, preferred_date: result.rows[0]?.preferred_date, preferred_time: result.rows[0]?.preferred_time }
+    });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/callbacks', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT cb.*, p.title, p.listing_type, p.district, p.area
+       FROM callback_requests cb
+       LEFT JOIN properties p ON p.id = cb.listing_id
+       WHERE cb.user_id = $1
+       ORDER BY cb.created_at DESC
+       LIMIT 100`,
+      [req.userAuth.id]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/callbacks', optionalAuth, async (req, res, next) => {
+  try {
+    const listingId = isUuid(req.body.listing_id || req.body.listingId) ? (req.body.listing_id || req.body.listingId) : null;
+    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'MakaUg user');
+    const phone = asText(req.body.phone || req.userAuth?.phone) || null;
+    const email = asText(req.body.email || req.userAuth?.email) || null;
+    if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
+    const lead = await createLead(db, {
+      userId: req.userAuth?.id || null,
+      listingId,
+      contact: {
+        userId: req.userAuth?.id || null,
+        name,
+        phone,
+        email,
+        preferredContactChannel: req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel,
+        preferredLanguage: req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language,
+        roleType: 'property_seeker'
+      },
+      source: req.body.source || 'callback_request',
+      leadType: 'callback',
+      message: req.body.message || 'Callback requested from MakaUg dashboard/web.',
+      metadata: { preferred_callback_time: req.body.preferred_callback_time || req.body.preferredCallbackTime }
+    });
+    const result = await db.query(
+      `INSERT INTO callback_requests (
+         listing_id, user_id, name, phone, email, preferred_callback_time,
+         contact_method, message, status, source, language_preference, lead_id
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'requested',$9,$10,$11)
+       RETURNING *`,
+      [
+        listingId,
+        req.userAuth?.id || null,
+        name,
+        phone,
+        email,
+        asText(req.body.preferred_callback_time || req.body.preferredCallbackTime) || null,
+        asContactChannel(req.body.contact_method || req.body.contactMethod || req.userAuth?.preferred_contact_channel, 'whatsapp'),
+        asText(req.body.message) || null,
+        asText(req.body.source, 'web'),
+        asLanguage(req.body.language_preference || req.body.languagePreference || req.userAuth?.preferred_language),
+        lead?.id || null
+      ]
+    );
+    await logActivity(req.userAuth?.id || null, 'request_callback', { callback_request_id: result.rows[0]?.id }, { listingId, leadId: lead?.id || null });
+    await logNotification(db, {
+      userId: req.userAuth?.id || null,
+      recipientPhone: phone,
+      recipientEmail: email,
+      channel: 'in_app',
+      type: 'callback_requested',
+      status: 'logged',
+      relatedListingId: listingId,
+      relatedLeadId: lead?.id || null,
+      payloadSummary: { callback_request_id: result.rows[0]?.id, preferred_callback_time: result.rows[0]?.preferred_callback_time }
+    });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/enquiries', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT pi.*, p.title, p.listing_type, p.district, p.area
+       FROM property_inquiries pi
+       LEFT JOIN properties p ON p.id = pi.property_id
+       WHERE (pi.contact_email = $2 AND $2::text IS NOT NULL)
+          OR (pi.contact_phone = $3 AND $3::text IS NOT NULL)
+       ORDER BY pi.created_at DESC
+       LIMIT 100`,
+      [req.userAuth.id, req.userAuth.email || null, req.userAuth.phone || null]
+    );
+    return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/contact-history', requireAuth, async (req, res, next) => {
+  try {
+    const result = await db.query(
+      `SELECT *
+       FROM property_seeker_activities
+       WHERE user_id = $1
+         AND activity_type IN ('contact_whatsapp','whatsapp_contact_initiated','contact_call','contact_email','book_viewing','request_callback')
+       ORDER BY created_at DESC
+       LIMIT 100`,
       [req.userAuth.id]
     );
     return res.json({ ok: true, data: { items: result.rows, total: result.rows.length } });

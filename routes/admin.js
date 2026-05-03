@@ -50,6 +50,7 @@ const {
   getAdvertisingPackages,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
+const { addLeadActivity } = require('../services/leadService');
 
 const router = express.Router();
 
@@ -3092,6 +3093,365 @@ router.post('/campaigns/:id/cancel', async (req, res, next) => {
     await writeAudit('campaign_cancelled', { campaign_id: campaignId });
 
     return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/crm/summary', async (_req, res, next) => {
+  try {
+    const [summary, bySource, byType, demand, tasks] = await Promise.all([
+      db.query(
+        `SELECT
+           COUNT(*)::int AS total_leads,
+           COUNT(*) FILTER (WHERE lead_status = 'open')::int AS open_leads,
+           COUNT(*) FILTER (WHERE assigned_to_user_id IS NULL)::int AS unassigned_leads,
+           COUNT(*) FILTER (WHERE priority IN ('high','urgent'))::int AS hot_leads,
+           COUNT(*) FILTER (WHERE next_follow_up_at < NOW() AND lead_status = 'open')::int AS overdue_followups,
+           COALESCE(SUM(budget), 0)::bigint AS budget_pipeline
+         FROM leads`
+      ),
+      db.query(
+        `SELECT source, COUNT(*)::int AS total
+         FROM leads
+         GROUP BY source
+         ORDER BY total DESC
+         LIMIT 12`
+      ),
+      db.query(
+        `SELECT lead_type, COUNT(*)::int AS total
+         FROM leads
+         GROUP BY lead_type
+         ORDER BY total DESC
+         LIMIT 12`
+      ),
+      db.query(
+        `SELECT location, category, COUNT(*)::int AS total, COALESCE(AVG(budget), 0)::bigint AS avg_budget
+         FROM leads
+         WHERE location IS NOT NULL OR category IS NOT NULL
+         GROUP BY location, category
+         ORDER BY total DESC
+         LIMIT 20`
+      ),
+      db.query(
+        `SELECT status, COUNT(*)::int AS total
+         FROM lead_tasks
+         GROUP BY status
+         ORDER BY total DESC`
+      )
+    ]);
+    return res.json({
+      ok: true,
+      data: {
+        summary: summary.rows[0] || {},
+        bySource: bySource.rows,
+        byType: byType.rows,
+        demand: demand.rows,
+        tasks: tasks.rows
+      }
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({
+        ok: true,
+        data: {
+          summary: { total_leads: 0, open_leads: 0, unassigned_leads: 0, hot_leads: 0, overdue_followups: 0, budget_pipeline: 0 },
+          bySource: [],
+          byType: [],
+          demand: [],
+          tasks: [],
+          provider_missing: true
+        }
+      });
+    }
+    return next(error);
+  }
+});
+
+router.get('/notifications', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = cleanText(req.query.status);
+    const channel = cleanText(req.query.channel);
+    const values = [];
+    const filters = [];
+    if (status) {
+      values.push(status);
+      filters.push(`status = $${values.length}`);
+    }
+    if (channel) {
+      values.push(channel);
+      filters.push(`channel = $${values.length}`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const count = await db.query(`SELECT COUNT(*)::int AS total FROM notifications ${where}`, values);
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT *
+       FROM notifications
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50) });
+    return next(error);
+  }
+});
+
+router.get('/emails', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = cleanText(req.query.status);
+    const values = [];
+    const filters = [];
+    if (status) {
+      values.push(status);
+      filters.push(`status = $${values.length}`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const count = await db.query(`SELECT COUNT(*)::int AS total FROM email_logs ${where}`, values);
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT *
+       FROM email_logs
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      const fallback = await db.query(
+        `SELECT id, type AS event_type, recipient_email AS recipient_email_masked,
+                type AS template_key, status, channel AS provider, failure_reason,
+                related_listing_id, related_lead_id, created_at, sent_at
+         FROM notifications
+         WHERE channel = 'email'
+         ORDER BY created_at DESC
+         LIMIT 100`
+      ).catch(() => ({ rows: [] }));
+      return res.json({ ok: true, data: fallback.rows, pagination: toPagination(fallback.rows.length, 1, 100), fallback: true });
+    }
+    return next(error);
+  }
+});
+
+router.get('/whatsapp-message-logs', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = cleanText(req.query.status);
+    const values = [];
+    const filters = [];
+    if (status) {
+      values.push(status);
+      filters.push(`status = $${values.length}`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const count = await db.query(`SELECT COUNT(*)::int AS total FROM whatsapp_message_logs ${where}`, values);
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT *
+       FROM whatsapp_message_logs
+       ${where}
+       ORDER BY created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      const fallback = await db.query(
+        `SELECT id, user_phone AS recipient_phone_masked, status, channel AS message_type,
+                last_error AS failure_reason, created_at, sent_at
+         FROM outbound_message_queue
+         ORDER BY created_at DESC
+         LIMIT 100`
+      ).catch(() => ({ rows: [] }));
+      return res.json({ ok: true, data: fallback.rows, pagination: toPagination(fallback.rows.length, 1, 100), fallback: true });
+    }
+    return next(error);
+  }
+});
+
+router.get('/leads', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const filters = [];
+    const values = [];
+    const addFilter = (sql, value) => {
+      values.push(value);
+      filters.push(sql.replace('?', `$${values.length}`));
+    };
+    if (req.query.status) addFilter('l.lead_status = ?', String(req.query.status).trim());
+    if (req.query.source) addFilter('l.source = ?', String(req.query.source).trim());
+    if (req.query.type) addFilter('l.lead_type = ?', String(req.query.type).trim());
+    if (req.query.priority) addFilter('l.priority = ?', String(req.query.priority).trim());
+    if (req.query.search) {
+      values.push(`%${String(req.query.search).trim()}%`);
+      filters.push(`(l.message ILIKE $${values.length} OR l.location ILIKE $${values.length} OR c.name ILIKE $${values.length} OR c.phone ILIKE $${values.length} OR c.email ILIKE $${values.length})`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const count = await db.query(
+      `SELECT COUNT(*)::int AS total
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       ${where}`,
+      values
+    );
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email,
+              c.whatsapp AS contact_whatsapp, p.title AS listing_title
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       LEFT JOIN properties p ON p.id = l.listing_id
+       ${where}
+       ORDER BY l.created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+router.get('/leads/:id', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const lead = await db.query(
+      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email,
+              c.whatsapp AS contact_whatsapp, c.preferred_contact_channel, c.preferred_language,
+              p.title AS listing_title, p.inquiry_reference AS listing_reference
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       LEFT JOIN properties p ON p.id = l.listing_id
+       WHERE l.id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!lead.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const [activities, tasks] = await Promise.all([
+      db.query('SELECT * FROM lead_activities WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 100', [leadId]),
+      db.query('SELECT * FROM lead_tasks WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 100', [leadId])
+    ]);
+    return res.json({ ok: true, data: { lead: lead.rows[0], activities: activities.rows, tasks: tasks.rows } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/leads/:id', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const previous = await db.query('SELECT * FROM leads WHERE id = $1 LIMIT 1', [leadId]);
+    if (!previous.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const updates = [];
+    const values = [];
+    const add = (field, value, cast = '') => {
+      values.push(value);
+      updates.push(`${field} = $${values.length}${cast}`);
+    };
+    [
+      'lead_status',
+      'lifecycle_stage',
+      'priority',
+      'sla_status',
+      'outcome',
+      'lost_reason'
+    ].forEach((field) => {
+      if (Object.prototype.hasOwnProperty.call(req.body, field)) add(field, cleanText(req.body[field]) || null);
+    });
+    if (Object.prototype.hasOwnProperty.call(req.body, 'assigned_to_user_id')) add('assigned_to_user_id', cleanText(req.body.assigned_to_user_id) || null);
+    if (Object.prototype.hasOwnProperty.call(req.body, 'next_follow_up_at')) add('next_follow_up_at', cleanText(req.body.next_follow_up_at) || null, '::timestamptz');
+    if (Object.prototype.hasOwnProperty.call(req.body, 'last_contacted_at')) add('last_contacted_at', cleanText(req.body.last_contacted_at) || null, '::timestamptz');
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'No lead updates provided' });
+    values.push(leadId);
+    const updated = await db.query(
+      `UPDATE leads
+       SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE id = $${values.length}
+       RETURNING *`,
+      values
+    );
+    await addLeadActivity(db, {
+      leadId,
+      actorUserId: req.adminAuth?.userId || null,
+      actorType: 'admin',
+      activityType: 'status_change',
+      oldStatus: previous.rows[0].lead_status,
+      newStatus: updated.rows[0].lead_status,
+      message: cleanText(req.body.note) || 'Lead updated by admin',
+      metadata: { changed_fields: updates.map((item) => item.split(' = ')[0]) }
+    });
+    await writeAudit('crm_lead_updated', { lead_id: leadId }, adminActorId(req));
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/leads/:id/activities', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const found = await db.query('SELECT id FROM leads WHERE id = $1 LIMIT 1', [leadId]);
+    if (!found.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const activity = await addLeadActivity(db, {
+      leadId,
+      actorUserId: req.adminAuth?.userId || null,
+      actorType: 'admin',
+      activityType: cleanText(req.body.activity_type || req.body.activityType) || 'note',
+      message: cleanText(req.body.message || req.body.note) || null,
+      metadata: req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {}
+    });
+    await writeAudit('crm_lead_activity_added', { lead_id: leadId, activity_id: activity?.id }, adminActorId(req));
+    return res.status(201).json({ ok: true, data: activity });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/leads/:id/tasks', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const title = cleanText(req.body.title);
+    if (!title) return res.status(400).json({ ok: false, error: 'title is required' });
+    const found = await db.query('SELECT id FROM leads WHERE id = $1 LIMIT 1', [leadId]);
+    if (!found.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const task = await db.query(
+      `INSERT INTO lead_tasks (lead_id, assigned_to_user_id, title, due_at, status, created_by_user_id)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING *`,
+      [
+        leadId,
+        cleanText(req.body.assigned_to_user_id) || req.adminAuth?.userId || null,
+        title,
+        cleanText(req.body.due_at) || null,
+        cleanText(req.body.status) || 'open',
+        req.adminAuth?.userId || null
+      ]
+    );
+    await addLeadActivity(db, {
+      leadId,
+      actorUserId: req.adminAuth?.userId || null,
+      actorType: 'admin',
+      activityType: 'task_created',
+      message: title,
+      metadata: { task_id: task.rows[0]?.id }
+    });
+    await writeAudit('crm_lead_task_created', { lead_id: leadId, task_id: task.rows[0]?.id }, adminActorId(req));
+    return res.status(201).json({ ok: true, data: task.rows[0] });
   } catch (error) {
     return next(error);
   }

@@ -88,6 +88,12 @@ function assertNoProtectedIds(label, html) {
 
 function run() {
   const sourceHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const propertySeekerRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'property-seeker.js'), 'utf8');
+  const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
+  const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
+  const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
+  const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
+  const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   for (const publicRoute of PUBLIC_ROUTES) {
     const publicHtml = sanitizePublicHtml(sourceHtml, { pathname: publicRoute });
     assertNoProtectedStrings(publicRoute, publicHtml);
@@ -106,6 +112,15 @@ function run() {
   assert(!homeText.includes('Listing submitted successfully'), 'homepage should not contain listing success panel');
   assert(!homeText.includes('Inquiry Number'), 'homepage should not contain inquiry number text before submission');
   assert(!homeText.includes('Our Mission'), 'homepage should not contain full about page body');
+  assert(homeText.includes('Saved'), 'anonymous homepage should keep the saved entry point');
+  assert(homeText.includes('Sign In'), 'anonymous homepage should show Sign In');
+  assert(!homeText.includes('Sign Out'), 'anonymous homepage should not show Sign Out before auth');
+  assert(homeText.includes('Find your next home, land, rental, or student room'), 'homepage hero copy should be the go-live wording');
+  assert(!homeText.includes('Discover your perfect maka'), 'old incomplete homepage hero copy should be gone');
+  assert(/id="top-signout-link"[^>]*><\/a>/.test(sourceHtml), 'public header sign-out link should start empty until auth is present');
+  assert(sourceHtml.includes('id="top-dashboard-link"'), 'logged-in header dashboard link target should exist');
+  assert(sourceHtml.includes('openSignedInDashboard()'), 'dashboard header link should route to the role dashboard');
+  assert(sourceHtml.includes('translateListingLabel("Sign Out")'), 'logged-in header should inject Sign Out through auth UI');
   assert(homeText.includes('© 2026 MakaUg. All rights reserved.'), 'homepage footer should use MakaUg copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
 
@@ -163,10 +178,66 @@ function run() {
     'Lead Pipeline',
     'Demand Intelligence',
     'Revenue Opportunities',
-    'WhatsApp Lead Sources'
+    'WhatsApp Lead Sources',
+    'Lead, Email & Notification Control',
+    'Notification Log',
+    'Email Log',
+    'WhatsApp Message Log'
   ];
   for (const expected of requiredDashboardShellText) {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
+  }
+
+  for (const expected of [
+    'GET /api/property-seeker/dashboard',
+    'saved-searches',
+    'viewings',
+    'callbacks',
+    'property-comparison',
+    'hidden-listings',
+    'listing-notes'
+  ]) {
+    const needle = expected === 'GET /api/property-seeker/dashboard' ? "router.get('/dashboard'" : expected;
+    assert(propertySeekerRoutes.includes(needle), `property seeker API missing ${expected}`);
+  }
+  assert(studentRoutes.includes("router.post('/saved-searches'"), 'student saved-search API should exist');
+  for (const expected of [
+    "router.get('/crm/summary'",
+    "router.get('/notifications'",
+    "router.get('/emails'",
+    "router.get('/whatsapp-message-logs'",
+    "router.get('/leads'",
+    "router.patch('/leads/:id'",
+    "router.post('/leads/:id/activities'"
+  ]) {
+    assert(adminRoutes.includes(expected), `admin CRM/log route missing: ${expected}`);
+  }
+  for (const expected of [
+    "router.get('/dashboard'",
+    "router.post('/campaigns'",
+    "router.post('/campaigns/:id/payment-link'",
+    'providerMissing',
+    'createLead'
+  ]) {
+    assert(advertisingRoutes.includes(expected), `advertising workflow missing: ${expected}`);
+  }
+  for (const expected of ['createLead', 'addLeadActivity', 'lead_activities', 'contacts']) {
+    assert(leadService.includes(expected), `lead service missing ${expected}`);
+  }
+  for (const tableName of [
+    'contacts',
+    'leads',
+    'lead_activities',
+    'lead_tasks',
+    'viewing_configs',
+    'viewing_bookings',
+    'callback_requests',
+    'invoices',
+    'payment_links',
+    'email_logs',
+    'whatsapp_message_logs'
+  ]) {
+    assert(new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${tableName}`, 'i').test(task3Migration), `Task 3 migration missing ${tableName}`);
   }
 
   for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
