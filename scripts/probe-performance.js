@@ -6,7 +6,7 @@ const { chromium } = require('playwright-core');
 
 const BASE_URL = String(process.env.BASE_URL || 'https://makaug.com').replace(/\/$/, '');
 const IS_LOCAL_BASE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(BASE_URL);
-const OUT_FILE = path.join(__dirname, '..', 'docs', 'performance-audit.md');
+const OUT_FILE = process.env.PERFORMANCE_AUDIT_FILE || path.join(__dirname, '..', 'docs', 'performance-audit.md');
 
 const ROUTES = [
   '/',

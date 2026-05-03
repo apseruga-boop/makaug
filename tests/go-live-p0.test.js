@@ -316,11 +316,14 @@ function run() {
     assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
   }
   assert(sourceHtml.includes('data-howto-video-modal="1"'), 'how-to video modal should exist');
-  assert.strictEqual(HOW_TO_VIDEO_SLOTS.length, 10, 'there should be exactly 10 how-to video slots');
-  for (const requiredVideo of ['what-is-makaug', 'search-property', 'use-filters', 'student-accommodation', 'list-property', 'location-and-photos', 'whatsapp-contact', 'save-searches-alerts', 'book-viewing-callback', 'stay-safe-report']) {
+  const generalHowToKeys = ['what-is-makaug', 'search-property', 'use-filters', 'student-accommodation', 'list-property', 'location-and-photos', 'whatsapp-contact', 'save-searches-alerts', 'book-viewing-callback', 'stay-safe-report'];
+  const aiHowToKeys = ['ai-can-help', 'ai-search-whatsapp', 'ai-list-property', 'ai-alerts-recommendations', 'ai-fraud-handoff'];
+  assert.strictEqual(generalHowToKeys.filter((key) => HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === key)).length, 10, 'there should be 10 general how-to video slots');
+  assert.strictEqual(aiHowToKeys.filter((key) => HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === key)).length, 5, 'there should be 5 AI chatbot how-to video slots');
+  for (const requiredVideo of [...generalHowToKeys, ...aiHowToKeys]) {
     assert(HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === requiredVideo), `missing how-to video slot: ${requiredVideo}`);
   }
-  for (const context of ['about', 'how-it-works', 'help', 'list-property', 'students', 'safety']) {
+  for (const context of ['about', 'how-it-works', 'help', 'list-property', 'students', 'safety', 'ai-chatbot']) {
     assert(sourceHtml.includes(`data-howto-video-grid="${context}"`) || [aboutHtml, howItWorksHtml, helpHtml, listPropertyHtml, safetyHtml].some((html) => html.includes(`data-howto-video-grid="${context}"`)), `missing how-to video grid for ${context}`);
   }
   assert(sourceHtml.includes('openHowToVideo'), 'how-to videos should open in a modal');
@@ -338,10 +341,15 @@ function run() {
     assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
   }
   assert(sourceHtml.includes('data-testid="list-property-free-cta"'), 'header should expose List Property CTA');
+  assert(sourceHtml.includes('id="nav-about"') && sourceHtml.includes('>About Us</a>'), 'primary nav should show About Us');
+  assert(!sourceHtml.includes('id="nav-fraud"'), 'primary nav should not show Fraud as the main nav item');
+  assert(sourceHtml.includes('id="footer-link-anti-fraud"'), 'Anti-Fraud should remain available from footer/support');
   assert(!sourceHtml.includes('List your property for free'), 'source should not keep old header CTA wording');
   assert(!sourceHtml.includes('List a Property Free'), 'source should not keep old footer CTA wording');
   assert(!sourceHtml.includes('data-testid="advertise-property-cta"'), 'header should not keep old Advertise Property CTA test id');
   assert(sourceHtml.includes('handleListPropertyFreeCta(event)'), 'header List your property CTA should be wired');
+  assert(sourceHtml.includes('data-list-property-choice="1"'), '/list-property should offer online and WhatsApp listing choices');
+  assert(sourceHtml.includes('openListPropertyWhatsApp'), '/list-property WhatsApp listing action should be wired');
   assert(sourceHtml.includes('id="student-login-cta"'), 'student login CTA should be globally addressable for tests');
   assert(sourceHtml.includes('data-auth-role-card="1"'), 'auth drawer should use icon role cards');
   for (const iconClass of ['fa-house-chimney', 'fa-graduation-cap', 'fa-briefcase', 'fa-clipboard-list', 'fa-bullhorn']) {
@@ -360,7 +368,12 @@ function run() {
   assert(sourceHtml.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
   assert(sourceHtml.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
   assert(sourceHtml.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
-  assert(sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should show mobile-friendly progress steps');
+  assert(!sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should not show old Account/Details/Preferences/Verify pills on the first screen');
+  assert(sourceHtml.includes('id="account-access-progress-summary"'), 'auth drawer should show compact create-account progress only after create is selected');
+  assert(sourceHtml.includes('openPolicyPreviewModal'), 'auth drawer should expose terms/privacy preview interactions');
+  assert(sourceHtml.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or phone/WhatsApp OTP');
+  assert(sourceHtml.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
+  assert(sourceHtml.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');
@@ -379,9 +392,16 @@ function run() {
     'Mortgage/Budget Centre',
     'Safety and Trust Centre',
     'Area Watch',
+    'Search preference summary',
+    'Sponsored slot',
+    'Dashboard order',
+    'Account settings',
     'Saved Student Searches',
     'Enquiry History and WhatsApp Requests',
     'Language Preference',
+    'Broker account settings',
+    'Field Agent settings',
+    'Advertiser settings',
     'Advertiser Dashboard',
     'Create Campaign',
     'Creatives',
@@ -424,6 +444,11 @@ function run() {
     assert(sourceHtml.includes(previewPath), `missing dashboard preview link: ${previewPath}`);
   }
   assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
+  assert(sourceHtml.includes('data-ai-chatbot-live-panel="1"'), 'AI chatbot route should expose a connected live task panel');
+  assert(sourceHtml.includes('submitAiChatbotPrompt'), 'AI chatbot prompt should be wired to a safe API/fallback flow');
+  for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial', 'save_search', 'create_alert', 'book_viewing', 'request_callback', 'list_property', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'ask_help', 'advertiser_interest', 'language_change', 'human_handoff']) {
+    assert(sourceHtml.includes(`value="${intent}"`) || sourceHtml.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
+  }
 
   for (const expected of [
     'GET /api/property-seeker/dashboard',

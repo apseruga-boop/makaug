@@ -97,8 +97,8 @@ function hasMarker(text, route) {
 async function probeRoute(page, route) {
   const url = `${BASE_URL}${route === '/' ? '/' : route}?v=${Date.now()}`;
   const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
-  await page.waitForTimeout(700);
+  await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+  await page.waitForTimeout(300);
 
   const expectedPageId = EXPECTED_PAGE_IDS[route];
   const data = await page.evaluate(({ expectedPageId, forbidden }) => {

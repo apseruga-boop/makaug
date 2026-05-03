@@ -34,10 +34,12 @@ const PRIMARY_ACTIONS = [
   { route: '/', selector: '#nav-brokers', label: 'Header Brokers', expectUrl: '/brokers', marker: 'Brokers' },
   { route: '/', selector: '#nav-mortgage', label: 'Header Mortgage', expectUrl: '/mortgage', marker: 'Mortgage' },
   { route: '/', selector: '#nav-ai', label: 'Header AI Chatbot', expectUrl: '/discover-ai-chatbot', marker: 'AI' },
-  { route: '/', selector: '#nav-fraud', label: 'Header Fraud', expectUrl: '/anti-fraud', marker: 'Fraud' },
+  { route: '/', selector: '#nav-about', label: 'Header About Us', expectUrl: '/about', marker: 'About MakaUg' },
   { route: '/', selector: '#top-signin-link', label: 'Header Sign In opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
   { route: '/', selector: '#top-saved-link', label: 'Saved logged out opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
   { route: '/student-accommodation', selector: '#student-login-cta', label: 'Student Login opens student drawer', expectDrawer: '#account-access-drawer', marker: 'Students can save campus searches' },
+  { route: '/list-property', selector: '#lp-whatsapp-option-btn', label: 'List Property WhatsApp option', expectPopup: true, marker: 'List via WhatsApp' },
+  { route: '/discover-ai-chatbot', selector: '#ai-chatbot-submit-btn', label: 'AI chatbot prompt action', expectSamePageAction: true, marker: 'MakaUg AI', fill: { selector: '#ai-chatbot-message', value: 'Help me search for a rental in Kampala' } },
   { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Property' },
   { route: '/', selector: '#footer-link-advertise', label: 'Footer Advertise', expectUrl: '/advertise', marker: 'Advertise' },
   { route: '/', selector: '#footer-link-help', label: 'Footer Help', expectUrl: '/help', marker: 'Help' },
@@ -46,8 +48,8 @@ const PRIMARY_ACTIONS = [
 
 async function go(page, route) {
   await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
-  await page.waitForTimeout(300);
+  await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+  await page.waitForTimeout(180);
 }
 
 async function visibleText(page) {
@@ -122,7 +124,7 @@ async function auditCardsAndMarkers(page, route) {
         checks.push(`map marker click failed: ${error.message}`);
       });
     }
-    await page.waitForTimeout(300);
+    await page.waitForSelector('.leaflet-popup:visible, #detail-content:visible, [data-map-marker-popup]:visible', { timeout: 1500 }).catch(() => {});
     const popupOrDetail = await page.locator('.leaflet-popup:visible, #detail-content:visible, [data-map-marker-popup]:visible').count();
     if (!popupOrDetail) checks.push('map marker did not open popup/detail');
   }
@@ -152,6 +154,7 @@ function isLocalOptionalResponseFailure(failure) {
     '/api/properties',
     '/api/agents',
     '/api/mortgage-rates',
+    '/api/ai/assistant-reply',
     '/api/analytics/event',
     '/api/analytics/web-vitals'
   ].some((prefix) => pathname.startsWith(prefix));
@@ -201,10 +204,24 @@ async function main() {
       if (!(await locator.count())) {
         failures.push(`missing selector ${action.selector}`);
       } else {
+        if (action.fill?.selector) {
+          const input = page.locator(action.fill.selector).first();
+          if (await input.count()) await input.fill(action.fill.value || 'Test');
+        }
+        const popupPromise = action.expectPopup ? page.waitForEvent('popup', { timeout: 6000 }).catch(() => null) : null;
         await locator.click({ timeout: 8000 });
-        await page.waitForLoadState('domcontentloaded', { timeout: 12000 }).catch(() => {});
-        await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
-        await page.waitForTimeout(300);
+        const popup = popupPromise ? await popupPromise : null;
+        if (action.expectPopup) {
+          if (!popup) failures.push('expected popup/external destination');
+          else await popup.close().catch(() => {});
+        }
+        if (action.expectDrawer || action.expectPopup || action.expectSamePageAction) {
+          await page.waitForTimeout(700);
+        } else {
+          await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+          await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+          await page.waitForTimeout(180);
+        }
         const text = await visibleText(page);
         if (action.expectDrawer) {
           const drawer = page.locator(action.expectDrawer).first();
@@ -213,7 +230,7 @@ async function main() {
           } else if (!(await drawer.isVisible())) {
             failures.push(`drawer ${action.expectDrawer} is not visible`);
           }
-        } else {
+        } else if (!action.expectPopup && !action.expectSamePageAction) {
           const url = new URL(page.url());
           if (!url.pathname.startsWith(action.expectUrl)) {
             failures.push(`expected URL ${action.expectUrl}, got ${url.pathname}`);

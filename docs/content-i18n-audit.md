@@ -14,6 +14,8 @@ Status: partial, go-live safe for English routes, translations still need editor
 - `/help`: standalone public route exists. English content was expanded for Task 11 into a Help Centre with categories, quick actions, a support request form, WhatsApp support, and how-to video slots. Translation keys are partial and fall back to English.
 - `/safety`: standalone public route exists. English content is present. Translation keys are partial.
 - `/brokers`: standalone public route exists. English content is present. Translation keys are partial.
+- `/discover-ai-chatbot`: standalone public route exists. Task 12 added a connected AI task panel and five AI how-to video slots. English is complete enough for go-live; translations are partial/fallback.
+- Auth drawer: Task 12 cleaned the initial sign-in/create-account journey and added partial English/Luganda/Kiswahili drawer translations. Acholi, Runyankole, Rukiga, and Lusoga currently fall back to English in the drawer for missing strings.
 
 ## Supported Language Codes
 
@@ -39,7 +41,7 @@ The public route shells and core CTAs are language-aware, but full editorial tra
 
 ## How-to Video Slots
 
-Task 11 added 10 configurable one-minute YouTube slots in `config/howToVideos.js`:
+Task 11 added 10 configurable general one-minute YouTube slots in `config/howToVideos.js`:
 
 1. What is MakaUg?
 2. How to search for property
@@ -53,6 +55,16 @@ Task 11 added 10 configurable one-minute YouTube slots in `config/howToVideos.js
 10. How to stay safe and report suspicious listings
 
 YouTube IDs are intentionally empty until the owner publishes the videos. The frontend shows slots and lazy-loads YouTube only when a configured video is opened.
+
+Task 12 added 5 AI chatbot-specific video slots:
+
+1. What MakaUg AI can help with
+2. How to search property using WhatsApp/AI
+3. How to list property with AI help
+4. How to create alerts and recommendations
+5. How to report fraud or request human help
+
+These also have empty YouTube IDs until the videos are published.
 
 ## Admin Follow-up
 

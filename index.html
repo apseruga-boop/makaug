@@ -805,7 +805,7 @@
         <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
         <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
         <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
-        <a id="nav-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
+        <a id="nav-about" href="/about" onclick="showPage('about')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">About Us</a>
       </div>
       <div class="flex items-center gap-2">
         <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List Property</a>
@@ -821,7 +821,7 @@
       <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
-      <a id="mnav-fraud" href="/anti-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
+      <a id="mnav-about" href="/about" onclick="showPage('about');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">About Us</a>
       <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List Property</a>
     </div>
   </nav>
@@ -1857,6 +1857,42 @@
           </a>
         </div>
       </div>
+      <div class="bg-white border border-green-100 rounded-2xl p-6" data-ai-chatbot-live-panel="1">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-green-700">Connected AI flow</p>
+            <h2 class="text-2xl font-black text-gray-900 serif mt-1">Try a MakaUg AI task</h2>
+            <p class="text-sm text-gray-600 mt-1 max-w-2xl">Ask about search, rent, sale, student rooms, land, commercial spaces, listing property, alerts, viewings, mortgage help, fraud reporting, or human handoff.</p>
+          </div>
+          <a href="/help" onclick="showPage('help')" class="text-sm font-bold text-green-700">Need human help?</a>
+        </div>
+        <form id="ai-chatbot-test-form" onsubmit="submitAiChatbotPrompt(event)" class="mt-4 grid md:grid-cols-[220px,1fr,auto] gap-3">
+          <select id="ai-chatbot-intent" class="border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+            <option value="search_property">Search property</option>
+            <option value="search_rent">Search rentals</option>
+            <option value="search_sale">Search for sale</option>
+            <option value="search_student">Student accommodation</option>
+            <option value="search_land">Land search</option>
+            <option value="search_commercial">Commercial search</option>
+            <option value="save_search">Save search</option>
+            <option value="create_alert">Create alert</option>
+            <option value="book_viewing">Book viewing</option>
+            <option value="request_callback">Request callback</option>
+            <option value="list_property">List property online</option>
+            <option value="list_property_whatsapp">List property via WhatsApp</option>
+            <option value="report_fraud">Report fraud</option>
+            <option value="ask_mortgage">Mortgage help</option>
+            <option value="ask_help">Help Centre</option>
+            <option value="advertiser_interest">Advertiser interest</option>
+            <option value="language_change">Language change</option>
+            <option value="human_handoff">Human handoff</option>
+          </select>
+          <input id="ai-chatbot-message" class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Example: I need a 2 bedroom rental in Ntinda below 1.5m">
+          <button id="ai-chatbot-submit-btn" class="bg-green-700 hover:bg-green-600 text-white px-5 py-3 rounded-xl text-sm font-bold">Ask AI</button>
+        </form>
+        <div id="ai-chatbot-response" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">AI responses appear here. Provider-missing states are shown safely.</div>
+      </div>
+      <section class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
     </div>
   </div>
 
@@ -2106,6 +2142,19 @@
             <span data-lp-step-label="4" class="text-green-700/80 font-semibold text-sm">Review & Submit</span>
           </div>
         </div>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-4 mb-7" data-list-property-choice="1">
+        <button type="button" onclick="setListWizardStep(1)" class="text-left rounded-3xl border border-green-200 bg-white p-5 hover:border-green-500 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600">
+          <div class="text-xs font-black uppercase tracking-wide text-green-700">Option 1</div>
+          <h2 class="text-xl font-black text-gray-900 mt-1">List online</h2>
+          <p class="text-sm text-gray-600 mt-1">Use the guided MakaUg form for address, photos, verification, and review.</p>
+        </button>
+        <button id="lp-whatsapp-option-btn" type="button" onclick="openListPropertyWhatsApp()" class="text-left rounded-3xl border border-green-200 bg-green-900 p-5 text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-600">
+          <div class="text-xs font-black uppercase tracking-wide text-green-200">Option 2</div>
+          <h2 class="text-xl font-black mt-1">List via WhatsApp</h2>
+          <p class="text-sm text-green-100 mt-1">Open WhatsApp with listing context so MakaUg can help you create the listing.</p>
+        </button>
       </div>
 
       <div id="lp-wizard-shell" class="lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
@@ -2600,7 +2649,7 @@
         <div class="text-3xl mb-2">📲</div>
         <h3 id="lp-wa-title" class="text-3xl md:text-4xl font-black serif mb-2">Prefer WhatsApp?</h3>
         <p id="lp-wa-copy" class="text-green-100 mb-5">No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language.</p>
-        <a href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+list+my+property" target="_blank" class="inline-flex items-center justify-center bg-green-400 hover:bg-green-300 text-green-950 font-bold rounded-xl px-8 py-3.5 text-base">
+        <a id="lp-wa-link" href="https://wa.me/256760112587?text=Hi%20MakaUg%2C%20I%20want%20to%20list%20a%20property.%20Please%20help%20me%20create%20the%20listing." onclick="handleListPropertyWhatsAppClick(event)" target="_blank" class="inline-flex items-center justify-center bg-green-400 hover:bg-green-300 text-green-950 font-bold rounded-xl px-8 py-3.5 text-base">
           <span id="lp-wa-btn-label">📲 List on WhatsApp Instead</span>
         </a>
       </div>
@@ -2734,8 +2783,39 @@
 
       <div id="finder-body" class="hidden space-y-6">
         <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <div id="finder-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
-          <p id="finder-greeting-sub" class="text-sm text-gray-500 mt-1">Your saved listings, recent views, enquiries, and route opens are tracked here.</p>
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <div id="finder-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
+              <p id="finder-greeting-sub" class="text-sm text-gray-500 mt-1">Your saved listings, recent views, enquiries, and route opens are tracked here.</p>
+              <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                <span id="finder-current-time" data-dashboard-current-time="1">Current time will appear here.</span>
+                <span id="finder-location-context" data-dashboard-location-context="1">Location context follows your preferences.</span>
+              </div>
+            </div>
+            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-950" data-dashboard-ad-slot="top-advertising-banner">
+              <strong>Sponsored slot</strong><br><span class="text-xs">Relevant paid placements appear here and are labelled Sponsored.</span>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="grid md:grid-cols-3 gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-gray-800">Search preference summary</h2>
+              <div id="finder-preference-summary" class="mt-2 text-sm text-gray-600">Your role preferences, budget, contact channel, and language personalize this dashboard.</div>
+            </div>
+            <label class="block">
+              <span class="block text-sm font-semibold text-gray-700 mb-1.5">Dashboard order</span>
+              <select id="finder-dashboard-order" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="saved">Show saved first</option>
+                <option value="newest">Show newest first</option>
+                <option value="recommended">Show recommended first</option>
+                <option value="viewings">Show viewings first</option>
+              </select>
+            </label>
+            <div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm text-green-950">
+              <strong>Account settings</strong><br>Change password, contact preferences, language, and alert channels from Account Settings.
+            </div>
+          </div>
         </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -2946,6 +3026,7 @@
           <div class="bg-blue-50 border border-blue-100 rounded-2xl p-5">
             <h2 class="text-xl font-bold text-blue-950 mb-2">Language Preference</h2>
             <p class="text-sm text-blue-950">Student alerts and dashboard guidance follow your selected MakaUg language where available.</p>
+            <button onclick="showPage('account')" class="mt-4 border border-blue-800 text-blue-800 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Settings, password, and contact preferences</button>
           </div>
         </div>
       </div>
@@ -3005,6 +3086,11 @@
           <h2 class="text-xl font-bold text-gray-800 mb-4">Your Listings Performance</h2>
           <div id="agent-listings-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
+        <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+          <h2 class="text-xl font-bold text-green-950 mb-2">Broker account settings</h2>
+          <p class="text-sm text-green-950">Manage password, contact preferences, language, verification status, WhatsApp lead handling, and viewing notifications.</p>
+          <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open settings</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3012,7 +3098,7 @@
   <div id="page-field-dashboard" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Field Broker Dashboard</h1>
+        <h1 class="text-3xl font-black serif">Field Agent Dashboard</h1>
         <p class="text-green-200 mt-1">Track sourced listings, approvals, rejections, and weekly payout status</p>
       </div>
     </div>
@@ -3028,12 +3114,13 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-center gap-4 flex-wrap">
             <div>
-              <h2 id="field-dashboard-name" class="text-2xl font-black text-gray-900">Field Broker Profile</h2>
+              <h2 id="field-dashboard-name" class="text-2xl font-black text-gray-900">Field Agent Profile</h2>
               <p id="field-dashboard-status" class="text-sm text-gray-500 mt-1">Status information</p>
             </div>
             <div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               Payout day: <strong>Friday</strong> (cut-off: previous Thursday 23:59)
             </div>
+            <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Settings</button>
             <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
           </div>
         </div>
@@ -3085,6 +3172,11 @@
             <li>Payout runs weekly on Friday based on prior cut-off period.</li>
             <li>Escalations and compliance events may suspend payout pending review.</li>
           </ul>
+        </div>
+        <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+          <h3 class="text-lg font-bold text-green-950 mb-2">Field Agent settings</h3>
+          <p class="text-sm text-green-950">Manage password, contact preferences, language, contract notifications, payment updates, and admin notes.</p>
+          <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open settings</button>
         </div>
       </div>
     </div>
@@ -3222,6 +3314,11 @@
             <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>WhatsApp Leads</strong><br><span class="text-gray-500">Reported when CTA tracking is enabled.</span></div>
             <div class="rounded-xl bg-gray-50 border border-gray-200 p-4"><strong>Revenue</strong><br><span class="text-gray-500">Visible to admin and advertiser account.</span></div>
           </div>
+        </div>
+        <div class="bg-amber-50 border border-amber-100 rounded-2xl p-5">
+          <h2 class="text-xl font-bold text-amber-950 mb-2">Advertiser settings</h2>
+          <p class="text-sm text-amber-950">Manage password, billing contact, campaign contact preferences, language, and notification channels.</p>
+          <button onclick="showPage('account')" class="mt-4 border border-amber-700 text-amber-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open settings</button>
         </div>
       </div>
     </div>
@@ -4247,6 +4344,20 @@
     </div>
   </div>
 
+  <div id="policy-preview-modal" class="modal-overlay" data-auth-legal-preview-modal="1">
+    <div class="modal-box" style="max-width:620px">
+      <button onclick="closeModal('policy-preview-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50" aria-label="Close policy preview">✕</button>
+      <p class="text-xs font-bold uppercase tracking-wide text-green-700">MakaUg account safety</p>
+      <h2 id="policy-preview-title" class="text-2xl font-black text-gray-800 serif mt-1">Terms preview</h2>
+      <div id="policy-preview-body" class="mt-4 space-y-2 text-sm text-gray-700"></div>
+      <div class="mt-5 flex gap-3 flex-wrap">
+        <a id="policy-preview-full-link" href="/terms" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 text-sm font-bold">Read full page</a>
+        <button type="button" onclick="closeModal('policy-preview-modal')" class="border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold text-gray-700">Done</button>
+      </div>
+    </div>
+  </div>
+  <div id="policy-preview-card" class="hidden fixed z-[10020] max-w-xs rounded-2xl border border-green-100 bg-white p-4 text-xs text-gray-700 shadow-2xl" data-auth-legal-preview-card="1"></div>
+
   <div id="auth-modal" class="modal-overlay">
     <div class="modal-box" style="max-width:700px">
       <button onclick="closeModal('auth-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
@@ -5079,7 +5190,12 @@
       { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask MakaUg", ctaUrl: "https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" },
       { key: "save-searches-alerts", title: "How to save searches and create alerts", description: "Keep track of demand and get notified when matching listings appear.", category: "alerts", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
       { key: "book-viewing-callback", title: "How to book a viewing or request callback", description: "Understand viewing buttons, callback requests, and follow-up tracking.", category: "viewings", youtubeVideoId: "", ctaLabel: "Find properties", ctaUrl: "/for-sale" },
-      { key: "stay-safe-report", title: "How to stay safe and report suspicious listings", description: "Learn red flags, title checks, payment safety, and fraud-report steps.", category: "safety", youtubeVideoId: "", ctaLabel: "Read safety tips", ctaUrl: "/safety" }
+      { key: "stay-safe-report", title: "How to stay safe and report suspicious listings", description: "Learn red flags, title checks, payment safety, and fraud-report steps.", category: "safety", youtubeVideoId: "", ctaLabel: "Read safety tips", ctaUrl: "/safety" },
+      { key: "ai-can-help", title: "What MakaUg AI can help with", description: "Search, list, create alerts, request help, and understand next steps.", category: "ai", youtubeVideoId: "", ctaLabel: "Try AI", ctaUrl: "/discover-ai-chatbot" },
+      { key: "ai-search-whatsapp", title: "How to search property using WhatsApp/AI", description: "Ask naturally by area, budget, category, campus, or land need.", category: "ai", youtubeVideoId: "", ctaLabel: "Open AI chatbot", ctaUrl: "/discover-ai-chatbot" },
+      { key: "ai-list-property", title: "How to list property with AI help", description: "Use the guided online form or WhatsApp listing path with safe prompts.", category: "ai", youtubeVideoId: "", ctaLabel: "List Property", ctaUrl: "/list-property" },
+      { key: "ai-alerts-recommendations", title: "How to create alerts and recommendations", description: "Turn searches into alerts and recommendation signals for better follow-up.", category: "ai", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
+      { key: "ai-fraud-handoff", title: "How to report fraud or request human help", description: "Escalate suspicious listings, payment pressure, or complex property questions.", category: "ai", youtubeVideoId: "", ctaLabel: "Report suspicious activity", ctaUrl: "/anti-fraud" }
     ];
 
     let activeCur = "UGX";
@@ -7551,7 +7667,7 @@
       setTextById("nav-brokers", tr("navBrokers"));
       setTextById("nav-mortgage", tr("navMortgage"));
       setTextById("nav-ai", tr("navAI"));
-      setTextById("nav-fraud", tr("navFraud"));
+      setTextById("nav-about", translateListingLabel("About Us"));
       setTextById("mnav-sale", tr("navSale"));
       setTextById("mnav-rent", tr("navRent"));
       setTextById("mnav-students", tr("navStudents"));
@@ -7560,7 +7676,7 @@
       setTextById("mnav-brokers", tr("navBrokers"));
       setTextById("mnav-mortgage", tr("navMortgage"));
       setTextById("mnav-ai", tr("navAI"));
-      setTextById("mnav-fraud", tr("navFraud"));
+      setTextById("mnav-about", translateListingLabel("About Us"));
       setTextById("nav-list-btn", tr("advertiseProperty"));
       setTextById("mnav-advertise", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
@@ -7628,6 +7744,7 @@
       setPageHeading("page-saved", tr("pageSaved"));
       setPageHeading("page-account", tr("pageAccount"));
       applyAuthUi();
+      applyAccountAccessLanguageUi();
       applyListingWizardLanguageUI();
       applySavePropertyLanguageUI();
       applyMortgageLanguageUI();
@@ -8749,6 +8866,17 @@
         }[authState.user.preferred_language || currentLang] || "English";
         greetingSubEl.textContent = `We will use ${languageLabel} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.`;
       }
+      const now = new Date();
+      setTextById("finder-current-time", `Current time: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+      const profile = authState.user.profile_data || {};
+      const preferredArea = profile.preferred_areas || profile.student_campus || profile.agent_districts || profile.campaign_location || "";
+      setTextById("finder-location-context", preferredArea ? `Preferred area: ${preferredArea}` : "Location context: add an area preference to personalize matches.");
+      setTextById("finder-preference-summary", [
+        profile.primary_goal ? `Goal: ${profile.primary_goal}` : "",
+        profile.budget_range ? `Budget: ${profile.budget_range}` : "",
+        authState.user.preferred_contact_channel ? `Contact: ${authState.user.preferred_contact_channel}` : "",
+        authState.user.preferred_language ? `Language: ${authState.user.preferred_language}` : ""
+      ].filter(Boolean).join(" • ") || "Your role preferences, budget, contact channel, and language personalize this dashboard.");
       const viewedIds = Object.keys(activity.viewed || {});
       const backendSaved = Array.isArray(payload?.savedListings) ? payload.savedListings.map(normalizeDashboardProperty) : [];
       const backendRecent = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed.map(normalizeDashboardProperty) : [];
@@ -16547,6 +16675,56 @@
       window.location.href = "/list-property";
     }
 
+    function getSelectedListPropertyTypeLabel() {
+      const selected = document.querySelector('input[name="lp-type"]:checked')?.value || currentLpType || "";
+      return {
+        sale: "For Sale",
+        rent: "For Rent",
+        student: "Student accommodation",
+        land: "Land",
+        commercial: "Commercial"
+      }[selected] || "";
+    }
+
+    function buildListPropertyWhatsAppMessage() {
+      const type = getSelectedListPropertyTypeLabel();
+      const title = (document.getElementById("lp-title")?.value || document.getElementById("listing-title")?.value || "").trim();
+      const location = (document.getElementById("lp-place-search")?.value || document.getElementById("lp-address-search")?.value || document.getElementById("lp-manual-landmark")?.value || "").trim();
+      const parts = ["Hi MakaUg, I want to list a property."];
+      if (type) parts.push(`Type: ${type}.`);
+      if (title) parts.push(`Title: ${title}.`);
+      if (location) parts.push(`Location: ${location}.`);
+      parts.push("Please help me create the listing.");
+      return parts.join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
+    }
+
+    function listPropertyWhatsAppUrl() {
+      return `https://wa.me/256760112587?text=${encodeURIComponent(buildListPropertyWhatsAppMessage())}`;
+    }
+
+    function handleListPropertyWhatsAppClick(event) {
+      const href = listPropertyWhatsAppUrl();
+      trackEvent("list_property_whatsapp_clicked", {
+        source_page: window.location.pathname || "/list-property",
+        listing_type: getSelectedListPropertyTypeLabel(),
+        signed_in: !!authState?.user
+      });
+      try {
+        const link = event?.currentTarget || document.getElementById("lp-wa-link");
+        if (link) link.href = href;
+      } catch (_) {}
+    }
+
+    function openListPropertyWhatsApp() {
+      const url = listPropertyWhatsAppUrl();
+      trackEvent("list_property_whatsapp_clicked", {
+        source_page: window.location.pathname || "/list-property",
+        listing_type: getSelectedListPropertyTypeLabel(),
+        signed_in: !!authState?.user
+      });
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+
     function handleSavedClick(event) {
       if (!authState?.user) {
         if (event) event.preventDefault();
@@ -16648,36 +16826,67 @@
     }
 
     function accountAccessRoleCopy(role = "finder") {
+      const lang = currentLang || "en";
+      const local = {
+        en: {
+          finder: ["Property Finder", "Search, save, alert."],
+          student: ["Student", "Campus rooms and alerts."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Apply, submit, track."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        lg: {
+          finder: ["Anoonya Property", "Noonya, tereka, funa alerts."],
+          student: ["Omuyizi", "Bisulo okumpi ne campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Saba, weereza, landirira."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        sw: {
+          finder: ["Mtafutaji", "Tafuta, hifadhi, arifa."],
+          student: ["Mwanafunzi", "Vyumba karibu na campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Omba, wasilisha, fuatilia."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        }
+      }[lang] || null;
+      const copy = local || {
+        finder: ["Property Finder", "Search, save, alert."],
+        student: ["Student", "Campus rooms and alerts."],
+        agent: ["Broker", "Listings, leads, viewings."],
+        field_agent: ["Field Agent", "Apply, submit, track."],
+        advertiser: ["Advertiser", "Campaigns, payments, leads."]
+      };
       return {
         finder: {
-          label: "Property Finder",
+          label: copy.finder[0],
           icon: "fa-house-chimney",
-          body: "Search, save, alert, view."
+          body: copy.finder[1]
         },
         student: {
-          label: "Student",
+          label: copy.student[0],
           icon: "fa-graduation-cap",
-          body: "Campus rooms and alerts."
+          body: copy.student[1]
         },
         agent: {
-          label: "Broker",
+          label: copy.agent[0],
           icon: "fa-briefcase",
-          body: "Listings, leads, viewings."
+          body: copy.agent[1]
         },
         field_agent: {
-          label: "Field Agent",
+          label: copy.field_agent[0],
           icon: "fa-clipboard-list",
-          body: "Apply, submit, track."
+          body: copy.field_agent[1]
         },
         advertiser: {
-          label: "Advertiser",
+          label: copy.advertiser[0],
           icon: "fa-bullhorn",
-          body: "Campaigns, payments, leads."
+          body: copy.advertiser[1]
         }
       }[normalizeAuthAudience(role)] || {
-        label: "Property Finder",
+        label: copy.finder[0],
         icon: "fa-house-chimney",
-        body: "Search, save, alert, view."
+        body: copy.finder[1]
       };
     }
 
@@ -16698,6 +16907,115 @@
       }).join("");
     }
 
+    function accountAccessText(key) {
+      const dict = {
+        en: {
+          heading: "Sign in or create your MakaUg account",
+          subheading: "Save properties, create alerts, book viewings, and manage your property search faster.",
+          language: "Language",
+          continueAs: "Continue as",
+          createAccount: "Create account",
+          signIn: "Sign in",
+          identifier: "Email address or phone number",
+          password: "Password",
+          firstName: "First name",
+          email: "Email address",
+          phone: "Phone / WhatsApp",
+          quickPreferences: "Quick preferences",
+          confirmPassword: "Confirm password",
+          otpMethod: "How should we send your verification code?",
+          otpEmail: "Email",
+          otpPhone: "Phone / WhatsApp",
+          terms: "I agree to the MakaUg Terms & Conditions.",
+          privacy: "I have read the MakaUg Privacy Policy.",
+          verifyTitle: "Verify your account",
+          verificationCode: "Verification code",
+          continue: "Continue",
+          forgot: "Forgot password?",
+          changeType: "Change account type"
+        },
+        lg: {
+          heading: "Yingira oba kola account ya MakaUg",
+          subheading: "Tereka properties, kola alerts, saba viewings, era landirira okunoonya kwo.",
+          language: "Olulimi",
+          continueAs: "Genda mu maaso nga",
+          createAccount: "Kola account",
+          signIn: "Yingira",
+          identifier: "Email oba ennamba ya simu",
+          password: "Password",
+          firstName: "Erinnya erisooka",
+          email: "Email",
+          phone: "Simu / WhatsApp",
+          quickPreferences: "By'oyagala mu bwangu",
+          confirmPassword: "Kakasa password",
+          otpMethod: "Tukusindikire wa code?",
+          otpEmail: "Email",
+          otpPhone: "Simu / WhatsApp",
+          terms: "Nzikiriza Terms & Conditions za MakaUg.",
+          privacy: "Nsomedde Privacy Policy ya MakaUg.",
+          verifyTitle: "Kakasa account yo",
+          verificationCode: "Code y'okukakasa",
+          continue: "Genda mu maaso",
+          forgot: "Werabidde password?",
+          changeType: "Kyusa account type"
+        },
+        sw: {
+          heading: "Ingia au fungua akaunti ya MakaUg",
+          subheading: "Hifadhi mali, tengeneza arifa, omba viewings, na simamia utafutaji wako.",
+          language: "Lugha",
+          continueAs: "Endelea kama",
+          createAccount: "Fungua akaunti",
+          signIn: "Ingia",
+          identifier: "Barua pepe au nambari ya simu",
+          password: "Nenosiri",
+          firstName: "Jina la kwanza",
+          email: "Barua pepe",
+          phone: "Simu / WhatsApp",
+          quickPreferences: "Mapendeleo ya haraka",
+          confirmPassword: "Thibitisha nenosiri",
+          otpMethod: "Tutume msimbo wapi?",
+          otpEmail: "Barua pepe",
+          otpPhone: "Simu / WhatsApp",
+          terms: "Nakubali Sheria na Masharti ya MakaUg.",
+          privacy: "Nimesoma Sera ya Faragha ya MakaUg.",
+          verifyTitle: "Thibitisha akaunti yako",
+          verificationCode: "Msimbo wa uthibitisho",
+          continue: "Endelea",
+          forgot: "Umesahau nenosiri?",
+          changeType: "Badilisha aina ya akaunti"
+        }
+      };
+      return (dict[currentLang] && dict[currentLang][key]) || dict.en[key] || key;
+    }
+
+    function applyAccountAccessLanguageUi() {
+      const drawer = document.getElementById("account-access-drawer");
+      if (!drawer) return;
+      setTextById("account-access-title", accountAccessText("heading"));
+      const sub = drawer.querySelector("[data-auth-drawer-subheading]");
+      if (sub) sub.textContent = accountAccessText("subheading");
+      const roleList = document.getElementById("account-access-role-list");
+      if (roleList) roleList.innerHTML = renderAccountAccessRoleCards();
+      const langLabel = drawer.querySelector("[data-auth-label-language]");
+      if (langLabel) langLabel.textContent = accountAccessText("language");
+      const continueAs = drawer.querySelector("[data-auth-label-continue-as]");
+      if (continueAs) continueAs.textContent = accountAccessText("continueAs");
+      drawer.querySelectorAll("[data-auth-text]").forEach((el) => {
+        const key = el.getAttribute("data-auth-text");
+        if (key) el.textContent = accountAccessText(key);
+      });
+      const termsCopy = document.getElementById("account-access-terms-copy");
+      if (termsCopy) {
+        termsCopy.innerHTML = `${accountAccessText("terms").replace("Terms & Conditions", `<button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>`)}`;
+      }
+      const privacyCopy = document.getElementById("account-access-privacy-copy");
+      if (privacyCopy) {
+        privacyCopy.innerHTML = `${accountAccessText("privacy").replace("Privacy Policy", `<button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>`)}`;
+      }
+      setAccountAccessRole(accountAccessDrawerAudience);
+      updateAccountAccessProgress(accountAccessDrawerStep);
+    }
+
     function renderAccountAccessScreening() {
       const wrap = document.getElementById("account-access-screening");
       if (!wrap) return;
@@ -16714,15 +17032,54 @@
 
     function updateAccountAccessProgress(step = "account") {
       accountAccessDrawerStep = step;
-      const steps = ["account", "details", "preferences", "verify"];
-      document.querySelectorAll("[data-auth-progress-step]").forEach((node) => {
-        const idx = steps.indexOf(node.getAttribute("data-auth-progress-step"));
-        const activeIdx = steps.indexOf(accountAccessDrawerStep);
-        node.classList.toggle("bg-green-700", idx <= activeIdx);
-        node.classList.toggle("text-white", idx <= activeIdx);
-        node.classList.toggle("bg-gray-100", idx > activeIdx);
-        node.classList.toggle("text-gray-600", idx > activeIdx);
-      });
+      const progress = document.getElementById("account-access-progress-summary");
+      if (!progress) return;
+      const labels = {
+        details: "1 of 3: Details",
+        preferences: "2 of 3: Preferences",
+        verify: "3 of 3: Verify"
+      };
+      const shouldShow = accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
+      progress.classList.toggle("hidden", !shouldShow);
+      progress.textContent = shouldShow ? (labels[step] || labels.details) : "";
+    }
+
+    function updateAccountAccessRoleFocus() {
+      const listWrap = document.getElementById("account-access-role-list-wrap");
+      const selectedWrap = document.getElementById("account-access-selected-role-card");
+      const secondary = document.getElementById("account-access-secondary-actions");
+      const isFocusedFlow = accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
+      if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow);
+      if (selectedWrap) {
+        const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
+        selectedWrap.classList.toggle("hidden", !isFocusedFlow);
+        selectedWrap.innerHTML = isFocusedFlow ? `<div class="flex items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="w-10 h-10 rounded-2xl bg-white text-green-700 flex items-center justify-center"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
+            <span><span class="block text-sm font-black text-gray-900">${copy.label}</span><span class="block text-xs text-gray-600">${copy.body}</span></span>
+          </div>
+          <button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold text-green-700">Change account type</button>
+        </div>` : "";
+      }
+      if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify");
+    }
+
+    function showAccountAccessRolePicker() {
+      accountAccessDrawerMode = "signin";
+      accountAccessPendingOtp = null;
+      const signInWrap = document.getElementById("account-access-signin-wrap");
+      const createWrap = document.getElementById("account-access-create-wrap");
+      const passwordWrap = document.getElementById("account-access-password-wrap");
+      const otpWrap = document.getElementById("account-access-otp-wrap");
+      if (signInWrap) signInWrap.classList.remove("hidden");
+      if (createWrap) createWrap.classList.add("hidden");
+      if (passwordWrap) passwordWrap.classList.add("hidden");
+      if (otpWrap) otpWrap.classList.add("hidden");
+      setTextById("account-access-mode-label", "Sign in");
+      const btn = document.getElementById("account-access-continue-btn");
+      if (btn) btn.textContent = "Continue";
+      updateAccountAccessProgress("account");
+      updateAccountAccessRoleFocus();
     }
 
     function ensureAccountAccessDrawer() {
@@ -16742,23 +17099,18 @@
               <div>
                 <p class="text-xs uppercase tracking-wide text-green-200 font-bold">MakaUg account</p>
                 <h2 id="account-access-title" class="text-2xl font-black serif mt-1">Sign in or create your MakaUg account</h2>
-                <p class="text-sm text-green-50 mt-2">Save properties, create alerts, book viewings, and manage your property search faster.</p>
+                <p class="text-sm text-green-50 mt-2" data-auth-drawer-subheading="1">Save properties, create alerts, book viewings, and manage your property search faster.</p>
               </div>
               <button type="button" aria-label="Close sign in" onclick="closeAccountAccessDrawer()" class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
                 <i class="fas fa-xmark"></i>
               </button>
             </div>
-            <div class="mt-4 grid grid-cols-4 gap-2 text-[11px] font-bold" aria-label="Account progress">
-              <span data-auth-progress-step="account" class="rounded-full bg-green-700 text-white px-2 py-1 text-center">Account</span>
-              <span data-auth-progress-step="details" class="rounded-full bg-gray-100 text-gray-600 px-2 py-1 text-center">Details</span>
-              <span data-auth-progress-step="preferences" class="rounded-full bg-gray-100 text-gray-600 px-2 py-1 text-center">Preferences</span>
-              <span data-auth-progress-step="verify" class="rounded-full bg-gray-100 text-gray-600 px-2 py-1 text-center">Verify</span>
-            </div>
+            <div id="account-access-progress-summary" class="hidden mt-4 rounded-full bg-white/15 px-3 py-2 text-xs font-bold text-green-50" aria-live="polite"></div>
           </div>
           <div class="flex-1 overflow-y-auto p-5 space-y-5">
             <div class="rounded-2xl bg-green-50 border border-green-100 p-4 text-sm text-green-900" id="auth-drawer-benefits"></div>
             <div>
-              <label class="block text-xs font-bold text-gray-600 mb-1">Language</label>
+              <label class="block text-xs font-bold text-gray-600 mb-1" data-auth-label-language="1">Language</label>
               <select id="auth-drawer-language" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="setLang(this.value)">
                 <option value="en">English</option>
                 <option value="lg">Luganda</option>
@@ -16769,27 +17121,28 @@
                 <option value="sm">Lusoga</option>
               </select>
             </div>
-            <div>
-              <div class="text-xs font-bold text-gray-600 mb-2">Continue as</div>
+            <div id="account-access-role-list-wrap">
+              <div class="text-xs font-bold text-gray-600 mb-2" data-auth-label-continue-as="1">Continue as</div>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="account-access-role-list">
                 ${renderAccountAccessRoleCards()}
               </div>
             </div>
+            <div id="account-access-selected-role-card" class="hidden rounded-2xl border border-green-100 bg-green-50 p-3"></div>
             <div class="rounded-2xl border border-gray-200 p-4">
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <p class="text-xs uppercase tracking-wide text-green-700 font-bold" id="account-access-role-label">Property Finder</p>
                   <h3 class="text-lg font-black text-gray-900" id="account-access-mode-label">Sign in</h3>
                 </div>
-                <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700">Create an account</button>
+                <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700" data-auth-text="createAccount">Create an account</button>
               </div>
               <p id="account-access-role-body" class="text-sm text-gray-600 mt-2"></p>
               <div id="account-access-signin-wrap">
-                <label class="block text-xs font-bold text-gray-600 mt-4 mb-1">Email address or phone number</label>
+                <label class="block text-xs font-bold text-gray-600 mt-4 mb-1" data-auth-text="identifier">Email address or phone number</label>
                 <input id="account-access-identifier" autocomplete="username" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Email address or phone number">
               </div>
               <div id="account-access-password-wrap" class="hidden">
-                <label class="block text-xs font-bold text-gray-600 mt-3 mb-1">Password</label>
+                <label class="block text-xs font-bold text-gray-600 mt-3 mb-1" data-auth-text="password">Password</label>
                 <div class="relative">
                   <input id="account-access-password" type="password" autocomplete="current-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 pr-12 text-base sm:text-sm" placeholder="Password">
                   <button type="button" onclick="toggleAccountAccessPassword()" aria-label="Show or hide password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="fas fa-eye"></i></button>
@@ -16798,61 +17151,71 @@
               <div id="account-access-create-wrap" class="hidden mt-4 space-y-3">
                 <div class="grid sm:grid-cols-2 gap-3">
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">First name</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="firstName">First name</span>
                     <input id="account-access-first-name" autocomplete="given-name" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="First name">
                   </label>
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Email</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
                     <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="you@email.com">
                   </label>
                   <label class="block sm:col-span-2">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Phone / WhatsApp</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="phone">Phone / WhatsApp</span>
                     <input id="account-access-phone" autocomplete="tel" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="+256 7XX XXX XXX">
                   </label>
                 </div>
                 <div>
-                  <div class="text-xs font-bold text-gray-600 mb-2">Quick preferences</div>
+                  <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
                   <div id="account-access-screening" class="grid sm:grid-cols-2 gap-3"></div>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-3">
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Password</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="password">Password</span>
                     <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Password">
                   </label>
                   <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1">Confirm password</span>
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
                     <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Confirm password">
                   </label>
                 </div>
+                <div id="account-access-otp-method-wrap" class="rounded-2xl border border-green-100 bg-green-50 p-3">
+                  <div class="text-xs font-black text-green-950 mb-2" data-auth-text="otpMethod">How should we send your verification code?</div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                      <input type="radio" name="account-access-otp-method" value="email" class="accent-green-700" checked>
+                      <span data-auth-text="otpEmail">Email</span>
+                    </label>
+                    <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                      <input type="radio" name="account-access-otp-method" value="phone" class="accent-green-700">
+                      <span data-auth-text="otpPhone">Phone / WhatsApp</span>
+                    </label>
+                  </div>
+                </div>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span>I accept the Terms and Conditions.</span>
+                  <span id="account-access-terms-copy">I agree to the MakaUg <button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
                 </label>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span>I accept the Privacy Policy.</span>
+                  <span id="account-access-privacy-copy">I have read the MakaUg <button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
                 </label>
               </div>
               <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
                 <div class="rounded-2xl bg-green-50 border border-green-100 p-3">
-                  <div class="text-sm font-black text-green-950">Verify your account</div>
+                  <div class="text-sm font-black text-green-950" data-auth-text="verifyTitle">Verify your account</div>
                   <p id="account-access-otp-copy" class="text-xs text-green-800 mt-1">Enter the 6-digit code sent to your email.</p>
                 </div>
                 <label class="block">
-                  <span class="block text-xs font-bold text-gray-600 mb-1">Verification code</span>
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="verificationCode">Verification code</span>
                   <input id="account-access-otp-code" inputmode="numeric" autocomplete="one-time-code" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-xl tracking-[0.3em] font-black text-center" placeholder="000000" maxlength="8">
                 </label>
               </div>
               <div class="sticky bottom-0 -mx-4 mt-4 bg-white/95 backdrop-blur px-4 pb-1 pt-3 border-t border-gray-100">
                 <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="w-full min-h-[48px] bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
               </div>
-              <div class="mt-4 flex flex-wrap gap-3 text-sm">
-                <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold">Create an account</button>
-                <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold">Forgot password?</button>
-                <button type="button" onclick="setAccountAccessRole('student')" class="text-blue-700 font-bold">Continue with student account</button>
-                <button type="button" onclick="setAccountAccessRole('agent')" class="text-amber-700 font-bold">Continue as broker</button>
-                <button type="button" onclick="setAccountAccessRole('field_agent')" class="text-gray-700 font-bold">Continue as field agent</button>
-                <button type="button" onclick="setAccountAccessRole('advertiser')" class="text-purple-700 font-bold">Continue as advertiser</button>
+              <div id="account-access-secondary-actions" class="mt-4 flex flex-wrap gap-3 text-sm">
+                <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold" data-auth-text="createAccount">Create an account</button>
+                <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold" data-auth-text="forgot">Forgot password?</button>
+                <button type="button" onclick="showAccountAccessRolePicker()" class="text-gray-600 font-bold" data-auth-text="changeType">Change account type</button>
               </div>
             </div>
           </div>
@@ -16903,6 +17266,7 @@
         btn.setAttribute("aria-pressed", active ? "true" : "false");
       });
       renderAccountAccessScreening();
+      updateAccountAccessRoleFocus();
     }
 
     function openAccountAccessDrawer(mode = "signin", audience = "finder") {
@@ -16928,6 +17292,8 @@
       if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Continue";
       setAccountAccessRole(audience);
       updateAccountAccessProgress(accountAccessDrawerMode === "create" ? "details" : "account");
+      updateAccountAccessRoleFocus();
+      applyAccountAccessLanguageUi();
       document.addEventListener("keydown", handleAccountAccessKeydown);
       const focusId = accountAccessDrawerMode === "create" ? "account-access-first-name" : "account-access-identifier";
       setTimeout(() => document.getElementById(focusId)?.focus(), 30);
@@ -16972,6 +17338,7 @@
       if (continueBtn) continueBtn.textContent = "Create account";
       renderAccountAccessScreening();
       updateAccountAccessProgress("details");
+      updateAccountAccessRoleFocus();
       setTimeout(() => document.getElementById("account-access-first-name")?.focus(), 30);
     }
 
@@ -17017,6 +17384,82 @@
       return profile;
     }
 
+    function selectedAccountAccessOtpChannel() {
+      return document.querySelector('input[name="account-access-otp-method"]:checked')?.value === "phone" ? "phone" : "email";
+    }
+
+    function maskAccountAccessDestination(value = "", channel = "email") {
+      const raw = String(value || "").trim();
+      if (!raw) return channel === "phone" ? "your phone / WhatsApp" : "your email";
+      if (channel === "phone") {
+        const digits = raw.replace(/\D/g, "");
+        return digits.length > 4 ? `${raw.slice(0, 4)}••••${digits.slice(-3)}` : "your phone / WhatsApp";
+      }
+      const [name, domain] = raw.split("@");
+      if (!domain) return "your email";
+      return `${name.slice(0, 2)}•••@${domain}`;
+    }
+
+    function accountPolicyPreview(kind = "terms") {
+      if (kind === "privacy") {
+        return {
+          title: "MakaUg Privacy Policy preview",
+          link: "/privacy-policy",
+          items: [
+            "We collect account, listing, contact, WhatsApp/email/SMS, saved-search, alert, and support data needed to run MakaUg.",
+            "We use this data for account access, listings, alerts, enquiries, safety checks, fraud prevention, advertising operations, and support.",
+            "You can manage contact preferences, opt out of marketing, and request access, correction, export, or deletion where applicable.",
+            "MakaUg applies Uganda data protection principles and GDPR-style rights where relevant. AI/data use must be consent-aware and privacy-safe.",
+            "Legal review note: the full policy should be reviewed by MakaUg legal counsel before formal reliance."
+          ]
+        };
+      }
+      return {
+        title: "MakaUg Terms & Conditions preview",
+        link: "/terms",
+        items: [
+          "MakaUg is a property marketplace and communication platform; it does not guarantee title, ownership, availability, or approval unless clearly verified.",
+          "Users must provide accurate account, listing, pricing, location, and contact information and must not misuse the platform.",
+          "Do not pay before viewing, verification, or proper due diligence. Report suspicious listings or payment pressure.",
+          "Advertising, sponsored placements, and payment links are subject to review, approval, and applicable campaign terms.",
+          "Legal review note: the full terms should be reviewed by MakaUg legal counsel before formal reliance."
+        ]
+      };
+    }
+
+    function renderPolicyPreviewHtml(kind = "terms") {
+      const preview = accountPolicyPreview(kind);
+      return `<div class="font-black text-gray-900 mb-2">${preview.title}</div><ul class="list-disc pl-4 space-y-1">${preview.items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+    }
+
+    function openPolicyPreviewModal(kind = "terms") {
+      const preview = accountPolicyPreview(kind);
+      setTextById("policy-preview-title", preview.title);
+      const body = document.getElementById("policy-preview-body");
+      if (body) body.innerHTML = `<ul class="list-disc pl-5 space-y-2">${preview.items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+      const link = document.getElementById("policy-preview-full-link");
+      if (link) {
+        link.href = preview.link;
+        link.textContent = kind === "privacy" ? "Read full Privacy Policy" : "Read full Terms";
+      }
+      openModal("policy-preview-modal");
+      trackEvent("auth_legal_preview_opened", { kind });
+    }
+
+    function showPolicyPreviewCard(anchor, kind = "terms") {
+      const card = document.getElementById("policy-preview-card");
+      if (!card || !anchor) return;
+      card.innerHTML = renderPolicyPreviewHtml(kind);
+      const rect = anchor.getBoundingClientRect();
+      card.style.left = `${Math.min(window.innerWidth - 340, Math.max(16, rect.left))}px`;
+      card.style.top = `${Math.min(window.innerHeight - 260, Math.max(16, rect.bottom + 8))}px`;
+      card.classList.remove("hidden");
+    }
+
+    function hidePolicyPreviewCard() {
+      document.getElementById("policy-preview-card")?.classList.add("hidden");
+    }
+
     async function submitAccountAccessCreate() {
       const firstName = (document.getElementById("account-access-first-name")?.value || "").trim();
       const email = (document.getElementById("account-access-email")?.value || "").trim().toLowerCase();
@@ -17026,6 +17469,7 @@
       const preferredLanguage = (document.getElementById("auth-drawer-language")?.value || currentLang || "en").trim();
       const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
       const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
+      const otpChannel = selectedAccountAccessOtpChannel();
       const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       if (!firstName || !email || !phone || !password) {
         toast("Add your first name, email, phone/WhatsApp, and password.");
@@ -17071,7 +17515,7 @@
             role: roleLabel,
             password,
             confirm_password: confirmPassword,
-            otp_channel: "email",
+            otp_channel: otpChannel,
             audience: accountAccessDrawerAudience,
             terms_accepted: termsAccepted,
             privacy_accepted: privacyAccepted,
@@ -17081,14 +17525,15 @@
             profile_data: profileData
           }
         });
-        accountAccessPendingOtp = { email, audience: accountAccessDrawerAudience };
+        const destination = otpChannel === "phone" ? phone : email;
+        accountAccessPendingOtp = { email, phone, channel: otpChannel, destination, audience: accountAccessDrawerAudience };
         accountAccessDrawerMode = "verify";
         document.getElementById("account-access-create-wrap")?.classList.add("hidden");
         document.getElementById("account-access-signin-wrap")?.classList.add("hidden");
         document.getElementById("account-access-password-wrap")?.classList.add("hidden");
         document.getElementById("account-access-otp-wrap")?.classList.remove("hidden");
         setTextById("account-access-mode-label", "Verify account");
-        setTextById("account-access-otp-copy", `Enter the 6-digit code sent to ${email}.`);
+        setTextById("account-access-otp-copy", `We sent a verification code to ${maskAccountAccessDestination(destination, otpChannel)}. Please enter it below.`);
         if (btn) btn.textContent = "Verify and continue";
         updateAccountAccessProgress("verify");
         toast(register?.message || "Check your email for the verification code.");
@@ -17107,8 +17552,9 @@
     async function submitAccountAccessOtp() {
       const pending = accountAccessPendingOtp || {};
       const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
-      if (!pending.email || !code) {
-        toast("Enter the verification code sent to your email.");
+      const channel = pending.channel === "phone" ? "phone" : "email";
+      if (!pending.destination || !code) {
+        toast(`Enter the verification code sent to your ${channel === "phone" ? "phone / WhatsApp" : "email"}.`);
         return;
       }
       const btn = document.getElementById("account-access-continue-btn");
@@ -17120,7 +17566,7 @@
       try {
         const verify = await apiRequest("/api/auth/verify-otp", {
           method: "POST",
-          body: { email: pending.email, code, purpose: "signup", channel: "email" }
+          body: { email: pending.email, phone: pending.phone, code, purpose: "signup", channel }
         });
         accountAccessPendingOtp = null;
         await finalizeAuth(verify?.data, "drawer_signup_otp", pending.audience || accountAccessDrawerAudience);
@@ -17184,13 +17630,7 @@
             : (normalized === "advertiser"
               ? "advertiser"
               : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
-      if (!document.getElementById("auth-modal")) {
-        openAccountAccessDrawer("signin", resolved);
-        return;
-      }
-      openModal("auth-modal");
-      setAuthModalTab("signin");
-      setAuthSignInAudience(resolved);
+      openAccountAccessDrawer("signin", resolved);
     }
 
     function openAuthSignUp(audience = "finder", event) {
@@ -17203,13 +17643,7 @@
           : (normalized === "advertiser"
             ? "advertiser"
             : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")));
-      if (!document.getElementById("auth-modal")) {
-        openAccountAccessDrawer("create", resolved);
-        return;
-      }
-      openModal("auth-modal");
-      setAuthModalTab("signup");
-      setAuthSignUpAudience(resolved);
+      openAccountAccessDrawer("create", resolved);
     }
 
     function setAuthModalTab(tab) {
@@ -17244,7 +17678,8 @@
         students: ["student", "alerts", "viewings"],
         "student-accommodation": ["student", "alerts", "viewings"],
         safety: ["safety", "whatsapp"],
-        fraud: ["safety", "whatsapp"]
+        fraud: ["safety", "whatsapp"],
+        "ai-chatbot": ["ai"]
       };
       const categories = categoryMap[key] || ["about", "search", "listing", "safety"];
       const selected = HOW_TO_VIDEO_SLOTS
@@ -17291,6 +17726,56 @@
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${videos.map(renderHowToVideoCard).join("")}</div>`;
         trackEvent("howto_video_shown", { source_page: currentPage, context, count: videos.length });
       });
+    }
+
+    async function submitAiChatbotPrompt(event) {
+      if (event) event.preventDefault();
+      const intent = (document.getElementById("ai-chatbot-intent")?.value || "search_property").trim();
+      const message = (document.getElementById("ai-chatbot-message")?.value || "").trim()
+        || `Please help me with ${intent.replace(/_/g, " ")} on MakaUg.`;
+      const responseBox = document.getElementById("ai-chatbot-response");
+      const button = document.getElementById("ai-chatbot-submit-btn");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Asking...";
+      }
+      if (responseBox) responseBox.textContent = "Checking MakaUg AI...";
+      try {
+        const response = await apiRequest("/api/ai/assistant-reply", {
+          method: "POST",
+          body: {
+            message,
+            intent,
+            language: currentLang || "en",
+            context: {
+              route: window.location.pathname || "/discover-ai-chatbot",
+              supported_intents: [
+                "search_property", "search_rent", "search_sale", "search_student", "search_land", "search_commercial",
+                "save_search", "create_alert", "book_viewing", "request_callback", "list_property", "list_property_whatsapp",
+                "report_fraud", "ask_mortgage", "ask_help", "advertiser_interest", "language_change", "human_handoff"
+              ]
+            }
+          }
+        });
+        const text = response?.data?.reply || response?.data?.message || response?.reply || "MakaUg AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
+        if (responseBox) responseBox.textContent = text;
+        trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en" });
+      } catch (error) {
+        const fallback = {
+          search_property: "I can help you search by category, area, budget, bedrooms, campus, land/title needs, or commercial use. Try For Sale, To Rent, Land, Student Accommodation, or Commercial.",
+          list_property: "You can list online from /list-property or use the WhatsApp listing option on that page.",
+          list_property_whatsapp: "Use the List via WhatsApp button on /list-property so MakaUg receives listing context safely.",
+          report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. MakaUg treats fraud reports as urgent support cases.",
+          human_handoff: "Human handoff is available through the Help Centre or WhatsApp support."
+        }[intent] || "AI provider output is unavailable right now. MakaUg logged this safely and you can continue by WhatsApp or Help Centre.";
+        if (responseBox) responseBox.textContent = fallback;
+        trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed" });
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Ask AI";
+        }
+      }
     }
 
     function openHowToVideo(key) {
@@ -19437,7 +19922,7 @@
       const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
       const photoUrl = getPropertyPreviewPhotoUrl(property);
       return `
-        <div style="min-width:220px;max-width:240px">
+        <div data-map-marker-popup="listing" style="min-width:220px;max-width:240px">
           <img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />
           <button type="button" onclick="openDetail(${idArg}); return false;" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;">
             ${adminEscape(title)}
@@ -24954,7 +25439,7 @@
           });
           const openBrokerInfo = () => {
             infoWindow.setContent(`
-              <div style="min-width:210px">
+              <div data-map-marker-popup="broker" style="min-width:210px">
                 <div style="font-weight:700;color:#111827;margin-bottom:2px">${adminEscape(broker.name || "Broker")}</div>
                 <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${adminEscape(broker.company || "")}</div>
                 <div style="font-size:12px;color:#374151;margin-bottom:8px">Location: ${adminEscape(broker.area || "")}</div>
@@ -24996,7 +25481,7 @@
         const marker = L.marker([point.lat, point.lng]).addTo(map);
 
         marker.bindPopup(`
-          <div style="min-width:210px">
+          <div data-map-marker-popup="broker" style="min-width:210px">
             <div style="font-weight:700;color:#111827;margin-bottom:2px">${broker.name}</div>
             <div style="font-size:12px;color:#6b7280;margin-bottom:8px">${broker.company}</div>
             <div style="font-size:12px;color:#374151;margin-bottom:8px">📍 ${broker.area}</div>
