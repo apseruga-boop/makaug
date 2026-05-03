@@ -1,6 +1,6 @@
 # MakaUg Performance Audit
 
-Generated: 2026-05-03T03:42:20.636Z
+Generated: 2026-05-03T03:44:40.125Z
 
 Base URL: https://makaug.com
 
@@ -10,19 +10,19 @@ Launch targets:
 - No console errors on public routes.
 - Google Maps should not load on the homepage before active map use.
 
-Slowest route: `/land` at 1128ms.
+Slowest route: `/` at 1131ms.
 
 | Route | Status | Body visible ms | DCL ms | Load ms | Resources | JS | CSS | Google Maps | Console errors | Result |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
-| `/` | 200 | 984 | 984 | 1122 | 18 | 1 | 1 | no | 0 | pass |
-| `/to-rent` | 200 | 862 | 835 | 842 | 18 | 1 | 1 | no | 0 | pass |
-| `/for-sale` | 200 | 850 | 821 | 1169 | 33 | 8 | 1 | yes | 0 | pass |
-| `/land` | 200 | 1128 | 1625 | 1634 | 34 | 8 | 1 | yes | 0 | pass |
-| `/student-accommodation` | 200 | 796 | 816 | 869 | 42 | 8 | 1 | yes | 0 | pass |
-| `/commercial` | 200 | 866 | 842 | 850 | 38 | 8 | 1 | yes | 0 | pass |
-| `/brokers` | 200 | 1015 | 1527 | 1537 | 34 | 8 | 1 | yes | 0 | pass |
-| `/list-property` | 200 | 849 | 844 | 903 | 35 | 9 | 1 | yes | 0 | pass |
-| `/advertise` | 200 | 882 | 833 | 837 | 18 | 1 | 1 | no | 0 | pass |
+| `/` | 200 | 1131 | 1535 | 1555 | 15 | 1 | 1 | no | 0 | pass |
+| `/to-rent` | 200 | 838 | 836 | 849 | 19 | 1 | 1 | no | 0 | pass |
+| `/for-sale` | 200 | 1071 | 1541 | 1550 | 33 | 8 | 1 | yes | 0 | pass |
+| `/land` | 200 | 749 | 720 | 727 | 33 | 8 | 1 | yes | 0 | pass |
+| `/student-accommodation` | 200 | 865 | 878 | 910 | 34 | 8 | 1 | yes | 0 | pass |
+| `/commercial` | 200 | 824 | 799 | 805 | 34 | 8 | 1 | yes | 0 | pass |
+| `/brokers` | 200 | 834 | 816 | 824 | 33 | 8 | 1 | yes | 0 | pass |
+| `/list-property` | 200 | 966 | 979 | 1029 | 34 | 9 | 1 | yes | 0 | pass |
+| `/advertise` | 200 | 1128 | 1278 | 1282 | 17 | 1 | 1 | no | 0 | pass |
 
 Notes:
 - These are lab probes from Playwright/Chrome against the configured base URL.
