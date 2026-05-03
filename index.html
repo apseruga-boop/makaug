@@ -20,8 +20,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/config.js"></script>
   <script>
     window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
@@ -7600,6 +7598,7 @@
     const ADMIN_API_KEY_STORAGE_KEY = "makaug_admin_api_key";
     let gaMeasurementId = null;
     let googleMapsLoadPromise = null;
+    let leafletLoadPromise = null;
     let googleGeocoderInstance = null;
     const mapProviders = {};
 
@@ -14333,15 +14332,24 @@
         ensureGoogleMapsApi().then((useGoogle) => {
           if (lpPinMap) return;
           const ready = useGoogle && initGoogleListPinMap(el);
-          if (!ready) initLeafletListPinMap();
-          if (lpPinMap) {
-            refreshListPinMapFromInputs();
-            resizeListMap(lpPinMap, lpPinMapProvider);
+          if (!ready) {
+            ensureLeafletApi().then(() => {
+              if (!lpPinMap) initLeafletListPinMap();
+              if (lpPinMap) {
+                refreshListPinMapFromInputs();
+                resizeListMap(lpPinMap, lpPinMapProvider);
+              }
+            });
+            return;
           }
+          refreshListPinMapFromInputs();
+          resizeListMap(lpPinMap, lpPinMapProvider);
         });
         return;
       }
-      if (initLeafletListPinMap()) resizeListMap(lpPinMap, lpPinMapProvider);
+      ensureLeafletApi().then(() => {
+        if (initLeafletListPinMap()) resizeListMap(lpPinMap, lpPinMapProvider);
+      });
     }
 
     function initGoogleListPreviewMap(el) {
@@ -14387,15 +14395,24 @@
         ensureGoogleMapsApi().then((useGoogle) => {
           if (lpPreviewMap) return;
           const ready = useGoogle && initGoogleListPreviewMap(el);
-          if (!ready) initLeafletListPreviewMap();
-          if (lpPreviewMap) {
-            updateListPreview();
-            resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+          if (!ready) {
+            ensureLeafletApi().then(() => {
+              if (!lpPreviewMap) initLeafletListPreviewMap();
+              if (lpPreviewMap) {
+                updateListPreview();
+                resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+              }
+            });
+            return;
           }
+          updateListPreview();
+          resizeListMap(lpPreviewMap, lpPreviewMapProvider);
         });
         return;
       }
-      if (initLeafletListPreviewMap()) resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+      ensureLeafletApi().then(() => {
+        if (initLeafletListPreviewMap()) resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+      });
     }
 
     function updateListPreviewMap(lat, lng, title, locationLabel, district) {
@@ -23802,6 +23819,38 @@
       return googleMapsLoadPromise;
     }
 
+    function ensureLeafletApi() {
+      if (window.L) return Promise.resolve(true);
+      if (leafletLoadPromise) return leafletLoadPromise;
+
+      leafletLoadPromise = new Promise((resolve) => {
+        if (!document.querySelector('link[data-makaug-leaflet-css="true"]')) {
+          const link = document.createElement("link");
+          link.rel = "stylesheet";
+          link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+          link.setAttribute("data-makaug-leaflet-css", "true");
+          document.head.appendChild(link);
+        }
+
+        const existing = document.getElementById("makaug-leaflet-script");
+        if (existing) {
+          existing.addEventListener("load", () => resolve(!!window.L), { once: true });
+          existing.addEventListener("error", () => resolve(false), { once: true });
+          return;
+        }
+
+        const script = document.createElement("script");
+        script.id = "makaug-leaflet-script";
+        script.async = true;
+        script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+        script.onload = () => resolve(!!window.L);
+        script.onerror = () => resolve(false);
+        document.head.appendChild(script);
+      });
+
+      return leafletLoadPromise;
+    }
+
     function clearMapMarkers(mapId) {
       const provider = mapProviders[mapId] || "leaflet";
       (markers[mapId] || []).forEach((marker) => {
@@ -23988,7 +24037,7 @@
         return;
       }
 
-      if (!window.L) return;
+      if (!(await ensureLeafletApi())) return;
       mapSpecs.forEach((spec) => {
         const el = document.getElementById(spec.id);
         if (!el) return;
