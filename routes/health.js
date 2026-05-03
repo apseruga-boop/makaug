@@ -30,4 +30,34 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/migrations', async (_req, res) => {
+  const required = [
+    '033_task3_engagement_crm.sql',
+    '034_task4_super_admin_alerts_payments.sql'
+  ];
+  try {
+    const result = await db.query(
+      `SELECT filename, applied_at
+       FROM schema_migrations
+       WHERE filename = ANY($1::text[])
+       ORDER BY filename`,
+      [required]
+    );
+    const applied = new Map(result.rows.map((row) => [row.filename, row.applied_at]));
+    return res.json({
+      ok: true,
+      migrations: required.map((filename) => ({
+        filename,
+        applied: applied.has(filename),
+        appliedAt: applied.get(filename) || null
+      }))
+    });
+  } catch (error) {
+    return res.status(503).json({
+      ok: false,
+      error: 'Migration status unavailable'
+    });
+  }
+});
+
 module.exports = router;

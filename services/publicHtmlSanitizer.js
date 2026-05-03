@@ -110,6 +110,57 @@ const PUBLIC_ROUTE_PAGE_MAP = {
   '/saved': ['page-saved']
 };
 
+const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
+  '/advertise': {
+    title: 'Advertise on MakaUg',
+    eyebrow: 'Sponsored campaigns',
+    body: 'Create sponsored property campaigns, broker spotlights, student accommodation promotions, and WhatsApp-first lead campaigns with transparent review before anything goes live.',
+    ctas: ['Advertiser signup', 'Campaign packages', 'Ask MakaUg on WhatsApp']
+  },
+  '/how-it-works': {
+    title: 'How MakaUg Works',
+    eyebrow: 'Simple property journeys',
+    body: 'Search public listings, save what matters, contact verified listers with property context, list property for review, and use MakaUg support when you need help.',
+    ctas: ['Search property', 'List property', 'Get help']
+  },
+  '/careers': {
+    title: 'Careers at MakaUg',
+    eyebrow: 'Build Uganda-first property technology',
+    body: 'MakaUg works with people who care about trust, field operations, student accommodation, advertising, data quality, and safer property discovery.',
+    ctas: ['Send career interest', 'Contact MakaUg', 'Field agent signup']
+  },
+  '/help': {
+    title: 'MakaUg Help Centre',
+    eyebrow: 'Help and WhatsApp support',
+    body: 'Get help with search, saved properties, listing submission, broker registration, student accommodation, viewings, callbacks, fraud reports, and account access.',
+    ctas: ['WhatsApp support', 'Report an issue', 'Tell MakaUg what you need']
+  },
+  '/safety': {
+    title: 'MakaUg Safety Tips',
+    eyebrow: 'Verify before paying',
+    body: 'View property before payment, verify broker or owner identity, use traceable payments, check land title and seller authority, and report suspicious listings quickly.',
+    ctas: ['Report suspicious listing', 'Ask MakaUg on WhatsApp', 'Read anti-fraud guidance']
+  },
+  '/terms': {
+    title: 'MakaUg Terms and Conditions',
+    eyebrow: 'Legal review required',
+    body: 'These terms explain acceptable use, listing responsibilities, moderation, advertising, payments, user content, account access, and platform limitations. Final legal review is still required before formal publication.',
+    ctas: ['Contact support', 'Privacy policy', 'Cookie policy']
+  },
+  '/privacy-policy': {
+    title: 'MakaUg Privacy Policy',
+    eyebrow: 'Data protection',
+    body: 'MakaUg uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, and consent-aware analytics.',
+    ctas: ['Data request', 'Update preferences', 'Contact privacy support']
+  },
+  '/cookie-policy': {
+    title: 'MakaUg Cookie Policy',
+    eyebrow: 'Cookies and preferences',
+    body: 'MakaUg uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
+    ctas: ['Manage preferences', 'Privacy policy', 'Contact support']
+  }
+};
+
 function normalizePath(pathname = '/') {
   const raw = String(pathname || '/').split('?')[0].split('#')[0] || '/';
   return raw.length > 1 ? raw.replace(/\/+$/, '') : raw;
@@ -169,9 +220,69 @@ function removePageBlockById(html, pageId) {
 
 function getPublicPageIdsForRoute(pathname = '/') {
   const pathName = normalizePath(pathname).toLowerCase();
+  if (SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName]) return [];
   if (pathName.startsWith('/property/')) return ['page-detail'];
   if (pathName.startsWith('/agents/') || pathName.startsWith('/broker/')) return ['page-broker-profile'];
   return PUBLIC_ROUTE_PAGE_MAP[pathName] || ['page-home'];
+}
+
+function activatePublicPageBlock(html, pathname = '/') {
+  const keep = getPublicPageIdsForRoute(pathname);
+  if (!keep.length) return html;
+  let output = String(html || '');
+  for (const pageId of keep) {
+    const start = output.indexOf(`<div id="${pageId}"`);
+    if (start === -1) continue;
+    const end = output.indexOf('>', start);
+    if (end === -1) continue;
+    const opening = output.slice(start, end + 1);
+    let nextOpening = opening;
+    if (/class="/.test(nextOpening)) {
+      nextOpening = nextOpening.replace(/class="([^"]*)"/, (_match, classes) => {
+        const cleanClasses = String(classes || '').split(/\s+/).filter((item) => item && item !== 'active');
+        cleanClasses.push('active');
+        return `class="${cleanClasses.join(' ')}"`;
+      });
+    } else {
+      nextOpening = nextOpening.replace(/>$/, ' class="active">');
+    }
+    output = `${output.slice(0, start)}${nextOpening}${output.slice(end + 1)}`;
+  }
+  return output;
+}
+
+function renderSyntheticRouteContent(pathname = '/') {
+  const pathName = normalizePath(pathname).toLowerCase();
+  const content = SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName];
+  if (!content) return '';
+  const ctaHtml = content.ctas.map((item) => `<span class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900">${item}</span>`).join('');
+  return `
+  <main id="page-${pathName.slice(1).replace(/[^a-z0-9-]/g, '-')}" class="page active" data-public-route="${pathName}">
+    <section class="bg-green-800 py-10 text-white">
+      <div class="max-w-5xl mx-auto px-4">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">${content.eyebrow}</p>
+        <h1 class="text-4xl font-black serif mt-2">${content.title}</h1>
+        <p class="text-green-50 mt-3 max-w-3xl">${content.body}</p>
+        <div class="flex flex-wrap gap-2 mt-5">${ctaHtml}</div>
+      </div>
+    </section>
+    <section class="max-w-5xl mx-auto px-4 py-10">
+      <div class="bg-white border border-green-100 rounded-2xl p-6">
+        <h2 class="text-2xl font-bold text-gray-900 serif">${content.title}</h2>
+        <p class="text-gray-600 mt-3">${content.body}</p>
+        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Ask MakaUg on WhatsApp</a>
+      </div>
+    </section>
+  </main>
+`;
+}
+
+function injectSyntheticRouteContent(html, pathname = '/') {
+  const synthetic = renderSyntheticRouteContent(pathname);
+  if (!synthetic) return html;
+  const footerIndex = String(html || '').indexOf('<footer');
+  if (footerIndex === -1) return `${html}${synthetic}`;
+  return `${String(html).slice(0, footerIndex)}${synthetic}${String(html).slice(footerIndex)}`;
 }
 
 function stripUnneededPublicPageBlocks(html, pathname = '/') {
@@ -206,6 +317,7 @@ function stripProtectedPageBlocks(html) {
   output = removeBetweenMarkers(output, '<div id="page-agent-dashboard"', '<div id="page-field-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-field-dashboard"', '<div id="page-admin-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="page-about"');
+  output = removeBetweenMarkers(output, '<div id="page-admin-docs"', '<div id="page-saved"');
   output = removeBetweenMarkers(output, '<div id="admin-evidence-modal"', '<script>');
   return output;
 }
@@ -234,6 +346,8 @@ function sanitizePublicHtml(html, options = {}) {
   const pathname = typeof options === 'string' ? options : options?.pathname;
   let output = stripProtectedPageBlocks(html);
   output = stripUnneededPublicPageBlocks(output, pathname || '/');
+  output = activatePublicPageBlock(output, pathname || '/');
+  output = injectSyntheticRouteContent(output, pathname || '/');
   output = stripPublicModalBlocks(output, pathname || '/');
   for (const forbidden of PUBLIC_FORBIDDEN_STRINGS) {
     output = output.split(forbidden).join('');

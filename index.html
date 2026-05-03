@@ -1023,7 +1023,12 @@
     <div class="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
         <p class="text-sm text-gray-600 mb-4"><strong id="sale-count">0</strong> properties found</p>
-        <div id="sale-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5"></div>
+        <div id="sale-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="rounded-2xl border border-green-100 bg-green-50 p-5 text-green-950 sm:col-span-2">
+            <h2 class="font-black text-lg">No homes for sale match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will help you find similar properties.</p>
+          </div>
+        </div>
       </div>
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
@@ -1130,7 +1135,12 @@
     <div class="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
         <p class="text-sm text-gray-600 mb-4"><strong id="rent-count">0</strong> properties found</p>
-        <div id="rent-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5"></div>
+        <div id="rent-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-blue-950 sm:col-span-2">
+            <h2 class="font-black text-lg">No rentals match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will keep watching for suitable rentals.</p>
+          </div>
+        </div>
       </div>
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
@@ -1250,7 +1260,12 @@
             </div>
             <button class="text-gray-600 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white hover:bg-gray-50">🔔 Save search</button>
           </div>
-          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+          <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950 md:col-span-2">
+              <h2 class="font-black text-lg">No student rooms match this search yet.</h2>
+              <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need near campus.</p>
+            </div>
+          </div>
         </div>
         <div class="hidden lg:block listing-map-col">
           <div class="listing-map-shell">
@@ -1348,7 +1363,12 @@
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
-        <div id="commercial-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+        <div id="commercial-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="rounded-2xl border border-amber-100 bg-amber-50 p-5 text-amber-950 md:col-span-2">
+            <h2 class="font-black text-lg">No commercial spaces match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what your business needs.</p>
+          </div>
+        </div>
       </div>
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
@@ -1444,7 +1464,12 @@
     </div>
     <div class="max-w-7xl mx-auto px-4 py-8 grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
-        <div id="land-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+        <div id="land-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-emerald-950 md:col-span-2">
+            <h2 class="font-black text-lg">No land listings match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what plot you need. Always verify title and ownership before payment.</p>
+          </div>
+        </div>
       </div>
       <div class="hidden lg:block listing-map-col">
         <div class="listing-map-shell">
@@ -1506,7 +1531,12 @@
               + Register as Broker
             </button>
           </div>
-          <div id="brokers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+          <div id="brokers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="rounded-2xl border border-green-100 bg-green-50 p-5 text-green-950 md:col-span-2">
+              <h2 class="font-black text-lg">Broker directory loading.</h2>
+              <p class="text-sm mt-2">Find a Broker, ask MakaUg for verified broker help, or tell us the district and property type you need.</p>
+            </div>
+          </div>
         </div>
         <div class="hidden lg:block listing-map-col">
           <div class="listing-map-shell">
@@ -3788,6 +3818,38 @@
           makaug.com is a listing and discovery platform. We do not act as legal counsel, escrow provider, or party to sale or tenancy contracts.
         </p>
       </div>
+    </div>
+  </div>
+
+  <div id="page-admin-docs" class="page">
+    <div class="bg-slate-950 py-8 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <p class="text-slate-300 text-sm font-bold uppercase tracking-wide">Admin only</p>
+        <h1 class="text-3xl font-black serif">MakaUg Go-Live Documentation</h1>
+        <p class="text-slate-300 mt-2">Read-only launch documentation for super admin and admin users. No secrets are shown here.</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-8 grid md:grid-cols-2 gap-5">
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">Feature Completion Matrix</h2>
+        <p class="text-sm text-gray-600 mt-2">Tracks each feature against route, component, API, dashboard, logging, tests, proof, and next action.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/feature-completion-matrix.md</code>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">Go-Live Manual QA</h2>
+        <p class="text-sm text-gray-600 mt-2">Step-by-step checks for public routes, signup, listing, dashboards, WhatsApp, payments, alerts, and content.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/go-live-manual-qa.md</code>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">Content/i18n Audit</h2>
+        <p class="text-sm text-gray-600 mt-2">Honest status of English go-live content and missing translation groups for supported languages.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/content-i18n-audit.md</code>
+      </article>
+      <article class="bg-white border border-gray-200 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-gray-900">Operating Rules</h2>
+        <p class="text-sm text-gray-600 mt-2">Codex operating rules for production-safe MakaUg changes and completion proof.</p>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">AGENTS.md</code>
+      </article>
     </div>
   </div>
 
@@ -18790,7 +18852,8 @@
         "agent-dashboard": "/broker-dashboard",
         "field-dashboard": "/field-agent-dashboard",
         "advertiser-dashboard": "/advertiser-dashboard",
-        "admin-dashboard": "/admin"
+        "admin-dashboard": "/admin",
+        "admin-docs": "/admin/docs"
       };
       return routes[page] || "";
     }
@@ -19091,7 +19154,16 @@
         }
       }
 
-      if (path === "/admin" || path === "/admin-dashboard") {
+      if (path === "/admin/docs") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
+          showPage("admin-docs");
+        } else {
+          openAuthSignIn("admin");
+        }
+        return true;
+      }
+
+      if (path === "/admin" || path === "/admin-dashboard" || path.startsWith("/admin/")) {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
           showPage("admin-dashboard");
           renderAdminDashboard();

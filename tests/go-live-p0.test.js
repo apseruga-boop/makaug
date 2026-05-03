@@ -32,6 +32,7 @@ const PUBLIC_ROUTES = [
   '/land',
   '/commercial',
   '/brokers',
+  '/mortgage',
   '/advertise',
   '/about',
   '/how-it-works',
@@ -45,6 +46,30 @@ const PUBLIC_ROUTES = [
   '/report-fraud',
   '/list-property'
 ];
+
+const PUBLIC_ROUTE_MARKERS = {
+  '/': ['Find your next home, land, rental, or student room'],
+  '/for-sale': ['For Sale', 'No homes for sale', 'Save Search'],
+  '/to-rent': ['To Rent', 'No rentals', 'Save Search'],
+  '/student-accommodation': ['Student accommodation', 'Campus', 'No student rooms'],
+  '/students': ['Student accommodation', 'Campus', 'No student rooms'],
+  '/land': ['Land', 'No land listings', 'title'],
+  '/commercial': ['Commercial', 'No commercial spaces', 'business'],
+  '/brokers': ['Brokers', 'Find your perfect broker', 'Broker directory'],
+  '/mortgage': ['Mortgage', 'repayments'],
+  '/advertise': ['Advertise', 'Campaign', 'Sponsored'],
+  '/about': ['About', 'MakaUg', 'Our Mission'],
+  '/how-it-works': ['How MakaUg Works', 'List property'],
+  '/careers': ['Careers at MakaUg', 'Field agent signup'],
+  '/help': ['Help Centre', 'WhatsApp support'],
+  '/safety': ['Safety Tips', 'Verify before paying'],
+  '/anti-fraud': ['Fraud', 'Report suspicious'],
+  '/privacy-policy': ['Privacy Policy', 'Data protection'],
+  '/cookie-policy': ['Cookie Policy', 'Cookies'],
+  '/terms': ['Terms and Conditions', 'Legal review'],
+  '/report-fraud': ['Fraud', 'Report suspicious'],
+  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review']
+};
 
 const FORBIDDEN_PUBLIC_IDS = [
   'page-account',
@@ -94,15 +119,21 @@ function run() {
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
+  const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
   for (const publicRoute of PUBLIC_ROUTES) {
     const publicHtml = sanitizePublicHtml(sourceHtml, { pathname: publicRoute });
+    const publicText = normalizeText(publicHtml);
     assertNoProtectedStrings(publicRoute, publicHtml);
     assertNoProtectedIds(publicRoute, publicHtml);
-    assert(!normalizeText(publicHtml).includes('This area only This area only'), `${publicRoute} has duplicate location-scope labels`);
+    assert(!publicText.includes('This area only This area only'), `${publicRoute} has duplicate location-scope labels`);
+    assert(/class="[^"]*\bactive\b[^"]*"/.test(publicHtml), `${publicRoute} should have an active public content section`);
+    const markers = PUBLIC_ROUTE_MARKERS[publicRoute] || [];
+    assert(markers.some((marker) => publicText.toLowerCase().includes(marker.toLowerCase())), `${publicRoute} missing route-specific content marker`);
+    assert(!publicHtml.includes('id="page-admin-docs"'), `${publicRoute} leaked admin docs`);
   }
 
   const homeHtml = sanitizePublicHtml(sourceHtml, { pathname: '/' });
@@ -194,6 +225,9 @@ function run() {
   for (const expected of requiredDashboardShellText) {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
   }
+  assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
+  assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
+  assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
 
   for (const expected of [
     'GET /api/property-seeker/dashboard',
@@ -266,7 +300,7 @@ function run() {
   assert(superAdminScript.includes('bcrypt.hash'), 'super admin bootstrap must hash the password');
   assert(!superAdminScript.includes('console.log(password'), 'super admin bootstrap must not print the password');
 
-  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
+  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/docs', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);
     const shell = renderProtectedLoginShell(protectedPath);
     assert(shell.includes('noindex,noarchive'), `${protectedPath} protected shell needs noindex/noarchive`);

@@ -5,10 +5,14 @@ Use this checklist against the running preview/live app after deploy.
 ## Public
 
 - Open `/` logged out. Header shows `Saved` and `Sign In`; it does not show `Dashboard` or `Sign Out`.
+- Open `/for-sale`, `/to-rent`, `/student-accommodation`, `/students`, `/land`, `/commercial`, `/brokers`, `/mortgage`, `/advertise`, `/list-property`, `/about`, `/help`, `/safety`, and `/anti-fraud`.
+- Confirm every public route shows route-specific body content, not only header/footer.
+- On empty category routes, confirm no-results content shows Save Search, Create Alert, Ask MakaUg on WhatsApp, and Tell MakaUg what you need.
 - Search from the homepage. Confirm location scope appears only once.
 - Switch language. Confirm visible labels change where translations exist.
 - Confirm footer says `© 2026 MakaUg. All rights reserved.`
 - Confirm public HTML does not include dashboard, admin, CRM, account, or listing submission internals.
+- Run `BASE_URL=https://makaug.com npm run probe:public-routes`.
 
 ## Signup
 
@@ -30,6 +34,16 @@ Use this checklist against the running preview/live app after deploy.
 - Confirm email/notification logs include the same reference.
 - Confirm admin moderation can find the listing by reference.
 
+## Super Admin
+
+- Set `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_INITIAL_PASSWORD`, `SUPER_ADMIN_PHONE` optional, `DATABASE_URL`, and `JWT_SECRET` in the target environment.
+- Run `npm run admin:create-super`.
+- Confirm the script does not print the password.
+- Sign in as the super admin.
+- Immediately change the initial password.
+- Confirm `/admin`, `/admin/docs`, `/admin/crm`, `/admin/leads`, `/admin/advertising`, `/admin/revenue`, `/admin/notifications`, `/admin/emails`, `/admin/whatsapp-inbox`, `/admin/viewings`, `/admin/callbacks`, `/admin/field-agents`, `/admin/payments`, `/admin/contracts`, `/admin/fraud`, and `/admin/data-protection` are accessible.
+- Confirm admin login, bootstrap, password change, manual payment, and retry actions create audit rows.
+
 ## Dashboards
 
 - Property seeker can open `/dashboard`.
@@ -38,6 +52,7 @@ Use this checklist against the running preview/live app after deploy.
 - Field agent can open `/field-agent-dashboard`.
 - Advertiser can open `/advertiser-dashboard`.
 - Super admin can open `/admin`, `/admin/crm`, `/admin/leads`, `/admin/advertising`, `/admin/revenue`, `/admin/alerts`, `/admin/emails`, `/admin/notifications`, and `/admin/whatsapp-inbox`.
+- Admin/super admin can open `/admin/docs` and read the Feature Completion Matrix, Go-Live Manual QA, Content/i18n Audit, and Operating Rules summaries.
 - Protected routes include noindex/noarchive.
 
 ## WhatsApp
