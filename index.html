@@ -18574,11 +18574,46 @@
         </div>`;
     }
 
+    function noResultsCardForGrid(id) {
+      const states = {
+        "sale-grid": {
+          cls: "border-green-100 bg-green-50 text-green-950 sm:col-span-2",
+          title: "No homes for sale match this search yet.",
+          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will help you find similar properties."
+        },
+        "rent-grid": {
+          cls: "border-blue-100 bg-blue-50 text-blue-950 sm:col-span-2",
+          title: "No rentals match this search yet.",
+          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will keep watching for suitable rentals."
+        },
+        "commercial-grid": {
+          cls: "border-amber-100 bg-amber-50 text-amber-950 md:col-span-2",
+          title: "No commercial spaces match this search yet.",
+          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what your business needs."
+        },
+        "land-grid": {
+          cls: "border-emerald-100 bg-emerald-50 text-emerald-950 md:col-span-2",
+          title: "No land listings match this search yet.",
+          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what plot you need. Always verify title and ownership before payment."
+        }
+      };
+      const state = states[id] || {
+        cls: "border-gray-200 bg-gray-50 text-gray-700",
+        title: "No properties found.",
+        body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need."
+      };
+      return `
+        <div class="col-span-full rounded-2xl border ${state.cls} p-5">
+          <h2 class="font-black text-lg">${state.title}</h2>
+          <p class="text-sm mt-2">${state.body}</p>
+        </div>`;
+    }
+
     function renderGrid(id, list) {
       const el = document.getElementById(id);
       if (!el) return;
       if (!list.length) {
-        el.innerHTML = `<div class="col-span-full bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-500">No properties found.</div>`;
+        el.innerHTML = noResultsCardForGrid(id);
         return;
       }
       el.innerHTML = list.map(propCard).join("");
@@ -18693,7 +18728,11 @@
       const el = document.getElementById("student-grid");
       if (!el) return;
       if (!list.length) {
-        el.innerHTML = `<div class="col-span-full bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-500">No student accommodation found for these filters.</div>`;
+        el.innerHTML = `
+          <div class="col-span-full rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950">
+            <h2 class="font-black text-lg">No student rooms match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need near campus.</p>
+          </div>`;
         return;
       }
       el.innerHTML = list.map(studentCard).join("");
@@ -18843,7 +18882,15 @@
         brokers: "/brokers",
         mortgage: "/mortgage",
         "ai-chatbot": "/discover-ai-chatbot",
+        advertise: "/advertise",
+        "how-it-works": "/how-it-works",
+        careers: "/careers",
+        help: "/help",
+        safety: "/safety",
         fraud: "/fraud",
+        "privacy-policy": "/privacy-policy",
+        "cookie-policy": "/cookie-policy",
+        terms: "/terms",
         "list-property": "/list-property",
         about: "/about",
         saved: "/saved",
@@ -19244,10 +19291,17 @@
         "/mortgage-finder": "mortgage",
         "/discover-ai-chatbot": "ai-chatbot",
         "/ai-chatbot": "ai-chatbot",
+        "/advertise": "advertise",
+        "/how-it-works": "how-it-works",
+        "/careers": "careers",
+        "/help": "help",
+        "/safety": "safety",
         "/fraud": "fraud",
         "/anti-fraud": "fraud",
-        "/safety": "fraud",
         "/report-fraud": "fraud",
+        "/privacy-policy": "privacy-policy",
+        "/cookie-policy": "cookie-policy",
+        "/terms": "terms",
         "/list-property": "list-property",
         "/about": "about",
         "/saved": "saved"

@@ -71,6 +71,30 @@ const PUBLIC_ROUTE_MARKERS = {
   '/list-property': ['List Your Property', 'Find address or place', 'Submit for review']
 };
 
+const PUBLIC_ROUTE_ACTIVE_IDS = {
+  '/': 'page-home',
+  '/for-sale': 'page-sale',
+  '/to-rent': 'page-rent',
+  '/student-accommodation': 'page-students',
+  '/students': 'page-students',
+  '/land': 'page-land',
+  '/commercial': 'page-commercial',
+  '/brokers': 'page-brokers',
+  '/mortgage': 'page-mortgage',
+  '/advertise': 'page-advertise',
+  '/about': 'page-about',
+  '/how-it-works': 'page-how-it-works',
+  '/careers': 'page-careers',
+  '/help': 'page-help',
+  '/safety': 'page-safety',
+  '/anti-fraud': 'page-fraud',
+  '/privacy-policy': 'page-privacy-policy',
+  '/cookie-policy': 'page-cookie-policy',
+  '/terms': 'page-terms',
+  '/report-fraud': 'page-fraud',
+  '/list-property': 'page-list-property'
+};
+
 const FORBIDDEN_PUBLIC_IDS = [
   'page-account',
   'page-finder-dashboard',
@@ -131,6 +155,8 @@ function run() {
     assertNoProtectedIds(publicRoute, publicHtml);
     assert(!publicText.includes('This area only This area only'), `${publicRoute} has duplicate location-scope labels`);
     assert(/class="[^"]*\bactive\b[^"]*"/.test(publicHtml), `${publicRoute} should have an active public content section`);
+    const activeId = PUBLIC_ROUTE_ACTIVE_IDS[publicRoute];
+    assert(new RegExp(`id="${activeId}"[^>]*class="[^"]*\\bactive\\b[^"]*"`, 'i').test(publicHtml), `${publicRoute} should activate ${activeId}`);
     const markers = PUBLIC_ROUTE_MARKERS[publicRoute] || [];
     assert(markers.some((marker) => publicText.toLowerCase().includes(marker.toLowerCase())), `${publicRoute} missing route-specific content marker`);
     assert(!publicHtml.includes('id="page-admin-docs"'), `${publicRoute} leaked admin docs`);
