@@ -1,8 +1,8 @@
 # MakaUg Performance Audit
 
-Generated: 2026-05-03T04:32:19.241Z
+Generated: 2026-05-03T04:39:05.810Z
 
-Base URL: http://127.0.0.1:5056
+Base URL: https://makaug.com
 
 Launch targets:
 - Route body visible <= 1500ms on normal desktop connection.
@@ -11,21 +11,21 @@ Launch targets:
 - Google Maps should not load on the homepage before active map use.
 - Google Maps should not load on homepage, mortgage, advertise, or login routes before active map use.
 
-Slowest route: `/` at 550ms.
+Slowest route: `/mortgage` at 1292ms.
 
 | Route | Status | Body visible ms | DCL ms | Load ms | Resources | JS | CSS | Google Maps | Console errors | Result |
 |---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
-| `/` | 200 | 550 | 550 | 1227 | 20 | 1 | 1 | no | 0 | pass |
-| `/to-rent` | 200 | 212 | 136 | 145 | 33 | 2 | 2 | no | 0 | pass |
-| `/for-sale` | 200 | 207 | 130 | 148 | 32 | 2 | 2 | no | 0 | pass |
-| `/land` | 200 | 184 | 123 | 131 | 43 | 2 | 2 | no | 0 | pass |
-| `/student-accommodation` | 200 | 239 | 164 | 193 | 36 | 2 | 2 | no | 0 | pass |
-| `/commercial` | 200 | 255 | 168 | 176 | 31 | 2 | 2 | no | 0 | pass |
-| `/brokers` | 200 | 191 | 165 | 174 | 31 | 2 | 2 | no | 0 | pass |
-| `/list-property` | 200 | 263 | 176 | 237 | 37 | 2 | 2 | no | 0 | pass |
-| `/advertise` | 200 | 189 | 142 | 146 | 19 | 1 | 1 | no | 0 | pass |
-| `/mortgage` | 200 | 227 | 145 | 153 | 20 | 1 | 1 | no | 0 | pass |
-| `/login` | 200 | 185 | 118 | 124 | 18 | 1 | 1 | no | 0 | pass |
+| `/` | 200 | 968 | 975 | 1114 | 16 | 1 | 1 | no | 0 | pass |
+| `/to-rent` | 200 | 917 | 893 | 902 | 29 | 8 | 1 | yes | 0 | pass |
+| `/for-sale` | 200 | 786 | 780 | 814 | 40 | 8 | 1 | yes | 0 | pass |
+| `/land` | 200 | 798 | 764 | 771 | 43 | 8 | 1 | yes | 0 | pass |
+| `/student-accommodation` | 200 | 1112 | 1556 | 1611 | 51 | 9 | 1 | yes | 0 | pass |
+| `/commercial` | 200 | 1011 | 1547 | 1555 | 50 | 9 | 1 | yes | 0 | pass |
+| `/brokers` | 200 | 1070 | 1505 | 1514 | 38 | 8 | 1 | yes | 0 | pass |
+| `/list-property` | 200 | 913 | 890 | 3659 | 58 | 10 | 1 | yes | 0 | pass |
+| `/advertise` | 200 | 1189 | 1605 | 1609 | 17 | 1 | 1 | no | 0 | pass |
+| `/mortgage` | 200 | 1292 | 1639 | 1648 | 19 | 1 | 1 | no | 0 | pass |
+| `/login` | 200 | 891 | 851 | 856 | 17 | 1 | 1 | no | 0 | pass |
 
 Notes:
 - These are lab probes from Playwright/Chrome against the configured base URL.
