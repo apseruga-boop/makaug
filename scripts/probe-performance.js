@@ -95,7 +95,13 @@ async function probeRoute(page, route) {
 
   const expectedPageId = EXPECTED_PAGE_IDS[route];
   const startedAt = Date.now();
-  const response = await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  let response;
+  try {
+    response = await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'commit', timeout: 30000 });
+  } catch (error) {
+    if (!/waitUntil/i.test(error.message || '')) throw error;
+    response = await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  }
   await page.waitForFunction((id) => {
     const el = document.getElementById(id);
     if (!el || !el.classList.contains('active')) return false;
