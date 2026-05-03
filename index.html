@@ -16413,6 +16413,7 @@
     let accountAccessDrawerAudience = "finder";
     let accountAccessDrawerLastFocus = null;
     let accountAccessDrawerStep = "account";
+    let accountAccessPendingOtp = null;
 
     const ACCOUNT_ACCESS_SCREENING = {
       finder: [
@@ -16671,6 +16672,16 @@
                   <span>I accept the Privacy Policy.</span>
                 </label>
               </div>
+              <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
+                <div class="rounded-2xl bg-green-50 border border-green-100 p-3">
+                  <div class="text-sm font-black text-green-950">Verify your account</div>
+                  <p id="account-access-otp-copy" class="text-xs text-green-800 mt-1">Enter the 6-digit code sent to your email.</p>
+                </div>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">Verification code</span>
+                  <input id="account-access-otp-code" inputmode="numeric" autocomplete="one-time-code" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-xl tracking-[0.3em] font-black text-center" placeholder="000000" maxlength="8">
+                </label>
+              </div>
               <div class="sticky bottom-0 -mx-4 mt-4 bg-white/95 backdrop-blur px-4 pb-1 pt-3 border-t border-gray-100">
                 <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="w-full min-h-[48px] bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
               </div>
@@ -16735,6 +16746,7 @@
 
     function openAccountAccessDrawer(mode = "signin", audience = "finder") {
       accountAccessDrawerMode = mode === "create" ? "create" : "signin";
+      accountAccessPendingOtp = null;
       accountAccessDrawerLastFocus = document.activeElement;
       const drawer = ensureAccountAccessDrawer();
       drawer.classList.remove("hidden");
@@ -16746,9 +16758,11 @@
       const passwordWrap = document.getElementById("account-access-password-wrap");
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
+      const otpWrap = document.getElementById("account-access-otp-wrap");
       if (passwordWrap) passwordWrap.classList.toggle("hidden", true);
       if (signInWrap) signInWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
       if (createWrap) createWrap.classList.toggle("hidden", accountAccessDrawerMode !== "create");
+      if (otpWrap) otpWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
       if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Continue";
       setAccountAccessRole(audience);
@@ -16773,10 +16787,12 @@
 
     function showAccountAccessCreate() {
       accountAccessDrawerMode = "create";
+      accountAccessPendingOtp = null;
       setTextById("account-access-mode-label", "Create account");
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
       const passwordWrap = document.getElementById("account-access-password-wrap");
+      const otpWrap = document.getElementById("account-access-otp-wrap");
       const identifier = (document.getElementById("account-access-identifier")?.value || "").trim();
       if (identifier) {
         if (identifier.includes("@")) {
@@ -16790,6 +16806,7 @@
       if (signInWrap) signInWrap.classList.add("hidden");
       if (createWrap) createWrap.classList.remove("hidden");
       if (passwordWrap) passwordWrap.classList.add("hidden");
+      if (otpWrap) otpWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
       if (continueBtn) continueBtn.textContent = "Create account";
       renderAccountAccessScreening();
@@ -16803,6 +16820,10 @@
     }
 
     async function continueAccountAccess() {
+      if (accountAccessDrawerMode === "verify") {
+        await submitAccountAccessOtp();
+        return;
+      }
       if (accountAccessDrawerMode === "create") {
         await submitAccountAccessCreate();
         return;
@@ -16899,19 +16920,51 @@
             profile_data: profileData
           }
         });
-        const otpCode = askOtpCode("email");
-        if (!otpCode) {
-          toast(register?.message || "Account created. Check your email for the verification code.");
-          return;
-        }
-        const verify = await apiRequest("/api/auth/verify-otp", {
-          method: "POST",
-          body: { email, code: otpCode, purpose: "signup", channel: "email" }
-        });
-        await finalizeAuth(verify?.data, "drawer_signup_otp", accountAccessDrawerAudience);
+        accountAccessPendingOtp = { email, audience: accountAccessDrawerAudience };
+        accountAccessDrawerMode = "verify";
+        document.getElementById("account-access-create-wrap")?.classList.add("hidden");
+        document.getElementById("account-access-signin-wrap")?.classList.add("hidden");
+        document.getElementById("account-access-password-wrap")?.classList.add("hidden");
+        document.getElementById("account-access-otp-wrap")?.classList.remove("hidden");
+        setTextById("account-access-mode-label", "Verify account");
+        setTextById("account-access-otp-copy", `Enter the 6-digit code sent to ${email}.`);
+        if (btn) btn.textContent = "Verify and continue";
+        updateAccountAccessProgress("verify");
+        toast(register?.message || "Check your email for the verification code.");
+        setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
       } catch (error) {
         updateAccountAccessProgress("details");
         toast(error.message || "Account creation failed.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (accountAccessDrawerMode !== "verify") btn.textContent = original;
+        }
+      }
+    }
+
+    async function submitAccountAccessOtp() {
+      const pending = accountAccessPendingOtp || {};
+      const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
+      if (!pending.email || !code) {
+        toast("Enter the verification code sent to your email.");
+        return;
+      }
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || "Verify and continue";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Verifying...";
+      }
+      try {
+        const verify = await apiRequest("/api/auth/verify-otp", {
+          method: "POST",
+          body: { email: pending.email, code, purpose: "signup", channel: "email" }
+        });
+        accountAccessPendingOtp = null;
+        await finalizeAuth(verify?.data, "drawer_signup_otp", pending.audience || accountAccessDrawerAudience);
+      } catch (error) {
+        toast(error.message || "Verification failed.");
       } finally {
         if (btn) {
           btn.disabled = false;

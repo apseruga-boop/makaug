@@ -261,6 +261,8 @@ function run() {
   assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
   assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
   assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(sourceHtml.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
+  assert(sourceHtml.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
   assert(sourceHtml.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
   assert(sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should show mobile-friendly progress steps');
 
