@@ -17,6 +17,7 @@
     "test:bot": "vitest run",
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
+    "admin:create-super": "node scripts/create-super-admin.js",
     "ai:export-training": "node scripts/export-ai-training-data.js",
     "ai:export-foundation": "node scripts/export-llm-foundation-data.js",
     "ai:run-agents": "node scripts/run-ai-agents.js",

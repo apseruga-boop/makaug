@@ -12,6 +12,10 @@ const {
   getAdvertisingPackages,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
+const {
+  getPaymentStatus,
+  handlePaymentWebhook
+} = require('../services/paymentProviderService');
 
 const router = express.Router();
 
@@ -372,6 +376,30 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
           : 'Payment provider is not configured. MakaUg has logged the invoice and admin can mark manual payment.'
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/payment-links/:id/status', requireAdvertiserAuth, async (req, res, next) => {
+  try {
+    const status = await getPaymentStatus(db, req.params.id);
+    if (!status) return res.status(404).json({ ok: false, error: 'Payment link not found' });
+    return res.json({ ok: true, data: status });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/payment-webhook/:provider?', async (req, res, next) => {
+  try {
+    const invoice = await handlePaymentWebhook(db, {
+      provider: req.params.provider || process.env.PAYMENT_PROVIDER || 'manual',
+      payload: req.body,
+      signature: req.get('x-payment-signature') || req.get('x-signature') || '',
+      req
+    });
+    return res.json({ ok: true, data: { invoice } });
   } catch (error) {
     return next(error);
   }

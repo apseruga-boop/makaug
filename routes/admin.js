@@ -51,6 +51,13 @@ const {
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const { addLeadActivity } = require('../services/leadService');
+const { getAlertSummary } = require('../services/alertSchedulerService');
+const { markInvoicePaidManually } = require('../services/paymentProviderService');
+const {
+  retryEmailLog,
+  retryNotification,
+  retryWhatsAppLog
+} = require('../services/notificationRetryService');
 
 const router = express.Router();
 
@@ -3454,6 +3461,87 @@ router.post('/leads/:id/tasks', async (req, res, next) => {
     return res.status(201).json({ ok: true, data: task.rows[0] });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.get('/alerts', async (_req, res, next) => {
+  try {
+    const summary = await getAlertSummary(db);
+    return res.json({ ok: true, data: summary });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/alerts/:id/retry', async (req, res, next) => {
+  try {
+    const alert = await db.query(
+      `UPDATE alert_matches
+       SET status = 'pending',
+           failure_reason = NULL
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id]
+    );
+    if (!alert.rows.length) return res.status(404).json({ ok: false, error: 'Alert match not found' });
+    await writeAudit('alert_retry_requested', { alert_match_id: req.params.id }, adminActorId(req));
+    return res.json({ ok: true, data: alert.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/payments/invoices/:id/manual-paid', async (req, res, next) => {
+  try {
+    const invoice = await markInvoicePaidManually(db, {
+      invoiceId: req.params.id,
+      adminUserId: req.adminAuth?.userId || null,
+      reason: cleanText(req.body.reason),
+      reference: cleanText(req.body.reference || req.body.payment_reference),
+      req
+    });
+    return res.json({ ok: true, data: invoice });
+  } catch (error) {
+    return res.status(error.status || 500).json({ ok: false, error: error.message || 'Manual payment update failed' });
+  }
+});
+
+router.post('/notifications/:id/retry', async (req, res, next) => {
+  try {
+    const result = await retryNotification(db, {
+      id: req.params.id,
+      adminUserId: req.adminAuth?.userId || null,
+      req
+    });
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return res.status(error.status || 500).json({ ok: false, error: error.message || 'Notification retry failed' });
+  }
+});
+
+router.post('/emails/:id/retry', async (req, res, next) => {
+  try {
+    const result = await retryEmailLog(db, {
+      id: req.params.id,
+      adminUserId: req.adminAuth?.userId || null,
+      req
+    });
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return res.status(error.status || 500).json({ ok: false, error: error.message || 'Email retry failed' });
+  }
+});
+
+router.post('/whatsapp-message-logs/:id/retry', async (req, res, next) => {
+  try {
+    const result = await retryWhatsAppLog(db, {
+      id: req.params.id,
+      adminUserId: req.adminAuth?.userId || null,
+      req
+    });
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return res.status(error.status || 500).json({ ok: false, error: error.message || 'WhatsApp retry failed' });
   }
 });
 

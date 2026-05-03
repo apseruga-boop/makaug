@@ -17,9 +17,9 @@ async function isAdminBearerToken(req) {
       [userId]
     );
     const user = result.rows[0];
-    if (user?.role !== 'admin' || user?.status !== 'active') return false;
+    if (!['admin', 'super_admin'].includes(user?.role) || user?.status !== 'active') return false;
 
-    req.adminAuth = { type: 'bearer', userId: user.id };
+    req.adminAuth = { type: 'bearer', userId: user.id, role: user.role };
     return true;
   } catch (_error) {
     return false;

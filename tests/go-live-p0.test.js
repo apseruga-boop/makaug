@@ -20,6 +20,8 @@ const {
 const { EMAIL_NOTIFICATION_EVENT_MATRIX } = require('../services/emailNotificationEventMatrix');
 const { buildListingReference, isListingReference } = require('../services/listingReferenceService');
 const { buildListingWhatsappMessage, buildWhatsAppUrl } = require('../services/whatsappLinkService');
+const { savedSearchMatchesListing } = require('../services/alertSchedulerService');
+const { normalizePaymentStatus, paymentProviderConfigured } = require('../services/paymentProviderService');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -94,6 +96,8 @@ function run() {
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
+  const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
+  const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
   for (const publicRoute of PUBLIC_ROUTES) {
     const publicHtml = sanitizePublicHtml(sourceHtml, { pathname: publicRoute });
     assertNoProtectedStrings(publicRoute, publicHtml);
@@ -114,13 +118,16 @@ function run() {
   assert(!homeText.includes('Our Mission'), 'homepage should not contain full about page body');
   assert(homeText.includes('Saved'), 'anonymous homepage should keep the saved entry point');
   assert(homeText.includes('Sign In'), 'anonymous homepage should show Sign In');
+  assert(!homeText.includes('Dashboard'), 'anonymous homepage should not show Dashboard before auth');
   assert(!homeText.includes('Sign Out'), 'anonymous homepage should not show Sign Out before auth');
   assert(homeText.includes('Find your next home, land, rental, or student room'), 'homepage hero copy should be the go-live wording');
   assert(!homeText.includes('Discover your perfect maka'), 'old incomplete homepage hero copy should be gone');
   assert(/id="top-signout-link"[^>]*><\/a>/.test(sourceHtml), 'public header sign-out link should start empty until auth is present');
+  assert(/id="top-dashboard-link"[^>]*><\/a>/.test(sourceHtml), 'public header dashboard link should start empty until auth is present');
   assert(sourceHtml.includes('id="top-dashboard-link"'), 'logged-in header dashboard link target should exist');
   assert(sourceHtml.includes('openSignedInDashboard()'), 'dashboard header link should route to the role dashboard');
   assert(sourceHtml.includes('translateListingLabel("Sign Out")'), 'logged-in header should inject Sign Out through auth UI');
+  assert(sourceHtml.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
   assert(homeText.includes('© 2026 MakaUg. All rights reserved.'), 'homepage footer should use MakaUg copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
 
@@ -216,10 +223,22 @@ function run() {
     "router.get('/dashboard'",
     "router.post('/campaigns'",
     "router.post('/campaigns/:id/payment-link'",
+    "router.get('/payment-links/:id/status'",
+    "router.post('/payment-webhook/:provider?'",
     'providerMissing',
     'createLead'
   ]) {
     assert(advertisingRoutes.includes(expected), `advertising workflow missing: ${expected}`);
+  }
+  for (const expected of [
+    "router.get('/alerts'",
+    "router.post('/alerts/:id/retry'",
+    "router.post('/payments/invoices/:id/manual-paid'",
+    "router.post('/notifications/:id/retry'",
+    "router.post('/emails/:id/retry'",
+    "router.post('/whatsapp-message-logs/:id/retry'"
+  ]) {
+    assert(adminRoutes.includes(expected), `Task 4 admin route missing: ${expected}`);
   }
   for (const expected of ['createLead', 'addLeadActivity', 'lead_activities', 'contacts']) {
     assert(leadService.includes(expected), `lead service missing ${expected}`);
@@ -239,6 +258,13 @@ function run() {
   ]) {
     assert(new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${tableName}`, 'i').test(task3Migration), `Task 3 migration missing ${tableName}`);
   }
+  assert(task4Migration.includes("'super_admin'"), 'Task 4 migration must allow super_admin role');
+  assert(/CREATE TABLE IF NOT EXISTS\s+admin_security_settings/i.test(task4Migration), 'Task 4 migration should add admin security settings');
+  assert(/CREATE TABLE IF NOT EXISTS\s+admin_audit_logs/i.test(task4Migration), 'Task 4 migration should add admin audit logs');
+  assert(superAdminScript.includes('SUPER_ADMIN_EMAIL'), 'super admin bootstrap must use SUPER_ADMIN_EMAIL');
+  assert(superAdminScript.includes('SUPER_ADMIN_INITIAL_PASSWORD'), 'super admin bootstrap must use one-time password env');
+  assert(superAdminScript.includes('bcrypt.hash'), 'super admin bootstrap must hash the password');
+  assert(!superAdminScript.includes('console.log(password'), 'super admin bootstrap must not print the password');
 
   for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);
@@ -252,6 +278,9 @@ function run() {
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin'), 'admin should access admin');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/crm'), 'admin should access CRM centre');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/leads'), 'admin should access lead centre');
+  for (const adminPath of ['/admin', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
+    assert(roleCanAccessProtectedPath({ role: 'super_admin', audience: 'super_admin' }, adminPath), `super_admin should access ${adminPath}`);
+  }
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/admin'), 'normal users must not access admin');
   assert(roleCanAccessProtectedPath({ role: 'agent_broker', audience: 'agent' }, '/broker-dashboard'), 'broker should access broker dashboard');
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/broker-dashboard'), 'finder must not access broker dashboard');
@@ -263,6 +292,7 @@ function run() {
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/advertiser-dashboard'), 'finder must not access advertiser dashboard');
 
   assert.strictEqual(normalizeSignupAudience('student-signup'), 'student');
+  assert.strictEqual(normalizeSignupAudience('super_admin'), 'super_admin');
   assert.strictEqual(normalizeSignupAudience('field-agent-signup'), 'field_agent');
   assert.strictEqual(roleForSignup({ audience: 'field_agent' }), 'field_agent');
   assert.strictEqual(roleForSignup({ audience: 'agent' }), 'agent_broker');
@@ -272,6 +302,19 @@ function run() {
   assert.strictEqual(dashboardForUser({ role: 'agent_broker', profile_data: { audience: 'agent' } }), '/broker-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'field_agent', profile_data: { audience: 'field_agent' } }), '/field-agent-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'buyer_renter', profile_data: { audience: 'advertiser' } }), '/advertiser-dashboard');
+  assert.strictEqual(dashboardForUser({ role: 'super_admin', profile_data: { audience: 'super_admin' } }), '/admin');
+
+  assert.strictEqual(normalizePaymentStatus('successful'), 'paid');
+  assert.strictEqual(normalizePaymentStatus('declined'), 'failed');
+  assert.strictEqual(typeof paymentProviderConfigured(), 'boolean');
+  assert(savedSearchMatchesListing(
+    { category: 'rent', location: 'Ntinda', max_price: 2000000, alert_channels: ['in_app'] },
+    { id: 'listing-1', listing_type: 'rent', area: 'Ntinda', district: 'Kampala', price: 1400000 }
+  ), 'saved-search matcher should match a relevant approved listing');
+  assert(!savedSearchMatchesListing(
+    { category: 'rent', location: 'Ntinda', max_price: 1000000 },
+    { id: 'listing-2', listing_type: 'rent', area: 'Ntinda', price: 1400000 }
+  ), 'saved-search matcher should reject over-budget listings');
 
   const listingReference = buildListingReference(new Date('2026-05-02T08:30:00.000Z'));
   assert(isListingReference(listingReference), `listing reference should match production format: ${listingReference}`);

@@ -21,6 +21,7 @@ const {
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { buildListingReference } = require('../services/listingReferenceService');
+const { matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
@@ -1451,7 +1452,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const currentResult = await db.query(
-      `SELECT id, status, moderation_checklist
+      `SELECT *
        FROM properties
        WHERE id = $1
        LIMIT 1`,
@@ -1668,6 +1669,11 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
     }
 
+    let alertMatching = null;
+    if (nextStatus === 'approved' && current.status !== 'approved') {
+      alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+    }
+
     return res.json({
       ok: true,
       data: {
@@ -1675,6 +1681,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
         lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent),
         notification,
+        alert_matching: alertMatching,
         warnings: approvalWarnings,
         automated_review: automatedReview || undefined
       }

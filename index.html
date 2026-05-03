@@ -770,7 +770,7 @@
           <option value="EUR">€ (EUR)</option>
         </select>
         <a id="top-saved-link" onclick="showPage('saved')" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
-        <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"><i class="fas fa-table-cells-large text-green-300"></i> Dashboard</a>
+        <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"></a>
         <a id="top-signin-link" onclick="openAuthSignIn('finder')" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
         <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
       </div>
@@ -7665,16 +7665,16 @@
       } catch (e) {}
     }
 
-    function derivePortalMode(user, preferredAudience = "") {
-      const preferred = String(preferredAudience || "").toLowerCase();
-      const profileData = user?.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
-      if (preferred === "admin") return "admin";
+	    function derivePortalMode(user, preferredAudience = "") {
+	      const preferred = String(preferredAudience || "").toLowerCase();
+	      const profileData = user?.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
+	      if (preferred === "admin" || preferred === "super_admin") return "admin";
       if (preferred === "field_agent" || preferred === "field") return "field_agent";
       if (preferred === "agent") return "agent";
       if (preferred === "advertiser") return "advertiser";
       if (preferred === "student") return "student";
       if (preferred === "finder") return "finder";
-      if (user?.role === "admin") return "admin";
+	      if (user?.role === "admin" || user?.role === "super_admin") return "admin";
       if (user?.role === "field_agent") return "field_agent";
       if (user?.role === "agent_broker") return "agent";
       if (profileData.account_kind === "advertiser" || profileData.audience === "advertiser") return "advertiser";
@@ -12535,18 +12535,30 @@
       renderAdminDashboard();
     }
 
-    function applyAuthUi() {
+	    function applyAuthUi() {
       const signEl = document.getElementById("top-signin-link");
       const dashboardEl = document.getElementById("top-dashboard-link");
       const signOutEl = document.getElementById("top-signout-link");
       if (!signEl) return;
-      if (authState?.user) {
-        signEl.classList.add("hidden");
-        if (dashboardEl) {
-          dashboardEl.innerHTML = `<i class="fas fa-table-cells-large text-green-300"></i> Dashboard`;
-          dashboardEl.onclick = () => openSignedInDashboard();
-          dashboardEl.classList.remove("hidden");
-        }
+	      if (authState?.user) {
+	        signEl.classList.add("hidden");
+	        if (dashboardEl) {
+	          const mode = derivePortalMode(authState.user, authState.user.portal_mode);
+	          const label = mode === "admin"
+	            ? "Admin"
+	            : mode === "student"
+	              ? "Student Dashboard"
+	              : mode === "agent"
+	                ? "Broker Dashboard"
+	                : mode === "field_agent"
+	                  ? "Field Agent Dashboard"
+	                  : mode === "advertiser"
+	                    ? "Advertiser Dashboard"
+	                    : "Dashboard";
+	          dashboardEl.innerHTML = `<i class="fas fa-table-cells-large text-green-300"></i> ${label}`;
+	          dashboardEl.onclick = () => openSignedInDashboard();
+	          dashboardEl.classList.remove("hidden");
+	        }
         if (signOutEl) {
           signOutEl.innerHTML = `<i class="fas fa-right-from-bracket text-green-300"></i> ${translateListingLabel("Sign Out")}`;
           signOutEl.classList.remove("hidden");
@@ -12568,13 +12580,14 @@
     }
 
     function mapRoleLabel(role) {
-      const map = {
-        buyer_renter: "Buyer / Renter",
-        property_owner: "Property Owner",
-        agent_broker: "Broker",
-        field_agent: "Field Agent",
-        admin: "Admin"
-      };
+	      const map = {
+	        buyer_renter: "Buyer / Renter",
+	        property_owner: "Property Owner",
+	        agent_broker: "Broker",
+	        field_agent: "Field Agent",
+	        admin: "Admin",
+	        super_admin: "Super Admin"
+	      };
       return map[role] || role || "-";
     }
 

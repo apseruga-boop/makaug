@@ -1,6 +1,7 @@
 'use strict';
 
 const ROLE_DASHBOARD_MAP = {
+  super_admin: '/admin',
   admin: '/admin',
   agent_broker: '/broker-dashboard',
   field_agent: '/field-agent-dashboard',
@@ -14,7 +15,7 @@ function normalizeSignupAudience(value = '') {
   if (['agent', 'broker', 'agent_broker', 'broker-signup'].includes(input)) return 'agent';
   if (['field', 'field_agent', 'field-agent', 'field-agent-signup'].includes(input)) return 'field_agent';
   if (['advertiser', 'advertiser-signup'].includes(input)) return 'advertiser';
-  if (['admin'].includes(input)) return 'admin';
+  if (['admin', 'super_admin'].includes(input)) return input;
   return 'finder';
 }
 
@@ -49,7 +50,7 @@ function roleForSignup({ roleInput = '', audience = '' } = {}) {
 function dashboardForUser(user = {}, preferredAudience = '') {
   const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
   const audience = normalizeSignupAudience(preferredAudience || profile.audience || profile.account_kind || profile.seeker_type);
-  if (user.role === 'admin' || audience === 'admin') return '/admin';
+  if (user.role === 'admin' || user.role === 'super_admin' || audience === 'admin' || audience === 'super_admin') return '/admin';
   if (user.role === 'field_agent' || audience === 'field_agent') return '/field-agent-dashboard';
   if (user.role === 'agent_broker' || audience === 'agent') return '/broker-dashboard';
   if (audience === 'student') return '/student-dashboard';

@@ -23,6 +23,11 @@ const {
   canUseAdminOtpOverride,
   isAdminOtpOverrideMatch
 } = require('../utils/adminOtpOverride');
+const {
+  ensureAdminSecuritySettings,
+  recordAdminLogin,
+  recordAdminPasswordChange
+} = require('../services/adminSecurityService');
 
 const router = express.Router();
 
@@ -828,9 +833,21 @@ router.post('/login', async (req, res, next) => {
 
     const token = createToken(user);
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    const adminSecurity = await ensureAdminSecuritySettings(db, user);
+    await recordAdminLogin(db, user, req);
     setAuthCookie(req, res, token);
 
-    return res.json({ ok: true, data: { token, user: publicUser(user) } });
+    return res.json({
+      ok: true,
+      data: {
+        token,
+        user: publicUser(user),
+        admin_security: adminSecurity ? {
+          mfa_enabled: adminSecurity.mfa_enabled === true,
+          force_password_change: adminSecurity.force_password_change === true
+        } : undefined
+      }
+    });
   } catch (error) {
     return next(error);
   }
@@ -1095,6 +1112,8 @@ router.post('/verify-otp', async (req, res, next) => {
 
     const token = createToken(user);
     await db.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    const adminSecurity = await ensureAdminSecuritySettings(db, user);
+    await recordAdminLogin(db, user, req);
     setAuthCookie(req, res, token);
 
     if (purpose === 'signup' && user.email) {
@@ -1139,15 +1158,20 @@ router.post('/verify-otp', async (req, res, next) => {
       payloadSummary: { purpose, redirect_url: dashboardForUser(user), contact_channel: channel }
     });
 
-    return res.json({
-      ok: true,
-      data: buildOtpSuccessPayload({
-        token,
-        user: publicPayload,
-        preferredAudience: publicPayload.profile_data?.audience || '',
-        message: 'Verification complete. Opening your MakaUg dashboard.'
-      })
+    const successPayload = buildOtpSuccessPayload({
+      token,
+      user: publicPayload,
+      preferredAudience: publicPayload.profile_data?.audience || '',
+      message: 'Verification complete. Opening your MakaUg dashboard.'
     });
+    if (adminSecurity) {
+      successPayload.admin_security = {
+        mfa_enabled: adminSecurity.mfa_enabled === true,
+        force_password_change: adminSecurity.force_password_change === true
+      };
+    }
+
+    return res.json({ ok: true, data: successPayload });
   } catch (error) {
     return next(error);
   }
@@ -1255,6 +1279,7 @@ router.post('/change-password', async (req, res, next) => {
 
     const newHash = await bcrypt.hash(newPassword, 10);
     await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [auth.userId, newHash]);
+    await recordAdminPasswordChange(db, user, req);
 
     return res.json({ ok: true, data: { changed: true } });
   } catch (error) {

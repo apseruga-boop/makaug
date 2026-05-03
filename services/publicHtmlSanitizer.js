@@ -124,12 +124,14 @@ function roleCanAccessProtectedPath(auth = {}, pathname = '') {
   const role = String(auth?.role || '').toLowerCase();
   const audience = String(auth?.audience || auth?.account_kind || '').toLowerCase();
   const pathName = normalizePath(pathname).toLowerCase();
-  if (pathName.startsWith('/admin')) return role === 'admin';
-  if (pathName.startsWith('/broker-dashboard')) return role === 'agent_broker' || role === 'admin';
-  if (pathName.startsWith('/field-agent-dashboard')) return role === 'field_agent' || role === 'admin';
-  if (pathName.startsWith('/student-dashboard')) return role === 'admin' || audience === 'student';
-  if (pathName.startsWith('/advertiser-dashboard')) return role === 'admin' || audience === 'advertiser';
-  if (pathName.startsWith('/dashboard')) return role === 'admin' || audience === 'finder' || audience === 'property_finder' || !audience;
+  const isAdminRole = role === 'admin' || role === 'super_admin';
+  if (role === 'super_admin') return true;
+  if (pathName.startsWith('/admin')) return isAdminRole;
+  if (pathName.startsWith('/broker-dashboard')) return role === 'agent_broker' || isAdminRole;
+  if (pathName.startsWith('/field-agent-dashboard')) return role === 'field_agent' || isAdminRole;
+  if (pathName.startsWith('/student-dashboard')) return isAdminRole || audience === 'student';
+  if (pathName.startsWith('/advertiser-dashboard')) return isAdminRole || audience === 'advertiser';
+  if (pathName.startsWith('/dashboard')) return isAdminRole || audience === 'finder' || audience === 'property_finder' || !audience;
   return Boolean(role);
 }
 
