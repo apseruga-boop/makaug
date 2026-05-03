@@ -769,9 +769,9 @@
           <option value="GBP">£ (GBP)</option>
           <option value="EUR">€ (EUR)</option>
         </select>
-        <a id="top-saved-link" onclick="showPage('saved')" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
+        <a id="top-saved-link" href="/saved" onclick="handleSavedClick(event)" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
         <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"></a>
-        <a id="top-signin-link" onclick="openAuthSignIn('finder')" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
+        <a id="top-signin-link" href="/login" onclick="openAuthSignIn('finder')" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
         <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
       </div>
     </div>
@@ -787,31 +787,32 @@
         </div>
       </a>
       <div class="hidden lg:flex items-center gap-0.5">
-        <a id="nav-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
-        <a id="nav-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
-        <a id="nav-students" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
-        <a id="nav-commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
-        <a id="nav-land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
-        <a id="nav-brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
-        <a id="nav-mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
-        <a id="nav-ai" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
-        <a id="nav-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
+        <a id="nav-sale" href="/for-sale" onclick="showPage('sale')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">For Sale</a>
+        <a id="nav-rent" href="/to-rent" onclick="showPage('rent')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">To Rent</a>
+        <a id="nav-students" href="/student-accommodation" onclick="showPage('students')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Students</a>
+        <a id="nav-commercial" href="/commercial" onclick="showPage('commercial')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Commercial</a>
+        <a id="nav-land" href="/land" onclick="showPage('land')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Land</a>
+        <a id="nav-brokers" href="/brokers" onclick="showPage('brokers')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Find Brokers</a>
+        <a id="nav-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Mortgage Finder</a>
+        <a id="nav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Discover AI Chatbot</a>
+        <a id="nav-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
       </div>
       <div class="flex items-center gap-2">
-        <button id="nav-list-btn" onclick="openListPropertyOptions()" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</button>
+        <a id="nav-list-btn" data-testid="advertise-property-cta" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</a>
         <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
     </div>
     <div id="mobile-menu" class="lg:hidden border-t border-gray-100 flex-col gap-1 px-4 py-3 bg-white">
-      <a id="mnav-sale" onclick="showPage('sale');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">For Sale</a>
-      <a id="mnav-rent" onclick="showPage('rent');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">To Rent</a>
-      <a id="mnav-students" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
-      <a id="mnav-commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
-      <a id="mnav-land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
-      <a id="mnav-brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
-      <a id="mnav-mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
-      <a id="mnav-ai" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
-      <a id="mnav-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
+      <a id="mnav-sale" href="/for-sale" onclick="showPage('sale');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">For Sale</a>
+      <a id="mnav-rent" href="/to-rent" onclick="showPage('rent');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">To Rent</a>
+      <a id="mnav-students" href="/student-accommodation" onclick="showPage('students');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Students</a>
+      <a id="mnav-commercial" href="/commercial" onclick="showPage('commercial');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Commercial</a>
+      <a id="mnav-land" href="/land" onclick="showPage('land');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Land</a>
+      <a id="mnav-brokers" href="/brokers" onclick="showPage('brokers');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Find Brokers</a>
+      <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
+      <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
+      <a id="mnav-fraud" href="/anti-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
+      <a id="mnav-advertise" data-testid="mobile-advertise-property-cta" href="/advertise" onclick="handleAdvertisePropertyCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">Advertise Property</a>
     </div>
   </nav>
 
@@ -3176,9 +3177,30 @@
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
+              <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
+          </div>
+        </div>
+
+        <div id="admin-launch-control" class="bg-white border border-amber-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Launch Control</h3>
+              <p class="text-sm text-gray-500 mt-1">CTA health, public route rendering, performance probes, and launch-readiness docs for go-live checks.</p>
+            </div>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-800">Admin only</span>
+          </div>
+          <div class="grid md:grid-cols-3 gap-3 text-sm">
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>CTA Health</strong><br><span class="text-gray-500">Run <code>npm run probe:click-actions</code> and review <code>docs/cta-action-matrix.md</code>.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Performance Health</strong><br><span class="text-gray-500">Run <code>npm run probe:performance</code> and review <code>docs/performance-audit.md</code>.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Route Health</strong><br><span class="text-gray-500">Run public HTML and browser route probes before launch.</span></div>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <a href="/admin/docs" class="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-4 py-2 text-sm font-semibold">View Admin Docs</a>
+            <a href="/admin/notifications" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Notification Failures</a>
+            <a href="/admin/emails" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Email Logs</a>
           </div>
         </div>
 
@@ -3883,39 +3905,39 @@
         <div>
           <h4 id="footer-col-properties" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Properties</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a id="footer-link-sale" onclick="showPage('sale')" class="block cursor-pointer hover:text-white">Houses for Sale</a>
-            <a id="footer-link-rent" onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
-            <a id="footer-link-students" onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
-            <a id="footer-link-commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
-            <a id="footer-link-land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
-            <a id="footer-link-mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
-            <a id="footer-link-list-free" onclick="openListPropertyOptions()" class="block cursor-pointer hover:text-white">List a Property Free</a>
-            <a id="footer-link-looking" onclick="openModal('looking-modal')" class="block cursor-pointer hover:text-white">Looking For...</a>
+            <a id="footer-link-sale" href="/for-sale" onclick="showPage('sale')" class="block cursor-pointer hover:text-white">Houses for Sale</a>
+            <a id="footer-link-rent" href="/to-rent" onclick="showPage('rent')" class="block cursor-pointer hover:text-white">Houses for Rent</a>
+            <a id="footer-link-students" href="/student-accommodation" onclick="showPage('students')" class="block cursor-pointer hover:text-white">Student Housing</a>
+            <a id="footer-link-commercial" href="/commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
+            <a id="footer-link-land" href="/land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
+            <a id="footer-link-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
+            <a id="footer-link-list-free" href="/list-property" onclick="showPage('list-property')" class="block cursor-pointer hover:text-white">List a Property Free</a>
+            <a id="footer-link-looking" href="/dashboard?intent=property-need" onclick="handlePropertyNeedCta(event)" class="block cursor-pointer hover:text-white">Looking For...</a>
           </div>
         </div>
 
         <div>
           <h4 id="footer-col-company" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Company</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a id="footer-link-about" onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
-            <a id="footer-link-how" onclick="openPageMod('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
-            <a id="footer-link-broker" onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
-            <a id="footer-link-register-broker" onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
-            <a id="footer-link-advertise" onclick="openPageMod('advertise')" class="block cursor-pointer hover:text-white">Advertise with Us</a>
-            <a id="footer-link-careers" onclick="openPageMod('careers')" class="block cursor-pointer hover:text-white">Careers</a>
+            <a id="footer-link-about" href="/about" onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
+            <a id="footer-link-how" href="/how-it-works" onclick="showPage('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
+            <a id="footer-link-broker" href="/brokers" onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
+            <a id="footer-link-register-broker" href="/broker-signup" onclick="openAuthSignUp('agent')" class="block cursor-pointer hover:text-white">Register as Broker</a>
+            <a id="footer-link-advertise" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="block cursor-pointer hover:text-white">Advertise with Us</a>
+            <a id="footer-link-careers" href="/careers" onclick="showPage('careers')" class="block cursor-pointer hover:text-white">Careers</a>
           </div>
         </div>
 
         <div>
           <h4 id="footer-col-legal" class="text-xs font-bold uppercase tracking-widest text-green-400 mb-3">Legal & Support</h4>
           <div class="space-y-2 text-sm text-green-200">
-            <a id="footer-link-terms" onclick="openPageMod('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
-            <a id="footer-link-privacy" onclick="openPageMod('privacy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
-            <a id="footer-link-cookies" onclick="openPageMod('cookies')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
-            <a id="footer-link-anti-fraud" onclick="openPageMod('anti-fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
-            <a id="footer-link-help" onclick="openPageMod('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
-            <a id="footer-link-report" onclick="openModal('report-modal')" class="block cursor-pointer hover:text-white">Report a Listing</a>
-            <a id="footer-link-safety" onclick="openPageMod('safety')" class="block cursor-pointer hover:text-white">Safety Tips</a>
+            <a id="footer-link-terms" href="/terms" onclick="showPage('terms')" class="block cursor-pointer hover:text-white">Terms & Conditions</a>
+            <a id="footer-link-privacy" href="/privacy-policy" onclick="showPage('privacy-policy')" class="block cursor-pointer hover:text-white">Privacy Policy</a>
+            <a id="footer-link-cookies" href="/cookie-policy" onclick="showPage('cookie-policy')" class="block cursor-pointer hover:text-white">Cookie Policy</a>
+            <a id="footer-link-anti-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Anti-Fraud Policy</a>
+            <a id="footer-link-help" href="/help" onclick="showPage('help')" class="block cursor-pointer hover:text-white">Help Centre</a>
+            <a id="footer-link-report" href="/report-fraud" onclick="showPage('fraud')" class="block cursor-pointer hover:text-white">Report a Listing</a>
+            <a id="footer-link-safety" href="/safety" onclick="showPage('safety')" class="block cursor-pointer hover:text-white">Safety Tips</a>
           </div>
         </div>
       </div>
@@ -7687,6 +7709,61 @@
           anonymize_ip: true
         });
       } catch (e) {}
+    }
+
+    function sendWebVitalMetric(metricName, value, rating = "") {
+      if (!metricName || !Number.isFinite(value)) return;
+      try {
+        fetch(apiUrl("/api/analytics/web-vitals"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          keepalive: true,
+          body: JSON.stringify({
+            metricName,
+            value,
+            rating,
+            route: window.location.pathname || "/",
+            sessionId: getAnalyticsClientId(),
+            device: window.innerWidth < 768 ? "mobile" : "desktop",
+            connection: navigator.connection?.effectiveType || ""
+          })
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    function initWebVitalsTracking() {
+      if (!("PerformanceObserver" in window)) return;
+      try {
+        new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          const last = entries[entries.length - 1];
+          if (last) sendWebVitalMetric("LCP", last.startTime, last.startTime <= 2500 ? "good" : "needs_improvement");
+        }).observe({ type: "largest-contentful-paint", buffered: true });
+      } catch (e) {}
+      try {
+        let cls = 0;
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (!entry.hadRecentInput) cls += entry.value || 0;
+          }
+          sendWebVitalMetric("CLS", cls, cls <= 0.1 ? "good" : "needs_improvement");
+        }).observe({ type: "layout-shift", buffered: true });
+      } catch (e) {}
+      try {
+        new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            const duration = Number(entry.duration || 0);
+            if (duration) sendWebVitalMetric("INP", duration, duration <= 200 ? "good" : "needs_improvement");
+          }
+        }).observe({ type: "event", buffered: true, durationThreshold: 40 });
+      } catch (e) {}
+      window.addEventListener("load", () => {
+        const nav = performance.getEntriesByType("navigation")[0];
+        if (nav) {
+          sendWebVitalMetric("TTFB", nav.responseStart, nav.responseStart <= 800 ? "good" : "needs_improvement");
+          sendWebVitalMetric("FCP", performance.getEntriesByName("first-contentful-paint")[0]?.startTime || 0, "observed");
+        }
+      }, { once: true });
     }
 
     function normalizePhoneInput(value) {
@@ -16133,11 +16210,71 @@
     }
 
     function openListPropertyOptions() {
+      if (!document.getElementById("list-choice-modal")) {
+        trackEvent("list_property_cta_clicked", { source: "public_route_fallback" });
+        window.location.href = "/list-property";
+        return;
+      }
       if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
         window.open("https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20list%20my%20property", "_blank", "noopener");
         return;
       }
       openModal("list-choice-modal");
+    }
+
+    function publicRouteForPageModal(page) {
+      return {
+        advertise: "/advertise",
+        "how-it-works": "/how-it-works",
+        careers: "/careers",
+        help: "/help",
+        safety: "/safety",
+        terms: "/terms",
+        privacy: "/privacy-policy",
+        cookies: "/cookie-policy",
+        "anti-fraud": "/anti-fraud"
+      }[String(page || "").toLowerCase()] || "/";
+    }
+
+    function handleAdvertisePropertyCta(event) {
+      if (event) event.preventDefault();
+      trackEvent("advertise_property_cta_clicked", {
+        source_page: window.location.pathname || "/",
+        signed_in: !!authState?.user
+      });
+      const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+      if (mode === "admin") {
+        window.location.href = "/admin/advertising";
+        return;
+      }
+      if (mode === "advertiser") {
+        window.location.href = "/advertiser-dashboard?tab=create-campaign";
+        return;
+      }
+      window.location.href = "/advertise";
+    }
+
+    function handleSavedClick(event) {
+      if (!authState?.user) {
+        if (event) event.preventDefault();
+        trackEvent("saved_auth_required_clicked", { source_page: window.location.pathname || "/" });
+        openAuthSignIn("finder");
+        return;
+      }
+      if (event) event.preventDefault();
+      window.location.href = "/dashboard?tab=saved";
+    }
+
+    function handlePropertyNeedCta(event) {
+      if (document.getElementById("looking-modal")) {
+        if (event) event.preventDefault();
+        openModal("looking-modal");
+        return;
+      }
+      if (!authState?.user && event) {
+        event.preventDefault();
+        openAuthSignIn("finder");
+      }
     }
 
     function openAuthSignIn(audience = "finder") {
@@ -16151,6 +16288,11 @@
             : (normalized === "advertiser"
               ? "advertiser"
               : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
+      if (!document.getElementById("auth-modal")) {
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `/login?audience=${encodeURIComponent(resolved)}&next=${next}`;
+        return;
+      }
       openModal("auth-modal");
       setAuthModalTab("signin");
       setAuthSignInAudience(resolved);
@@ -16165,6 +16307,17 @@
           : (normalized === "advertiser"
             ? "advertiser"
             : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")));
+      if (!document.getElementById("auth-modal")) {
+        const route = resolved === "student"
+          ? "/student-signup"
+          : (resolved === "agent"
+            ? "/broker-signup"
+            : (resolved === "field_agent"
+              ? "/field-agent-signup"
+              : (resolved === "advertiser" ? "/advertiser-signup" : "/signup")));
+        window.location.href = route;
+        return;
+      }
       openModal("auth-modal");
       setAuthModalTab("signup");
       setAuthSignUpAudience(resolved);
@@ -16601,6 +16754,10 @@
         return;
       }
       const body = document.getElementById("page-modal-body");
+      if (!body) {
+        window.location.href = publicRouteForPageModal(page);
+        return;
+      }
       if (body) body.innerHTML = html;
       if (body) localizePageModalContent(body);
       openModal("page-modal");
@@ -18860,8 +19017,10 @@
       renderGrid("land-grid", publicListings.filter((p) => normalizeType(p.type) === "land"));
       renderBrokers("home-brokers", getFeaturedBrokers(getBrokerDirectory()).slice(0, 3));
       renderBrokers("brokers-grid", getBrokerDirectory());
-      document.getElementById("sale-count").textContent = publicListings.filter((p) => normalizeType(p.type) === "sale").length;
-      document.getElementById("rent-count").textContent = publicListings.filter((p) => normalizeType(p.type) === "rent").length;
+      const saleCountEl = document.getElementById("sale-count");
+      if (saleCountEl) saleCountEl.textContent = publicListings.filter((p) => normalizeType(p.type) === "sale").length;
+      const rentCountEl = document.getElementById("rent-count");
+      if (rentCountEl) rentCountEl.textContent = publicListings.filter((p) => normalizeType(p.type) === "rent").length;
       renderSaved();
       renderFinderDashboard();
       renderStudentDashboard();
@@ -18927,6 +19086,7 @@
           try { m.invalidateSize(); } catch (e) {}
         });
       }, 200);
+      scheduleMapsInit();
       if (page && page !== previousPage) {
         trackEvent("page_view", { page });
       }
@@ -19446,7 +19606,8 @@
           const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
           return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
         });
-        document.getElementById("sale-count").textContent = list.length;
+        const saleCountEl = document.getElementById("sale-count");
+        if (saleCountEl) saleCountEl.textContent = list.length;
         renderGrid("sale-grid", list);
         setMapMarkers("map-sale", list);
       } else if (page === "rent") {
@@ -19474,7 +19635,8 @@
         if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
         if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
         if (sort === "newest") list.sort(sortListingsByNewest);
-        document.getElementById("rent-count").textContent = list.length;
+        const rentCountEl = document.getElementById("rent-count");
+        if (rentCountEl) rentCountEl.textContent = list.length;
         renderGrid("rent-grid", list);
         setMapMarkers("map-rent", list);
       }
@@ -23852,6 +24014,30 @@
       }
     }
 
+    let mapsInitScheduled = false;
+    let mapsInitStarted = false;
+
+    function scheduleMapsInit() {
+      if (mapsInitStarted || mapsInitScheduled) return;
+      mapsInitScheduled = true;
+      const activePage = document.querySelector(".page.active");
+      const hasActiveMap = !!activePage?.querySelector(".map-h, #map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers");
+      const onHomeOnly = activePage?.id === "page-home";
+      const delay = hasActiveMap && !onHomeOnly ? 300 : 2500;
+      const start = () => {
+        if (mapsInitStarted) return;
+        mapsInitStarted = true;
+        initMaps().catch((error) => console.warn("Map initialization skipped", error));
+      };
+      if (onHomeOnly) {
+        window.setTimeout(start, delay);
+      } else if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(start, { timeout: Math.max(delay, 1200) });
+      } else {
+        window.setTimeout(start, delay);
+      }
+    }
+
     function addMarkers(mapId, list) {
       if (!maps[mapId]) return;
       if (mapProviders[mapId] === "google") {
@@ -23981,6 +24167,19 @@
 
     function openModal(id) {
       const el = document.getElementById(id);
+      if (!el) {
+        const fallback = {
+          "auth-modal": "/login",
+          "list-choice-modal": "/list-property",
+          "looking-modal": "/dashboard?intent=property-need",
+          "report-modal": "/report-fraud",
+          "broker-reg-modal": "/broker-signup",
+          "page-modal": "/help",
+          "save-property-modal": "/login?next=%2Fdashboard%3Ftab%3Dsaved"
+        }[id];
+        if (fallback) window.location.href = fallback;
+        return false;
+      }
       if (el) el.classList.add("open");
       if (id === "auth-modal") {
         setAuthModalTab("signin");
@@ -23993,6 +24192,7 @@
         resetAgentProfilePhoto();
       }
       syncModalOpenState();
+      return true;
     }
 
     function closeModal(id) {
@@ -24052,6 +24252,7 @@
       handleOAuthReturnFromUrl();
       setLang(savedLang || currentLang, true, false);
       initFrontendAnalytics();
+      initWebVitalsTracking();
       setHeroLocationFilter(currentTab);
       setHeroRadiusState(currentTab);
       setHeroContextFilter(currentTab);
@@ -24076,7 +24277,7 @@
       });
       renderMortgageFinder();
       loadMortgageRates();
-      initMaps();
+      scheduleMapsInit();
       refreshBrokersFromApi({ silent: true }).then((loaded) => {
         if (loaded) {
           renderAll();

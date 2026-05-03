@@ -115,49 +115,57 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     title: 'Advertise on MakaUg',
     eyebrow: 'Sponsored campaigns',
     body: 'Create sponsored property campaigns, broker spotlights, student accommodation promotions, and WhatsApp-first lead campaigns with transparent review before anything goes live.',
-    ctas: ['Advertiser signup', 'Campaign packages', 'Ask MakaUg on WhatsApp']
+    ctas: ['Advertiser signup', 'Campaign packages', 'Ask MakaUg on WhatsApp'],
+    links: ['/advertiser-signup', '/advertiser-dashboard', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20advertise']
   },
   '/how-it-works': {
     title: 'How MakaUg Works',
     eyebrow: 'Simple property journeys',
     body: 'Search public listings, save what matters, contact verified listers with property context, list property for review, and use MakaUg support when you need help.',
-    ctas: ['Search property', 'List property', 'Get help']
+    ctas: ['Search property', 'List property', 'Get help'],
+    links: ['/for-sale', '/list-property', '/help']
   },
   '/careers': {
     title: 'Careers at MakaUg',
     eyebrow: 'Build Uganda-first property technology',
     body: 'MakaUg works with people who care about trust, field operations, student accommodation, advertising, data quality, and safer property discovery.',
-    ctas: ['Send career interest', 'Contact MakaUg', 'Field agent signup']
+    ctas: ['Send career interest', 'Contact MakaUg', 'Field agent signup'],
+    links: ['mailto:info@makaug.com?subject=Career%20interest%20-%20MakaUg', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
   },
   '/help': {
     title: 'MakaUg Help Centre',
     eyebrow: 'Help and WhatsApp support',
     body: 'Get help with search, saved properties, listing submission, broker registration, student accommodation, viewings, callbacks, fraud reports, and account access.',
-    ctas: ['WhatsApp support', 'Report an issue', 'Tell MakaUg what you need']
+    ctas: ['WhatsApp support', 'Report an issue', 'Tell MakaUg what you need'],
+    links: ['https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
   },
   '/safety': {
     title: 'MakaUg Safety Tips',
     eyebrow: 'Verify before paying',
     body: 'View property before payment, verify broker or owner identity, use traceable payments, check land title and seller authority, and report suspicious listings quickly.',
-    ctas: ['Report suspicious listing', 'Ask MakaUg on WhatsApp', 'Read anti-fraud guidance']
+    ctas: ['Report suspicious listing', 'Ask MakaUg on WhatsApp', 'Read anti-fraud guidance'],
+    links: ['/report-fraud', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20safety%20help', '/anti-fraud']
   },
   '/terms': {
     title: 'MakaUg Terms and Conditions',
     eyebrow: 'Legal review required',
     body: 'These terms explain acceptable use, listing responsibilities, moderation, advertising, payments, user content, account access, and platform limitations. Final legal review is still required before formal publication.',
-    ctas: ['Contact support', 'Privacy policy', 'Cookie policy']
+    ctas: ['Contact support', 'Privacy policy', 'Cookie policy'],
+    links: ['/help', '/privacy-policy', '/cookie-policy']
   },
   '/privacy-policy': {
     title: 'MakaUg Privacy Policy',
     eyebrow: 'Data protection',
     body: 'MakaUg uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, and consent-aware analytics.',
-    ctas: ['Data request', 'Update preferences', 'Contact privacy support']
+    ctas: ['Data request', 'Update preferences', 'Contact privacy support'],
+    links: ['/help', '/login?next=%2Faccount%3Ftab%3Dpreferences', 'mailto:info@makaug.com?subject=Privacy%20request']
   },
   '/cookie-policy': {
     title: 'MakaUg Cookie Policy',
     eyebrow: 'Cookies and preferences',
     body: 'MakaUg uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
-    ctas: ['Manage preferences', 'Privacy policy', 'Contact support']
+    ctas: ['Manage preferences', 'Privacy policy', 'Contact support'],
+    links: ['/login?next=%2Faccount%3Ftab%3Dpreferences', '/privacy-policy', '/help']
   }
 };
 
@@ -255,7 +263,11 @@ function renderSyntheticRouteContent(pathname = '/') {
   const pathName = normalizePath(pathname).toLowerCase();
   const content = SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName];
   if (!content) return '';
-  const ctaHtml = content.ctas.map((item) => `<span class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900">${item}</span>`).join('');
+  const ctaHtml = content.ctas.map((item, index) => {
+    const href = (content.links || [])[index] || '/help';
+    const external = /^https?:|^mailto:/i.test(href);
+    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900">${item}</a>`;
+  }).join('');
   return `
   <main id="page-${pathName.slice(1).replace(/[^a-z0-9-]/g, '-')}" class="page active" data-public-route="${pathName}">
     <section class="bg-green-800 py-10 text-white">

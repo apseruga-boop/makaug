@@ -31,6 +31,8 @@
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "probe:public-routes": "node scripts/probe-public-routes.js",
     "probe:public-routes:browser": "node scripts/probe-public-routes-browser.js",
+    "probe:click-actions": "node scripts/probe-click-actions.js",
+    "probe:performance": "node scripts/probe-performance.js",
     "check": "node --check server.js",
     "test:go-live-p0": "node tests/go-live-p0.test.js",
     "smoke": "bash scripts/smoke-test.sh",

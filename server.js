@@ -53,7 +53,9 @@ app.use(
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || !corsOrigins.length || corsOrigins.includes(origin)) {
+      const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(String(origin || ''));
+      const isMakaUgOrigin = /^https?:\/\/([^/]+\.)?makaug\.com$/i.test(String(origin || ''));
+      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isMakaUgOrigin) {
         return callback(null, true);
       }
       return callback(new Error('CORS origin not allowed'));
@@ -68,6 +70,7 @@ app.use(express.json({ limit: '15mb' }));
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
+  skip: (req) => req.path === '/analytics/config',
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -190,7 +193,17 @@ app.use((req, res, next) => {
   return sendPublicIndex(req, res, next);
 });
 
-app.use(express.static(staticRoot, { index: false }));
+app.use(express.static(staticRoot, {
+  index: false,
+  maxAge: '7d',
+  setHeaders(res, filePath) {
+    if (/\.(html?)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+  }
+}));
 
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
