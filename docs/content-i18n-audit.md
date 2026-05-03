@@ -6,7 +6,7 @@ Status: partial, go-live safe for English routes, translations still need editor
 
 - `/about`: standalone public route exists in the single-page router. English content was expanded for Task 11 into a full About MakaUg page with who-we-help sections, trust/safety, and how-to video slots. English content is complete enough for go-live. Translation keys are partial and fall back to English.
 - `/how-it-works`: standalone public route exists. English content was expanded for Task 11 into a 10-step visual flow with how-to video slots. Translation keys are partial and fall back to English.
-- `/careers`: standalone public route exists. English content is present. Lead capture exists through support/CRM patterns where configured. Translation keys are partial.
+- `/careers`: standalone public route exists. English content is present. Career interest form now submits to `POST /api/contact/career-interest`, creates a CRM lead, and logs email/notification fallback status. Translation keys are partial.
 - `/terms`: standalone public route exists. English content is present and must remain marked for legal review. Translation keys are partial.
 - `/privacy-policy`: standalone public route exists. English content is present and must remain marked for legal review. Translation keys are partial.
 - `/cookie-policy`: standalone public route exists. English content is present and must remain marked for legal review. Translation keys are partial.

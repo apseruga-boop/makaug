@@ -25,6 +25,7 @@ const EMAIL_NOTIFICATION_EVENT_MATRIX = {
   whatsapp_contact_initiated: { templateKey: 'whatsapp_contact_initiated', channels: ['in_app'], transactional: true, adminLogRequired: true },
   mortgage_lead_received: { templateKey: 'mortgage_lead_received', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   help_request_submitted: { templateKey: 'help_request', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
+  career_interest_submitted: { templateKey: 'career_interest', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   fraud_report_received: { templateKey: 'fraud_report_received', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   campaign_submitted: { templateKey: 'campaign_submitted', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   payment_link_created: { templateKey: 'payment_link_created', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
@@ -32,6 +33,7 @@ const EMAIL_NOTIFICATION_EVENT_MATRIX = {
   new_broker_verification_request: { templateKey: 'admin_broker_verification', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   new_field_agent_application: { templateKey: 'admin_field_agent_application', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   new_advertiser_signup: { templateKey: 'admin_advertiser_signup', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
+  new_career_interest: { templateKey: 'admin_alert', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   email_failed: { templateKey: 'admin_email_failed', channels: ['in_app'], transactional: true, adminLogRequired: true },
   whatsapp_failed: { templateKey: 'admin_whatsapp_failed', channels: ['in_app'], transactional: true, adminLogRequired: true },
   human_handoff_required: { templateKey: 'admin_handoff_required', channels: ['in_app'], transactional: true, adminLogRequired: true }

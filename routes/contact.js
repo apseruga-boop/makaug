@@ -402,11 +402,152 @@ async function handleHelpRequest(req, res, next) {
   }
 }
 
+async function handleCareerInterest(req, res, next) {
+  try {
+    const name = cleanText(req.body.name || req.body.full_name);
+    const email = cleanText(req.body.email);
+    const phone = cleanText(req.body.phone);
+    const roleInterest = cleanText(req.body.role_interest || req.body.roleInterest) || 'General interest';
+    const coverNote = cleanText(req.body.cover_note || req.body.coverNote || req.body.message) || null;
+    const cvUrl = cleanText(req.body.cv_url || req.body.cvUrl) || null;
+    const preferredContact = cleanText(req.body.preferred_contact || req.body.preferredContact) || 'email';
+
+    const errors = [];
+    if (!name) errors.push('name is required');
+    if (!email) errors.push('email is required');
+    if (!roleInterest) errors.push('role_interest is required');
+    if (email && !isValidEmail(email)) errors.push('email is invalid');
+    if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
+    if (cvUrl && !/^https?:\/\//i.test(cvUrl)) errors.push('cv_url must be a secure document link');
+    if (errors.length) return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+
+    const supportEmail = getSupportEmail();
+    const whatsappUrl = getSupportWhatsappUrl();
+    const lead = await createLead(db, {
+      source: cleanText(req.body.source) || 'careers_page',
+      leadType: 'career',
+      category: roleInterest,
+      message: [
+        coverNote || 'Career interest submitted.',
+        cvUrl ? `CV link: ${cvUrl}` : ''
+      ].filter(Boolean).join('\n'),
+      priority: 'normal',
+      contact: {
+        name,
+        email,
+        phone: phone || null,
+        preferredContactChannel: preferredContact,
+        roleType: 'career_applicant'
+      },
+      activityType: 'career_interest_submitted',
+      metadata: {
+        role_interest: roleInterest,
+        cv_url: cvUrl,
+        preferred_contact: preferredContact
+      }
+    });
+
+    const userSubject = 'We received your MakaUg career interest';
+    const adminSubject = `[MakaUg] Career interest received • ${roleInterest}`;
+    let userDelivery = { sent: false, reason: 'no_email_provider_configured' };
+    let adminDelivery = { sent: false, reason: 'no_email_provider_configured' };
+
+    try {
+      userDelivery = await sendSupportEmail({
+        to: email,
+        subject: userSubject,
+        text: [
+          `Hello ${name},`,
+          '',
+          'Thank you for sharing your career interest with MakaUg.',
+          `Role interest: ${roleInterest}`,
+          `Reference: ${lead?.id || 'logged'}`,
+          '',
+          'Our team will review your details and contact you if there is a suitable next step.',
+          `For updates or corrections, WhatsApp MakaUg: ${whatsappUrl}`,
+          '',
+          'MakaUg'
+        ].join('\n')
+      });
+      adminDelivery = await sendSupportEmail({
+        to: supportEmail,
+        subject: adminSubject,
+        text: [
+          'A career interest form was submitted on makaug.com.',
+          '',
+          `Reference: ${lead?.id || 'logged'}`,
+          `Name: ${name}`,
+          `Email: ${email}`,
+          `Phone: ${phone || '-'}`,
+          `Role interest: ${roleInterest}`,
+          `Preferred contact: ${preferredContact}`,
+          cvUrl ? `CV link: ${cvUrl}` : 'CV link: -',
+          '',
+          coverNote || 'No cover note provided.'
+        ].join('\n'),
+        replyTo: email
+      });
+    } catch (emailError) {
+      logger.warn('Career interest email notification failed', { error: emailError.message, leadId: lead?.id || null });
+    }
+
+    await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'career_interest_submitted',
+        recipientEmail: email,
+        recipientRole: 'career_applicant',
+        templateKey: 'career_interest',
+        subject: userSubject,
+        status: notificationStatusFromDelivery(userDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'new_career_interest',
+        recipientEmail: supportEmail,
+        recipientRole: 'admin',
+        templateKey: 'admin_alert',
+        subject: adminSubject,
+        status: notificationStatusFromDelivery(adminDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: adminDelivery?.error || adminDelivery?.reason || null,
+        sentAt: adminDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: email,
+        recipientPhone: phone || null,
+        channel: 'email',
+        type: 'career_interest_submitted',
+        status: notificationStatusFromDelivery(userDelivery),
+        payloadSummary: { lead_id: lead?.id || null, role_interest: roleInterest },
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: supportEmail,
+        channel: 'in_app',
+        type: 'new_career_interest',
+        status: 'logged',
+        payloadSummary: { lead_id: lead?.id || null, role_interest: roleInterest, name },
+        relatedLeadId: lead?.id || null
+      })
+    ]);
+
+    return res.status(201).json({ ok: true, data: { id: lead?.id || null, status: 'received' } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 router.post('/report-listing', handleReportListing);
 router.post('/report', handleReportListing);
 router.post('/looking-for-property', handleLookingForProperty);
 router.post('/looking', handleLookingForProperty);
 router.post('/help-request', handleHelpRequest);
 router.post('/help', handleHelpRequest);
+router.post('/career-interest', handleCareerInterest);
+router.post('/careers', handleCareerInterest);
 
 module.exports = router;

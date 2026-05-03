@@ -154,8 +154,37 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     title: 'Careers at MakaUg',
     eyebrow: 'Build Uganda-first property technology',
     body: 'MakaUg works with people who care about trust, field operations, student accommodation, advertising, data quality, and safer property discovery.',
+    extraHtml: `
+      <form id="career-interest-form" onsubmit="submitCareerInterest(event)" class="mt-8 rounded-3xl bg-white border border-green-100 p-5 space-y-3">
+        <h2 class="text-xl font-black text-gray-900">Send career interest</h2>
+        <p class="text-sm text-gray-600">Share your role interest, contact details, and an optional CV link. MakaUg logs this for admin follow-up.</p>
+        <div class="grid md:grid-cols-2 gap-3">
+          <input name="name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Full name" required>
+          <input name="email" type="email" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Email address" required>
+          <input name="phone" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Phone / WhatsApp">
+          <select name="role_interest" class="border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white" required>
+            <option value="">Role interest</option>
+            <option value="Field operations">Field operations</option>
+            <option value="Trust and safety">Trust and safety</option>
+            <option value="Product and engineering">Product and engineering</option>
+            <option value="Market growth">Market growth</option>
+            <option value="Customer support">Customer support</option>
+            <option value="Other">Other</option>
+          </select>
+          <select name="preferred_contact" class="border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white">
+            <option value="email">Email</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="phone">Phone call</option>
+          </select>
+          <input name="cv_url" type="url" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="CV link, e.g. Google Drive">
+        </div>
+        <textarea name="cover_note" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Short note, availability, or relevant experience"></textarea>
+        <div id="career-interest-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
+        <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold">Send career interest</button>
+      </form>
+    `,
     ctas: ['Send career interest', 'Contact MakaUg', 'Field agent signup'],
-    links: ['mailto:info@makaug.com?subject=Career%20interest%20-%20MakaUg', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
+    links: ['/careers#career-interest-form', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
   },
   '/help': {
     title: 'MakaUg Help Centre',

@@ -330,10 +330,14 @@ function run() {
     assert(helpText.includes(expected), `/help missing category or support form content: ${expected}`);
   }
   assert(contactRoutes.includes("router.post('/help-request'"), 'help request API should exist');
+  assert(contactRoutes.includes("router.post('/career-interest'"), 'careers interest API should exist');
   assert(contactRoutes.includes('help_request_submitted'), 'help request should log an email/notification event');
+  assert(contactRoutes.includes('career_interest_submitted'), 'career interest should log an email/notification event');
   assert(contactRoutes.includes('fraud_report_received'), 'fraud reports should create notification/email coverage');
   assert(contactRoutes.includes('property_need_request_created'), 'tell-MakaUg property need requests should create CRM/log events');
-  assert(contactRoutes.includes('createLead'), 'help/fraud/property need contact routes should create CRM leads');
+  assert(contactRoutes.includes('createLead'), 'help/fraud/careers/property need contact routes should create CRM leads');
+  assert(sourceHtml.includes('id="career-interest-form"'), '/careers should include a real lead capture form');
+  assert(sourceHtml.includes('submitCareerInterest'), '/careers form should submit to the backend');
   assert(howItWorksText.includes('How MakaUg Works'), '/how-it-works should show route heading');
   for (const expected of ['Search property', 'Use filters', 'Save options', 'Create alerts', 'WhatsApp contact', 'Book viewing', 'List property', 'Review checks', 'Use dashboards', 'Report suspicious']) {
     assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
@@ -447,7 +451,9 @@ function run() {
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
   assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
   assert(sourceHtml.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
+  assert(sourceHtml.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
+  assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
   assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
   for (const expected of [
     'Public Route Health',
@@ -670,6 +676,7 @@ function run() {
     'callback_requested',
     'mortgage_lead_received',
     'help_request_submitted',
+    'career_interest_submitted',
     'fraud_report_received',
     'advertiser_signup_received',
     'campaign_submitted',

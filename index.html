@@ -4199,7 +4199,7 @@
       <article class="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 class="text-xl font-bold text-gray-900">Backend Traceability Matrix</h2>
         <p class="text-sm text-gray-600 mt-2">Maps every launch-critical frontend action to APIs, services, database records, logs, dashboards, analytics, tests, and status.</p>
-        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/backend-traceability-matrix.md</code>
+        <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">docs/backend-traceability-matrix.md<br>docs/backend-readiness-report.md</code>
       </article>
       <article class="bg-white border border-gray-200 rounded-2xl p-6">
         <h2 class="text-xl font-bold text-gray-900">CTA Matrix and Performance Audit</h2>
@@ -16315,6 +16315,56 @@
       }
     }
 
+    async function submitCareerInterest(event) {
+      if (event) event.preventDefault();
+      const form = event?.target || document.getElementById("career-interest-form");
+      if (!form) return;
+      const data = new FormData(form);
+      const status = document.getElementById("career-interest-status");
+      const payload = {
+        name: String(data.get("name") || "").trim(),
+        email: String(data.get("email") || "").trim(),
+        phone: normalizePhoneInput(data.get("phone") || ""),
+        role_interest: String(data.get("role_interest") || "").trim(),
+        preferred_contact: String(data.get("preferred_contact") || "email").trim(),
+        cv_url: String(data.get("cv_url") || "").trim(),
+        cover_note: String(data.get("cover_note") || "").trim(),
+        source: "careers_page"
+      };
+      if (!payload.name || !payload.email || !payload.role_interest) {
+        toast("Add your name, email, and role interest.");
+        return;
+      }
+      const button = form.querySelector("button[type='submit']");
+      const original = button?.textContent || "Send career interest";
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Sending...";
+      }
+      try {
+        const res = await apiRequest("/api/contact/career-interest", { method: "POST", body: payload });
+        if (status) {
+          status.classList.remove("hidden");
+          status.className = "rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800";
+          status.textContent = `Career interest received. Reference: ${res?.data?.id || "logged"}. MakaUg will contact you if there is a fit.`;
+        }
+        toast("Career interest sent to MakaUg.");
+        form.reset();
+      } catch (error) {
+        if (status) {
+          status.classList.remove("hidden");
+          status.className = "rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700";
+          status.textContent = error.message || "Could not send career interest.";
+        }
+        toast(error.message || "Could not send career interest.");
+      } finally {
+        if (button) {
+          button.disabled = false;
+          button.textContent = original;
+        }
+      }
+    }
+
     function toggleLookingWhatsappAlt() {
       const mode = document.getElementById("looking-phone-is-whatsapp")?.value || "yes";
       const alt = document.getElementById("looking-whatsapp-alt");
@@ -18559,11 +18609,33 @@
         </ul>
         <div class="rounded-2xl border border-green-100 bg-white p-4">
           <h3 class="font-black text-gray-800 mb-2">Send your details</h3>
-          <p class="text-sm text-gray-600 mb-3">We may not have every role open today, but we are always looking for sharp, kind, serious people. Send your CV, role of interest, and a short note.</p>
-          <div class="grid md:grid-cols-2 gap-3">
-            <a class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold" href="mailto:info@makaug.com?subject=Application%20-%20Role%20Name%20-%20Full%20Name">Email CV to MakaUg</a>
-            <a class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
-          </div>
+          <p class="text-sm text-gray-600 mb-3">We may not have every role open today, but we are always looking for sharp, kind, serious people. Send your role of interest, a CV link if you have one, and a short note.</p>
+          <form id="career-interest-form" onsubmit="submitCareerInterest(event)" class="space-y-3">
+            <div class="grid md:grid-cols-2 gap-3">
+              <input name="name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Full name" required>
+              <input name="email" type="email" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Email address" required>
+              <input name="phone" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Phone / WhatsApp">
+              <select name="role_interest" class="border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white" required>
+                <option value="">Role interest</option>
+                <option value="Field operations">Field operations</option>
+                <option value="Trust and safety">Trust and safety</option>
+                <option value="Product and engineering">Product and engineering</option>
+                <option value="Market growth">Market growth</option>
+                <option value="Customer support">Customer support</option>
+                <option value="Other">Other</option>
+              </select>
+              <select name="preferred_contact" class="border border-gray-200 rounded-xl px-4 py-3 text-sm bg-white">
+                <option value="email">Email</option>
+                <option value="whatsapp">WhatsApp</option>
+                <option value="phone">Phone call</option>
+              </select>
+              <input name="cv_url" type="url" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="CV link, e.g. Google Drive">
+            </div>
+            <textarea name="cover_note" rows="3" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Short note, availability, or relevant experience"></textarea>
+            <div id="career-interest-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
+            <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold">Send career interest</button>
+          </form>
+          <a class="mt-3 block border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
         </div>
         <p class="text-sm mt-4 text-gray-600">
           makaug.com is committed to fair hiring and equal opportunity based on merit, role requirements, and practical impact.

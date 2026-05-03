@@ -122,6 +122,24 @@ app.get('/config.js', (_req, res) => {
 
 const staticRoot = __dirname;
 const indexPath = path.join(staticRoot, 'index.html');
+const isProduction = process.env.NODE_ENV === 'production';
+let cachedIndexHtml = null;
+const publicHtmlCache = new Map();
+
+function readIndexHtml() {
+  if (isProduction && cachedIndexHtml) return cachedIndexHtml;
+  const html = fs.readFileSync(indexPath, 'utf8');
+  if (isProduction) cachedIndexHtml = html;
+  return html;
+}
+
+function renderPublicHtml(pathname) {
+  const key = pathname || '/';
+  if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
+  const rendered = sanitizePublicHtml(readIndexHtml(), { pathname: key });
+  if (isProduction) publicHtmlCache.set(key, rendered);
+  return rendered;
+}
 
 function parseCookies(header = '') {
   return String(header || '')
@@ -162,7 +180,7 @@ function sendPublicIndex(req, res, next) {
       }));
     }
     try {
-      const html = fs.readFileSync(indexPath, 'utf8');
+      const html = readIndexHtml();
       res.type('html');
       res.set('Cache-Control', 'no-store');
       return res.send(html);
@@ -171,11 +189,10 @@ function sendPublicIndex(req, res, next) {
     }
   }
   try {
-    const html = fs.readFileSync(indexPath, 'utf8');
     res.type('html');
     res.set('Cache-Control', 'no-store');
     res.set('X-MakaUg-Public-Sanitized', '1');
-    return res.send(sanitizePublicHtml(html, { pathname: req.path }));
+    return res.send(renderPublicHtml(req.path));
   } catch (error) {
     return next(error);
   }
