@@ -21,11 +21,11 @@ function chromeExecutable() {
 }
 
 const PRIMARY_ACTIONS = [
-  { route: '/', selector: '[data-testid="advertise-property-cta"]', label: 'Advertise Property', expectUrl: '/advertise', marker: 'Advertise' },
-  { route: '/to-rent', selector: '[data-testid="advertise-property-cta"]', label: 'Advertise Property from rent', expectUrl: '/advertise', marker: 'Advertise' },
-  { route: '/for-sale', selector: '[data-testid="advertise-property-cta"]', label: 'Advertise Property from sale', expectUrl: '/advertise', marker: 'Advertise' },
-  { route: '/land', selector: '[data-testid="advertise-property-cta"]', label: 'Advertise Property from land', expectUrl: '/advertise', marker: 'Advertise' },
-  { route: '/student-accommodation', selector: '[data-testid="advertise-property-cta"]', label: 'Advertise Property from student route', expectUrl: '/advertise', marker: 'Advertise' },
+  { route: '/', selector: '[data-testid="list-property-free-cta"]', label: 'Header List your property for free', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/to-rent', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from rent', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/for-sale', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from sale', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/land', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from land', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/student-accommodation', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from student route', expectUrl: '/list-property', marker: 'List Your Property' },
   { route: '/', selector: '#nav-rent', label: 'Header To Rent', expectUrl: '/to-rent', marker: 'To Rent' },
   { route: '/', selector: '#nav-sale', label: 'Header For Sale', expectUrl: '/for-sale', marker: 'For Sale' },
   { route: '/', selector: '#nav-land', label: 'Header Land', expectUrl: '/land', marker: 'Land' },
@@ -35,8 +35,9 @@ const PRIMARY_ACTIONS = [
   { route: '/', selector: '#nav-mortgage', label: 'Header Mortgage', expectUrl: '/mortgage', marker: 'Mortgage' },
   { route: '/', selector: '#nav-ai', label: 'Header AI Chatbot', expectUrl: '/discover-ai-chatbot', marker: 'AI' },
   { route: '/', selector: '#nav-fraud', label: 'Header Fraud', expectUrl: '/anti-fraud', marker: 'Fraud' },
-  { route: '/', selector: '#top-signin-link', label: 'Header Sign In', expectUrl: '/login', marker: 'Sign' },
-  { route: '/', selector: '#top-saved-link', label: 'Saved logged out', expectUrl: '/login', marker: 'Sign' },
+  { route: '/', selector: '#top-signin-link', label: 'Header Sign In opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
+  { route: '/', selector: '#top-saved-link', label: 'Saved logged out opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
+  { route: '/student-accommodation', selector: '#student-login-cta', label: 'Student Login opens student drawer', expectDrawer: '#account-access-drawer', marker: 'Students can save campus searches' },
   { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Your Property' },
   { route: '/', selector: '#footer-link-advertise', label: 'Footer Advertise', expectUrl: '/advertise', marker: 'Advertise' },
   { route: '/', selector: '#footer-link-help', label: 'Footer Help', expectUrl: '/help', marker: 'Help' },
@@ -152,10 +153,19 @@ async function main() {
         await page.waitForLoadState('domcontentloaded', { timeout: 12000 }).catch(() => {});
         await page.waitForLoadState('networkidle', { timeout: 12000 }).catch(() => {});
         await page.waitForTimeout(300);
-        const url = new URL(page.url());
         const text = await visibleText(page);
-        if (!url.pathname.startsWith(action.expectUrl)) {
-          failures.push(`expected URL ${action.expectUrl}, got ${url.pathname}`);
+        if (action.expectDrawer) {
+          const drawer = page.locator(action.expectDrawer).first();
+          if (!(await drawer.count())) {
+            failures.push(`missing drawer ${action.expectDrawer}`);
+          } else if (!(await drawer.isVisible())) {
+            failures.push(`drawer ${action.expectDrawer} is not visible`);
+          }
+        } else {
+          const url = new URL(page.url());
+          if (!url.pathname.startsWith(action.expectUrl)) {
+            failures.push(`expected URL ${action.expectUrl}, got ${url.pathname}`);
+          }
         }
         if (action.marker && !text.toLowerCase().includes(action.marker.toLowerCase())) {
           failures.push(`missing marker ${action.marker}`);
@@ -171,7 +181,7 @@ async function main() {
       results.push({ label: action.label, route: action.route, selector: action.selector, ok: failures.length === 0, failures });
     }
 
-    const auditRoutes = ['/', '/to-rent', '/for-sale', '/land', '/student-accommodation', '/commercial', '/brokers', '/list-property', '/advertise', '/mortgage', '/about', '/help', '/safety', '/anti-fraud'];
+    const auditRoutes = ['/', '/to-rent', '/for-sale', '/land', '/student-accommodation', '/commercial', '/brokers', '/list-property', '/advertise', '/mortgage', '/login', '/about', '/help', '/safety', '/anti-fraud'];
     for (const route of auditRoutes) {
       await go(page, route);
       const actions = await auditVisibleActions(page);

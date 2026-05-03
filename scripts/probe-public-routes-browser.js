@@ -19,7 +19,8 @@ const ROUTES = [
   '/safety',
   '/anti-fraud',
   '/advertise',
-  '/mortgage'
+  '/mortgage',
+  '/login'
 ];
 
 const MARKERS = {
@@ -36,7 +37,8 @@ const MARKERS = {
   '/safety': ['Safety', 'Safety Tips'],
   '/anti-fraud': ['Anti-Fraud', 'Report suspicious', 'Fraud'],
   '/advertise': ['Advertise', 'Campaign', 'Sponsored', 'Packages'],
-  '/mortgage': ['Mortgage', 'Mortgage Finder', 'repayment']
+  '/mortgage': ['Mortgage', 'Mortgage Finder', 'repayment'],
+  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
 };
 
 const EXPECTED_PAGE_IDS = {
@@ -53,7 +55,8 @@ const EXPECTED_PAGE_IDS = {
   '/safety': 'page-safety',
   '/anti-fraud': 'page-fraud',
   '/advertise': 'page-advertise',
-  '/mortgage': 'page-mortgage'
+  '/mortgage': 'page-mortgage',
+  '/login': 'page-login'
 };
 
 const FORBIDDEN_VISIBLE_TEXT = [

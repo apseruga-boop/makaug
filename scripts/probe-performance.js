@@ -17,7 +17,9 @@ const ROUTES = [
   '/commercial',
   '/brokers',
   '/list-property',
-  '/advertise'
+  '/advertise',
+  '/mortgage',
+  '/login'
 ];
 
 const EXPECTED_PAGE_IDS = {
@@ -29,7 +31,9 @@ const EXPECTED_PAGE_IDS = {
   '/commercial': 'page-commercial',
   '/brokers': 'page-brokers',
   '/list-property': 'page-list-property',
-  '/advertise': 'page-advertise'
+  '/advertise': 'page-advertise',
+  '/mortgage': 'page-mortgage',
+  '/login': 'page-login'
 };
 
 function chromeExecutable() {
@@ -145,7 +149,9 @@ async function probeRoute(page, route) {
   if (visibleMs > 1500) failures.push(`route body visible after ${visibleMs}ms (target <= 1500ms)`);
   if (significantResponses.length) failures.push(`HTTP failures: ${significantResponses.slice(0, 2).map((f) => `${f.status} ${f.url}`).join(' | ')}`);
   if (consoleErrors.length) failures.push(`console errors: ${consoleErrors.slice(0, 2).join(' | ')}`);
-  if (route === '/' && metrics.googleMapsLoaded) failures.push('Google Maps loaded on homepage before active map use');
+  if (['/', '/advertise', '/mortgage', '/login'].includes(route) && metrics.googleMapsLoaded) {
+    failures.push(`Google Maps loaded on ${route} before active map use`);
+  }
 
   return {
     route,
@@ -172,6 +178,7 @@ Launch targets:
 - SPA/internal route body visible <= 500ms once JS is loaded.
 - No console errors on public routes.
 - Google Maps should not load on the homepage before active map use.
+- Google Maps should not load on homepage, mortgage, advertise, or login routes before active map use.
 
 Slowest route: \`${slowest?.route || '-'}\` at ${slowest?.visibleMs ?? '-'}ms.
 

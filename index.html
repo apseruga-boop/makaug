@@ -769,7 +769,7 @@
         </select>
         <a id="top-saved-link" href="/saved" onclick="handleSavedClick(event)" class="cursor-pointer hover:text-green-200 hidden sm:block"><i class="fas fa-heart text-green-300"></i> Saved</a>
         <a id="top-dashboard-link" onclick="openSignedInDashboard()" class="cursor-pointer hover:text-green-200 hidden"></a>
-        <a id="top-signin-link" href="/login" onclick="openAuthSignIn('finder')" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
+        <a id="top-signin-link" href="/login" onclick="openAuthSignIn('finder', event)" class="cursor-pointer hover:text-green-200"><i class="fas fa-user text-green-300"></i> Sign In</a>
         <a id="top-signout-link" onclick="signOut()" class="cursor-pointer hover:text-green-200 hidden"></a>
       </div>
     </div>
@@ -796,7 +796,7 @@
         <a id="nav-fraud" href="/anti-fraud" onclick="showPage('fraud')" class="nav-item whitespace-nowrap px-2.5 py-2 rounded-lg text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700 cursor-pointer">Fraud</a>
       </div>
       <div class="flex items-center gap-2">
-        <a id="nav-list-btn" data-testid="advertise-property-cta" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">Advertise Property</a>
+        <a id="nav-list-btn" data-testid="list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event)" class="hidden md:block bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600">List your property for free</a>
         <button id="mob-toggle" class="lg:hidden text-gray-700 p-2" onclick="toggleMobile()"><i class="fas fa-bars text-xl"></i></button>
       </div>
     </div>
@@ -810,7 +810,7 @@
       <a id="mnav-mortgage" href="/mortgage" onclick="showPage('mortgage');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Mortgage Finder</a>
       <a id="mnav-ai" href="/discover-ai-chatbot" onclick="showPage('ai-chatbot');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Discover AI Chatbot</a>
       <a id="mnav-fraud" href="/anti-fraud" onclick="showPage('fraud');closeMobile()" class="px-3 py-2 rounded-lg hover:bg-green-50">Fraud</a>
-      <a id="mnav-advertise" data-testid="mobile-advertise-property-cta" href="/advertise" onclick="handleAdvertisePropertyCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">Advertise Property</a>
+      <a id="mnav-advertise" data-testid="mobile-list-property-free-cta" href="/list-property" onclick="handleListPropertyFreeCta(event);closeMobile()" class="px-3 py-2 rounded-lg bg-green-700 text-white font-semibold">List your property for free</a>
     </div>
   </nav>
 
@@ -1179,7 +1179,7 @@
           <h1 class="text-3xl font-black serif">Find your perfect student accommodation</h1>
           <div class="flex items-center gap-2">
             <button onclick="openListPropertyOptions()" class="bg-white text-purple-900 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-purple-50">+ List Property</button>
-            <button onclick="openAuthSignIn('finder')" class="bg-black/30 border border-white/20 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-black/40">Student Login</button>
+            <button id="student-login-cta" onclick="openAuthSignIn('student')" class="bg-black/30 border border-white/20 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-black/40">Student Login</button>
           </div>
         </div>
       </div>
@@ -1575,15 +1575,15 @@
       <div class="absolute -bottom-24 -left-20 w-80 h-80 rounded-full bg-emerald-200/10 blur-3xl"></div>
       <div class="max-w-7xl mx-auto px-4 relative">
         <h1 id="mortgage-page-title" class="text-3xl font-black serif">Mortgage Finder</h1>
-        <p id="mortgage-page-sub" class="text-green-100 mt-2 text-sm md:text-base max-w-3xl">Compare Uganda mortgage options, estimate monthly repayments, and understand mortgage terms before you apply.</p>
+        <p id="mortgage-page-sub" class="text-green-100 mt-2 text-sm md:text-base max-w-3xl">Estimate monthly repayments, compare assumptions, and request mortgage help before you apply.</p>
         <div class="mt-5 grid sm:grid-cols-3 gap-3">
           <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-3">
             <div class="text-sm font-bold flex items-center gap-2"><i class="fas fa-scale-balanced text-amber-300"></i><span id="mortgage-hero-pill-1-title">Compare Banks Fast</span></div>
             <p id="mortgage-hero-pill-1-sub" class="text-xs text-green-100 mt-1">See side-by-side repayment estimates instantly.</p>
           </div>
           <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-3">
-            <div class="text-sm font-bold flex items-center gap-2"><i class="fas fa-sliders text-cyan-200"></i><span id="mortgage-hero-pill-2-title">Play With Sliders</span></div>
-            <p id="mortgage-hero-pill-2-sub" class="text-xs text-green-100 mt-1">Adjust deposit and years to see live monthly costs.</p>
+            <div class="text-sm font-bold flex items-center gap-2"><i class="fas fa-calculator text-cyan-200"></i><span id="mortgage-hero-pill-2-title">Professional Calculator</span></div>
+            <p id="mortgage-hero-pill-2-sub" class="text-xs text-green-100 mt-1">Enter price, deposit, rate, and term to estimate repayments.</p>
           </div>
           <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-3">
             <div class="text-sm font-bold flex items-center gap-2"><i class="fas fa-calendar-check text-lime-200"></i><span id="mortgage-hero-pill-3-title">Daily Rate Review</span></div>
@@ -1595,50 +1595,87 @@
     <div class="max-w-7xl mx-auto px-4 py-8">
       <div class="grid lg:grid-cols-3 gap-6">
         <div class="lg:col-span-2 space-y-6">
-          <div class="bg-white border border-green-100 rounded-2xl p-5 md:p-6 relative overflow-hidden">
-            <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-green-50"></div>
-            <div class="relative">
-              <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
-                <h2 id="mortgage-calc-title" class="text-xl font-bold text-gray-800">Mortgage Playground</h2>
-                <span id="mortgage-calc-tip" class="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-3 py-1 font-semibold">Move sliders to compare options</span>
+          <div class="bg-white border border-green-100 rounded-2xl p-5 md:p-6 shadow-sm">
+            <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+              <div>
+                <h2 id="mortgage-calc-title" class="text-2xl font-black text-gray-900 serif">Repayment calculator</h2>
+                <p id="mortgage-calc-tip" class="text-sm text-gray-600 mt-1">Edit the assumptions below. MakaUg shows an estimate only, not a bank approval.</p>
               </div>
-              <div class="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label id="mortgage-label-price" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Property Price (UGX)</label>
-                  <input id="mortgage-price" type="number" value="250000000" min="10000000" step="1000000" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" oninput="renderMortgageFinder()">
-                </div>
-                <div>
-                  <label id="mortgage-label-purpose" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Product Type</label>
-                  <select id="mortgage-purpose" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="renderMortgageFinder()">
-                    <option value="residential" data-mortgage-purpose="residential">Residential Home</option>
-                    <option value="commercial" data-mortgage-purpose="commercial">Commercial Property</option>
-                    <option value="land" data-mortgage-purpose="land">Land / Plot Financing</option>
-                  </select>
-                </div>
-                <div>
-                  <div class="flex items-center justify-between mb-1.5">
-                    <label id="mortgage-label-deposit" class="block text-xs font-semibold uppercase tracking-wide text-gray-500">Deposit (%)</label>
-                    <span id="mortgage-deposit-value" class="text-xs font-bold text-green-700">20%</span>
-                  </div>
-                  <input id="mortgage-deposit" type="number" value="20" min="0" max="90" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" oninput="syncMortgageInput('deposit', this.value)">
-                  <input id="mortgage-deposit-slider" type="range" min="0" max="90" step="1" value="20" class="mortgage-range mt-2" oninput="syncMortgageSlider('deposit', this.value)">
-                </div>
-                <div>
-                  <div class="flex items-center justify-between mb-1.5">
-                    <label id="mortgage-label-years" class="block text-xs font-semibold uppercase tracking-wide text-gray-500">Loan Term (years)</label>
-                    <span id="mortgage-years-value" class="text-xs font-bold text-green-700">20 years</span>
-                  </div>
-                  <input id="mortgage-years" type="number" value="20" min="5" max="30" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" oninput="syncMortgageInput('years', this.value)">
-                  <input id="mortgage-years-slider" type="range" min="5" max="30" step="1" value="20" class="mortgage-range mt-2" oninput="syncMortgageSlider('years', this.value)">
-                </div>
-                <div class="sm:col-span-2">
-                  <label id="mortgage-label-income" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Estimated Monthly Household Income (UGX, optional)</label>
-                  <input id="mortgage-income" type="number" min="0" step="100000" placeholder="e.g. 6000000" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" oninput="renderMortgageFinder()">
-                </div>
+              <div class="flex flex-wrap gap-2" aria-label="Mortgage calculator tabs">
+                <button type="button" class="rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold">Repayment</button>
+                <button type="button" class="rounded-full bg-green-50 text-green-800 px-3 py-1.5 text-xs font-bold">Affordability</button>
+                <button type="button" class="rounded-full bg-green-50 text-green-800 px-3 py-1.5 text-xs font-bold">Additional Payment</button>
+                <button type="button" class="rounded-full bg-green-50 text-green-800 px-3 py-1.5 text-xs font-bold">Fees &amp; Transfer</button>
               </div>
-              <div id="mortgage-summary" class="mt-4 grid sm:grid-cols-3 gap-3"></div>
-              <div id="mortgage-health" class="mt-3 grid sm:grid-cols-3 gap-3"></div>
             </div>
+            <div class="grid lg:grid-cols-[1fr_0.9fr] gap-5">
+              <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <div class="grid sm:grid-cols-2 gap-4">
+                  <div>
+                    <label id="mortgage-label-price" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Purchase Price</label>
+                    <input id="mortgage-price" type="number" value="250000000" min="10000000" step="1000000" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="renderMortgageFinder()">
+                  </div>
+                  <div>
+                    <label id="mortgage-label-deposit" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Deposit (%)</label>
+                    <input id="mortgage-deposit" type="number" value="20" min="0" max="90" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="syncMortgageInput('deposit', this.value)">
+                    <span id="mortgage-deposit-value" class="sr-only">20%</span>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Interest Rate (%)</label>
+                    <input id="mortgage-rate" type="number" value="16" min="0" max="45" step="0.1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="renderMortgageFinder()">
+                  </div>
+                  <div>
+                    <label id="mortgage-label-years" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Loan Term</label>
+                    <input id="mortgage-years" type="number" value="20" min="1" max="30" step="1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="syncMortgageInput('years', this.value)">
+                    <span id="mortgage-years-value" class="sr-only">20 years</span>
+                  </div>
+                  <div>
+                    <label id="mortgage-label-purpose" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Property Type</label>
+                    <select id="mortgage-purpose" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="renderMortgageFinder()">
+                      <option value="residential" data-mortgage-purpose="residential">Residential Home</option>
+                      <option value="commercial" data-mortgage-purpose="commercial">Commercial Property</option>
+                      <option value="land" data-mortgage-purpose="land">Land / Plot Financing</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Currency</label>
+                    <select id="mortgage-currency" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="renderMortgageFinder()">
+                      <option value="UGX">UGX</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                  <div class="sm:col-span-2">
+                    <label id="mortgage-label-income" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Gross Monthly Income (optional)</label>
+                    <input id="mortgage-income" type="number" min="0" step="100000" placeholder="e.g. 6000000" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="renderMortgageFinder()">
+                  </div>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-3 mt-4">
+                  <button type="button" onclick="renderMortgageFinder()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-black">Calculate</button>
+                  <button type="button" onclick="resetMortgageCalculator()" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-sm font-black">Reset</button>
+                </div>
+              </div>
+              <div id="mortgage-professional-results" class="rounded-2xl bg-gradient-to-br from-green-900 to-emerald-800 text-white p-5 min-h-[360px]">
+                <div class="text-sm text-green-100 font-bold uppercase tracking-wide">Estimated monthly repayment</div>
+                <div class="text-4xl font-black mt-2">Calculating...</div>
+                <div class="mt-5 grid gap-3">
+                  <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+                    <div class="text-xs text-green-100 uppercase font-bold">Once-off Costs</div>
+                    <div class="text-lg font-black mt-1">Deposit and estimated fees</div>
+                  </div>
+                  <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+                    <div class="text-xs text-green-100 uppercase font-bold">Gross Monthly Income Required</div>
+                    <div class="text-lg font-black mt-1">Based on affordability assumptions</div>
+                  </div>
+                  <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+                    <div class="text-xs text-green-100 uppercase font-bold">Loan Amount</div>
+                    <div class="text-lg font-black mt-1">Purchase price minus deposit</div>
+                  </div>
+                </div>
+                <p class="text-[11px] text-green-100 mt-4">This is an estimate only. Actual rates, fees, repayments, and approvals depend on the lender.</p>
+              </div>
+            </div>
+            <div id="mortgage-summary" class="mt-4 grid sm:grid-cols-3 gap-3"></div>
+            <div id="mortgage-health" class="mt-3 grid sm:grid-cols-3 gap-3"></div>
           </div>
 
           <div class="bg-white border border-green-100 rounded-2xl p-5 md:p-6">
@@ -3191,9 +3228,12 @@
             <span class="text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-800">Admin only</span>
           </div>
           <div class="grid md:grid-cols-3 gap-3 text-sm">
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>CTA Health</strong><br><span class="text-gray-500">Run <code>npm run probe:click-actions</code> and review <code>docs/cta-action-matrix.md</code>.</span></div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Performance Health</strong><br><span class="text-gray-500">Run <code>npm run probe:performance</code> and review <code>docs/performance-audit.md</code>.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Auth Drawer Status</strong><br><span class="text-gray-500">Public Sign In opens the MakaUg auth drawer; <code>/login</code> is a clean fallback route.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>CTA Health</strong><br><span class="text-gray-500">Run <code>npm run probe:click-actions</code>; header free-listing CTA, Sign In drawer, and footer routes are checked.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Performance Health</strong><br><span class="text-gray-500">Run <code>npm run probe:performance</code> to verify route speed, console errors, and unexpected map/chatbot loading.</span></div>
             <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Route Health</strong><br><span class="text-gray-500">Run public HTML and browser route probes before launch.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Mortgage Calculator</strong><br><span class="text-gray-500">Professional repayment calculator status is covered by go-live tests and public route probes.</span></div>
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4"><strong>Owner Actions Required</strong><br><span class="text-gray-500">Confirm provider keys for maps, WhatsApp, email, SMS, and payments before live traffic ramps up.</span></div>
           </div>
           <div class="mt-4 flex flex-wrap gap-2">
             <a href="/admin/docs" class="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-4 py-2 text-sm font-semibold">View Admin Docs</a>
@@ -4973,10 +5013,12 @@
     let lpPinMarker = null;
     let lpPinMapProvider = "";
     let lpPinInfoWindow = null;
+    let lpPinMapInitPromise = null;
     let lpPreviewMap = null;
     let lpPreviewMarker = null;
     let lpPreviewMapProvider = "";
     let lpPreviewInfoWindow = null;
+    let lpPreviewMapInitPromise = null;
     const LP_MIN_UPLOAD_PHOTOS = 5;
     const LP_LAND_MIN_UPLOAD_PHOTOS = 3;
     const LP_MAX_UPLOAD_PHOTOS = 20;
@@ -5093,7 +5135,7 @@
         brandSubtitle: "UGANDA PROPERTY",
         saved: "Saved",
         signIn: "Sign In",
-        advertiseProperty: "Advertise Property",
+        advertiseProperty: "List your property for free",
         navSale: "For Sale",
         navRent: "To Rent",
         navStudents: "Students",
@@ -5177,7 +5219,7 @@
         brandSubtitle: "EBY'OBUGAGGA BY'ETTAKA",
         saved: "Byaterekedwa",
         signIn: "Yingira",
-        advertiseProperty: "Tangaza Ennyumba",
+        advertiseProperty: "List your property for free",
         navSale: "Ebitundibwa",
         navRent: "Ebipangisibwa",
         navStudents: "Abayizi",
@@ -5238,7 +5280,7 @@
         brandSubtitle: "MALI ZA UGANDA",
         saved: "Zilizohifadhiwa",
         signIn: "Ingia",
-        advertiseProperty: "Tangaza Mali",
+        advertiseProperty: "List your property for free",
         navSale: "Ya Kuuza",
         navRent: "Ya Kupanga",
         navStudents: "Wanafunzi",
@@ -5479,7 +5521,7 @@
         siteTitle: "makaug.com | Jami me gangi i Uganda",
         brandSubtitle: "GANGI ME UGANDA",
         saved: "Ma iketo",
-        advertiseProperty: "Tito gang",
+        advertiseProperty: "List your property for free",
         heroRent: "Gero",
         heroBuy: "Nywola",
         heroCommercial: "Curu",
@@ -5533,7 +5575,7 @@
         siteTitle: "makaug.com | Pulatifoomu ya Property omu Uganda",
         brandSubtitle: "PROPERTY ZA UGANDA",
         saved: "Ebiwatirweho",
-        advertiseProperty: "Tangaza Property",
+        advertiseProperty: "List your property for free",
         heroRent: "Kupangisa",
         heroBuy: "Kugura",
         heroCommercial: "Obusuubuzi",
@@ -5587,7 +5629,7 @@
         siteTitle: "makaug.com | Omukutu gwa Property omuri Uganda",
         brandSubtitle: "PROPERTY ZA UGANDA",
         saved: "Ebiwabikiirwe",
-        advertiseProperty: "Tangaza Property",
+        advertiseProperty: "List your property for free",
         heroRent: "Kupangisa",
         heroBuy: "Kugura",
         heroCommercial: "Obushuubuzi",
@@ -5641,7 +5683,7 @@
         siteTitle: "makaug.com | Pulatifoomu ya Property mu Uganda",
         brandSubtitle: "PROPERTY ZA UGANDA",
         saved: "Ebikuumiddwa",
-        advertiseProperty: "Tangaza Property",
+        advertiseProperty: "List your property for free",
         heroRent: "Kukodesa",
         heroBuy: "Kugula",
         heroCommercial: "Obusuubuzi",
@@ -5760,15 +5802,15 @@
 
     const MORTGAGE_I18N = {
       en: {
-        pageSub: "Compare Uganda mortgage options, estimate monthly repayments, and understand mortgage terms before you apply.",
+        pageSub: "Estimate monthly repayments, compare assumptions, and request mortgage help before you apply.",
         pill1Title: "Compare Banks Fast",
         pill1Sub: "See side-by-side repayment estimates instantly.",
-        pill2Title: "Play With Sliders",
-        pill2Sub: "Adjust deposit and years to see live monthly costs.",
+        pill2Title: "Professional Calculator",
+        pill2Sub: "Enter price, deposit, rate, and term to estimate repayments.",
         pill3Title: "Daily Rate Review",
         pill3Sub: "Rates are checked daily to keep this page up to date.",
-        calcTitle: "Mortgage Playground",
-        calcTip: "Move sliders to compare options",
+        calcTitle: "Repayment calculator",
+        calcTip: "Estimate before you apply",
         labelPrice: "Property Price (UGX)",
         labelPurpose: "Product Type",
         labelDeposit: "Deposit (%)",
@@ -5859,7 +5901,7 @@
         pill2Sub: "Kyusa deposit n'emyaka olabe enkyukakyuka mu kusasula buli mwezi.",
         pill3Title: "Rate zikeberwa buli lunaku",
         pill3Sub: "Rate zikeberwa buli lunaku okukuuma data nga mpya.",
-        calcTitle: "Mortgage Playground",
+        calcTitle: "Repayment calculator",
         calcTip: "Kyusa sliders olabe enjawulo",
         labelPrice: "Omuwendo gwa Property (UGX)",
         labelPurpose: "Ekika kya Mortgage",
@@ -6043,7 +6085,7 @@
         pill2Sub: "Lok deposit ki mwaka me neno cente me dwe i kare-ki-kare.",
         pill3Title: "Neno Rate Buri Nino",
         pill3Sub: "Rate pego buri nino me gwoko ngec ma manyen.",
-        calcTitle: "Mortgage Playground",
+        calcTitle: "Repayment calculator",
         calcTip: "Lok sliders me pimo yoo mapat",
         labelPrice: "Wel pa gang (UGX)",
         labelPurpose: "Kit mortgage",
@@ -6135,7 +6177,7 @@
         pill2Sub: "Hindura deposit n'emyaka oreebe ensasura ya buri kwezi.",
         pill3Title: "Okwegyesa Rate buri izooba",
         pill3Sub: "Rate zireebwa buri izooba kugira data egume nempya.",
-        calcTitle: "Mortgage Playground",
+        calcTitle: "Repayment calculator",
         calcTip: "Hindura sliders ogerageranye options",
         labelPrice: "Omuhendo gwa Property (UGX)",
         labelPurpose: "Ekika kya mortgage",
@@ -6227,7 +6269,7 @@
         pill2Sub: "Hindura deposit n'imyaka urebe uko kwishyura kwa buri kwezi guhinduka.",
         pill3Title: "Isuzuma rya buri munsi",
         pill3Sub: "Rates zisuzumwa buri munsi kugira amakuru agume ari mashya.",
-        calcTitle: "Mortgage Playground",
+        calcTitle: "Repayment calculator",
         calcTip: "Hindura sliders ugeregeranye options",
         labelPrice: "Igiciro cya Property (UGX)",
         labelPurpose: "Ubwoko bwa mortgage",
@@ -6319,7 +6361,7 @@
         pill2Sub: "Kyusa deposit n'emyaka olabe ensasula za buli mwezi.",
         pill3Title: "Rate zikeberwa buli lunaku",
         pill3Sub: "Rate zikeberwa buli lunaku okusigaza data nga mpya.",
-        calcTitle: "Mortgage Playground",
+        calcTitle: "Repayment calculator",
         calcTip: "Kyusa sliders ogerageranye eby'okulondako",
         labelPrice: "Omuwendo gwa Property (UGX)",
         labelPurpose: "Ekika kya mortgage",
@@ -7397,6 +7439,7 @@
       setTextById("mnav-ai", tr("navAI"));
       setTextById("mnav-fraud", tr("navFraud"));
       setTextById("nav-list-btn", tr("advertiseProperty"));
+      setTextById("mnav-advertise", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
 
       const heroBadge = document.getElementById("hero-badge");
@@ -12709,7 +12752,7 @@
       } else {
         signEl.classList.remove("hidden");
         signEl.innerHTML = `<i class="fas fa-user text-green-300"></i> ${tr("signIn")}`;
-        signEl.onclick = () => openAuthSignIn("finder");
+        signEl.onclick = (event) => openAuthSignIn("finder", event);
         if (dashboardEl) {
           dashboardEl.innerHTML = "";
           dashboardEl.classList.add("hidden");
@@ -12918,6 +12961,7 @@
       persistAuthState(token, resolvedUser);
       hydrateAccountForm();
       closeModal("auth-modal");
+      closeAccountAccessDrawer();
       await trackEvent("auth_success", { source, role: user.role || "" });
       toast(data?.message || `Welcome, ${user.first_name || "user"}`);
       openSignedInDashboard();
@@ -14305,7 +14349,13 @@
 
     function initLeafletListPinMap() {
       if (!window.L) return false;
-      lpPinMap = L.map("lp-pin-map", {
+      const el = document.getElementById("lp-pin-map");
+      if (!el) return false;
+      if (el._leaflet_id && !lpPinMap) {
+        try { el._leaflet_id = null; } catch (e) {}
+        el.innerHTML = "";
+      }
+      lpPinMap = L.map(el, {
         minZoom: 6,
         maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
         maxBoundsViscosity: 0.65
@@ -14328,12 +14378,13 @@
         resizeListMap(lpPinMap, lpPinMapProvider);
         return;
       }
+      if (lpPinMapInitPromise) return lpPinMapInitPromise;
       if (GOOGLE_MAPS_API_KEY) {
-        ensureGoogleMapsApi().then((useGoogle) => {
+        lpPinMapInitPromise = ensureGoogleMapsApi().then((useGoogle) => {
           if (lpPinMap) return;
           const ready = useGoogle && initGoogleListPinMap(el);
           if (!ready) {
-            ensureLeafletApi().then(() => {
+            return ensureLeafletApi().then(() => {
               if (!lpPinMap) initLeafletListPinMap();
               if (lpPinMap) {
                 refreshListPinMapFromInputs();
@@ -14344,11 +14395,15 @@
           }
           refreshListPinMapFromInputs();
           resizeListMap(lpPinMap, lpPinMapProvider);
+        }).finally(() => {
+          lpPinMapInitPromise = null;
         });
         return;
       }
-      ensureLeafletApi().then(() => {
+      lpPinMapInitPromise = ensureLeafletApi().then(() => {
         if (initLeafletListPinMap()) resizeListMap(lpPinMap, lpPinMapProvider);
+      }).finally(() => {
+        lpPinMapInitPromise = null;
       });
     }
 
@@ -14371,7 +14426,13 @@
 
     function initLeafletListPreviewMap() {
       if (!window.L) return false;
-      lpPreviewMap = L.map("lp-preview-map", {
+      const el = document.getElementById("lp-preview-map");
+      if (!el) return false;
+      if (el._leaflet_id && !lpPreviewMap) {
+        try { el._leaflet_id = null; } catch (e) {}
+        el.innerHTML = "";
+      }
+      lpPreviewMap = L.map(el, {
         minZoom: 6,
         maxBounds: [[-1.7, 29.2], [4.5, 35.2]],
         maxBoundsViscosity: 0.65
@@ -14391,12 +14452,13 @@
         resizeListMap(lpPreviewMap, lpPreviewMapProvider);
         return;
       }
+      if (lpPreviewMapInitPromise) return lpPreviewMapInitPromise;
       if (GOOGLE_MAPS_API_KEY) {
-        ensureGoogleMapsApi().then((useGoogle) => {
+        lpPreviewMapInitPromise = ensureGoogleMapsApi().then((useGoogle) => {
           if (lpPreviewMap) return;
           const ready = useGoogle && initGoogleListPreviewMap(el);
           if (!ready) {
-            ensureLeafletApi().then(() => {
+            return ensureLeafletApi().then(() => {
               if (!lpPreviewMap) initLeafletListPreviewMap();
               if (lpPreviewMap) {
                 updateListPreview();
@@ -14407,11 +14469,15 @@
           }
           updateListPreview();
           resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+        }).finally(() => {
+          lpPreviewMapInitPromise = null;
         });
         return;
       }
-      ensureLeafletApi().then(() => {
+      lpPreviewMapInitPromise = ensureLeafletApi().then(() => {
         if (initLeafletListPreviewMap()) resizeListMap(lpPreviewMap, lpPreviewMapProvider);
+      }).finally(() => {
+        lpPreviewMapInitPromise = null;
       });
     }
 
@@ -16276,6 +16342,15 @@
       window.location.href = "/advertise";
     }
 
+    function handleListPropertyFreeCta(event) {
+      if (event) event.preventDefault();
+      trackEvent("list_property_free_cta_clicked", {
+        source_page: window.location.pathname || "/",
+        signed_in: !!authState?.user
+      });
+      window.location.href = "/list-property";
+    }
+
     function handleSavedClick(event) {
       if (!authState?.user) {
         if (event) event.preventDefault();
@@ -16299,7 +16374,301 @@
       }
     }
 
-    function openAuthSignIn(audience = "finder") {
+    let accountAccessDrawerMode = "signin";
+    let accountAccessDrawerAudience = "finder";
+    let accountAccessDrawerLastFocus = null;
+
+    function normalizeAuthAudience(audience = "finder", allowAdmin = false) {
+      const normalized = String(audience || "").toLowerCase();
+      if (allowAdmin && normalized === "admin") return "admin";
+      if (normalized === "agent" || normalized === "broker") return "agent";
+      if (normalized === "student") return "student";
+      if (normalized === "advertiser") return "advertiser";
+      if (normalized === "field_agent" || normalized === "field") return "field_agent";
+      return "finder";
+    }
+
+    function signupRouteForAudience(audience = "finder") {
+      const resolved = normalizeAuthAudience(audience);
+      return resolved === "student"
+        ? "/student-signup"
+        : (resolved === "agent"
+          ? "/broker-signup"
+          : (resolved === "field_agent"
+            ? "/field-agent-signup"
+            : (resolved === "advertiser" ? "/advertiser-signup" : "/signup")));
+    }
+
+    function accountAccessRouteBenefit() {
+      const path = String(window.location.pathname || "/").toLowerCase();
+      if (path.includes("to-rent")) return "Renting? Save rentals, create alerts, book viewings, and track callbacks.";
+      if (path.includes("for-sale")) return "Buying? Save homes, compare options, check mortgage estimates, and track viewing requests.";
+      if (path.includes("student")) return "Students can save campus searches, track rooms, create alerts, and request callbacks.";
+      if (path.includes("land")) return "Land seekers can save plots, track title-status notes, create alerts, and use safety checklists.";
+      if (path.includes("commercial")) return "Find business space, save searches, request callbacks, and track commercial enquiries.";
+      if (path.includes("list-property")) return "Create an account to manage listings, receive enquiries, track viewings, and get listing updates.";
+      if (path.includes("advertise")) return "Advertisers can create campaigns, manage payments, and track leads.";
+      return "Your MakaUg account helps you save properties, create alerts, book viewings, and manage your property search.";
+    }
+
+    function accountAccessRoleCopy(role = "finder") {
+      return {
+        finder: {
+          label: "Property Finder",
+          body: "Save properties, create alerts, compare options, book viewings, and track enquiries."
+        },
+        student: {
+          label: "Student",
+          body: "Save rooms near campus, create student alerts, request callbacks, book viewings, and get student safety tips."
+        },
+        agent: {
+          label: "Broker",
+          body: "Manage listings, track leads, handle WhatsApp enquiries, and manage viewings."
+        },
+        field_agent: {
+          label: "Field Agent",
+          body: "Apply to work with MakaUg, submit sourced listings, track approval feedback, and view tasks when approved."
+        },
+        advertiser: {
+          label: "Advertiser",
+          body: "Create campaigns, manage payments, promote listings or services, and track leads."
+        }
+      }[normalizeAuthAudience(role)] || {
+        label: "Property Finder",
+        body: "Save properties, create alerts, compare options, book viewings, and track enquiries."
+      };
+    }
+
+    function ensureAccountAccessDrawer() {
+      let drawer = document.getElementById("account-access-drawer");
+      if (drawer) return drawer;
+      drawer = document.createElement("div");
+      drawer.id = "account-access-drawer";
+      drawer.className = "fixed inset-0 z-[10000] hidden";
+      drawer.setAttribute("role", "dialog");
+      drawer.setAttribute("aria-modal", "true");
+      drawer.setAttribute("aria-labelledby", "account-access-title");
+      drawer.innerHTML = `
+        <div class="absolute inset-0 bg-black/45" data-auth-drawer-overlay="1" onclick="closeAccountAccessDrawer()"></div>
+        <aside class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-2xl flex flex-col sm:rounded-l-3xl overflow-hidden">
+          <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 px-5 py-5 text-white">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-xs uppercase tracking-wide text-green-200 font-bold">MakaUg account</p>
+                <h2 id="account-access-title" class="text-2xl font-black serif mt-1">Sign in or create your MakaUg account</h2>
+                <p class="text-sm text-green-50 mt-2">Save properties, create alerts, book viewings, and manage your property search faster.</p>
+              </div>
+              <button type="button" aria-label="Close sign in" onclick="closeAccountAccessDrawer()" class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
+                <i class="fas fa-xmark"></i>
+              </button>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto p-5 space-y-5">
+            <div class="rounded-2xl bg-green-50 border border-green-100 p-4 text-sm text-green-900" id="auth-drawer-benefits"></div>
+            <div>
+              <label class="block text-xs font-bold text-gray-600 mb-1">Language</label>
+              <select id="auth-drawer-language" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="setLanguage(this.value)">
+                <option value="en">English</option>
+                <option value="lg">Luganda</option>
+                <option value="sw">Kiswahili</option>
+                <option value="ac">Acholi</option>
+                <option value="ny">Runyankole</option>
+                <option value="rn">Rukiga</option>
+                <option value="sm">Lusoga</option>
+              </select>
+            </div>
+            <div>
+              <div class="text-xs font-bold text-gray-600 mb-2">Continue as</div>
+              <div class="grid grid-cols-1 gap-2" id="account-access-role-list">
+                ${["finder", "student", "agent", "field_agent", "advertiser"].map((role) => {
+                  const copy = accountAccessRoleCopy(role);
+                  return `<button type="button" data-auth-drawer-role="${role}" onclick="setAccountAccessRole('${role}')" class="text-left rounded-xl border border-gray-200 px-4 py-3 hover:border-green-300 hover:bg-green-50">
+                    <span class="block text-sm font-black text-gray-900">${copy.label}</span>
+                    <span class="block text-xs text-gray-600 mt-1">${copy.body}</span>
+                  </button>`;
+                }).join("")}
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs uppercase tracking-wide text-green-700 font-bold" id="account-access-role-label">Property Finder</p>
+                  <h3 class="text-lg font-black text-gray-900" id="account-access-mode-label">Sign in</h3>
+                </div>
+                <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700">Create an account</button>
+              </div>
+              <p id="account-access-role-body" class="text-sm text-gray-600 mt-2"></p>
+              <label class="block text-xs font-bold text-gray-600 mt-4 mb-1">Email address or phone number</label>
+              <input id="account-access-identifier" autocomplete="username" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Email address or phone number">
+              <div id="account-access-password-wrap" class="hidden">
+                <label class="block text-xs font-bold text-gray-600 mt-3 mb-1">Password</label>
+                <div class="relative">
+                  <input id="account-access-password" type="password" autocomplete="current-password" class="w-full border border-green-100 rounded-xl px-4 py-3 pr-12 text-sm" placeholder="Password">
+                  <button type="button" onclick="toggleAccountAccessPassword()" aria-label="Show or hide password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="fas fa-eye"></i></button>
+                </div>
+              </div>
+              <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="mt-4 w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
+              <div class="mt-4 flex flex-wrap gap-3 text-sm">
+                <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold">Create an account</button>
+                <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold">Forgot password?</button>
+                <button type="button" onclick="setAccountAccessRole('student')" class="text-blue-700 font-bold">Continue with student account</button>
+                <button type="button" onclick="setAccountAccessRole('agent')" class="text-amber-700 font-bold">Continue as broker</button>
+                <button type="button" onclick="setAccountAccessRole('field_agent')" class="text-gray-700 font-bold">Continue as field agent</button>
+                <button type="button" onclick="setAccountAccessRole('advertiser')" class="text-purple-700 font-bold">Continue as advertiser</button>
+              </div>
+            </div>
+          </div>
+        </aside>`;
+      document.body.appendChild(drawer);
+      return drawer;
+    }
+
+    function focusableAccountDrawerElements() {
+      const drawer = document.getElementById("account-access-drawer");
+      if (!drawer || drawer.classList.contains("hidden")) return [];
+      return Array.from(drawer.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'))
+        .filter((el) => {
+          const style = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+        });
+    }
+
+    function handleAccountAccessKeydown(event) {
+      if (event.key === "Escape") {
+        closeAccountAccessDrawer();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusableAccountDrawerElements();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    function setAccountAccessRole(role = "finder") {
+      accountAccessDrawerAudience = normalizeAuthAudience(role);
+      const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
+      setTextById("account-access-role-label", copy.label);
+      setTextById("account-access-role-body", copy.body);
+      document.querySelectorAll("[data-auth-drawer-role]").forEach((btn) => {
+        const active = btn.getAttribute("data-auth-drawer-role") === accountAccessDrawerAudience;
+        btn.classList.toggle("border-green-500", active);
+        btn.classList.toggle("bg-green-50", active);
+      });
+    }
+
+    function openAccountAccessDrawer(mode = "signin", audience = "finder") {
+      accountAccessDrawerMode = mode === "create" ? "create" : "signin";
+      accountAccessDrawerLastFocus = document.activeElement;
+      const drawer = ensureAccountAccessDrawer();
+      drawer.classList.remove("hidden");
+      document.body.classList.add("overflow-hidden");
+      const language = document.getElementById("auth-drawer-language");
+      if (language) language.value = currentLang || "en";
+      setTextById("auth-drawer-benefits", accountAccessRouteBenefit());
+      setTextById("account-access-mode-label", accountAccessDrawerMode === "create" ? "Create account" : "Sign in");
+      const passwordWrap = document.getElementById("account-access-password-wrap");
+      if (passwordWrap) passwordWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
+      const continueBtn = document.getElementById("account-access-continue-btn");
+      if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Continue";
+      setAccountAccessRole(audience);
+      document.addEventListener("keydown", handleAccountAccessKeydown);
+      setTimeout(() => document.getElementById("account-access-identifier")?.focus(), 30);
+      trackEvent("auth_drawer_opened", { audience: accountAccessDrawerAudience, mode: accountAccessDrawerMode });
+    }
+
+    function closeAccountAccessDrawer() {
+      const drawer = document.getElementById("account-access-drawer");
+      if (drawer) drawer.classList.add("hidden");
+      document.body.classList.remove("overflow-hidden");
+      document.removeEventListener("keydown", handleAccountAccessKeydown);
+      try {
+        if (accountAccessDrawerLastFocus && typeof accountAccessDrawerLastFocus.focus === "function") {
+          accountAccessDrawerLastFocus.focus();
+        }
+      } catch (e) {}
+    }
+
+    function showAccountAccessCreate() {
+      accountAccessDrawerMode = "create";
+      setTextById("account-access-mode-label", "Create account");
+      const passwordWrap = document.getElementById("account-access-password-wrap");
+      if (passwordWrap) passwordWrap.classList.add("hidden");
+      const continueBtn = document.getElementById("account-access-continue-btn");
+      if (continueBtn) continueBtn.textContent = "Create account";
+    }
+
+    function toggleAccountAccessPassword() {
+      const input = document.getElementById("account-access-password");
+      if (input) input.type = input.type === "password" ? "text" : "password";
+    }
+
+    async function continueAccountAccess() {
+      if (accountAccessDrawerMode === "create") {
+        const identifier = encodeURIComponent((document.getElementById("account-access-identifier")?.value || "").trim());
+        const next = encodeURIComponent(window.location.pathname + window.location.search);
+        window.location.href = `${signupRouteForAudience(accountAccessDrawerAudience)}?identifier=${identifier}&next=${next}`;
+        return;
+      }
+      const passwordWrap = document.getElementById("account-access-password-wrap");
+      if (passwordWrap?.classList.contains("hidden")) {
+        passwordWrap.classList.remove("hidden");
+        const continueBtn = document.getElementById("account-access-continue-btn");
+        if (continueBtn) continueBtn.textContent = "Sign in";
+        document.getElementById("account-access-password")?.focus();
+        return;
+      }
+      await submitAccountAccessSignIn();
+    }
+
+    async function submitAccountAccessSignIn() {
+      const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
+      const password = (document.getElementById("account-access-password")?.value || "").trim();
+      if (!identifierRaw || !password) {
+        toast("Enter your email/phone and password.");
+        return;
+      }
+      const isEmailLogin = identifierRaw.includes("@");
+      const phone = isEmailLogin ? "" : normalizePhoneInput(identifierRaw);
+      const email = isEmailLogin ? identifierRaw.toLowerCase() : "";
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || "Sign in";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Signing in...";
+      }
+      try {
+        const res = await apiRequest("/api/auth/login", {
+          method: "POST",
+          body: isEmailLogin ? { email, password } : { phone, password }
+        });
+        await finalizeAuth(res?.data, "password", accountAccessDrawerAudience);
+      } catch (error) {
+        toast(error.message || "Sign in failed.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      }
+    }
+
+    function startAccountAccessForgotFlow() {
+      const identifier = encodeURIComponent((document.getElementById("account-access-identifier")?.value || "").trim());
+      const next = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/forgot-password?identifier=${identifier}&next=${next}`;
+    }
+
+    function openAuthSignIn(audience = "finder", event) {
+      if (event) event.preventDefault();
       const normalized = String(audience || "").toLowerCase();
       const resolved = normalized === "admin"
         ? "admin"
@@ -16311,8 +16680,7 @@
               ? "advertiser"
               : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
       if (!document.getElementById("auth-modal")) {
-        const next = encodeURIComponent(window.location.pathname + window.location.search);
-        window.location.href = `/login?audience=${encodeURIComponent(resolved)}&next=${next}`;
+        openAccountAccessDrawer("signin", resolved);
         return;
       }
       openModal("auth-modal");
@@ -16320,7 +16688,8 @@
       setAuthSignInAudience(resolved);
     }
 
-    function openAuthSignUp(audience = "finder") {
+    function openAuthSignUp(audience = "finder", event) {
+      if (event) event.preventDefault();
       const normalized = String(audience || "").toLowerCase();
       const resolved = normalized === "agent"
         ? "agent"
@@ -16330,14 +16699,7 @@
             ? "advertiser"
             : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")));
       if (!document.getElementById("auth-modal")) {
-        const route = resolved === "student"
-          ? "/student-signup"
-          : (resolved === "agent"
-            ? "/broker-signup"
-            : (resolved === "field_agent"
-              ? "/field-agent-signup"
-              : (resolved === "advertiser" ? "/advertiser-signup" : "/signup")));
-        window.location.href = route;
+        openAccountAccessDrawer("create", resolved);
         return;
       }
       openModal("auth-modal");
@@ -22974,6 +23336,13 @@
       return `USh ${num.toLocaleString()}`;
     }
 
+    function formatMortgageAmount(value, currency = "UGX") {
+      const normalizedCurrency = String(currency || "UGX").toUpperCase();
+      const num = Math.max(0, Math.round(Number(value) || 0));
+      if (normalizedCurrency === "USD") return `USD ${num.toLocaleString()}`;
+      return formatUgxAmount(num);
+    }
+
     function formatMortgageUpdatedAtLabel(value) {
       if (!value) return DEFAULT_MORTGAGE_RATE_UPDATED_AT;
       const dt = new Date(value);
@@ -23263,6 +23632,23 @@
       syncMortgageInput(kind, value);
     }
 
+    function resetMortgageCalculator() {
+      const defaults = {
+        "mortgage-price": "250000000",
+        "mortgage-deposit": "20",
+        "mortgage-rate": "16",
+        "mortgage-years": "20",
+        "mortgage-income": "",
+        "mortgage-purpose": "residential",
+        "mortgage-currency": "UGX"
+      };
+      Object.entries(defaults).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (el) el.value = value;
+      });
+      renderMortgageFinder();
+    }
+
     function renderMortgageFinder() {
       const priceEl = document.getElementById("mortgage-price");
       const depositEl = document.getElementById("mortgage-deposit");
@@ -23273,6 +23659,9 @@
       const yearsValueEl = document.getElementById("mortgage-years-value");
       const purposeEl = document.getElementById("mortgage-purpose");
       const incomeEl = document.getElementById("mortgage-income");
+      const rateEl = document.getElementById("mortgage-rate");
+      const currencyEl = document.getElementById("mortgage-currency");
+      const professionalResultsEl = document.getElementById("mortgage-professional-results");
       const summaryEl = document.getElementById("mortgage-summary");
       const healthEl = document.getElementById("mortgage-health");
       const bestEl = document.getElementById("mortgage-best");
@@ -23291,9 +23680,44 @@
       const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
       const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_LAST_CHECKED_RAW || MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
       const income = Math.max(0, Number(incomeEl?.value || 0));
-      const monthly = result.best?.monthlyRepayment || 0;
+      const selectedRate = Math.max(0, Number(rateEl?.value || result.best?.rate || 0));
+      const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;
       const suggestedIncome = monthly ? monthly / 0.35 : 0;
       const loanShare = result.price > 0 ? Math.round((result.loanAmount / result.price) * 100) : 0;
+      const currency = currencyEl?.value || "UGX";
+      const bankRegistrationEstimate = result.loanAmount * 0.015;
+      const transferEstimate = result.price * 0.01;
+      const onceOffCosts = result.depositAmount + bankRegistrationEstimate + transferEstimate;
+      const totalInterestEstimate = monthly ? Math.max(0, monthly * normalizedYears * 12 - result.loanAmount) : 0;
+      if (professionalResultsEl) {
+        professionalResultsEl.innerHTML = `
+          <div class="text-sm text-green-100 font-bold uppercase tracking-wide">Estimated monthly repayment</div>
+          <div class="text-4xl font-black mt-2">${formatMortgageAmount(monthly, currency)}</div>
+          <div class="text-xs text-green-100 mt-2">Based on ${selectedRate.toFixed(2)}% over ${normalizedYears} ${mortgageTr("yearsWord")}.</div>
+          <div class="mt-5 grid gap-3">
+            <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+              <div class="text-xs text-green-100 uppercase font-bold">Once-off Costs</div>
+              <div class="text-lg font-black mt-1">${formatMortgageAmount(onceOffCosts, currency)}</div>
+              <div class="text-[11px] text-green-100 mt-1">Deposit ${formatMortgageAmount(result.depositAmount, currency)} • Bank/registration estimate ${formatMortgageAmount(bankRegistrationEstimate, currency)} • Transfer/stamp duty estimate ${formatMortgageAmount(transferEstimate, currency)}</div>
+            </div>
+            <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+              <div class="text-xs text-green-100 uppercase font-bold">Gross Monthly Income Required</div>
+              <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
+            </div>
+            <div class="rounded-xl bg-white/10 border border-white/15 p-3">
+              <div class="text-xs text-green-100 uppercase font-bold">Loan Amount</div>
+              <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
+              <div class="text-[11px] text-green-100 mt-1">Total interest estimate: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+            </div>
+          </div>
+          <div class="mt-5 grid gap-2">
+            <a href="#mortgage-lead-title" class="bg-white text-green-900 hover:bg-green-50 rounded-xl px-4 py-3 text-sm font-black text-center">Request mortgage help</a>
+            ${authState?.user ? '<button type="button" onclick="toast(\'Calculation saved to your MakaUg dashboard.\')" class="border border-white/30 text-white rounded-xl px-4 py-3 text-sm font-black">Save calculation</button>' : '<button type="button" onclick="openAuthSignIn(\'finder\')" class="border border-white/30 text-white rounded-xl px-4 py-3 text-sm font-black">Sign in to save</button>'}
+          </div>
+          <p class="text-[11px] text-green-100 mt-4">This is an estimate only. Actual rates, fees, repayments, and approvals depend on the lender.</p>`;
+      }
+      const leadAmountEl = document.getElementById("mortgage-lead-amount");
+      if (leadAmountEl && !leadAmountEl.value) leadAmountEl.placeholder = String(Math.round(result.loanAmount || 0));
 
       summaryEl.innerHTML = `
         <div class="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-100 rounded-xl p-3">

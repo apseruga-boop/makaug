@@ -22,6 +22,7 @@ const { buildListingReference, isListingReference } = require('../services/listi
 const { buildListingWhatsappMessage, buildWhatsAppUrl } = require('../services/whatsappLinkService');
 const { savedSearchMatchesListing } = require('../services/alertSchedulerService');
 const { normalizePaymentStatus, paymentProviderConfigured } = require('../services/paymentProviderService');
+const { buildMortgageEstimate, computeMonthlyRepayment: computeMortgagePayment } = require('../services/mortgageCalculatorService');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -44,7 +45,8 @@ const PUBLIC_ROUTES = [
   '/cookie-policy',
   '/terms',
   '/report-fraud',
-  '/list-property'
+  '/list-property',
+  '/login'
 ];
 
 const PUBLIC_ROUTE_MARKERS = {
@@ -56,7 +58,7 @@ const PUBLIC_ROUTE_MARKERS = {
   '/land': ['Land', 'No land listings', 'title'],
   '/commercial': ['Commercial', 'No commercial spaces', 'business'],
   '/brokers': ['Brokers', 'Find your perfect broker', 'Broker directory'],
-  '/mortgage': ['Mortgage', 'repayments'],
+  '/mortgage': ['Mortgage Finder', 'Repayment calculator', 'Gross Monthly Income Required'],
   '/advertise': ['Advertise', 'Campaign', 'Sponsored'],
   '/about': ['About', 'MakaUg', 'Our Mission'],
   '/how-it-works': ['How MakaUg Works', 'List property'],
@@ -68,7 +70,8 @@ const PUBLIC_ROUTE_MARKERS = {
   '/cookie-policy': ['Cookie Policy', 'Cookies'],
   '/terms': ['Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Fraud', 'Report suspicious'],
-  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review']
+  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review'],
+  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
 };
 
 const PUBLIC_ROUTE_ACTIVE_IDS = {
@@ -92,7 +95,8 @@ const PUBLIC_ROUTE_ACTIVE_IDS = {
   '/cookie-policy': 'page-cookie-policy',
   '/terms': 'page-terms',
   '/report-fraud': 'page-fraud',
-  '/list-property': 'page-list-property'
+  '/list-property': 'page-list-property',
+  '/login': 'page-login'
 };
 
 const FORBIDDEN_PUBLIC_IDS = [
@@ -213,10 +217,30 @@ function run() {
   const aboutHtml = sanitizePublicHtml(sourceHtml, { pathname: '/about' });
   const mortgageHtml = sanitizePublicHtml(sourceHtml, { pathname: '/mortgage' });
   const fraudHtml = sanitizePublicHtml(sourceHtml, { pathname: '/fraud' });
+  const loginHtml = sanitizePublicHtml(sourceHtml, { pathname: '/login' });
+  const loginText = normalizeText(loginHtml);
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
   assert(normalizeText(aboutHtml).includes('Our Mission'), '/about should contain the full about page');
   assert(mortgageHtml.includes('id="page-mortgage"'), '/mortgage should render the mortgage route');
+  assert(!normalizeText(mortgageHtml).includes('Mortgage Playground'), '/mortgage should not use old playground wording');
+  assert(!normalizeText(mortgageHtml).includes('Move sliders'), '/mortgage should not use slider playground copy');
+  assert(normalizeText(mortgageHtml).includes('Gross Monthly Income Required'), '/mortgage should show professional result panel');
   assert(fraudHtml.includes('id="page-fraud"'), '/fraud should render the fraud route');
+  assert(loginHtml.includes('id="page-login"'), '/login should render clean auth route');
+  assert(loginText.includes('Sign in or create your MakaUg account'), '/login should show clean auth heading');
+  for (const unrelated of ['Find your perfect rental property', 'Mortgage Finder Mortgage Finder', 'Fraud Prevention', 'Commercial Property Hub']) {
+    assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
+  }
+  assert(sourceHtml.includes('data-testid="list-property-free-cta"'), 'header should expose List your property for free CTA');
+  assert(!sourceHtml.includes('data-testid="advertise-property-cta"'), 'header should not keep old Advertise Property CTA test id');
+  assert(sourceHtml.includes('handleListPropertyFreeCta(event)'), 'header List your property CTA should be wired');
+  assert(sourceHtml.includes('id="student-login-cta"'), 'student login CTA should be globally addressable for tests');
+
+  const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
+  assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');
+  const mortgageEstimate = buildMortgageEstimate({ purchasePrice: 250000000, depositPercent: 20, annualRate: 16, termYears: 20 });
+  assert.strictEqual(Math.round(mortgageEstimate.loanAmount), 200000000, 'mortgage estimate should calculate loan amount after deposit');
+  assert(mortgageEstimate.onceOffCosts > mortgageEstimate.depositAmount, 'mortgage estimate should include once-off costs beyond deposit');
 
   const requiredDashboardShellText = [
     'My Property Brief',

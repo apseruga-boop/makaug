@@ -23,7 +23,8 @@ const ROUTES = [
   '/cookie-policy',
   '/terms',
   '/report-fraud',
-  '/list-property'
+  '/list-property',
+  '/login'
 ];
 
 const FORBIDDEN_VISIBLE_TEXT = [
@@ -63,7 +64,8 @@ const MARKERS = {
   '/cookie-policy': ['Cookie Policy', 'Cookies'],
   '/terms': ['Terms', 'Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Report suspicious', 'Fraud', 'Report a Listing'],
-  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review']
+  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review'],
+  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
 };
 
 function visibleText(html) {
@@ -96,6 +98,7 @@ function routeActiveMarker(route, html) {
     '/terms': 'page-terms',
     '/report-fraud': 'page-fraud',
     '/list-property': 'page-list-property',
+    '/login': 'page-login',
     '/about': 'page-about'
   };
   const id = expectations[route];

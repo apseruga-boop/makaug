@@ -1,6 +1,6 @@
 # MakaUg CTA Action Matrix
 
-Generated for Task 8 go-live stabilization.
+Generated for Task 9 go-live stabilization.
 
 Status terms: **working** means the CTA has a route, click handler, API submit, or external destination and is covered by the click-action probe or existing go-live tests. **partial** means backend/provider behaviour may depend on credentials or logged-in state. **disabled** means intentionally unavailable with a visible reason.
 
@@ -10,8 +10,8 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | Header | Email | `mailto:info@makaug.com` | Opens email client | Opens mail | Opens mail | none | href audit | working | Public support channel. |
 | Header | Language | `#lang-sel` | Changes visible language labels | Saves preference locally | Saves preference locally | `language_changed` where analytics enabled | go-live/i18n checks | working | Full translations remain tracked separately in content audit. |
 | Header | Currency | `#cur-sel` | Changes display currency | Saves preference locally | Saves preference locally | currency preference | static checks | working | Existing currency logic preserved. |
-| Header | Saved | `#top-saved-link` | Saved page/dashboard saved tab | Redirects to `/login` | `/dashboard?tab=saved` | `saved_auth_required_clicked` | click probe | working | No stripped modal dependency. |
-| Header | Sign In | `#top-signin-link` | Sign-in flow | `/login` on sanitized public HTML | Opens modal where full app shell has it | auth event | click probe | working | Fallback prevents dead click. |
+| Header | Saved | `#top-saved-link` | Saved page/dashboard saved tab | Opens MakaUg auth drawer with saved-property context | `/dashboard?tab=saved` | `saved_auth_required_clicked` | click probe | working | No stripped modal dependency. |
+| Header | Sign In | `#top-signin-link` | Opens MakaUg auth drawer | Opens drawer; `/login` remains clean fallback | Dashboard redirect after auth | `auth_drawer_opened`, `auth_success` | click probe | working | Fixed Task 9: no messy all-in-one `/login`. |
 | Header | For Sale | `#nav-sale` | `/for-sale` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | To Rent | `#nav-rent` | `/to-rent` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | Students | `#nav-students` | `/student-accommodation` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
@@ -21,7 +21,7 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | Header | Mortgage Finder | `#nav-mortgage` | `/mortgage` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | Discover AI Chatbot | `#nav-ai` | `/discover-ai-chatbot` | Public route | Public route | `page_view` | click probe | working | Chatbot route opens AI/WhatsApp help page. |
 | Header | Fraud | `#nav-fraud` | `/anti-fraud` | Public safety route | Public safety route | `page_view` | click probe | working | No report modal dependency. |
-| Header | Advertise Property | `[data-testid="advertise-property-cta"]` | `/advertise`, or dashboard/admin route by role | `/advertise` | advertiser `/advertiser-dashboard?tab=create-campaign`; admin `/admin/advertising` | `advertise_property_cta_clicked`; advertiser inquiry lead on form submit | click probe | working | Fixed from dead list-property modal behaviour. |
+| Header | List your property for free | `[data-testid="list-property-free-cta"]` | `/list-property` | Public listing route | Public listing route | `list_property_free_cta_clicked` | click probe | working | Replaces old confusing “Advertise Property” header CTA. |
 | Homepage | Search | `#hero-search-btn` | Runs search and navigates to category | Public search | Public search | `property_search` | go-live tests | working | Uses existing filters. |
 | Homepage | List your property for free | `#hero-list-free-btn` | `/list-property` fallback or listing modal in full shell | Public listing route | Public listing route | `list_property_cta_clicked` | click audit | working | Fallback added if modal stripped. |
 | Homepage | View all featured properties | `#home-featured-link` | `/for-sale` | Public route | Public route | `page_view` | click audit | working | Uses `showPage`/route fallback. |
@@ -42,7 +42,8 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | List property | Continue / Submit | `#lp-step*`, submit buttons | Step wizard and API submit | Public listing flow | Public listing flow | property submit/email notification | go-live tests | working | Reference generation already tested. |
 | List property | Find address or place | `#lp-address-search-btn` | Address lookup/fallback | Public | Public | location event | go-live tests | working | Provider fallback documented. |
 | List property | Send/Verify OTP | `#lp-send-otp-btn`, verify buttons | OTP provider or safe dev path | Public | Public | OTP events | go-live tests | working | Provider credentials may be required live. |
-| Advertise | Advertise with MakaUg | `/advertise` synthetic CTA | Advertising route/signup/contact | Public advertising route | Advertiser dashboard/admin by role | advertiser inquiry/click | click probe | working | CTA links added in sanitized HTML. |
+| Advertise | Advertise with MakaUg | `/advertise` synthetic CTA | Paid advertising route/signup/contact | Public paid campaign route | Advertiser dashboard/admin by role | advertiser inquiry/click | click probe | working | Kept separate from free property listing. |
+| Mortgage | Request mortgage help | `#mortgage-lead-submit` | POST mortgage lead | Submits/logs lead where provider/API exists | Same plus dashboard history where available | `mortgage_lead_submit` | go-live tests/perf probe | working | Calculator redesigned around professional repayment results. |
 | Advertise | Start advertising / signup | `/advertiser-signup` | Advertiser signup | Signup route | Dashboard if advertiser | advertiser_signup | click probe route | working | Provider-independent. |
 | Advertise | Generate payment link | advertiser dashboard | Payment link or provider-missing state | Requires auth | Advertiser/admin | payment events | go-live tests | partial | Real provider depends on env. |
 | Auth | Sign In / Create account | `/login`, `/signup`, role signup routes | Auth drawer or route | Public auth route | Session/dashboard redirect | auth events | go-live tests | working | Fallback added for sanitized public pages. |
