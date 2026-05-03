@@ -125,7 +125,7 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/advertise': {
     title: 'Advertise with MakaUg',
     eyebrow: 'Paid advertising campaigns',
-    body: 'Run paid sponsored listings, broker spotlights, student accommodation campaigns, mortgage partner placements, and WhatsApp-first lead campaigns. Free property listing lives on List Your Property; this page is for campaign packages, review, payment links, and advertiser dashboard access.',
+    body: 'Run paid sponsored listings, broker spotlights, student accommodation campaigns, mortgage partner placements, and WhatsApp-first lead campaigns. Free property listing lives on List Property; this page is for campaign packages, review, payment links, and advertiser dashboard access.',
     ctas: ['Start advertising', 'Create advertiser account', 'Ask MakaUg about advertising on WhatsApp'],
     links: ['/advertiser-signup', '/advertiser-dashboard', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20advertise']
   },
@@ -382,11 +382,11 @@ function renderAuthRouteContent(pathname = '/') {
           <h2 class="text-2xl font-black text-gray-900 serif">Choose how you want to continue</h2>
           <p class="text-gray-600 mt-2">Use one clean MakaUg account for property search, student rooms, broker tools, field work, or advertiser campaigns. Admin access is invite-only and is not available through public signup.</p>
           <div class="grid sm:grid-cols-2 gap-3 mt-5">
-            <a href="/signup?role=finder" class="rounded-xl border border-green-100 bg-green-50 p-4 text-green-900 font-bold">Property Finder<span class="block text-xs font-normal text-green-800 mt-1">Save, compare, alert, and book.</span></a>
-            <a href="/student-signup" class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900 font-bold">Student<span class="block text-xs font-normal text-blue-800 mt-1">Campus rooms, alerts, and callbacks.</span></a>
-            <a href="/broker-signup" class="rounded-xl border border-amber-100 bg-amber-50 p-4 text-amber-900 font-bold">Broker<span class="block text-xs font-normal text-amber-800 mt-1">Listings, leads, and viewings.</span></a>
-            <a href="/field-agent-signup" class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-900 font-bold">Field Agent<span class="block text-xs font-normal text-gray-700 mt-1">Apply, submit, and track feedback.</span></a>
-            <a href="/advertiser-signup" class="rounded-xl border border-purple-100 bg-purple-50 p-4 text-purple-900 font-bold sm:col-span-2">Advertiser<span class="block text-xs font-normal text-purple-800 mt-1">Campaigns, payments, and leads.</span></a>
+            <a href="/signup?role=finder" class="rounded-xl border border-green-100 bg-green-50 p-4 text-green-900 font-bold"><i class="fas fa-house-chimney mr-2"></i>Property Finder<span class="block text-xs font-normal text-green-800 mt-1">Search, save, alert, view.</span></a>
+            <a href="/student-signup" class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900 font-bold"><i class="fas fa-graduation-cap mr-2"></i>Student<span class="block text-xs font-normal text-blue-800 mt-1">Campus rooms and alerts.</span></a>
+            <a href="/broker-signup" class="rounded-xl border border-amber-100 bg-amber-50 p-4 text-amber-900 font-bold"><i class="fas fa-briefcase mr-2"></i>Broker<span class="block text-xs font-normal text-amber-800 mt-1">Listings, leads, viewings.</span></a>
+            <a href="/field-agent-signup" class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-900 font-bold"><i class="fas fa-clipboard-list mr-2"></i>Field Agent<span class="block text-xs font-normal text-gray-700 mt-1">Apply, submit, track.</span></a>
+            <a href="/advertiser-signup" class="rounded-xl border border-purple-100 bg-purple-50 p-4 text-purple-900 font-bold sm:col-span-2"><i class="fas fa-bullhorn mr-2"></i>Advertiser<span class="block text-xs font-normal text-purple-800 mt-1">Campaigns, payments, leads.</span></a>
           </div>
         </div>
         <div class="bg-white border border-green-100 rounded-2xl p-6 shadow-lg">

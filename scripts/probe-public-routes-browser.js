@@ -31,7 +31,7 @@ const MARKERS = {
   '/student-accommodation': ['Student Accommodation', 'Student Housing', 'Campus', 'Student rooms'],
   '/commercial': ['Commercial', 'Offices', 'Shops', 'Warehouses', 'Business space'],
   '/brokers': ['Brokers', 'Find a Broker', 'Broker directory', 'Verified brokers'],
-  '/list-property': ['List Your Property', 'Find address or place'],
+  '/list-property': ['List Property', 'Find address or place'],
   '/about': ['About', 'MakaUg'],
   '/help': ['Help', 'Help Centre'],
   '/safety': ['Safety', 'Safety Tips'],

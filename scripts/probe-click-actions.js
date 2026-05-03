@@ -21,11 +21,11 @@ function chromeExecutable() {
 }
 
 const PRIMARY_ACTIONS = [
-  { route: '/', selector: '[data-testid="list-property-free-cta"]', label: 'Header List your property for free', expectUrl: '/list-property', marker: 'List Your Property' },
-  { route: '/to-rent', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from rent', expectUrl: '/list-property', marker: 'List Your Property' },
-  { route: '/for-sale', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from sale', expectUrl: '/list-property', marker: 'List Your Property' },
-  { route: '/land', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from land', expectUrl: '/list-property', marker: 'List Your Property' },
-  { route: '/student-accommodation', selector: '[data-testid="list-property-free-cta"]', label: 'Header List property from student route', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/', selector: '[data-testid="list-property-free-cta"]', label: 'Header List Property', expectUrl: '/list-property', marker: 'List Property' },
+  { route: '/to-rent', selector: '[data-testid="list-property-free-cta"]', label: 'Header List Property from rent', expectUrl: '/list-property', marker: 'List Property' },
+  { route: '/for-sale', selector: '[data-testid="list-property-free-cta"]', label: 'Header List Property from sale', expectUrl: '/list-property', marker: 'List Property' },
+  { route: '/land', selector: '[data-testid="list-property-free-cta"]', label: 'Header List Property from land', expectUrl: '/list-property', marker: 'List Property' },
+  { route: '/student-accommodation', selector: '[data-testid="list-property-free-cta"]', label: 'Header List Property from student route', expectUrl: '/list-property', marker: 'List Property' },
   { route: '/', selector: '#nav-rent', label: 'Header To Rent', expectUrl: '/to-rent', marker: 'To Rent' },
   { route: '/', selector: '#nav-sale', label: 'Header For Sale', expectUrl: '/for-sale', marker: 'For Sale' },
   { route: '/', selector: '#nav-land', label: 'Header Land', expectUrl: '/land', marker: 'Land' },
@@ -38,7 +38,7 @@ const PRIMARY_ACTIONS = [
   { route: '/', selector: '#top-signin-link', label: 'Header Sign In opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
   { route: '/', selector: '#top-saved-link', label: 'Saved logged out opens drawer', expectDrawer: '#account-access-drawer', marker: 'Sign in or create your MakaUg account' },
   { route: '/student-accommodation', selector: '#student-login-cta', label: 'Student Login opens student drawer', expectDrawer: '#account-access-drawer', marker: 'Students can save campus searches' },
-  { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Your Property' },
+  { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Property' },
   { route: '/', selector: '#footer-link-advertise', label: 'Footer Advertise', expectUrl: '/advertise', marker: 'Advertise' },
   { route: '/', selector: '#footer-link-help', label: 'Footer Help', expectUrl: '/help', marker: 'Help' },
   { route: '/', selector: '#footer-link-safety', label: 'Footer Safety', expectUrl: '/safety', marker: 'Safety' }
@@ -75,6 +75,58 @@ async function auditVisibleActions(page) {
       }))
       .filter((item) => item.label || item.id);
   });
+}
+
+async function auditCardsAndMarkers(page, route) {
+  const checks = [];
+  const card = page.locator('.property-card:visible, [data-property-card]:visible, [data-property-id]:visible').first();
+  if (await card.count()) {
+    const before = page.url();
+    await card.click({ timeout: 8000 }).catch((error) => {
+      checks.push(`listing/property card click failed: ${error.message}`);
+    });
+    await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const text = await visibleText(page);
+    const after = page.url();
+    if (before === after && !/Back to results|Property Details|Book Viewing|Request Callback|WhatsApp/i.test(text)) {
+      checks.push('listing/property card did not open a detail view or route');
+    }
+    await go(page, route);
+  }
+  const markerCount = await page.locator('.leaflet-marker-icon:visible, [data-map-marker]:visible').count();
+  if (markerCount) {
+    const markerIndex = await page.evaluate(() => {
+      const nodes = Array.from(document.querySelectorAll('.leaflet-marker-icon, [data-map-marker]'))
+        .filter((el) => {
+          const style = window.getComputedStyle(el);
+          const rect = el.getBoundingClientRect();
+          return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        });
+      for (let i = 0; i < nodes.length; i += 1) {
+        const el = nodes[i];
+        el.scrollIntoView({ block: 'center', inline: 'center' });
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const top = document.elementFromPoint(x, y);
+        if (top === el || el.contains(top)) return i;
+      }
+      return -1;
+    });
+    if (markerIndex < 0) {
+      checks.push('no unobstructed map marker was clickable');
+    } else {
+      const marker = page.locator('.leaflet-marker-icon:visible, [data-map-marker]:visible').nth(markerIndex);
+      await marker.click({ timeout: 8000 }).catch((error) => {
+        checks.push(`map marker click failed: ${error.message}`);
+      });
+    }
+    await page.waitForTimeout(300);
+    const popupOrDetail = await page.locator('.leaflet-popup:visible, #detail-content:visible, [data-map-marker-popup]:visible').count();
+    if (!popupOrDetail) checks.push('map marker did not open popup/detail');
+  }
+  return checks;
 }
 
 function actionHasDestination(item) {
@@ -186,12 +238,13 @@ async function main() {
       await go(page, route);
       const actions = await auditVisibleActions(page);
       const dead = actions.filter((item) => !actionHasDestination(item));
+      const cardMarkerFailures = await auditCardsAndMarkers(page, route);
       results.push({
         label: `Visible action audit ${route}`,
         route,
         selector: `${actions.length} visible actions`,
-        ok: dead.length === 0,
-        failures: dead.slice(0, 5).map((item) => `dead visible action: ${item.id || item.label || item.tag}`)
+        ok: dead.length === 0 && cardMarkerFailures.length === 0,
+        failures: dead.slice(0, 5).map((item) => `dead visible action: ${item.id || item.label || item.tag}`).concat(cardMarkerFailures)
       });
     }
   } finally {

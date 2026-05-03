@@ -64,7 +64,7 @@ const MARKERS = {
   '/cookie-policy': ['Cookie Policy', 'Cookies'],
   '/terms': ['Terms', 'Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Report suspicious', 'Fraud', 'Report a Listing'],
-  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review'],
+  '/list-property': ['List Property', 'Find address or place', 'Submit for review'],
   '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
 };
 

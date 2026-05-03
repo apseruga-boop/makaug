@@ -70,7 +70,7 @@ const PUBLIC_ROUTE_MARKERS = {
   '/cookie-policy': ['Cookie Policy', 'Cookies'],
   '/terms': ['Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Fraud', 'Report suspicious'],
-  '/list-property': ['List Your Property', 'Find address or place', 'Submit for review'],
+  '/list-property': ['List Property', 'Find address or place', 'Submit for review'],
   '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
 };
 
@@ -174,6 +174,8 @@ function run() {
   assert(!homeHtml.includes('id="page-mortgage"'), 'homepage should not render the full mortgage route');
   assert(!homeHtml.includes('id="page-fraud"'), 'homepage should not render the full fraud route');
   assert(!homeText.includes('# List Your Property - Free'), 'homepage should not contain raw list-property heading');
+  assert(homeText.includes('List Property'), 'homepage should show the short List Property CTA');
+  assert(!homeText.includes('List your property for free'), 'homepage header should not use the long list-property CTA');
   assert(!homeText.includes('Listing submitted successfully'), 'homepage should not contain listing success panel');
   assert(!homeText.includes('Inquiry Number'), 'homepage should not contain inquiry number text before submission');
   assert(!homeText.includes('Our Mission'), 'homepage should not contain full about page body');
@@ -195,7 +197,13 @@ function run() {
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
   const listPropertyText = normalizeText(listPropertyHtml);
   assert(listPropertyHtml.includes('id="page-list-property"'), '/list-property should render the listing form route');
+  assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
+  assert(listPropertyText.includes('List your property on MakaUg for free.'), '/list-property should explain free listing in supporting copy');
+  assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
+  assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
+  assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
+  assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');
   for (const oldLocationCopy of [
     'Location setup (step-by-step)',
     'Choose the location step by step',
@@ -225,16 +233,36 @@ function run() {
   assert(!normalizeText(mortgageHtml).includes('Mortgage Playground'), '/mortgage should not use old playground wording');
   assert(!normalizeText(mortgageHtml).includes('Move sliders'), '/mortgage should not use slider playground copy');
   assert(normalizeText(mortgageHtml).includes('Gross Monthly Income Required'), '/mortgage should show professional result panel');
+  assert(mortgageHtml.includes('data-mortgage-visual="light-3d"'), '/mortgage should use the light 3D calculator shell');
+  assert(mortgageHtml.includes('mortgage-result-pop'), '/mortgage should include subtle result animation styling');
   assert(fraudHtml.includes('id="page-fraud"'), '/fraud should render the fraud route');
   assert(loginHtml.includes('id="page-login"'), '/login should render clean auth route');
   assert(loginText.includes('Sign in or create your MakaUg account'), '/login should show clean auth heading');
   for (const unrelated of ['Find your perfect rental property', 'Mortgage Finder Mortgage Finder', 'Fraud Prevention', 'Commercial Property Hub']) {
     assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
   }
-  assert(sourceHtml.includes('data-testid="list-property-free-cta"'), 'header should expose List your property for free CTA');
+  assert(sourceHtml.includes('data-testid="list-property-free-cta"'), 'header should expose List Property CTA');
+  assert(!sourceHtml.includes('List your property for free'), 'source should not keep old header CTA wording');
+  assert(!sourceHtml.includes('List a Property Free'), 'source should not keep old footer CTA wording');
   assert(!sourceHtml.includes('data-testid="advertise-property-cta"'), 'header should not keep old Advertise Property CTA test id');
   assert(sourceHtml.includes('handleListPropertyFreeCta(event)'), 'header List your property CTA should be wired');
   assert(sourceHtml.includes('id="student-login-cta"'), 'student login CTA should be globally addressable for tests');
+  assert(sourceHtml.includes('data-auth-role-card="1"'), 'auth drawer should use icon role cards');
+  for (const iconClass of ['fa-house-chimney', 'fa-graduation-cap', 'fa-briefcase', 'fa-clipboard-list', 'fa-bullhorn']) {
+    assert(sourceHtml.includes(iconClass), `auth drawer missing role icon: ${iconClass}`);
+  }
+  assert(sourceHtml.includes('ACCOUNT_ACCESS_SCREENING'), 'auth drawer should define quick screening questions');
+  for (const role of ['finder', 'student', 'agent', 'field_agent', 'advertiser']) {
+    const match = sourceHtml.match(new RegExp(`${role}: \\[([\\s\\S]*?)\\n\\s*\\]`, 'm'));
+    assert(match, `missing auth screening questions for ${role}`);
+    const count = (match[1].match(/key:/g) || []).length;
+    assert(count > 0 && count <= 5, `${role} should have 1-5 screening questions, got ${count}`);
+  }
+  assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
+  assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
+  assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(sourceHtml.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
+  assert(sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should show mobile-friendly progress steps');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');

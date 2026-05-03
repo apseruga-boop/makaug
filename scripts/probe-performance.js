@@ -36,6 +36,11 @@ const EXPECTED_PAGE_IDS = {
   '/login': 'page-login'
 };
 
+const VIEWPORTS = [
+  { name: 'desktop', width: 1365, height: 900 },
+  { name: 'mobile', width: 390, height: 844 }
+];
+
 function chromeExecutable() {
   const candidates = [
     process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
@@ -82,7 +87,7 @@ function significantConsoleIssues(issues, responseFailures) {
   });
 }
 
-async function probeRoute(page, route) {
+async function probeRoute(page, route, viewportName = 'desktop') {
   const consoleIssues = [];
   const responseFailures = [];
   const onConsole = (msg) => {
@@ -155,6 +160,7 @@ async function probeRoute(page, route) {
 
   return {
     route,
+    viewport: viewportName,
     status: response?.status() || 0,
     visibleMs,
     consoleErrors,
@@ -166,7 +172,7 @@ async function probeRoute(page, route) {
 function markdown(results) {
   const now = new Date().toISOString();
   const slowest = [...results].sort((a, b) => b.visibleMs - a.visibleMs)[0];
-  const rows = results.map((r) => `| \`${r.route}\` | ${r.status} | ${r.visibleMs} | ${r.domContentLoadedMs ?? '-'} | ${r.loadMs ?? '-'} | ${r.resourceCount} | ${r.jsCount} | ${r.cssCount} | ${r.googleMapsLoaded ? 'yes' : 'no'} | ${r.consoleErrors.length} | ${r.failures.length ? r.failures.join('<br>') : 'pass'} |`).join('\n');
+  const rows = results.map((r) => `| \`${r.route}\` | ${r.viewport} | ${r.status} | ${r.visibleMs} | ${r.domContentLoadedMs ?? '-'} | ${r.loadMs ?? '-'} | ${r.resourceCount} | ${r.jsCount} | ${r.cssCount} | ${r.googleMapsLoaded ? 'yes' : 'no'} | ${r.consoleErrors.length} | ${r.failures.length ? r.failures.join('<br>') : 'pass'} |`).join('\n');
   return `# MakaUg Performance Audit
 
 Generated: ${now}
@@ -180,10 +186,10 @@ Launch targets:
 - Google Maps should not load on the homepage before active map use.
 - Google Maps should not load on homepage, mortgage, advertise, or login routes before active map use.
 
-Slowest route: \`${slowest?.route || '-'}\` at ${slowest?.visibleMs ?? '-'}ms.
+Slowest route: \`${slowest?.route || '-'}\` (${slowest?.viewport || '-'}) at ${slowest?.visibleMs ?? '-'}ms.
 
-| Route | Status | Body visible ms | DCL ms | Load ms | Resources | JS | CSS | Google Maps | Console errors | Result |
-|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
+| Route | Viewport | Status | Body visible ms | DCL ms | Load ms | Resources | JS | CSS | Google Maps | Console errors | Result |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
 ${rows}
 
 Notes:
@@ -200,15 +206,18 @@ async function main() {
   const page = await context.newPage();
   const results = [];
   try {
-    for (const route of ROUTES) {
-      results.push(await probeRoute(page, route));
+    for (const viewport of VIEWPORTS) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const route of ROUTES) {
+        results.push(await probeRoute(page, route, viewport.name));
+      }
     }
   } finally {
     await browser.close();
   }
   fs.writeFileSync(OUT_FILE, markdown(results));
   for (const result of results) {
-    console.log(`${result.failures.length ? 'FAIL' : 'PASS'} ${result.route} status=${result.status} visible=${result.visibleMs}ms dcl=${result.domContentLoadedMs}ms load=${result.loadMs}ms resources=${result.resourceCount} js=${result.jsCount} css=${result.cssCount} maps=${result.googleMapsLoaded ? 'yes' : 'no'} console=${result.consoleErrors.length}`);
+    console.log(`${result.failures.length ? 'FAIL' : 'PASS'} ${result.route} viewport=${result.viewport} status=${result.status} visible=${result.visibleMs}ms dcl=${result.domContentLoadedMs}ms load=${result.loadMs}ms resources=${result.resourceCount} js=${result.jsCount} css=${result.cssCount} maps=${result.googleMapsLoaded ? 'yes' : 'no'} console=${result.consoleErrors.length}`);
     for (const failure of result.failures) console.log(`  - ${failure}`);
   }
   console.log(`Performance audit written to ${OUT_FILE}`);

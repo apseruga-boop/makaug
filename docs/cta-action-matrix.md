@@ -1,6 +1,6 @@
 # MakaUg CTA Action Matrix
 
-Generated for Task 9 go-live stabilization.
+Generated for Task 10 go-live UX polish.
 
 Status terms: **working** means the CTA has a route, click handler, API submit, or external destination and is covered by the click-action probe or existing go-live tests. **partial** means backend/provider behaviour may depend on credentials or logged-in state. **disabled** means intentionally unavailable with a visible reason.
 
@@ -21,9 +21,9 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | Header | Mortgage Finder | `#nav-mortgage` | `/mortgage` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | Discover AI Chatbot | `#nav-ai` | `/discover-ai-chatbot` | Public route | Public route | `page_view` | click probe | working | Chatbot route opens AI/WhatsApp help page. |
 | Header | Fraud | `#nav-fraud` | `/anti-fraud` | Public safety route | Public safety route | `page_view` | click probe | working | No report modal dependency. |
-| Header | List your property for free | `[data-testid="list-property-free-cta"]` | `/list-property` | Public listing route | Public listing route | `list_property_free_cta_clicked` | click probe | working | Replaces old confusing “Advertise Property” header CTA. |
+| Header | List Property | `[data-testid="list-property-free-cta"]` | `/list-property` | Public listing route | Public listing route | `list_property_free_cta_clicked` | click probe | working | Short launch CTA; free-listing copy lives on the route. |
 | Homepage | Search | `#hero-search-btn` | Runs search and navigates to category | Public search | Public search | `property_search` | go-live tests | working | Uses existing filters. |
-| Homepage | List your property for free | `#hero-list-free-btn` | `/list-property` fallback or listing modal in full shell | Public listing route | Public listing route | `list_property_cta_clicked` | click audit | working | Fallback added if modal stripped. |
+| Homepage | List Property | `#hero-list-free-btn` | `/list-property` fallback or listing modal in full shell | Public listing route | Public listing route | `list_property_cta_clicked` | click audit | working | Fallback added if modal stripped. |
 | Homepage | View all featured properties | `#home-featured-link` | `/for-sale` | Public route | Public route | `page_view` | click audit | working | Uses `showPage`/route fallback. |
 | Homepage | All Agents | `#home-brokers-link` | `/brokers` | Public route | Public route | `page_view` | click audit | working | Existing route. |
 | Homepage | Discover AI Chatbot | `#home-assistant-discover-btn` | AI chatbot page | Public route | Public route | `page_view` | click audit | working | Existing route. |
