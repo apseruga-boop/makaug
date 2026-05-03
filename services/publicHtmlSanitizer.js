@@ -428,7 +428,7 @@ function stripProtectedPageBlocks(html) {
 function stripPublicModalBlocks(html, pathname = '/') {
   let output = String(html || '');
   const pathName = normalizePath(pathname).toLowerCase();
-  const preserve = new Set(pathName === '/list-property' ? ['listing-submit-modal'] : []);
+  const preserve = new Set(pathName === '/list-property' ? ['list-choice-modal', 'listing-submit-modal'] : []);
   for (const id of PUBLIC_MODAL_IDS) {
     if (preserve.has(id)) continue;
     output = removeElementById(output, id);

@@ -919,6 +919,116 @@ router.post('/verify-submit-otp', async (req, res, next) => {
   }
 });
 
+router.post('/listing-intent', async (req, res, next) => {
+  try {
+    const body = req.body || {};
+    const modeRaw = cleanText(body.mode || body.listing_mode).toLowerCase();
+    const mode = modeRaw === 'whatsapp_ai' || modeRaw === 'whatsapp' ? 'whatsapp_ai' : 'online';
+    const listingTypeRaw = normalizeListingType(body.listing_type || body.type);
+    const listingType = LISTING_TYPES.includes(listingTypeRaw) ? listingTypeRaw : 'sale';
+    const title = cleanText(body.title) || null;
+    const location = cleanText(body.location || body.full_address || body.area || body.district) || null;
+    const phone = normalizeUgPhone(body.phone || body.whatsapp || body.user_phone);
+    const email = normalizeEmail(body.email || body.user_email);
+    const language = normalizePreferredLanguage(body.language || body.preferred_language);
+    const sourcePage = cleanText(body.source_page) || '/list-property';
+
+    const lead = await createLead(db, {
+      contact: {
+        name: cleanText(body.name) || 'Listing owner',
+        phone: isValidPhone(phone) ? phone : null,
+        email: isValidEmail(email) ? email : null,
+        preferredContactChannel: mode === 'whatsapp_ai' ? 'whatsapp' : 'in_app',
+        preferredLanguage: language,
+        roleType: 'listing_owner',
+        locationInterest: location || '',
+        categoryInterest: listingType
+      },
+      source: mode === 'whatsapp_ai' ? 'list_property_whatsapp_ai' : 'list_property_online',
+      leadType: 'listing_owner',
+      category: listingType,
+      location: location || '',
+      message: mode === 'whatsapp_ai'
+        ? 'Owner chose WhatsApp AI listing path.'
+        : 'Owner chose online listing form.',
+      activityType: 'listing_path_selected',
+      metadata: {
+        mode,
+        listing_type: listingType,
+        title,
+        location,
+        source_page: sourcePage
+      }
+    });
+
+    await logNotification(db, {
+      recipientPhone: isValidPhone(phone) ? phone : null,
+      recipientEmail: isValidEmail(email) ? email : null,
+      channel: mode === 'whatsapp_ai' ? 'whatsapp' : 'in_app',
+      type: 'list_property_path_selected',
+      status: mode === 'whatsapp_ai' ? 'provider_missing' : 'logged',
+      failureReason: mode === 'whatsapp_ai' ? 'External WhatsApp handoff opens from browser; inbound provider confirms when configured.' : null,
+      payloadSummary: {
+        mode,
+        listing_type: listingType,
+        title,
+        location,
+        source_page: sourcePage
+      },
+      relatedLeadId: lead?.id || null
+    });
+
+    if (mode === 'whatsapp_ai') {
+      await logWhatsAppMessage(db, {
+        recipientPhone: process.env.MAKAUG_WHATSAPP_NUMBER || '+256760112587',
+        templateKey: 'list_property_whatsapp_ai',
+        messageType: 'handoff',
+        language,
+        status: 'manual_url',
+        relatedLeadId: lead?.id || null,
+        failureReason: 'wa.me handoff logged; provider inbox records delivery when configured.'
+      });
+    }
+
+    captureLearningEvent({
+      eventName: 'list_property_path_selected',
+      source: sourcePage,
+      channel: mode === 'whatsapp_ai' ? 'whatsapp' : 'web',
+      sessionId: `list_property_intent:${Date.now()}`,
+      externalUserId: phone || email || sourcePage,
+      inputText: [mode, listingType, title, location].filter(Boolean).join(' | '),
+      responseText: mode === 'whatsapp_ai' ? 'User selected WhatsApp AI listing path.' : 'User selected online listing path.',
+      payload: {
+        mode,
+        listing_type: listingType,
+        title,
+        location,
+        source_page: sourcePage,
+        related_lead_id: lead?.id || null
+      },
+      entities: {
+        listing_type: listingType,
+        location: location || ''
+      },
+      dedupeKey: `list_property_intent:${mode}:${listingType}:${sourcePage}:${phone || email || 'anonymous'}`,
+      requestIp: req.ip,
+      userAgent: req.get('user-agent')
+    });
+
+    return res.status(201).json({
+      ok: true,
+      data: {
+        mode,
+        listing_type: listingType,
+        lead_id: lead?.id || null,
+        logged: true
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/', async (req, res, next) => {
   try {
     const body = req.body || {};

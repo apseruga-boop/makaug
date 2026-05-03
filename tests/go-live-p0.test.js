@@ -139,6 +139,7 @@ function normalizeText(html) {
 function assertNoProtectedIds(label, html) {
   for (const id of FORBIDDEN_PUBLIC_IDS) {
     if (label === '/list-property' && id === 'listing-submit-modal') continue;
+    if (label === '/list-property' && id === 'list-choice-modal') continue;
     assert(!html.includes(`id="${id}"`), `${label} leaked protected/modal id: ${id}`);
   }
 }
@@ -222,6 +223,15 @@ function run() {
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
   const listPropertyText = normalizeText(listPropertyHtml);
   assert(listPropertyHtml.includes('id="page-list-property"'), '/list-property should render the listing form route');
+  assert(listPropertyHtml.includes('id="list-choice-modal"'), '/list-property should include the listing path choice modal');
+  assert(listPropertyHtml.includes('Choose the listing type, then pick online form or WhatsApp AI chatbot.'), '/list-property choice modal should explain online vs WhatsApp AI paths');
+  assert(listPropertyHtml.includes('id="list-choice-online-btn"'), '/list-property choice modal should include List Online action');
+  assert(listPropertyHtml.includes('id="lp-whatsapp-option-btn"'), '/list-property choice modal should include WhatsApp AI action');
+  assert(listPropertyHtml.includes('chooseListPropertyOnline'), '/list-property should open the form only after choosing online listing');
+  assert(listPropertyHtml.includes('chooseListPropertyWhatsApp'), '/list-property should open WhatsApp AI from the listing choice');
+  assert(listPropertyHtml.includes('lp-theme-student'), '/list-property should include the student accommodation theme');
+  assert(listPropertyHtml.includes('Student accommodation uses a purple campus flow'), '/list-property should explain the student accommodation colour/theme flow');
+  assert(listPropertyHtml.includes('id="lp-wizard-shell" class="hidden'), '/list-property form should be gated until the user chooses List online');
   assert(listPropertyHtml.includes('id="listing-submit-modal"'), '/list-property should include the hidden post-submit success modal');
   assert(/id="listing-submit-modal"[^>]*class="modal-overlay"/.test(listPropertyHtml), 'listing submit modal should be hidden by default');
   assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
@@ -258,6 +268,9 @@ function run() {
   assert(sourceHtml.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
   assert(sourceHtml.includes('WhatsApp confirmation logged for admin follow-up.'), 'success modal should explain WhatsApp fallback');
   assert(propertiesRoutes.includes('logEmailEvent'), 'property submission should create EmailLog entries');
+  assert(propertiesRoutes.includes("router.post('/listing-intent'"), 'listing path choice should have a backend intent endpoint');
+  assert(propertiesRoutes.includes('list_property_path_selected'), 'listing path choice should create a backend lead/activity/log event');
+  assert(propertiesRoutes.includes('list_property_whatsapp_ai'), 'WhatsApp AI listing path should be logged distinctly');
   assert(propertiesRoutes.includes('logWhatsAppMessage'), 'property submission should create WhatsAppMessageLog entries');
   assert(propertiesRoutes.includes('listing_submitted'), 'property submission should log listing_submitted event');
   assert(propertiesRoutes.includes("source: 'listing_submission'"), 'property submission should create a CRM lead source');

@@ -489,12 +489,93 @@
       padding: 7px 12px;
       margin-bottom: 14px;
     }
-    .lp-wizard-shell {
+    #page-list-property {
       --lp-accent: #166534;
       --lp-accent-2: #16a34a;
       --lp-soft: #f0fdf4;
       --lp-border: #bbf7d0;
       --lp-ink: #14532d;
+      --lp-on-accent: #ffffff;
+    }
+    .lp-page-hero {
+      background:
+        radial-gradient(circle at 86% 0%, color-mix(in srgb, var(--lp-accent-2) 30%, transparent), transparent 34%),
+        linear-gradient(135deg, var(--lp-accent), color-mix(in srgb, var(--lp-accent) 84%, #0f172a));
+      color: #ffffff;
+      transition: background .22s ease;
+    }
+    .lp-choice-gate {
+      border: 1px solid var(--lp-border);
+      background:
+        radial-gradient(circle at top right, color-mix(in srgb, var(--lp-accent-2) 16%, transparent), transparent 35%),
+        linear-gradient(135deg, var(--lp-soft), #ffffff);
+      box-shadow: 0 20px 60px rgba(15, 23, 42, .08);
+    }
+    .lp-choice-card {
+      border: 1px solid var(--lp-border);
+      background: #ffffff;
+      transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .lp-choice-card:hover,
+    .lp-choice-card:focus-visible {
+      border-color: var(--lp-accent);
+      background: var(--lp-soft);
+      box-shadow: 0 18px 42px color-mix(in srgb, var(--lp-accent) 14%, transparent);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .lp-choice-card-primary {
+      background: linear-gradient(135deg, var(--lp-accent), color-mix(in srgb, var(--lp-accent) 82%, #0f172a));
+      color: #ffffff;
+      border-color: color-mix(in srgb, var(--lp-accent-2) 50%, var(--lp-accent));
+    }
+    .lp-choice-card-primary:hover,
+    .lp-choice-card-primary:focus-visible {
+      background: linear-gradient(135deg, color-mix(in srgb, var(--lp-accent) 92%, #ffffff), var(--lp-accent));
+      color: #ffffff;
+    }
+    .lp-choice-type-chip {
+      border: 1px solid var(--lp-border);
+      background: #ffffff;
+      color: #374151;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      transition: all .16s ease;
+    }
+    .lp-choice-type-chip.active,
+    .lp-choice-type-chip:hover,
+    .lp-choice-type-chip:focus-visible {
+      border-color: var(--lp-accent);
+      background: var(--lp-soft);
+      color: var(--lp-ink);
+      outline: none;
+    }
+    .lp-theme-button {
+      background: var(--lp-accent) !important;
+      color: #ffffff !important;
+      border-color: var(--lp-accent) !important;
+    }
+    .lp-theme-button:hover,
+    .lp-theme-button:focus-visible {
+      filter: brightness(1.08);
+    }
+    .lp-theme-outline {
+      border-color: var(--lp-border) !important;
+      color: var(--lp-ink) !important;
+      background: color-mix(in srgb, var(--lp-soft) 78%, #ffffff) !important;
+    }
+    .lp-type-chip {
+      border-color: var(--lp-border) !important;
+    }
+    .lp-type-chip.lp-type-active {
+      border-color: var(--lp-accent) !important;
+      background: var(--lp-soft) !important;
+      color: var(--lp-ink) !important;
+      font-weight: 800;
+    }
+    .lp-wizard-shell {
       position: relative;
       overflow: hidden;
       border-color: var(--lp-border) !important;
@@ -507,11 +588,39 @@
       height: 7px;
       background: linear-gradient(90deg, var(--lp-accent), var(--lp-accent-2));
     }
-    .lp-theme-sale { --lp-accent: #166534; --lp-accent-2: #22c55e; --lp-soft: #f0fdf4; --lp-border: #bbf7d0; --lp-ink: #14532d; }
-    .lp-theme-rent { --lp-accent: #b45309; --lp-accent-2: #f59e0b; --lp-soft: #fffbeb; --lp-border: #fde68a; --lp-ink: #92400e; }
-    .lp-theme-land { --lp-accent: #047857; --lp-accent-2: #84cc16; --lp-soft: #ecfdf5; --lp-border: #a7f3d0; --lp-ink: #065f46; }
-    .lp-theme-commercial { --lp-accent: #9a3412; --lp-accent-2: #ea580c; --lp-soft: #fff7ed; --lp-border: #fed7aa; --lp-ink: #7c2d12; }
-    .lp-theme-student { --lp-accent: #1d4ed8; --lp-accent-2: #06b6d4; --lp-soft: #eff6ff; --lp-border: #bfdbfe; --lp-ink: #1e3a8a; }
+    .lp-theme-sale, #page-list-property.lp-theme-sale { --lp-accent: #166534; --lp-accent-2: #22c55e; --lp-soft: #f0fdf4; --lp-border: #bbf7d0; --lp-ink: #14532d; }
+    .lp-theme-rent, #page-list-property.lp-theme-rent { --lp-accent: #b45309; --lp-accent-2: #f59e0b; --lp-soft: #fffbeb; --lp-border: #fde68a; --lp-ink: #92400e; }
+    .lp-theme-land, #page-list-property.lp-theme-land { --lp-accent: #047857; --lp-accent-2: #84cc16; --lp-soft: #ecfdf5; --lp-border: #a7f3d0; --lp-ink: #065f46; }
+    .lp-theme-commercial, #page-list-property.lp-theme-commercial { --lp-accent: #9a3412; --lp-accent-2: #ea580c; --lp-soft: #fff7ed; --lp-border: #fed7aa; --lp-ink: #7c2d12; }
+    .lp-theme-student, #page-list-property.lp-theme-student { --lp-accent: #6d28d9; --lp-accent-2: #a855f7; --lp-soft: #faf5ff; --lp-border: #e9d5ff; --lp-ink: #581c87; }
+    #page-list-property #lp-address-first-card,
+    #page-list-property #lp-pin-map,
+    #page-list-property .lp-lang-tip {
+      border-color: var(--lp-border) !important;
+      background: var(--lp-soft) !important;
+      color: var(--lp-ink) !important;
+    }
+    #page-list-property input:focus,
+    #page-list-property select:focus,
+    #page-list-property textarea:focus {
+      outline: none;
+      border-color: var(--lp-accent) !important;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--lp-accent-2) 20%, transparent);
+    }
+    #page-list-property #lp-address-search-btn,
+    #page-list-property #lp-location-confirm-btn,
+    #page-list-property #lp-step1-next-btn,
+    #page-list-property #lp-step2-next-btn,
+    #page-list-property #lp-step3-next-btn,
+    #page-list-property #lp-submit-btn {
+      background: var(--lp-accent) !important;
+      color: #ffffff !important;
+    }
+    #page-list-property #lp-map-sync-btn {
+      border-color: var(--lp-accent) !important;
+      color: var(--lp-ink) !important;
+      background: #ffffff !important;
+    }
     .lp-mode-hero {
       position: relative;
       display: grid;
@@ -2112,15 +2221,15 @@
     </div>
   </div>
 
-  <div id="page-list-property" class="page">
-    <div class="bg-green-800 py-8 text-white">
+  <div id="page-list-property" class="page lp-theme-sale">
+    <div id="lp-page-hero" class="lp-page-hero py-8">
       <div class="max-w-4xl mx-auto px-4">
         <h1 id="lp-page-title" class="text-3xl font-black serif">List Property</h1>
         <p id="lp-page-subtitle" class="text-green-100 text-sm mt-2">List your property on MakaUg for free.</p>
       </div>
     </div>
     <div class="max-w-4xl mx-auto px-4 py-10">
-      <div class="bg-white border border-green-100 rounded-2xl p-5 md:p-6 mb-7">
+      <div id="lp-stepper" class="hidden bg-white border border-green-100 rounded-2xl p-5 md:p-6 mb-7">
         <div class="flex flex-wrap md:flex-nowrap items-center gap-3 md:gap-4">
           <div data-lp-step-item="1" class="flex items-center gap-3">
             <div data-lp-step-circle="1" class="w-8 h-8 rounded-full bg-green-800 text-white text-sm font-bold flex items-center justify-center">1</div>
@@ -2144,20 +2253,39 @@
         </div>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-4 mb-7" data-list-property-choice="1">
-        <button type="button" onclick="setListWizardStep(1)" class="text-left rounded-3xl border border-green-200 bg-white p-5 hover:border-green-500 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-600">
+      <div id="lp-choice-gate" class="lp-choice-gate rounded-3xl p-5 md:p-7 mb-7" data-list-property-choice="1">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-5">
+          <div>
+            <div id="lp-choice-gate-kicker" class="text-xs uppercase tracking-[.16em] font-black" style="color:var(--lp-ink)">Choose your listing path</div>
+            <h2 id="lp-choice-gate-title" class="text-2xl md:text-3xl font-black text-gray-900 mt-1">How would you like to list?</h2>
+            <p id="lp-choice-gate-copy" class="text-sm text-gray-600 mt-2 max-w-2xl">Pick the listing type first, then choose the online form or WhatsApp AI chatbot.</p>
+          </div>
+          <button type="button" onclick="openListPropertyOptions()" class="lp-theme-outline inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold">
+            <i class="fas fa-sliders"></i> Choose in pop-up
+          </button>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-5" role="list" aria-label="Listing type">
+          <button type="button" data-list-choice-type="sale" onclick="setListChoiceType('sale')" class="lp-choice-type-chip active">🏠 For Sale</button>
+          <button type="button" data-list-choice-type="rent" onclick="setListChoiceType('rent')" class="lp-choice-type-chip">🔑 For Rent</button>
+          <button type="button" data-list-choice-type="student" onclick="setListChoiceType('student')" class="lp-choice-type-chip">🎓 Student Accommodation</button>
+          <button type="button" data-list-choice-type="land" onclick="setListChoiceType('land')" class="lp-choice-type-chip">🌿 Land</button>
+          <button type="button" data-list-choice-type="commercial" onclick="setListChoiceType('commercial')" class="lp-choice-type-chip">🏢 Commercial</button>
+        </div>
+        <div class="grid md:grid-cols-2 gap-4">
+        <button type="button" onclick="chooseListPropertyOnline({ source: 'inline_choice' })" class="lp-choice-card text-left rounded-3xl p-5 focus:outline-none">
           <div class="text-xs font-black uppercase tracking-wide text-green-700">Option 1</div>
           <h2 class="text-xl font-black text-gray-900 mt-1">List online</h2>
-          <p class="text-sm text-gray-600 mt-1">Use the guided MakaUg form for address, photos, verification, and review.</p>
+          <p id="lp-choice-online-context" class="text-sm text-gray-600 mt-1">Use the guided MakaUg form for Find address or place, photos, verification, and review.</p>
         </button>
-        <button id="lp-whatsapp-option-btn" type="button" onclick="openListPropertyWhatsApp()" class="text-left rounded-3xl border border-green-200 bg-green-900 p-5 text-white hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-600">
+        <button id="lp-whatsapp-option-inline-btn" type="button" onclick="chooseListPropertyWhatsApp({ source: 'inline_choice' })" class="lp-choice-card lp-choice-card-primary text-left rounded-3xl p-5 focus:outline-none">
           <div class="text-xs font-black uppercase tracking-wide text-green-200">Option 2</div>
-          <h2 class="text-xl font-black mt-1">List via WhatsApp</h2>
-          <p class="text-sm text-green-100 mt-1">Open WhatsApp with listing context so MakaUg can help you create the listing.</p>
+          <h2 class="text-xl font-black mt-1">List via WhatsApp AI</h2>
+          <p id="lp-choice-whatsapp-context" class="text-sm text-white/90 mt-1">Open WhatsApp with listing context so MakaUg AI can help you create the listing.</p>
         </button>
+        </div>
       </div>
 
-      <div id="lp-wizard-shell" class="lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
+      <div id="lp-wizard-shell" class="hidden lp-wizard-shell lp-theme-sale bg-white border border-green-100 rounded-2xl p-6 md:p-8">
         <div id="lp-success-box" class="hidden mb-6 bg-green-50 border border-green-200 rounded-2xl p-5">
           <h3 id="lp-success-title" class="text-xl font-black text-green-900 mb-1"></h3>
           <p id="lp-success-sub" class="text-sm text-green-800"></p>
@@ -4223,22 +4351,32 @@
   </div>
 
   <div id="list-choice-modal" class="modal-overlay">
-    <div class="modal-box" style="max-width:640px">
+    <div id="list-choice-box" class="modal-box lp-theme-sale" style="max-width:720px">
       <button onclick="closeModal('list-choice-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
-      <h2 id="list-choice-title" class="text-2xl font-bold text-gray-800 serif">List Property</h2>
-      <p id="list-choice-sub" class="text-sm text-gray-500 mt-1 mb-5">Choose how you'd like to add your property</p>
+      <div class="rounded-3xl p-5 mb-5" style="background:linear-gradient(135deg,var(--lp-soft),#fff);border:1px solid var(--lp-border)">
+        <div id="list-choice-kicker" class="text-xs uppercase tracking-[.16em] font-black" style="color:var(--lp-ink)">Choose listing path</div>
+        <h2 id="list-choice-title" class="text-2xl font-bold text-gray-800 serif mt-1">List Property</h2>
+        <p id="list-choice-sub" class="text-sm text-gray-500 mt-1">Choose the listing type, then pick online form or WhatsApp AI chatbot.</p>
+        <div class="flex flex-wrap gap-2 mt-4" role="list" aria-label="Listing type">
+          <button type="button" data-list-choice-type="sale" onclick="setListChoiceType('sale')" class="lp-choice-type-chip active">🏠 For Sale</button>
+          <button type="button" data-list-choice-type="rent" onclick="setListChoiceType('rent')" class="lp-choice-type-chip">🔑 For Rent</button>
+          <button type="button" data-list-choice-type="student" onclick="setListChoiceType('student')" class="lp-choice-type-chip">🎓 Student Accommodation</button>
+          <button type="button" data-list-choice-type="land" onclick="setListChoiceType('land')" class="lp-choice-type-chip">🌿 Land</button>
+          <button type="button" data-list-choice-type="commercial" onclick="setListChoiceType('commercial')" class="lp-choice-type-chip">🏢 Commercial</button>
+        </div>
+      </div>
 
       <div class="grid md:grid-cols-2 gap-4">
-        <button onclick="closeModal('list-choice-modal'); showPage('list-property')" class="border-2 border-green-100 rounded-2xl p-7 text-center hover:border-green-300 hover:bg-green-50 transition-all">
+        <button id="list-choice-online-btn" type="button" onclick="chooseListPropertyOnline({ source: 'modal' })" class="lp-choice-card rounded-2xl p-7 text-center transition-all">
           <div class="text-4xl mb-3">💻</div>
           <h3 id="list-choice-online-title" class="text-base font-bold text-gray-800">List Online</h3>
-          <p id="list-choice-online-copy" class="text-sm text-gray-500 mt-1">Full form on website</p>
+          <p id="list-choice-online-copy" class="text-sm text-gray-500 mt-1">Open the guided website form.</p>
         </button>
 
-        <a href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+list+my+property" target="_blank" onclick="closeModal('list-choice-modal')" class="border-2 border-green-100 rounded-2xl p-7 text-center hover:border-green-300 hover:bg-green-50 transition-all">
+        <a id="lp-whatsapp-option-btn" href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+list+my+property" target="_blank" onclick="chooseListPropertyWhatsApp({ source: 'modal', event: event })" class="lp-choice-card lp-choice-card-primary rounded-2xl p-7 text-center transition-all">
           <div class="text-4xl mb-3">📲</div>
-          <h3 id="list-choice-wa-title" class="text-base font-bold text-gray-800">Via WhatsApp</h3>
-          <p id="list-choice-wa-copy" class="text-sm text-gray-500 mt-1">Chat with our AI bot</p>
+          <h3 id="list-choice-wa-title" class="text-base font-bold">Via WhatsApp AI</h3>
+          <p id="list-choice-wa-copy" class="text-sm text-white/90 mt-1">Chat with the MakaUg AI listing assistant.</p>
         </a>
       </div>
 
@@ -5303,6 +5441,8 @@
     let lpStreetManualOverride = false;
     let lpAddressManualOverride = false;
     let lpCurrentFormType = "sale";
+    let lpListingPathChoice = "";
+    let lpChoiceType = "sale";
     let lpPreviewPhotos = [];
     let lpPreviewPhotoIndex = 0;
     let lpHierarchyAnchorSeq = 0;
@@ -7243,11 +7383,11 @@
         ["lp-wa-copy", "No laptop? No problem. List via our WhatsApp chatbot in any Ugandan language."],
         ["lp-wa-btn-label", "📲 List on WhatsApp Instead"],
         ["list-choice-title", "List Property"],
-        ["list-choice-sub", "Choose how you'd like to add your property"],
+        ["list-choice-sub", "Choose the listing type, then pick online form or WhatsApp AI chatbot."],
         ["list-choice-online-title", "List Online"],
-        ["list-choice-online-copy", "Full form on website"],
-        ["list-choice-wa-title", "Via WhatsApp"],
-        ["list-choice-wa-copy", "Chat with our AI bot"],
+        ["list-choice-online-copy", "Open the guided website form."],
+        ["list-choice-wa-title", "Via WhatsApp AI"],
+        ["list-choice-wa-copy", "Chat with the MakaUg AI listing assistant."],
         ["list-choice-free-title", "Always 100% Free."],
         ["list-choice-free-copy", "Your listing goes live within 24 hours after identity verification."]
       ];
@@ -15256,6 +15396,7 @@
           label.className = "text-green-700/80 font-semibold text-sm";
         }
       });
+      applyListThemeToControls();
       if (next === 1) refreshListPinMapFromInputs();
       if (next === 2) updateLpPhotoRequirements();
       if (next === 4) {
@@ -16634,16 +16775,185 @@
       renderListReviewSummary();
     }
 
+    function getListChoiceType() {
+      return lpChoiceType || getListType() || "sale";
+    }
+
+    function listingThemeClass(type = "sale") {
+      return `lp-theme-${["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale"}`;
+    }
+
+    function getListPropertyRouteMode() {
+      try {
+        return new URLSearchParams(window.location.search || "").get("mode") || "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function getListPropertyRouteType() {
+      try {
+        const value = new URLSearchParams(window.location.search || "").get("type") || "";
+        return ["sale", "rent", "land", "commercial", "student"].includes(value) ? value : "";
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function inferListTypeFromCurrentRoute() {
+      const path = String(window.location.pathname || "").toLowerCase();
+      if (currentPage === "rent" || path.includes("to-rent")) return "rent";
+      if (currentPage === "students" || path.includes("student")) return "student";
+      if (currentPage === "land" || path.includes("land")) return "land";
+      if (currentPage === "commercial" || path.includes("commercial")) return "commercial";
+      if (currentPage === "sale" || path.includes("for-sale")) return "sale";
+      return getListChoiceType() || "sale";
+    }
+
+    function listChoiceMeta(type = getListChoiceType()) {
+      const meta = LP_MODE_META[type] || LP_MODE_META.sale;
+      const labels = {
+        sale: {
+          gateTitle: "List a property for sale",
+          gateCopy: "For sale listings use ownership, price, photos, Find address or place, and review checks.",
+          onlineCopy: "Open the sale listing form for address, price, photos, ownership, and review.",
+          whatsappCopy: "Open WhatsApp AI with sale-listing context for guided capture.",
+          modalSub: "Sale listings use the green MakaUg owner flow."
+        },
+        rent: {
+          gateTitle: "List a rental property",
+          gateCopy: "Rental listings use availability, rent period, amenities, Find address or place, and viewing setup.",
+          onlineCopy: "Open the rental form for rent period, availability, amenities, address, and verification.",
+          whatsappCopy: "Open WhatsApp AI with rental context so MakaUg can help capture the right details.",
+          modalSub: "Rental listings use the warm amber rent flow."
+        },
+        student: {
+          gateTitle: "List student accommodation",
+          gateCopy: "Student accommodation uses a purple campus flow for campus, room setup, safety, services, and availability.",
+          onlineCopy: "Open the student accommodation form for campus, room setup, services, photos, and map pin.",
+          whatsappCopy: "Open WhatsApp AI with campus and student-housing context.",
+          modalSub: "Student accommodation uses the purple campus theme."
+        },
+        land: {
+          gateTitle: "List land",
+          gateCopy: "Land listings use title/tenure, plot size, road access, map pin, and ownership review.",
+          onlineCopy: "Open the land form for title/tenure, plot size, location, photos, and review.",
+          whatsappCopy: "Open WhatsApp AI with land and title-status context.",
+          modalSub: "Land listings use a natural green title-safety flow."
+        },
+        commercial: {
+          gateTitle: "List commercial property",
+          gateCopy: "Commercial listings use business use, size, parking/loading, price terms, and location.",
+          onlineCopy: "Open the commercial form for business use, size, terms, address, and verification.",
+          whatsappCopy: "Open WhatsApp AI with commercial-space context.",
+          modalSub: "Commercial listings use a warm business-orange flow."
+        }
+      };
+      return {
+        ...meta,
+        ...(labels[type] || labels.sale)
+      };
+    }
+
+    function applyListPropertyTheme(type = getListChoiceType()) {
+      const themeClasses = ["lp-theme-sale", "lp-theme-rent", "lp-theme-land", "lp-theme-commercial", "lp-theme-student"];
+      ["page-list-property", "lp-wizard-shell", "list-choice-box"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove(...themeClasses);
+        el.classList.add(listingThemeClass(type));
+      });
+      requestAnimationFrame(() => {
+        applyListThemeToControls();
+      });
+    }
+
+    function applyListThemeToControls() {
+      const host = document.getElementById("page-list-property") || document.getElementById("lp-wizard-shell");
+      if (!host) return;
+      const style = getComputedStyle(host);
+      const accent = style.getPropertyValue("--lp-accent").trim() || "#166534";
+      const soft = style.getPropertyValue("--lp-soft").trim() || "#f0fdf4";
+      const border = style.getPropertyValue("--lp-border").trim() || "#bbf7d0";
+      const ink = style.getPropertyValue("--lp-ink").trim() || "#14532d";
+      document.querySelectorAll("[data-lp-step-circle]").forEach((circle) => {
+        const step = Number(circle.getAttribute("data-lp-step-circle") || 0);
+        circle.style.background = step <= listWizardStep ? accent : soft;
+        circle.style.color = step <= listWizardStep ? "#ffffff" : ink;
+        circle.style.borderColor = border;
+      });
+      document.querySelectorAll("[data-lp-step-label]").forEach((label) => {
+        const step = Number(label.getAttribute("data-lp-step-label") || 0);
+        label.style.color = step <= listWizardStep ? ink : "color-mix(in srgb, var(--lp-ink) 68%, #64748b)";
+      });
+    }
+
+    function syncListChoiceCopy(type = getListChoiceType()) {
+      const meta = listChoiceMeta(type);
+      setTextById("lp-choice-gate-title", translateListingLabel(meta.gateTitle));
+      setTextById("lp-choice-gate-copy", translateListingLabel(meta.gateCopy));
+      setTextById("lp-choice-online-context", translateListingLabel(meta.onlineCopy));
+      setTextById("lp-choice-whatsapp-context", translateListingLabel(meta.whatsappCopy));
+      setTextById("list-choice-sub", translateListingLabel(meta.modalSub));
+      setTextById("list-choice-online-copy", translateListingLabel(meta.onlineCopy));
+      setTextById("list-choice-wa-copy", translateListingLabel(meta.whatsappCopy));
+      const title = document.getElementById("list-choice-title");
+      if (title) title.textContent = translateListingLabel(meta.gateTitle);
+      const subtitle = document.getElementById("lp-page-subtitle");
+      if (subtitle) subtitle.textContent = translateListingLabel(meta.gateCopy);
+      document.querySelectorAll("[data-list-choice-type]").forEach((chip) => {
+        chip.classList.toggle("active", chip.getAttribute("data-list-choice-type") === type);
+      });
+    }
+
+    function setListChoiceType(type) {
+      const selected = ["sale", "rent", "land", "commercial", "student"].includes(type) ? type : "sale";
+      lpChoiceType = selected;
+      applyListPropertyTheme(selected);
+      syncListChoiceCopy(selected);
+      const radio = document.querySelector(`input[name='lp-type'][value='${selected}']`);
+      if (radio) {
+        radio.checked = true;
+        setListType(selected);
+      }
+      updateListPropertyWhatsAppLinks();
+    }
+
+    function setListPropertyFormVisible(visible) {
+      const show = visible === true;
+      document.getElementById("lp-stepper")?.classList.toggle("hidden", !show);
+      document.getElementById("lp-wizard-shell")?.classList.toggle("hidden", !show);
+      document.getElementById("lp-choice-gate")?.classList.toggle("hidden", show);
+      if (show) {
+        setListWizardStep(listWizardStep || 1);
+        ensureListPinMap();
+        refreshListPinMapFromInputs();
+      }
+    }
+
+    function maybeOpenListPropertyChoiceModal() {
+      if (currentPage !== "list-property") return;
+      const mode = getListPropertyRouteMode();
+      const type = getListPropertyRouteType();
+      if (type) setListChoiceType(type);
+      if (mode === "online") {
+        chooseListPropertyOnline({ source: "route_query", skipModalClose: true });
+        return;
+      }
+      setListPropertyFormVisible(false);
+      window.setTimeout(() => {
+        if (currentPage === "list-property" && !lpListingPathChoice) openListPropertyOptions();
+      }, 120);
+    }
+
     function openListPropertyOptions() {
       if (!document.getElementById("list-choice-modal")) {
         trackEvent("list_property_cta_clicked", { source: "public_route_fallback" });
         window.location.href = "/list-property";
         return;
       }
-      if (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
-        window.open("https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20list%20my%20property", "_blank", "noopener");
-        return;
-      }
+      setListChoiceType(inferListTypeFromCurrentRoute());
+      updateListPropertyWhatsAppLinks();
       openModal("list-choice-modal");
     }
 
@@ -16685,11 +16995,12 @@
         source_page: window.location.pathname || "/",
         signed_in: !!authState?.user
       });
-      window.location.href = "/list-property";
+      const inferredType = inferListTypeFromCurrentRoute();
+      window.location.href = `/list-property?type=${encodeURIComponent(inferredType)}`;
     }
 
     function getSelectedListPropertyTypeLabel() {
-      const selected = document.querySelector('input[name="lp-type"]:checked')?.value || currentLpType || "";
+      const selected = document.querySelector('input[name="lp-type"]:checked')?.value || getListChoiceType() || "";
       return {
         sale: "For Sale",
         rent: "For Rent",
@@ -16697,6 +17008,39 @@
         land: "Land",
         commercial: "Commercial"
       }[selected] || "";
+    }
+
+    function getListPropertyContext() {
+      const location = (
+        document.getElementById("lp-address-search")?.value ||
+        document.getElementById("lp-place-search")?.value ||
+        document.getElementById("lp-manual-landmark")?.value ||
+        document.getElementById("lp-area")?.value ||
+        ""
+      ).trim();
+      return {
+        listing_type: getListChoiceType(),
+        listing_type_label: getSelectedListPropertyTypeLabel(),
+        title: (document.getElementById("lp-title")?.value || document.getElementById("listing-title")?.value || "").trim(),
+        location,
+        source_page: window.location.pathname || "/list-property",
+        signed_in: !!authState?.user,
+        language: currentLang || "en"
+      };
+    }
+
+    function logListPropertyIntent(mode, extra = {}) {
+      const context = getListPropertyContext();
+      const payload = {
+        mode,
+        ...context,
+        ...extra
+      };
+      trackEvent("list_property_path_selected", payload);
+      apiRequest("/api/properties/listing-intent", {
+        method: "POST",
+        body: payload
+      }).catch(() => {});
     }
 
     function buildListPropertyWhatsAppMessage() {
@@ -16715,13 +17059,48 @@
       return `https://wa.me/256760112587?text=${encodeURIComponent(buildListPropertyWhatsAppMessage())}`;
     }
 
+    function updateListPropertyWhatsAppLinks() {
+      const href = listPropertyWhatsAppUrl();
+      ["lp-wa-link", "lp-whatsapp-option-btn"].forEach((id) => {
+        const link = document.getElementById(id);
+        if (link) link.href = href;
+      });
+    }
+
+    function chooseListPropertyOnline(options = {}) {
+      lpListingPathChoice = "online";
+      const type = getListChoiceType();
+      setListChoiceType(type);
+      logListPropertyIntent("online", { source: options.source || "list_property_choice" });
+      if (currentPage !== "list-property") {
+        window.location.href = `/list-property?mode=online&type=${encodeURIComponent(type)}`;
+        return;
+      }
+      if (!options.skipModalClose) closeModal("list-choice-modal");
+      setListPropertyFormVisible(true);
+      window.setTimeout(() => {
+        document.getElementById("lp-title")?.focus?.();
+      }, 80);
+    }
+
+    function chooseListPropertyWhatsApp(options = {}) {
+      const event = options.event;
+      const href = listPropertyWhatsAppUrl();
+      logListPropertyIntent("whatsapp_ai", { source: options.source || "list_property_choice" });
+      try {
+        const link = event?.currentTarget || document.getElementById("lp-whatsapp-option-btn") || document.getElementById("lp-wa-link");
+        if (link) link.href = href;
+      } catch (_) {}
+      closeModal("list-choice-modal");
+      if (!event) {
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+      return true;
+    }
+
     function handleListPropertyWhatsAppClick(event) {
       const href = listPropertyWhatsAppUrl();
-      trackEvent("list_property_whatsapp_clicked", {
-        source_page: window.location.pathname || "/list-property",
-        listing_type: getSelectedListPropertyTypeLabel(),
-        signed_in: !!authState?.user
-      });
+      logListPropertyIntent("whatsapp_ai", { source: "form_whatsapp_cta" });
       try {
         const link = event?.currentTarget || document.getElementById("lp-wa-link");
         if (link) link.href = href;
@@ -16729,13 +17108,7 @@
     }
 
     function openListPropertyWhatsApp() {
-      const url = listPropertyWhatsAppUrl();
-      trackEvent("list_property_whatsapp_clicked", {
-        source_page: window.location.pathname || "/list-property",
-        listing_type: getSelectedListPropertyTypeLabel(),
-        signed_in: !!authState?.user
-      });
-      window.open(url, "_blank", "noopener,noreferrer");
+      chooseListPropertyWhatsApp({ source: "form_whatsapp_cta" });
     }
 
     function handleSavedClick(event) {
@@ -20550,6 +20923,7 @@
       if (page === "list-property") {
         if (previousPage !== "list-property") {
           listWizardStep = 1;
+          lpListingPathChoice = "";
           lpInquiryReference = "";
           lpMainPhotoIndex = 0;
           lpSelectedPhotos = [];
@@ -20568,9 +20942,15 @@
           if (success) success.classList.add("hidden");
           renderLpVideoPreview();
         }
-        ensureListPinMap();
-        refreshListPinMapFromInputs();
-        setListWizardStep(listWizardStep || 1);
+        const routeType = getListPropertyRouteType();
+        if (routeType) setListChoiceType(routeType);
+        if (getListPropertyRouteMode() === "online") {
+          chooseListPropertyOnline({ source: "route_query", skipModalClose: true });
+        } else {
+          setListChoiceType(getListChoiceType());
+          setListPropertyFormVisible(false);
+          maybeOpenListPropertyChoiceModal();
+        }
       }
     }
 
@@ -23747,11 +24127,10 @@
     }
 
     function updateListTypeChips(type) {
-      const active = "inline-flex items-center gap-2 border border-green-700 bg-green-50 rounded-xl px-4 py-2.5 text-sm text-green-800 font-semibold cursor-pointer transition-colors";
-      const base = "inline-flex items-center gap-2 border border-green-100 rounded-xl px-4 py-2.5 text-sm text-gray-700 cursor-pointer transition-colors";
+      const base = "lp-type-chip inline-flex items-center gap-2 border rounded-xl px-4 py-2.5 text-sm text-gray-700 cursor-pointer transition-colors";
       document.querySelectorAll("[data-lp-type-chip]").forEach((chip) => {
         const val = chip.getAttribute("data-lp-type-chip");
-        chip.className = val === type ? active : base;
+        chip.className = val === type ? `${base} lp-type-active` : base;
       });
     }
 
@@ -23890,6 +24269,10 @@
 
       updateListTypeChips(selected);
       updateListingModeHero(selected);
+      lpChoiceType = selected;
+      applyListPropertyTheme(selected);
+      syncListChoiceCopy(selected);
+      updateListPropertyWhatsAppLinks();
 
       const titleEl = document.getElementById("lp-title");
       const areaEl = document.getElementById("lp-area");
