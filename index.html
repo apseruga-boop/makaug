@@ -7711,8 +7711,13 @@
       } catch (e) {}
     }
 
+    const sentWebVitalMetrics = new Set();
+
     function sendWebVitalMetric(metricName, value, rating = "") {
       if (!metricName || !Number.isFinite(value)) return;
+      const metricKey = `${metricName}:${window.location.pathname || "/"}`;
+      if (sentWebVitalMetrics.has(metricKey)) return;
+      sentWebVitalMetrics.add(metricKey);
       try {
         fetch(apiUrl("/api/analytics/web-vitals"), {
           method: "POST",
@@ -24022,6 +24027,10 @@
       mapsInitScheduled = true;
       const activePage = document.querySelector(".page.active");
       const hasActiveMap = !!activePage?.querySelector(".map-h, #map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers");
+      if (!hasActiveMap) {
+        mapsInitScheduled = false;
+        return;
+      }
       const onHomeOnly = activePage?.id === "page-home";
       const delay = hasActiveMap && !onHomeOnly ? 300 : 2500;
       const start = () => {

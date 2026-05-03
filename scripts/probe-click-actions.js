@@ -59,6 +59,7 @@ async function auditVisibleActions(page) {
       .filter((el) => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
+        if (el.closest('.leaflet-container, .leaflet-pane, .gm-style')) return false;
         return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
       })
       .map((el) => ({
