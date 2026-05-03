@@ -138,6 +138,7 @@ function normalizeText(html) {
 
 function assertNoProtectedIds(label, html) {
   for (const id of FORBIDDEN_PUBLIC_IDS) {
+    if (label === '/list-property' && id === 'listing-submit-modal') continue;
     assert(!html.includes(`id="${id}"`), `${label} leaked protected/modal id: ${id}`);
   }
 }
@@ -218,6 +219,9 @@ function run() {
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
   const listPropertyText = normalizeText(listPropertyHtml);
   assert(listPropertyHtml.includes('id="page-list-property"'), '/list-property should render the listing form route');
+  assert(listPropertyHtml.includes('id="listing-submit-modal"'), '/list-property should include the hidden post-submit success modal');
+  assert(/id="listing-submit-modal"[^>]*class="modal-overlay"/.test(listPropertyHtml), 'listing submit modal should be hidden by default');
+  assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
   assert(listPropertyText.includes('List your property on MakaUg for free.'), '/list-property should explain free listing in supporting copy');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
