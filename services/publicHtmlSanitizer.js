@@ -52,19 +52,19 @@ const PUBLIC_FORBIDDEN_STRINGS = [
   'internal metrics'
 ];
 
-const PUBLIC_MODAL_START_MARKERS = [
-  '<div id="admin-evidence-modal"',
-  '<div id="admin-whatsapp-modal"',
-  '<div id="list-choice-modal"',
-  '<div id="listing-submit-modal"',
-  '<div id="save-property-modal"',
-  '<div id="auth-modal"',
-  '<div id="looking-modal"',
-  '<div id="report-modal"',
-  '<div id="broker-reg-modal"',
-  '<div id="page-modal"',
-  '<div id="preview-photo-modal"',
-  '<div id="detail-photo-modal"'
+const PUBLIC_MODAL_IDS = [
+  'admin-evidence-modal',
+  'admin-whatsapp-modal',
+  'list-choice-modal',
+  'listing-submit-modal',
+  'save-property-modal',
+  'auth-modal',
+  'looking-modal',
+  'report-modal',
+  'broker-reg-modal',
+  'page-modal',
+  'preview-photo-modal',
+  'detail-photo-modal'
 ];
 
 const PUBLIC_PAGE_IDS = [
@@ -131,9 +131,23 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   },
   '/how-it-works': {
     title: 'How MakaUg Works',
-    eyebrow: 'Simple property journeys',
-    body: 'Search public listings, save what matters, contact verified listers with property context, list property for review, and use MakaUg support when you need help.',
-    ctas: ['Search property', 'List property', 'Get help'],
+    eyebrow: 'Step-by-step property journeys',
+    body: 'Search property, use filters, save properties and searches, create alerts, contact on WhatsApp, book viewings or callbacks, list property, pass review and safety checks, use dashboards, and report suspicious listings.',
+    extraHtml: `
+      <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>1. Search property</strong><span class="block text-sm text-gray-600 mt-1">Start with sale, rent, land, student rooms, commercial, or brokers.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>2. Use filters</strong><span class="block text-sm text-gray-600 mt-1">Narrow by budget, location, beds, amenities, and purpose.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>3. Save options</strong><span class="block text-sm text-gray-600 mt-1">Save properties and searches into your MakaUg account.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>4. Create alerts</strong><span class="block text-sm text-gray-600 mt-1">Get notified when matching listings go live.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>5. WhatsApp contact</strong><span class="block text-sm text-gray-600 mt-1">Contact owners, brokers, or MakaUg with listing context.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>6. Book viewing</strong><span class="block text-sm text-gray-600 mt-1">Request a viewing or callback when the lister allows it.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided free listing form with address, photos, and verification.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>8. Review checks</strong><span class="block text-sm text-gray-600 mt-1">MakaUg checks details before publishing listings.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>9. Use dashboards</strong><span class="block text-sm text-gray-600 mt-1">Track saved items, leads, bookings, campaigns, and follow-ups.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>10. Report suspicious</strong><span class="block text-sm text-gray-600 mt-1">Flag risky listings quickly so admin can review.</span></div>
+      </div>
+    `,
+    ctas: ['Search property', 'List Property', 'Get help'],
     links: ['/for-sale', '/list-property', '/help']
   },
   '/careers': {
@@ -146,7 +160,34 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/help': {
     title: 'MakaUg Help Centre',
     eyebrow: 'Help and WhatsApp support',
-    body: 'Get help with search, saved properties, listing submission, broker registration, student accommodation, viewings, callbacks, fraud reports, and account access.',
+    body: 'Find quick help for searching, listing, student accommodation, saved searches and alerts, viewings and callbacks, brokers and agents, land and title safety, fraud reports, account access, and paid advertising.',
+    extraHtml: `
+      <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/for-sale"><strong>Finding property</strong><span class="block text-sm text-gray-600 mt-1">Search, filters, maps, and recommendations.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/list-property"><strong>Listing property</strong><span class="block text-sm text-gray-600 mt-1">Address, photos, verification, and review.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/student-accommodation"><strong>Student accommodation</strong><span class="block text-sm text-gray-600 mt-1">Campus searches, budget, safety, and callbacks.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/dashboard"><strong>Saved searches and alerts</strong><span class="block text-sm text-gray-600 mt-1">Save searches and choose alert channels.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/help"><strong>Book viewings and callbacks</strong><span class="block text-sm text-gray-600 mt-1">Request a viewing, callback, or WhatsApp follow-up.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/brokers"><strong>Brokers and agents</strong><span class="block text-sm text-gray-600 mt-1">Profiles, leads, trust, and enquiries.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/safety"><strong>Land and title safety</strong><span class="block text-sm text-gray-600 mt-1">Verify title, seller authority, and payment safety.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/anti-fraud"><strong>Fraud and suspicious listings</strong><span class="block text-sm text-gray-600 mt-1">Report risky listings and get safety help.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/login"><strong>Account and login</strong><span class="block text-sm text-gray-600 mt-1">Sign in, create account, roles, and OTP.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/advertise"><strong>Advertising with MakaUg</strong><span class="block text-sm text-gray-600 mt-1">Campaign packages, payment, and performance.</span></a>
+      </div>
+      <form id="help-request-form" onsubmit="submitHelpRequest(event)" class="mt-8 rounded-3xl bg-white border border-green-100 p-5 space-y-3">
+        <h3 class="text-xl font-black text-gray-900">Contact MakaUg support</h3>
+        <div class="grid md:grid-cols-2 gap-3">
+          <input name="name" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Your name">
+          <input name="email" type="email" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Email address">
+          <input name="phone" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Phone / WhatsApp">
+          <select name="topic" class="border border-green-100 rounded-xl px-4 py-3 text-sm"><option>Finding property</option><option>Listing property</option><option>Student accommodation</option><option>Fraud report</option><option>Advertising with MakaUg</option><option>Account and login</option></select>
+        </div>
+        <textarea name="message" required class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" rows="4" placeholder="How can MakaUg help?"></textarea>
+        <select name="preferredContactMethod" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm"><option value="whatsapp">WhatsApp</option><option value="phone">Phone call</option><option value="email">Email</option></select>
+        <button type="submit" class="rounded-xl bg-green-700 px-5 py-3 text-white font-bold">Send help request</button>
+        <div data-help-request-status class="text-sm text-gray-600"></div>
+      </form>
+    `,
     ctas: ['WhatsApp support', 'Report an issue', 'Tell MakaUg what you need'],
     links: ['https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
   },
@@ -222,6 +263,35 @@ function removeBetweenMarkers(html, startMarker, endMarker) {
   return output;
 }
 
+function findDivBlockEnd(html, start) {
+  const source = String(html || '');
+  const tagRe = /<\/?div\b[^>]*>/gi;
+  tagRe.lastIndex = start;
+  let depth = 0;
+  let match;
+  while ((match = tagRe.exec(source))) {
+    if (match[0].startsWith('</')) {
+      depth -= 1;
+      if (depth <= 0) return tagRe.lastIndex;
+    } else {
+      depth += 1;
+    }
+  }
+  return -1;
+}
+
+function removeElementById(html, id) {
+  let output = String(html || '');
+  let start = output.indexOf(`<div id="${id}"`);
+  while (start !== -1) {
+    const end = findDivBlockEnd(output, start);
+    if (end === -1) break;
+    output = `${output.slice(0, start)}${output.slice(end)}`;
+    start = output.indexOf(`<div id="${id}"`);
+  }
+  return output;
+}
+
 function getPageBlockBounds(html, pageId) {
   const startMarker = `<div id="${pageId}"`;
   const start = String(html || '').indexOf(startMarker);
@@ -285,6 +355,19 @@ function renderSyntheticRouteContent(pathname = '/') {
     const external = /^https?:|^mailto:/i.test(href);
     return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900">${item}</a>`;
   }).join('');
+  const videoContext = {
+    '/about': 'about',
+    '/how-it-works': 'how-it-works',
+    '/help': 'help',
+    '/safety': 'safety',
+    '/anti-fraud': 'safety',
+    '/list-property': 'list-property',
+    '/student-accommodation': 'students',
+    '/students': 'students'
+  }[pathName] || '';
+  const videoSection = videoContext
+    ? `<section class="max-w-5xl mx-auto px-4 pb-10"><div class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="${videoContext}"></div></section>`
+    : '';
   return `
   <main id="page-${pathName.slice(1).replace(/[^a-z0-9-]/g, '-')}" class="page active" data-public-route="${pathName}">
     <section class="bg-green-800 py-10 text-white">
@@ -299,9 +382,11 @@ function renderSyntheticRouteContent(pathname = '/') {
       <div class="bg-white border border-green-100 rounded-2xl p-6">
         <h2 class="text-2xl font-bold text-gray-900 serif">${content.title}</h2>
         <p class="text-gray-600 mt-3">${content.body}</p>
+        ${content.extraHtml || ''}
         <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Ask MakaUg on WhatsApp</a>
       </div>
     </section>
+    ${videoSection}
   </main>
 `;
 }
@@ -335,14 +420,15 @@ function stripProtectedPageBlocks(html) {
   output = removeBetweenMarkers(output, '<div id="page-field-dashboard"', '<div id="page-admin-dashboard"');
   output = removeBetweenMarkers(output, '<div id="page-admin-dashboard"', '<div id="page-about"');
   output = removeBetweenMarkers(output, '<div id="page-admin-docs"', '<div id="page-saved"');
-  output = removeBetweenMarkers(output, '<div id="admin-evidence-modal"', '<script>');
+  output = removeElementById(output, 'admin-evidence-modal');
+  output = removeElementById(output, 'admin-whatsapp-modal');
   return output;
 }
 
 function stripPublicModalBlocks(html, pathname = '/') {
   let output = String(html || '');
-  for (const marker of PUBLIC_MODAL_START_MARKERS) {
-    output = removeBetweenMarkers(output, marker, '<script>');
+  for (const id of PUBLIC_MODAL_IDS) {
+    output = removeElementById(output, id);
   }
   return output;
 }

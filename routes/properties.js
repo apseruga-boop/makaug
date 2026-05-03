@@ -23,6 +23,8 @@ const { captureLearningEvent } = require('../services/aiLearningCaptureService')
 const { buildListingReference } = require('../services/listingReferenceService');
 const { matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -1239,6 +1241,42 @@ router.post('/', async (req, res, next) => {
     }
 
     await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'listing_submitted',
+        recipientEmail: listerEmailNormalized || null,
+        recipientRole: cleanText(body.lister_type) || 'owner',
+        templateKey: 'property_submitted',
+        subject: 'Your MakaUg property listing has been submitted',
+        language: normalizePreferredLanguage(body.preferred_language),
+        status: notificationStatusFromDelivery(ownerNotification.email),
+        provider: ownerNotification.email?.provider || null,
+        providerMessageId: ownerNotification.email?.messageId || ownerNotification.email?.provider_message_id || null,
+        relatedListingId: propertyId,
+        failureReason: ownerNotification.email?.error || ownerNotification.email?.reason || null,
+        sentAt: ownerNotification.email?.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'new_listing_pending_review',
+        recipientEmail: process.env.SUPPORT_EMAIL || 'info@makaug.com',
+        recipientRole: 'admin',
+        templateKey: 'admin_alert',
+        subject: `New listing pending review • ${inquiryReference}`,
+        language: 'en',
+        status: notificationStatusFromDelivery(supportEmailNotification),
+        relatedListingId: propertyId,
+        failureReason: supportEmailNotification?.error || supportEmailNotification?.reason || null,
+        sentAt: supportEmailNotification?.sent ? new Date() : null
+      }),
+      logWhatsAppMessage(db, {
+        recipientPhone: listerPhone || null,
+        templateKey: 'listing_submitted',
+        messageType: 'template',
+        language: normalizePreferredLanguage(body.preferred_language),
+        status: notificationStatusFromDelivery(ownerNotification.whatsapp),
+        relatedListingId: propertyId,
+        failureReason: ownerNotification.whatsapp?.error || ownerNotification.whatsapp?.reason || null,
+        sentAt: ownerNotification.whatsapp?.sent ? new Date() : null
+      }),
       logNotification(db, {
         recipientEmail: listerEmailNormalized || null,
         recipientPhone: listerPhone || null,

@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const { sendSupportEmail, getSupportEmail } = require('./emailService');
+const { sendSupportEmail, getSupportEmail, getSupportPhone } = require('./emailService');
 const { normalizeUgPhoneForWhatsApp, sendWhatsAppText } = require('./whatsappNotificationService');
 
 const REVIEW_CHECKS = [
@@ -463,28 +463,42 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
   const reference = getListingReference(listing);
   const title = listing.title || 'Your property listing';
   const supportEmail = getSupportEmail();
-  const siteUrl = getPublicSiteUrl();
+  const siteUrl = getSiteBaseUrl();
+  const submittedAt = new Date().toISOString();
+  const dashboardUrl = `${siteUrl}/dashboard`;
+  const whatsappUrl = `https://wa.me/${String(getSupportPhone()).replace(/\D/g, '') || '256760112587'}`;
 
   return {
-    subject: `[MakaUg] Listing received for review • ${title}`,
+    subject: 'Your MakaUg property listing has been submitted',
     text: [
       `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
       '',
-      'We received your MakaUg property listing and it is now pending review.',
-      `Listing reference: ${reference}`,
+      'Your MakaUg property listing has been submitted.',
       `Title: ${title}`,
+      `Listing reference: ${reference}`,
+      'Status: Pending Review',
+      `Submitted: ${submittedAt}`,
       '',
-      'Our team will check the details, media, location, and verification information before it goes live.',
-      'We will contact you if anything needs updating.',
+      'What happens next:',
+      '- Our team checks the details, media, location, and verification information before publication.',
+      '- We will contact you if anything needs updating.',
+      '- Approved listings appear publicly after review.',
       '',
+      `Dashboard: ${dashboardUrl}`,
+      `WhatsApp support: ${whatsappUrl}`,
       `If you need help, contact ${supportEmail}.`,
-      `Browse MakaUg: ${siteUrl}`,
+      `Open MakaUg: ${siteUrl}`,
+      '',
+      'MakaUg',
       'Thank you for using MakaUg.'
     ].join('\n'),
     whatsapp: [
-      'MakaUg: your listing is pending review.',
-      `Ref: ${reference}`,
+      'MakaUg Listing Received',
+      '',
+      'Your property listing has been submitted for review.',
       `Title: ${title}`,
+      `Ref: ${reference}`,
+      'Status: Pending Review',
       'We will contact you after review or if we need more information.'
     ].join('\n')
   };

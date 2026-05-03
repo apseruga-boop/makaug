@@ -23,6 +23,7 @@ const { buildListingWhatsappMessage, buildWhatsAppUrl } = require('../services/w
 const { savedSearchMatchesListing } = require('../services/alertSchedulerService');
 const { normalizePaymentStatus, paymentProviderConfigured } = require('../services/paymentProviderService');
 const { buildMortgageEstimate, computeMonthlyRepayment: computeMortgagePayment } = require('../services/mortgageCalculatorService');
+const { HOW_TO_VIDEO_SLOTS } = require('../config/howToVideos');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -149,6 +150,11 @@ function run() {
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
+  const propertiesRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
+  const contactRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'contact.js'), 'utf8');
+  const listingModerationService = fs.readFileSync(path.join(__dirname, '..', 'services', 'listingModerationService.js'), 'utf8');
+  const emailLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailLogService.js'), 'utf8');
+  const whatsappMessageLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappMessageLogService.js'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
@@ -193,6 +199,21 @@ function run() {
   assert(sourceHtml.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
   assert(homeText.includes('© 2026 MakaUg. All rights reserved.'), 'homepage footer should use MakaUg copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
+  for (const badBrandText of [
+    'Use makaug in 7 Ugandan languages',
+    'About makaug.com',
+    'Welcome to makaug',
+    'Create your free makaug account to:',
+    'You authorize makaug',
+    'makaug may contact',
+    'keep makaug safer',
+    'Hello+makaug',
+    'Hello%20makaug'
+  ]) {
+    assert(!sourceHtml.includes(badBrandText), `public-facing brand text should use MakaUg casing: ${badBrandText}`);
+  }
+  assert(sourceHtml.includes('Use MakaUg in 7 Ugandan languages'), 'language spotlight should use MakaUg casing');
+  assert(sourceHtml.includes('About MakaUg'), 'about labels should use MakaUg casing');
 
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
   const listPropertyText = normalizeText(listPropertyHtml);
@@ -221,14 +242,85 @@ function run() {
   ]) {
     assert(!listPropertyText.includes(invalidReference), `/list-property leaked invalid default reference: ${invalidReference}`);
   }
+  assert(sourceHtml.includes('data-listing-submit-success-modal="1"'), 'listing submission success modal should exist in source');
+  assert(sourceHtml.includes('Your property has been submitted'), 'success modal should use the go-live submission title');
+  assert(sourceHtml.includes('listing-submit-email-status'), 'success modal should show email confirmation status');
+  assert(sourceHtml.includes('listing-submit-whatsapp-status'), 'success modal should show WhatsApp confirmation status');
+  assert(sourceHtml.includes('List another property'), 'success modal should offer list-another action');
+  assert(sourceHtml.includes('Go to dashboard'), 'success modal should offer dashboard action');
+  assert(sourceHtml.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
+  assert(sourceHtml.includes('WhatsApp confirmation logged for admin follow-up.'), 'success modal should explain WhatsApp fallback');
+  assert(propertiesRoutes.includes('logEmailEvent'), 'property submission should create EmailLog entries');
+  assert(propertiesRoutes.includes('logWhatsAppMessage'), 'property submission should create WhatsAppMessageLog entries');
+  assert(propertiesRoutes.includes('listing_submitted'), 'property submission should log listing_submitted event');
+  assert(listingModerationService.includes('Your MakaUg property listing has been submitted'), 'property submitted email subject should be MakaUg branded');
+  assert(listingModerationService.includes('Status: Pending Review'), 'property submitted email should include pending-review status');
+  assert(listingModerationService.includes('WhatsApp support'), 'property submitted email should include WhatsApp support');
+  assert(emailLogService.includes('INSERT INTO email_logs'), 'email log service should persist email logs when table exists');
+  assert(whatsappMessageLogService.includes('INSERT INTO whatsapp_message_logs'), 'WhatsApp log service should persist WhatsApp logs when table exists');
 
   const aboutHtml = sanitizePublicHtml(sourceHtml, { pathname: '/about' });
   const mortgageHtml = sanitizePublicHtml(sourceHtml, { pathname: '/mortgage' });
   const fraudHtml = sanitizePublicHtml(sourceHtml, { pathname: '/fraud' });
   const loginHtml = sanitizePublicHtml(sourceHtml, { pathname: '/login' });
+  const howItWorksHtml = sanitizePublicHtml(sourceHtml, { pathname: '/how-it-works' });
+  const helpHtml = sanitizePublicHtml(sourceHtml, { pathname: '/help' });
+  const safetyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/safety' });
   const loginText = normalizeText(loginHtml);
+  const aboutText = normalizeText(aboutHtml);
+  const helpText = normalizeText(helpHtml);
+  const howItWorksText = normalizeText(howItWorksHtml);
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
-  assert(normalizeText(aboutHtml).includes('Our Mission'), '/about should contain the full about page');
+  assert(aboutText.includes('About MakaUg'), '/about should show About MakaUg');
+  for (const expected of [
+    'Property in Uganda should be easier to find, easier to list, and safer to trust.',
+    'Who we are',
+    'Our mission',
+    'Why MakaUg exists',
+    'Renters',
+    'Buyers',
+    'Students and parents',
+    'Owners and sellers',
+    'Brokers',
+    'Commercial users',
+    'How we support trust and safety'
+  ]) {
+    assert(aboutText.includes(expected), `/about missing redesigned section: ${expected}`);
+  }
+  const pageAboutBlock = sourceHtml.slice(sourceHtml.indexOf('<div id="page-about"'), sourceHtml.indexOf('<div id="page-saved"'));
+  assert(!/<h[12][^>]*>[^<]*Mortgage/i.test(pageAboutBlock), '/about should not make mortgage a major section');
+  assert(helpText.includes('MakaUg Help Centre'), '/help should show Help Centre heading');
+  for (const expected of [
+    'Finding property',
+    'Listing property',
+    'Student accommodation',
+    'Saved searches and alerts',
+    'Book viewings and callbacks',
+    'Brokers and agents',
+    'Land and title safety',
+    'Fraud and suspicious listings',
+    'Account and login',
+    'Advertising with MakaUg',
+    'Contact MakaUg support'
+  ]) {
+    assert(helpText.includes(expected), `/help missing category or support form content: ${expected}`);
+  }
+  assert(contactRoutes.includes("router.post('/help-request'"), 'help request API should exist');
+  assert(contactRoutes.includes('help_request_submitted'), 'help request should log an email/notification event');
+  assert(howItWorksText.includes('How MakaUg Works'), '/how-it-works should show route heading');
+  for (const expected of ['Search property', 'Use filters', 'Save options', 'Create alerts', 'WhatsApp contact', 'Book viewing', 'List property', 'Review checks', 'Use dashboards', 'Report suspicious']) {
+    assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
+  }
+  assert(sourceHtml.includes('data-howto-video-modal="1"'), 'how-to video modal should exist');
+  assert.strictEqual(HOW_TO_VIDEO_SLOTS.length, 10, 'there should be exactly 10 how-to video slots');
+  for (const requiredVideo of ['what-is-makaug', 'search-property', 'use-filters', 'student-accommodation', 'list-property', 'location-and-photos', 'whatsapp-contact', 'save-searches-alerts', 'book-viewing-callback', 'stay-safe-report']) {
+    assert(HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === requiredVideo), `missing how-to video slot: ${requiredVideo}`);
+  }
+  for (const context of ['about', 'how-it-works', 'help', 'list-property', 'students', 'safety']) {
+    assert(sourceHtml.includes(`data-howto-video-grid="${context}"`) || [aboutHtml, howItWorksHtml, helpHtml, listPropertyHtml, safetyHtml].some((html) => html.includes(`data-howto-video-grid="${context}"`)), `missing how-to video grid for ${context}`);
+  }
+  assert(sourceHtml.includes('openHowToVideo'), 'how-to videos should open in a modal');
+  assert(sourceHtml.includes('youtubeVideoId'), 'how-to videos should support YouTube IDs');
   assert(mortgageHtml.includes('id="page-mortgage"'), '/mortgage should render the mortgage route');
   assert(!normalizeText(mortgageHtml).includes('Mortgage Playground'), '/mortgage should not use old playground wording');
   assert(!normalizeText(mortgageHtml).includes('Move sliders'), '/mortgage should not use slider playground copy');
@@ -307,6 +399,26 @@ function run() {
   }
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
   assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
+  assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
+  for (const expected of [
+    'Public Route Health',
+    'CTA health',
+    'Performance Health',
+    'Email / Notification Health',
+    'WhatsApp Health',
+    'Listings Pending Review',
+    'Saved-search Demand',
+    'How-to Video Status',
+    'Content / i18n Status',
+    'Payment Status'
+  ]) {
+    assert(sourceHtml.includes(expected), `admin launch control missing owner health section: ${expected}`);
+  }
+  assert(sourceHtml.includes('data-admin-preview-links="1"'), 'super_admin dashboard preview links should exist');
+  assert(sourceHtml.includes('Admin preview mode — read only'), 'dashboard preview should show read-only admin banner');
+  for (const previewPath of ['/dashboard?admin_preview=1', '/student-dashboard?admin_preview=1', '/broker-dashboard?admin_preview=1', '/field-agent-dashboard?admin_preview=1', '/advertiser-dashboard?admin_preview=1']) {
+    assert(sourceHtml.includes(previewPath), `missing dashboard preview link: ${previewPath}`);
+  }
   assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
 
   for (const expected of [
@@ -486,6 +598,17 @@ function run() {
     'account_created_broker',
     'field_agent_application_received',
     'listing_submitted',
+    'listing_approved',
+    'listing_rejected',
+    'saved_search_created',
+    'viewing_requested',
+    'callback_requested',
+    'mortgage_lead_received',
+    'help_request_submitted',
+    'fraud_report_received',
+    'advertiser_signup_received',
+    'campaign_submitted',
+    'payment_link_created',
     'new_listing_pending_review',
     'whatsapp_contact_initiated',
     'email_failed',

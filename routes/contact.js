@@ -5,6 +5,9 @@ const logger = require('../config/logger');
 const { cleanText, toNullableInt, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
+const { createLead } = require('../services/leadService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 
 const router = express.Router();
 
@@ -167,9 +170,143 @@ async function handleLookingForProperty(req, res, next) {
   }
 }
 
+async function handleHelpRequest(req, res, next) {
+  try {
+    const name = cleanText(req.body.name);
+    const email = cleanText(req.body.email);
+    const phone = cleanText(req.body.phone);
+    const topic = cleanText(req.body.topic) || 'Help';
+    const message = cleanText(req.body.message);
+    const preferredContact = cleanText(req.body.preferred_contact || req.body.preferredContact) || 'WhatsApp';
+
+    const errors = [];
+    if (!name) errors.push('name is required');
+    if (!email) errors.push('email is required');
+    if (!phone) errors.push('phone is required');
+    if (!message) errors.push('message is required');
+    if (email && !isValidEmail(email)) errors.push('email is invalid');
+    if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
+    if (errors.length) return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
+
+    const lead = await createLead(db, {
+      source: cleanText(req.body.source) || 'help_centre',
+      leadType: 'support',
+      category: topic,
+      message,
+      priority: topic.toLowerCase().includes('fraud') ? 'high' : 'normal',
+      contact: {
+        name,
+        email,
+        phone,
+        preferredContactChannel: preferredContact,
+        roleType: 'support'
+      },
+      metadata: {
+        topic,
+        preferred_contact: preferredContact
+      }
+    });
+
+    const supportEmail = getSupportEmail();
+    const whatsappUrl = getSupportWhatsappUrl();
+    const userSubject = 'We received your MakaUg help request';
+    const adminSubject = `[MakaUg] Help request received • ${topic}`;
+    let userDelivery = { sent: false, reason: 'no_email_provider_configured' };
+    let adminDelivery = { sent: false, reason: 'no_email_provider_configured' };
+
+    try {
+      userDelivery = await sendSupportEmail({
+        to: email,
+        subject: userSubject,
+        text: [
+          `Hello ${name},`,
+          '',
+          'Thank you for contacting the MakaUg Help Centre.',
+          `Topic: ${topic}`,
+          `Reference: ${lead?.id || 'logged'}`,
+          '',
+          'Our team will review your message and contact you using your preferred channel.',
+          `WhatsApp support: ${whatsappUrl}`,
+          '',
+          'MakaUg'
+        ].join('\n')
+      });
+      adminDelivery = await sendSupportEmail({
+        to: supportEmail,
+        subject: adminSubject,
+        text: [
+          'A MakaUg Help Centre request was submitted.',
+          '',
+          `Reference: ${lead?.id || 'logged'}`,
+          `Name: ${name}`,
+          `Email: ${email}`,
+          `Phone: ${phone}`,
+          `Topic: ${topic}`,
+          `Preferred contact: ${preferredContact}`,
+          '',
+          message
+        ].join('\n'),
+        replyTo: email
+      });
+    } catch (emailError) {
+      logger.warn('Help request email notification failed', { error: emailError.message, leadId: lead?.id || null });
+    }
+
+    await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'help_request_submitted',
+        recipientEmail: email,
+        recipientRole: 'user',
+        templateKey: 'help_request',
+        subject: userSubject,
+        status: notificationStatusFromDelivery(userDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'new_help_request',
+        recipientEmail: supportEmail,
+        recipientRole: 'admin',
+        templateKey: 'admin_alert',
+        subject: adminSubject,
+        status: notificationStatusFromDelivery(adminDelivery),
+        relatedLeadId: lead?.id || null,
+        failureReason: adminDelivery?.error || adminDelivery?.reason || null,
+        sentAt: adminDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: email,
+        recipientPhone: phone,
+        channel: 'email',
+        type: 'help_request_submitted',
+        status: notificationStatusFromDelivery(userDelivery),
+        payloadSummary: { topic, lead_id: lead?.id || null },
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery?.error || userDelivery?.reason || null,
+        sentAt: userDelivery?.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        recipientEmail: supportEmail,
+        channel: 'in_app',
+        type: 'new_help_request',
+        status: 'logged',
+        payloadSummary: { topic, lead_id: lead?.id || null, name },
+        relatedLeadId: lead?.id || null
+      })
+    ]);
+
+    return res.status(201).json({ ok: true, data: { id: lead?.id || null, status: 'received' } });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 router.post('/report-listing', handleReportListing);
 router.post('/report', handleReportListing);
 router.post('/looking-for-property', handleLookingForProperty);
 router.post('/looking', handleLookingForProperty);
+router.post('/help-request', handleHelpRequest);
+router.post('/help', handleHelpRequest);
 
 module.exports = router;
