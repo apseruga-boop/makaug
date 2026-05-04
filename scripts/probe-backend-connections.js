@@ -1,0 +1,181 @@
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+const BASE_URL = String(process.env.BASE_URL || process.env.QA_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+
+function read(relPath) {
+  return fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+}
+
+function has(relPath, needle) {
+  return read(relPath).includes(needle);
+}
+
+function oneLine(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function pass(label, detail = '') {
+  return { ok: true, label, detail };
+}
+
+function fail(label, detail = '') {
+  return { ok: false, label, detail };
+}
+
+async function fetchText(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'content-type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  const text = await response.text();
+  return { response, text };
+}
+
+async function probePublicBackend() {
+  const checks = [];
+  const endpoints = [
+    { path: '/api/health', expect: 200, marker: '"ok":true' },
+    { path: '/api/health/migrations', expect: 200, marker: '034_task4_super_admin_alerts_payments.sql' },
+    { path: '/api/ai/model-card', expect: 200, marker: 'MakaUg Property AI Model' },
+    { path: '/api/advertising/packages', expect: 200, marker: 'featured_property_boost' },
+    { path: '/api/mortgage-rates', expect: 200, marker: 'providers' }
+  ];
+
+  for (const endpoint of endpoints) {
+    try {
+      const { response, text } = await fetchText(`${BASE_URL}${endpoint.path}`);
+      const statusOk = response.status === endpoint.expect;
+      const markerOk = !endpoint.marker || text.includes(endpoint.marker);
+      checks.push((statusOk && markerOk)
+        ? pass(`live ${endpoint.path}`, `status ${response.status}`)
+        : fail(`live ${endpoint.path}`, `status ${response.status}, marker ${endpoint.marker ? markerOk : 'n/a'}`));
+    } catch (error) {
+      checks.push(fail(`live ${endpoint.path}`, error.message || 'fetch failed'));
+    }
+  }
+
+  return checks;
+}
+
+async function probeProtectedBackend() {
+  const checks = [];
+  const endpoints = [
+    ['/api/admin/summary', 401],
+    ['/api/admin/crm/summary', 401],
+    ['/api/admin/leads', 401],
+    ['/api/admin/emails', 401],
+    ['/api/admin/notifications', 401],
+    ['/api/admin/alerts', 401],
+    ['/api/property-seeker/dashboard', 401],
+    ['/api/student/dashboard', 401],
+    ['/api/advertising/dashboard', 403]
+  ];
+
+  for (const [endpoint, expectedStatus] of endpoints) {
+    try {
+      const { response, text } = await fetchText(`${BASE_URL}${endpoint}`);
+      checks.push(response.status === expectedStatus
+        ? pass(`anonymous blocked ${endpoint}`, `status ${response.status}`)
+        : fail(`anonymous blocked ${endpoint}`, `expected ${expectedStatus}, got ${response.status}: ${oneLine(text).slice(0, 180)}`));
+    } catch (error) {
+      checks.push(fail(`anonymous blocked ${endpoint}`, error.message || 'fetch failed'));
+    }
+  }
+
+  return checks;
+}
+
+function sourceWiringChecks() {
+  const checks = [];
+  const expectations = [
+    ['auth register requires email', 'routes/auth.js', "if (!email) errors.push('email is required')"],
+    ['auth register requires phone', 'routes/auth.js', "if (!phone) errors.push('phone is required')"],
+    ['OTP verify creates post-verification records', 'routes/auth.js', 'ensurePostVerificationRecords'],
+    ['admin login audited', 'routes/auth.js', 'recordAdminLogin'],
+    ['super admin bootstrap uses env email', 'scripts/create-super-admin.js', 'SUPER_ADMIN_EMAIL'],
+    ['super admin bootstrap hashes password', 'scripts/create-super-admin.js', 'bcrypt.hash'],
+    ['property submit creates listing reference', 'routes/properties.js', 'buildListingReference'],
+    ['property submit logs EmailLog', 'routes/properties.js', 'logEmailEvent'],
+    ['property submit logs NotificationLog', 'routes/properties.js', 'logNotification'],
+    ['property submit logs WhatsAppMessageLog', 'routes/properties.js', 'logWhatsAppMessage'],
+    ['property submit creates CRM lead', 'routes/properties.js', "source: 'listing_submission'"],
+    ['property WhatsApp listing path creates lead', 'routes/properties.js', "router.post('/listing-intent'"],
+    ['saved search APIs exist', 'routes/property-seeker.js', "router.post('/saved-searches'"],
+    ['alert matcher creates AlertMatch', 'services/alertSchedulerService.js', 'INSERT INTO alert_matches'],
+    ['viewing creates booking record', 'routes/property-seeker.js', 'INSERT INTO viewing_bookings'],
+    ['callback creates request record', 'routes/property-seeker.js', 'INSERT INTO callback_requests'],
+    ['advertiser campaign creates campaign', 'routes/advertising.js', 'INSERT INTO advertising_campaigns'],
+    ['payment link creates invoice', 'routes/advertising.js', 'INSERT INTO invoices'],
+    ['manual payment writes audit', 'services/paymentProviderService.js', 'manual_payment_marked_paid'],
+    ['mortgage enquiry creates lead', 'routes/mortgage.js', 'mortgage_lead_received'],
+    ['help request logs event', 'routes/contact.js', 'help_request_submitted'],
+    ['careers request logs event', 'routes/contact.js', 'career_interest_submitted'],
+    ['fraud report creates report row', 'routes/contact.js', 'INSERT INTO report_listings'],
+    ['AI assistant logs conversation', 'routes/ai.js', 'conversation_logged'],
+    ['AI assistant creates CRM lead', 'routes/ai.js', 'createLead'],
+    ['admin alerts visible', 'routes/admin.js', "router.get('/alerts'"],
+    ['admin email logs visible', 'routes/admin.js', "router.get('/emails'"],
+    ['admin WhatsApp logs visible', 'routes/admin.js', "router.get('/whatsapp-message-logs'"]
+  ];
+
+  for (const [label, relPath, needle] of expectations) {
+    checks.push(has(relPath, needle) ? pass(label, relPath) : fail(label, `${relPath} missing ${needle}`));
+  }
+
+  return checks;
+}
+
+function providerStatusChecks() {
+  const groups = [
+    ['super_admin bootstrap', ['SUPER_ADMIN_EMAIL', 'SUPER_ADMIN_INITIAL_PASSWORD', 'DATABASE_URL', 'JWT_SECRET']],
+    ['admin API key', ['ADMIN_API_KEY']],
+    ['email provider', ['SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID']],
+    ['WhatsApp provider', ['WHATSAPP_PROVIDER', 'TWILIO_ACCOUNT_SID', 'WHATSAPP_WEB_BRIDGE_ENABLED']],
+    ['SMS provider', ['TWILIO_ACCOUNT_SID', 'SMS_PROVIDER']],
+    ['payment provider', ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET']],
+    ['Google Maps/Places', ['GOOGLE_MAPS_API_KEY']],
+    ['OpenAI/LLM provider', ['OPENAI_API_KEY']]
+  ];
+
+  return groups.map(([label, keys]) => {
+    const setKeys = keys.filter((key) => Boolean(process.env[key]));
+    const missingKeys = keys.filter((key) => !process.env[key]);
+    return {
+      ok: true,
+      label: `env ${label}`,
+      detail: setKeys.length ? `set: ${setKeys.join(', ')}; missing: ${missingKeys.join(', ') || 'none'}` : `missing: ${missingKeys.join(', ')}`
+    };
+  });
+}
+
+async function run() {
+  const checks = [
+    ...sourceWiringChecks(),
+    ...providerStatusChecks(),
+    ...(await probePublicBackend()),
+    ...(await probeProtectedBackend())
+  ];
+
+  const failures = checks.filter((item) => !item.ok);
+  console.log(`Backend connection probe for ${BASE_URL}`);
+  for (const item of checks) {
+    console.log(`${item.ok ? 'PASS' : 'FAIL'} ${item.label}${item.detail ? ` - ${item.detail}` : ''}`);
+  }
+
+  console.log(`SUMMARY checks=${checks.length} failures=${failures.length}`);
+  if (failures.length) {
+    process.exitCode = 1;
+  }
+}
+
+run().catch((error) => {
+  console.error(error.message || error);
+  process.exitCode = 1;
+});

@@ -161,6 +161,10 @@ function run() {
   const emailLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailLogService.js'), 'utf8');
   const whatsappMessageLogService = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappMessageLogService.js'), 'utf8');
   const clickProbeScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'probe-click-actions.js'), 'utf8');
+  const backendConnectionProbeScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'probe-backend-connections.js'), 'utf8');
+  const backendReadinessReport = fs.readFileSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md'), 'utf8');
+  const backendTraceabilityMatrix = fs.readFileSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md'), 'utf8');
+  const goLiveManualQa = fs.readFileSync(path.join(__dirname, '..', 'docs', 'go-live-manual-qa.md'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
@@ -455,6 +459,17 @@ function run() {
   assert(sourceHtml.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
+  assert(backendReadinessReport.includes('Task 15 Backend Gate Addendum'), 'backend readiness report should include the Task 15 live audit addendum');
+  assert(backendReadinessReport.includes('super_admin support exists, but live super_admin was not created because required env vars were not provided.'), 'backend readiness report should state exact super_admin live-creation blocker');
+  assert(backendReadinessReport.includes('GET https://makaug.com/api/health'), 'backend readiness report should include live health proof');
+  assert(backendReadinessReport.includes('033_task3_engagement_crm.sql') && backendReadinessReport.includes('034_task4_super_admin_alerts_payments.sql'), 'backend readiness report should include migration proof');
+  assert(backendTraceabilityMatrix.includes('Task 15 Traceability Addendum'), 'backend traceability matrix should include Task 15 addendum');
+  assert(backendTraceabilityMatrix.includes('npm run probe:backend-connections'), 'backend traceability matrix should mention the backend connection probe');
+  assert(goLiveManualQa.includes('npm run probe:backend-connections'), 'manual QA should include the backend connection probe command');
+  assert(backendConnectionProbeScript.includes('/api/health/migrations'), 'backend probe should verify migration status');
+  assert(backendConnectionProbeScript.includes('/api/admin/summary'), 'backend probe should verify admin API anonymous blocking');
+  assert(backendConnectionProbeScript.includes('SUPER_ADMIN_EMAIL'), 'backend probe should check super admin env presence without printing secrets');
+  assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
   assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
   for (const expected of [
     'Public Route Health',

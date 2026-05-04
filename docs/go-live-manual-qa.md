@@ -49,6 +49,7 @@ Use this checklist against the running preview/live app after deploy.
 - Open `docs/backend-traceability-matrix.md` or `/admin/docs` as super admin.
 - Confirm every launch-critical public CTA and form has an API/service/table/log/admin visibility row.
 - Confirm no item marked `Partial` is described as complete in launch messaging.
+- Run `BASE_URL=https://makaug.com npm run probe:backend-connections` and confirm live health, migrations, public backend endpoints, and anonymous admin/API blocking pass.
 - Run `npm run test:go-live-p0` and confirm backend wiring checks pass.
 - Check `/api/health/migrations` and confirm migrations `033_task3_engagement_crm.sql` and `034_task4_super_admin_alerts_payments.sql` are applied.
 - In preview/test mode, submit one property and confirm the same reference appears in `properties`, `email_logs`, `whatsapp_message_logs`, `notifications`, CRM leads, and admin moderation.

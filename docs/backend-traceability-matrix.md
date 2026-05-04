@@ -2,6 +2,19 @@
 
 Date: 2026-05-03
 
+## Task 15 Traceability Addendum
+
+`npm run probe:backend-connections` has been added as the repeatable backend gate probe. It confirms source wiring and live unauthenticated/API health without creating production data. The latest audit evidence is:
+
+- Production `/api/health` returned `200`, `ok: true`, and database `ok: true`.
+- Production `/api/health/migrations` confirms `033_task3_engagement_crm.sql` and `034_task4_super_admin_alerts_payments.sql` are applied.
+- Production public backend endpoints `/api/ai/model-card`, `/api/advertising/packages`, and `/api/mortgage-rates` are reachable.
+- Production `/api/mortgage-rates` currently reports `source: fallback`, so bank/rate copy must remain indicative.
+- Anonymous requests to admin APIs and role dashboards are rejected.
+- Local env did not include live owner/provider secrets; therefore live super_admin creation/login, provider sends, payment provider execution, Google Places, SMS/WhatsApp delivery, and OpenAI/LLM tool execution are not marked complete.
+
+This matrix uses **Working** only for code paths with source/test/probe evidence. Anything requiring credentials, live owner login, live provider delivery, live scheduled cadence, or intentional production test data remains **Partial**.
+
 This audit maps public and protected product actions to backend endpoints, durable records, provider logs, CRM/lead activity, admin visibility, analytics, and tests. Status values are honest launch-readiness labels:
 
 - Working: backend endpoint/service/model/log path exists and is covered by tests or probes.

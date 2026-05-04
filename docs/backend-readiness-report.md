@@ -2,6 +2,44 @@
 
 Date: 2026-05-03
 
+## Task 15 Backend Gate Addendum
+
+This addendum records the focused Task 15 backend audit. It intentionally separates **source/backend wiring proof** from **live owner/provider proof** so the launch gate stays honest.
+
+### Live API Proof Captured
+
+| Check | Result | Evidence |
+|---|---:|---|
+| Production backend health | Passed | `GET https://makaug.com/api/health` returned `200` with `ok: true`, `env: production`, and database `ok: true`. |
+| Migration `033_task3_engagement_crm.sql` | Passed | `GET /api/health/migrations` reported `applied: true`, `appliedAt: 2026-05-03T00:06:14.457Z`. |
+| Migration `034_task4_super_admin_alerts_payments.sql` | Passed | `GET /api/health/migrations` reported `applied: true`, `appliedAt: 2026-05-03T01:29:10.365Z`. |
+| Public AI model-card endpoint | Passed | `GET /api/ai/model-card` returned `200` and the MakaUg AI model card. |
+| Public advertising packages endpoint | Passed | `GET /api/advertising/packages` returned `200` and package data. |
+| Public mortgage rates endpoint | Passed with fallback source | `GET /api/mortgage-rates` returned `200`, `source: fallback`; rates must remain labelled indicative unless a verified source is configured. |
+| Anonymous admin APIs blocked | Passed | `/api/admin/summary`, `/api/admin/crm/summary`, `/api/admin/leads`, `/api/admin/emails`, `/api/admin/notifications`, and `/api/admin/alerts` returned `401`. |
+| Anonymous role dashboards blocked | Passed | `/api/property-seeker/dashboard` and `/api/student/dashboard` returned `401`; `/api/advertising/dashboard` returned `403`. |
+
+### Local Environment Proof Captured
+
+The local audit shell did not have production secrets. Secret values were not printed. The following were missing locally: `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_INITIAL_PASSWORD`, `SUPER_ADMIN_PHONE`, `DATABASE_URL`, `JWT_SECRET`, `ADMIN_API_KEY`, `SMTP_HOST`, `MS_GRAPH_CLIENT_ID`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `PAYMENT_LINK_BASE_URL`, `PAYMENT_PROVIDER_API_KEY`, `PAYMENT_PROVIDER_WEBHOOK_SECRET`, `GOOGLE_MAPS_API_KEY`, `OPENAI_API_KEY`, and `PUBLIC_BASE_URL`.
+
+Exact live super_admin status: **super_admin support exists, but live super_admin was not created because required env vars were not provided.**
+
+### New Repeatable Probe
+
+`npm run probe:backend-connections` now checks:
+
+- source-level backend wiring for auth, listing submission, saved searches, alerts, viewings, callbacks, advertising/payment, mortgage, help, careers, fraud, AI assistant, and admin log visibility;
+- provider/env presence without printing secrets;
+- live health, migration, AI model card, advertising packages, and mortgage endpoint status;
+- anonymous blocking for protected/admin APIs.
+
+This probe is a launch gate helper; it does not create fake production listings, leads, payments, or users.
+
+### Task 15 Gate Decision
+
+Backend wiring is stronger than the frontend-only shell stage, and production migrations are applied. However, live super_admin login, live property submission, provider sends, AI tool execution with a configured LLM, saved-search scheduler cadence, live viewing/callback records, and real payment-provider execution remain unproven in this audit. The current gate remains **not masterpiece complete**.
+
 This report is the Task 14 backend gate. It only marks a feature as **working** when a route/service/model/log path exists and is covered by automated tests or probes. Live provider delivery and owner login are tracked separately because they require production credentials and deliberate owner action.
 
 ## Status Legend
