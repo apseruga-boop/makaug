@@ -32,15 +32,39 @@ function getAfricasTalkingConfig() {
   };
 }
 
-async function sendViaAfricasTalking(to, message) {
+function summarizeProviderError(error) {
+  return String(error?.message || error || 'unknown_error').slice(0, 240);
+}
+
+function isRejectedStatus(status = '') {
+  return /(fail|reject|invalid|error|undeliver)/i.test(String(status || ''));
+}
+
+function getTwilioSmsSender() {
+  const explicitSmsSender = String(
+    process.env.TWILIO_FROM_SMS
+      || process.env.TWILIO_SMS_FROM
+      || ''
+  ).trim();
+  if (explicitSmsSender) return explicitSmsSender;
+
+  const genericSender = String(process.env.TWILIO_FROM || '').trim();
+  if (genericSender.toLowerCase().startsWith('whatsapp:')) return '';
+  return genericSender;
+}
+
+async function sendViaAfricasTalking(to, message, options = {}) {
   const config = getAfricasTalkingConfig();
   if (!config) return null;
+  const senderId = Object.prototype.hasOwnProperty.call(options, 'senderId')
+    ? String(options.senderId || '').trim()
+    : config.senderId;
 
   const body = new URLSearchParams();
   body.set('username', config.username);
   body.set('to', to);
   body.set('message', message);
-  if (config.senderId) body.set('from', config.senderId);
+  if (senderId) body.set('from', senderId);
 
   const response = await fetch(config.baseUrl, {
     method: 'POST',
@@ -69,6 +93,11 @@ async function sendViaAfricasTalking(to, message) {
   }
 
   const recipient = payload?.SMSMessageData?.Recipients?.[0] || null;
+  if (isRejectedStatus(recipient?.status)) {
+    const err = new Error(`Africa's Talking SMS failed: ${recipient.status}`);
+    err.payload = payload;
+    throw err;
+  }
   return {
     provider: "africastalking",
     status: recipient?.status || payload?.SMSMessageData?.Message || 'sent',
@@ -78,30 +107,70 @@ async function sendViaAfricasTalking(to, message) {
 }
 
 async function sendSMS(to, message) {
-  const from = process.env.TWILIO_FROM_SMS || process.env.TWILIO_FROM;
+  const failures = [];
+  const from = getTwilioSmsSender();
   const twilioClient = getClient();
 
   if (twilioClient && from) {
-    const result = await twilioClient.messages.create({
-      from,
-      to,
-      body: message
-    });
+    try {
+      const result = await twilioClient.messages.create({
+        from,
+        to,
+        body: message
+      });
 
-    return {
-      provider: "twilio",
-      sid: result.sid,
-      status: result.status
-    };
+      return {
+        provider: "twilio",
+        sid: result.sid,
+        status: result.status
+      };
+    } catch (error) {
+      failures.push({ provider: 'twilio', error: summarizeProviderError(error) });
+      logger.warn('Twilio SMS send failed; trying next SMS provider', {
+        to,
+        error: summarizeProviderError(error)
+      });
+    }
+  } else if (twilioClient && !from) {
+    failures.push({ provider: 'twilio', error: 'twilio_sms_sender_missing' });
   }
 
-  const africaResult = await sendViaAfricasTalking(to, message);
-  if (africaResult) return africaResult;
+  try {
+    const africaResult = await sendViaAfricasTalking(to, message);
+    if (africaResult) return africaResult;
+  } catch (error) {
+    failures.push({ provider: 'africastalking', error: summarizeProviderError(error) });
+    const config = getAfricasTalkingConfig();
+    if (config?.senderId) {
+      logger.warn("Africa's Talking SMS send failed with sender ID; retrying without sender ID", {
+        to,
+        error: summarizeProviderError(error)
+      });
+      try {
+        const retryResult = await sendViaAfricasTalking(to, message, { senderId: '' });
+        if (retryResult) {
+          return {
+            ...retryResult,
+            retry: 'without_sender_id'
+          };
+        }
+      } catch (retryError) {
+        failures.push({ provider: 'africastalking', retry: 'without_sender_id', error: summarizeProviderError(retryError) });
+      }
+    }
+  }
+
+  if (failures.length) {
+    const err = new Error(`SMS delivery failed: ${failures.map((failure) => `${failure.provider}:${failure.error}`).join('; ')}`);
+    err.failures = failures;
+    throw err;
+  }
 
   logger.info('[SMS MOCK]', { to, messageLength: String(message || '').length });
   return { mocked: true };
 }
 
 module.exports = {
+  getTwilioSmsSender,
   sendSMS
 };

@@ -706,6 +706,9 @@ function run() {
   assert.strictEqual(notificationStatusFromDelivery({ status: 'queued' }), 'queued', 'queued SMS OTP should log queued status');
   assert(!phoneOtpDeliveryServiceSource.includes('sendWhatsAppText'), 'phone OTP must not use WhatsApp delivery');
   assert(!phoneOtpDeliveryServiceSource.includes('queueWhatsappWebBridgeMessage'), 'phone OTP must not queue WhatsApp bridge fallback');
+  assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');
+  assert(smsServiceSource.includes("startsWith('whatsapp:')"), 'SMS delivery must not use WhatsApp sender IDs for text OTP');
+  assert(smsServiceSource.includes('retrying without sender ID'), 'Africa\'s Talking SMS should retry without unapproved sender ID');
   assert(!smsServiceSource.includes('logger.info(\'[SMS MOCK]\', { to, message })'), 'SMS mock logging must not print OTP bodies');
   assert(!whatsappNotificationServiceSource.includes('logger.info(\'[WHATSAPP MOCK]\', { to: recipient, body: message })'), 'WhatsApp mock logging must not print OTP bodies');
 
