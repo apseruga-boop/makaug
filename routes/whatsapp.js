@@ -18,6 +18,7 @@ const {
 } = require('../config/languageRegistry');
 const {
   DEFAULT_SEARCH_RADIUS_MILES,
+  isPointInUganda,
   normalizeRadiusMiles,
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
@@ -82,6 +83,8 @@ const T = {
     askSearchType: '🔎 What are you looking for?\n1️⃣ For sale\n2️⃣ To rent\n3️⃣ Land\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Anything',
     askSearchArea: '📍 Which area or district are you looking in? You can also share your WhatsApp location.',
     locationSharedReceived: '📍 Location received. I am searching within 10 miles of you first.',
+    locationSavedChooseSearch: '📍 Location received. What should I search near this pin?',
+    outsideUgandaLocation: 'Sorry, this location appears to be outside Uganda, so I cannot search for nearby MakaUg listings around it. Please choose a Ugandan area, road, landmark, district, or type *all Uganda* to browse available listings.',
     searchNoNearbyResults: 'No approved listings found within 10 miles. Showing the nearest available options.',
     widenNearbySearch: 'Reply *WIDEN* if you want me to expand the search area.',
     kmAway: 'km away',
@@ -105,6 +108,9 @@ const T = {
     invalidPhone: '❌ Invalid phone format. Try: 0760112587',
     visitMoreListings: 'Visit {url} for more listings.',
     seeAllAgents: 'See all agents: {url}',
+    nextPropertySearchActions: 'Next: tap a listing link to view photos, map, book a viewing, or request a callback. Reply *2* to search again, *MENU* for the main menu, or *WIDEN* if this was a nearby search.',
+    nextAgentActions: 'Next: tap a broker profile to view details. Reply *3* to find another broker, *2* to search property, or *MENU* for the main menu.',
+    noMatchNextActions: 'Next: reply with another area, district, budget, or property type. You can also reply *2* to search again or *MENU* for the main menu.',
     replySearchAgain: 'Reply 2 to search again.',
     replyAgentAgain: 'Reply 3 to find another agent.',
     areasLabel: 'Areas',
@@ -1216,6 +1222,49 @@ function locationPreviewPrompt(lang) {
     sm: '📍 Ndaba map/location preview, naye WhatsApp Web tempadde pin entuufu. Share location yo oba wandika ekitundu/district ekiri okumpi.'
   };
   return messages[code] || messages.en;
+}
+
+function sharedLocationLabel(sharedLocation = {}) {
+  const lat = Number(sharedLocation?.lat);
+  const lng = Number(sharedLocation?.lng);
+  return normalizeInput(sharedLocation?.address)
+    || normalizeInput(sharedLocation?.label)
+    || (Number.isFinite(lat) && Number.isFinite(lng) ? `${lat.toFixed(4)}, ${lng.toFixed(4)}` : 'shared location');
+}
+
+function hasUsableSharedLocation(sharedLocation = null) {
+  return Number.isFinite(Number(sharedLocation?.lat)) && Number.isFinite(Number(sharedLocation?.lng));
+}
+
+function sharedLocationIsInUganda(sharedLocation = {}) {
+  return hasUsableSharedLocation(sharedLocation) && isPointInUganda(sharedLocation.lat, sharedLocation.lng);
+}
+
+function outsideUgandaLocationReply(lang) {
+  return `${t(lang, 'outsideUgandaLocation')}\n\n${t(lang, 'noMatchNextActions')}`;
+}
+
+async function logOutsideUgandaSharedLocation({ userPhone, searchType = 'any', sharedLocation = {}, context = 'whatsapp_shared_location' } = {}) {
+  try {
+    await logPropertySearchRequest({
+      userPhone,
+      searchType,
+      queryText: context,
+      location: {
+        lat: Number(sharedLocation.lat),
+        lng: Number(sharedLocation.lng),
+        label: sharedLocationLabel(sharedLocation),
+        outside_uganda: true
+      },
+      radiusMiles: DEFAULT_SEARCH_RADIUS_MILES,
+      resultRows: [],
+      usedNearestFallback: false,
+      outsideUganda: true,
+      fallbackReason: 'outside_uganda_location'
+    });
+  } catch (error) {
+    logger.warn('Failed to log outside-Uganda WhatsApp location', { error: error.message });
+  }
 }
 
 function isMetaWebhookPayload(payload = {}) {
@@ -2960,7 +3009,9 @@ async function logPropertySearchRequest({
   location = null,
   radiusMiles = null,
   resultRows = [],
-  usedNearestFallback = false
+  usedNearestFallback = false,
+  outsideUganda = false,
+  fallbackReason = null
 }) {
   const safeLocation = location && typeof location === 'object'
     ? {
@@ -2978,6 +3029,8 @@ async function logPropertySearchRequest({
     location: safeLocation || null,
     radius_miles: radiusMiles == null ? null : normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES),
     used_nearest_fallback: !!usedNearestFallback,
+    outside_uganda: !!outsideUganda,
+    fallback_reason: fallbackReason || null,
     result_count: Array.isArray(resultRows) ? resultRows.length : 0
   };
 
@@ -3308,8 +3361,7 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     lines.push('━━━━━━━━━━━━━━━━');
   });
   lines.push(`✨ ${copy.footer}`);
-  lines.push(t(lang, 'menuHint'));
-  lines.push(t(lang, 'replySearchAgain'));
+  lines.push(t(lang, 'nextPropertySearchActions'));
   return lines.join('\n');
 }
 
@@ -3335,8 +3387,7 @@ function formatAgentSearchMessage(lang, rows, location) {
     lines.push(`   ${t(lang, 'profileLabel')}: ${HOME_URL}/agents/${r.id}`);
     lines.push('');
   });
-  lines.push(t(lang, 'menuHint'));
-  lines.push(t(lang, 'replyAgentAgain'));
+  lines.push(t(lang, 'nextAgentActions'));
   return lines.join('\n');
 }
 
@@ -3345,9 +3396,9 @@ function formatNoMatchReply(lang, preferredArea = '') {
   const area = normalizeInput(preferredArea);
   const areaText = area ? ` in *${area}*` : '';
   const messages = {
-    en: `I do not have an approved match${areaText} right now. I have saved this request so MakaUg can follow up when a matching listing appears.\n\nBrowse live listings: ${HOME_URL}\n${t(code, 'menuHint')}`,
-    lg: `Sifunye listing ekakasiddwa${areaText} kati. Nterese okusaba kuno MakaUg esobole okukuddamu nga listing efaanana efunye.\n\nLaba listings: ${HOME_URL}\n${t(code, 'menuHint')}`,
-    sw: `Sijapata tangazo lililoidhinishwa${areaText} kwa sasa. Nimehifadhi ombi hili ili MakaUg ikujulishe likipatikana.\n\nTazama matangazo: ${HOME_URL}\n${t(code, 'menuHint')}`
+    en: `I do not have an approved match${areaText} right now. I have saved this request so MakaUg can follow up when a matching listing appears.\n\nBrowse live listings: ${HOME_URL}\n${t(code, 'noMatchNextActions')}`,
+    lg: `Sifunye listing ekakasiddwa${areaText} kati. Nterese okusaba kuno MakaUg esobole okukuddamu nga listing efaanana efunye.\n\nLaba listings: ${HOME_URL}\n${t(code, 'noMatchNextActions')}`,
+    sw: `Sijapata tangazo lililoidhinishwa${areaText} kwa sasa. Nimehifadhi ombi hili ili MakaUg ikujulishe likipatikana.\n\nTazama matangazo: ${HOME_URL}\n${t(code, 'noMatchNextActions')}`
   };
   return messages[code] || messages.en;
 }
@@ -3676,6 +3727,27 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(next.message, next.nextStep);
   }
 
+  if (step === 'greeting' && hasUsableSharedLocation(sharedLocation)) {
+    if (!sharedLocationIsInUganda(sharedLocation)) {
+      await logOutsideUgandaSharedLocation({
+        userPhone: phone,
+        searchType: 'any',
+        sharedLocation,
+        context: 'greeting_shared_location_outside_uganda'
+      });
+      return respond(outsideUgandaLocationReply(lang), 'main_menu');
+    }
+    await patchSessionData(phone, {
+      search_lat: Number(sharedLocation.lat),
+      search_lng: Number(sharedLocation.lng),
+      search_location_label: sharedLocationLabel(sharedLocation),
+      search_radius_miles: DEFAULT_SEARCH_RADIUS_MILES,
+      search_location_source: 'whatsapp_shared_location_pending',
+      pending_search_filters: null
+    });
+    return respond(`${t(lang, 'locationSavedChooseSearch')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
+  }
+
   // GREETING
   if (step === 'greeting') {
     if (cleanBody === '1') return respond(t(lang, 'askListingType'), 'listing_type');
@@ -3698,6 +3770,27 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // MAIN MENU
   if (step === 'main_menu') {
+    if (hasUsableSharedLocation(sharedLocation)) {
+      if (!sharedLocationIsInUganda(sharedLocation)) {
+        await logOutsideUgandaSharedLocation({
+          userPhone: phone,
+          searchType: sessionData.search_type || 'any',
+          sharedLocation,
+          context: 'main_menu_shared_location_outside_uganda'
+        });
+        return respond(outsideUgandaLocationReply(lang), 'main_menu');
+      }
+      await patchSessionData(phone, {
+        search_lat: Number(sharedLocation.lat),
+        search_lng: Number(sharedLocation.lng),
+        search_location_label: sharedLocationLabel(sharedLocation),
+        search_radius_miles: DEFAULT_SEARCH_RADIUS_MILES,
+        search_location_source: 'whatsapp_shared_location_pending',
+        pending_search_filters: null
+      });
+      return respond(`${t(lang, 'locationSavedChooseSearch')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
+    }
+
     const pendingIntent = sessionData.pending_intent_confirmation
       && typeof sessionData.pending_intent_confirmation === 'object'
       ? sessionData.pending_intent_confirmation
@@ -3887,6 +3980,27 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SEARCH TYPE
   if (step === 'search_type') {
+    if (hasUsableSharedLocation(sharedLocation)) {
+      if (!sharedLocationIsInUganda(sharedLocation)) {
+        await logOutsideUgandaSharedLocation({
+          userPhone: phone,
+          searchType: sessionData.search_type || 'any',
+          sharedLocation,
+          context: 'search_type_shared_location_outside_uganda'
+        });
+        return respond(outsideUgandaLocationReply(lang), 'main_menu');
+      }
+      await patchSessionData(phone, {
+        search_lat: Number(sharedLocation.lat),
+        search_lng: Number(sharedLocation.lng),
+        search_location_label: sharedLocationLabel(sharedLocation),
+        search_radius_miles: DEFAULT_SEARCH_RADIUS_MILES,
+        search_location_source: 'whatsapp_shared_location_pending',
+        pending_search_filters: null
+      });
+      return respond(`${t(lang, 'locationSavedChooseSearch')}\n\n${t(lang, 'askSearchType')}`, 'search_type');
+    }
+
     let naturalFilters = await resolveNaturalSearchFilters({
       text: cleanBody,
       entities: intentResult?.entities || {},
@@ -3962,6 +4076,63 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
     const searchType = mapSearchTypeInput(cleanBody);
     if (searchType) {
+      if (
+        sessionData.search_location_source === 'whatsapp_shared_location_pending'
+        && Number.isFinite(Number(sessionData.search_lat))
+        && Number.isFinite(Number(sessionData.search_lng))
+      ) {
+        const savedLocation = {
+          lat: Number(sessionData.search_lat),
+          lng: Number(sessionData.search_lng),
+          label: sessionData.search_location_label || null,
+          address: sessionData.search_location_label || null
+        };
+        if (!sharedLocationIsInUganda(savedLocation)) {
+          await logOutsideUgandaSharedLocation({
+            userPhone: phone,
+            searchType,
+            sharedLocation: savedLocation,
+            context: 'stored_shared_location_outside_uganda'
+          });
+          return respond(outsideUgandaLocationReply(lang), 'main_menu');
+        }
+        const near = await findPropertiesNearWhatsapp(searchType, savedLocation);
+        await patchSessionData(phone, {
+          search_type: searchType,
+          last_nearby_search_filters: { searchType },
+          last_nearby_search_at: new Date().toISOString(),
+          search_location_source: 'whatsapp_shared_location_used',
+          pending_search_filters: null
+        });
+        await logPropertySearchRequest({
+          userPhone: phone,
+          searchType,
+          queryText: 'stored_shared_location',
+          location: savedLocation,
+          radiusMiles: near.radiusMiles || DEFAULT_SEARCH_RADIUS_MILES,
+          resultRows: near.rows,
+          usedNearestFallback: near.usedNearestFallback
+        });
+        if (!near.rows.length) {
+          const reply = await formatNoMatchOrFallbackReply({
+            lang,
+            userPhone: phone,
+            searchType,
+            area: sharedLocationLabel(savedLocation),
+            queryText: 'stored_shared_location',
+            filters: { searchType },
+            notes: 'No approved listings found from stored WhatsApp shared location.'
+          });
+          return respond(reply, 'main_menu');
+        }
+        const extra = near.usedNearestFallback
+          ? `\n${t(lang, 'searchNoNearbyResults')}\n${t(lang, 'widenNearbySearch')}\n`
+          : `\n${t(lang, 'widenNearbySearch')}\n`;
+        return respond(
+          `${t(lang, 'locationSharedReceived')}${extra}\n${formatPropertySearchMessage(lang, near.rows, sharedLocationLabel(savedLocation), searchType)}`,
+          'main_menu'
+        );
+      }
       await patchSessionData(phone, { search_type: searchType });
       return respond(t(lang, 'askSearchArea'), 'search_area');
     }
@@ -4089,11 +4260,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(formatPropertySearchMessage(lang, rows, 'Any area', searchType), 'main_menu');
     }
 
-    if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
+    if (hasUsableSharedLocation(sharedLocation)) {
+      if (!sharedLocationIsInUganda(sharedLocation)) {
+        await logOutsideUgandaSharedLocation({
+          userPhone: phone,
+          searchType: pendingFilters?.searchType || searchType,
+          sharedLocation,
+          context: 'search_area_shared_location_outside_uganda'
+        });
+        await patchSessionData(phone, {
+          pending_search_filters: pendingFilters || null,
+          search_type: pendingFilters?.searchType || searchType
+        });
+        return respond(outsideUgandaLocationReply(lang), 'main_menu');
+      }
       await patchSessionData(phone, {
         search_lat: Number(sharedLocation.lat),
         search_lng: Number(sharedLocation.lng),
-        search_location_label: sharedLocation.address || sharedLocation.label || null,
+        search_location_label: sharedLocationLabel(sharedLocation),
         search_radius_miles: DEFAULT_SEARCH_RADIUS_MILES,
         search_type: pendingFilters?.searchType || searchType,
         last_nearby_search_filters: pendingFilters || { searchType },
@@ -4101,9 +4285,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         pending_search_filters: null
       });
 
-      const locationText = sharedLocation.address
-        || sharedLocation.label
-        || `${Number(sharedLocation.lat).toFixed(4)}, ${Number(sharedLocation.lng).toFixed(4)}`;
+      const locationText = sharedLocationLabel(sharedLocation);
       const near = pendingFilters
         ? await findPropertiesNearWhatsappWithFilters(searchType, sharedLocation, pendingFilters)
         : await findPropertiesNearWhatsapp(searchType, sharedLocation);
@@ -4215,7 +4397,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // AGENT AREA SEARCH
   if (step === 'agent_area') {
-    if (sharedLocation && Number.isFinite(Number(sharedLocation.lat)) && Number.isFinite(Number(sharedLocation.lng))) {
+    if (hasUsableSharedLocation(sharedLocation)) {
+      if (!sharedLocationIsInUganda(sharedLocation)) {
+        await logOutsideUgandaSharedLocation({
+          userPhone: phone,
+          searchType: 'agent',
+          sharedLocation,
+          context: 'agent_area_shared_location_outside_uganda'
+        });
+        return respond(outsideUgandaLocationReply(lang), 'main_menu');
+      }
       const inferred = await inferAgentSearchFromSharedLocation(sharedLocation, sessionData);
       const rows = await findAgentsForWhatsappKeywords(inferred.keywords, inferred.preferredAgentIds);
       if (!rows.length) {

@@ -258,14 +258,14 @@ const scenarios = [
     ]
   },
   {
-    name: 'Rukiga language search path works',
+    name: 'Rukiga language search path falls back without Kinyarwanda',
     messages: ['Hello', '9', '6', '2', 'Kampala'],
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Rukiga'] },
       { step: 'main_menu', includes: ['MakaUg'] },
-      { step: 'search_type', includesAny: ['Urashaka', 'Kugurisha'], excludes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties zihuye', 'request'], excludes: ['data:image', 'Best matching properties'] }
+      { step: 'search_type', includesAny: ['What are you looking for?', 'Rukiga'], excludes: ['Urashaka', 'Kugurisha'] },
+      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Best matching properties', 'request'], excludes: ['data:image', 'Properties zihuye'] }
     ]
   },
   {
@@ -329,6 +329,23 @@ const scenarios = [
       { step: 'search_type' },
       { step: 'search_area' },
       { step: 'main_menu', includesAny: ['km away', 'listings', 'request', 'MakaUg'] }
+    ]
+  },
+  {
+    name: 'Shared location outside Uganda is blocked safely',
+    messages: [
+      '2',
+      '6',
+      { body: '', location: { lat: 51.5072, lng: -0.1276, label: 'London' } }
+    ],
+    expect: [
+      { step: 'search_type' },
+      { step: 'search_area' },
+      {
+        step: 'main_menu',
+        includes: ['outside Uganda', 'Ugandan area'],
+        excludes: ['MakaUg Matchboard', 'km away', 'I am searching within 10 miles']
+      }
     ]
   },
   {

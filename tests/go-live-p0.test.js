@@ -622,6 +622,11 @@ function run() {
   assert(whatsappRoutes.includes('search_radius_miles'), 'WhatsApp shared-location search should store radius');
   assert(whatsappRoutes.includes('DEFAULT_SEARCH_RADIUS_MILES'), 'WhatsApp shared-location search should use shared 10-mile default');
   assert(whatsappRoutes.includes('roundLocationForAnalytics'), 'WhatsApp shared-location logs should round analytics coordinates');
+  assert(whatsappRoutes.includes('isPointInUganda'), 'WhatsApp shared-location flow should block out-of-country coordinates');
+  assert(whatsappRoutes.includes('outsideUgandaLocation'), 'WhatsApp should explain when a shared location is outside Uganda');
+  assert(whatsappRoutes.includes('outside_uganda'), 'WhatsApp outside-Uganda shared locations should be logged');
+  assert(whatsappRoutes.includes('nextPropertySearchActions'), 'WhatsApp search results should drive the next conversation step');
+  assert(whatsappRoutes.includes('book a viewing'), 'WhatsApp next-step prompt should guide users after listing results');
 
   for (const expected of [
     'GET /api/property-seeker/dashboard',

@@ -147,6 +147,10 @@ function sourceWiringChecks() {
     ['frontend Google Places autocomplete exists', 'index.html', 'getGooglePlacePredictions'],
     ['WhatsApp shared location radius logging exists', 'routes/whatsapp.js', 'search_radius_miles'],
     ['WhatsApp shared location uses 10-mile default', 'routes/whatsapp.js', 'DEFAULT_SEARCH_RADIUS_MILES'],
+    ['WhatsApp shared location uses Uganda bounds', 'routes/whatsapp.js', 'isPointInUganda'],
+    ['WhatsApp shared location blocks out-of-country coordinates', 'routes/whatsapp.js', 'outsideUgandaLocation'],
+    ['WhatsApp shared location logs outside-Uganda fallback', 'routes/whatsapp.js', 'outside_uganda'],
+    ['WhatsApp search results include next-step prompt', 'routes/whatsapp.js', 'nextPropertySearchActions'],
     ['admin setup exposes language status', 'routes/admin.js', 'languageSystem'],
     ['admin setup exposes location status', 'routes/admin.js', 'locationSystem']
   ];
