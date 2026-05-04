@@ -1767,11 +1767,13 @@ function parsePropertyType(text) {
 
 function parseSearchType(text) {
   const clean = normalizeInput(text);
-  const mapped = mapSearchTypeInput(clean);
-  if (mapped) return mapped;
+  // Natural phrases like "land for sale" contain sale/rent words, but the
+  // category intent is land. Check category-specific nouns before exact maps.
   if (/\b(land|plot|plots|acre|acres|farm land|agricultural)\b/i.test(clean)) return 'land';
   if (/\b(commercial|office|retail|warehouse|shop|business premises)\b/i.test(clean)) return 'commercial';
   if (/\b(student|students|hostel|dorm|dormitory|campus|university)\b/i.test(clean)) return 'student';
+  const mapped = mapSearchTypeInput(clean);
+  if (mapped) return mapped;
   for (const rule of SEARCH_TYPE_KEYWORDS) {
     if (rule.re.test(clean)) return rule.type;
   }

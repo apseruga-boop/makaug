@@ -415,11 +415,11 @@ function shouldUseFastIntentPath({ text = '', step = '', fallback = {} } = {}) {
 }
 
 const QUERY_SEARCH_TYPE_RULES = [
-  { type: 'rent', re: /\b(rent|rental|to rent|lease|monthly|per month|\/month)\b/i },
-  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i },
+  { type: 'land', re: /\b(land|plot|plots|acre|acres|farm|shamba|kiwanja|ardhi|ttaka)\b/i },
   { type: 'student', re: /\b(student|students|hostel|dorm|campus|university)\b/i },
   { type: 'commercial', re: /\b(commercial|office|retail|warehouse|shop|business)\b/i },
-  { type: 'land', re: /\b(land|plot|plots|acre|acres|farm|shamba|kiwanja|ardhi|ttaka)\b/i }
+  { type: 'rent', re: /\b(rent|rental|to rent|lease|monthly|per month|\/month)\b/i },
+  { type: 'sale', re: /\b(buy|buying|sale|for sale|purchase|own)\b/i }
 ];
 
 const QUERY_PROPERTY_TYPE_RULES = [

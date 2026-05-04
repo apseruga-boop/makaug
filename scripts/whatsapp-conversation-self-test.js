@@ -199,8 +199,8 @@ const scenarios = [
     expect: [
       { step: 'listing_type' },
       { step: 'ownership' },
-      { step: 'title' },
-      { step: 'title', includesAny: ['carry on where we left off', 'new request', 'CONTINUE'] }
+      { step: 'ask_field_agent' },
+      { step: 'ask_field_agent', includesAny: ['carry on where we left off', 'new request', 'CONTINUE'] }
     ]
   },
   {
