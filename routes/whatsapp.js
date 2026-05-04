@@ -607,13 +607,13 @@ function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeti
   const nextLang = resolveLangCode(detectedLanguage.code || '');
   const currentLang = resolveLangCode(sessionLang || 'en');
   if (!nextLang || nextLang === currentLang) return false;
+  if (nextLang === 'en' && currentLang !== 'en' && detectedLanguage.source !== 'ai_explicit_language') return false;
   if (detectedLanguage.source === 'intent_entity') return true;
   if (detectedLanguage.source === 'ai_explicit_language') return true;
   if (detectedLanguage.source === 'ai_language' && Number(detectedLanguage.confidence || 0) >= 0.92) return true;
   if (detectedLanguage.source === 'voice_transcription') return true;
   if (detectedLanguage.source === 'voice_transcript_text') return true;
   if (Number(detectedLanguage.confidence || 0) < 0.9) return false;
-  if (nextLang === 'en' && currentLang !== 'en') return false;
   return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(sessionStep || 'greeting');
 }
 
