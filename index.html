@@ -102,6 +102,41 @@
       filter: brightness(1.05);
       transform: translateY(-1px);
     }
+    .hero-location-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      color: rgba(255, 255, 255, 0.86);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .hero-location-chip {
+      min-height: 38px;
+      border-radius: 999px;
+      border: 1px solid rgba(187, 247, 208, 0.5);
+      background: rgba(20, 83, 45, 0.78);
+      color: #fff;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+      transition: transform .18s ease, background .18s ease;
+    }
+    .hero-location-chip:hover {
+      background: rgba(22, 101, 52, 0.92);
+      transform: translateY(-1px);
+    }
+    .hero-location-note {
+      color: rgba(255, 255, 255, 0.82);
+      font-size: 12px;
+      font-weight: 700;
+    }
     .about-reveal {
       animation: aboutReveal .55s ease both;
     }
@@ -808,6 +843,13 @@
         font-size: 16px;
         padding: 0 16px;
       }
+      .hero-location-row {
+        align-items: stretch;
+      }
+      .hero-location-chip {
+        width: 100%;
+        justify-content: center;
+      }
       .map-h { height: 260px; }
       #map-home.map-h { height: 400px; }
       .map-h-sm { height: 220px; }
@@ -1017,7 +1059,7 @@
             </div>
           </div>
 
-          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto_auto]">
+          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[2.2fr_1fr_1fr_auto]">
             <div id="hero-q-wrap" class="relative">
               <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
               <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area">
@@ -1029,10 +1071,13 @@
               <option value="0">This area only</option>
             </select>
             <select id="hero-context-f" class="hero-field px-4"></select>
-            <button id="hero-use-location-btn" type="button" onclick="applyNearMe('hero')" class="hero-search-btn bg-white text-green-900 hover:bg-green-50 border border-white/60">
-              <i class="fas fa-location-crosshairs mr-1.5"></i>Use my location
-            </button>
             <button id="hero-search-btn" onclick="doSearch()" class="hero-search-btn">Search</button>
+          </div>
+          <div class="hero-location-row">
+            <button id="hero-use-location-btn" type="button" onclick="applyNearMe('hero')" class="hero-location-chip">
+              <i class="fas fa-location-crosshairs"></i> Use my location
+            </button>
+            <span id="hero-location-note" class="hero-location-note">Manual area, radius, and property filters stay active. Location search uses 10 miles by default.</span>
           </div>
         </div>
       </div>
@@ -5631,7 +5676,7 @@
     const LISTING_NEW_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
     const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
     const DEFAULT_NEAR_ME_RADIUS_MI = 10;
-    const SEARCH_RADIUS_MI_OPTIONS = [0, 5, 10, 20, 50];
+    const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50];
     const nearMeSearchState = {
       hero: null,
       sale: null,
@@ -5728,6 +5773,8 @@
         heroLand: "Land",
         heroListFree: "List Property",
         heroSearch: "Search",
+        heroUseLocation: "Use my location",
+        heroNearMeNote: "Manual area, radius, and property filters stay active. Location search uses 10 miles by default.",
         homeFeatured: "Featured Properties",
         homeMap: "Explore on Map",
         homeBrokers: "Featured Agents",
@@ -8201,6 +8248,9 @@
       const heroListBtn = document.getElementById("hero-list-free-btn");
       if (heroListBtn) heroListBtn.innerHTML = `<i class="fas fa-plus"></i> ${tr("heroListFree")}`;
       setTextById("hero-search-btn", tr("heroSearch"));
+      const heroLocationBtn = document.getElementById("hero-use-location-btn");
+      if (heroLocationBtn) heroLocationBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${tr("heroUseLocation")}`;
+      setTextById("hero-location-note", tr("heroNearMeNote"));
 
       setTextById("home-featured-title", tr("homeFeatured"));
       setTextById("home-featured-link", translateListingLabel("View all"));
@@ -20220,7 +20270,7 @@
 
     function radiusLabel(miles) {
       if (!miles) return tr("areaOnly");
-      const unit = miles === 1 ? tr("mileUnitSingular") : tr("mileUnitPlural");
+      const unit = miles <= 1 ? tr("mileUnitSingular") : tr("mileUnitPlural");
       return `${tr("withinLabel")} ${formatRadiusDistanceText(miles)} ${unit}`;
     }
 
