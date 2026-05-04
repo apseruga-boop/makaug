@@ -3517,6 +3517,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const globalRoute = intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = Number(intentResult?.confidence || 0);
+  const numericOptionReply = /^[1-9]$/.test(cleanBody);
+  const activeFlowOwnsNumericReply = numericOptionReply
+    && !['greeting', 'main_menu', 'choose_language', 'search_type', 'search_area', 'agent_area'].includes(step);
   if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
     const next = menuRouteReply(lang, globalRoute);
     return respond(next.message, next.nextStep);
@@ -3613,6 +3616,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   const canSwitchFlow = globalRoute
     && step !== 'main_menu'
+    && !activeFlowOwnsNumericReply
     && globalRoute !== step
     && !(globalRoute === 'search_type' && ['search_type', 'search_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
