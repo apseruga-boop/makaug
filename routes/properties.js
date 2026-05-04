@@ -127,6 +127,19 @@ function isUsableSubmittedImageUrl(url) {
   return /^https?:\/\//i.test(value) || /^data:image\//i.test(value);
 }
 
+function isAcceptedNationalIdPhoto({ name = '', url = '', mimeType = '' } = {}) {
+  const fileName = cleanText(name).toLowerCase();
+  const mediaUrl = cleanText(url);
+  const type = cleanText(mimeType).toLowerCase();
+  if (!fileName && !mediaUrl && !type) return false;
+  if (/\.pdf$/i.test(fileName) || type.includes('pdf') || /^data:application\/pdf/i.test(mediaUrl)) return false;
+  if (/^data:image\//i.test(mediaUrl)) return true;
+  if (type.startsWith('image/')) return true;
+  if (/\.(jpe?g|png|webp|heic|heif)$/i.test(fileName)) return true;
+  if (/\.(jpe?g|png|webp|heic|heif)(?:$|[?#])/i.test(mediaUrl)) return true;
+  return false;
+}
+
 function toUuidOrNull(value) {
   const text = cleanText(value);
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
@@ -1066,6 +1079,10 @@ router.post('/', async (req, res, next) => {
     const inquiryReference = cleanText(body.inquiry_reference) || buildListingReference();
     const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
     const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
+    const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
+    const idDocumentName = cleanText(body.id_document_name || extraFields?.verify?.id_document_name);
+    const idDocumentUrl = cleanText(body.id_document_url || extraFields?.verify?.id_document_url);
+    const idDocumentType = cleanText(body.id_document_type || body.id_document_mime_type || extraFields?.verify?.id_document_type || extraFields?.verify?.id_document_mime_type);
 
     if (listerEmail && !isValidEmail(listerEmail)) errors.push('lister_email is invalid');
     if (listerPhone && !isValidPhone(listerPhone)) errors.push('lister_phone is invalid');
@@ -1106,6 +1123,11 @@ router.post('/', async (req, res, next) => {
       if (invalidSubmittedImages.length) {
         errors.push('Each property image must include a viewable image URL');
       }
+      if (!idDocumentName && !idDocumentUrl) {
+        errors.push('National ID photo is required. Upload a photo image; PDFs are not accepted');
+      } else if (!isAcceptedNationalIdPhoto({ name: idDocumentName, url: idDocumentUrl, mimeType: idDocumentType })) {
+        errors.push('National ID must be uploaded as a photo image. PDFs are not accepted. Please take a picture and upload it');
+      }
       if (!listingOtpToken) {
         errors.push('listing_otp_token is required. Verify OTP before submit');
       } else {
@@ -1133,7 +1155,6 @@ router.post('/', async (req, res, next) => {
     }
 
     const amenities = asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean);
-    const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
 	    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
 	    const availableFrom = cleanText(body.available_from || extraFields.available_from);
 	    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
@@ -1234,8 +1255,8 @@ router.post('/', async (req, res, next) => {
         verificationTermsAccepted,
         inquiryReference,
         cleanText(body.id_number) || null,
-        cleanText(body.id_document_name) || null,
-        cleanText(body.id_document_url || body.extra_fields?.verify?.id_document_url) || null,
+        idDocumentName || null,
+        idDocumentUrl || null,
         newUntil,
         JSON.stringify(amenities),
         JSON.stringify(extraFields),

@@ -223,7 +223,7 @@ describe('conversation state machine', () => {
     await run(machine, session, msg('text', '123456'));
     await run(machine, session, msg('text', 'john@example.com'));
     await run(machine, session, msg('text', 'CM12345678ABCD'));
-    await run(machine, session, { ...msg('document'), mediaId: 'doc1' });
+    await run(machine, session, { ...msg('image'), mediaId: 'doc1', mimeType: 'image/jpeg', fileName: 'national-id.jpg' });
     const final = await run(machine, session, msg('text', 'YES'));
 
     expect(final.replies[0].text).toContain('submitted for review');
@@ -268,6 +268,19 @@ describe('conversation state machine', () => {
 
     const response = await run(machine, session, msg('text', '123'));
     expect(response.replies[0].text).toContain('Invalid NIN');
+  });
+
+  it('rejects PDF uploads for National ID verification', async () => {
+    const { machine } = makeMachine();
+    const session = baseSession({
+      currentIntent: 'property_listing',
+      currentStep: 'listing_verification',
+      data: { verificationStage: 'idUpload', listing: { verification: { nin: 'CM12345678ABCD' } } }
+    });
+
+    const response = await run(machine, session, { ...msg('document'), mediaId: 'doc1', mimeType: 'application/pdf', fileName: 'national-id.pdf' });
+    expect(response.replies[0].text).toContain('PDFs are not accepted');
+    expect(response.state.data.verificationStage).toBe('idUpload');
   });
 
   it('handles voice note flow', async () => {

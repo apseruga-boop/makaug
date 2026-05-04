@@ -78,7 +78,7 @@ const ENGLISH: Record<PhraseKey, string> = {
   otp_invalid: 'OTP invalid. Reply with the correct code or type RESEND.',
   ask_email: 'Enter your email address.',
   ask_nin: 'Enter your NIN (National ID Number).',
-  ask_nid_upload: 'Upload your National ID image or PDF.',
+  ask_nid_upload: 'Upload a clear photo of your National ID. PDFs are not accepted. Take a picture and upload the photo.',
   ask_consent: 'Do you consent to anti-fraud review checks and manual listing review? Reply YES to continue.',
   listing_submitted:
     'Your listing has been submitted for review. We will contact you on WhatsApp or email within 24 hours. Ref: {ref}.',

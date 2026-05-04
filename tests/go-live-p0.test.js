@@ -156,6 +156,7 @@ function run() {
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
+  const whatsappRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
   const smsServiceSource = fs.readFileSync(path.join(__dirname, '..', 'models', 'smsService.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
   const phoneOtpDeliveryServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'phoneOtpDeliveryService.js'), 'utf8');
@@ -255,6 +256,9 @@ function run() {
   assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
   assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
   assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');
+  assert(listPropertyHtml.includes('id="lp-verify-id-file" type="file" accept="image/*"'), 'National ID upload should accept photos only');
+  assert(listPropertyText.includes('PDFs are not accepted'), 'National ID upload should tell users PDFs are not accepted');
+  assert(!listPropertyHtml.includes('id="lp-verify-id-file" type="file" accept="image/*,.pdf"'), 'National ID upload must not accept PDFs');
   for (const oldLocationCopy of [
     'Location setup (step-by-step)',
     'Choose the location step by step',
@@ -281,6 +285,7 @@ function run() {
   assert(sourceHtml.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
   assert(sourceHtml.includes('WhatsApp confirmation logged for admin follow-up.'), 'success modal should explain WhatsApp fallback');
   assert(propertiesRoutes.includes('logEmailEvent'), 'property submission should create EmailLog entries');
+  assert(propertiesRoutes.includes('National ID must be uploaded as a photo image. PDFs are not accepted'), 'property submission backend should reject National ID PDFs');
   assert(propertiesRoutes.includes("router.post('/listing-intent'"), 'listing path choice should have a backend intent endpoint');
   assert(propertiesRoutes.includes('list_property_path_selected'), 'listing path choice should create a backend lead/activity/log event');
   assert(propertiesRoutes.includes('list_property_whatsapp_ai'), 'WhatsApp AI listing path should be logged distinctly');
@@ -295,6 +300,8 @@ function run() {
   assert(listingModerationService.includes('WhatsApp support'), 'property submitted email should include WhatsApp support');
   assert(emailLogService.includes('INSERT INTO email_logs'), 'email log service should persist email logs when table exists');
   assert(whatsappMessageLogService.includes('INSERT INTO whatsapp_message_logs'), 'WhatsApp log service should persist WhatsApp logs when table exists');
+  assert(whatsappRoutes.includes('Do not send a PDF'), 'WhatsApp identity prompt should say PDFs are not accepted');
+  assert(whatsappRoutes.includes('isPhotoMediaForIdentity'), 'WhatsApp identity upload should validate photo-only media');
 
   const aboutHtml = sanitizePublicHtml(sourceHtml, { pathname: '/about' });
   const mortgageHtml = sanitizePublicHtml(sourceHtml, { pathname: '/mortgage' });

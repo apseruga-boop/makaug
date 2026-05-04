@@ -790,8 +790,11 @@ export class ConversationStateMachine {
       }
 
       if (stage === 'idUpload') {
-        if (!['document', 'image'].includes(input.type) || !input.mediaId) {
-          return { state: session, replies: [{ text: 'Please upload National ID as image or PDF document.' }] };
+        const mimeType = String(input.mimeType || '').toLowerCase();
+        const fileName = String(input.fileName || '').toLowerCase();
+        const isPdf = mimeType.includes('pdf') || fileName.endsWith('.pdf');
+        if (input.type !== 'image' || !input.mediaId || isPdf) {
+          return { state: session, replies: [{ text: 'Please upload a photo of your National ID. PDFs are not accepted. Take a picture and upload the photo.' }] };
         }
 
         let idDocRef = `whatsapp-media:${input.mediaId}`;

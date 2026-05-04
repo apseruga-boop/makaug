@@ -500,6 +500,32 @@ const scenarios = [
     expectLast: { step: 'verify_otp', includesAny: ['6-digit code', 'SMS'] }
   },
   {
+    name: 'Listing identity step rejects National ID PDF uploads',
+    messages: [
+      '1',
+      '1',
+      '1',
+      '2',
+      'Family house in Kololo',
+      'Kampala',
+      'Kololo',
+      '250000000',
+      '3',
+      'A bright family home with parking, security, kitchen, and garden.',
+      { body: '[image]', mediaType: 'image', mediaCount: 1 },
+      { mediaUrl: 'whatsapp-web://living-room', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://bedroom', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://kitchen', mediaType: 'image' },
+      { mediaUrl: 'whatsapp-web://bathroom', mediaType: 'image' },
+      'Amina',
+      '1',
+      '+256760112587',
+      'CM1234567890ABCD',
+      { mediaUrl: 'whatsapp-web://national-id.pdf', mediaType: 'application/pdf' }
+    ],
+    expectLast: { step: 'ask_selfie', includesAny: ['No PDFs', 'photo'], excludes: ['6-digit code'] }
+  },
+  {
     name: 'Voice note architecture asks clearly when transcription is unavailable',
     messages: [
       'Habari',

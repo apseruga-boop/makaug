@@ -57,7 +57,7 @@ const T = {
     askContactValuePhone: '📱 Please send the WhatsApp/phone number for listing enquiries.\nFormat: +256 7XX XXX XXX',
     askContactValueEmail: '✉️ Please send the email address for listing enquiries.',
     askIDNumber: '🪪 For security, we need your National ID Number (NIN). This is required to prevent fraud and will not be publicly shown.\n\nPlease type your NIN:',
-    askSelfie: '🤳 Please take a clear selfie (photo of yourself) holding your National ID card and send it here. This verifies you are real and reduces fraud.',
+    askSelfie: '🤳 Please take a clear photo of yourself holding your National ID card and send the photo here. Do not send a PDF or document file. It has to be a photo.',
     askPhone: '📱 What is your mobile phone number (for verification)?\nFormat: +256 7XX XXX XXX',
     otpSent: "📲 We've sent a 6-digit code to your phone via SMS. Please type that code here to verify:",
     otpSentEmail: "✉️ We've sent a 6-digit code to your email. Please type that code here to verify:",
@@ -92,7 +92,7 @@ const T = {
     photosUploaded: "📸 You've uploaded {count} photos. Type *DONE* to continue, or send any extra helpful photos.",
     photoReceived: '✅ Photo {count} received.',
     invalidNin: '❌ Please enter a valid National ID Number (NIN).',
-    sendSelfiePhotoOnly: '❌ Please send a photo (selfie) - not text.',
+    sendSelfiePhotoOnly: '❌ Please upload a photo of your National ID/selfie. No PDFs or document files. Take a picture and send the photo.',
     invalidPhone: '❌ Invalid phone format. Try: 0760112587',
     visitMoreListings: 'Visit {url} for more listings.',
     seeAllAgents: 'See all agents: {url}',
@@ -130,7 +130,7 @@ const T = {
     askDescription: '📝 Teeka ennukuta ntono ku ensi eno (otuutu, ebintu, embeera...)',
     askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
     askIDNumber: '🪪 Kwa nteekateeka, tukeetaaga NIN yo (National ID Number). Ejja kutuzikirira bukyamu.',
-    askSelfie: "🤳 Weereza selfie (ekifaananyi kyo) ng'oyita NIN yo.",
+    askSelfie: "🤳 Weereza ekifaananyi kyo ekirabika obulungi ng'okutte National ID yo. Tosindika PDF oba document file; kyetaagisa kubeera kifaananyi.",
     askPhone: '📱 Enamba yaffe ya simu (okukakasa)?\nFomati: +256 7XX XXX XXX',
     otpSent: '📲 Tukusindise koodi ku simu yo nga SMS. Wandika koodi eyo eri wano:',
     listingSubmitted: "🎉 *Ensi yo eterekedwa!*\n\nTeemu yaffe eya kulabirira era ejja kuterekebwa mu saawa 24.\n\nReference: #{ref}\n\n✅ Edirirra: teekawo profile yo olabe views, saves n'ebibuuza ku listing yo.\n\nWebale okozesa MakaUg! 🏠🇺🇬",
@@ -163,7 +163,7 @@ const T = {
     photosUploaded: '📸 Ofunye ebifaananyi {count}/5. Wandiika *DONE* nga omaze okutuusa ku 5.',
     photoReceived: '✅ Ekifaananyi {count}/5 kifuniddwa! Weereza ekiddako.',
     invalidNin: '❌ NIN gyotadde si ntuufu. Gezaako nate.',
-    sendSelfiePhotoOnly: '❌ Weereza ekifaananyi (selfie), si bubaka bwa nnukuta.',
+    sendSelfiePhotoOnly: '❌ Weereza ekifaananyi kya National ID/selfie. Tosindika PDF oba document file.',
     invalidPhone: '❌ Namba ya ssimu si ntuufu. Geza: 0760112587',
     visitMoreListings: 'Laba ebisingawo ku {url}.',
     seeAllAgents: 'Laba ba agent bonna: {url}',
@@ -221,7 +221,7 @@ const T = {
     photosUploaded: '📸 Umepakia picha {count}/5. Andika *DONE* ukifika 5.',
     photoReceived: '✅ Picha {count}/5 imepokelewa! Tuma picha inayofuata.',
     invalidNin: '❌ Tafadhali andika NIN sahihi.',
-    sendSelfiePhotoOnly: '❌ Tafadhali tuma picha (selfie), si maandishi.',
+    sendSelfiePhotoOnly: '❌ Tafadhali tuma picha ya National ID/selfie. Usitume PDF au faili la document.',
     invalidPhone: '❌ Namba ya simu si sahihi. Jaribu: 0760112587',
     visitMoreListings: 'Tembelea {url} kuona mali zaidi.',
     seeAllAgents: 'Tazama mawakala wote: {url}',
@@ -285,7 +285,7 @@ Object.assign(T.sw, {
   askContactValuePhone: '📱 Tuma namba ya WhatsApp/simu kwa maswali ya tangazo.\nMfano: +256 7XX XXX XXX',
   askContactValueEmail: '✉️ Tuma email ya maswali ya tangazo.',
   askIDNumber: '🪪 Kwa usalama, tunahitaji National ID Number (NIN). Haitaonekana hadharani.\n\nTafadhali andika NIN yako:',
-  askSelfie: '🤳 Tuma selfie iliyo wazi ukiwa umeshika National ID yako.',
+  askSelfie: '🤳 Tuma picha iliyo wazi ukiwa umeshika National ID yako. Usitume PDF au faili la document; lazima iwe picha.',
   askPhone: '📱 Namba yako ya simu ya uthibitisho ni ipi?\nMfano: +256 7XX XXX XXX',
   verifyOTP: 'Tafadhali andika code ya tarakimu 6 tuliyotuma:',
   askDeposit: '💵 Deposit ni kiasi gani? (UGX, nambari tu)',
@@ -314,7 +314,7 @@ Object.assign(T.ac, {
   askContactValuePhone: '📱 Cwal namba me WhatsApp/cim pi enquiries.',
   askContactValueEmail: '✉️ Cwal email pi enquiries.',
   askIDNumber: '🪪 Pi gwoko kuc, wamito National ID Number (NIN). Pe bino nyute bot lwak.\n\nCoo NIN mamegi:',
-  askSelfie: '🤳 Cwal selfie ma nen maber ki National ID mamegi.',
+  askSelfie: '🤳 Cwal photo/selfie ma nen maber ki National ID mamegi. Pe i cwal PDF onyo document file; myero obed photo.',
   askPhone: '📱 Namba cim mamegi pi verification?',
   otpSent: '📲 Wacwalo code me digit 6 i cim mamegi. Coo code kany:',
   otpSentEmail: '✉️ Wacwalo code me digit 6 i email mamegi. Coo code kany:',
@@ -342,7 +342,7 @@ Object.assign(T.ac, {
   needExactlyFivePhotos: '❌ Cwal photos 5: front, sitting room, bedroom, kitchen, bathroom.',
   photosUploaded: '📸 Itye ki photos {count}/5. Coo *DONE* ka oromo 5.',
   photoReceived: '✅ Photo {count}/5 onongo! Cwal ma lubo kore.',
-  sendSelfiePhotoOnly: '❌ Cwal photo/selfie, pe text.',
+    sendSelfiePhotoOnly: '❌ Cwal photo/selfie only. Pe PDF onyo document file.',
   replySearchAgain: 'Dwog 2 me yenyo doki.',
   replyAgentAgain: 'Dwog 3 me yenyo agent mukene.',
   typeSale: 'Me acata',
@@ -1178,6 +1178,17 @@ function isLocationPreviewWithoutCoordinates(mediaType = '', body = '') {
   const type = String(mediaType || '').toLowerCase();
   if (type.includes('location')) return true;
   return type === 'image' && /^\s*\d{1,2}:\d{2}\s*(?:am|pm)?\s*$/i.test(String(body || '').trim());
+}
+
+function isPhotoMediaForIdentity(mediaType = '', mediaUrl = '') {
+  const type = String(mediaType || '').toLowerCase();
+  const url = String(mediaUrl || '').toLowerCase();
+  if (!url) return false;
+  if (type.includes('pdf') || type === 'document' || /\.pdf(?:$|[?#])/i.test(url)) return false;
+  return type === 'image'
+    || type.startsWith('image/')
+    || url.startsWith('data:image/')
+    || /\.(jpe?g|png|webp|heic|heif)(?:$|[?#])/i.test(url);
 }
 
 function locationPreviewPrompt(lang) {
@@ -4484,7 +4495,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // SELFIE
   if (step === 'ask_selfie') {
-    if (!mediaUrl) return respond(t(lang, 'sendSelfiePhotoOnly'), 'ask_selfie');
+    if (!isPhotoMediaForIdentity(runtime.mediaType, mediaUrl)) return respond(t(lang, 'sendSelfiePhotoOnly'), 'ask_selfie');
     await patchDraft(phone, { selfie_url: mediaUrl });
     if (draft.otp_identifier) {
       await issueOtp(draft.otp_identifier, { channel: draft.otp_channel || 'phone' });

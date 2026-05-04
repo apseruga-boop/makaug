@@ -8,7 +8,7 @@ const REVIEW_CHECKS = [
   { key: 'contact_details_verified', label: 'Phone/email details verified' },
   { key: 'identity_number_supplied', label: 'ID number supplied' },
   { key: 'identity_number_format', label: 'ID number format looks valid' },
-  { key: 'identity_document_available', label: 'ID document preview available' },
+  { key: 'identity_document_available', label: 'National ID photo preview available' },
   { key: 'identity_number_not_reused', label: 'ID number not reused by another contact', overrideable: true },
   { key: 'previous_lister_checked', label: 'Previous lister history checked', overrideable: true },
   { key: 'makaug_duplicate_checked', label: 'Not duplicated on MakaUg', overrideable: true },
@@ -212,8 +212,8 @@ function buildAutomatedListingReview({
     : Number(listing.price || 0) > 0;
   const minRequiredImages = String(listing.listing_type || '').toLowerCase() === 'land' ? 3 : 5;
   const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
-  const hasViewableIdDocument = isUsableMediaUrl(idDocumentUrl, { allowPdf: true });
   const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
+  const hasViewableIdDocument = isUsableMediaUrl(idDocumentUrl, { allowPdf: false }) && !/\.pdf$/i.test(idDocumentName);
   const externalScan = normalizeExternalDuplicateScan(externalDuplicateScan);
 
   const checks = [
@@ -244,7 +244,7 @@ function buildAutomatedListingReview({
     checkResult(
       'identity_document_available',
       hasViewableIdDocument ? 'pass' : 'fail',
-      hasViewableIdDocument ? 'ID document can be opened for review.' : (idDocumentName ? 'ID document name is stored, but the document itself is not viewable.' : 'ID document is missing.'),
+      hasViewableIdDocument ? 'National ID photo can be opened for review.' : (idDocumentName ? 'National ID file is stored, but it is not a supported photo. Ask for a clear photo; PDFs are not accepted.' : 'National ID photo is missing.'),
       { id_document_name: idDocumentName || null, id_document_url_present: !!idDocumentUrl, id_document_viewable: hasViewableIdDocument }
     ),
     checkResult(
