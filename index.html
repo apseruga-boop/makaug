@@ -22432,6 +22432,9 @@
       const contextCfg = HERO_CONTEXT_FILTERS[currentTab] || HERO_CONTEXT_FILTERS.sale;
       const pageMap = { sale: "sale", rent: "rent", students: "students", commercial: "commercial", land: "land" };
       const heroNearState = getNearMeSearchState(currentTab);
+      const routedRadiusValue = heroNearState
+        ? String(heroNearState.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI)
+        : heroRadiusValue;
       let results = getPublicListings().filter((p) => {
         const typeMatch = currentTab === "students" ? isStudentDiscoverable(p) : normalizeType(p.type) === currentTab;
         const districtMatch = heroNearState
@@ -22456,7 +22459,7 @@
         const rb = document.getElementById("rent-min-beds-f");
         if (rq) rq.value = document.getElementById("hero-q").value || "";
         if (rd) rd.value = areaOrUni;
-        if (rr) rr.value = heroRadiusValue;
+        if (rr) rr.value = routedRadiusValue;
         if (rb) rb.value = contextVal || "";
         filterListings("rent");
       } else if (currentTab === "students") {
@@ -22466,7 +22469,7 @@
         const stQuick = document.getElementById("student-type-quick-f");
         if (sq) sq.value = document.getElementById("hero-q").value || "";
         if (su) su.value = areaOrUni;
-        if (sr) sr.value = "0";
+        if (sr) sr.value = routedRadiusValue;
         if (stQuick) stQuick.value = contextVal || "";
         filterStudents();
       } else if (currentTab === "commercial") {
@@ -22477,7 +22480,7 @@
         const commercialTypeMap = { office: "Office", retail: "Retail", warehouse: "Warehouse", shop: "Shop" };
         if (cq) cq.value = document.getElementById("hero-q").value || "";
         if (cd) cd.value = areaOrUni;
-        if (cr) cr.value = heroRadiusValue;
+        if (cr) cr.value = routedRadiusValue;
         if (ct) ct.value = commercialTypeMap[contextVal] || "";
         filterCommercial();
       } else if (currentTab === "land") {
@@ -22488,7 +22491,7 @@
         const landTypeMap = { residential: "Residential", commercial: "Commercial", agricultural: "Agricultural" };
         if (lq) lq.value = document.getElementById("hero-q").value || "";
         if (ld) ld.value = areaOrUni;
-        if (lr) lr.value = heroRadiusValue;
+        if (lr) lr.value = routedRadiusValue;
         if (lt) lt.value = landTypeMap[contextVal] || "";
         filterLand();
       } else {
@@ -22498,7 +22501,7 @@
         const sb = document.getElementById("sale-min-beds-f");
         if (sq) sq.value = document.getElementById("hero-q").value || "";
         if (sd) sd.value = areaOrUni;
-        if (sr) sr.value = heroRadiusValue;
+        if (sr) sr.value = routedRadiusValue;
         if (sb) sb.value = contextVal || "";
         filterListings("sale");
       }

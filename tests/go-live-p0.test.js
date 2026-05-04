@@ -554,6 +554,9 @@ function run() {
   assert(backendConnectionProbeScript.includes('/api/admin/summary'), 'backend probe should verify admin API anonymous blocking');
   assert(backendConnectionProbeScript.includes('/api/admin/setup-status'), 'backend probe should verify setup status anonymous blocking');
   assert(backendConnectionProbeScript.includes('SUPER_ADMIN_EMAIL'), 'backend probe should check super admin env presence without printing secrets');
+  assert(backendConnectionProbeScript.includes("require('dotenv').config()"), 'backend probe should load local env for provider readiness checks');
+  assert(backendConnectionProbeScript.includes('AFRICASTALKING_API_KEY'), 'backend probe should include Africa’s Talking SMS provider keys');
+  assert(backendConnectionProbeScript.includes('SMS_TEST_PHONE'), 'backend probe should include explicit SMS test phone key');
   assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
   assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
   assert(sourceHtml.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
@@ -598,6 +601,7 @@ function run() {
   assert(sourceHtml.includes('id="hero-use-location-btn"'), 'homepage should include Use my location search');
   assert(sourceHtml.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
   assert(sourceHtml.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');
+  assert(sourceHtml.includes('routedRadiusValue'), 'homepage near-me search should preserve radius when routing to category pages');
   assert(sourceHtml.includes('You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.'), 'near-me search should handle overseas coordinates');
   assert(sourceHtml.includes('decorateAndSortNearMeResults'), 'near-me results should be decorated and sorted by distance');
   assert(propertiesRoutes.includes("router.get('/search', listPropertiesHandler)"), 'backend should expose /api/properties/search');

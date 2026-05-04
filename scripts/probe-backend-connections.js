@@ -1,5 +1,7 @@
 'use strict';
 
+require('dotenv').config();
+
 const fs = require('fs');
 const path = require('path');
 
@@ -166,12 +168,12 @@ function providerStatusChecks() {
   const groups = [
     ['super_admin bootstrap', ['SUPER_ADMIN_EMAIL', 'SUPER_ADMIN_INITIAL_PASSWORD', 'DATABASE_URL', 'JWT_SECRET']],
     ['admin API key', ['ADMIN_API_KEY']],
-    ['email provider', ['SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID']],
-    ['WhatsApp provider', ['WHATSAPP_PROVIDER', 'TWILIO_ACCOUNT_SID', 'WHATSAPP_WEB_BRIDGE_ENABLED']],
-    ['SMS provider', ['TWILIO_ACCOUNT_SID', 'SMS_PROVIDER']],
+    ['email provider', ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'RESEND_API_KEY', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID']],
+    ['WhatsApp provider', ['WHATSAPP_PROVIDER', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN']],
+    ['SMS provider', ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_FROM_SMS', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME', 'AFRICASTALKING_SENDER_ID', 'SMS_TEST_PHONE']],
     ['payment provider', ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET']],
-    ['Google Maps/Places', ['GOOGLE_MAPS_API_KEY']],
-    ['OpenAI/LLM provider', ['OPENAI_API_KEY']]
+    ['Google Maps/Places', ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY']],
+    ['OpenAI/LLM provider', ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY']]
   ];
 
   return groups.map(([label, keys]) => {
