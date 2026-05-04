@@ -54,9 +54,10 @@ const {
 const { addLeadActivity, createLead } = require('../services/leadService');
 const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
 const { markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
-const { logNotification } = require('../services/notificationLogService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { getProviderMeta } = require('../services/llmProvider');
 const {
@@ -162,7 +163,7 @@ function adminTestEmail() {
 }
 
 function adminTestPhone() {
-  return process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || '+256760112587';
+  return process.env.SMS_TEST_PHONE || process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || '+256760112587';
 }
 
 function launchTimestamp() {
@@ -4029,6 +4030,30 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
         status: configured ? 'queued' : 'provider_missing',
         failureReason: configured ? null : 'whatsapp_provider_missing'
       });
+    } else if (provider === 'sms') {
+      const deliveryResult = await sendPhoneOtp({
+        to: adminTestPhone(),
+        message: 'MakaUg SMS provider test. No action needed.'
+      });
+      const deliveryStatus = deliveryResult.ok
+        ? notificationStatusFromDelivery(deliveryResult.delivery)
+        : (configured ? 'failed' : 'provider_missing');
+      log = await logNotification(db, {
+        recipientPhone: adminTestPhone(),
+        channel: 'sms',
+        type: 'provider_test_sms',
+        status: deliveryStatus,
+        payloadSummary: {
+          provider,
+          configured,
+          launch_proof: true,
+          attempts: deliveryResult.attempts || []
+        },
+        failureReason: deliveryResult.ok ? null : (deliveryResult.failureReason || 'sms_provider_test_failed')
+      });
+      base.status = deliveryStatus;
+      base.deliveryChannel = 'sms';
+      base.attempts = deliveryResult.attempts || [];
     } else {
       log = await logNotification(db, {
         recipientPhone: provider === 'sms' ? adminTestPhone() : null,

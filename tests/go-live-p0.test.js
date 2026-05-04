@@ -624,6 +624,8 @@ function run() {
   assert(adminRoutes.includes("router.get('/setup-status'"), 'admin setup status API should exist');
   assert(adminRoutes.includes("router.post('/setup-status/property-submission-test'"), 'admin setup status should run safe property submission proof');
   assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
+  assert(adminRoutes.includes('sendPhoneOtp'), 'admin SMS provider proof should exercise real SMS delivery path');
+  assert(adminRoutes.includes('SMS_TEST_PHONE'), 'admin SMS provider proof should support an explicit test phone');
   assert(adminRoutes.includes("router.post('/setup-status/ai-smoke-test'"), 'admin setup status should run AI proof');
   assert(adminRoutes.includes("router.post('/setup-status/run-alert-matcher'"), 'admin setup status should run alert matching proof');
   assert(adminRoutes.includes("router.post('/setup-status/viewing-callback-test'"), 'admin setup status should run viewing/callback proof');
