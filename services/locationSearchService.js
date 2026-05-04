@@ -1,5 +1,9 @@
 const DEFAULT_SEARCH_RADIUS_MILES = 10;
 const DEFAULT_SEARCH_RADIUS_KM = 16.09344;
+const MIN_SEARCH_RADIUS_MILES = 0.25;
+const MAX_SEARCH_RADIUS_MILES = 50;
+const MIN_SEARCH_RADIUS_KM = MIN_SEARCH_RADIUS_MILES * 1.609344;
+const MAX_SEARCH_RADIUS_KM = MAX_SEARCH_RADIUS_MILES * 1.609344;
 const UGANDA_BOUNDS = {
   minLat: -1.7,
   maxLat: 4.5,
@@ -27,12 +31,12 @@ function kmToMiles(km) {
 function normalizeRadiusMiles(value, fallback = DEFAULT_SEARCH_RADIUS_MILES) {
   const miles = toFiniteNumber(value);
   if (miles == null || miles <= 0) return fallback;
-  return Math.min(50, Math.max(1, miles));
+  return Math.min(MAX_SEARCH_RADIUS_MILES, Math.max(MIN_SEARCH_RADIUS_MILES, miles));
 }
 
 function normalizeRadiusKm(value, fallbackMiles = DEFAULT_SEARCH_RADIUS_MILES) {
   const km = toFiniteNumber(value);
-  if (km != null && km > 0) return Math.min(80.5, Math.max(1, km));
+  if (km != null && km > 0) return Math.min(MAX_SEARCH_RADIUS_KM, Math.max(MIN_SEARCH_RADIUS_KM, km));
   return milesToKm(normalizeRadiusMiles(undefined, fallbackMiles));
 }
 
@@ -77,6 +81,8 @@ function buildHaversineSql(latRef, lngRef, latColumn = 'p.latitude', lngColumn =
 module.exports = {
   DEFAULT_SEARCH_RADIUS_MILES,
   DEFAULT_SEARCH_RADIUS_KM,
+  MIN_SEARCH_RADIUS_MILES,
+  MAX_SEARCH_RADIUS_MILES,
   UGANDA_BOUNDS,
   milesToKm,
   kmToMiles,

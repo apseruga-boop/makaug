@@ -609,6 +609,9 @@ function run() {
   assert(adminRoutes.includes('locationSearches'), 'admin setup status should show recent location search counts');
   assert.strictEqual(DEFAULT_SEARCH_RADIUS_MILES, 10, 'shared default radius should be 10 miles');
   assert.strictEqual(normalizeRadiusMiles(undefined), 10, 'missing radius should default to 10 miles');
+  assert.strictEqual(normalizeRadiusMiles(0.25), 0.25, 'backend should honor restored quarter-mile radius searches');
+  assert.strictEqual(normalizeRadiusMiles(0.5), 0.5, 'backend should honor restored half-mile radius searches');
+  assert.strictEqual(Number(normalizeRadiusKm(0.25 * 1.609344).toFixed(6)), Number((0.25 * 1.609344).toFixed(6)), 'backend should not clamp quarter-mile radius to 1km');
   assert(normalizeRadiusKm(undefined) > 16 && normalizeRadiusKm(undefined) < 17, 'default radius should be about 16.1 km');
   assert(isPointInUganda(0.3476, 32.5825), 'Kampala should be inside Uganda bounds');
   assert(!isPointInUganda(51.5072, -0.1276), 'London should be outside Uganda bounds');
