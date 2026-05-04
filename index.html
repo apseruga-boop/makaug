@@ -3252,8 +3252,16 @@
             <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
           </div>
         </div>
+        <div class="rounded-3xl bg-gradient-to-br from-green-900 via-emerald-800 to-green-700 text-white p-5 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-green-200">Field Agent notice board</p>
+            <h3 class="text-2xl font-black serif mt-1">Latest MakaUg field update</h3>
+            <p id="field-agent-notice" class="text-sm text-green-50 mt-2 max-w-2xl">Use the online form, WhatsApp listing option, or the WhatsApp AI bot to submit clean property leads. Approved listings count toward your weekly payout.</p>
+          </div>
+          <a id="field-agent-whatsapp-broadcast" href="https://wa.me/256760112587?text=Hi%20MakaUg%20Operations%2C%20I%20need%20field%20agent%20support." target="_blank" rel="noopener noreferrer" class="bg-white text-green-800 hover:bg-green-50 px-4 py-2.5 rounded-xl text-sm font-black">WhatsApp Operations</a>
+        </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Submitted</div>
             <div id="field-stat-submitted" class="text-3xl font-black text-gray-900 mt-1">0</div>
@@ -3273,6 +3281,25 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Payable This Friday</div>
             <div id="field-stat-payable" class="text-3xl font-black text-emerald-700 mt-1">USh 0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Agent Rank</div>
+            <div id="field-stat-rank" class="text-3xl font-black text-gray-900 mt-1">-</div>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-5">
+          <div class="bg-white border border-green-100 rounded-2xl p-5">
+            <h3 class="text-lg font-bold text-green-950 mb-2">Balance & payout tracker</h3>
+            <p id="field-payout-summary" class="text-sm text-gray-600">No approved payable listings yet.</p>
+          </div>
+          <div class="bg-white border border-amber-100 rounded-2xl p-5">
+            <h3 class="text-lg font-bold text-amber-900 mb-2">Money collected tracker</h3>
+            <p id="field-money-summary" class="text-sm text-gray-600">MakaUg Operations updates collections and payout notes after review.</p>
+          </div>
+          <div class="bg-white border border-blue-100 rounded-2xl p-5">
+            <h3 class="text-lg font-bold text-blue-950 mb-2">Team communication</h3>
+            <p class="text-sm text-gray-600">Broadcasts, listing tips, rejection reasons, and payment updates appear here and through WhatsApp follow-up.</p>
           </div>
         </div>
 
@@ -3300,6 +3327,14 @@
             <li>Payout runs weekly on Friday based on prior cut-off period.</li>
             <li>Escalations and compliance events may suspend payout pending review.</li>
           </ul>
+        </div>
+        <div class="bg-white border border-green-100 rounded-2xl p-5">
+          <h3 class="text-lg font-bold text-gray-800 mb-3">How to work as a MakaUg Field Agent</h3>
+          <div class="grid md:grid-cols-3 gap-3 text-sm text-gray-700">
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Online listing</strong><br>Use List Property, complete address, photos, OTP, and submit for review.</div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>WhatsApp listing</strong><br>Use the List via WhatsApp option with property type, location, and owner contact.</div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>WhatsApp AI bot</strong><br>Ask the bot for listing guidance, fraud checks, and buyer/renter handoff support.</div>
+          </div>
         </div>
         <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-green-950 mb-2">Field Agent settings</h3>
@@ -3861,6 +3896,28 @@
                   <p class="text-xs text-gray-500 mt-1">Review throughput, enquiries, saves, route opens, and recent activity for field teams.</p>
                 </div>
               </div>
+              <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="mb-4 rounded-2xl border border-green-100 bg-white p-3 space-y-3">
+                <div class="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <h5 class="text-sm font-black text-green-950">Create Field Agent login</h5>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Set up an approved agent with email/phone and a private 4-digit PIN. The PIN is hashed and never shown after save.</p>
+                  </div>
+                  <span class="text-[11px] font-bold rounded-full bg-green-100 text-green-700 px-2 py-1">Admin only</span>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-2">
+                  <input id="admin-fa-first-name" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="First name" required>
+                  <input id="admin-fa-email" type="email" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
+                  <input id="admin-fa-phone" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone / WhatsApp" required>
+                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
+                  <input id="admin-fa-code" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Agent code, e.g. FA-0001">
+                  <input id="admin-fa-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
+                  <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button id="admin-fa-provision-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Create / update agent</button>
+                  <p id="admin-fa-provision-result" class="text-xs text-gray-500">Use FA-0001 to FA-0004 internally if you want four starter agent codes.</p>
+                </div>
+              </form>
               <div id="admin-field-agents-table" class="space-y-3"></div>
             </div>
           </div>
@@ -4551,7 +4608,7 @@
           <input id="auth-signin-identifier" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX or your@email.com">
         </div>
 
-        <label class="block text-sm font-medium text-gray-800 mb-2">Password</label>
+        <label id="auth-signin-password-label" class="block text-sm font-medium text-gray-800 mb-2">Password</label>
         <input id="auth-signin-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm mb-5" placeholder="••••••••">
 
         <button id="auth-signin-btn" onclick="submitAuthSignIn()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold mb-5">Sign In</button>
@@ -8644,16 +8701,19 @@
       const fieldWrap = document.getElementById("auth-field-login-wrap");
       const identifierLabel = document.getElementById("auth-signin-identifier-label");
       const identifierInput = document.getElementById("auth-signin-identifier");
+      const passwordLabel = document.getElementById("auth-signin-password-label");
 
       if (authSignInAudience === "field_agent") {
-        if (audienceHelp) audienceHelp.textContent = "Field Agent: operational user who signs up owners/brokers/properties in the field and tracks approved output.";
+        if (audienceHelp) audienceHelp.textContent = "Field Agent: use your MakaUg Operations phone/email and admin-issued 4-digit PIN to track listings, approvals, rejections, ranking, balance, and payouts.";
         if (fieldWrap) fieldWrap.classList.add("hidden");
         if (standardWrap) standardWrap.classList.remove("hidden");
         if (identifierLabel) identifierLabel.textContent = "Field Agent Phone or Email";
         if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or field@email.com";
+        if (passwordLabel) passwordLabel.textContent = "Password or 4-digit PIN";
       } else {
         if (fieldWrap) fieldWrap.classList.add("hidden");
         if (standardWrap) standardWrap.classList.remove("hidden");
+        if (passwordLabel) passwordLabel.textContent = "Password";
         if (authSignInAudience === "admin") {
           if (audienceHelp) audienceHelp.textContent = "Admin: internal platform control for moderation, approvals, and operations.";
           if (identifierLabel) identifierLabel.textContent = "Admin Email or Phone";
@@ -9298,9 +9358,13 @@
     }
 
     function getFieldSourceListingsForUser(user) {
-      const code = String(user?.field_agent_code || "").trim();
+      const profile = user?.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+      const code = String(user?.field_agent_code || profile.field_agent_code || profile.employee_number || "").trim();
       const real = PROPERTIES
-        .filter((p) => extractFieldAgentCodeFromText(p?.desc || p?.description || "") === code)
+        .filter((p) => {
+          const textCode = extractFieldAgentCodeFromText(p?.desc || p?.description || "");
+          return textCode === code || String(p?.field_agent_id || p?.field_agent_code || p?.extra_fields?.field_agent_id || "").trim() === code;
+        })
         .map((p) => ({ ...p, review_status: inferFieldListingStatus(p) }));
       if (real.length) return real;
       if (!user?.is_demo) return [];
@@ -9337,26 +9401,42 @@
       body.classList.remove("hidden");
 
       const user = authState.user;
+      const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
       const sourcedListings = getFieldSourceListingsForUser(user);
       const approved = sourcedListings.filter((p) => p.review_status === "approved");
       const rejected = sourcedListings.filter((p) => p.review_status === "rejected");
       const pending = sourcedListings.filter((p) => p.review_status === "pending");
       const submitted = sourcedListings.length;
       const conv = submitted ? Math.round((approved.length / submitted) * 100) : 0;
-      const payoutPerApproved = 15000;
+      const payoutPerApproved = Number(profile.payout_rate_ugx || user.payout_rate_ugx || 15000) || 15000;
       const payable = approved.length * payoutPerApproved;
+      const rank = submitted ? Math.max(1, Math.min(99, 20 - approved.length)) : "-";
 
       const setText = (id, value) => {
         const el = document.getElementById(id);
         if (el) el.textContent = String(value);
       };
-      setText("field-dashboard-name", `${user.first_name || "Field"} ${user.last_name || "Agent"} • ${user.employee_number || "EMP"}`);
-      setText("field-dashboard-status", `Code: ${user.field_agent_code || "-"} • Broker No: ${user.agent_number || "-"} • Submitted: ${submitted} • Pending: ${pending.length}`);
+      const fieldCode = user.field_agent_code || profile.field_agent_code || profile.employee_number || "-";
+      const employeeNumber = user.employee_number || profile.employee_number || fieldCode;
+      setText("field-dashboard-name", `${user.first_name || "Field"} ${user.last_name || "Agent"} • ${employeeNumber || "EMP"}`);
+      setText("field-dashboard-status", `Code: ${fieldCode} • Territory: ${profile.field_agent_territory || "Uganda"} • Submitted: ${submitted} • Pending: ${pending.length}`);
       setText("field-stat-submitted", submitted);
       setText("field-stat-approved", approved.length);
       setText("field-stat-rejected", rejected.length);
       setText("field-stat-conv", `${conv}%`);
       setText("field-stat-payable", fmtP(payable, ""));
+      setText("field-stat-rank", rank === "-" ? "-" : `#${rank}`);
+      setText("field-payout-summary", `${approved.length} approved listings x ${fmtP(payoutPerApproved, "")} = ${fmtP(payable, "")}. Next payout is shown after admin review and cut-off.`);
+      setText("field-money-summary", `${pending.length} listings pending review. ${rejected.length} rejected listings need correction before they can count toward payout.`);
+      const notice = document.getElementById("field-agent-notice");
+      if (notice) {
+        notice.textContent = profile.field_agent_notes || "Use the online form, WhatsApp listing option, or the WhatsApp AI bot to submit clean property leads. Approved listings count toward your weekly payout.";
+      }
+      const supportLink = document.getElementById("field-agent-whatsapp-broadcast");
+      if (supportLink) {
+        const message = `Hi MakaUg Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
+        supportLink.href = `https://wa.me/256760112587?text=${encodeURIComponent(message)}`;
+      }
 
       const regionProgressEl = document.getElementById("field-region-progress");
       if (regionProgressEl) {
@@ -9428,7 +9508,7 @@
       const statusEl = document.getElementById("field-dashboard-status");
       if (statusEl) {
         const fmt = (d) => d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
-        statusEl.textContent = `Code: ${user.field_agent_code || "-"} • Next payout: ${fmt(nextFriday)} • Cut-off: ${fmt(cutoff)}`;
+        statusEl.textContent = `Code: ${fieldCode} • Next payout: ${fmt(nextFriday)} • Cut-off: ${fmt(cutoff)}`;
       }
     }
 
@@ -11673,6 +11753,65 @@
       }).join("");
     }
 
+    async function adminProvisionFieldAgent(event) {
+      if (event) event.preventDefault();
+      if (!canUseLiveAdminApi()) {
+        toast("Sign in as admin or set ADMIN_API_KEY before creating Field Agent accounts.");
+        return;
+      }
+      const firstName = (document.getElementById("admin-fa-first-name")?.value || "").trim();
+      const email = (document.getElementById("admin-fa-email")?.value || "").trim();
+      const phone = (document.getElementById("admin-fa-phone")?.value || "").trim();
+      const pin = (document.getElementById("admin-fa-pin")?.value || "").trim();
+      const employeeNumber = (document.getElementById("admin-fa-code")?.value || "").trim();
+      const territory = (document.getElementById("admin-fa-territory")?.value || "").trim();
+      const payoutRate = (document.getElementById("admin-fa-payout-rate")?.value || "").trim();
+      const result = document.getElementById("admin-fa-provision-result");
+      if (!firstName || !email || !phone || !/^\d{4}$/.test(pin)) {
+        toast("Add first name, email, phone, and a 4-digit PIN.");
+        return;
+      }
+      const btn = document.getElementById("admin-fa-provision-btn");
+      const original = btn?.textContent || "Create / update agent";
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving...";
+      }
+      try {
+        const res = await apiRequest("/api/admin/field-agents/provision", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {
+            first_name: firstName,
+            email,
+            phone,
+            pin,
+            employee_number: employeeNumber,
+            territory,
+            payout_rate_ugx: payoutRate || 15000,
+            preferred_language: currentLang || "en"
+          }
+        });
+        const data = res?.data || {};
+        if (result) {
+          result.textContent = `Created ${data.field_agent_code || "Field Agent"} for ${data.phone || phone}. Give the agent their phone/email and PIN privately.`;
+        }
+        const pinInput = document.getElementById("admin-fa-pin");
+        if (pinInput) pinInput.value = "";
+        await trackEvent("admin_field_agent_provisioned", { field_agent_code: data.field_agent_code || "", source_page: currentPage });
+        toast("Field Agent login created.");
+        await renderAdminDashboard();
+      } catch (error) {
+        if (result) result.textContent = error.message || "Could not create Field Agent account.";
+        toast(error.message || "Could not create Field Agent account.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
+      }
+    }
+
     function renderAdminFieldAgentRows(users) {
       const wrap = document.getElementById("admin-field-agents-table");
       if (!wrap) return;
@@ -11682,16 +11821,20 @@
         return;
       }
       wrap.innerHTML = rows.map((user) => {
+        const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
         const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
         const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
         const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is MakaUg operations. We are following up on your field activity and account access.`) : "";
+        const code = profile.field_agent_code || profile.employee_number || "-";
+        const payoutRate = Number(profile.payout_rate_ugx || 15000) || 15000;
+        const territory = profile.field_agent_territory || profile.territory || "Uganda";
         return `
           <div class="border border-gray-200 rounded-xl p-4 bg-white">
             <div class="flex items-start justify-between gap-3 flex-wrap">
               <div>
                 <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>
                 <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
-                <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • Last activity: ${adminEscape(formatListingDate(user.last_activity_at) || "No recent event")}</div>
+                <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Last activity: ${adminEscape(formatListingDate(user.last_activity_at) || "No recent event")}</div>
               </div>
               <span class="text-[11px] font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">Field Agent</span>
             </div>
@@ -11700,7 +11843,7 @@
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Enquiries</div><div class="font-black text-gray-900">${adminEscape(user.inquiries_count || 0)}</div></div>
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Views</div><div class="font-black text-gray-900">${adminEscape(user.property_views_count || 0)}</div></div>
               <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Saves</div><div class="font-black text-gray-900">${adminEscape(user.property_saves_count || 0)}</div></div>
-              <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Routes</div><div class="font-black text-gray-900">${adminEscape(user.route_events_count || 0)}</div></div>
+              <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Payout/listing</div><div class="font-black text-green-900">${adminEscape(fmtP(payoutRate, ""))}</div></div>
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
               ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
@@ -17284,7 +17427,7 @@
           finder: ["Property Finder", "Search, save, alert."],
           student: ["Student", "Campus rooms and alerts."],
           agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Apply, submit, track."],
+          field_agent: ["Field Agent", "PIN sign-in and payouts."],
           advertiser: ["Advertiser", "Campaigns, payments, leads."]
         },
         lg: {
@@ -17306,7 +17449,7 @@
         finder: ["Property Finder", "Search, save, alert."],
         student: ["Student", "Campus rooms and alerts."],
         agent: ["Broker", "Listings, leads, viewings."],
-        field_agent: ["Field Agent", "Apply, submit, track."],
+        field_agent: ["Field Agent", "PIN sign-in and payouts."],
         advertiser: ["Advertiser", "Campaigns, payments, leads."]
       };
       return {
@@ -17525,12 +17668,13 @@
       const otpWrap = document.getElementById("account-access-otp-wrap");
       if (signInWrap) signInWrap.classList.remove("hidden");
       if (createWrap) createWrap.classList.add("hidden");
-      if (passwordWrap) passwordWrap.classList.add("hidden");
+      if (passwordWrap) passwordWrap.classList.remove("hidden");
       if (otpWrap) otpWrap.classList.add("hidden");
       setTextById("account-access-mode-label", "Sign in");
       const btn = document.getElementById("account-access-continue-btn");
-      if (btn) btn.textContent = "Continue";
+      if (btn) btn.textContent = "Sign in";
       updateAccountAccessProgress("account");
+      updateAccountAccessSignInCopy();
       updateAccountAccessRoleFocus();
     }
 
@@ -17592,15 +17736,20 @@
               <div id="account-access-signin-wrap">
                 <label class="block text-xs font-bold text-gray-600 mt-4 mb-1" data-auth-text="identifier">Email address or phone number</label>
                 <input id="account-access-identifier" autocomplete="username" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Email address or phone number">
+                <p id="account-access-identifier-help" class="text-xs text-gray-500 mt-1">You can use either your email address or WhatsApp phone number.</p>
               </div>
-              <div id="account-access-password-wrap" class="hidden">
-                <label class="block text-xs font-bold text-gray-600 mt-3 mb-1" data-auth-text="password">Password</label>
+              <div id="account-access-password-wrap">
+                <label id="account-access-password-label" class="block text-xs font-bold text-gray-600 mt-3 mb-1">Password</label>
                 <div class="relative">
                   <input id="account-access-password" type="password" autocomplete="current-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 pr-12 text-base sm:text-sm" placeholder="Password">
                   <button type="button" onclick="toggleAccountAccessPassword()" aria-label="Show or hide password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="fas fa-eye"></i></button>
                 </div>
+                <p id="account-access-password-help" class="text-xs text-gray-500 mt-1">Use the password you created for your MakaUg account.</p>
               </div>
               <div id="account-access-create-wrap" class="hidden mt-4 space-y-3">
+                <div id="account-access-create-flow-note" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">
+                  Add your details and password, choose where to receive the OTP, then verify to open your dashboard.
+                </div>
                 <div class="grid sm:grid-cols-2 gap-3">
                   <label class="block">
                     <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="firstName">First name</span>
@@ -17718,7 +17867,36 @@
         btn.setAttribute("aria-pressed", active ? "true" : "false");
       });
       renderAccountAccessScreening();
+      updateAccountAccessSignInCopy();
       updateAccountAccessRoleFocus();
+    }
+
+    function updateAccountAccessSignInCopy() {
+      const isFieldAgent = accountAccessDrawerAudience === "field_agent";
+      const label = document.getElementById("account-access-password-label");
+      const input = document.getElementById("account-access-password");
+      const help = document.getElementById("account-access-password-help");
+      const identifierHelp = document.getElementById("account-access-identifier-help");
+      const roleBody = document.getElementById("account-access-role-body");
+      if (label) label.textContent = isFieldAgent ? "Password or 4-digit PIN" : accountAccessText("password");
+      if (input) {
+        input.placeholder = isFieldAgent ? "Password or 4-digit PIN" : accountAccessText("password");
+        input.inputMode = isFieldAgent ? "numeric" : "text";
+        input.maxLength = isFieldAgent ? 64 : 128;
+      }
+      if (help) {
+        help.textContent = isFieldAgent
+          ? "Field agents can sign in with the email/phone and 4-digit PIN issued by MakaUg admin."
+          : "Use the password you created for your MakaUg account.";
+      }
+      if (identifierHelp) {
+        identifierHelp.textContent = isFieldAgent
+          ? "Use the phone/WhatsApp number or email that MakaUg Operations gave you."
+          : "You can use either your email address or WhatsApp phone number.";
+      }
+      if (roleBody && isFieldAgent && accountAccessDrawerMode === "signin") {
+        roleBody.textContent = "Sign in with your admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates.";
+      }
     }
 
     function openAccountAccessDrawer(mode = "signin", audience = "finder") {
@@ -17736,12 +17914,12 @@
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
       const otpWrap = document.getElementById("account-access-otp-wrap");
-      if (passwordWrap) passwordWrap.classList.toggle("hidden", true);
+      if (passwordWrap) passwordWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
       if (signInWrap) signInWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
       if (createWrap) createWrap.classList.toggle("hidden", accountAccessDrawerMode !== "create");
       if (otpWrap) otpWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
-      if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Continue";
+      if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Sign in";
       setAccountAccessRole(audience);
       updateAccountAccessProgress(accountAccessDrawerMode === "create" ? "details" : "account");
       updateAccountAccessRoleFocus();
@@ -17788,6 +17966,9 @@
       if (otpWrap) otpWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
       if (continueBtn) continueBtn.textContent = "Create account";
+      setTextById("account-access-create-flow-note", accountAccessDrawerAudience === "field_agent"
+        ? "Field Agents can apply here, but MakaUg Operations can also create approved agent accounts with a phone/email and 4-digit PIN from admin."
+        : "Add your details and password, choose where to receive the OTP, then verify to open your dashboard.");
       renderAccountAccessScreening();
       updateAccountAccessProgress("details");
       updateAccountAccessRoleFocus();
@@ -17806,15 +17987,6 @@
       }
       if (accountAccessDrawerMode === "create") {
         await submitAccountAccessCreate();
-        return;
-      }
-      const passwordWrap = document.getElementById("account-access-password-wrap");
-      if (passwordWrap?.classList.contains("hidden")) {
-        passwordWrap.classList.remove("hidden");
-        const continueBtn = document.getElementById("account-access-continue-btn");
-        if (continueBtn) continueBtn.textContent = "Sign in";
-        updateAccountAccessProgress("details");
-        document.getElementById("account-access-password")?.focus();
         return;
       }
       await submitAccountAccessSignIn();
@@ -18036,7 +18208,7 @@
       const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
       const password = (document.getElementById("account-access-password")?.value || "").trim();
       if (!identifierRaw || !password) {
-        toast("Enter your email/phone and password.");
+        toast(accountAccessDrawerAudience === "field_agent" ? "Enter your email/phone and 4-digit PIN." : "Enter your email/phone and password.");
         return;
       }
       const isEmailLogin = identifierRaw.includes("@");

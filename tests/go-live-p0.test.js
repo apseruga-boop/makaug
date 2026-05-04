@@ -165,6 +165,7 @@ function run() {
   const backendReadinessReport = fs.readFileSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md'), 'utf8');
   const backendTraceabilityMatrix = fs.readFileSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md'), 'utf8');
   const goLiveManualQa = fs.readFileSync(path.join(__dirname, '..', 'docs', 'go-live-manual-qa.md'), 'utf8');
+  const fieldAgentSetupDoc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'field-agent-live-setup.md'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
@@ -397,6 +398,17 @@ function run() {
   assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
   assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
   assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(sourceHtml.includes('Password or 4-digit PIN'), 'field-agent sign-in should visibly support the admin-issued 4-digit PIN');
+  assert(sourceHtml.includes('admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
+  assert(sourceHtml.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
+  assert(sourceHtml.includes('id="admin-fa-code"'), 'admin field-agent setup should let owner assign FA-0001 style agent codes');
+  assert(sourceHtml.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
+  assert(sourceHtml.includes('Create Field Agent login'), 'admin UI should expose the field-agent login setup path');
+  assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
+  assert(adminRoutes.includes('bcrypt.hash(pin, 12)'), 'field-agent PIN should be hashed before storage');
+  assert(adminRoutes.includes('field_agent_account_provisioned'), 'field-agent provisioning should create a safe notification log');
+  assert(adminRoutes.includes('field_agent_provisioned'), 'field-agent provisioning should create an admin audit event');
+  assert(!adminRoutes.includes('pin, password_hash'), 'admin field-agent provisioning must not store raw PIN values');
   assert(sourceHtml.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
   assert(sourceHtml.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
   assert(sourceHtml.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
@@ -433,6 +445,10 @@ function run() {
     'Language Preference',
     'Broker account settings',
     'Field Agent settings',
+    'Field Agent notice board',
+    'Balance & payout tracker',
+    'Money collected tracker',
+    'How to work as a MakaUg Field Agent',
     'Advertiser settings',
     'Advertiser Dashboard',
     'Create Campaign',
@@ -459,6 +475,7 @@ function run() {
   assert(sourceHtml.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
+  assert(fieldAgentSetupDoc.includes('FA-0001') && fieldAgentSetupDoc.includes('4-digit PIN'), 'field-agent live setup doc should give starter codes and PIN instructions');
   assert(backendReadinessReport.includes('Task 15 Backend Gate Addendum'), 'backend readiness report should include the Task 15 live audit addendum');
   assert(backendReadinessReport.includes('super_admin support exists, but live super_admin was not created because required env vars were not provided.'), 'backend readiness report should state exact super_admin live-creation blocker');
   assert(backendReadinessReport.includes('GET https://makaug.com/api/health'), 'backend readiness report should include live health proof');

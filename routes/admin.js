@@ -1,8 +1,9 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 
 const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
-const { asArray, cleanText, toNullableInt } = require('../middleware/validation');
+const { asArray, cleanText, toNullableInt, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS } = require('../utils/constants');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
@@ -53,6 +54,7 @@ const {
 const { addLeadActivity } = require('../services/leadService');
 const { getAlertSummary } = require('../services/alertSchedulerService');
 const { markInvoicePaidManually } = require('../services/paymentProviderService');
+const { logNotification } = require('../services/notificationLogService');
 const {
   retryEmailLog,
   retryNotification,
@@ -1890,6 +1892,181 @@ router.patch('/users/:id', async (req, res, next) => {
     });
 
     return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/field-agents/provision', async (req, res, next) => {
+  try {
+    const firstName = cleanText(req.body.first_name);
+    const lastName = cleanText(req.body.last_name);
+    const email = normalizeEmail(req.body.email);
+    const phone = normalizeUgPhone(req.body.phone);
+    const pin = cleanText(req.body.pin);
+    const territory = cleanText(req.body.territory);
+    const employeeNumber = cleanText(req.body.employee_number);
+    const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || 15000;
+    const status = cleanText(req.body.status || 'active').toLowerCase();
+    const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
+    const broadcastGroup = cleanText(req.body.whatsapp_broadcast_group);
+    const notes = cleanText(req.body.notes);
+    const actorId = adminActorId(req);
+
+    if (!firstName || !email || !phone || !pin) {
+      return res.status(400).json({ ok: false, error: 'First name, email, phone, and 4-digit PIN are required' });
+    }
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ ok: false, error: 'Enter a valid email address' });
+    }
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({ ok: false, error: 'Enter a valid phone number' });
+    }
+    if (!/^\d{4}$/.test(pin)) {
+      return res.status(400).json({ ok: false, error: 'Field Agent PIN must be exactly 4 digits' });
+    }
+    if (!['active', 'suspended'].includes(status)) {
+      return res.status(400).json({ ok: false, error: 'Field Agent status must be active or suspended' });
+    }
+
+    const existing = await db.query(
+      `SELECT id, profile_data
+       FROM users
+       WHERE phone = $1 OR LOWER(email) = LOWER($2)
+       LIMIT 1`,
+      [phone, email]
+    );
+    const existingProfile = existing.rows[0]?.profile_data && typeof existing.rows[0].profile_data === 'object'
+      ? existing.rows[0].profile_data
+      : {};
+    const generatedCode = existingProfile.field_agent_code
+      || employeeNumber
+      || `FA-${String(Date.now()).slice(-6)}`;
+    const passwordHash = await bcrypt.hash(pin, 12);
+    const profileData = {
+      ...existingProfile,
+      audience: 'field_agent',
+      account_kind: 'field_agent',
+      field_agent_application_status: 'approved',
+      field_agent_code: generatedCode,
+      employee_number: employeeNumber || generatedCode,
+      field_agent_territory: territory || existingProfile.field_agent_territory || '',
+      payout_rate_ugx: payoutRateUgx,
+      payout_frequency: 'weekly',
+      payout_day: 'Friday',
+      next_payout_source: 'admin_set',
+      whatsapp_broadcast_group: broadcastGroup || existingProfile.whatsapp_broadcast_group || '',
+      field_agent_notes: notes || existingProfile.field_agent_notes || '',
+      field_agent_pin_set: true,
+      field_agent_pin_last_set_at: new Date().toISOString(),
+      manual_review_required: true,
+      approved_by_admin: true
+    };
+
+    let saved;
+    if (existing.rows.length) {
+      const updated = await db.query(
+        `UPDATE users
+         SET first_name = $2,
+             last_name = $3,
+             phone = $4,
+             email = $5,
+             role = 'field_agent',
+             password_hash = $6,
+             phone_verified = TRUE,
+             status = $7,
+             preferred_contact_channel = 'whatsapp',
+             preferred_language = $8,
+             profile_data = COALESCE(profile_data, '{}'::jsonb) || $9::jsonb,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_language, profile_data, created_at, updated_at`,
+        [
+          existing.rows[0].id,
+          firstName,
+          lastName,
+          phone,
+          email,
+          passwordHash,
+          status,
+          ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguage) ? preferredLanguage : 'en',
+          JSON.stringify(profileData)
+        ]
+      );
+      saved = updated.rows[0];
+    } else {
+      const inserted = await db.query(
+        `INSERT INTO users (
+           first_name,
+           last_name,
+           phone,
+           email,
+           role,
+           password_hash,
+           phone_verified,
+           status,
+           marketing_opt_in,
+           weekly_tips_opt_in,
+           preferred_contact_channel,
+           preferred_language,
+           profile_data
+         ) VALUES ($1,$2,$3,$4,'field_agent',$5,TRUE,$6,FALSE,TRUE,'whatsapp',$7,$8::jsonb)
+         RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_language, profile_data, created_at, updated_at`,
+        [
+          firstName,
+          lastName,
+          phone,
+          email,
+          passwordHash,
+          status,
+          ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguage) ? preferredLanguage : 'en',
+          JSON.stringify(profileData)
+        ]
+      );
+      saved = inserted.rows[0];
+    }
+
+    await writeAudit('field_agent_provisioned', {
+      user_id: saved.id,
+      email,
+      phone_masked: phone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
+      field_agent_code: generatedCode,
+      employee_number: employeeNumber || generatedCode,
+      pin_set: true
+    }, actorId);
+
+    await logNotification(db, {
+      userId: saved.id,
+      recipientPhone: phone,
+      recipientEmail: email,
+      channel: 'in_app',
+      type: 'field_agent_account_provisioned',
+      status: 'logged',
+      payloadSummary: {
+        message: 'Field Agent account provisioned by MakaUg admin',
+        field_agent_code: generatedCode,
+        employee_number: employeeNumber || generatedCode,
+        login_identifier_hint: 'Use your email or phone with the admin-issued PIN'
+      }
+    });
+
+    return res.status(existing.rows.length ? 200 : 201).json({
+      ok: true,
+      data: {
+        id: saved.id,
+        first_name: saved.first_name,
+        last_name: saved.last_name,
+        email: saved.email,
+        phone: saved.phone,
+        role: saved.role,
+        status: saved.status,
+        phone_verified: saved.phone_verified,
+        field_agent_code: saved.profile_data?.field_agent_code,
+        employee_number: saved.profile_data?.employee_number,
+        payout_rate_ugx: saved.profile_data?.payout_rate_ugx,
+        pin_set: true
+      }
+    });
   } catch (error) {
     return next(error);
   }
