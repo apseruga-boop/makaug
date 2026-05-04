@@ -487,43 +487,13 @@ function renderAuthRouteContent(pathname = '/') {
   const roleLabel = roleLabels[mode] || roleLabels.finder;
   return `
   <main id="page-login" class="page active" data-page="login" data-public-route="/login">
-    <section class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-800 py-10 text-white">
-      <div class="max-w-6xl mx-auto px-4">
-        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">MakaUg account access</p>
-        <h1 class="text-4xl font-black serif mt-2">Sign in or create your MakaUg account</h1>
-        <p class="text-green-50 mt-3 max-w-3xl">Save properties, create alerts, book viewings, and manage your property search faster.</p>
-      </div>
-    </section>
-    <section class="max-w-6xl mx-auto px-4 py-10">
-      <div class="grid lg:grid-cols-[1fr_420px] gap-6 items-start">
-        <div class="bg-white border border-green-100 rounded-2xl p-6 shadow-sm">
-          <h2 class="text-2xl font-black text-gray-900 serif">Choose how you want to continue</h2>
-          <p class="text-gray-600 mt-2">Use one clean MakaUg account for property search, student rooms, broker tools, field work, or advertiser campaigns. Admin access is invite-only and is not available through public signup.</p>
-          <div class="grid sm:grid-cols-2 gap-3 mt-5">
-            <a href="/signup?role=finder" class="rounded-xl border border-green-100 bg-green-50 p-4 text-green-900 font-bold"><i class="fas fa-house-chimney mr-2"></i>Property Finder<span class="block text-xs font-normal text-green-800 mt-1">Search, save, alert, view.</span></a>
-            <a href="/student-signup" class="rounded-xl border border-blue-100 bg-blue-50 p-4 text-blue-900 font-bold"><i class="fas fa-graduation-cap mr-2"></i>Student<span class="block text-xs font-normal text-blue-800 mt-1">Campus rooms and alerts.</span></a>
-            <a href="/broker-signup" class="rounded-xl border border-amber-100 bg-amber-50 p-4 text-amber-900 font-bold"><i class="fas fa-briefcase mr-2"></i>Broker<span class="block text-xs font-normal text-amber-800 mt-1">Listings, leads, viewings.</span></a>
-            <a href="/field-agent-signup" class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-gray-900 font-bold"><i class="fas fa-clipboard-list mr-2"></i>Field Agent<span class="block text-xs font-normal text-gray-700 mt-1">Apply, submit, track.</span></a>
-            <a href="/advertiser-signup" class="rounded-xl border border-purple-100 bg-purple-50 p-4 text-purple-900 font-bold sm:col-span-2"><i class="fas fa-bullhorn mr-2"></i>Advertiser<span class="block text-xs font-normal text-purple-800 mt-1">Campaigns, payments, leads.</span></a>
-          </div>
-        </div>
-        <div class="bg-white border border-green-100 rounded-2xl p-6 shadow-lg">
-          <p class="text-xs font-bold uppercase tracking-wide text-green-700">${roleLabel}</p>
-          <h2 class="text-xl font-black text-gray-900 mt-1">Sign in</h2>
-          <p class="text-sm text-gray-600 mt-1">Enter your email address or phone number to continue.</p>
-          <label class="block text-xs font-bold text-gray-600 mt-4 mb-1">Email address or phone number</label>
-          <input id="login-identifier" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" autocomplete="username" placeholder="Email address or phone number">
-          <label class="block text-xs font-bold text-gray-600 mt-3 mb-1">Password or OTP</label>
-          <input id="login-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" autocomplete="current-password" placeholder="Password">
-          <button type="button" onclick="openAuthSignIn('${mode}')" class="mt-4 w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
-          <div class="mt-4 flex flex-wrap gap-3 text-sm">
-            <a href="/signup?role=${mode}" class="text-green-700 font-semibold">Create an account</a>
-            <a href="/forgot-password" class="text-gray-600 font-semibold">Forgot password?</a>
-          </div>
-          <div class="mt-5 rounded-xl bg-green-50 border border-green-100 p-3 text-sm text-green-900">
-            Students can sign in here too. Use the student option if you want campus searches, room alerts, and student safety tips.
-          </div>
-        </div>
+    <section class="min-h-[52vh] bg-gradient-to-br from-green-950 via-green-900 to-emerald-800 py-14 text-white">
+      <div class="max-w-3xl mx-auto px-4 text-center">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">makaug.com account</p>
+        <h1 class="text-4xl font-black serif mt-2">Opening your makaug.com account panel</h1>
+        <p class="text-green-50 mt-3">Sign in or create your account in the same secure drawer used across the site.</p>
+        <button type="button" onclick="openAuthSignIn('${mode}')" class="mt-6 inline-flex items-center justify-center bg-white text-green-900 rounded-xl px-5 py-3 font-black">Open account panel</button>
+        <p class="text-xs text-green-100 mt-4">Selected account type: ${roleLabel}. You can choose a different account type inside the panel before creating an account.</p>
       </div>
     </section>
   </main>

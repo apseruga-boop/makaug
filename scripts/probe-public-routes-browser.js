@@ -38,7 +38,7 @@ const MARKERS = {
   '/anti-fraud': ['Anti-Fraud', 'Report suspicious', 'Fraud'],
   '/advertise': ['Advertise', 'Campaign', 'Sponsored', 'Packages'],
   '/mortgage': ['Mortgage', 'Mortgage Finder', 'repayment'],
-  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
+  '/login': ['Opening your makaug.com account panel', 'Open account panel']
 };
 
 const EXPECTED_PAGE_IDS = {

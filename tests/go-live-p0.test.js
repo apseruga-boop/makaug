@@ -88,7 +88,7 @@ const PUBLIC_ROUTE_MARKERS = {
   '/terms': ['Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Fraud', 'Report suspicious'],
   '/list-property': ['List Property', 'Find address or place', 'Submit for review'],
-  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
+  '/login': ['Opening your makaug.com account panel', 'Open account panel']
 };
 
 const PUBLIC_ROUTE_ACTIVE_IDS = {
@@ -234,7 +234,7 @@ function run() {
   assert(sourceHtml.includes('openSignedInDashboard()'), 'dashboard header link should route to the role dashboard');
   assert(sourceHtml.includes('translateListingLabel("Sign Out")'), 'logged-in header should inject Sign Out through auth UI');
   assert(sourceHtml.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
-  assert(homeText.includes('© 2026 MakaUg. All rights reserved.'), 'homepage footer should use MakaUg copyright');
+  assert(homeText.includes('© 2026 makaug.com. All rights reserved.'), 'homepage footer should use lowercase public brand copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
   for (const badBrandText of [
     'Use makaug in 7 Ugandan languages',
@@ -249,8 +249,8 @@ function run() {
   ]) {
     assert(!sourceHtml.includes(badBrandText), `public-facing brand text should use MakaUg casing: ${badBrandText}`);
   }
-  assert(sourceHtml.includes('Use MakaUg in 7 Ugandan languages'), 'language spotlight should use MakaUg casing');
-  assert(sourceHtml.includes('About MakaUg'), 'about labels should use MakaUg casing');
+  assert(sourceHtml.includes('BrandConfig') && sourceHtml.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
+  assert(!sourceHtml.includes('Makar') && !sourceHtml.includes('Makai') && !sourceHtml.includes('Makaid') && !sourceHtml.includes('makaug.co.uk'), 'public source should not contain wrong brand variants');
   assert.strictEqual(toCanonicalLanguageCode('rukiga'), 'rkg', 'Rukiga should have a canonical language code');
   assert.strictEqual(toCanonicalLanguageCode('runyankole'), 'rnynk', 'Runyankole should have a canonical language code');
   assert.strictEqual(normalizeLanguageCode('rkg'), 'rn', 'Rukiga should preserve legacy rn code for current UI compatibility');
@@ -424,7 +424,8 @@ function run() {
   assert(mortgageHtml.includes('mortgage-result-pop'), '/mortgage should include subtle result animation styling');
   assert(fraudHtml.includes('id="page-fraud"'), '/fraud should render the fraud route');
   assert(loginHtml.includes('id="page-login"'), '/login should render clean auth route');
-  assert(loginText.includes('Sign in or create your MakaUg account'), '/login should show clean auth heading');
+  assert(loginText.includes('Opening your makaug.com account panel'), '/login should launch the shared auth panel instead of a duplicate login page');
+  assert(!loginText.includes('Choose how you want to continue'), '/login should not render a separate role-selection login page');
   for (const unrelated of ['Find your perfect rental property', 'Mortgage Finder Mortgage Finder', 'Fraud Prevention', 'Commercial Property Hub']) {
     assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
   }
@@ -477,6 +478,9 @@ function run() {
   assert(propertiesRoutes.includes('OTP sent by SMS'), 'listing OTP route should report SMS OTP delivery accurately');
   assert(sourceHtml.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
   assert(sourceHtml.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
+  assert(!sourceHtml.includes('data-auth-text="changeType"'), 'auth drawer should not show messy Change account type action in the main flow');
+  assert(sourceHtml.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
+  assert(sourceHtml.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');

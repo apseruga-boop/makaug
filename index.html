@@ -4449,7 +4449,7 @@
     <div class="max-w-7xl mx-auto px-4">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
         <div>
-          <div class="text-2xl font-black serif" id="footer-brand-title">MakaUg</div>
+          <div class="text-2xl font-black serif" id="footer-brand-title">makaug.com</div>
           <p id="footer-brand-copy" class="text-green-200 text-sm mt-3 leading-relaxed">
             Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
           </p>
@@ -4520,7 +4520,7 @@
           <div class="text-xs text-green-300" id="footer-growth-note">In-house sponsored placements and SEO indexing enabled for growth campaigns.</div>
         </div>
         <div id="footer-copyright" class="text-xs text-green-400 mt-3">
-          © 2026 MakaUg. All rights reserved.
+          © 2026 makaug.com. All rights reserved.
         </div>
       </div>
     </div>
@@ -5152,6 +5152,13 @@
   </div>
 
   <script>
+    const BrandConfig = Object.freeze({
+      productDisplayName: "makaug.com",
+      domain: "makaug.com",
+      legalOrInternalName: "MakaUg",
+      tagline: "Uganda Property"
+    });
+    const publicBrand = () => BrandConfig.productDisplayName;
     const normalizeType = (t) => (t === "students" ? "student" : t);
 
     const DISTRICTS = [
@@ -8258,6 +8265,7 @@
       setTextById("home-brokers-title", tr("homeBrokers"));
       setTextById("home-brokers-link", translateListingLabel("All Agents"));
       setTextById("detail-back-results-btn", translateListingLabel("Back to results"));
+      setTextById("footer-brand-title", publicBrand());
       setTextById("footer-brand-copy", translateListingLabel("Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts."));
       setTextById("footer-chat-whatsapp", `💬 ${translateListingLabel("Chat on WhatsApp")}`);
       setTextById("footer-location-label", translateListingLabel("📍 Kampala, Uganda"));
@@ -8285,7 +8293,7 @@
       setTextById("footer-link-help", translateListingLabel("Help Centre"));
       setTextById("footer-link-report", translateListingLabel("Report a Listing"));
       setTextById("footer-link-safety", translateListingLabel("Safety Tips"));
-      setTextById("footer-copyright", translateListingLabel("© 2026 MakaUg. All rights reserved."));
+      setTextById("footer-copyright", translateListingLabel(`© 2026 ${publicBrand()}. All rights reserved.`));
       applyHomeAssistantLanguageUI();
 
       setPageHeading("page-sale", tr("pageSale"));
@@ -18065,7 +18073,7 @@
       if (path.includes("commercial")) return "Find business space, save searches, request callbacks, and track commercial enquiries.";
       if (path.includes("list-property")) return "Create an account to manage listings, receive enquiries, track viewings, and get listing updates.";
       if (path.includes("advertise")) return "Advertisers can create campaigns, manage payments, and track leads.";
-      return "Your MakaUg account helps you save properties, create alerts, book viewings, and manage your property search.";
+      return `Your ${publicBrand()} account helps you save properties, create alerts, book viewings, and manage your property search.`;
     }
 
     function accountAccessRoleCopy(role = "finder") {
@@ -18153,10 +18161,10 @@
     function accountAccessText(key) {
       const dict = {
         en: {
-          heading: "Sign in or create your MakaUg account",
+          heading: `Sign in or create your ${publicBrand()} account`,
           subheading: "Save properties, create alerts, book viewings, and manage your property search faster.",
           language: "Language",
-          continueAs: "Continue as",
+          continueAs: "Account type",
           createAccount: "Create account",
           signIn: "Sign in",
           identifier: "Email address or phone number",
@@ -18169,19 +18177,18 @@
           otpMethod: "How should we send your verification code?",
           otpEmail: "Email",
           otpPhone: "SMS / Text",
-          terms: "I agree to the MakaUg Terms & Conditions.",
-          privacy: "I have read the MakaUg Privacy Policy.",
+          terms: `I agree to the ${publicBrand()} Terms & Conditions.`,
+          privacy: `I have read the ${publicBrand()} Privacy Policy.`,
           verifyTitle: "Verify your account",
           verificationCode: "Verification code",
           continue: "Continue",
-          forgot: "Forgot password?",
-          changeType: "Change account type"
+          forgot: "Forgot password?"
         },
         lg: {
-          heading: "Yingira oba kola account ya MakaUg",
+          heading: `Yingira oba kola account ya ${publicBrand()}`,
           subheading: "Tereka properties, kola alerts, saba viewings, era landirira okunoonya kwo.",
           language: "Olulimi",
-          continueAs: "Genda mu maaso nga",
+          continueAs: "Ekika kya account",
           createAccount: "Kola account",
           signIn: "Yingira",
           identifier: "Email oba ennamba ya simu",
@@ -18194,19 +18201,18 @@
           otpMethod: "Tukusindikire wa code?",
           otpEmail: "Email",
           otpPhone: "SMS / Text",
-          terms: "Nzikiriza Terms & Conditions za MakaUg.",
-          privacy: "Nsomedde Privacy Policy ya MakaUg.",
+          terms: `Nzikiriza Terms & Conditions za ${publicBrand()}.`,
+          privacy: `Nsomedde Privacy Policy ya ${publicBrand()}.`,
           verifyTitle: "Kakasa account yo",
           verificationCode: "Code y'okukakasa",
           continue: "Genda mu maaso",
-          forgot: "Werabidde password?",
-          changeType: "Kyusa account type"
+          forgot: "Werabidde password?"
         },
         sw: {
-          heading: "Ingia au fungua akaunti ya MakaUg",
+          heading: `Ingia au fungua akaunti ya ${publicBrand()}`,
           subheading: "Hifadhi mali, tengeneza arifa, omba viewings, na simamia utafutaji wako.",
           language: "Lugha",
-          continueAs: "Endelea kama",
+          continueAs: "Aina ya akaunti",
           createAccount: "Fungua akaunti",
           signIn: "Ingia",
           identifier: "Barua pepe au nambari ya simu",
@@ -18219,13 +18225,12 @@
           otpMethod: "Tutume msimbo wapi?",
           otpEmail: "Barua pepe",
           otpPhone: "SMS / Text",
-          terms: "Nakubali Sheria na Masharti ya MakaUg.",
-          privacy: "Nimesoma Sera ya Faragha ya MakaUg.",
+          terms: `Nakubali Sheria na Masharti ya ${publicBrand()}.`,
+          privacy: `Nimesoma Sera ya Faragha ya ${publicBrand()}.`,
           verifyTitle: "Thibitisha akaunti yako",
           verificationCode: "Msimbo wa uthibitisho",
           continue: "Endelea",
-          forgot: "Umesahau nenosiri?",
-          changeType: "Badilisha aina ya akaunti"
+          forgot: "Umesahau nenosiri?"
         }
       };
       return (dict[currentLang] && dict[currentLang][key]) || dict.en[key] || key;
@@ -18301,7 +18306,7 @@
             <span class="w-10 h-10 rounded-2xl bg-white text-green-700 flex items-center justify-center"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
             <span><span class="block text-sm font-black text-gray-900">${copy.label}</span><span class="block text-xs text-gray-600">${copy.body}</span></span>
           </div>
-          <button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold text-green-700">Change account type</button>
+          ${accountAccessDrawerMode === "create" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold text-green-700">Back to account type</button>` : ""}
         </div>` : "";
       }
       if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify");
@@ -18341,8 +18346,8 @@
           <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 px-5 py-5 text-white shrink-0">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-xs uppercase tracking-wide text-green-200 font-bold">MakaUg account</p>
-                <h2 id="account-access-title" class="text-2xl font-black serif mt-1">Sign in or create your MakaUg account</h2>
+                <p class="text-xs uppercase tracking-wide text-green-200 font-bold">makaug.com account</p>
+                <h2 id="account-access-title" class="text-2xl font-black serif mt-1">Sign in or create your makaug.com account</h2>
                 <p class="text-sm text-green-50 mt-2" data-auth-drawer-subheading="1">Save properties, create alerts, book viewings, and manage your property search faster.</p>
               </div>
               <button type="button" aria-label="Close sign in" onclick="closeAccountAccessDrawer()" class="w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center">
@@ -18392,7 +18397,7 @@
                   <input id="account-access-password" type="password" autocomplete="current-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 pr-12 text-base sm:text-sm" placeholder="Password">
                   <button type="button" onclick="toggleAccountAccessPassword()" aria-label="Show or hide password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="fas fa-eye"></i></button>
                 </div>
-                <p id="account-access-password-help" class="text-xs text-gray-500 mt-1">Use the password you created for your MakaUg account.</p>
+                <p id="account-access-password-help" class="text-xs text-gray-500 mt-1">Use the password you created for your makaug.com account.</p>
               </div>
               <div id="account-access-create-wrap" class="hidden mt-4 space-y-3">
                 <div id="account-access-create-flow-note" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">
@@ -18441,11 +18446,11 @@
                 </div>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-terms-copy">I agree to the MakaUg <button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
+                  <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
                 </label>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-privacy-copy">I have read the MakaUg <button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
+                  <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
                 </label>
               </div>
               <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
@@ -18464,7 +18469,6 @@
               <div id="account-access-secondary-actions" class="mt-4 flex flex-wrap gap-3 text-sm">
                 <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold" data-auth-text="createAccount">Create an account</button>
                 <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold" data-auth-text="forgot">Forgot password?</button>
-                <button type="button" onclick="showAccountAccessRolePicker()" class="text-gray-600 font-bold" data-auth-text="changeType">Change account type</button>
               </div>
             </div>
           </div>
@@ -18534,12 +18538,12 @@
       }
       if (help) {
         help.textContent = isFieldAgent
-          ? "Field agents can sign in with the email/phone and 4-digit PIN issued by MakaUg admin."
-          : "Use the password you created for your MakaUg account.";
+          ? `Field agents can sign in with the email/phone and 4-digit PIN issued by ${publicBrand()} admin.`
+          : `Use the password you created for your ${publicBrand()} account.`;
       }
       if (identifierHelp) {
         identifierHelp.textContent = isFieldAgent
-          ? "Use the phone/WhatsApp number or email that MakaUg Operations gave you."
+          ? `Use the phone/WhatsApp number or email that ${publicBrand()} Operations gave you.`
           : "You can use either your email address or WhatsApp phone number.";
       }
       if (roleBody && isFieldAgent && accountAccessDrawerMode === "signin") {
@@ -18615,7 +18619,7 @@
       const continueBtn = document.getElementById("account-access-continue-btn");
       if (continueBtn) continueBtn.textContent = "Create account";
       setTextById("account-access-create-flow-note", accountAccessDrawerAudience === "field_agent"
-        ? "Field Agents can apply here, but MakaUg Operations can also create approved agent accounts with a phone/email and 4-digit PIN from admin."
+        ? `Field Agents can apply here, but ${publicBrand()} Operations can also create approved agent accounts with a phone/email and 4-digit PIN from admin.`
         : "Add your details and password, choose where to receive the OTP, then verify to open your dashboard.");
       renderAccountAccessScreening();
       updateAccountAccessProgress("details");
@@ -18893,9 +18897,62 @@
     }
 
     function startAccountAccessForgotFlow() {
-      const identifier = encodeURIComponent((document.getElementById("account-access-identifier")?.value || "").trim());
-      const next = encodeURIComponent(window.location.pathname + window.location.search);
-      window.location.href = `/forgot-password?identifier=${identifier}&next=${next}`;
+      resetAccountAccessPasswordFromDrawer();
+    }
+
+    async function resetAccountAccessPasswordFromDrawer() {
+      const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
+      const prompted = identifierRaw || (window.prompt("Enter your account email address or phone number:") || "").trim();
+      const isEmailReset = prompted.includes("@");
+      const phone = isEmailReset ? "" : normalizePhoneInput(prompted);
+      const email = isEmailReset ? prompted.toLowerCase() : "";
+      if (!phone && !email) {
+        toast("Enter your email address or phone number to reset your password.");
+        return;
+      }
+      try {
+        await apiRequest("/api/auth/request-password-reset", {
+          method: "POST",
+          body: isEmailReset
+            ? { email, channel: "email", preferred_language: currentLang || "en" }
+            : { phone, channel: "phone", preferred_language: currentLang || "en" }
+        });
+        const channelLabel = isEmailReset ? "email" : "SMS/text";
+        toast(`We sent a password reset code by ${channelLabel}.`);
+        const code = (window.prompt(`Enter the password reset code sent by ${channelLabel}:`) || "").trim();
+        if (!code) {
+          toast("Password reset cancelled.");
+          return;
+        }
+        const newPassword = (window.prompt("Enter your new password (minimum 8 characters):") || "").trim();
+        if (!newPassword || newPassword.length < 8) {
+          toast("New password must be at least 8 characters.");
+          return;
+        }
+        const confirmPassword = (window.prompt("Confirm your new password:") || "").trim();
+        if (newPassword !== confirmPassword) {
+          toast("Passwords do not match.");
+          return;
+        }
+        await apiRequest("/api/auth/reset-password", {
+          method: "POST",
+          body: {
+            phone: isEmailReset ? undefined : phone,
+            email: isEmailReset ? email : undefined,
+            channel: isEmailReset ? "email" : "phone",
+            code,
+            new_password: newPassword
+          }
+        });
+        const identifierEl = document.getElementById("account-access-identifier");
+        const passwordEl = document.getElementById("account-access-password");
+        if (identifierEl) identifierEl.value = isEmailReset ? email : phone;
+        if (passwordEl) passwordEl.value = "";
+        await trackEvent("auth_password_reset", { source: "drawer", channel: isEmailReset ? "email" : "phone" });
+        toast("Password reset successful. Sign in with your new password.");
+      } catch (error) {
+        toast(error.message || "Password reset failed.");
+      }
     }
 
     function openAuthSignIn(audience = "finder", event) {
@@ -22301,6 +22358,24 @@
       const path = (window.location.pathname || "/").replace(/\/+$/, "") || "/";
       const qs = new URLSearchParams(window.location.search || "");
 
+      const authIntent = String(qs.get("auth") || "").toLowerCase();
+      if (path === "/login" || authIntent === "signin") {
+        const role = qs.get("role") || qs.get("audience") || "finder";
+        openAuthSignIn(role);
+        return true;
+      }
+      if (path === "/signup" || path === "/student-signup" || path === "/broker-signup" || path === "/field-agent-signup" || path === "/advertiser-signup" || authIntent === "create") {
+        const role = path.includes("student")
+          ? "student"
+          : (path.includes("broker")
+            ? "agent"
+            : (path.includes("field-agent")
+              ? "field_agent"
+              : (path.includes("advertiser") ? "advertiser" : (qs.get("role") || qs.get("audience") || "finder"))));
+        openAuthSignUp(role);
+        return true;
+      }
+
       const propertyFromPath = path.match(/^\/property\/([^/?#]+)/i)?.[1];
       const agentFromPath = path.match(/^\/agents?\/([^/?#]+)/i)?.[1];
       const propertyFromQuery = qs.get("property") || qs.get("listing");
@@ -22434,11 +22509,6 @@
         } else {
           openAuthSignIn("field_agent");
         }
-        return true;
-      }
-
-      if (path === "/advertiser-signup") {
-        openAuthSignUp("advertiser");
         return true;
       }
 

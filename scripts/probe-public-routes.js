@@ -65,7 +65,7 @@ const MARKERS = {
   '/terms': ['Terms', 'Terms and Conditions', 'Legal review'],
   '/report-fraud': ['Report suspicious', 'Fraud', 'Report a Listing'],
   '/list-property': ['List Property', 'Find address or place', 'Submit for review'],
-  '/login': ['Sign in or create your MakaUg account', 'Email address or phone number']
+  '/login': ['Opening your makaug.com account panel', 'Open account panel']
 };
 
 function visibleText(html) {
