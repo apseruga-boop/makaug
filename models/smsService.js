@@ -17,7 +17,11 @@ function getClient() {
 
 function getAfricasTalkingConfig() {
   const apiKey = String(process.env.AFRICASTALKING_API_KEY || '').trim();
-  const username = String(process.env.AFRICASTALKING_USERNAME || '').trim();
+  const username = String(
+    process.env.AFRICASTALKING_USERNAME
+      || process.env.AFRICASTALKING_UESERNAME
+      || ''
+  ).trim();
   const senderId = String(process.env.AFRICASTALKING_SENDER_ID || '').trim();
   const baseUrl = String(process.env.AFRICASTALKING_BASE_URL || '').trim()
     || 'https://api.africastalking.com/version1/messaging';

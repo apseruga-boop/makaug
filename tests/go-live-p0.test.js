@@ -626,6 +626,8 @@ function run() {
   assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
   assert(adminRoutes.includes('sendPhoneOtp'), 'admin SMS provider proof should exercise real SMS delivery path');
   assert(adminRoutes.includes('SMS_TEST_PHONE'), 'admin SMS provider proof should support an explicit test phone');
+  assert(adminRoutes.includes('AFRICASTALKING_USERNAME'), 'admin SMS setup status should require Africa\'s Talking username');
+  assert(adminRoutes.includes('AFRICASTALKING_UESERNAME'), 'admin SMS setup status should warn about the misspelled Africa\'s Talking username key');
   assert(adminRoutes.includes("router.post('/setup-status/ai-smoke-test'"), 'admin setup status should run AI proof');
   assert(adminRoutes.includes("router.post('/setup-status/run-alert-matcher'"), 'admin setup status should run alert matching proof');
   assert(adminRoutes.includes("router.post('/setup-status/viewing-callback-test'"), 'admin setup status should run viewing/callback proof');
@@ -711,6 +713,8 @@ function run() {
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');
   assert(smsServiceSource.includes("startsWith('whatsapp:')"), 'SMS delivery must not use WhatsApp sender IDs for text OTP');
   assert(smsServiceSource.includes('retrying without sender ID'), 'Africa\'s Talking SMS should retry without unapproved sender ID');
+  assert(smsServiceSource.includes('AFRICASTALKING_USERNAME'), 'Africa\'s Talking SMS must read the correctly spelled username env');
+  assert(smsServiceSource.includes('AFRICASTALKING_UESERNAME'), 'Africa\'s Talking SMS should tolerate the previously misspelled username env during launch');
   assert(!smsServiceSource.includes('logger.info(\'[SMS MOCK]\', { to, message })'), 'SMS mock logging must not print OTP bodies');
   assert(!whatsappNotificationServiceSource.includes('logger.info(\'[WHATSAPP MOCK]\', { to: recipient, body: message })'), 'WhatsApp mock logging must not print OTP bodies');
 

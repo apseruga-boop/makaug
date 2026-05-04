@@ -94,16 +94,59 @@ function anyEnv(keys = []) {
   return keys.some((key) => envSet(key));
 }
 
+function africasTalkingUsernameConfigured() {
+  return envSet('AFRICASTALKING_USERNAME') || envSet('AFRICASTALKING_UESERNAME');
+}
+
+function africasTalkingSmsConfigured() {
+  return envSet('AFRICASTALKING_API_KEY') && africasTalkingUsernameConfigured();
+}
+
+function twilioSmsConfigured() {
+  const hasSender = envSet('TWILIO_FROM_SMS')
+    || envSet('TWILIO_SMS_FROM')
+    || (envSet('TWILIO_FROM') && !String(process.env.TWILIO_FROM || '').trim().toLowerCase().startsWith('whatsapp:'));
+  return envSet('TWILIO_ACCOUNT_SID') && envSet('TWILIO_AUTH_TOKEN') && hasSender;
+}
+
+function smsProviderWarnings() {
+  const warnings = [];
+  if (envSet('AFRICASTALKING_UESERNAME') && !envSet('AFRICASTALKING_USERNAME')) {
+    warnings.push('AFRICASTALKING_UESERNAME is misspelled. Add AFRICASTALKING_USERNAME and remove the misspelled key after deploy.');
+  }
+  if (envSet('AFRICASTALKING_SENDER_ID')) {
+    warnings.push('If Africa’s Talking SMS fails, confirm AFRICASTALKING_SENDER_ID is approved or temporarily remove it to use the default sender.');
+  }
+  return warnings;
+}
+
+function missingSmsEnv() {
+  const usingTwilio = envSet('TWILIO_ACCOUNT_SID') || envSet('TWILIO_AUTH_TOKEN') || envSet('TWILIO_FROM_SMS') || envSet('TWILIO_SMS_FROM');
+  const usingAfricasTalking = envSet('AFRICASTALKING_API_KEY') || africasTalkingUsernameConfigured() || String(process.env.SMS_PROVIDER || '').toLowerCase().includes('africa');
+  if (usingTwilio && !usingAfricasTalking) {
+    const missing = [];
+    if (!envSet('TWILIO_ACCOUNT_SID')) missing.push('TWILIO_ACCOUNT_SID');
+    if (!envSet('TWILIO_AUTH_TOKEN')) missing.push('TWILIO_AUTH_TOKEN');
+    if (!envSet('TWILIO_FROM_SMS') && !envSet('TWILIO_SMS_FROM')) missing.push('TWILIO_FROM_SMS');
+    return missing;
+  }
+
+  const missing = [];
+  if (!envSet('AFRICASTALKING_API_KEY')) missing.push('AFRICASTALKING_API_KEY');
+  if (!africasTalkingUsernameConfigured()) missing.push('AFRICASTALKING_USERNAME');
+  return missing;
+}
+
 function providerConfigured(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
     whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN', 'AFRICASTALKING_API_KEY'],
-    sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY'],
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
+  if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
   return anyEnv(keyGroups[provider] || []);
 }
 
@@ -123,6 +166,11 @@ function providerEnvKeys(provider) {
 
 function missingEnv(keys = []) {
   return keys.filter((key) => !envSet(key));
+}
+
+function missingProviderEnv(provider) {
+  if (provider === 'sms') return missingSmsEnv();
+  return missingEnv(providerEnvKeys(provider));
 }
 
 async function safeOne(sql, values = [], fallback = {}) {
@@ -3902,7 +3950,8 @@ async function buildSetupStatus() {
     label,
     configured: providerConfigured(key),
     requiredEnv: providerEnvKeys(key),
-    missingEnv: missingEnv(providerEnvKeys(key))
+    missingEnv: missingProviderEnv(key),
+    warnings: key === 'sms' ? smsProviderWarnings() : []
   }));
   const llmMeta = getProviderMeta();
   const counts = {
@@ -3944,7 +3993,8 @@ async function buildSetupStatus() {
       ownerActions.push({
         title: `Configure ${provider.label}`,
         status: 'provider_missing',
-        missingEnv: provider.missingEnv
+        missingEnv: provider.missingEnv,
+        warnings: provider.warnings || []
       });
     }
   });
@@ -4008,7 +4058,8 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       provider,
       configured,
       status: configured ? 'logged' : 'provider_missing',
-      missingEnv: configured ? [] : missingEnv(providerEnvKeys(provider))
+      missingEnv: configured ? [] : missingProviderEnv(provider),
+      warnings: provider === 'sms' ? smsProviderWarnings() : []
     };
     let log = null;
     if (provider === 'email') {
