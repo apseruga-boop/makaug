@@ -118,7 +118,7 @@ async function sendWhatsAppText({ to, body }) {
   if (twilioResult.sent) return twilioResult;
   if (twilioResult.error) logger.warn('Twilio WhatsApp send failed', twilioResult);
 
-  logger.info('[WHATSAPP MOCK]', { to: recipient, body: message });
+  logger.info('[WHATSAPP MOCK]', { to: recipient, messageLength: message.length });
   return {
     sent: false,
     mocked: true,

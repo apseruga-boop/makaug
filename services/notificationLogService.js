@@ -62,6 +62,7 @@ async function logNotification(db, entry = {}) {
 
 function notificationStatusFromDelivery(delivery = {}) {
   if (delivery?.sent === true) return 'sent';
+  if (delivery?.queued === true) return 'queued';
   if (delivery?.mocked === true || delivery?.manual_url) return 'logged';
   if (delivery?.skipped === true) return 'skipped';
   if (delivery?.error || delivery?.failureReason || delivery?.reason) return 'failed';

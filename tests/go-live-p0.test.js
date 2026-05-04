@@ -22,6 +22,8 @@ const { buildListingReference, isListingReference } = require('../services/listi
 const { buildListingWhatsappMessage, buildWhatsAppUrl } = require('../services/whatsappLinkService');
 const { savedSearchMatchesListing } = require('../services/alertSchedulerService');
 const { normalizePaymentStatus, paymentProviderConfigured } = require('../services/paymentProviderService');
+const { isSmsOtpDeliveryConfirmed } = require('../services/phoneOtpDeliveryService');
+const { notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { buildMortgageEstimate, computeMonthlyRepayment: computeMortgagePayment } = require('../services/mortgageCalculatorService');
 const { HOW_TO_VIDEO_SLOTS } = require('../config/howToVideos');
 
@@ -154,7 +156,9 @@ function run() {
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
+  const smsServiceSource = fs.readFileSync(path.join(__dirname, '..', 'models', 'smsService.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
+  const whatsappNotificationServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappNotificationService.js'), 'utf8');
   const propertiesRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
   const contactRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'contact.js'), 'utf8');
   const mortgageRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'mortgage.js'), 'utf8');
@@ -693,6 +697,13 @@ function run() {
   assert.strictEqual(otpPayload.contactVerified, true);
   assert.strictEqual(otpPayload.redirectUrl, '/student-dashboard');
   assert(otpPayload.message);
+  assert.strictEqual(isSmsOtpDeliveryConfirmed({ mocked: true }), false, 'mock phone OTP delivery must not count as production send');
+  assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'Success' }), true, 'SMS success status should count as confirmed');
+  assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'queued' }), true, 'queued provider SMS should count as accepted');
+  assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'failed' }), false, 'failed SMS status should not count as delivered');
+  assert.strictEqual(notificationStatusFromDelivery({ queued: true }), 'queued', 'WhatsApp bridge fallback should log queued status');
+  assert(!smsServiceSource.includes('logger.info(\'[SMS MOCK]\', { to, message })'), 'SMS mock logging must not print OTP bodies');
+  assert(!whatsappNotificationServiceSource.includes('logger.info(\'[WHATSAPP MOCK]\', { to: recipient, body: message })'), 'WhatsApp mock logging must not print OTP bodies');
 
   const base = 'https://makaug.com';
   const cases = [

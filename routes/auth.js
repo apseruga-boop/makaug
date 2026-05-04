@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
-const smsService = require('../models/smsService');
 const logger = require('../config/logger');
 const { sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
 const {
@@ -14,6 +13,7 @@ const {
   roleForSignup
 } = require('../services/authFlowService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const { isSmsOtpDeliveryConfirmed, sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const {
   parseBooleanLike,
@@ -338,13 +338,7 @@ function isEmailOtpDeliveryConfirmed(delivery) {
 }
 
 function isPhoneOtpDeliveryConfirmed(delivery) {
-  if (!delivery || delivery.mocked) return false;
-  if (delivery.sid || delivery.messageId || delivery.sent === true) return true;
-
-  const status = String(delivery.status || '').trim().toLowerCase();
-  if (!status) return false;
-  if (/(fail|reject|invalid|error|undeliver)/i.test(status)) return false;
-  return ['sent', 'success', 'submitted', 'queued', 'accepted', 'buffered'].includes(status);
+  return isSmsOtpDeliveryConfirmed(delivery);
 }
 
 function getOtpCopy(language = 'en', { otp, expiresMinutes, purpose = 'login' } = {}) {
@@ -460,34 +454,50 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       failureReason: delivery?.error || delivery?.reason || null
     });
   } else {
-    let delivery = null;
-    try {
-      delivery = await smsService.sendSMS(identifier, getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose }));
-    } catch (error) {
-      logger.error('Failed to send OTP SMS', error.message);
+    const deliveryResult = await sendPhoneOtp({
+      to: identifier,
+      message: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose }),
+      purpose,
+      source: 'auth_otp'
+    });
+    const delivery = deliveryResult.delivery || null;
+    if (!deliveryResult.ok) {
+      logger.error('Failed to send OTP to phone', {
+        purpose,
+        attempts: deliveryResult.attempts
+      });
+      await logNotification(db, {
+        recipientPhone: identifier,
+        channel: 'sms',
+        type: 'otp_sent',
+        status: 'failed',
+        payloadSummary: {
+          purpose,
+          expires_minutes: expiresMinutes,
+          attempts: deliveryResult.attempts
+        },
+        failureReason: deliveryResult.failureReason || 'phone_otp_delivery_failed'
+      });
       if (overrideAllowed) {
-        logger.warn('OTP SMS send failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        logger.warn('OTP phone delivery failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
         return { otp, channel: resolvedChannel, identifier, expiresMinutes };
       }
-      const sendError = new Error('Failed to send OTP SMS');
+      const sendError = new Error('Failed to send OTP to phone or WhatsApp');
       sendError.status = 400;
       throw sendError;
     }
-    if (process.env.NODE_ENV === 'production' && !isPhoneOtpDeliveryConfirmed(delivery)) {
-      if (overrideAllowed) {
-        logger.warn('OTP SMS delivery unavailable, using ADMIN_OTP_OVERRIDE_CODE fallback');
-        return { otp, channel: resolvedChannel, identifier, expiresMinutes };
-      }
-      const configError = new Error('Phone OTP delivery provider is not configured');
-      configError.status = 400;
-      throw configError;
-    }
     await logNotification(db, {
       recipientPhone: identifier,
-      channel: 'sms',
+      channel: deliveryResult.channel === 'whatsapp' ? 'whatsapp' : 'sms',
       type: 'otp_sent',
       status: notificationStatusFromDelivery(delivery),
-      payloadSummary: { purpose, expires_minutes: expiresMinutes },
+      payloadSummary: {
+        purpose,
+        expires_minutes: expiresMinutes,
+        delivery_channel: deliveryResult.channel,
+        provider: delivery?.provider || null,
+        attempts: deliveryResult.attempts
+      },
       sentAt: delivery?.success || delivery?.sent ? new Date() : null,
       failureReason: delivery?.error || delivery?.reason || null
     });

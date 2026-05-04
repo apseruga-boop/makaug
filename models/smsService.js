@@ -98,7 +98,7 @@ async function sendSMS(to, message) {
   const africaResult = await sendViaAfricasTalking(to, message);
   if (africaResult) return africaResult;
 
-  logger.info('[SMS MOCK]', { to, message });
+  logger.info('[SMS MOCK]', { to, messageLength: String(message || '').length });
   return { mocked: true };
 }
 
