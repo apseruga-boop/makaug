@@ -602,6 +602,8 @@ function run() {
   assert(sourceHtml.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
   assert(sourceHtml.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');
   assert(sourceHtml.includes('routedRadiusValue'), 'homepage near-me search should preserve radius when routing to category pages');
+  assert(sourceHtml.includes('HERO_SEARCH_HANDOFF_KEY'), 'homepage near-me search should persist search state across sanitized public route navigation');
+  assert(sourceHtml.includes('applyHeroSearchHandoff(publicRoutePage)'), 'public route loader should restore hero search handoff state');
   assert(sourceHtml.includes('You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.'), 'near-me search should handle overseas coordinates');
   assert(sourceHtml.includes('decorateAndSortNearMeResults'), 'near-me results should be decorated and sorted by distance');
   assert(propertiesRoutes.includes("router.get('/search', listPropertiesHandler)"), 'backend should expose /api/properties/search');

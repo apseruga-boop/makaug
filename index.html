@@ -20335,6 +20335,83 @@
       if (nearMeSearchState[page]) nearMeSearchState[page] = null;
     }
 
+    const HERO_SEARCH_HANDOFF_KEY = "makaug_hero_search_handoff";
+
+    function saveHeroSearchHandoff(page, payload = {}) {
+      try {
+        sessionStorage.setItem(HERO_SEARCH_HANDOFF_KEY, JSON.stringify({
+          ...payload,
+          page,
+          savedAt: Date.now(),
+          expiresAt: Date.now() + 90 * 1000
+        }));
+      } catch (error) {}
+    }
+
+    function consumeHeroSearchHandoff(page) {
+      try {
+        const raw = sessionStorage.getItem(HERO_SEARCH_HANDOFF_KEY);
+        if (!raw) return null;
+        const payload = JSON.parse(raw);
+        sessionStorage.removeItem(HERO_SEARCH_HANDOFF_KEY);
+        if (!payload || payload.page !== page || Date.now() > Number(payload.expiresAt || 0)) return null;
+        return payload;
+      } catch (error) {
+        try { sessionStorage.removeItem(HERO_SEARCH_HANDOFF_KEY); } catch (_) {}
+        return null;
+      }
+    }
+
+    function applyHeroSearchHandoff(page) {
+      const payload = consumeHeroSearchHandoff(page);
+      if (!payload) return false;
+      const radiusValue = String(payload.radiusMiles || payload.radius || DEFAULT_NEAR_ME_RADIUS_MI);
+      if (payload.nearState) {
+        nearMeSearchState[page] = {
+          ...payload.nearState,
+          radiusMiles: Number(payload.nearState.radiusMiles || payload.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI),
+          radiusKm: Number(payload.nearState.radiusKm || milesToKm(payload.nearState.radiusMiles || payload.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI))
+        };
+      }
+      const setValue = (id, value) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = value || "";
+      };
+      if (page === "rent") {
+        setValue("rent-location-f", payload.query);
+        setValue("rent-district-f", payload.area);
+        setValue("rent-radius-f", radiusValue);
+        setValue("rent-min-beds-f", payload.context);
+        filterListings("rent");
+      } else if (page === "students") {
+        setValue("student-q-f", payload.query);
+        setValue("student-uni-f", payload.area);
+        setValue("student-radius-f", radiusValue);
+        setValue("student-type-quick-f", payload.context);
+        filterStudents();
+      } else if (page === "commercial") {
+        setValue("commercial-q-f", payload.query);
+        setValue("commercial-district-f", payload.area);
+        setValue("commercial-radius-f", radiusValue);
+        setValue("commercial-type-f", payload.context);
+        filterCommercial();
+      } else if (page === "land") {
+        setValue("land-q-f", payload.query);
+        setValue("land-district-f", payload.area);
+        setValue("land-radius-f", radiusValue);
+        setValue("land-type-f", payload.context);
+        filterLand();
+      } else if (page === "sale") {
+        setValue("sale-location-f", payload.query);
+        setValue("sale-district-f", payload.area);
+        setValue("sale-radius-f", radiusValue);
+        setValue("sale-min-beds-f", payload.context);
+        filterListings("sale");
+      }
+      return true;
+    }
+
     function propertyMatchesNearMe(property, state, radiusKm) {
       if (!state) return true;
       const pLat = Number(property?.lat ?? property?.latitude);
@@ -22398,6 +22475,7 @@
       }[path];
       if (publicRoutePage) {
         showPage(publicRoutePage);
+        applyHeroSearchHandoff(publicRoutePage);
         return true;
       }
 
@@ -22451,7 +22529,23 @@
       });
       results = decorateAndSortNearMeResults(results, heroNearState);
       incrementUserSearchCount();
-      showPage(pageMap[currentTab] || "sale");
+      const destinationPage = pageMap[currentTab] || "sale";
+      saveHeroSearchHandoff(destinationPage, {
+        query: document.getElementById("hero-q").value || "",
+        area: areaOrUni || "",
+        radius: routedRadiusValue,
+        radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
+        context: contextVal || "",
+        nearState: heroNearState ? {
+          lat: heroNearState.lat,
+          lng: heroNearState.lng,
+          radiusMiles: heroNearState.radiusMiles,
+          radiusKm: heroNearState.radiusKm,
+          district: heroNearState.district || "",
+          label: heroNearState.label || ""
+        } : null
+      });
+      showPage(destinationPage);
       if (currentTab === "rent") {
         const rq = document.getElementById("rent-location-f");
         const rd = document.getElementById("rent-district-f");
