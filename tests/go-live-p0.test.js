@@ -26,6 +26,12 @@ const { isSmsOtpDeliveryConfirmed } = require('../services/phoneOtpDeliveryServi
 const { notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { buildMortgageEstimate, computeMonthlyRepayment: computeMortgagePayment } = require('../services/mortgageCalculatorService');
 const { HOW_TO_VIDEO_SLOTS } = require('../config/howToVideos');
+const {
+  LANGUAGE_REGISTRY,
+  normalizeLanguageCode,
+  toCanonicalLanguageCode,
+  shouldUseEnglishFallback
+} = require('../config/languageRegistry');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -157,6 +163,8 @@ function run() {
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const whatsappRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
+  const aiServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'aiService.js'), 'utf8');
+  const languageRegistrySource = fs.readFileSync(path.join(__dirname, '..', 'config', 'languageRegistry.js'), 'utf8');
   const smsServiceSource = fs.readFileSync(path.join(__dirname, '..', 'models', 'smsService.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
   const phoneOtpDeliveryServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'phoneOtpDeliveryService.js'), 'utf8');
@@ -233,6 +241,19 @@ function run() {
   }
   assert(sourceHtml.includes('Use MakaUg in 7 Ugandan languages'), 'language spotlight should use MakaUg casing');
   assert(sourceHtml.includes('About MakaUg'), 'about labels should use MakaUg casing');
+  assert.strictEqual(toCanonicalLanguageCode('rukiga'), 'rkg', 'Rukiga should have a canonical language code');
+  assert.strictEqual(toCanonicalLanguageCode('runyankole'), 'rnynk', 'Runyankole should have a canonical language code');
+  assert.strictEqual(normalizeLanguageCode('rkg'), 'rn', 'Rukiga should preserve legacy rn code for current UI compatibility');
+  assert.strictEqual(normalizeLanguageCode('rnynk'), 'ny', 'Runyankole should preserve legacy ny code for current UI compatibility');
+  assert.strictEqual(shouldUseEnglishFallback('rukiga'), true, 'Rukiga must use English fallback until reviewed translations exist');
+  assert(LANGUAGE_REGISTRY.rkg && LANGUAGE_REGISTRY.rkg.fallbackLanguage === 'en', 'language registry should define Rukiga fallback');
+  assert(languageRegistrySource.includes('Do not use Kinyarwanda for Rukiga or Runyankole'), 'language registry should guard against Kinyarwanda substitution');
+  assert(sourceHtml.includes('data-content-i18n="about.heroStatement"'), 'About page body should use content i18n keys');
+  assert(sourceHtml.includes('function applyAboutLanguageUI'), 'About page should apply body translations on language switch');
+  assert(sourceHtml.includes('window.MAKAUG_MISSING_TRANSLATIONS'), 'missing content translations should be logged in the browser session');
+  assert(aiServiceSource.includes('wrong_nearby_language_guard'), 'AI replies should guard against nearby-language substitution');
+  assert(aiServiceSource.includes('Do not use Kinyarwanda'), 'AI prompts should explicitly block Kinyarwanda fallback for Rukiga/Runyankole');
+  assert(whatsappRoutes.includes("shouldUseEnglishFallback(raw)"), 'WhatsApp language resolver should apply registry fallback rules');
 
   const listPropertyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/list-property' });
   const listPropertyText = normalizeText(listPropertyHtml);
@@ -429,7 +450,11 @@ function run() {
   assert(!sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should not show old Account/Details/Preferences/Verify pills on the first screen');
   assert(sourceHtml.includes('id="account-access-progress-summary"'), 'auth drawer should show compact create-account progress only after create is selected');
   assert(sourceHtml.includes('openPolicyPreviewModal'), 'auth drawer should expose terms/privacy preview interactions');
-  assert(sourceHtml.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or phone/WhatsApp OTP');
+  assert(sourceHtml.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or SMS OTP');
+  assert(sourceHtml.includes('SMS / Text'), 'auth drawer should label phone OTP as SMS/Text');
+  assert(sourceHtml.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
+  assert(authRoutes.includes('Verification OTP sent by SMS'), 'auth register route should report SMS OTP delivery accurately');
+  assert(propertiesRoutes.includes('OTP sent by SMS'), 'listing OTP route should report SMS OTP delivery accurately');
   assert(sourceHtml.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
   assert(sourceHtml.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
 

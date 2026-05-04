@@ -4,7 +4,7 @@ Status: partial, go-live safe for English routes, translations still need editor
 
 ## Routes Checked
 
-- `/about`: standalone public route exists in the single-page router. English content was expanded for Task 11 into a full About MakaUg page with who-we-help sections, trust/safety, and how-to video slots. English content is complete enough for go-live. Translation keys are partial and fall back to English.
+- `/about`: standalone public route exists in the single-page router. English content was expanded for Task 11 into a full About MakaUg page with who-we-help sections, trust/safety, and how-to video slots. Task 17 moved the visible About body onto `data-content-i18n` keys and added English/Luganda/Kiswahili body coverage. Acholi, Runyankole, Rukiga, and Lusoga fall back to English where reviewed copy is missing.
 - `/how-it-works`: standalone public route exists. English content was expanded for Task 11 into a 10-step visual flow with how-to video slots. Translation keys are partial and fall back to English.
 - `/careers`: standalone public route exists. English content is present. Career interest form now submits to `POST /api/contact/career-interest`, creates a CRM lead, and logs email/notification fallback status. Translation keys are partial.
 - `/terms`: standalone public route exists. English content is present and must remain marked for legal review. Translation keys are partial.
@@ -22,10 +22,12 @@ Status: partial, go-live safe for English routes, translations still need editor
 - `en`: English, complete enough for go-live.
 - `lg`: Luganda, partial.
 - `sw`: Kiswahili, partial.
-- `ac`: Acholi, partial.
-- `ny`: Runyankole, partial legacy code kept for compatibility.
-- `rn`: Rukiga/Runyankole family, partial.
-- `sm`: Lusoga, partial legacy code kept for compatibility.
+- `ach` / legacy `ac`: Acholi, partial.
+- `rnynk` / legacy `ny`: Runyankole, partial legacy code kept for compatibility.
+- `rkg` / legacy `rn`: Rukiga, English fallback until reviewed. It must not be treated as Kinyarwanda.
+- `lus` / legacy `sm`: Lusoga, partial legacy code kept for compatibility.
+
+The canonical registry is documented in `docs/language-system-audit.md` and implemented in `config/languageRegistry.js`.
 
 ## Missing Translation Work
 

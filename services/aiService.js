@@ -9,6 +9,14 @@ const {
   getProviderMeta,
   toProviderFile
 } = require('./llmProvider');
+const {
+  SUPPORTED_AI_LANGUAGES,
+  normalizeLanguageCode,
+  toCanonicalLanguageCode,
+  languageDisplayName,
+  languageGuardrail,
+  shouldUseEnglishFallback
+} = require('../config/languageRegistry');
 
 const INTENTS = [
   'property_search',
@@ -24,16 +32,6 @@ const INTENTS = [
   'unknown'
 ];
 
-const SUPPORTED_AI_LANGUAGES = {
-  en: 'English',
-  lg: 'Luganda',
-  sw: 'Kiswahili',
-  ac: 'Acholi',
-  ny: 'Runyankole',
-  rn: 'Rukiga',
-  sm: 'Lusoga'
-};
-
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 
 function getClient() {
@@ -44,12 +42,6 @@ function normalizeIntent(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (INTENTS.includes(raw)) return raw;
   return 'unknown';
-}
-
-function normalizeLanguageCode(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (Object.prototype.hasOwnProperty.call(SUPPORTED_AI_LANGUAGES, raw)) return raw;
-  return 'en';
 }
 
 function safeNumber(value, fallback = 0) {
@@ -256,6 +248,7 @@ function buildIntentLink(intent) {
 
 function buildLocalizedAssistantFallbackText(languageCode, link) {
   const code = normalizeLanguageCode(languageCode);
+  const displayName = languageDisplayName(code);
   const copy = {
     en: [
       'I can help with property search, listing, agent support, mortgage guidance, and account help.',
@@ -283,9 +276,10 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
       'Ku oraabe nooyenda omuntu akuyambe, teera 0760112587 nari email info@makaug.com.'
     ],
     rn: [
-      'Nshobora kugufasha gushaka property, kuyishyiraho, gushaka agent, mortgage, na account.',
-      `Fungura: ${link}`,
-      'Niba mukeneye umuntu abafasha, hamagara 0760112587 canke email info@makaug.com.'
+      `${displayName} translation is not fully available yet, so I will use English rather than guessing another language.`,
+      'I can help with property search, listing, agent support, mortgage guidance, and account help.',
+      `Open: ${link}`,
+      'If you need human support, call 0760112587 or email info@makaug.com.'
     ],
     sm: [
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
@@ -294,6 +288,14 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
     ]
   };
   return (copy[code] || copy.en).join(' ');
+}
+
+function looksLikeWrongNearbyLanguage(languageCode, text) {
+  const canonical = toCanonicalLanguageCode(languageCode);
+  if (!['rkg', 'rnynk'].includes(canonical)) return false;
+  const sample = cleanText(text, 1500).toLowerCase();
+  if (!sample) return false;
+  return /\b(gushaka|gufasha|umutungo|urubuga|amafoto|ndabona|kwandikisha|mushobora|mukeneye|hamagara|mumbwire|subiza|nimero)\b/.test(sample);
 }
 
 async function logAiModelEvent({
@@ -733,6 +735,8 @@ Rules:
 - If the user says "respond in English/Luganda/Kiswahili/etc", set explicitSwitch true and use that requested language.
 - If text mixes languages, choose the language of the user's request.
 - Never treat a language name as a property search area.
+- Rukiga and Runyankole are Ugandan languages. Do not map them to Kinyarwanda.
+- Do not use Kinyarwanda as a fallback language; use English fallback if uncertain.
 - If uncertain, keep the current session language with lower confidence.`
         },
         {
@@ -1360,19 +1364,32 @@ async function suggestWhatsappAssistantReply({
   const link = buildIntentLink(intent);
   const languageCode = normalizeLanguageCode(language);
   const fallbackText = buildLocalizedAssistantFallbackText(languageCode, link);
+  const guardrail = languageGuardrail(languageCode);
 
   const client = getClient();
-  if (!client) {
+  if (!client || shouldUseEnglishFallback(languageCode)) {
     await logAiModelEvent({
       eventType: 'assistant_reply',
       source,
       inputPayload: { userMessage, intent, language: languageCode, context },
-      outputPayload: { text: fallbackText },
+      outputPayload: {
+        text: fallbackText,
+        fallbackUsed: shouldUseEnglishFallback(languageCode),
+        fallbackReason: shouldUseEnglishFallback(languageCode) ? 'language_translation_not_reviewed' : 'template_provider_missing'
+      },
       modelName: 'template',
       language: languageCode,
       qualityScore: 0.5
     });
-    return { text: fallbackText, model: 'template' };
+    return {
+      text: fallbackText,
+      model: 'template',
+      language: languageCode,
+      requestedLanguage: languageCode,
+      responseLanguage: shouldUseEnglishFallback(languageCode) ? 'en' : languageCode,
+      fallbackUsed: shouldUseEnglishFallback(languageCode),
+      fallbackReason: shouldUseEnglishFallback(languageCode) ? 'language_translation_not_reviewed' : 'template_provider_missing'
+    };
   }
 
   const model = getTaskModel('reply', process.env.OPENAI_REPLY_MODEL || 'gpt-4.1-mini');
@@ -1386,6 +1403,7 @@ async function suggestWhatsappAssistantReply({
           role: 'system',
           content: `You are MakaUg WhatsApp property assistant for Uganda.
 Produce a short typed reply in ${SUPPORTED_AI_LANGUAGES[languageCode]}.
+Language guardrail: ${guardrail}
 Requirements:
 - Keep under 550 characters.
 - Be practical and action-oriented.
@@ -1407,11 +1425,17 @@ Return strict JSON: {"text":"..."}`
 
     const raw = completion?.choices?.[0]?.message?.content || '{}';
     const parsed = safeJsonParse(raw, {});
-    const text = cleanText(parsed.text || fallbackText, 1500);
+    const generatedText = cleanText(parsed.text || fallbackText, 1500);
+    const fallbackUsed = looksLikeWrongNearbyLanguage(languageCode, generatedText);
+    const text = fallbackUsed ? fallbackText : generatedText;
 
     const output = {
       text: text.includes('http') ? text : `${text}\n${link}`,
-      model
+      model,
+      requestedLanguage: languageCode,
+      responseLanguage: fallbackUsed ? 'en' : languageCode,
+      fallbackUsed,
+      fallbackReason: fallbackUsed ? 'wrong_nearby_language_guard' : null
     };
 
     await logAiModelEvent({
@@ -1421,7 +1445,7 @@ Return strict JSON: {"text":"..."}`
       outputPayload: output,
       modelName: model,
       language: languageCode,
-      qualityScore: 0.8
+      qualityScore: fallbackUsed ? 0.55 : 0.8
     });
 
     return output;

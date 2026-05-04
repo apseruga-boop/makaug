@@ -13,6 +13,10 @@ const {
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
+  toLegacyLanguageCode,
+  shouldUseEnglishFallback
+} = require('../config/languageRegistry');
+const {
   getWhatsappConversationControl,
   syncWhatsappConversationState
 } = require('../services/whatsappConversationService');
@@ -468,6 +472,10 @@ Object.assign(T.sm, {
 function resolveLangCode(lang) {
   const raw = normalizeInput(lang).toLowerCase();
   if (!raw) return 'en';
+  if (shouldUseEnglishFallback(raw)) return 'en';
+  const legacy = toLegacyLanguageCode(raw);
+  if (shouldUseEnglishFallback(legacy)) return 'en';
+  if (T[legacy]) return legacy;
   if (T[raw]) return raw;
 
   const normalized = raw.replace(/_/g, '-');

@@ -859,7 +859,7 @@ router.post('/request-submit-otp', async (req, res, next) => {
         phone: channel === 'phone' ? phone : undefined,
         email: channel === 'email' ? email : undefined,
         expires_minutes: expiresMinutes,
-        message: 'OTP sent',
+        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent by SMS',
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otp })
       }
     });

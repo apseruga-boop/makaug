@@ -128,10 +128,10 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<PhraseKey, string>> = {
     support_intro: 'Support: +256 770 646 879 or info@makaug.com'
   }),
   rn: pack({
-    language_set: 'Ururimi rwaterekwe. Ushobora kuruhindura igihe cose.',
-    main_menu: `Ushaka gukora iki?\n${TOP_LEVEL_MENU.join('\n')}`,
-    unknown: 'Sinabitahura neza. Hitamwo muri menu.',
-    support_intro: 'Support: +256 770 646 879 canke info@makaug.com'
+    language_set: 'Rukiga translation is not fully available yet, so MakaUg will use English fallback rather than guessing another language.',
+    main_menu: ENGLISH.main_menu,
+    unknown: ENGLISH.unknown,
+    support_intro: ENGLISH.support_intro
   }),
   sm: pack({
     language_set: 'Olulimi luterekeddwa. Osobola okukuhindura buli kaseera.',
@@ -152,15 +152,21 @@ const languageMap: Record<string, SupportedLanguage> = {
   kiswahili: 'sw',
   sw: 'sw',
   '4': 'ac',
+  ach: 'ac',
   acholi: 'ac',
   ac: 'ac',
   '5': 'ny',
+  rnynk: 'ny',
+  runyankore: 'ny',
   runyankole: 'ny',
   ny: 'ny',
   '6': 'rn',
+  rkg: 'rn',
   rukiga: 'rn',
   rn: 'rn',
   '7': 'sm',
+  lus: 'sm',
+  xog: 'sm',
   lusoga: 'sm',
   sm: 'sm'
 };
@@ -198,7 +204,7 @@ export class LanguageService {
           {
             role: 'system',
             content:
-              'Translate the user text to the requested Ugandan language only. Keep formatting, links, and list numbering. Return translation only.'
+              'Translate the user text to the requested Ugandan language only. Keep formatting, links, and list numbering. Return translation only. Rukiga and Runyankole are not Kinyarwanda; do not substitute Kinyarwanda. If you cannot confidently translate to the requested language, return the original English text.'
           },
           {
             role: 'user',

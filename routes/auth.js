@@ -789,7 +789,7 @@ router.post('/register', async (req, res, next) => {
       data: {
         user: publicUser(user),
         requires_otp: true,
-        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent to phone',
+        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS',
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -911,7 +911,7 @@ router.post('/request-otp', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent',
+        message: channel === 'email' ? 'OTP sent to email' : 'OTP sent by SMS',
         channel,
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
@@ -958,7 +958,7 @@ router.post('/request-password-reset', async (req, res, next) => {
     return res.json({
       ok: true,
       data: {
-        message: channel === 'email' ? 'Password reset OTP sent to email' : 'Password reset OTP sent',
+        message: channel === 'email' ? 'Password reset OTP sent to email' : 'Password reset OTP sent by SMS',
         channel,
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }

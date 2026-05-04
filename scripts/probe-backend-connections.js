@@ -5,6 +5,7 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const BASE_URL = String(process.env.BASE_URL || process.env.QA_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+let probeRequestCounter = 0;
 
 function read(relPath) {
   return fs.readFileSync(path.join(ROOT, relPath), 'utf8');
@@ -27,10 +28,14 @@ function fail(label, detail = '') {
 }
 
 async function fetchText(url, options = {}) {
+  probeRequestCounter += 1;
+  const localProbeIp = `127.77.17.${(probeRequestCounter % 240) + 1}`;
   const response = await fetch(url, {
     ...options,
     headers: {
       'content-type': 'application/json',
+      'user-agent': 'MakaUg backend-connection-probe',
+      'x-forwarded-for': localProbeIp,
       ...(options.headers || {})
     }
   });

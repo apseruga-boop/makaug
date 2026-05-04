@@ -102,6 +102,40 @@
       filter: brightness(1.05);
       transform: translateY(-1px);
     }
+    .about-reveal {
+      animation: aboutReveal .55s ease both;
+    }
+    .about-card {
+      transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+      will-change: transform;
+    }
+    .about-card:hover,
+    .about-card:focus-within {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 42px rgba(20, 83, 45, 0.12);
+      border-color: rgba(34, 197, 94, 0.38);
+    }
+    .about-cta {
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .about-cta:hover,
+    .about-cta:focus-visible {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 26px rgba(20, 83, 45, 0.18);
+    }
+    @keyframes aboutReveal {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .about-reveal,
+      .about-card,
+      .about-cta {
+        animation: none;
+        transition: none;
+        transform: none !important;
+      }
+    }
     .rm-sugg-panel {
       position: fixed;
       background: #fff;
@@ -2631,7 +2665,7 @@
                 <input id="lp-verify-otp-code" class="flex-1 border border-green-100 rounded-lg px-3 py-2 text-sm" placeholder="Enter 6-digit OTP">
                 <button id="lp-verify-otp-btn" type="button" onclick="verifyListingOtp()" class="bg-green-700 text-white hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold">Verify OTP</button>
               </div>
-              <p id="lp-otp-status" class="text-xs text-gray-500 mt-1">Phone OTP pending verification.</p>
+              <p id="lp-otp-status" class="text-xs text-gray-500 mt-1">SMS OTP pending verification.</p>
             </div>
             <div>
               <label id="lp-contact-pref-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Best Contact Method *</label>
@@ -4144,57 +4178,57 @@
 
   <div id="page-about" class="page">
     <div class="bg-gradient-to-br from-green-950 via-green-900 to-emerald-800 py-14 text-white">
-      <div class="max-w-6xl mx-auto px-4">
-        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">About Us</p>
-        <h1 class="text-4xl md:text-5xl font-black serif mt-2">About MakaUg</h1>
-        <p class="text-2xl md:text-3xl font-black leading-tight mt-5 max-w-4xl">Property in Uganda should be easier to find, easier to list, and safer to trust.</p>
-        <p class="text-green-50 mt-4 max-w-3xl">
+      <div class="max-w-6xl mx-auto px-4 about-reveal">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide" data-content-i18n="about.heroLabel">About Us</p>
+        <h1 class="text-4xl md:text-5xl font-black serif mt-2" data-content-i18n="about.title">About MakaUg</h1>
+        <p class="text-2xl md:text-3xl font-black leading-tight mt-5 max-w-4xl" data-content-i18n="about.heroStatement">Property in Uganda should be easier to find, easier to list, and safer to trust.</p>
+        <p class="text-green-50 mt-4 max-w-3xl" data-content-i18n="about.subtitle">
           MakaUg is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.
         </p>
         <div class="flex flex-wrap gap-2 mt-6">
-          <a href="/for-sale" class="bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold">Search property</a>
-          <a href="/list-property" class="bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold">List Property</a>
-          <a href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" target="_blank" rel="noopener" class="border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold">Ask MakaUg on WhatsApp</a>
+          <a href="/for-sale" class="about-cta bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
+          <a href="/list-property" class="about-cta bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List Property</a>
+          <a href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp">Ask MakaUg on WhatsApp</a>
         </div>
       </div>
     </div>
     <div class="max-w-6xl mx-auto px-4 py-12">
       <div class="grid md:grid-cols-3 gap-4 mb-8">
-        <div class="bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
+        <div class="about-card bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
           <i class="fas fa-location-dot text-green-700 text-2xl"></i>
-          <div class="text-2xl font-black text-gray-900 mt-3">Uganda-first</div>
-          <p class="text-sm text-gray-600 mt-2">Built around local places, local language needs, WhatsApp habits, and real listing workflows.</p>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueUgandaTitle">Uganda-first</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueUgandaText">Built around local places, local language needs, WhatsApp habits, and real listing workflows.</p>
         </div>
-        <div class="bg-white border border-amber-100 rounded-3xl p-5 shadow-sm">
+        <div class="about-card bg-white border border-amber-100 rounded-3xl p-5 shadow-sm">
           <i class="fas fa-hand-holding-heart text-amber-600 text-2xl"></i>
-          <div class="text-2xl font-black text-gray-900 mt-3">Free listing</div>
-          <p class="text-sm text-gray-600 mt-2">Owners and brokers can list property without a listing fee while paid advertising stays separate.</p>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueFreeTitle">Free listing</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueFreeText">Owners and brokers can list property without a listing fee while paid advertising stays separate.</p>
         </div>
-        <div class="bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
+        <div class="about-card bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
           <i class="fab fa-whatsapp text-green-600 text-2xl"></i>
-          <div class="text-2xl font-black text-gray-900 mt-3">Web + WhatsApp</div>
-          <p class="text-sm text-gray-600 mt-2">Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.</p>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueWhatsappTitle">Web + WhatsApp</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueWhatsappText">Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.</p>
         </div>
       </div>
 
       <div class="grid lg:grid-cols-[0.95fr,1.05fr] gap-6 mb-8">
-        <section class="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
-          <h2 class="text-2xl font-black text-gray-900 serif">Who we are</h2>
-          <p class="text-gray-700 mt-3 leading-relaxed">
+        <section class="about-card bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
+          <h2 class="text-2xl font-black text-gray-900 serif" data-content-i18n="about.whoTitle">Who we are</h2>
+          <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.whoText">
             MakaUg is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda’s property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.
           </p>
         </section>
-        <section class="bg-green-50 border border-green-100 rounded-3xl p-6">
-          <h2 class="text-2xl font-black text-green-950 serif">Our mission</h2>
-          <p class="text-green-900 mt-3 leading-relaxed">
+        <section class="about-card bg-green-50 border border-green-100 rounded-3xl p-6">
+          <h2 class="text-2xl font-black text-green-950 serif" data-content-i18n="about.missionTitle">Our mission</h2>
+          <p class="text-green-900 mt-3 leading-relaxed" data-content-i18n="about.missionText">
             Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda’s property market with better information.
           </p>
         </section>
       </div>
 
-      <section class="bg-white border border-gray-200 rounded-3xl p-6 mb-8">
-        <h2 class="text-2xl font-black text-gray-900 serif">Why MakaUg exists</h2>
-        <p class="text-gray-700 mt-3 leading-relaxed">
+      <section class="about-card bg-white border border-gray-200 rounded-3xl p-6 mb-8">
+        <h2 class="text-2xl font-black text-gray-900 serif" data-content-i18n="about.whyTitle">Why MakaUg exists</h2>
+        <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.whyText">
           Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. MakaUg brings structure, search, safety, and communication together.
         </p>
       </section>
@@ -4202,27 +4236,27 @@
       <section>
         <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
-            <p class="text-xs font-black uppercase tracking-wide text-green-700">Who we help</p>
-            <h2 class="text-3xl font-black text-gray-900 serif">Built for real property journeys</h2>
+            <p class="text-xs font-black uppercase tracking-wide text-green-700" data-content-i18n="about.helpLabel">Who we help</p>
+            <h2 class="text-3xl font-black text-gray-900 serif" data-content-i18n="about.helpTitle">Built for real property journeys</h2>
           </div>
-          <a href="/safety" class="text-sm font-bold text-green-700">Learn safety tips</a>
+          <a href="/safety" class="text-sm font-bold text-green-700" data-content-i18n="about.ctaSafety">Learn safety tips</a>
         </div>
         <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          <article class="rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-key text-green-700"></i><h3 class="font-black mt-3">Renters</h3><p class="text-sm text-gray-600 mt-2">Search by area and budget, save properties, create alerts, contact safely, book viewings, request callbacks, and report suspicious listings.</p></article>
-          <article class="rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-house text-green-700"></i><h3 class="font-black mt-3">Buyers</h3><p class="text-sm text-gray-600 mt-2">Search homes and land, compare options, understand location, title and verification signals, save searches, and use safety guidance.</p></article>
-          <article class="rounded-3xl border border-blue-100 bg-blue-50 p-5 shadow-sm"><i class="fas fa-graduation-cap text-blue-700"></i><h3 class="font-black mt-3">Students and parents</h3><p class="text-sm text-gray-600 mt-2">Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.</p></article>
-          <article class="rounded-3xl border border-amber-100 bg-amber-50 p-5 shadow-sm"><i class="fas fa-sign-hanging text-amber-700"></i><h3 class="font-black mt-3">Owners and sellers</h3><p class="text-sm text-gray-700 mt-2">List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.</p></article>
-          <article class="rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><i class="fas fa-briefcase text-gray-700"></i><h3 class="font-black mt-3">Brokers</h3><p class="text-sm text-gray-600 mt-2">Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.</p></article>
-          <article class="rounded-3xl border border-purple-100 bg-purple-50 p-5 shadow-sm"><i class="fas fa-building text-purple-700"></i><h3 class="font-black mt-3">Commercial users</h3><p class="text-sm text-gray-700 mt-2">Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.</p></article>
+          <article class="about-card rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-key text-green-700"></i><h3 class="font-black mt-3" data-content-i18n="about.rentersTitle">Renters</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.rentersText">Search by area and budget, save properties, create alerts, contact safely, book viewings, request callbacks, and report suspicious listings.</p></article>
+          <article class="about-card rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-house text-green-700"></i><h3 class="font-black mt-3" data-content-i18n="about.buyersTitle">Buyers</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.buyersText">Search homes and land, compare options, understand location, title and verification signals, save searches, and use safety guidance.</p></article>
+          <article class="about-card rounded-3xl border border-blue-100 bg-blue-50 p-5 shadow-sm"><i class="fas fa-graduation-cap text-blue-700"></i><h3 class="font-black mt-3" data-content-i18n="about.studentsTitle">Students and parents</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.studentsText">Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.</p></article>
+          <article class="about-card rounded-3xl border border-amber-100 bg-amber-50 p-5 shadow-sm"><i class="fas fa-sign-hanging text-amber-700"></i><h3 class="font-black mt-3" data-content-i18n="about.ownersTitle">Owners and sellers</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.ownersText">List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.</p></article>
+          <article class="about-card rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><i class="fas fa-briefcase text-gray-700"></i><h3 class="font-black mt-3" data-content-i18n="about.brokersTitle">Brokers</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.brokersText">Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.</p></article>
+          <article class="about-card rounded-3xl border border-purple-100 bg-purple-50 p-5 shadow-sm"><i class="fas fa-building text-purple-700"></i><h3 class="font-black mt-3" data-content-i18n="about.commercialTitle">Commercial users</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.commercialText">Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.</p></article>
         </div>
       </section>
 
       <section class="mt-8 bg-green-950 text-white rounded-3xl p-6">
-        <h2 class="text-2xl font-black serif">How we support trust and safety</h2>
+        <h2 class="text-2xl font-black serif" data-content-i18n="about.trustTitle">How we support trust and safety</h2>
         <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm text-green-50">
-          <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><strong>OTP and contact checks</strong><br>Contact verification helps reduce fake submissions and missed follow-up.</div>
-          <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><strong>Review before publishing</strong><br>Listing details, photos, location, and fraud signals are checked before approval.</div>
-          <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><strong>Fraud reporting</strong><br>Users can report suspicious listings, land/title concerns, and payment pressure.</div>
+          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustOtpTitle">OTP and contact checks</strong><br><span data-content-i18n="about.trustOtpText">Contact verification helps reduce fake submissions and missed follow-up.</span></div>
+          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustReviewTitle">Review before publishing</strong><br><span data-content-i18n="about.trustReviewText">Listing details, photos, location, and fraud signals are checked before approval.</span></div>
+          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustFraudTitle">Fraud reporting</strong><br><span data-content-i18n="about.trustFraudText">Users can report suspicious listings, land/title concerns, and payment pressure.</span></div>
         </div>
       </section>
 
@@ -4791,7 +4825,7 @@
             <div>
               <label class="block text-sm font-medium text-gray-800 mb-2">Channel</label>
               <select id="auth-signup-otp-channel" onchange="setAuthSignUpOtpChannel(this.value)" class="w-full border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white">
-                <option value="phone">Phone OTP</option>
+                <option value="phone">SMS / Text OTP</option>
                 <option value="email">Email OTP</option>
               </select>
             </div>
@@ -4979,7 +5013,7 @@
               <input id="agent-otp-code" class="flex-1 border border-green-100 rounded-lg px-3 py-2 text-sm" placeholder="Enter 6-digit OTP">
               <button id="agent-verify-otp-btn" type="button" onclick="verifyAgentOtp()" class="bg-green-700 text-white hover:bg-green-600 px-3 py-2 rounded-lg text-xs font-semibold">Verify OTP</button>
             </div>
-            <p id="agent-otp-status" class="text-xs text-gray-500 mt-1">Phone OTP pending verification.</p>
+            <p id="agent-otp-status" class="text-xs text-gray-500 mt-1">SMS OTP pending verification.</p>
           </div>
         </div>
 
@@ -6270,6 +6304,175 @@
       sm: "en"
     };
 
+    if (I18N_UI.rn) {
+      I18N_UI.rn = Object.assign({}, I18N_UI.en, {
+        languageSet: "Language set",
+        langBanner: "Rukiga translation is not fully available yet, so MakaUg uses English fallback instead of guessing another language.",
+        pageAbout: "About MakaUg"
+      });
+    }
+
+    const CONTENT_I18N = {
+      en: {
+        "about.heroLabel": "About Us",
+        "about.title": "About MakaUg",
+        "about.heroStatement": "Property in Uganda should be easier to find, easier to list, and safer to trust.",
+        "about.subtitle": "MakaUg is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.",
+        "about.ctaSearch": "Search property",
+        "about.ctaList": "List Property",
+        "about.ctaWhatsapp": "Ask MakaUg on WhatsApp",
+        "about.valueUgandaTitle": "Uganda-first",
+        "about.valueUgandaText": "Built around local places, local language needs, WhatsApp habits, and real listing workflows.",
+        "about.valueFreeTitle": "Free listing",
+        "about.valueFreeText": "Owners and brokers can list property without a listing fee while paid advertising stays separate.",
+        "about.valueWhatsappTitle": "Web + WhatsApp",
+        "about.valueWhatsappText": "Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.",
+        "about.whoTitle": "Who we are",
+        "about.whoText": "MakaUg is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
+        "about.missionTitle": "Our mission",
+        "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
+        "about.whyTitle": "Why MakaUg exists",
+        "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. MakaUg brings structure, search, safety, and communication together.",
+        "about.helpLabel": "Who we help",
+        "about.helpTitle": "Built for real property journeys",
+        "about.ctaSafety": "Learn safety tips",
+        "about.rentersTitle": "Renters",
+        "about.rentersText": "Search by area and budget, save properties, create alerts, contact safely, book viewings, request callbacks, and report suspicious listings.",
+        "about.buyersTitle": "Buyers",
+        "about.buyersText": "Search homes and land, compare options, understand location, title and verification signals, save searches, and use safety guidance.",
+        "about.studentsTitle": "Students and parents",
+        "about.studentsText": "Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.",
+        "about.ownersTitle": "Owners and sellers",
+        "about.ownersText": "List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.",
+        "about.brokersTitle": "Brokers",
+        "about.brokersText": "Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.",
+        "about.commercialTitle": "Commercial users",
+        "about.commercialText": "Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.",
+        "about.trustTitle": "How we support trust and safety",
+        "about.trustOtpTitle": "OTP and contact checks",
+        "about.trustOtpText": "Contact verification helps reduce fake submissions and missed follow-up.",
+        "about.trustReviewTitle": "Review before publishing",
+        "about.trustReviewText": "Listing details, photos, location, and fraud signals are checked before approval.",
+        "about.trustFraudTitle": "Fraud reporting",
+        "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure."
+      },
+      lg: {
+        "about.heroLabel": "Ebitukwatako",
+        "about.title": "Ebitukwatako ku MakaUg",
+        "about.heroStatement": "Property mu Uganda erina okuba nnyangu okunoonya, okulistinga, era erina okuba ey'obwesige.",
+        "about.subtitle": "MakaUg ezimbibwa nga platform ya property eya Uganda eyamba abapangisa, abagula, abayizi, abanoonya ettaka, bannannyini property, brokers, n'abasuubuzi.",
+        "about.ctaSearch": "Noonya property",
+        "about.ctaList": "List Property",
+        "about.ctaWhatsapp": "Buuza MakaUg ku WhatsApp",
+        "about.valueUgandaTitle": "Uganda ku mwanjo",
+        "about.valueUgandaText": "Tuzimbiddwa ku bifo bya wano, ennimi za wano, enkozesa ya WhatsApp, n'engeri listing gye zikolebwamu mu ddala.",
+        "about.valueFreeTitle": "Listing ya bwereere",
+        "about.valueFreeText": "Bannannyini property ne brokers basobola okulistinga awatali ssente za listing, nga advertising esasulwa ekyali kyawukana.",
+        "about.valueWhatsappTitle": "Web + WhatsApp",
+        "about.valueWhatsappText": "Ekoleddwa ku mobile web, WhatsApp contact, dashboard follow-up, n'okuyamba abantu okusalawo mu ngeri ey'obukuumi.",
+        "about.whoTitle": "Ffe baani",
+        "about.whoText": "MakaUg ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, ne guided free listings. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
+        "about.missionTitle": "Omulamwa gwaffe",
+        "about.missionText": "Omulamwa gwaffe kwe kufuula property ennyangu okuzuula, okukendeeza okutabulwa, okulongoosa omutindo gwa listings, n'okuyamba abantu okuva ku search okutuuka ku viewing n'okusalaawo.",
+        "about.whyTitle": "Lwaki MakaUg eriwo",
+        "about.whyText": "Okunoonya property mu Uganda kusobola okuba mu WhatsApp, brokers, social posts, n'amawulire agava mu bantu. MakaUg egatta search, safety, n'empuliziganya mu kifo kimu.",
+        "about.helpLabel": "Be tuyamba",
+        "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
+        "about.ctaSafety": "Yiga safety tips",
+        "about.rentersTitle": "Abapangisa",
+        "about.rentersText": "Noonya ku kitundu ne budget, tereka property, kola alerts, buuza mu bukuumi, bookinga viewing, saba callback, era reportinga ebiteeberezebwa.",
+        "about.buyersTitle": "Abagula",
+        "about.buyersText": "Noonya amaka n'ettaka, geraageranya options, tegeera location, title, verification signals, tereka searches, era kozesa safety guidance.",
+        "about.studentsTitle": "Abayizi n'abazadde",
+        "about.studentsText": "Noonya okusinziira ku campus, budget, room type, security, amazzi, Wi-Fi, emmere, callbacks, viewings, ne student alerts.",
+        "about.ownersTitle": "Bannannyini property n'abatunda",
+        "about.ownersText": "Listinga property ya bwereere n'ebibuuzo ebikulungamya, map location, photos, OTP/contact verification, review nga tennaba published, enquiries, ne callbacks.",
+        "about.brokersTitle": "Brokers",
+        "about.brokersText": "Zimba broker profile, ddukanya listings, landirira leads, WhatsApp enquiries, viewings, n'obwesige bwa broker.",
+        "about.commercialTitle": "Abakozesa commercial",
+        "about.commercialText": "Noonya business space, offices, shops, warehouses, direct enquiries, ne saved commercial searches.",
+        "about.trustTitle": "Engeri gye tuyamba mu trust ne safety",
+        "about.trustOtpTitle": "OTP ne contact checks",
+        "about.trustOtpText": "Contact verification eyamba okukendeeza fake submissions n'okulemererwa follow-up.",
+        "about.trustReviewTitle": "Review nga tennaba publishing",
+        "about.trustReviewText": "Details, photos, location, ne fraud signals bikekebejjebwa nga listing tennakkirizibwa.",
+        "about.trustFraudTitle": "Fraud reporting",
+        "about.trustFraudText": "Users basobola okuloopa listings eziteeberezebwa, land/title concerns, ne pressure y'okusasula."
+      },
+      sw: {
+        "about.heroLabel": "Kuhusu Sisi",
+        "about.title": "Kuhusu MakaUg",
+        "about.heroStatement": "Mali nchini Uganda inapaswa kuwa rahisi kutafuta, rahisi kuorodhesha, na salama kuamini.",
+        "about.subtitle": "MakaUg inajenga jukwaa la mali la Uganda kwa wapangaji, wanunuzi, wanafunzi, watafuta ardhi, wamiliki, brokers, na biashara.",
+        "about.ctaSearch": "Tafuta mali",
+        "about.ctaList": "List Property",
+        "about.ctaWhatsapp": "Uliza MakaUg kwa WhatsApp",
+        "about.valueUgandaTitle": "Uganda kwanza",
+        "about.valueUgandaText": "Imejengwa kuzunguka maeneo ya ndani, mahitaji ya lugha, matumizi ya WhatsApp, na mtiririko halisi wa listings.",
+        "about.valueFreeTitle": "Listing bure",
+        "about.valueFreeText": "Wamiliki na brokers wanaweza kuorodhesha mali bila ada ya listing huku matangazo ya kulipia yakibaki tofauti.",
+        "about.valueWhatsappTitle": "Web + WhatsApp",
+        "about.valueWhatsappText": "Imetengenezwa kwa mobile web, mawasiliano ya WhatsApp, dashboard follow-up, na maamuzi salama.",
+        "about.whoTitle": "Sisi ni nani",
+        "about.whoText": "MakaUg ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na listings za bure zilizoongozwa. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
+        "about.missionTitle": "Dhamira yetu",
+        "about.missionText": "Dhamira yetu ni kurahisisha ugunduzi wa mali, kupunguza mkanganyiko, kuboresha ubora wa listings, na kusaidia watu kutoka search hadi viewing na uamuzi.",
+        "about.whyTitle": "Kwa nini MakaUg ipo",
+        "about.whyText": "Utafutaji wa mali Uganda unaweza kutawanyika kwenye WhatsApp, brokers, social posts, na maneno ya watu. MakaUg huleta muundo, search, safety, na mawasiliano pamoja.",
+        "about.helpLabel": "Tunasaidia nani",
+        "about.helpTitle": "Imejengwa kwa safari halisi za mali",
+        "about.ctaSafety": "Jifunze safety tips",
+        "about.rentersTitle": "Wapangaji",
+        "about.rentersText": "Tafuta kwa eneo na budget, hifadhi mali, tengeneza alerts, wasiliana salama, book viewings, omba callbacks, na report suspicious listings.",
+        "about.buyersTitle": "Wanunuzi",
+        "about.buyersText": "Tafuta nyumba na ardhi, linganisha options, elewa location, title na verification signals, hifadhi searches, na tumia safety guidance.",
+        "about.studentsTitle": "Wanafunzi na wazazi",
+        "about.studentsText": "Tafuta kwa campus, budget, room type, security, maji, Wi-Fi, meals, callbacks, viewings, na student alerts.",
+        "about.ownersTitle": "Wamiliki na wauzaji",
+        "about.ownersText": "List property bure kwa guided fields, map location, photo prompts, OTP/contact verification, review kabla ya publishing, enquiries, na callbacks.",
+        "about.brokersTitle": "Brokers",
+        "about.brokersText": "Jenga broker profile, simamia listings, fuatilia leads, WhatsApp enquiries, viewings, na broker trust.",
+        "about.commercialTitle": "Watumiaji commercial",
+        "about.commercialText": "Tafuta business space, offices, shops, warehouses, direct enquiries, na saved commercial searches.",
+        "about.trustTitle": "Jinsi tunavyosaidia trust na safety",
+        "about.trustOtpTitle": "OTP na contact checks",
+        "about.trustOtpText": "Contact verification husaidia kupunguza fake submissions na missed follow-up.",
+        "about.trustReviewTitle": "Review kabla ya publishing",
+        "about.trustReviewText": "Listing details, photos, location, na fraud signals hukaguliwa kabla ya approval.",
+        "about.trustFraudTitle": "Fraud reporting",
+        "about.trustFraudText": "Users wanaweza kuripoti suspicious listings, land/title concerns, na payment pressure."
+      }
+    };
+
+    function contentTr(key) {
+      const lang = currentLang || "en";
+      const fallback = LANG_FALLBACK[lang] || "en";
+      const value = CONTENT_I18N[lang]?.[key]
+        || CONTENT_I18N[fallback]?.[key]
+        || CONTENT_I18N.en?.[key]
+        || "";
+      if (!CONTENT_I18N[lang]?.[key] && lang !== "en") {
+        window.MAKAUG_MISSING_TRANSLATIONS = window.MAKAUG_MISSING_TRANSLATIONS || [];
+        const missingKey = `${lang}:${key}`;
+        if (!window.MAKAUG_MISSING_TRANSLATIONS.includes(missingKey)) {
+          window.MAKAUG_MISSING_TRANSLATIONS.push(missingKey);
+        }
+      }
+      return value || key;
+    }
+
+    function applyContentLanguageUI(root = document) {
+      if (!root) return;
+      root.querySelectorAll("[data-content-i18n]").forEach((el) => {
+        const key = el.getAttribute("data-content-i18n");
+        if (key) el.textContent = contentTr(key);
+      });
+    }
+
+    function applyAboutLanguageUI() {
+      applyContentLanguageUI(document.getElementById("page-about"));
+    }
+
     function tr(key) {
       const lang = currentLang || "en";
       const langPack = I18N_UI[lang] || I18N_UI.en;
@@ -6967,6 +7170,10 @@
         leadSubmitFail: "Tetusobodde kutuusa kusaba kwa mortgage kati."
       }
     };
+
+    MORTGAGE_I18N.rn = Object.assign({}, MORTGAGE_I18N.en, {
+      pageSub: "Rukiga mortgage translation is not fully available yet, so this page uses English fallback rather than guessing another language."
+    });
 
     function mortgageTr(key) {
       const lang = currentLang || "en";
@@ -8025,6 +8232,7 @@
       setPageHeading("page-about", tr("pageAbout"));
       setPageHeading("page-saved", tr("pageSaved"));
       setPageHeading("page-account", tr("pageAccount"));
+      applyAboutLanguageUI();
       applyAuthUi();
       applyAccountAccessLanguageUi();
       applyListingWizardLanguageUI();
@@ -8820,7 +9028,7 @@
       if (hint) {
         hint.value = authSignUpOtpChannel === "email"
           ? "OTP will be sent to your email address"
-          : "OTP will be sent to your phone number";
+          : "OTP will be sent by SMS to your phone number";
       }
     }
 
@@ -14481,7 +14689,7 @@
         || lower.includes("failed to send otp email")
         || lower.includes("failed to send otp sms");
       if (!providerIssue) return raw || "Could not send OTP right now.";
-      const modeLabel = channel === "email" ? "email" : "phone";
+      const modeLabel = channel === "email" ? "email" : "SMS";
       return `OTP delivery via ${modeLabel} is temporarily unavailable. For internal testing, use the authorized admin override code.`;
     }
 
@@ -14517,7 +14725,7 @@
         const otpStatus = document.getElementById("lp-otp-status");
         if (otpStatus) {
           otpStatus.className = "text-xs text-green-700 mt-1";
-          otpStatus.textContent = channel === "email" ? "OTP sent to your email." : "OTP sent to your phone.";
+          otpStatus.textContent = channel === "email" ? "OTP sent to your email." : "OTP sent by SMS to your phone.";
         }
         lpListingOtpVerifiedPhone = "";
         lpListingOtpVerifiedEmail = "";
@@ -14569,7 +14777,7 @@
         const otpStatus = document.getElementById("lp-otp-status");
         if (otpStatus) {
           otpStatus.className = "text-xs text-green-700 mt-1";
-          otpStatus.textContent = `${channel === "email" ? "Email" : "Phone"} OTP verified.`;
+          otpStatus.textContent = `${channel === "email" ? "Email" : "SMS"} OTP verified.`;
         }
         renderListReviewSummary();
       } catch (error) {
@@ -16879,7 +17087,7 @@
       if (otpInput) otpInput.value = "";
       setAgentOtpStatus("neutral", agentOtpChannel === "email"
         ? "Email OTP pending verification."
-        : "Phone OTP pending verification.");
+        : "SMS OTP pending verification.");
     }
 
     function resetAgentRegistrationOtpState() {
@@ -17029,7 +17237,7 @@
         agentRegistrationOtpToken = "";
         agentOtpVerifiedPhone = "";
         agentOtpVerifiedEmail = "";
-        setAgentOtpStatus("success", channel === "email" ? "OTP sent to your email." : "OTP sent to your phone.");
+        setAgentOtpStatus("success", channel === "email" ? "OTP sent to your email." : "OTP sent by SMS to your phone.");
       } catch (error) {
         const fallbackMsg = formatOtpDeliveryFallbackMessage(error.message, channel);
         setAgentOtpStatus("error", fallbackMsg);
@@ -17202,7 +17410,7 @@
         otpStatus.className = "text-xs text-gray-500 mt-1";
         otpStatus.textContent = lpListingOtpChannel === "email"
           ? "Email OTP pending verification."
-          : "Phone OTP pending verification.";
+          : "SMS OTP pending verification.";
       }
       lpListingOtpToken = "";
       lpListingOtpVerifiedPhone = "";
@@ -17757,7 +17965,7 @@
           confirmPassword: "Confirm password",
           otpMethod: "How should we send your verification code?",
           otpEmail: "Email",
-          otpPhone: "Phone / WhatsApp",
+          otpPhone: "SMS / Text",
           terms: "I agree to the MakaUg Terms & Conditions.",
           privacy: "I have read the MakaUg Privacy Policy.",
           verifyTitle: "Verify your account",
@@ -17782,7 +17990,7 @@
           confirmPassword: "Kakasa password",
           otpMethod: "Tukusindikire wa code?",
           otpEmail: "Email",
-          otpPhone: "Simu / WhatsApp",
+          otpPhone: "SMS / Text",
           terms: "Nzikiriza Terms & Conditions za MakaUg.",
           privacy: "Nsomedde Privacy Policy ya MakaUg.",
           verifyTitle: "Kakasa account yo",
@@ -17807,7 +18015,7 @@
           confirmPassword: "Thibitisha nenosiri",
           otpMethod: "Tutume msimbo wapi?",
           otpEmail: "Barua pepe",
-          otpPhone: "Simu / WhatsApp",
+          otpPhone: "SMS / Text",
           terms: "Nakubali Sheria na Masharti ya MakaUg.",
           privacy: "Nimesoma Sera ya Faragha ya MakaUg.",
           verifyTitle: "Thibitisha akaunti yako",
@@ -18024,7 +18232,7 @@
                     </label>
                     <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
                       <input type="radio" name="account-access-otp-method" value="phone" class="accent-green-700">
-                      <span data-auth-text="otpPhone">Phone / WhatsApp</span>
+                      <span data-auth-text="otpPhone">SMS / Text</span>
                     </label>
                   </div>
                 </div>
@@ -18251,14 +18459,22 @@
 
     function maskAccountAccessDestination(value = "", channel = "email") {
       const raw = String(value || "").trim();
-      if (!raw) return channel === "phone" ? "your phone / WhatsApp" : "your email";
+      if (!raw) return channel === "phone" ? "your phone number" : "your email";
       if (channel === "phone") {
         const digits = raw.replace(/\D/g, "");
-        return digits.length > 4 ? `${raw.slice(0, 4)}••••${digits.slice(-3)}` : "your phone / WhatsApp";
+        return digits.length > 4 ? `${raw.slice(0, 4)}••••${digits.slice(-3)}` : "your phone number";
       }
       const [name, domain] = raw.split("@");
       if (!domain) return "your email";
       return `${name.slice(0, 2)}•••@${domain}`;
+    }
+
+    function accountAccessOtpChannelCopy(channel = "email", destination = "") {
+      const masked = maskAccountAccessDestination(destination, channel);
+      if (channel === "phone") {
+        return `We sent a verification code by SMS to: ${masked}. Please enter it below.`;
+      }
+      return `We sent a verification code to your email: ${masked}. Please enter it below.`;
     }
 
     function accountPolicyPreview(kind = "terms") {
@@ -18394,10 +18610,10 @@
         document.getElementById("account-access-password-wrap")?.classList.add("hidden");
         document.getElementById("account-access-otp-wrap")?.classList.remove("hidden");
         setTextById("account-access-mode-label", "Verify account");
-        setTextById("account-access-otp-copy", `We sent a verification code to ${maskAccountAccessDestination(destination, otpChannel)}. Please enter it below.`);
+        setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(otpChannel, destination));
         if (btn) btn.textContent = "Verify and continue";
         updateAccountAccessProgress("verify");
-        toast(register?.message || "Check your email for the verification code.");
+        toast(register?.message || (otpChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code."));
         setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
       } catch (error) {
         updateAccountAccessProgress("details");
@@ -18415,7 +18631,7 @@
       const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
       const channel = pending.channel === "phone" ? "phone" : "email";
       if (!pending.destination || !code) {
-        toast(`Enter the verification code sent to your ${channel === "phone" ? "phone / WhatsApp" : "email"}.`);
+        toast(`Enter the verification code sent ${channel === "phone" ? "by SMS to your phone" : "to your email"}.`);
         return;
       }
       const btn = document.getElementById("account-access-continue-btn");
