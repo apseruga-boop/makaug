@@ -66,6 +66,10 @@ function notificationStatusFromDelivery(delivery = {}) {
   if (delivery?.mocked === true || delivery?.manual_url) return 'logged';
   if (delivery?.skipped === true) return 'skipped';
   if (delivery?.error || delivery?.failureReason || delivery?.reason) return 'failed';
+  const status = String(delivery?.status || '').trim().toLowerCase();
+  if (/(fail|reject|invalid|error|undeliver)/i.test(status)) return 'failed';
+  if (['sent', 'success'].includes(status)) return 'sent';
+  if (['queued', 'submitted', 'accepted', 'buffered'].includes(status)) return 'queued';
   return 'logged';
 }
 

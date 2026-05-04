@@ -158,6 +158,7 @@ function run() {
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const smsServiceSource = fs.readFileSync(path.join(__dirname, '..', 'models', 'smsService.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
+  const phoneOtpDeliveryServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'phoneOtpDeliveryService.js'), 'utf8');
   const whatsappNotificationServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappNotificationService.js'), 'utf8');
   const propertiesRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
   const contactRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'contact.js'), 'utf8');
@@ -701,7 +702,10 @@ function run() {
   assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'Success' }), true, 'SMS success status should count as confirmed');
   assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'queued' }), true, 'queued provider SMS should count as accepted');
   assert.strictEqual(isSmsOtpDeliveryConfirmed({ status: 'failed' }), false, 'failed SMS status should not count as delivered');
-  assert.strictEqual(notificationStatusFromDelivery({ queued: true }), 'queued', 'WhatsApp bridge fallback should log queued status');
+  assert.strictEqual(notificationStatusFromDelivery({ status: 'Success' }), 'sent', 'successful SMS OTP should log sent status');
+  assert.strictEqual(notificationStatusFromDelivery({ status: 'queued' }), 'queued', 'queued SMS OTP should log queued status');
+  assert(!phoneOtpDeliveryServiceSource.includes('sendWhatsAppText'), 'phone OTP must not use WhatsApp delivery');
+  assert(!phoneOtpDeliveryServiceSource.includes('queueWhatsappWebBridgeMessage'), 'phone OTP must not queue WhatsApp bridge fallback');
   assert(!smsServiceSource.includes('logger.info(\'[SMS MOCK]\', { to, message })'), 'SMS mock logging must not print OTP bodies');
   assert(!whatsappNotificationServiceSource.includes('logger.info(\'[WHATSAPP MOCK]\', { to: recipient, body: message })'), 'WhatsApp mock logging must not print OTP bodies');
 

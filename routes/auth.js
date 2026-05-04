@@ -456,9 +456,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
   } else {
     const deliveryResult = await sendPhoneOtp({
       to: identifier,
-      message: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose }),
-      purpose,
-      source: 'auth_otp'
+      message: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
     });
     const delivery = deliveryResult.delivery || null;
     if (!deliveryResult.ok) {
@@ -476,25 +474,25 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
           expires_minutes: expiresMinutes,
           attempts: deliveryResult.attempts
         },
-        failureReason: deliveryResult.failureReason || 'phone_otp_delivery_failed'
+        failureReason: deliveryResult.failureReason || 'sms_otp_delivery_failed'
       });
       if (overrideAllowed) {
-        logger.warn('OTP phone delivery failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
+        logger.warn('OTP SMS delivery failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
         return { otp, channel: resolvedChannel, identifier, expiresMinutes };
       }
-      const sendError = new Error('Failed to send OTP to phone or WhatsApp');
+      const sendError = new Error('Failed to send OTP SMS');
       sendError.status = 400;
       throw sendError;
     }
     await logNotification(db, {
       recipientPhone: identifier,
-      channel: deliveryResult.channel === 'whatsapp' ? 'whatsapp' : 'sms',
+      channel: 'sms',
       type: 'otp_sent',
       status: notificationStatusFromDelivery(delivery),
       payloadSummary: {
         purpose,
         expires_minutes: expiresMinutes,
-        delivery_channel: deliveryResult.channel,
+        delivery_channel: 'sms',
         provider: delivery?.provider || null,
         attempts: deliveryResult.attempts
       },
