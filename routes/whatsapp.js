@@ -1898,9 +1898,14 @@ function sanitizeNaturalSearchFilters(filters = {}, originalText = '') {
 function extractNaturalSearchFilters(text, entities = {}, fallbackType = 'any', sessionData = {}) {
   const clean = normalizeInput(text);
   const e = entities && typeof entities === 'object' ? entities : {};
+  const parsedSearchType = parseSearchType(clean);
+  const entitySearchType = e.listing_type || e.listingType;
+  const categorySearchType = ['land', 'student', 'commercial'].includes(parsedSearchType)
+    ? parsedSearchType
+    : null;
 
   const searchType = normalizeListingType(
-    e.listing_type || e.listingType || parseSearchType(clean) || fallbackType || 'any'
+    categorySearchType || entitySearchType || parsedSearchType || fallbackType || 'any'
   );
   const area = sanitizeSearchAreaCandidate(e.area || e.location || e.district || parseAreaFromText(clean, sessionData), clean);
   const bedsMin = Number(e.bedrooms || e.beds || parseBedCount(clean) || 0) || 0;
