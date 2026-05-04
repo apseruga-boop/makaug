@@ -1017,7 +1017,7 @@
             </div>
           </div>
 
-          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto]">
+          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_auto_auto]">
             <div id="hero-q-wrap" class="relative">
               <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
               <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area">
@@ -1029,6 +1029,9 @@
               <option value="0">This area only</option>
             </select>
             <select id="hero-context-f" class="hero-field px-4"></select>
+            <button id="hero-use-location-btn" type="button" onclick="applyNearMe('hero')" class="hero-search-btn bg-white text-green-900 hover:bg-green-50 border border-white/60">
+              <i class="fas fa-location-crosshairs mr-1.5"></i>Use my location
+            </button>
             <button id="hero-search-btn" onclick="doSearch()" class="hero-search-btn">Search</button>
           </div>
         </div>
@@ -1159,8 +1162,8 @@
             <button onclick="filterListings('sale')" class="h-11 px-5 rounded-xl bg-white text-green-900 font-semibold text-sm hover:bg-green-50 transition-colors">
               <i class="fas fa-search mr-1.5"></i>Search
             </button>
-            <button onclick="applyNearMe('sale')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors">
-              <i class="fas fa-location-crosshairs mr-1.5"></i>Near me (5 mi)
+            <button id="sale-use-location-btn" type="button" onclick="applyNearMe('sale')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors">
+              <i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 mi)
             </button>
           </div>
 
@@ -1274,7 +1277,7 @@
               <option value="villa">Villa</option>
             </select>
             <button onclick="filterListings('rent')" class="h-11 px-5 rounded-xl bg-white text-blue-900 font-semibold text-sm hover:bg-blue-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
-            <button onclick="applyNearMe('rent')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Near me (5 mi)</button>
+            <button id="rent-use-location-btn" type="button" onclick="applyNearMe('rent')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 mi)</button>
           </div>
           <div class="mt-2 flex justify-end">
             <select id="rent-sort-f" onchange="filterListings('rent')" class="h-10 rounded-lg border border-white/20 bg-blue-950/50 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-blue-400/40">
@@ -1387,7 +1390,7 @@
               <option value="water">Water</option>
             </select>
             <button onclick="filterStudents()" class="h-11 px-5 rounded-xl bg-white text-purple-900 font-semibold text-sm hover:bg-purple-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
-            <button onclick="applyNearMe('students')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Near me (5 mi)</button>
+            <button id="student-use-location-btn" type="button" onclick="applyNearMe('students')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 mi)</button>
           </div>
           <div class="mt-2 flex justify-end gap-2 flex-wrap">
             <button id="student-verified-btn" onclick="toggleStudentVerified()" class="h-10 px-4 rounded-lg bg-white text-purple-900 text-sm font-semibold border border-white/30">⚡ Verified</button>
@@ -1505,7 +1508,7 @@
               <option value="500">500</option>
             </select>
             <button onclick="filterCommercial()" class="h-11 px-5 rounded-xl bg-white text-amber-900 font-semibold text-sm hover:bg-amber-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
-            <button onclick="applyNearMe('commercial')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Near me (5 mi)</button>
+            <button id="commercial-use-location-btn" type="button" onclick="applyNearMe('commercial')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 mi)</button>
           </div>
           <div class="mt-2 flex justify-end">
             <select id="commercial-sort-f" onchange="filterCommercial()" class="h-10 rounded-lg border border-white/20 bg-amber-900/30 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-amber-300/40">
@@ -1606,7 +1609,7 @@
               <option value="5">5</option>
             </select>
             <button onclick="filterLand()" class="h-11 px-5 rounded-xl bg-white text-emerald-900 font-semibold text-sm hover:bg-emerald-50 transition-colors"><i class="fas fa-search mr-1.5"></i>Search</button>
-            <button onclick="applyNearMe('land')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Near me (5 mi)</button>
+            <button id="land-use-location-btn" type="button" onclick="applyNearMe('land')" class="h-11 px-4 rounded-xl border border-white/40 text-white font-semibold text-sm hover:bg-white/10 transition-colors"><i class="fas fa-location-crosshairs mr-1.5"></i>Use my location (10 mi)</button>
           </div>
           <div class="mt-2 flex justify-end">
             <select id="land-sort-f" onchange="filterLand()" class="h-10 rounded-lg border border-white/20 bg-emerald-950/40 text-white px-3 text-sm outline-none focus:ring-2 focus:ring-emerald-400/40">
@@ -2406,6 +2409,12 @@
                 <button id="lp-address-search-btn" type="button" onclick="findLpAddressOrPlace()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-bold">
                   <i class="fas fa-location-crosshairs"></i> Find on map
                 </button>
+              </div>
+              <div class="mt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                <button id="lp-current-location-btn" data-testid="lp-current-location-btn" type="button" onclick="shareLpCurrentLocation()" class="inline-flex items-center justify-center gap-2 border border-green-700 text-green-800 hover:bg-green-100 rounded-xl px-4 py-2.5 text-sm font-bold">
+                  <i class="fas fa-crosshairs"></i> Use my current location
+                </button>
+                <span id="lp-current-location-status" class="text-xs text-green-800">We only use your exact location for this listing after you confirm the pin.</span>
               </div>
               <p id="lp-address-search-status" class="text-xs text-green-800 mt-2">Google Places is used when configured. If it is unavailable, enter the nearest landmark and place the pin manually.</p>
             </div>
@@ -5621,7 +5630,16 @@
     const lpHierarchyAnchorCache = new Map();
     const LISTING_NEW_WINDOW_MS = 5 * 24 * 60 * 60 * 1000;
     const typeaheadState = { panel: null, input: null, items: [], index: -1, onPick: null };
-    const SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40];
+    const DEFAULT_NEAR_ME_RADIUS_MI = 10;
+    const SEARCH_RADIUS_MI_OPTIONS = [0, 5, 10, 20, 50];
+    const nearMeSearchState = {
+      hero: null,
+      sale: null,
+      rent: null,
+      students: null,
+      commercial: null,
+      land: null
+    };
     let districtCenterCache = null;
     const HERO_CONTEXT_FILTERS = {
       sale: {
@@ -8373,6 +8391,8 @@
     let googleMapsLoadPromise = null;
     let leafletLoadPromise = null;
     let googleGeocoderInstance = null;
+    let googlePlacesAutocompleteService = null;
+    let lpPlacesSuggestTimer = null;
     const mapProviders = {};
 
     function apiUrl(path) {
@@ -15062,6 +15082,37 @@
       return googleGeocoderInstance;
     }
 
+    async function getGooglePlacesAutocompleteService() {
+      const ready = await ensureGoogleMapsApi();
+      if (!ready || !window.google?.maps?.places?.AutocompleteService) return null;
+      if (!googlePlacesAutocompleteService) {
+        googlePlacesAutocompleteService = new google.maps.places.AutocompleteService();
+      }
+      return googlePlacesAutocompleteService;
+    }
+
+    async function getGooglePlacePredictions(query) {
+      const service = await getGooglePlacesAutocompleteService();
+      if (!service || !query) return [];
+      return new Promise((resolve) => {
+        service.getPlacePredictions({
+          input: query,
+          componentRestrictions: { country: "ug" },
+          types: ["geocode"]
+        }, (predictions, status) => {
+          if (status !== "OK" || !Array.isArray(predictions)) {
+            resolve([]);
+            return;
+          }
+          resolve(predictions.slice(0, 5).map((prediction) => ({
+            value: prediction.description,
+            kind: "Google Places",
+            placeId: prediction.place_id
+          })));
+        });
+      });
+    }
+
     async function geocodeWithGoogle(query, options = {}) {
       const geocoder = await getGoogleGeocoder();
       if (!geocoder || !query) return null;
@@ -15167,7 +15218,19 @@
           if (input) input.value = value;
           findLpAddressOrPlace();
         });
+        if (lpPlacesSuggestTimer) window.clearTimeout(lpPlacesSuggestTimer);
+        lpPlacesSuggestTimer = window.setTimeout(async () => {
+          if (!input || document.activeElement !== input || (input.value || "").trim() !== query) return;
+          const predictions = await getGooglePlacePredictions(query);
+          if (!predictions.length || document.activeElement !== input) return;
+          renderTypeahead(input, predictions.concat(getLocationSuggestionPool(true)), (value) => {
+            if (input) input.value = value;
+            findLpAddressOrPlace();
+          });
+          setLpAddressSearchStatus(translateListingLabel("Choose a Google Places suggestion or keep typing a landmark, road, area, town, or district."));
+        }, 250);
       } else {
+        if (lpPlacesSuggestTimer) window.clearTimeout(lpPlacesSuggestTimer);
         closeTypeahead();
       }
     }
@@ -15223,6 +15286,96 @@
         return false;
       }
       return applyLpAddressPlaceResult(point, query);
+    }
+
+    function setLpCurrentLocationStatus(message = "", tone = "info") {
+      const el = document.getElementById("lp-current-location-status");
+      if (!el) return;
+      const color = tone === "error" ? "text-red-700" : tone === "success" ? "text-green-800" : "text-green-800";
+      el.className = `text-xs ${color}`;
+      el.textContent = message || "We only use your exact location for this listing after you confirm the pin.";
+    }
+
+    function shareLpCurrentLocation() {
+      const btn = document.getElementById("lp-current-location-btn");
+      if (!navigator.geolocation) {
+        const message = translateListingLabel("Location sharing is not available on this device. Search for address or place manually.");
+        setLpCurrentLocationStatus(message, "error");
+        setLpAddressSearchStatus(message, "error");
+        return;
+      }
+      const secureEnough = window.isSecureContext || ["localhost", "127.0.0.1"].includes(window.location.hostname);
+      if (!secureEnough) {
+        const message = translateListingLabel("Location sharing needs HTTPS. Search for address or place manually.");
+        setLpCurrentLocationStatus(message, "error");
+        setLpAddressSearchStatus(message, "error");
+        return;
+      }
+      if (btn) btn.disabled = true;
+      setLpCurrentLocationStatus(translateListingLabel("Requesting location permission..."));
+      setLpAddressSearchStatus(translateListingLabel("Requesting location permission..."));
+      ensureListPinMap();
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = Number(pos.coords?.latitude);
+        const lng = Number(pos.coords?.longitude);
+        if (btn) btn.disabled = false;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          const message = translateListingLabel("Could not read your location. Search for address or place manually.");
+          setLpCurrentLocationStatus(message, "error");
+          setLpAddressSearchStatus(message, "error");
+          return;
+        }
+        if (!isPointInUgandaClient(lat, lng)) {
+          const message = translateListingLabel("The location appears outside Uganda. Search for a Ugandan address or place instead.");
+          setLpCurrentLocationStatus(message, "error");
+          setLpAddressSearchStatus(message, "error");
+          trackEvent("listing_current_location_outside_uganda", {
+            lat: roundSearchCoord(lat),
+            lng: roundSearchCoord(lng),
+            fallback: "manual_uganda_address"
+          });
+          return;
+        }
+        const input = document.getElementById("lp-address-search");
+        const addressEl = document.getElementById("lp-address");
+        if (input && !input.value.trim()) input.value = "Current location";
+        if (addressEl && !addressEl.value.trim()) {
+          addressEl.disabled = false;
+          addressEl.value = "Current location";
+          addressEl.dataset.auto = "0";
+        }
+        setLpHiddenValue("lp-geocoding-provider", "browser_geolocation");
+        setLpHiddenValue("lp-geocoded-at", new Date().toISOString());
+        const accuracy = Number(pos.coords?.accuracy);
+        const confidence = Number.isFinite(accuracy) ? Math.max(0.35, Math.min(0.95, 1 - (accuracy / 5000))) : 0.75;
+        setLpHiddenValue("lp-location-confidence", confidence.toFixed(2));
+        setLpResolvedLocationLabel("Current location");
+        setListPinCoords(lat, lng, true, false);
+        const message = translateListingLabel("Location captured. Please move the pin if needed, then confirm the location.");
+        setLpCurrentLocationStatus(message, "success");
+        setLpAddressSearchStatus(message, "success");
+        trackEvent("listing_current_location_captured", {
+          lat: roundSearchCoord(lat),
+          lng: roundSearchCoord(lng),
+          accuracy_m: Number.isFinite(accuracy) ? Math.round(accuracy) : null,
+          source: "browser_geolocation"
+        });
+      }, (err) => {
+        if (btn) btn.disabled = false;
+        const denied = err?.code === 1;
+        const message = denied
+          ? translateListingLabel("Location permission was denied. Search for an address or place instead.")
+          : translateListingLabel("Location timed out or is unavailable. Search for address or place manually.");
+        setLpCurrentLocationStatus(message, "error");
+        setLpAddressSearchStatus(message, "error");
+        trackEvent("listing_current_location_failed", {
+          reason: denied ? "permission_denied" : "unavailable_or_timeout"
+        });
+      }, {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 60000
+      });
     }
 
     async function reverseGeocodeGoogleResult(lat, lng) {
@@ -20111,6 +20264,52 @@
       return milesToKm(miles);
     }
 
+    function isPointInUgandaClient(lat, lng) {
+      const nLat = Number(lat);
+      const nLng = Number(lng);
+      return Number.isFinite(nLat) && Number.isFinite(nLng)
+        && nLat >= -1.7 && nLat <= 4.5
+        && nLng >= 29.2 && nLng <= 35.2;
+    }
+
+    function roundSearchCoord(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? Number(num.toFixed(3)) : null;
+    }
+
+    function getNearMeSearchState(page) {
+      return nearMeSearchState[page] || null;
+    }
+
+    function clearNearMeSearchState(page) {
+      if (nearMeSearchState[page]) nearMeSearchState[page] = null;
+    }
+
+    function propertyMatchesNearMe(property, state, radiusKm) {
+      if (!state) return true;
+      const pLat = Number(property?.lat ?? property?.latitude);
+      const pLng = Number(property?.lng ?? property?.longitude);
+      if (!Number.isFinite(pLat) || !Number.isFinite(pLng)) return false;
+      const distanceKm = haversineKm(Number(state.lat), Number(state.lng), pLat, pLng);
+      return Number.isFinite(distanceKm) && distanceKm <= (Number(radiusKm) || state.radiusKm || milesToKm(DEFAULT_NEAR_ME_RADIUS_MI));
+    }
+
+    function decorateAndSortNearMeResults(list, state) {
+      if (!state) return list;
+      return list.map((property) => {
+        const pLat = Number(property?.lat ?? property?.latitude);
+        const pLng = Number(property?.lng ?? property?.longitude);
+        const distanceKm = Number.isFinite(pLat) && Number.isFinite(pLng)
+          ? haversineKm(Number(state.lat), Number(state.lng), pLat, pLng)
+          : Infinity;
+        return {
+          ...property,
+          distance_km: Number.isFinite(distanceKm) ? Number(distanceKm.toFixed(2)) : null,
+          distance_miles: Number.isFinite(distanceKm) ? Number((distanceKm / 1.60934).toFixed(1)) : null
+        };
+      }).sort((a, b) => (a.distance_km ?? 9999) - (b.distance_km ?? 9999));
+    }
+
     function findNearestDistrictFromCoords(lat, lng) {
       let best = { district: "", distanceKm: Infinity, center: null };
       DISTRICTS.forEach((district) => {
@@ -20130,13 +20329,15 @@
         return;
       }
 
+      const targetPage = page === "hero" ? currentTab : page;
       const cfg = {
+        hero: { districtId: "hero-district", radiusId: "hero-radius-f", run: () => doSearch(), mapId: "map-home" },
         sale: { districtId: "sale-district-f", radiusId: "sale-radius-f", run: () => filterListings("sale"), mapId: "map-sale" },
         rent: { districtId: "rent-district-f", radiusId: "rent-radius-f", run: () => filterListings("rent"), mapId: "map-rent" },
         students: { districtId: "student-district-f", radiusId: "student-radius-f", run: () => filterStudents(), mapId: "map-students" },
         commercial: { districtId: "commercial-district-f", radiusId: "commercial-radius-f", run: () => filterCommercial(), mapId: "map-commercial" },
         land: { districtId: "land-district-f", radiusId: "land-radius-f", run: () => filterLand(), mapId: "map-land" }
-      }[page];
+      }[page === "hero" ? "hero" : targetPage];
 
       if (!cfg) return;
       toast("Finding properties near your location...");
@@ -20148,17 +20349,38 @@
           toast("Could not read your location. Please try again.");
           return;
         }
+        if (!isPointInUgandaClient(lat, lng)) {
+          clearNearMeSearchState(targetPage);
+          toast("You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.");
+          trackEvent("near_me_outside_uganda", {
+            page: targetPage,
+            lat: roundSearchCoord(lat),
+            lng: roundSearchCoord(lng),
+            fallback: "manual_uganda_search"
+          });
+          return;
+        }
 
         const nearest = findNearestDistrictFromCoords(lat, lng);
         const districtEl = document.getElementById(cfg.districtId);
         const radiusEl = document.getElementById(cfg.radiusId);
+        const radiusMiles = DEFAULT_NEAR_ME_RADIUS_MI;
+        const radiusKm = milesToKm(radiusMiles);
 
         if (districtEl && nearest.district && Array.from(districtEl.options).some((o) => o.value === nearest.district)) {
           districtEl.value = nearest.district;
         }
-        if (radiusEl && Array.from(radiusEl.options).some((o) => o.value === "5")) {
-          radiusEl.value = "5";
+        if (radiusEl && Array.from(radiusEl.options).some((o) => o.value === String(radiusMiles))) {
+          radiusEl.value = String(radiusMiles);
         }
+        nearMeSearchState[targetPage] = {
+          lat,
+          lng,
+          radiusMiles,
+          radiusKm,
+          district: nearest.district || "",
+          label: nearest.district ? `near ${nearest.district}` : "near your location"
+        };
 
         cfg.run();
 
@@ -20168,16 +20390,18 @@
         }
 
         trackEvent("near_me_search", {
-          page,
-          lat,
-          lng,
+          page: targetPage,
+          lat: roundSearchCoord(lat),
+          lng: roundSearchCoord(lng),
+          radius_miles: radiusMiles,
+          radius_km: Number(radiusKm.toFixed(2)),
           district: nearest.district || "",
           nearest_distance_km: Number.isFinite(nearest.distanceKm) ? Number(nearest.distanceKm.toFixed(2)) : null
         });
-        toast(nearest.district ? `Showing properties near you in/around ${nearest.district}` : "Showing properties near your location");
+        toast(nearest.district ? `Showing properties within 10 miles of you in/around ${nearest.district}` : "Showing properties within 10 miles of your location");
       }, (err) => {
         const denied = err?.code === 1;
-        toast(denied ? "Location access denied. Please allow location and try again." : "Could not get your location. Try again.");
+        toast(denied ? "Location permission denied. Enter an area, road, landmark, or district." : "Could not get your location. Search for address or place manually.");
       }, {
         enableHighAccuracy: true,
         timeout: 12000,
@@ -21308,6 +21532,7 @@
 	      const showNew = isListingNew(p);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
+	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
       return `
         <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
           <div class="h-48 relative overflow-hidden">
@@ -21330,6 +21555,7 @@
           <div class="p-4">
             <h3 class="font-bold text-gray-800 line-clamp-1">${p.title}</h3>
             <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
+            ${nearDistance ? `<p class="text-xs font-semibold text-green-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
             <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
               ${p.beds ? `<span><i class="fas fa-bed text-green-600"></i> ${p.beds} ${countLabel(p.beds, "bed", "beds")}</span>` : ""}
               ${p.baths ? `<span><i class="fas fa-bath text-green-600"></i> ${p.baths} ${countLabel(p.baths, "bath", "baths")}</span>` : ""}
@@ -21453,6 +21679,7 @@
       const distanceText = p.nearest_university
         ? `${p.area}, ${p.distance_to_uni_km || "?"}km from ${p.nearest_university}`
         : `${p.area}, ${p.district}`;
+      const nearDistanceText = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
       const bottomText = p.student_walk_text || "Near campus";
       const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
       return `
@@ -21472,6 +21699,7 @@
           <div class="p-4">
             <h3 class="font-bold text-gray-800 leading-snug line-clamp-2">${p.title}</h3>
             <p class="text-gray-600 mt-1">${distanceText}</p>
+            ${nearDistanceText ? `<p class="text-xs font-semibold text-purple-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistanceText}</p>` : ""}
             <div class="mt-2">
               <span class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
                 <i class="${source.icon} text-[10px]"></i> ${source.label}
@@ -22153,18 +22381,22 @@
       const contextVal = (document.getElementById("hero-context-f")?.value || "").toLowerCase().trim();
       const contextCfg = HERO_CONTEXT_FILTERS[currentTab] || HERO_CONTEXT_FILTERS.sale;
       const pageMap = { sale: "sale", rent: "rent", students: "students", commercial: "commercial", land: "land" };
-      const results = getPublicListings().filter((p) => {
+      const heroNearState = getNearMeSearchState(currentTab);
+      let results = getPublicListings().filter((p) => {
         const typeMatch = currentTab === "students" ? isStudentDiscoverable(p) : normalizeType(p.type) === currentTab;
-        const districtMatch = currentTab === "students"
-          ? (!uniValue
+        const districtMatch = heroNearState
+          ? propertyMatchesNearMe(p, heroNearState, heroRadiusKm || heroNearState.radiusKm)
+          : currentTab === "students"
+            ? (!uniValue
               || (p.nearest_university || "").toLowerCase().includes(uniValue)
               || (p.student_universities || []).join(" ").toLowerCase().includes(uniValue)
               || (p.area || "").toLowerCase().includes(uniValue))
-          : matchDistrictRadius(p, areaOrUni, heroRadiusKm);
+            : matchDistrictRadius(p, areaOrUni, heroRadiusKm);
         const qMatch = !q || getPropertySearchText(p).includes(q);
         const contextMatch = contextCfg.match ? contextCfg.match(p, contextVal) : true;
         return typeMatch && districtMatch && qMatch && contextMatch;
       });
+      results = decorateAndSortNearMeResults(results, heroNearState);
       incrementUserSearchCount();
       showPage(pageMap[currentTab] || "sale");
       if (currentTab === "rent") {
@@ -22226,7 +22458,9 @@
         query: q || "",
         district_or_university: areaOrUni || "",
         context: contextVal || "",
-        results_count: results.length
+        results_count: results.length,
+        radius_miles: heroNearState?.radiusMiles || null,
+        near_me: Boolean(heroNearState)
       });
     }
 
@@ -22242,6 +22476,7 @@
         const dRaw = document.getElementById("sale-district-f")?.value || "";
         const d = dRaw || guessDistrictFromText(q);
         const radiusKm = getRadiusKmFromSelect("sale-radius-f");
+        const nearState = getNearMeSearchState("sale");
         const minBeds = parseInt(document.getElementById("sale-min-beds-f")?.value || "0", 10);
         const maxBeds = parseInt(document.getElementById("sale-beds-f")?.value || "0", 10);
         const min = parseInt(document.getElementById("sale-min-price-f")?.value || "0", 10);
@@ -22250,7 +22485,7 @@
         list = list.filter((p) => {
           const text = getPropertySearchText(p);
           const qMatch = !q || text.includes(q);
-          const dMatch = matchDistrictRadius(p, d, radiusKm);
+          const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
           const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
           const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
           const minMatch = !min || p.price >= min;
@@ -22258,6 +22493,7 @@
           const typeMatch = !type || ((p.subtype || "").toLowerCase().includes(type) || text.includes(type));
           return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
         });
+        list = decorateAndSortNearMeResults(list, nearState);
         const saleCountEl = document.getElementById("sale-count");
         if (saleCountEl) saleCountEl.textContent = list.length;
         renderGrid("sale-grid", list);
@@ -22267,6 +22503,7 @@
         const dRaw = document.getElementById("rent-district-f")?.value || "";
         const d = dRaw || guessDistrictFromText(q);
         const radiusKm = getRadiusKmFromSelect("rent-radius-f");
+        const nearState = getNearMeSearchState("rent");
         const minBeds = parseInt(document.getElementById("rent-min-beds-f")?.value || "0", 10);
         const maxBeds = parseInt(document.getElementById("rent-beds-f")?.value || "0", 10);
         const min = parseInt(document.getElementById("rent-min-price-f")?.value || "0", 10);
@@ -22276,7 +22513,7 @@
         list = list.filter((p) => {
           const text = getPropertySearchText(p);
           const qMatch = !q || text.includes(q);
-          const dMatch = matchDistrictRadius(p, d, radiusKm);
+          const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
           const minBedsMatch = !minBeds || (p.beds || 0) >= minBeds;
           const maxBedsMatch = !maxBeds || (p.beds || 0) <= maxBeds;
           const minMatch = !min || p.price >= min;
@@ -22287,6 +22524,7 @@
         if (sort === "price_asc") list.sort((a, b) => a.price - b.price);
         if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
         if (sort === "newest") list.sort(sortListingsByNewest);
+        if (nearState) list = decorateAndSortNearMeResults(list, nearState);
         const rentCountEl = document.getElementById("rent-count");
         if (rentCountEl) rentCountEl.textContent = list.length;
         renderGrid("rent-grid", list);
@@ -22299,6 +22537,7 @@
       const dRaw = document.getElementById("student-district-f")?.value || "";
       const d = dRaw || guessDistrictFromText(q);
       const radiusKm = getRadiusKmFromSelect("student-radius-f");
+      const nearState = getNearMeSearchState("students");
       const uni = (document.getElementById("student-uni-f")?.value || "").toLowerCase().trim();
       const type = (document.getElementById("student-type-quick-f")?.value || "").toLowerCase().trim();
       const amenity = (document.getElementById("student-amenity-f")?.value || "").toLowerCase().trim();
@@ -22315,7 +22554,7 @@
         const amenityMatchText = (p.amenities || []).join(" ").toLowerCase();
         const typeMatch = !type || pType === type;
         const qMatch = !q || text.includes(q);
-        const dMatch = matchDistrictRadius(p, d, radiusKm);
+        const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
         const uMatch = !uni || uniMatchText.includes(uni);
         const aMatch = !amenity || amenityMatchText.includes(amenity);
         const cMatch = !category
@@ -22331,6 +22570,7 @@
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "distance_asc") list.sort((a, b) => (a.distance_to_uni_km || 999) - (b.distance_to_uni_km || 999));
       if (sort === "newest") list.sort(sortListingsByNewest);
+      if (nearState) list = decorateAndSortNearMeResults(list, nearState);
       renderStudentGrid(list);
       updateStudentHeader(list);
       setMapMarkers("map-students", list);
@@ -25514,6 +25754,7 @@
       const dRaw = document.getElementById("commercial-district-f")?.value || "";
       const d = dRaw || guessDistrictFromText(q);
       const radiusKm = getRadiusKmFromSelect("commercial-radius-f");
+      const nearState = getNearMeSearchState("commercial");
       const type = (document.getElementById("commercial-type-f")?.value || "").toLowerCase().trim();
       const min = parseInt(document.getElementById("commercial-min-price-f")?.value || "0", 10);
       const max = parseInt(document.getElementById("commercial-price-f")?.value || "0", 10);
@@ -25524,7 +25765,7 @@
         const text = getPropertySearchText(p);
         const sizeNum = numericValue(p.size);
         const qMatch = !q || text.includes(q);
-        const dMatch = matchDistrictRadius(p, d, radiusKm);
+        const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
         const tMatch = !type || text.includes(type);
         const minMatch = !min || p.price >= min;
         const maxMatch = !max || p.price <= max;
@@ -25535,6 +25776,7 @@
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
       if (sort === "newest") list.sort(sortListingsByNewest);
+      if (nearState) list = decorateAndSortNearMeResults(list, nearState);
       renderGrid("commercial-grid", list);
       setMapMarkers("map-commercial", list);
       return list;
@@ -25545,6 +25787,7 @@
       const dRaw = document.getElementById("land-district-f")?.value || "";
       const d = dRaw || guessDistrictFromText(q);
       const radiusKm = getRadiusKmFromSelect("land-radius-f");
+      const nearState = getNearMeSearchState("land");
       const type = (document.getElementById("land-type-f")?.value || "").toLowerCase().trim();
       const min = parseInt(document.getElementById("land-min-price-f")?.value || "0", 10);
       const max = parseInt(document.getElementById("land-price-f")?.value || "0", 10);
@@ -25555,7 +25798,7 @@
         const text = getPropertySearchText(p);
         const sizeNum = numericValue(p.size);
         const qMatch = !q || text.includes(q);
-        const dMatch = matchDistrictRadius(p, d, radiusKm);
+        const dMatch = nearState ? propertyMatchesNearMe(p, nearState, radiusKm || nearState.radiusKm) : matchDistrictRadius(p, d, radiusKm);
         const tMatch = !type || text.includes(type);
         const minMatch = !min || p.price >= min;
         const maxMatch = !max || p.price <= max;
@@ -25566,6 +25809,7 @@
       if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
       if (sort === "size_desc") list.sort((a, b) => numericValue(b.size) - numericValue(a.size));
       if (sort === "newest") list.sort(sortListingsByNewest);
+      if (nearState) list = decorateAndSortNearMeResults(list, nearState);
       renderGrid("land-grid", list);
       setMapMarkers("map-land", list);
       return list;
@@ -26539,7 +26783,7 @@
         script.id = scriptId;
         script.async = true;
         script.defer = true;
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}&libraries=places`;
         script.onload = () => resolve(!!window.google?.maps);
         script.onerror = () => resolve(false);
         document.head.appendChild(script);

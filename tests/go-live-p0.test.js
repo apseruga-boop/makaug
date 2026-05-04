@@ -32,6 +32,14 @@ const {
   toCanonicalLanguageCode,
   shouldUseEnglishFallback
 } = require('../config/languageRegistry');
+const {
+  DEFAULT_SEARCH_RADIUS_MILES,
+  haversineKm,
+  isPointInUganda,
+  normalizeRadiusKm,
+  normalizeRadiusMiles,
+  roundLocationForAnalytics
+} = require('../services/locationSearchService');
 
 const PUBLIC_ROUTES = [
   '/',
@@ -170,6 +178,8 @@ function run() {
   const phoneOtpDeliveryServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'phoneOtpDeliveryService.js'), 'utf8');
   const whatsappNotificationServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappNotificationService.js'), 'utf8');
   const propertiesRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'properties.js'), 'utf8');
+  const locationSearchServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'locationSearchService.js'), 'utf8');
+  const translationProviderServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'translationProviderService.js'), 'utf8');
   const contactRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'contact.js'), 'utf8');
   const mortgageRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'mortgage.js'), 'utf8');
   const listingModerationService = fs.readFileSync(path.join(__dirname, '..', 'services', 'listingModerationService.js'), 'utf8');
@@ -248,6 +258,9 @@ function run() {
   assert.strictEqual(shouldUseEnglishFallback('rukiga'), true, 'Rukiga must use English fallback until reviewed translations exist');
   assert(LANGUAGE_REGISTRY.rkg && LANGUAGE_REGISTRY.rkg.fallbackLanguage === 'en', 'language registry should define Rukiga fallback');
   assert(languageRegistrySource.includes('Do not use Kinyarwanda for Rukiga or Runyankole'), 'language registry should guard against Kinyarwanda substitution');
+  assert(languageRegistrySource.includes('providerSupport'), 'language registry should document provider support per language');
+  assert(languageRegistrySource.includes('humanReviewRequired'), 'language registry should document human review status per language');
+  assert(translationProviderServiceSource.includes('human_table_then_provider_then_english'), 'translation provider should use safe fallback strategy');
   assert(sourceHtml.includes('data-content-i18n="about.heroStatement"'), 'About page body should use content i18n keys');
   assert(sourceHtml.includes('function applyAboutLanguageUI'), 'About page should apply body translations on language switch');
   assert(sourceHtml.includes('window.MAKAUG_MISSING_TRANSLATIONS'), 'missing content translations should be logged in the browser session');
@@ -274,6 +287,13 @@ function run() {
   assert(listPropertyText.includes('List your property on MakaUg for free.'), '/list-property should explain free listing in supporting copy');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
+  assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');
+  assert(sourceHtml.includes('function shareLpCurrentLocation'), '/list-property current-location button needs a JS handler');
+  assert(sourceHtml.includes('Location captured. Please move the pin if needed'), 'current-location flow should tell users to adjust and confirm the pin');
+  assert(sourceHtml.includes('Location permission was denied. Search for an address or place instead.'), 'current-location flow should handle denied permission');
+  assert(sourceHtml.includes('The location appears outside Uganda. Search for a Ugandan address or place instead.'), 'current-location flow should block overseas listing pins');
+  assert(sourceHtml.includes('&libraries=places'), 'Google Maps loader should include Places library for typed address autocomplete');
+  assert(sourceHtml.includes('getGooglePlacePredictions'), 'typed address flow should request Google Places predictions when configured');
   assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
   assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
   assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');
@@ -575,6 +595,30 @@ function run() {
   assert(sourceHtml.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
   assert(sourceHtml.includes('map_property_click'), 'map View Property click should emit analytics');
   assert(clickProbeScript.includes('map popup View Property did not open a listing detail route/view'), 'click probe should fail if map View Property does not open detail');
+  assert(sourceHtml.includes('id="hero-use-location-btn"'), 'homepage should include Use my location search');
+  assert(sourceHtml.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
+  assert(sourceHtml.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 5, 10, 20, 50]'), 'radius selector should expose launch mile options');
+  assert(sourceHtml.includes('You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.'), 'near-me search should handle overseas coordinates');
+  assert(sourceHtml.includes('decorateAndSortNearMeResults'), 'near-me results should be decorated and sorted by distance');
+  assert(propertiesRoutes.includes("router.get('/search', listPropertiesHandler)"), 'backend should expose /api/properties/search');
+  assert(propertiesRoutes.includes('distance_miles'), 'radius search API should return distance_miles');
+  assert(propertiesRoutes.includes('outside_uganda'), 'radius search API should return outside-Uganda fallback');
+  assert(propertiesRoutes.includes('web_radius_search'), 'radius search API should log backend search visibility');
+  assert(adminRoutes.includes('locationSystem'), 'admin setup status should expose location-system status');
+  assert(adminRoutes.includes('languageSystem'), 'admin setup status should expose language-system status');
+  assert(adminRoutes.includes('locationSearches'), 'admin setup status should show recent location search counts');
+  assert.strictEqual(DEFAULT_SEARCH_RADIUS_MILES, 10, 'shared default radius should be 10 miles');
+  assert.strictEqual(normalizeRadiusMiles(undefined), 10, 'missing radius should default to 10 miles');
+  assert(normalizeRadiusKm(undefined) > 16 && normalizeRadiusKm(undefined) < 17, 'default radius should be about 16.1 km');
+  assert(isPointInUganda(0.3476, 32.5825), 'Kampala should be inside Uganda bounds');
+  assert(!isPointInUganda(51.5072, -0.1276), 'London should be outside Uganda bounds');
+  const kampalaToNtindaKm = haversineKm(0.3476, 32.5825, 0.353, 32.616);
+  assert(kampalaToNtindaKm > 0 && kampalaToNtindaKm < 10, 'haversine should produce plausible Kampala distance');
+  assert.deepStrictEqual(roundLocationForAnalytics(0.3476123, 32.5825123), { latitude: 0.348, longitude: 32.583 });
+  assert(locationSearchServiceSource.includes('buildHaversineSql'), 'location search service should expose SQL distance helper');
+  assert(whatsappRoutes.includes('search_radius_miles'), 'WhatsApp shared-location search should store radius');
+  assert(whatsappRoutes.includes('DEFAULT_SEARCH_RADIUS_MILES'), 'WhatsApp shared-location search should use shared 10-mile default');
+  assert(whatsappRoutes.includes('roundLocationForAnalytics'), 'WhatsApp shared-location logs should round analytics coordinates');
 
   for (const expected of [
     'GET /api/property-seeker/dashboard',

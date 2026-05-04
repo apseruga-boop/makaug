@@ -159,3 +159,25 @@ Owner actions after deployment:
 4. Review `/admin/launch-control`, `/admin/emails`, `/admin/notifications`, `/admin/whatsapp-inbox`, `/admin/alerts`, `/admin/revenue`, and `/admin/leads` for the generated proof records.
 
 Gate remains **not masterpiece complete** until the owner has run those live proof actions and confirmed provider sends or admin-visible provider-missing logs.
+
+## Task 18 Language, OTP, and Location Addendum
+
+Task 18 adds source-level backend visibility for language fallback and location search.
+
+| Flow | Frontend/API | Backend service/log | Admin visibility | Status |
+|---|---|---|---|---|
+| Language registry | Web/auth/OTP/WhatsApp/AI | `config/languageRegistry.js`, `services/translationProviderService.js` | `/api/admin/setup-status` `languageSystem` | Working in source; full translations partial |
+| Wrong-language guard | WhatsApp/AI prompts | registry guardrails and fallback metadata | setup/launch status counts where logs exist | Working in source; live WhatsApp/LLM needs proof |
+| List Property current location | `/list-property` button `lp-current-location-btn` | listing payload location object on submit | listing moderation/admin review | Working in source; browser permission must be tested live |
+| Typed address autocomplete | `/list-property` `Find address or place` | Google Places if configured, Nominatim/manual fallback otherwise | provider status in setup page | Working in source; Google key must be verified live |
+| Web radius search | `/api/properties/search?lat=&lng=&radiusKm=` | Haversine query, `property_search_requests` log | setup status `locationSearches` | Working in source; live API/probe to rerun after deploy |
+| Outside-Uganda fallback | `/api/properties/search` and browser near-me | safe 400/fallback response, rounded location log | setup status location counts | Working in source |
+| WhatsApp shared-location search | WhatsApp webhook shared location | 10-mile default search, rounded location analytics, search result cache | WhatsApp/search logs | Working in source; provider webhook still needs live proof |
+
+Owner actions still required:
+
+1. Verify Google Maps/Places key in production.
+2. Test browser geolocation on HTTPS for `/list-property` and homepage/category search.
+3. Confirm SMS OTP provider sends a real text message through Africa's Talking.
+4. Run WhatsApp shared-location search through the live webhook or a controlled provider test.
+5. Review Rukiga/Runyankole/Luganda/Kiswahili/Acholi/Lusoga translations before marking multilingual content complete.

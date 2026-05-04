@@ -10,7 +10,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'complete'
+    translationStatus: 'complete',
+    providerSupport: { humanTable: true, llm: true, externalApi: false },
+    humanReviewRequired: false
   },
   lg: {
     code: 'lg',
@@ -23,7 +25,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'partial'
+    translationStatus: 'partial',
+    providerSupport: { humanTable: true, llm: true, externalApi: false },
+    humanReviewRequired: true
   },
   sw: {
     code: 'sw',
@@ -36,7 +40,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'partial'
+    translationStatus: 'partial',
+    providerSupport: { humanTable: true, llm: true, externalApi: false },
+    humanReviewRequired: true
   },
   ach: {
     code: 'ach',
@@ -49,7 +55,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'partial'
+    translationStatus: 'partial',
+    providerSupport: { humanTable: false, llm: true, externalApi: false },
+    humanReviewRequired: true
   },
   rnynk: {
     code: 'rnynk',
@@ -62,7 +70,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'partial'
+    translationStatus: 'partial',
+    providerSupport: { humanTable: false, llm: true, externalApi: false },
+    humanReviewRequired: true
   },
   rkg: {
     code: 'rkg',
@@ -75,7 +85,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'english_fallback_until_reviewed'
+    translationStatus: 'english_fallback_until_reviewed',
+    providerSupport: { humanTable: false, llm: false, externalApi: false },
+    humanReviewRequired: true
   },
   lus: {
     code: 'lus',
@@ -88,7 +100,9 @@ const LANGUAGE_REGISTRY = {
     supportedInWhatsApp: true,
     supportedInAI: true,
     fallbackLanguage: 'en',
-    translationStatus: 'partial'
+    translationStatus: 'partial',
+    providerSupport: { humanTable: false, llm: true, externalApi: false },
+    humanReviewRequired: true
   }
 };
 

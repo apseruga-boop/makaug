@@ -60,6 +60,8 @@ const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { getProviderMeta } = require('../services/llmProvider');
+const { translationProviderStatus } = require('../services/translationProviderService');
+const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
 const {
   retryEmailLog,
   retryNotification,
@@ -3969,8 +3971,13 @@ async function buildSetupStatus() {
     campaigns: await safeCount('SELECT COUNT(*)::int AS total FROM advertising_campaigns'),
     invoices: await safeCount('SELECT COUNT(*)::int AS total FROM invoices'),
     fraudReports: await safeCount('SELECT COUNT(*)::int AS total FROM report_listings'),
-    mortgageEnquiries: await safeCount('SELECT COUNT(*)::int AS total FROM mortgage_enquiries')
+    mortgageEnquiries: await safeCount('SELECT COUNT(*)::int AS total FROM mortgage_enquiries'),
+    locationSearches: await safeCount("SELECT COUNT(*)::int AS total FROM property_search_requests WHERE payload ? 'location' AND payload->'location' IS NOT NULL"),
+    whatsappLocationSearches: await safeCount("SELECT COUNT(*)::int AS total FROM property_search_requests WHERE user_phone IS NOT NULL AND payload ? 'location' AND payload->'location' IS NOT NULL"),
+    languageFallbackLogs: await safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE COALESCE(fallback_used, false) = true OR fallback_reason IS NOT NULL"),
+    otpFailures: await safeCount("SELECT COUNT(*)::int AS total FROM otp_attempt_logs WHERE status IN ('failed','expired','provider_missing')")
   };
+  const translation = translationProviderStatus();
   const requiredSuperAdminEnv = providerEnvKeys('super_admin');
   const missingSuperAdminEnv = missingEnv(requiredSuperAdminEnv);
   const ownerActions = [];
@@ -4033,6 +4040,23 @@ async function buildSetupStatus() {
         configured: Boolean(llmMeta.hasApiKey || llmMeta.baseURL)
       },
       paymentProviderConfigured: paymentProviderConfigured()
+    },
+    languageSystem: {
+      registry: 'canonical',
+      supportedLanguages: translation.supportedLanguages,
+      defaultLanguage: translation.defaultLanguage,
+      missingTranslationFallback: translation.fallbackMode,
+      wrongLanguageGuard: 'Rukiga/Runyankole never map to Kinyarwanda; English fallback is used when unreviewed translations are missing.',
+      providerStatus: translation
+    },
+    locationSystem: {
+      geolocation: 'browser_permission_plus_manual_fallback',
+      backendRadiusSearch: true,
+      defaultRadiusMiles: DEFAULT_SEARCH_RADIUS_MILES,
+      defaultRadiusKm: Number(DEFAULT_SEARCH_RADIUS_KM.toFixed(2)),
+      ugandaBounds: 'lat -1.7..4.5, lng 29.2..35.2',
+      googlePlacesConfigured: providerConfigured('google_places'),
+      privacy: 'Exact listing coordinates are kept for listing moderation after consent; search analytics use rounded coordinates.'
     },
     ownerActions
   };

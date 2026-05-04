@@ -123,6 +123,8 @@ function normalizeLocationObject(value) {
       'longitude',
       'plusCode',
       'radius',
+      'radiusKm',
+      'radiusMiles',
       'locationConfidence',
       'locationPrivacy'
     ].forEach((key) => {

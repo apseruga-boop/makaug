@@ -128,7 +128,27 @@ function sourceWiringChecks() {
     ['AI assistant creates CRM lead', 'routes/ai.js', 'createLead'],
     ['admin alerts visible', 'routes/admin.js', "router.get('/alerts'"],
     ['admin email logs visible', 'routes/admin.js', "router.get('/emails'"],
-    ['admin WhatsApp logs visible', 'routes/admin.js', "router.get('/whatsapp-message-logs'"]
+    ['admin WhatsApp logs visible', 'routes/admin.js', "router.get('/whatsapp-message-logs'"],
+    ['language registry canonical source exists', 'config/languageRegistry.js', 'LANGUAGE_REGISTRY'],
+    ['language registry blocks Kinyarwanda substitution', 'config/languageRegistry.js', 'Do not use Kinyarwanda for Rukiga or Runyankole'],
+    ['translation provider fallback service exists', 'services/translationProviderService.js', 'human_table_then_provider_then_english'],
+    ['location search service exists', 'services/locationSearchService.js', 'DEFAULT_SEARCH_RADIUS_MILES'],
+    ['location radius defaults to 10 miles', 'services/locationSearchService.js', 'const DEFAULT_SEARCH_RADIUS_MILES = 10'],
+    ['location service has Uganda bounds', 'services/locationSearchService.js', 'UGANDA_BOUNDS'],
+    ['location service has Haversine SQL', 'services/locationSearchService.js', 'buildHaversineSql'],
+    ['properties search endpoint exists', 'routes/properties.js', "router.get('/search', listPropertiesHandler)"],
+    ['properties search returns distance miles', 'routes/properties.js', 'distance_miles'],
+    ['properties search logs web radius searches', 'routes/properties.js', 'web_radius_search'],
+    ['properties search has outside Uganda fallback', 'routes/properties.js', 'outside_uganda'],
+    ['frontend list current location button exists', 'index.html', 'lp-current-location-btn'],
+    ['frontend list current location handler exists', 'index.html', 'function shareLpCurrentLocation'],
+    ['frontend hero use my location exists', 'index.html', 'hero-use-location-btn'],
+    ['frontend 10-mile radius default exists', 'index.html', 'DEFAULT_NEAR_ME_RADIUS_MI = 10'],
+    ['frontend Google Places autocomplete exists', 'index.html', 'getGooglePlacePredictions'],
+    ['WhatsApp shared location radius logging exists', 'routes/whatsapp.js', 'search_radius_miles'],
+    ['WhatsApp shared location uses 10-mile default', 'routes/whatsapp.js', 'DEFAULT_SEARCH_RADIUS_MILES'],
+    ['admin setup exposes language status', 'routes/admin.js', 'languageSystem'],
+    ['admin setup exposes location status', 'routes/admin.js', 'locationSystem']
   ];
 
   for (const [label, relPath, needle] of expectations) {

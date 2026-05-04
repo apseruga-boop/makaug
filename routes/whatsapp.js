@@ -17,6 +17,11 @@ const {
   shouldUseEnglishFallback
 } = require('../config/languageRegistry');
 const {
+  DEFAULT_SEARCH_RADIUS_MILES,
+  normalizeRadiusMiles,
+  roundLocationForAnalytics
+} = require('../services/locationSearchService');
+const {
   getWhatsappConversationControl,
   syncWhatsappConversationState
 } = require('../services/whatsappConversationService');
@@ -76,8 +81,8 @@ const T = {
     askDistance: '🚶 How far is the property from the university (in km)? (e.g. 0.5, 1, 2)',
     askSearchType: '🔎 What are you looking for?\n1️⃣ For sale\n2️⃣ To rent\n3️⃣ Land\n4️⃣ Student accommodation\n5️⃣ Commercial property\n6️⃣ Anything',
     askSearchArea: '📍 Which area or district are you looking in? You can also share your WhatsApp location.',
-    locationSharedReceived: '📍 Location received. I am searching within 5 miles of you first.',
-    searchNoNearbyResults: 'No approved listings found within 5 miles. Showing the nearest available options.',
+    locationSharedReceived: '📍 Location received. I am searching within 10 miles of you first.',
+    searchNoNearbyResults: 'No approved listings found within 10 miles. Showing the nearest available options.',
     widenNearbySearch: 'Reply *WIDEN* if you want me to expand the search area.',
     kmAway: 'km away',
     searchNoResults: 'I do not have an approved matching listing right now.',
@@ -147,8 +152,8 @@ const T = {
     askDistance: '🚶 Mulenda gwa emiita mingaana ukola nga oyebase? (km)',
     askSearchType: '🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Ezikodizibwa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw\'abayiizi\n5️⃣ Ebyobusuubuzi\n6️⃣ Byonna',
     askSearchArea: '📍 Wandiika ekitundu oba district gy\'onoonya (nga Ntinda, Kampala, Wakiso), oba share location yo ku WhatsApp:',
-    locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 5 ezikuli okumpi okusooka...',
-    searchNoNearbyResults: 'Tewali listings ezikkiriziddwa munda wa miles 5. Tukulaga eziri okumpi eziriwo.',
+    locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 10 ezikuli okumpi okusooka...',
+    searchNoNearbyResults: 'Tewali listings ezikkiriziddwa munda wa miles 10. Tukulaga eziri okumpi eziriwo.',
     widenNearbySearch: 'Ddamu *WIDEN* bwoyagala ngaziye ekitundu kyokunoonya.',
     kmAway: 'km okuva awo',
     searchNoResults: 'Tewali listings ezikkiriziddwa ezifaanana n\'onoonyezza wo kati.',
@@ -205,8 +210,8 @@ const T = {
     otpFailed: '❌ Nambari si sahihi. Jaribu tena.',
     askSearchType: '🔎 Unatafuta nini?\n1️⃣ Ya kuuza\n2️⃣ Ya kupangisha\n3️⃣ Ardhi\n4️⃣ Makazi ya wanafunzi\n5️⃣ Biashara\n6️⃣ Mali yoyote',
     askSearchArea: '📍 Andika eneo, wilaya au mahali unapotafuta (mf. Ntinda, Kampala, Wakiso), au tuma location yako kwenye WhatsApp:',
-    locationSharedReceived: '📍 Location yako imepokelewa. Natafuta kwanza ndani ya maili 5 karibu nawe...',
-    searchNoNearbyResults: 'Hakuna mali zilizoidhinishwa ndani ya maili 5. Tunaonyesha chaguo za karibu zilizopo.',
+    locationSharedReceived: '📍 Location yako imepokelewa. Natafuta kwanza ndani ya maili 10 karibu nawe...',
+    searchNoNearbyResults: 'Hakuna mali zilizoidhinishwa ndani ya maili 10. Tunaonyesha chaguo za karibu zilizopo.',
     widenNearbySearch: 'Jibu *WIDEN* kama unataka nipanue eneo la utafutaji.',
     kmAway: 'km kutoka hapo',
     searchNoResults: 'Hakuna mali iliyoidhinishwa inayolingana na utafutaji wako sasa.',
@@ -331,9 +336,9 @@ Object.assign(T.ac, {
   askDistance: '🚶 Bor-ne ki university i km rom mene?',
   askSearchType: '🔎 Itye kayenyo ngo?\n1️⃣ Me acata\n2️⃣ Me rent\n3️⃣ Ngom\n4️⃣ Kabedo me students\n5️⃣ Business\n6️⃣ Weng',
   askSearchArea: '📍 Coo area onyo district ma iyenyo iye, onyo share location mamegi.',
-  locationSharedReceived: '📍 Location onongo. Wayenyo properties i miles 5 ma cok kwedi mukwongo.',
+  locationSharedReceived: '📍 Location onongo. Wayenyo properties i miles 10 ma cok kwedi mukwongo.',
   widenNearbySearch: 'Dwog *WIDEN* ka imito ni warwak kabedo me yeny.',
-  searchNoNearbyResults: 'Pe wanongo listings ma approved i miles 5. Wanyuto ma cok.',
+  searchNoNearbyResults: 'Pe wanongo listings ma approved i miles 10. Wanyuto ma cok.',
   searchNoResults: 'Pe wanongo listing ma approved ma rwate kombedi.',
   askAgentArea: '👔 Imito agent i district/area mene?',
   noAgentsFound: 'Pe wanongo agent ma verified i area meno kombedi.',
@@ -374,9 +379,9 @@ Object.assign(T.ny, {
   askPhotos: '📸 Tuma ekishushani kya *front/outside* kubanza.',
   askSearchType: '🔎 Noshaka ki?\n1️⃣ Ebyokugurisha\n2️⃣ Ebyokukodisa\n3️⃣ Itaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Byona',
   askSearchArea: '📍 Handiika area nari district eyi orikushakiramu, nari share location yaawe.',
-  locationSharedReceived: '📍 Location yaawe yatunga. Ninyanza kushaka omu miles 5 eziri haihi naiwe.',
+  locationSharedReceived: '📍 Location yaawe yatunga. Ninyanza kushaka omu miles 10 eziri haihi naiwe.',
   widenNearbySearch: 'Garukamu *WIDEN* waaba noyenda nyongyereho ahokushakira.',
-  searchNoNearbyResults: 'Tinsangire listings ezikirizibwe omu miles 5. Ninyija kukwereka ezirikubaasa kukuhwera.',
+  searchNoNearbyResults: 'Tinsangire listings ezikirizibwe omu miles 10. Ninyija kukwereka ezirikubaasa kukuhwera.',
   menuHint: 'Handiika MENU obwire bwona kugaruka aha main menu.',
   searchHeader: 'Properties ezirikukwatagana munonga',
   agentHeader: 'Agents abahamibwa',
@@ -410,9 +415,9 @@ Object.assign(T.rn, {
   askPhotos: '📸 Ohereza ifoto ya *front/outside* mbere.',
   askSearchType: '🔎 Urashaka iki?\n1️⃣ Kugurisha\n2️⃣ Gukodesha\n3️⃣ Ubutaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Vyose',
   askSearchArea: '📍 Andika area canke district uronderamwo, canke share location yawe.',
-  locationSharedReceived: '📍 Location yawe yakiriwe. Ntanguye kurondera mu miles 5 hafi yawe.',
+  locationSharedReceived: '📍 Location yawe yakiriwe. Rukiga translation is not fully available yet, so MakaUg uses English fallback instead of guessing another language. I am searching within 10 miles first.',
   widenNearbySearch: 'Subiza *WIDEN* nimba ushaka nagure aho kurondera.',
-  searchNoNearbyResults: 'Nta listings zemejwe nabonye mu miles 5. Ndakwereka izindi zishobora gufasha.',
+  searchNoNearbyResults: 'No approved listings found within 10 miles. Showing the nearest available options.',
   menuHint: 'Andika MENU igihe cose gusubira kuri main menu.',
   searchHeader: 'Properties zihuye cane',
   agentHeader: 'Agents bemejwe',
@@ -446,9 +451,9 @@ Object.assign(T.sm, {
   askPhotos: '📸 Weereza ekifaananyi kya *front/outside* okusooka.',
   askSearchType: "🔎 Onoonya ki?\n1️⃣ Ebitundibwa\n2️⃣ Eby'okukodisa\n3️⃣ Ttaka\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial\n6️⃣ Byonna",
   askSearchArea: '📍 Wandiika area oba district gyonoonya, oba share location yo.',
-  locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 5 ezikuli okumpi okusooka.',
+  locationSharedReceived: '📍 Location yo efuniddwa. Nnoonya mu miles 10 ezikuli okumpi okusooka.',
   widenNearbySearch: 'Ddamu *WIDEN* bwoyagala ngaziye ekitundu kyokunoonya.',
-  searchNoNearbyResults: 'Sirabye listings ezikakasiddwa mu miles 5. Nja kukulaga ezirala eziyinza okukuyamba.',
+  searchNoNearbyResults: 'Sirabye listings ezikakasiddwa mu miles 10. Nja kukulaga ezirala eziyinza okukuyamba.',
   menuHint: 'Wandiika MENU anytime okudda ku main menu.',
   searchHeader: 'Properties ezisinga okukwatagana',
   agentHeader: 'Agents abakakasiddwa',
@@ -2066,13 +2071,13 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
       sm: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
     },
     location: {
-      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now. I will start within 5 miles, then you can reply WIDEN if you want more options.`,
-      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 5, olwo oddemu WIDEN bwoyagala ebisingawo.`,
-      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa. Nitaanza ndani ya maili 5, kisha ujibu WIDEN ukitaka chaguo zaidi.`,
-      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp. Abicako i miles 5, dok iromo dwoko WIDEN pi me yaro.`,
-      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati. Ninyija kutandika omu miles 5, kandi wangarukamu WIDEN waba noyenda ebindi.`,
-      rn: `📍 Nshobora gushaka hafi yanyu.\n${filterLine}Ohereza location ya WhatsApp ubu. Ndatangura muri miles 5, hanyuma wandike WIDEN nimba mushaka ibindi.`,
-      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 5, olwo oddemu WIDEN bwoyagala ebisingawo.`
+      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now. I will start within 10 miles, then you can reply WIDEN if you want more options.`,
+      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 10, olwo oddemu WIDEN bwoyagala ebisingawo.`,
+      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa. Nitaanza ndani ya maili 10, kisha ujibu WIDEN ukitaka chaguo zaidi.`,
+      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp. Abicako i miles 10, dok iromo dwoko WIDEN pi me yaro.`,
+      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati. Ninyija kutandika omu miles 10, kandi wangarukamu WIDEN waba noyenda ebindi.`,
+      rn: `📍 I can search near you. Rukiga translation is not fully available yet, so MakaUg will use English fallback rather than guessing another language. Please share your WhatsApp location now. I will start within 10 miles.`,
+      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 10, olwo oddemu WIDEN bwoyagala ebisingawo.`
     }
   };
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
@@ -2613,7 +2618,7 @@ async function findPropertiesForWhatsapp(searchType, location) {
   return mergeSearchRows(result.rows, websiteRows, 5);
 }
 
-async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMiles = 5) {
+async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMiles = DEFAULT_SEARCH_RADIUS_MILES) {
   const values = ['approved'];
   let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
 
@@ -2652,16 +2657,17 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
     .filter(Boolean)
     .sort((a, b) => a.distance_km - b.distance_km);
 
-  const radiusKm = Math.max(1, Number(radiusMiles) || 5) * 1.609344;
+  const normalizedRadiusMiles = normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES);
+  const radiusKm = normalizedRadiusMiles * 1.609344;
   const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
   return {
     rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
     usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
-    radiusMiles: Math.max(1, Number(radiusMiles) || 5)
+    radiusMiles: normalizedRadiusMiles
   };
 }
 
-async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null, radiusMiles = 5) {
+async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null, radiusMiles = DEFAULT_SEARCH_RADIUS_MILES) {
   const f = filters && typeof filters === 'object' ? filters : {};
   const values = ['approved'];
   let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
@@ -2766,12 +2772,13 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
     .filter(Boolean)
     .sort((a, b) => a.distance_km - b.distance_km);
 
-  const radiusKm = Math.max(1, Number(radiusMiles) || 5) * 1.609344;
+  const normalizedRadiusMiles = normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES);
+  const radiusKm = normalizedRadiusMiles * 1.609344;
   const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
   return {
     rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
     usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
-    radiusMiles: Math.max(1, Number(radiusMiles) || 5)
+    radiusMiles: normalizedRadiusMiles
   };
 }
 
@@ -2951,13 +2958,25 @@ async function logPropertySearchRequest({
   searchType = 'any',
   queryText = '',
   location = null,
+  radiusMiles = null,
   resultRows = [],
   usedNearestFallback = false
 }) {
+  const safeLocation = location && typeof location === 'object'
+    ? {
+        ...location,
+        analytics: Number.isFinite(Number(location.lat)) && Number.isFinite(Number(location.lng))
+          ? roundLocationForAnalytics(location.lat, location.lng)
+          : null,
+        lat: Number.isFinite(Number(location.lat)) ? Number(Number(location.lat).toFixed(5)) : null,
+        lng: Number.isFinite(Number(location.lng)) ? Number(Number(location.lng).toFixed(5)) : null
+      }
+    : location;
   const payload = {
     search_type: searchType,
     query: queryText || null,
-    location: location || null,
+    location: safeLocation || null,
+    radius_miles: radiusMiles == null ? null : normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES),
     used_nearest_fallback: !!usedNearestFallback,
     result_count: Array.isArray(resultRows) ? resultRows.length : 0
   };
@@ -4075,6 +4094,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         search_lat: Number(sharedLocation.lat),
         search_lng: Number(sharedLocation.lng),
         search_location_label: sharedLocation.address || sharedLocation.label || null,
+        search_radius_miles: DEFAULT_SEARCH_RADIUS_MILES,
         search_type: pendingFilters?.searchType || searchType,
         last_nearby_search_filters: pendingFilters || { searchType },
         last_nearby_search_at: new Date().toISOString(),
@@ -4096,6 +4116,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           lng: Number(sharedLocation.lng),
           label: locationText
         },
+        radiusMiles: near.radiusMiles || DEFAULT_SEARCH_RADIUS_MILES,
         resultRows: near.rows,
         usedNearestFallback: near.usedNearestFallback
       });

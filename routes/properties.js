@@ -45,6 +45,14 @@ const {
 } = require('../utils/listingSubmitOtp');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, UNIVERSITIES, LISTING_TYPES, PROPERTY_STATUSES } = require('../utils/constants');
+const {
+  DEFAULT_SEARCH_RADIUS_MILES,
+  buildHaversineSql,
+  kmToMiles,
+  normalizeRadiusKm,
+  isPointInUganda,
+  roundLocationForAnalytics
+} = require('../services/locationSearchService');
 
 const router = express.Router();
 
@@ -516,7 +524,7 @@ router.get('/suggestions', async (req, res, next) => {
   }
 });
 
-router.get('/', async (req, res, next) => {
+async function listPropertiesHandler(req, res, next) {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const filters = [];
@@ -533,6 +541,13 @@ router.get('/', async (req, res, next) => {
     const maxBeds = toNullableInt(req.query.max_beds);
     const propertyType = cleanText(req.query.property_type);
     const requestingModerationData = status && status !== 'approved';
+    const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
+    const searchLng = toNullableFloat(req.query.lng || req.query.longitude);
+    const requestedRadiusKm = toNullableFloat(req.query.radiusKm || req.query.radius_km);
+    const requestedRadiusMiles = toNullableFloat(req.query.radiusMiles || req.query.radius_miles || req.query.radius);
+    const hasRadiusSearch = searchLat != null && searchLng != null;
+    const radiusKm = requestedRadiusKm || normalizeRadiusKm(requestedRadiusMiles ? requestedRadiusMiles * 1.609344 : null, DEFAULT_SEARCH_RADIUS_MILES);
+    let distanceSql = 'NULL::numeric';
 
     if (requestingModerationData && !(await hasAdminAccess(req))) {
       return res.status(403).json({
@@ -583,6 +598,46 @@ router.get('/', async (req, res, next) => {
     if (maxBeds != null) addFilter(filters, values, 'p.bedrooms <= ?', maxBeds);
     if (propertyType) addFilter(filters, values, 'p.property_type = ?', propertyType);
 
+    if (hasRadiusSearch) {
+      if (!isPointInUganda(searchLat, searchLng)) {
+        try {
+          await db.query(
+            `INSERT INTO property_search_requests (user_phone, payload)
+             VALUES (NULL, $1::jsonb)`,
+            [JSON.stringify({
+              source: 'web_radius_search',
+              location: {
+                analytics: roundLocationForAnalytics(searchLat, searchLng)
+              },
+              radius_km: Number(radiusKm.toFixed(3)),
+              radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
+              outside_uganda: true,
+              fallback: 'manual_uganda_search'
+            })]
+          );
+        } catch (logError) {
+          logger.warn('Failed to log outside-Uganda radius search', { error: logError.message });
+        }
+        return res.status(400).json({
+          ok: false,
+          error: 'Location appears outside Uganda. Choose a Ugandan area or search all Uganda.',
+          data: {
+            outside_uganda: true,
+            fallback: 'manual_uganda_search'
+          }
+        });
+      }
+      values.push(searchLat);
+      const latRef = `$${values.length}`;
+      values.push(searchLng);
+      const lngRef = `$${values.length}`;
+      distanceSql = buildHaversineSql(latRef, lngRef);
+      filters.push('p.latitude IS NOT NULL');
+      filters.push('p.longitude IS NOT NULL');
+      values.push(radiusKm);
+      filters.push(`${distanceSql} <= $${values.length}`);
+    }
+
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
     const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
@@ -595,7 +650,9 @@ router.get('/', async (req, res, next) => {
     };
 
     const sortBy = cleanText(req.query.sort || 'newest').toLowerCase();
-    const orderBy = sortMap[sortBy] || sortMap.newest;
+    const orderBy = hasRadiusSearch
+      ? `${distanceSql} ASC NULLS LAST, p.created_at DESC`
+      : (sortMap[sortBy] || sortMap.newest);
 
     const listValues = [...values, limit, offset];
 
@@ -632,6 +689,7 @@ router.get('/', async (req, res, next) => {
         p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
         p.extra_fields->>'region' AS region,
         p.extra_fields->>'resolved_location_label' AS resolved_location_label,
+        ${distanceSql} AS distance_km,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
         p.extra_fields->>'featured_at' AS featured_at,
         img.url AS primary_image_url,
@@ -659,16 +717,57 @@ router.get('/', async (req, res, next) => {
       OFFSET $${values.length + 2}`,
       listValues
     );
+    if (hasRadiusSearch) {
+      try {
+        await db.query(
+          `INSERT INTO property_search_requests (user_phone, payload)
+           VALUES (NULL, $1::jsonb)`,
+          [JSON.stringify({
+            source: 'web_radius_search',
+            search_type: listingType || (studentPortal ? 'student' : 'any'),
+            query: area || null,
+            location: {
+              lat: Number(searchLat.toFixed(5)),
+              lng: Number(searchLng.toFixed(5)),
+              analytics: roundLocationForAnalytics(searchLat, searchLng)
+            },
+            radius_km: Number(radiusKm.toFixed(3)),
+            radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
+            result_count: listResult.rows.length,
+            outside_uganda: false
+          })]
+        );
+      } catch (logError) {
+        logger.warn('Failed to log radius property search', { error: logError.message });
+      }
+    }
 
     return res.json({
       ok: true,
-      data: listResult.rows,
+      data: listResult.rows.map((row) => ({
+        ...row,
+        distance_km: row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3)),
+        distance_miles: row.distance_km == null ? null : Number(kmToMiles(Number(row.distance_km)).toFixed(2))
+      })),
+      search: hasRadiusSearch ? {
+        latitude: searchLat,
+        longitude: searchLng,
+        radius_km: Number(radiusKm.toFixed(3)),
+        radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
+        privacy: {
+          exact_location_public: false,
+          analytics_location: roundLocationForAnalytics(searchLat, searchLng)
+        }
+      } : null,
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {
     return next(error);
   }
-});
+}
+
+router.get('/search', listPropertiesHandler);
+router.get('/', listPropertiesHandler);
 
 router.get('/:id', async (req, res, next) => {
   try {
