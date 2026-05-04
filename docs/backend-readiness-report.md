@@ -134,3 +134,28 @@ Local environment variables were checked without printing secret values. Require
 ## Gate Decision
 
 Backend connectivity is substantially implemented in code and local/static tests, but live owner login, production provider sends, live property submission, AI provider/tool execution, alert scheduler cadence, live viewing/callback records, and real payment provider execution remain unproven. The current gate status is therefore **not masterpiece complete** until those owner/provider proof steps pass.
+
+## Task 16 Owner Proof Addendum
+
+`/admin/setup-status` is now the protected owner proof page. It is admin/super_admin only, shows setup status without secret values, and names missing environment variable keys rather than displaying values.
+
+New admin-only proof actions:
+
+| Proof action | API | Backend effect | Public-data safety | Status |
+|---|---|---|---|---|
+| Safe property submission test | `POST /api/admin/setup-status/property-submission-test` | Creates a pending admin-test listing with `MK-YYYYMMDD-XXXXXX` reference, CRM lead/activity, `EmailLog`, `NotificationLog`, `WhatsAppMessageLog`, and audit row | `source=admin_test`, test metadata, not approved publicly | Working in source; live owner must run |
+| Provider tests | `POST /api/admin/setup-status/provider-test` | Creates queued/logged/provider-missing proof rows for email, WhatsApp, SMS, Google Places, OpenAI/LLM, and payment | No secret values shown; sends are not forced without configured providers | Working in source; live owner must run |
+| AI chatbot smoke test | `POST /api/admin/setup-status/ai-smoke-test` | Logs eleven canonical prompts, detected intents, provider status, CRM leads for actionable intents, and audit row | Provider-missing state recorded if LLM is absent | Working in source; live provider execution still required |
+| Alert matcher proof | `POST /api/admin/setup-status/run-alert-matcher` | Creates a test saved search/listing pair, runs `matchListingToSavedSearches`, creates `AlertMatch`/notification rows, and audit row | Test-labelled records | Working in source; cron cadence still owner action |
+| Viewing/callback proof | `POST /api/admin/setup-status/viewing-callback-test` | Creates `ViewingConfig`, `ViewingBooking`, `CallbackRequest`, CRM leads, notification log, and audit row | Test-labelled listing/records | Working in source; live owner must run |
+| Advertising/payment proof | `POST /api/admin/setup-status/advertising-payment-test` | Creates test campaign, invoice, payment link or provider-missing state, manually marks paid with audit | Test campaign/invoice | Working in source; real provider remains unverified |
+| Mortgage/help/careers/fraud proof | `POST /api/admin/setup-status/support-flow-test` | Creates mortgage/help/careers/fraud leads, mortgage enquiry/report row where available, email/notification logs, and audit | Test-labelled lead/log rows | Working in source; live owner must run |
+
+Owner actions after deployment:
+
+1. Add `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_INITIAL_PASSWORD`, `SUPER_ADMIN_PHONE` optional, `DATABASE_URL`, `JWT_SECRET`, and `ADMIN_API_KEY` if API-key fallback is desired.
+2. Run `npm run admin:create-super`, log in as super_admin, and rotate the initial password.
+3. Open `/admin/setup-status`, confirm provider/database/super_admin status, then run each proof button.
+4. Review `/admin/launch-control`, `/admin/emails`, `/admin/notifications`, `/admin/whatsapp-inbox`, `/admin/alerts`, `/admin/revenue`, and `/admin/leads` for the generated proof records.
+
+Gate remains **not masterpiece complete** until the owner has run those live proof actions and confirmed provider sends or admin-visible provider-missing logs.

@@ -3554,6 +3554,7 @@
             </div>
           </div>
           <div class="mt-4 flex flex-wrap gap-2">
+            <a href="/admin/setup-status" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 text-sm font-semibold">Owner Setup Status</a>
             <a href="/admin/docs" class="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-4 py-2 text-sm font-semibold">View Admin Docs</a>
             <a href="/admin/notifications" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Notification Failures</a>
             <a href="/admin/emails" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-semibold">Email Logs</a>
@@ -4268,6 +4269,80 @@
         <p class="text-sm text-gray-600 mt-2">Codex operating rules for production-safe MakaUg changes and completion proof.</p>
         <code class="block mt-4 rounded-xl bg-gray-50 border border-gray-100 p-3 text-xs text-gray-700">AGENTS.md</code>
       </article>
+    </div>
+  </div>
+
+  <div id="page-admin-setup-status" class="page">
+    <div class="bg-slate-950 py-8 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <p class="text-slate-300 text-sm font-bold uppercase tracking-wide">Admin only</p>
+        <h1 class="text-3xl font-black serif">Owner Setup Status</h1>
+        <p class="text-slate-300 mt-2">Live operational proof for super admin access, provider readiness, safe test submissions, alerts, payments, AI, and launch checks. Secret values are never shown.</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <div id="admin-setup-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
+        <div class="text-4xl mb-3">🛡️</div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Admin sign in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Sign in as admin or super admin to view setup status and run proof actions.</p>
+        <button onclick="openAuthSignIn('admin')" class="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Admin</button>
+      </div>
+
+      <div id="admin-setup-body" class="hidden space-y-6">
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h2 class="text-2xl font-black text-gray-900">Masterpiece Setup Gate</h2>
+              <p class="text-sm text-gray-500 mt-1">Use these checks before launch. They create test-flagged logs/records only and do not expose provider secrets.</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="renderAdminSetupStatus()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh Status</button>
+              <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
+              <a href="/admin/docs" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Docs</a>
+            </div>
+          </div>
+        </div>
+
+        <div id="admin-setup-summary" class="grid md:grid-cols-3 gap-4"></div>
+
+        <section class="bg-white border border-gray-200 rounded-2xl p-5">
+          <h3 class="text-xl font-bold text-gray-900">Provider Status</h3>
+          <p class="text-sm text-gray-500 mt-1">Configured means required env keys are present; test buttons create sent/queued/provider-missing logs without showing secret values.</p>
+          <div id="admin-setup-provider-status" class="mt-4 grid md:grid-cols-2 gap-3"></div>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-2xl p-5">
+          <h3 class="text-xl font-bold text-gray-900">Database, Migrations, and Launch Proof</h3>
+          <div id="admin-setup-proof-status" class="mt-4 grid md:grid-cols-2 gap-3"></div>
+        </section>
+
+        <section class="bg-white border border-amber-100 rounded-2xl p-5">
+          <h3 class="text-xl font-bold text-gray-900">Run Safe Backend Proof Actions</h3>
+          <p class="text-sm text-gray-500 mt-1">These admin-only actions prove backend paths while keeping records test-flagged and non-public where applicable.</p>
+          <div class="mt-4 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            <button onclick="runAdminSetupAction('property-submission-test')" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Run safe property submission test</button>
+            <button onclick="runAdminSetupAction('ai-smoke-test')" class="bg-gray-900 hover:bg-gray-800 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Run AI chatbot smoke test</button>
+            <button onclick="runAdminSetupAction('run-alert-matcher')" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Run alert matching now</button>
+            <button onclick="runAdminSetupAction('viewing-callback-test')" class="bg-blue-700 hover:bg-blue-600 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Create viewing/callback test</button>
+            <button onclick="runAdminSetupAction('advertising-payment-test')" class="bg-amber-700 hover:bg-amber-600 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Create payment fallback test</button>
+            <button onclick="runAdminSetupAction('support-flow-test')" class="bg-purple-700 hover:bg-purple-600 text-white rounded-xl px-4 py-2.5 text-sm font-bold">Test mortgage/help/careers/fraud</button>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button onclick="runAdminProviderTest('email')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test email</button>
+            <button onclick="runAdminProviderTest('whatsapp')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test WhatsApp</button>
+            <button onclick="runAdminProviderTest('sms')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test SMS</button>
+            <button onclick="runAdminProviderTest('google_places')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test Google Places</button>
+            <button onclick="runAdminProviderTest('openai_llm')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test OpenAI/LLM</button>
+            <button onclick="runAdminProviderTest('payment_link')" class="border border-gray-200 hover:bg-gray-50 rounded-xl px-3 py-2 text-sm font-bold">Test payment link</button>
+          </div>
+          <pre id="admin-setup-test-result" class="mt-4 text-xs bg-slate-950 text-slate-100 rounded-2xl p-4 overflow-auto min-h-[120px]">No setup action has been run in this browser session.</pre>
+        </section>
+
+        <section class="bg-white border border-red-100 rounded-2xl p-5">
+          <h3 class="text-xl font-bold text-gray-900">Owner Actions Required</h3>
+          <div id="admin-setup-owner-actions" class="mt-4 space-y-3"></div>
+        </section>
+      </div>
     </div>
   </div>
 
@@ -10586,6 +10661,152 @@
             <button onclick="adminSetReportStatus('${r.id}','dismissed')" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[11px] font-semibold">Dismiss</button>
           </div>` : ""}
         </div>`);
+    }
+
+    function setupBadge(ok, label) {
+      return `<span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-black ${ok ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}">${adminEscape(label || (ok ? "Ready" : "Needs action"))}</span>`;
+    }
+
+    function renderAdminSetupStatusCards(status = {}) {
+      const summary = document.getElementById("admin-setup-summary");
+      if (!summary) return;
+      const superAdmin = status.superAdmin || {};
+      const dbStatus = status.database || {};
+      const proof = status.launchProof || {};
+      summary.innerHTML = [
+        {
+          title: "Super admin",
+          value: superAdmin.exists ? "Exists" : "Missing",
+          note: `Last login: ${superAdmin.lastLoginAt ? formatListingDate(superAdmin.lastLoginAt) : "not proven"}`
+        },
+        {
+          title: "Migrations 033/034",
+          value: (dbStatus.missingMigrations || []).length ? "Needs check" : "Applied",
+          note: (dbStatus.missingMigrations || []).length ? `Missing: ${(dbStatus.missingMigrations || []).join(", ")}` : "Both launch migrations are visible."
+        },
+        {
+          title: "Launch proof actions",
+          value: Object.keys(proof.latest || {}).length,
+          note: "Latest admin proof actions recorded in audit log."
+        }
+      ].map((card) => `<article class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div class="text-xs uppercase tracking-wide text-gray-500 font-black">${adminEscape(card.title)}</div>
+        <div class="text-2xl font-black text-gray-900 mt-2">${adminEscape(card.value)}</div>
+        <div class="text-xs text-gray-500 mt-2">${adminEscape(card.note)}</div>
+      </article>`).join("");
+    }
+
+    function renderAdminSetupProviders(status = {}) {
+      const wrap = document.getElementById("admin-setup-provider-status");
+      if (!wrap) return;
+      const providers = Array.isArray(status.providers) ? status.providers : [];
+      wrap.innerHTML = providers.map((provider) => `<div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-black text-gray-900">${adminEscape(provider.label || provider.key)}</div>
+            <div class="text-xs text-gray-500 mt-1">Required env: ${adminEscape((provider.requiredEnv || []).join(", ") || "none")}</div>
+            ${provider.configured ? "" : `<div class="text-xs text-amber-700 mt-1">Missing: ${adminEscape((provider.missingEnv || []).join(", ") || "provider env")}</div>`}
+          </div>
+          ${setupBadge(provider.configured, provider.configured ? "Configured" : "Missing")}
+        </div>
+      </div>`).join("") || `<div class="text-sm text-gray-500">Provider status unavailable.</div>`;
+    }
+
+    function renderAdminSetupProof(status = {}) {
+      const wrap = document.getElementById("admin-setup-proof-status");
+      if (!wrap) return;
+      const counts = status.launchProof?.counts || {};
+      const latest = status.launchProof?.latest || {};
+      const dbStatus = status.database || {};
+      const rows = [
+        ["DATABASE_URL", dbStatus.databaseUrlConnected ? "connected" : "not proven"],
+        ["Migrations", (dbStatus.missingMigrations || []).length ? `missing ${(dbStatus.missingMigrations || []).join(", ")}` : "033 and 034 applied"],
+        ["Property submission tests", counts.listingTests || 0],
+        ["Saved searches / alert matches", `${counts.savedSearches || 0} / ${counts.alertMatches || 0}`],
+        ["Viewing / callbacks", `${counts.viewings || 0} / ${counts.callbacks || 0}`],
+        ["Campaigns / invoices", `${counts.campaigns || 0} / ${counts.invoices || 0}`],
+        ["Failed email / WhatsApp / SMS", `${counts.failedEmails || 0} / ${counts.failedWhatsApp || 0} / ${counts.failedSms || 0}`],
+        ["Latest proof actions", Object.keys(latest).join(", ") || "none yet"]
+      ];
+      wrap.innerHTML = rows.map(([label, value]) => `<div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div class="text-xs uppercase tracking-wide text-gray-500 font-black">${adminEscape(label)}</div>
+        <div class="text-sm font-bold text-gray-900 mt-1 break-words">${adminEscape(value)}</div>
+      </div>`).join("");
+    }
+
+    function renderAdminSetupOwnerActions(status = {}) {
+      const wrap = document.getElementById("admin-setup-owner-actions");
+      if (!wrap) return;
+      const actions = Array.isArray(status.ownerActions) ? status.ownerActions : [];
+      wrap.innerHTML = actions.map((action) => `<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-black text-gray-900">${adminEscape(action.title)}</div>
+            ${action.command ? `<code class="block mt-2 rounded-xl bg-white border border-amber-100 p-2 text-xs text-gray-700">${adminEscape(action.command)}</code>` : ""}
+            ${(action.missingEnv || []).length ? `<div class="text-xs text-amber-800 mt-2">Missing env: ${adminEscape(action.missingEnv.join(", "))}</div>` : ""}
+          </div>
+          ${setupBadge(false, action.status || "required")}
+        </div>
+      </div>`).join("") || `<div class="text-sm text-green-700 bg-green-50 border border-green-100 rounded-2xl p-4">No owner blockers reported by setup status.</div>`;
+    }
+
+    async function renderAdminSetupStatus() {
+      const gate = document.getElementById("admin-setup-auth-gate");
+      const body = document.getElementById("admin-setup-body");
+      if (!gate || !body) return;
+      if (!authState?.user || derivePortalMode(authState.user, authState.user.portal_mode) !== "admin") {
+        gate.classList.remove("hidden");
+        body.classList.add("hidden");
+        return;
+      }
+      gate.classList.add("hidden");
+      body.classList.remove("hidden");
+      const resultBox = document.getElementById("admin-setup-test-result");
+      try {
+        const response = await apiRequest("/api/admin/setup-status", { headers: adminAuthHeaders() });
+        const status = response?.data || {};
+        renderAdminSetupStatusCards(status);
+        renderAdminSetupProviders(status);
+        renderAdminSetupProof(status);
+        renderAdminSetupOwnerActions(status);
+        if (resultBox && resultBox.textContent.includes("No setup action")) {
+          resultBox.textContent = `Setup status refreshed at ${new Date().toLocaleString()}.`;
+        }
+      } catch (error) {
+        if (resultBox) resultBox.textContent = `Setup status failed: ${error.message || "request failed"}`;
+      }
+    }
+
+    async function runAdminSetupAction(action) {
+      const resultBox = document.getElementById("admin-setup-test-result");
+      if (resultBox) resultBox.textContent = `Running ${action}...`;
+      try {
+        const response = await apiRequest(`/api/admin/setup-status/${action}`, {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: {}
+        });
+        if (resultBox) resultBox.textContent = JSON.stringify(response?.data || response, null, 2);
+        await renderAdminSetupStatus();
+      } catch (error) {
+        if (resultBox) resultBox.textContent = `${action} failed: ${error.message || "request failed"}`;
+      }
+    }
+
+    async function runAdminProviderTest(provider) {
+      const resultBox = document.getElementById("admin-setup-test-result");
+      if (resultBox) resultBox.textContent = `Testing ${provider} provider...`;
+      try {
+        const response = await apiRequest("/api/admin/setup-status/provider-test", {
+          method: "POST",
+          headers: adminAuthHeaders(),
+          body: { provider }
+        });
+        if (resultBox) resultBox.textContent = JSON.stringify(response?.data || response, null, 2);
+        await renderAdminSetupStatus();
+      } catch (error) {
+        if (resultBox) resultBox.textContent = `${provider} provider test failed: ${error.message || "request failed"}`;
+      }
     }
 
     async function saveAdminApiKeyAndRefresh() {
@@ -21227,7 +21448,8 @@
         "field-dashboard": "/field-agent-dashboard",
         "advertiser-dashboard": "/advertiser-dashboard",
         "admin-dashboard": "/admin",
-        "admin-docs": "/admin/docs"
+        "admin-docs": "/admin/docs",
+        "admin-setup-status": "/admin/setup-status"
       };
       return routes[page] || "";
     }
@@ -21265,6 +21487,7 @@
       if (page === "field-dashboard") renderFieldDashboard();
       if (page === "advertiser-dashboard") renderAdvertiserDashboard();
       if (page === "admin-dashboard") renderAdminDashboard();
+      if (page === "admin-setup-status") renderAdminSetupStatus();
       if (page === "list-property") {
         if (previousPage !== "list-property") {
           listWizardStep = 1;
@@ -21546,6 +21769,16 @@
           openBrokerProfile(found.id);
           return true;
         }
+      }
+
+      if (path === "/admin/setup-status") {
+        if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
+          showPage("admin-setup-status");
+          renderAdminSetupStatus();
+        } else {
+          openAuthSignIn("admin");
+        }
+        return true;
       }
 
       if (path === "/admin/docs") {

@@ -68,6 +68,7 @@ async function probeProtectedBackend() {
   const checks = [];
   const endpoints = [
     ['/api/admin/summary', 401],
+    ['/api/admin/setup-status', 401],
     ['/api/admin/crm/summary', 401],
     ['/api/admin/leads', 401],
     ['/api/admin/emails', 401],

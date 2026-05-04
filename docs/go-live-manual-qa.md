@@ -47,6 +47,10 @@ Use this checklist against the running preview/live app after deploy.
 ## Backend Connection Audit
 
 - Open `docs/backend-traceability-matrix.md` or `/admin/docs` as super admin.
+- Open `/admin/setup-status` as super admin. Confirm it does not show secret values.
+- Confirm Super admin status, provider status, migration status, launch proof timestamps, and owner actions required.
+- Run each setup-status proof action: safe property submission, provider tests, AI smoke test, alert matcher, viewing/callback test, advertising/payment test, and mortgage/help/careers/fraud test.
+- Confirm generated proof records appear in `/admin/launch-control`, `/admin/leads`, `/admin/emails`, `/admin/notifications`, `/admin/whatsapp-inbox`, `/admin/alerts`, and `/admin/revenue` where relevant.
 - Confirm every launch-critical public CTA and form has an API/service/table/log/admin visibility row.
 - Confirm no item marked `Partial` is described as complete in launch messaging.
 - Run `BASE_URL=https://makaug.com npm run probe:backend-connections` and confirm live health, migrations, public backend endpoints, and anonymous admin/API blocking pass.

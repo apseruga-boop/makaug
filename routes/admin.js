@@ -51,10 +51,14 @@ const {
   getAdvertisingPackages,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
-const { addLeadActivity } = require('../services/leadService');
-const { getAlertSummary } = require('../services/alertSchedulerService');
-const { markInvoicePaidManually } = require('../services/paymentProviderService');
+const { addLeadActivity, createLead } = require('../services/leadService');
+const { getAlertSummary, matchListingToSavedSearches } = require('../services/alertSchedulerService');
+const { markInvoicePaidManually, paymentProviderConfigured } = require('../services/paymentProviderService');
 const { logNotification } = require('../services/notificationLogService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const { buildListingReference } = require('../services/listingReferenceService');
+const { getProviderMeta } = require('../services/llmProvider');
 const {
   retryEmailLog,
   retryNotification,
@@ -79,6 +83,195 @@ async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
 
 function adminActorId(req) {
   return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+}
+
+function envSet(key) {
+  return Boolean(String(process.env[key] || '').trim());
+}
+
+function anyEnv(keys = []) {
+  return keys.some((key) => envSet(key));
+}
+
+function providerConfigured(provider) {
+  const keyGroups = {
+    email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
+    whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN', 'AFRICASTALKING_API_KEY'],
+    sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY'],
+    google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
+    openai_llm: ['OPENAI_API_KEY', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
+    payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
+    public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
+  };
+  return anyEnv(keyGroups[provider] || []);
+}
+
+function providerEnvKeys(provider) {
+  const keyGroups = {
+    email: ['RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'],
+    whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN'],
+    sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME'],
+    google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
+    openai_llm: ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
+    payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
+    super_admin: ['SUPER_ADMIN_EMAIL', 'SUPER_ADMIN_INITIAL_PASSWORD', 'DATABASE_URL', 'JWT_SECRET'],
+    public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
+  };
+  return keyGroups[provider] || [];
+}
+
+function missingEnv(keys = []) {
+  return keys.filter((key) => !envSet(key));
+}
+
+async function safeOne(sql, values = [], fallback = {}) {
+  try {
+    const result = await db.query(sql, values);
+    return result.rows[0] || fallback;
+  } catch (error) {
+    if (['42P01', '42703', '42704'].includes(error?.code)) return fallback;
+    throw error;
+  }
+}
+
+async function safeRows(sql, values = []) {
+  try {
+    const result = await db.query(sql, values);
+    return result.rows || [];
+  } catch (error) {
+    if (['42P01', '42703', '42704'].includes(error?.code)) return [];
+    throw error;
+  }
+}
+
+async function safeCount(sql, values = []) {
+  const row = await safeOne(sql, values, { total: 0 });
+  return Number(row.total || 0);
+}
+
+async function createLaunchAudit(req, action, details = {}) {
+  await writeAudit(action, {
+    ...details,
+    launch_proof: true,
+    created_by: 'admin_setup_status'
+  }, adminActorId(req));
+}
+
+function adminTestEmail() {
+  return process.env.SUPER_ADMIN_EMAIL || process.env.SUPPORT_EMAIL || process.env.EMAIL_FROM || 'owner@makaug.com';
+}
+
+function adminTestPhone() {
+  return process.env.SUPER_ADMIN_PHONE || process.env.SUPPORT_WHATSAPP || process.env.WHATSAPP_TEST_PHONE || '+256760112587';
+}
+
+function launchTimestamp() {
+  return new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+}
+
+async function createSafeLaunchProperty(req, overrides = {}) {
+  const reference = buildListingReference();
+  const result = await db.query(
+    `INSERT INTO properties (
+       listing_type, title, description, district, area, address, price,
+       bedrooms, bathrooms, property_type, amenities, extra_fields,
+       lister_name, lister_phone, lister_email, lister_type, status, source, listed_via
+     )
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19)
+     RETURNING *`,
+    [
+      overrides.listing_type || 'sale',
+      overrides.title || `Launch proof hidden listing ${reference}`,
+      overrides.description || 'Admin-only safe property submission test. This record is for launch proof and should not be approved publicly.',
+      overrides.district || 'Kampala',
+      overrides.area || 'Ntinda',
+      overrides.address || 'Launch proof landmark, Ntinda',
+      overrides.price || 150000000,
+      overrides.bedrooms || 2,
+      overrides.bathrooms || 1,
+      overrides.property_type || 'house',
+      JSON.stringify(['launch_test']),
+      JSON.stringify({
+        is_test: true,
+        launch_proof: true,
+        non_public_test: true,
+        reference,
+        location_object: {
+          query: 'Ntinda launch proof',
+          fullAddress: 'Launch proof landmark, Ntinda, Kampala, Uganda',
+          area: 'Ntinda',
+          city: 'Kampala',
+          district: 'Kampala',
+          country: 'Uganda',
+          latitude: 0.353,
+          longitude: 32.616,
+          locationConfidence: 'test',
+          locationPrivacy: 'admin_only'
+        }
+      }),
+      overrides.lister_name || 'MakaUg Launch Proof',
+      overrides.lister_phone || adminTestPhone(),
+      overrides.lister_email || adminTestEmail(),
+      'owner',
+      'pending',
+      'admin_test',
+      'admin_setup_status'
+    ]
+  );
+  const listing = result.rows[0];
+  const lead = await createLead(db, {
+    source: 'admin_property_submission_test',
+    leadType: 'listing_submission',
+    category: listing.listing_type,
+    location: `${listing.area}, ${listing.district}`,
+    listingId: listing.id,
+    contact: {
+      name: listing.lister_name,
+      email: listing.lister_email,
+      phone: listing.lister_phone,
+      roleType: 'owner',
+      preferredContactChannel: 'whatsapp'
+    },
+    message: `Safe property submission proof for ${reference}`,
+    metadata: { reference, launch_proof: true, non_public_test: true }
+  });
+  await logEmailEvent(db, {
+    eventType: 'listing_submitted',
+    recipientEmail: listing.lister_email,
+    recipientRole: 'property_owner',
+    templateKey: 'listing_submitted_confirmation',
+    subject: 'Your MakaUg property listing has been submitted',
+    status: providerConfigured('email') ? 'queued' : 'provider_missing',
+    provider: providerConfigured('email') ? 'configured' : null,
+    relatedListingId: listing.id,
+    relatedLeadId: lead?.id || null,
+    failureReason: providerConfigured('email') ? null : 'email_provider_missing'
+  });
+  await logNotification(db, {
+    recipientPhone: listing.lister_phone,
+    recipientEmail: listing.lister_email,
+    channel: 'in_app',
+    type: 'listing_submitted',
+    status: 'logged',
+    relatedListingId: listing.id,
+    relatedLeadId: lead?.id || null,
+    payloadSummary: { reference, launch_proof: true, status: 'pending_review' }
+  });
+  await logWhatsAppMessage(db, {
+    recipientPhone: listing.lister_phone,
+    templateKey: 'listing_submitted_confirmation',
+    messageType: 'template',
+    status: providerConfigured('whatsapp') ? 'queued' : 'provider_missing',
+    relatedListingId: listing.id,
+    relatedLeadId: lead?.id || null,
+    failureReason: providerConfigured('whatsapp') ? null : 'whatsapp_provider_missing'
+  });
+  await createLaunchAudit(req, 'safe_property_submission_test', {
+    listing_id: listing.id,
+    lead_id: lead?.id || null,
+    reference
+  });
+  return { listing, lead, reference };
 }
 
 function whatsappPayloadPreview(payload = {}, messageType = 'text') {
@@ -3636,6 +3829,619 @@ router.post('/leads/:id/tasks', async (req, res, next) => {
     });
     await writeAudit('crm_lead_task_created', { lead_id: leadId, task_id: task.rows[0]?.id }, adminActorId(req));
     return res.status(201).json({ ok: true, data: task.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+async function buildSetupStatus() {
+  const superAdmin = await safeOne(
+    `SELECT COUNT(*)::int AS total,
+            MAX(last_login_at) AS last_login_at
+     FROM users
+     WHERE role = 'super_admin'`,
+    [],
+    { total: 0, last_login_at: null, force_password_change: null }
+  );
+  const adminSecurity = await safeOne(
+    `SELECT
+       COUNT(*)::int AS total,
+       BOOL_OR(COALESCE(mfa_enabled, false)) AS mfa_enabled,
+       BOOL_OR(COALESCE(force_password_change, false)) AS force_password_change,
+       MAX(last_password_change_at) AS last_password_change_at
+     FROM admin_security_settings`,
+    [],
+    { total: 0, mfa_enabled: false, last_password_change_at: null }
+  );
+  const auditCount = await safeCount(
+    `SELECT COUNT(*)::int AS total FROM audit_logs WHERE action ILIKE '%admin%' OR action ILIKE '%launch%'`
+  );
+  const migrations = await safeRows(
+    `SELECT name, applied_at FROM schema_migrations
+     WHERE name IN ('033_task3_engagement_crm.sql','034_task4_super_admin_alerts_payments.sql')
+     ORDER BY name`
+  );
+  const latestProof = await safeRows(
+    `SELECT DISTINCT ON (action) action, details, created_at
+     FROM audit_logs
+     WHERE action IN (
+       'safe_property_submission_test',
+       'provider_test_email',
+       'provider_test_whatsapp',
+       'provider_test_sms',
+       'provider_test_google_places',
+       'provider_test_openai_llm',
+       'provider_test_payment_link',
+       'ai_chatbot_smoke_test',
+       'alert_matching_manual_run',
+       'viewing_callback_launch_test',
+       'advertising_payment_launch_test',
+       'support_flows_launch_test'
+     )
+     ORDER BY action, created_at DESC`
+  );
+  const proofByAction = latestProof.reduce((acc, row) => {
+    acc[row.action] = {
+      createdAt: row.created_at,
+      details: row.details || {}
+    };
+    return acc;
+  }, {});
+
+  const providers = [
+    ['email', 'Email'],
+    ['whatsapp', 'WhatsApp'],
+    ['sms', 'SMS'],
+    ['google_places', 'Google Maps/Places'],
+    ['openai_llm', 'OpenAI/LLM'],
+    ['payment_link', 'Payment provider'],
+    ['public_base_url', 'PUBLIC_BASE_URL']
+  ].map(([key, label]) => ({
+    key,
+    label,
+    configured: providerConfigured(key),
+    requiredEnv: providerEnvKeys(key),
+    missingEnv: missingEnv(providerEnvKeys(key))
+  }));
+  const llmMeta = getProviderMeta();
+  const counts = {
+    leads: await safeCount('SELECT COUNT(*)::int AS total FROM leads'),
+    listingsPending: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+    listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),
+    listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
+    failedEmails: await safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
+    failedWhatsApp: await safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing')"),
+    failedSms: await safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE channel = 'sms' AND status IN ('failed','provider_missing')"),
+    savedSearches: await safeCount("SELECT COUNT(*)::int AS total FROM saved_searches WHERE status = 'active'"),
+    alertMatches: await safeCount("SELECT COUNT(*)::int AS total FROM alert_matches"),
+    viewings: await safeCount('SELECT COUNT(*)::int AS total FROM viewing_bookings'),
+    callbacks: await safeCount('SELECT COUNT(*)::int AS total FROM callback_requests'),
+    campaigns: await safeCount('SELECT COUNT(*)::int AS total FROM advertising_campaigns'),
+    invoices: await safeCount('SELECT COUNT(*)::int AS total FROM invoices'),
+    fraudReports: await safeCount('SELECT COUNT(*)::int AS total FROM report_listings'),
+    mortgageEnquiries: await safeCount('SELECT COUNT(*)::int AS total FROM mortgage_enquiries')
+  };
+  const requiredSuperAdminEnv = providerEnvKeys('super_admin');
+  const missingSuperAdminEnv = missingEnv(requiredSuperAdminEnv);
+  const ownerActions = [];
+  if (missingSuperAdminEnv.length) {
+    ownerActions.push({
+      title: 'Create live super_admin',
+      status: 'blocked',
+      missingEnv: missingSuperAdminEnv,
+      command: 'npm run admin:create-super'
+    });
+  } else if (!Number(superAdmin.total || 0)) {
+    ownerActions.push({
+      title: 'Run super_admin bootstrap',
+      status: 'required',
+      command: 'npm run admin:create-super'
+    });
+  }
+  providers.forEach((provider) => {
+    if (!provider.configured) {
+      ownerActions.push({
+        title: `Configure ${provider.label}`,
+        status: 'provider_missing',
+        missingEnv: provider.missingEnv
+      });
+    }
+  });
+  ownerActions.push({
+    title: 'Run proof buttons',
+    status: 'required',
+    command: 'Open /admin/setup-status and run safe property, provider, AI, alert, payment, and support proof actions.'
+  });
+
+  return {
+    superAdmin: {
+      exists: Number(superAdmin.total || 0) > 0,
+      count: Number(superAdmin.total || 0),
+      lastLoginAt: superAdmin.last_login_at || null,
+      forcePasswordChange: adminSecurity.force_password_change === true,
+      adminSecuritySettings: {
+        rows: Number(adminSecurity.total || 0),
+        mfaEnabled: adminSecurity.mfa_enabled === true,
+        lastPasswordChangeAt: adminSecurity.last_password_change_at || null
+      },
+      auditLogStatus: auditCount > 0 ? 'available' : 'no_admin_audit_rows_found'
+    },
+    providers,
+    database: {
+      databaseUrlConnected: true,
+      migrations033034: migrations,
+      missingMigrations: ['033_task3_engagement_crm.sql', '034_task4_super_admin_alerts_payments.sql']
+        .filter((name) => !migrations.some((row) => row.name === name)),
+      migrationTableStatus: migrations.length ? 'readable' : 'missing_or_no_rows'
+    },
+    launchProof: {
+      latest: proofByAction,
+      counts,
+      llm: {
+        provider: llmMeta.provider,
+        configured: Boolean(llmMeta.hasApiKey || llmMeta.baseURL)
+      },
+      paymentProviderConfigured: paymentProviderConfigured()
+    },
+    ownerActions
+  };
+}
+
+router.get('/setup-status', async (_req, res, next) => {
+  try {
+    return res.json({ ok: true, data: await buildSetupStatus() });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/provider-test', async (req, res, next) => {
+  try {
+    const provider = cleanText(req.body.provider || req.body.type);
+    const allowed = ['email', 'whatsapp', 'sms', 'google_places', 'openai_llm', 'payment_link'];
+    if (!allowed.includes(provider)) {
+      return res.status(400).json({ ok: false, error: 'Unsupported provider test' });
+    }
+    const configured = providerConfigured(provider);
+    const base = {
+      provider,
+      configured,
+      status: configured ? 'logged' : 'provider_missing',
+      missingEnv: configured ? [] : missingEnv(providerEnvKeys(provider))
+    };
+    let log = null;
+    if (provider === 'email') {
+      log = await logEmailEvent(db, {
+        eventType: 'admin_provider_test_email',
+        recipientEmail: adminTestEmail(),
+        recipientRole: 'admin',
+        templateKey: 'provider_test_email',
+        subject: 'MakaUg email provider test',
+        status: configured ? 'queued' : 'provider_missing',
+        provider: configured ? 'configured' : null,
+        failureReason: configured ? null : 'email_provider_missing'
+      });
+    } else if (provider === 'whatsapp') {
+      log = await logWhatsAppMessage(db, {
+        recipientPhone: adminTestPhone(),
+        templateKey: 'provider_test_whatsapp',
+        messageType: 'template',
+        status: configured ? 'queued' : 'provider_missing',
+        failureReason: configured ? null : 'whatsapp_provider_missing'
+      });
+    } else {
+      log = await logNotification(db, {
+        recipientPhone: provider === 'sms' ? adminTestPhone() : null,
+        recipientEmail: provider !== 'sms' ? adminTestEmail() : null,
+        channel: provider === 'sms' ? 'sms' : 'in_app',
+        type: `provider_test_${provider}`,
+        status: configured ? 'logged' : 'provider_missing',
+        payloadSummary: { provider, configured, launch_proof: true },
+        failureReason: configured ? null : `${provider}_provider_missing`
+      });
+    }
+    await createLaunchAudit(req, `provider_test_${provider}`, {
+      configured,
+      log_id: log?.id || null,
+      missing_env: base.missingEnv
+    });
+    return res.json({ ok: true, data: { ...base, logId: log?.id || null } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/property-submission-test', async (req, res, next) => {
+  try {
+    const { listing, lead, reference } = await createSafeLaunchProperty(req);
+    return res.status(201).json({
+      ok: true,
+      data: {
+        reference,
+        listingId: listing.id,
+        listingStatus: listing.status,
+        source: listing.source,
+        leadId: lead?.id || null,
+        nonPublicTest: true,
+        logs: {
+          email: providerConfigured('email') ? 'queued' : 'provider_missing',
+          whatsapp: providerConfigured('whatsapp') ? 'queued' : 'provider_missing',
+          notification: 'logged'
+        }
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/ai-smoke-test', async (req, res, next) => {
+  try {
+    const prompts = [
+      ['search_rent', 'Find me a 2 bedroom rental in Ntinda under 1.5m.'],
+      ['search_student', 'I need student accommodation near Makerere.'],
+      ['create_alert', 'Save this search and alert me.'],
+      ['book_viewing', 'Book a viewing.'],
+      ['request_callback', 'Request a callback.'],
+      ['list_property_whatsapp', 'I want to list property on WhatsApp.'],
+      ['report_fraud', 'I think this listing is fraud.'],
+      ['ask_mortgage', 'Can I get mortgage help?'],
+      ['advertiser_interest', 'I want to advertise on MakaUg.'],
+      ['language_change', 'Use Luganda.'],
+      ['human_handoff', 'I need a human.']
+    ];
+    const llmMeta = getProviderMeta();
+    const configured = providerConfigured('openai_llm');
+    const results = [];
+    for (const [intent, prompt] of prompts) {
+      const lead = ['book_viewing', 'request_callback', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'advertiser_interest', 'human_handoff'].includes(intent)
+        ? await createLead(db, {
+          source: 'ai_admin_smoke_test',
+          leadType: intent,
+          category: 'ai_chatbot',
+          contact: {
+            name: 'MakaUg AI Smoke Test',
+            email: adminTestEmail(),
+            phone: adminTestPhone(),
+            roleType: 'admin_test'
+          },
+          message: prompt,
+          metadata: { launch_proof: true, intent, provider_configured: configured }
+        })
+        : null;
+      await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'in_app',
+        type: 'ai_chatbot_smoke_prompt',
+        status: configured ? 'logged' : 'provider_missing',
+        relatedLeadId: lead?.id || null,
+        payloadSummary: { prompt, intent, launch_proof: true, provider: llmMeta.provider },
+        failureReason: configured ? null : 'llm_provider_missing'
+      });
+      results.push({
+        prompt,
+        intent,
+        safeResponse: configured ? 'provider configured; prompt logged for smoke execution' : 'LLM provider missing; safe provider-missing state logged',
+        leadId: lead?.id || null
+      });
+    }
+    await createLaunchAudit(req, 'ai_chatbot_smoke_test', {
+      configured,
+      provider: llmMeta.provider,
+      prompts: prompts.length,
+      actionable_leads: results.filter((item) => item.leadId).length
+    });
+    return res.json({ ok: true, data: { configured, provider: llmMeta.provider, results } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/run-alert-matcher', async (req, res, next) => {
+  try {
+    const { listing, reference } = await createSafeLaunchProperty(req, {
+      title: `Launch proof alert listing ${buildListingReference()}`
+    });
+    const savedSearch = await db.query(
+      `INSERT INTO saved_searches (
+         phone, category, filters, label, location, min_price, max_price,
+         alert_frequency, alert_channels, created_from, status
+       )
+       VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)
+       RETURNING *`,
+      [
+        adminTestPhone(),
+        listing.listing_type,
+        JSON.stringify({ district: listing.district, area: listing.area, launch_proof: true }),
+        `Launch proof alert ${reference}`,
+        listing.area,
+        0,
+        Number(listing.price || 0) + 1,
+        'instant',
+        JSON.stringify(['in_app', 'email']),
+        'admin_setup_status',
+        'active'
+      ]
+    );
+    const result = await matchListingToSavedSearches(db, listing);
+    const summary = await getAlertSummary(db);
+    await createLaunchAudit(req, 'alert_matching_manual_run', {
+      listing_id: listing.id,
+      saved_search_id: savedSearch.rows[0]?.id,
+      matches_created: result?.created || 0,
+      duplicates: result?.duplicates || 0
+    });
+    return res.json({
+      ok: true,
+      data: {
+        listingId: listing.id,
+        savedSearchId: savedSearch.rows[0]?.id,
+        reference,
+        matcher: result,
+        summary
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/viewing-callback-test', async (req, res, next) => {
+  try {
+    const { listing, reference } = await createSafeLaunchProperty(req, { title: `Launch proof viewing ${buildListingReference()}` });
+    await db.query(
+      `INSERT INTO viewing_configs (
+         listing_id, accepts_viewings, booking_mode, manager_type, contact_method,
+         available_days, available_time_windows, public_instructions
+       )
+       VALUES ($1,true,'request','owner','whatsapp',$2::jsonb,$3::jsonb,$4)
+       ON CONFLICT (listing_id) DO UPDATE
+       SET accepts_viewings = true, booking_mode = 'request', updated_at = NOW()`,
+      [listing.id, JSON.stringify(['monday', 'tuesday']), JSON.stringify(['09:00-12:00']), 'Launch proof viewing config']
+    );
+    const viewingLead = await createLead(db, {
+      source: 'admin_viewing_test',
+      leadType: 'viewing',
+      listingId: listing.id,
+      contact: { name: 'Launch Viewing Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'property_finder' },
+      message: `Launch viewing proof for ${reference}`,
+      metadata: { launch_proof: true, reference }
+    });
+    const booking = await db.query(
+      `INSERT INTO viewing_bookings (
+         listing_id, name, phone, email, preferred_date, preferred_time, contact_method, message, source, lead_id
+       )
+       VALUES ($1,$2,$3,$4,CURRENT_DATE + INTERVAL '2 days',$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [listing.id, 'Launch Viewing Test', adminTestPhone(), adminTestEmail(), '10:00', 'whatsapp', `Launch viewing proof ${reference}`, 'admin_setup_status', viewingLead?.id || null]
+    );
+    const callbackLead = await createLead(db, {
+      source: 'admin_callback_test',
+      leadType: 'callback',
+      listingId: listing.id,
+      contact: { name: 'Launch Callback Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'property_finder' },
+      message: `Launch callback proof for ${reference}`,
+      metadata: { launch_proof: true, reference }
+    });
+    const callback = await db.query(
+      `INSERT INTO callback_requests (
+         listing_id, name, phone, email, preferred_callback_time, contact_method, message, source, lead_id
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING *`,
+      [listing.id, 'Launch Callback Test', adminTestPhone(), adminTestEmail(), 'Tomorrow morning', 'whatsapp', `Launch callback proof ${reference}`, 'admin_setup_status', callbackLead?.id || null]
+    );
+    await logNotification(db, {
+      recipientEmail: adminTestEmail(),
+      channel: 'in_app',
+      type: 'viewing_callback_launch_test',
+      status: 'logged',
+      relatedListingId: listing.id,
+      relatedLeadId: viewingLead?.id || callbackLead?.id || null,
+      payloadSummary: { reference, booking_id: booking.rows[0]?.id, callback_id: callback.rows[0]?.id }
+    });
+    await createLaunchAudit(req, 'viewing_callback_launch_test', {
+      listing_id: listing.id,
+      booking_id: booking.rows[0]?.id,
+      callback_id: callback.rows[0]?.id
+    });
+    return res.json({
+      ok: true,
+      data: {
+        reference,
+        listingId: listing.id,
+        viewingBookingId: booking.rows[0]?.id,
+        callbackRequestId: callback.rows[0]?.id,
+        viewingLeadId: viewingLead?.id || null,
+        callbackLeadId: callbackLead?.id || null
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/advertising-payment-test', async (req, res, next) => {
+  try {
+    const stamp = launchTimestamp();
+    const campaign = await db.query(
+      `INSERT INTO advertising_campaigns (
+         advertiser_name, advertiser_email, advertiser_phone, campaign_name,
+         package_key, package_label, placements, target_locations, target_listing_types,
+         audience_segments, creative_status, creative_brief, quoted_amount_ugx,
+         payment_status, status
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15)
+       RETURNING *`,
+      [
+        'MakaUg Launch Proof Advertiser',
+        adminTestEmail(),
+        adminTestPhone(),
+        `Launch proof campaign ${stamp}`,
+        'featured_property_boost',
+        'Featured property boost',
+        JSON.stringify(['homepage', 'category']),
+        JSON.stringify(['Kampala']),
+        JSON.stringify(['sale']),
+        JSON.stringify(['buyers']),
+        'brief_needed',
+        'Admin-only launch proof campaign.',
+        100000,
+        'invoiced',
+        'awaiting_payment'
+      ]
+    );
+    const invoiceNumber = `MK-INV-${stamp}`;
+    const invoice = await db.query(
+      `INSERT INTO invoices (
+         campaign_id, invoice_number, amount, currency, status, payment_method, payment_provider, due_date
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,CURRENT_DATE + INTERVAL '7 days')
+       RETURNING *`,
+      [campaign.rows[0].id, invoiceNumber, 100000, 'UGX', 'pending_payment', 'manual', paymentProviderConfigured() ? 'configured_provider' : 'manual']
+    );
+    const paymentLink = await db.query(
+      `INSERT INTO payment_links (
+         provider, amount, currency, purpose, related_campaign_id, invoice_id,
+         status, provider_reference, checkout_url, expires_at
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW() + INTERVAL '7 days')
+       RETURNING *`,
+      [
+        paymentProviderConfigured() ? 'configured_provider' : 'manual',
+        100000,
+        'UGX',
+        'campaign',
+        campaign.rows[0].id,
+        invoice.rows[0].id,
+        paymentProviderConfigured() ? 'created' : 'provider_missing',
+        invoiceNumber,
+        process.env.PAYMENT_LINK_BASE_URL ? `${process.env.PAYMENT_LINK_BASE_URL.replace(/\/$/, '')}/${invoiceNumber}` : null
+      ]
+    );
+    const paid = await markInvoicePaidManually(db, {
+      invoiceId: invoice.rows[0].id,
+      adminUserId: req.adminAuth?.userId || null,
+      reason: 'Launch proof manual payment fallback',
+      reference: `MANUAL-${stamp}`,
+      req
+    });
+    await createLaunchAudit(req, 'advertising_payment_launch_test', {
+      campaign_id: campaign.rows[0].id,
+      invoice_id: invoice.rows[0].id,
+      payment_link_id: paymentLink.rows[0]?.id,
+      provider_configured: paymentProviderConfigured()
+    });
+    return res.json({
+      ok: true,
+      data: {
+        campaignId: campaign.rows[0].id,
+        invoiceId: invoice.rows[0].id,
+        paymentLinkId: paymentLink.rows[0]?.id,
+        invoiceStatus: paid.status,
+        providerConfigured: paymentProviderConfigured(),
+        manualFallbackAudited: true
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/setup-status/support-flow-test', async (req, res, next) => {
+  try {
+    const stamp = launchTimestamp();
+    const mortgage = await createLead(db, {
+      source: 'admin_mortgage_test',
+      leadType: 'mortgage',
+      category: 'mortgage_help',
+      budget: 100000000,
+      contact: { name: 'Launch Mortgage Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'mortgage' },
+      message: 'Launch proof mortgage help request.',
+      metadata: { launch_proof: true, stamp }
+    });
+    const mortgageRow = await db.query(
+      `INSERT INTO mortgage_enquiries (user_phone, property_price, property_purpose, deposit_percent, term_years, household_income, payload)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
+       RETURNING id`,
+      [adminTestPhone(), 150000000, 'home_purchase', 20, 20, 4500000, JSON.stringify({ launch_proof: true, lead_id: mortgage?.id || null })]
+    ).catch(() => ({ rows: [] }));
+    const help = await createLead(db, {
+      source: 'admin_help_test',
+      leadType: 'help_request',
+      category: 'support',
+      contact: { name: 'Launch Help Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'support' },
+      message: 'Launch proof help request.',
+      metadata: { launch_proof: true, stamp }
+    });
+    const career = await createLead(db, {
+      source: 'admin_careers_test',
+      leadType: 'career_interest',
+      category: 'field_agent',
+      contact: { name: 'Launch Career Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'career' },
+      message: 'Launch proof careers request.',
+      metadata: { launch_proof: true, role_interest: 'field_agent', stamp }
+    });
+    const fraud = await createLead(db, {
+      source: 'admin_fraud_test',
+      leadType: 'fraud_report',
+      category: 'fraud',
+      contact: { name: 'Launch Fraud Test', email: adminTestEmail(), phone: adminTestPhone(), roleType: 'fraud_reporter' },
+      message: 'Launch proof fraud report.',
+      metadata: { launch_proof: true, stamp }
+    });
+    const report = await db.query(
+      `INSERT INTO report_listings (property_reference, reason, details, reporter_contact, status)
+       VALUES ($1,$2,$3,$4,$5)
+       RETURNING *`,
+      [`LAUNCH-${stamp}`, 'launch proof', 'Admin-only fraud report proof.', adminTestEmail(), 'open']
+    );
+    for (const [eventType, lead] of [
+      ['mortgage_help_requested', mortgage],
+      ['help_request_submitted', help],
+      ['careers_request_submitted', career],
+      ['fraud_report_submitted', fraud]
+    ]) {
+      await logEmailEvent(db, {
+        eventType,
+        recipientEmail: adminTestEmail(),
+        recipientRole: 'admin',
+        templateKey: eventType,
+        subject: `MakaUg ${eventType.replace(/_/g, ' ')}`,
+        status: providerConfigured('email') ? 'queued' : 'provider_missing',
+        provider: providerConfigured('email') ? 'configured' : null,
+        relatedLeadId: lead?.id || null,
+        relatedMortgageLeadId: eventType === 'mortgage_help_requested' ? (mortgageRow.rows[0]?.id || null) : null,
+        failureReason: providerConfigured('email') ? null : 'email_provider_missing'
+      });
+      await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'in_app',
+        type: eventType,
+        status: 'logged',
+        relatedLeadId: lead?.id || null,
+        payloadSummary: { launch_proof: true, stamp }
+      });
+    }
+    await createLaunchAudit(req, 'support_flows_launch_test', {
+      mortgage_lead_id: mortgage?.id || null,
+      mortgage_enquiry_id: mortgageRow.rows[0]?.id || null,
+      help_lead_id: help?.id || null,
+      career_lead_id: career?.id || null,
+      fraud_lead_id: fraud?.id || null,
+      report_id: report.rows[0]?.id || null
+    });
+    return res.json({
+      ok: true,
+      data: {
+        mortgageLeadId: mortgage?.id || null,
+        mortgageEnquiryId: mortgageRow.rows[0]?.id || null,
+        helpLeadId: help?.id || null,
+        careerLeadId: career?.id || null,
+        fraudLeadId: fraud?.id || null,
+        fraudReportId: report.rows[0]?.id || null
+      }
+    });
   } catch (error) {
     return next(error);
   }

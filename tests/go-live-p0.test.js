@@ -108,6 +108,7 @@ const FORBIDDEN_PUBLIC_IDS = [
   'page-field-dashboard',
   'page-advertiser-dashboard',
   'page-admin-dashboard',
+  'page-admin-setup-status',
   'admin-evidence-modal',
   'admin-whatsapp-modal',
   'list-choice-modal',
@@ -181,6 +182,7 @@ function run() {
     const markers = PUBLIC_ROUTE_MARKERS[publicRoute] || [];
     assert(markers.some((marker) => publicText.toLowerCase().includes(marker.toLowerCase())), `${publicRoute} missing route-specific content marker`);
     assert(!publicHtml.includes('id="page-admin-docs"'), `${publicRoute} leaked admin docs`);
+    assert(!publicHtml.includes('id="page-admin-setup-status"'), `${publicRoute} leaked owner setup status`);
   }
 
   const homeHtml = sanitizePublicHtml(sourceHtml, { pathname: '/' });
@@ -470,6 +472,14 @@ function run() {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
   }
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
+  assert(sourceHtml.includes('id="page-admin-setup-status"'), 'owner setup status page should exist for protected admin route');
+  assert(sourceHtml.includes('Owner Setup Status'), 'owner setup status page should be visible to signed-in admins');
+  assert(sourceHtml.includes('Run safe property submission test'), 'setup status should include safe property submission proof action');
+  assert(sourceHtml.includes('Run AI chatbot smoke test'), 'setup status should include AI smoke proof action');
+  assert(sourceHtml.includes('Run alert matching now'), 'setup status should include alert matcher proof action');
+  assert(sourceHtml.includes('Create payment fallback test'), 'setup status should include payment fallback proof action');
+  assert(sourceHtml.includes('renderAdminSetupStatus'), 'setup status should be wired to live admin API rendering');
+  assert(sourceHtml.includes('/api/admin/setup-status'), 'setup status should call protected admin setup status API');
   assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
   assert(sourceHtml.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
   assert(sourceHtml.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
@@ -485,9 +495,11 @@ function run() {
   assert(goLiveManualQa.includes('npm run probe:backend-connections'), 'manual QA should include the backend connection probe command');
   assert(backendConnectionProbeScript.includes('/api/health/migrations'), 'backend probe should verify migration status');
   assert(backendConnectionProbeScript.includes('/api/admin/summary'), 'backend probe should verify admin API anonymous blocking');
+  assert(backendConnectionProbeScript.includes('/api/admin/setup-status'), 'backend probe should verify setup status anonymous blocking');
   assert(backendConnectionProbeScript.includes('SUPER_ADMIN_EMAIL'), 'backend probe should check super admin env presence without printing secrets');
   assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
   assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
+  assert(sourceHtml.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
   for (const expected of [
     'Public Route Health',
     'CTA health',
@@ -604,8 +616,20 @@ function run() {
   assert(mortgageRoutes.includes('mortgage_lead_received'), 'mortgage enquiry should create/log mortgage lead events');
   assert(mortgageRoutes.includes('createLead'), 'mortgage enquiry should create CRM leads');
   assert(mortgageRoutes.includes('logEmailEvent'), 'mortgage enquiry should create EmailLog entries');
+  assert(adminRoutes.includes("router.get('/setup-status'"), 'admin setup status API should exist');
+  assert(adminRoutes.includes("router.post('/setup-status/property-submission-test'"), 'admin setup status should run safe property submission proof');
+  assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
+  assert(adminRoutes.includes("router.post('/setup-status/ai-smoke-test'"), 'admin setup status should run AI proof');
+  assert(adminRoutes.includes("router.post('/setup-status/run-alert-matcher'"), 'admin setup status should run alert matching proof');
+  assert(adminRoutes.includes("router.post('/setup-status/viewing-callback-test'"), 'admin setup status should run viewing/callback proof');
+  assert(adminRoutes.includes("router.post('/setup-status/advertising-payment-test'"), 'admin setup status should run advertising/payment proof');
+  assert(adminRoutes.includes("router.post('/setup-status/support-flow-test'"), 'admin setup status should run mortgage/help/careers/fraud proof');
+  assert(adminRoutes.includes('buildListingReference'), 'admin safe submission proof should generate real MakaUg references');
+  assert(adminRoutes.includes('logEmailEvent'), 'admin proof actions should create EmailLog records');
+  assert(adminRoutes.includes('logWhatsAppMessage'), 'admin proof actions should create WhatsAppMessageLog records');
+  assert(adminRoutes.includes('matchListingToSavedSearches'), 'admin proof actions should run real alert matcher service');
 
-  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/docs', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
+  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/docs', '/admin/setup-status', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);
     const shell = renderProtectedLoginShell(protectedPath);
     assert(shell.includes('noindex,noarchive'), `${protectedPath} protected shell needs noindex/noarchive`);
@@ -617,7 +641,7 @@ function run() {
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin'), 'admin should access admin');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/crm'), 'admin should access CRM centre');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/leads'), 'admin should access lead centre');
-  for (const adminPath of ['/admin', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
+  for (const adminPath of ['/admin', '/admin/setup-status', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
     assert(roleCanAccessProtectedPath({ role: 'super_admin', audience: 'super_admin' }, adminPath), `super_admin should access ${adminPath}`);
   }
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/admin'), 'normal users must not access admin');
