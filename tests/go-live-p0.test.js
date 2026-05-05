@@ -460,6 +460,10 @@ function run() {
   assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
   assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
   assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(sourceHtml.includes('id="account-access-create-details-step"'), 'create account should start with contact details before OTP');
+  assert(sourceHtml.includes('id="account-access-create-preferences-step"'), 'create account should move to role preferences after OTP');
+  assert(sourceHtml.includes('id="account-access-create-password-step"'), 'create account should collect password after preferences');
+  assert(sourceHtml.includes('contact_verification_token'), 'create account should use a verified-contact token before final registration');
   assert(sourceHtml.includes('id="account-access-brand-kicker"'), 'auth drawer should expose a brand kicker that can be verified');
   assert(sourceHtml.includes('tracking-normal text-white/85 font-bold">makaug.com account'), 'auth drawer brand kicker should display lowercase makaug.com, not uppercase');
   assert(sourceHtml.includes('ACCOUNT_ACCESS_ROLE_THEME'), 'auth drawer should define role-specific accent themes');
@@ -491,6 +495,8 @@ function run() {
   assert(sourceHtml.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or SMS OTP');
   assert(sourceHtml.includes('SMS / Text'), 'auth drawer should label phone OTP as SMS/Text');
   assert(sourceHtml.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
+  assert(authRoutes.includes("router.post('/request-signup-otp'"), 'auth route should support pre-account signup OTP delivery');
+  assert(authRoutes.includes("router.post('/verify-signup-otp'"), 'auth route should verify signup contact before account creation');
   assert(authRoutes.includes('Verification OTP sent by SMS'), 'auth register route should report SMS OTP delivery accurately');
   assert(authRoutes.includes('terms_accepted is required'), 'auth register route should enforce terms acceptance on the backend');
   assert(authRoutes.includes('privacy_accepted is required'), 'auth register route should enforce privacy acceptance on the backend');
@@ -501,6 +507,9 @@ function run() {
   assert(!sourceHtml.includes('data-auth-text="changeType"'), 'auth drawer should not show messy Change account type action in the main flow');
   assert(sourceHtml.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
   assert(sourceHtml.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
+  assert(sourceHtml.includes('id="account-access-forgot-wrap"'), 'forgot password should use inline drawer fields instead of prompt-only reset');
+  const finderScreening = sourceHtml.match(/finder: \[([\s\S]*?)\n\s*\],\n\s*student:/m)?.[1] || '';
+  assert(finderScreening.includes('["WhatsApp", "Email"]'), 'property finder preferred contact should be limited to WhatsApp and Email');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');

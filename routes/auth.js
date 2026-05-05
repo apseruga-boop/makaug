@@ -92,21 +92,26 @@ function sanitizeProfileData(input = {}) {
     'student_campus',
     'student_university',
     'accommodation_type',
+    'student_must_have',
     'agent_company',
     'agent_districts',
     'agent_specialities',
+    'agent_languages',
+    'active_listing_count',
     'preferred_updates',
     'field_agent_territory',
     'field_agent_areas',
     'field_agent_languages',
     'field_agent_experience',
     'field_agent_availability',
+    'transport_access',
     'field_agent_reason',
     'field_agent_application_status',
     'broker_review_status',
     'business_name',
     'business_type',
-    'campaign_interest'
+    'campaign_interest',
+    'campaign_location'
   ];
   return allowed.reduce((acc, key) => {
     const value = cleanText(source[key]);
@@ -135,6 +140,52 @@ function createToken(user) {
     secret,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
+}
+
+function createSignupContactVerificationToken({ channel = 'email', email = '', phone = '' } = {}) {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not configured');
+  }
+  const resolvedChannel = String(channel || 'email').toLowerCase() === 'phone' ? 'phone' : 'email';
+  const identifier = resolvedChannel === 'email' ? normalizeEmail(email) : normalizeUgPhone(phone);
+  if (!identifier) {
+    throw new Error('Missing verified signup contact');
+  }
+  return jwt.sign(
+    {
+      purpose: 'signup_contact_verified',
+      channel: resolvedChannel,
+      identifier,
+      email: normalizeEmail(email) || '',
+      phone: normalizeUgPhone(phone) || ''
+    },
+    secret,
+    { expiresIn: '20m' }
+  );
+}
+
+function verifySignupContactVerificationToken(token = '', { email = '', phone = '' } = {}) {
+  if (!token) return { ok: false, error: 'contact_verification_token is required' };
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (decoded?.purpose !== 'signup_contact_verified') {
+      return { ok: false, error: 'contact_verification_token is invalid' };
+    }
+    const normalizedEmail = normalizeEmail(email) || '';
+    const normalizedPhone = normalizeUgPhone(phone) || '';
+    const tokenEmail = normalizeEmail(decoded.email) || '';
+    const tokenPhone = normalizeUgPhone(decoded.phone) || '';
+    const tokenIdentifier = String(decoded.identifier || '').toLowerCase();
+    const emailMatches = normalizedEmail && (tokenEmail === normalizedEmail || tokenIdentifier === normalizedEmail);
+    const phoneMatches = normalizedPhone && (tokenPhone === normalizedPhone || decoded.identifier === normalizedPhone);
+    if (!emailMatches && !phoneMatches) {
+      return { ok: false, error: 'contact_verification_token does not match this email or phone' };
+    }
+    return { ok: true, channel: decoded.channel === 'phone' ? 'phone' : 'email', identifier: decoded.identifier };
+  } catch (error) {
+    return { ok: false, error: 'contact_verification_token is invalid or expired' };
+  }
 }
 
 async function notifyAdminSignup({ user, eventType }) {
@@ -631,6 +682,119 @@ router.get('/oauth/:provider/callback', async (req, res) => {
   }
 });
 
+router.post('/request-signup-otp', async (req, res, next) => {
+  try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'phone' ? 'phone' : 'email';
+    const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
+    const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
+    const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
+      ? preferredLanguageInput
+      : 'en';
+
+    if (channel === 'email' && (!email || !isValidEmail(email))) {
+      return res.status(400).json({ ok: false, error: 'Valid email is required' });
+    }
+    if (channel === 'phone' && (!phone || !isValidPhone(phone) || !isValidUgPhone(phone))) {
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone number is required for SMS verification' });
+    }
+
+    const existing = channel === 'email'
+      ? await db.query('SELECT id, phone_verified FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
+      : await db.query('SELECT id, phone_verified FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    if (existing.rows.some((row) => row.phone_verified === true)) {
+      return res.status(409).json({ ok: false, error: 'An active account already exists. Please sign in or reset your password.' });
+    }
+
+    const otpIssue = await issueOtp({
+      purpose: 'signup',
+      channel,
+      phone,
+      email,
+      preferredLanguage
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        channel,
+        message: channel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS',
+        ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/verify-signup-otp', async (req, res, next) => {
+  try {
+    const channelInput = cleanText(req.body.channel).toLowerCase();
+    const channel = channelInput === 'phone' ? 'phone' : 'email';
+    const phone = normalizeUgPhone(req.body.phone);
+    const email = normalizeEmail(req.body.email);
+    const code = cleanText(req.body.code);
+    const identifier = channel === 'email' ? email : phone;
+
+    if (!identifier || !code) {
+      return res.status(400).json({ ok: false, error: `${channel} and code are required` });
+    }
+    if (channel === 'email' && !isValidEmail(identifier)) {
+      return res.status(400).json({ ok: false, error: 'email is invalid' });
+    }
+    if (channel === 'phone' && (!isValidPhone(identifier) || !isValidUgPhone(identifier))) {
+      return res.status(400).json({ ok: false, error: 'phone is invalid' });
+    }
+
+    const usedOverride = isAdminOtpOverrideMatch({ code, channel, identifier });
+    let matchedOtp = null;
+    if (!usedOverride) {
+      const otp = await db.query(
+        `SELECT *
+         FROM otps
+         WHERE phone = $1
+           AND code = $2
+           AND purpose = 'signup'
+           AND used = FALSE
+           AND expires_at > NOW()
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [identifier, code]
+      );
+      if (!otp.rows.length) {
+        return res.status(400).json({ ok: false, error: 'Invalid or expired OTP code' });
+      }
+      matchedOtp = otp.rows[0];
+      await db.query('UPDATE otps SET used = TRUE WHERE id = $1', [matchedOtp.id]);
+    } else {
+      logger.warn('Signup contact OTP verified via ADMIN_OTP_OVERRIDE_CODE fallback', { channel, identifier });
+    }
+
+    const contactVerificationToken = createSignupContactVerificationToken({ channel, email, phone });
+    await logNotification(db, {
+      recipientPhone: channel === 'phone' ? identifier : phone,
+      recipientEmail: channel === 'email' ? identifier : email,
+      channel: 'in_app',
+      type: 'signup_contact_verified',
+      status: 'logged',
+      payloadSummary: { contact_channel: channel }
+    });
+
+    return res.json({
+      ok: true,
+      data: {
+        contact_verified: true,
+        channel,
+        contact_verification_token: contactVerificationToken,
+        message: 'Contact verified. Continue creating your makaug.com account.'
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/register', async (req, res, next) => {
   let client = null;
   try {
@@ -644,6 +808,7 @@ router.post('/register', async (req, res, next) => {
     const confirmPassword = cleanText(req.body.confirm_password);
     const otpChannelInput = cleanText(req.body.otp_channel).toLowerCase();
     const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
+    const contactVerification = verifySignupContactVerificationToken(cleanText(req.body.contact_verification_token), { email, phone });
     const marketingOptIn = parseBooleanLike(req.body.marketing_opt_in, true);
     const weeklyTipsOptIn = parseBooleanLike(req.body.weekly_tips_opt_in, true);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
@@ -675,6 +840,7 @@ router.post('/register', async (req, res, next) => {
     if (phone && !isValidUgPhone(phone)) errors.push('phone must be a valid Uganda number');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
     if (otpChannel === 'email' && !email) errors.push('email is required when otp_channel is email');
+    if (req.body.contact_verification_token && !contactVerification.ok) errors.push(contactVerification.error);
     if (audience === 'agent' && !email) errors.push('email is required for broker signup');
     if (audience === 'field_agent' && !profileData.field_agent_territory && !profileData.field_agent_areas) {
       errors.push('field agent territory or areas are required');
@@ -766,16 +932,35 @@ router.post('/register', async (req, res, next) => {
       user = result.rows[0];
     }
 
-    const otpIssue = await issueOtp({
-      purpose: 'signup',
-      channel: otpChannel === 'email' && email ? 'email' : 'phone',
-      phone,
-      email,
-      preferredLanguage,
-      queryRunner: client
-    });
-
-    await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    let otpIssue = null;
+    if (contactVerification.ok) {
+      const verifiedPatch = {
+        contact_verified_before_account_creation: true,
+        contact_verified_channel: contactVerification.channel,
+        contact_verified_at: new Date().toISOString()
+      };
+      const verifiedUpdate = await client.query(
+        `UPDATE users
+         SET phone_verified = TRUE,
+             profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
+             last_login_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [user.id, JSON.stringify(verifiedPatch)]
+      );
+      user = verifiedUpdate.rows[0];
+    } else {
+      otpIssue = await issueOtp({
+        purpose: 'signup',
+        channel: otpChannel === 'email' && email ? 'email' : 'phone',
+        phone,
+        email,
+        preferredLanguage,
+        queryRunner: client
+      });
+      await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
+    }
     await client.query('COMMIT');
 
     if (audience === 'field_agent') {
@@ -784,6 +969,57 @@ router.post('/register', async (req, res, next) => {
       await notifyAdminSignup({ user, eventType: 'new_broker_verification_request' });
     } else if (audience === 'advertiser') {
       await notifyAdminSignup({ user, eventType: 'new_advertiser_signup' });
+    }
+
+    if (contactVerification.ok) {
+      try {
+        await ensurePostVerificationRecords(db, user);
+        const refreshed = await db.query('SELECT * FROM users WHERE id = $1 LIMIT 1', [user.id]);
+        if (refreshed.rows.length) user = refreshed.rows[0];
+      } catch (profileError) {
+        logger.warn('Post-registration profile setup failed', { userId: user.id, error: profileError.message });
+      }
+
+      if (user.email) {
+        try {
+          const welcomeDelivery = await sendWelcomeEmail({ to: user.email, user });
+          await logNotification(db, {
+            userId: user.id,
+            recipientEmail: user.email,
+            channel: 'email',
+            type: accountCreatedEventType(user),
+            status: notificationStatusFromDelivery(welcomeDelivery),
+            payloadSummary: { redirect_url: dashboardForUser(user), purpose: 'signup' },
+            sentAt: welcomeDelivery?.sent ? new Date() : null,
+            failureReason: welcomeDelivery?.error || welcomeDelivery?.reason || null
+          });
+        } catch (emailError) {
+          logger.warn('Welcome email delivery failed after verified signup', {
+            userId: user.id,
+            email: user.email,
+            error: emailError.message
+          });
+          await logNotification(db, {
+            userId: user.id,
+            recipientEmail: user.email,
+            channel: 'email',
+            type: accountCreatedEventType(user),
+            status: 'failed',
+            payloadSummary: { redirect_url: dashboardForUser(user), purpose: 'signup' },
+            failureReason: emailError.message
+          });
+        }
+      }
+
+      const token = createToken(user);
+      setAuthCookie(req, res, token);
+      const successPayload = buildOtpSuccessPayload({
+        token,
+        user: publicUser(user),
+        preferredAudience: audience,
+        message: 'Your makaug.com account has been set up. Opening your dashboard now.'
+      });
+      return res.status(201).json({ ok: true, data: successPayload });
     }
 
     return res.status(201).json({

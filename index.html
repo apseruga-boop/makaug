@@ -18721,6 +18721,9 @@
     let accountAccessDrawerLastFocus = null;
     let accountAccessDrawerStep = "account";
     let accountAccessPendingOtp = null;
+    let accountAccessCreateStep = "details";
+    let accountAccessContactVerificationToken = "";
+    let accountAccessForgotResetState = null;
 
     const ACCOUNT_ACCESS_ROLE_THEME = {
       finder: {
@@ -18780,7 +18783,7 @@
         { key: "preferred_areas", label: "Preferred area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
         { key: "budget_range", label: "Budget range?", options: ["Under USh 500K", "USh 500K-1M", "USh 1M-2M", "USh 2M-5M", "USh 50M+", "I'll choose later"] },
         { key: "moving_timeline", label: "How soon do you need it?", options: ["Immediately", "This month", "1-3 months", "Just browsing"] },
-        { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Phone call", "Email", "SMS where configured"] }
+        { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
       ],
       student: [
         { key: "student_campus", label: "Which campus/university?", options: ["Makerere", "Kyambogo", "MUBS", "UCU", "KIU", "Other / I'll choose later"] },
@@ -18808,7 +18811,7 @@
         { key: "audience", label: "Audience?", options: ["Renters", "Buyers", "Students", "Land seekers", "Commercial users"] },
         { key: "budget_range", label: "Budget range?", options: ["Under USh 100K", "USh 100K-500K", "USh 500K-1M", "USh 1M+", "Not sure"] },
         { key: "campaign_location", label: "Campaign location?", options: ["Kampala", "Wakiso", "Mukono", "National", "Other"] },
-        { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Phone call", "Email"] }
+        { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
       ]
     };
 
@@ -18892,44 +18895,44 @@
         lg: {
           finder: ["Anoonya Property", "Noonya, tereka, funa alerts."],
           student: ["Omuyizi", "Bisulo okumpi ne campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Saba, weereza, landirira."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Omusuubuzi w'ebyamaka", "Listings, leads, ne viewings."],
+          field_agent: ["Omukozi wa field", "PIN, listings, ne payouts."],
+          advertiser: ["Omulanga", "Campaigns, payments, ne leads."]
         },
         sw: {
           finder: ["Mtafutaji", "Tafuta, hifadhi, arifa."],
           student: ["Mwanafunzi", "Vyumba karibu na campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Omba, wasilisha, fuatilia."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Dalali", "Listings, leads, viewings."],
+          field_agent: ["Wakala wa field", "PIN, listings, na malipo."],
+          advertiser: ["Mtangazaji", "Kampeni, malipo, leads."]
         },
         ac: {
           finder: ["Lanwo property", "Yeny, gwok, alert."],
           student: ["Lanyut", "Rooms macok ki campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Kwac, cwal, lub kore."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Lacat property", "Listings, leads, viewings."],
+          field_agent: ["Latich field", "PIN, listings, payouts."],
+          advertiser: ["Lami kwena", "Campaigns, payments, leads."]
         },
         ny: {
           finder: ["Omunooni wa property", "Noonya, bika, alert."],
           student: ["Omwegi", "Ebisenge bya campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Shaba, tuma, kuratira."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Omushuubuzi wa property", "Listings, leads, viewings."],
+          field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
+          advertiser: ["Omurangirizi", "Campaigns, payments, leads."]
         },
         rn: {
           finder: ["Omunooni wa property", "Noonya, bika, alert."],
           student: ["Omwegi", "Ebisenge bya campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Shaba, tuma, kuratira."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Omushuubuzi wa property", "Listings, leads, viewings."],
+          field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
+          advertiser: ["Omurangirizi", "Campaigns, payments, leads."]
         },
         sm: {
           finder: ["Anoonya property", "Noonya, tereka, alert."],
           student: ["Omuyizi", "Ebisulo bya campus."],
-          agent: ["Broker", "Listings, leads, viewings."],
-          field_agent: ["Field Agent", "Saba, weereza, landirira."],
-          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+          agent: ["Omusuubuzi w'ebyamaka", "Listings, leads, viewings."],
+          field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
+          advertiser: ["Omulanga", "Campaigns, payments, leads."]
         }
       }[lang] || null;
       const copy = local || {
@@ -19009,6 +19012,22 @@
           otpMethod: "How should we send your verification code?",
           otpEmail: "Email",
           otpPhone: "SMS / Text",
+          detailsTitle: "Confirm contact details",
+          preferencesTitle: "Quick preferences",
+          passwordTitle: "Create password",
+          sendCode: "Send verification code",
+          verifyCode: "Verify code",
+          createFinal: "Create account",
+          contactStepNote: "Add your name, email, and mobile number. We will send a code before you choose preferences.",
+          preferencesStepNote: "Tell us what you are looking for so your dashboard starts useful.",
+          passwordStepNote: "Create a password, confirm it, and accept the terms before opening your dashboard.",
+          forgotTitle: "Reset password",
+          resetIdentifier: "Email address or phone number",
+          resetCode: "Reset code",
+          newPassword: "New password",
+          sendResetCode: "Send reset code",
+          resetPassword: "Reset password",
+          backToSignIn: "Back to sign in",
           terms: `I agree to the ${publicBrand()} Terms & Conditions.`,
           privacy: `I have read the ${publicBrand()} Privacy Policy.`,
           verifyTitle: "Verify your account",
@@ -19033,6 +19052,22 @@
           otpMethod: "Tukusindikire wa code?",
           otpEmail: "Email",
           otpPhone: "SMS / Text",
+          detailsTitle: "Kakasa email n'essimu",
+          preferencesTitle: "By'oyagala mu bwangu",
+          passwordTitle: "Kola password",
+          sendCode: "Sindika code",
+          verifyCode: "Kakasa code",
+          createFinal: "Kola account",
+          contactStepNote: "Teekamu erinnya, email, n'essimu. Tujja kusindika code nga tonnalonda by'oyagala.",
+          preferencesStepNote: "Tubuulire ky'onoonya dashboard yo etandike nga ekuyamba.",
+          passwordStepNote: "Kola password, gikakase, era okkirize amateeka nga tonnayigira dashboard.",
+          forgotTitle: "Kyuusa password",
+          resetIdentifier: "Email oba ennamba ya simu",
+          resetCode: "Code y'okukyusa",
+          newPassword: "Password empya",
+          sendResetCode: "Sindika code",
+          resetPassword: "Kyuusa password",
+          backToSignIn: "Ddayo okuyingira",
           terms: `Nzikiriza Terms & Conditions za ${publicBrand()}.`,
           privacy: `Nsomedde Privacy Policy ya ${publicBrand()}.`,
           verifyTitle: "Kakasa account yo",
@@ -19057,6 +19092,22 @@
           otpMethod: "Tutume msimbo wapi?",
           otpEmail: "Barua pepe",
           otpPhone: "SMS / Text",
+          detailsTitle: "Thibitisha mawasiliano",
+          preferencesTitle: "Mapendeleo ya haraka",
+          passwordTitle: "Unda nenosiri",
+          sendCode: "Tuma msimbo",
+          verifyCode: "Thibitisha msimbo",
+          createFinal: "Fungua akaunti",
+          contactStepNote: "Weka jina, barua pepe, na nambari ya simu. Tutatuma msimbo kabla ya mapendeleo.",
+          preferencesStepNote: "Tuambie unachotafuta ili dashibodi yako ianze vizuri.",
+          passwordStepNote: "Unda nenosiri, lithibitishe, na ukubali masharti kabla ya dashibodi.",
+          forgotTitle: "Weka upya nenosiri",
+          resetIdentifier: "Barua pepe au nambari ya simu",
+          resetCode: "Msimbo wa kuweka upya",
+          newPassword: "Nenosiri jipya",
+          sendResetCode: "Tuma msimbo",
+          resetPassword: "Weka upya nenosiri",
+          backToSignIn: "Rudi kuingia",
           terms: `Nakubali Sheria na Masharti ya ${publicBrand()}.`,
           privacy: `Nimesoma Sera ya Faragha ya ${publicBrand()}.`,
           verifyTitle: "Thibitisha akaunti yako",
@@ -19333,6 +19384,17 @@
       }
       setAccountAccessRole(accountAccessDrawerAudience);
       applyAccountAccessTheme();
+      if (accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify") {
+        setAccountAccessCreateStep(accountAccessCreateStep);
+      } else if (accountAccessDrawerMode === "forgot") {
+        setTextById("account-access-mode-label", accountAccessText("forgotTitle"));
+        const btn = document.getElementById("account-access-continue-btn");
+        if (btn) btn.textContent = accountAccessForgotResetState ? accountAccessText("resetPassword") : accountAccessText("sendResetCode");
+      } else {
+        setTextById("account-access-mode-label", accountAccessText("signIn"));
+        const btn = document.getElementById("account-access-continue-btn");
+        if (btn) btn.textContent = accountAccessText("signIn");
+      }
       updateAccountAccessProgress(accountAccessDrawerStep);
     }
 
@@ -19355,9 +19417,10 @@
       const progress = document.getElementById("account-access-progress-summary");
       if (!progress) return;
       const labels = {
-        details: "1 of 3: Details",
-        preferences: "2 of 3: Preferences",
-        verify: "3 of 3: Verify"
+        details: "1 of 4: Details",
+        verify: "2 of 4: Verify",
+        preferences: "3 of 4: Preferences",
+        password: "4 of 4: Password"
       };
       const shouldShow = accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
       progress.classList.toggle("hidden", !shouldShow);
@@ -19381,10 +19444,10 @@
             <span class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center" style="color:${theme.primary};"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
             <span><span class="block text-sm font-black text-gray-900">${adminEscape(copy.label)}</span><span class="block text-xs text-gray-600">${adminEscape(copy.body)}</span></span>
           </div>
-          ${accountAccessDrawerMode === "create" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold" style="color:${theme.primary};">Back to account type</button>` : ""}
+          ${accountAccessDrawerMode === "create" && accountAccessCreateStep === "details" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold" style="color:${theme.primary};">Back to account type</button>` : ""}
         </div>` : "";
       }
-      if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify");
+      if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify" || accountAccessDrawerMode === "forgot");
     }
 
     function applyAccountAccessTheme() {
@@ -19429,23 +19492,90 @@
       });
     }
 
+    function setAccountAccessCreateStep(step = "details") {
+      accountAccessCreateStep = ["details", "verify", "preferences", "password"].includes(step) ? step : "details";
+      const isVerify = accountAccessCreateStep === "verify";
+      const stepIds = {
+        details: "account-access-create-details-step",
+        preferences: "account-access-create-preferences-step",
+        password: "account-access-create-password-step"
+      };
+      Object.entries(stepIds).forEach(([key, id]) => {
+        document.getElementById(id)?.classList.toggle("hidden", key !== accountAccessCreateStep);
+      });
+      document.getElementById("account-access-otp-wrap")?.classList.toggle("hidden", !isVerify);
+      document.getElementById("account-access-create-wrap")?.classList.toggle("hidden", isVerify);
+      document.getElementById("account-access-signin-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-password-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-forgot-wrap")?.classList.add("hidden");
+      const note = document.getElementById("account-access-create-flow-note");
+      if (note) {
+        const noteKey = accountAccessCreateStep === "preferences"
+          ? "preferencesStepNote"
+          : (accountAccessCreateStep === "password" ? "passwordStepNote" : "contactStepNote");
+        note.textContent = accountAccessText(noteKey);
+      }
+      const titles = {
+        details: accountAccessText("detailsTitle"),
+        verify: accountAccessText("verifyTitle"),
+        preferences: accountAccessText("preferencesTitle"),
+        password: accountAccessText("passwordTitle")
+      };
+      setTextById("account-access-mode-label", titles[accountAccessCreateStep] || accountAccessText("createAccount"));
+      const btn = document.getElementById("account-access-continue-btn");
+      if (btn) {
+        const labels = {
+          details: accountAccessText("sendCode"),
+          verify: accountAccessText("verifyCode"),
+          preferences: accountAccessText("continue"),
+          password: accountAccessText("createFinal")
+        };
+        btn.textContent = labels[accountAccessCreateStep] || accountAccessText("continue");
+      }
+      updateAccountAccessProgress(accountAccessCreateStep);
+      updateAccountAccessRoleFocus();
+      applyAccountAccessTheme();
+    }
+
     function showAccountAccessRolePicker() {
       accountAccessDrawerMode = "signin";
       accountAccessPendingOtp = null;
+      accountAccessContactVerificationToken = "";
+      accountAccessCreateStep = "details";
+      accountAccessForgotResetState = null;
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
       const passwordWrap = document.getElementById("account-access-password-wrap");
       const otpWrap = document.getElementById("account-access-otp-wrap");
+      const forgotWrap = document.getElementById("account-access-forgot-wrap");
       if (signInWrap) signInWrap.classList.remove("hidden");
       if (createWrap) createWrap.classList.add("hidden");
       if (passwordWrap) passwordWrap.classList.remove("hidden");
       if (otpWrap) otpWrap.classList.add("hidden");
-      setTextById("account-access-mode-label", "Sign in");
+      if (forgotWrap) forgotWrap.classList.add("hidden");
+      setTextById("account-access-mode-label", accountAccessText("signIn"));
       const btn = document.getElementById("account-access-continue-btn");
-      if (btn) btn.textContent = "Sign in";
+      if (btn) btn.textContent = accountAccessText("signIn");
       updateAccountAccessProgress("account");
       updateAccountAccessSignInCopy();
       updateAccountAccessRoleFocus();
+    }
+
+    function showAccountAccessSignIn() {
+      accountAccessDrawerMode = "signin";
+      accountAccessForgotResetState = null;
+      document.getElementById("account-access-signin-wrap")?.classList.remove("hidden");
+      document.getElementById("account-access-password-wrap")?.classList.remove("hidden");
+      document.getElementById("account-access-create-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-otp-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-forgot-wrap")?.classList.add("hidden");
+      setTextById("account-access-mode-label", accountAccessText("signIn"));
+      const btn = document.getElementById("account-access-continue-btn");
+      if (btn) btn.textContent = accountAccessText("signIn");
+      updateAccountAccessProgress("account");
+      updateAccountAccessSignInCopy();
+      updateAccountAccessRoleFocus();
+      setTimeout(() => document.getElementById("account-access-identifier")?.focus(), 30);
     }
 
     function ensureAccountAccessDrawer() {
@@ -19459,7 +19589,7 @@
       drawer.setAttribute("aria-labelledby", "account-access-title");
       drawer.innerHTML = `
         <div class="absolute inset-0 bg-black/45" data-auth-drawer-overlay="1" onclick="closeAccountAccessDrawer()"></div>
-        <aside class="absolute right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl flex flex-col sm:rounded-l-3xl overflow-hidden overflow-x-hidden">
+        <aside class="absolute right-0 top-0 h-full w-full sm:max-w-xl lg:max-w-2xl bg-white shadow-2xl flex flex-col sm:rounded-l-3xl overflow-hidden overflow-x-hidden">
           <div id="account-access-header" class="px-5 py-5 text-white shrink-0" style="background:linear-gradient(135deg, #064e3b 0%, #147a3f 52%, #22c55e 100%);">
             <div class="flex items-start justify-between gap-4">
               <div>
@@ -19518,57 +19648,61 @@
               </div>
               <div id="account-access-create-wrap" class="hidden mt-4 space-y-3">
                 <div id="account-access-create-flow-note" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">
-                  Add your details and password, choose where to receive the OTP, then verify to open your dashboard.
+                  Add your name, email, and mobile number. We will send a code before you choose preferences.
                 </div>
-                <div class="grid sm:grid-cols-2 gap-3">
-                  <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="firstName">First name</span>
-                    <input id="account-access-first-name" autocomplete="given-name" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="First name">
-                  </label>
-                  <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
-                    <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="you@email.com">
-                  </label>
-                  <label class="block sm:col-span-2">
-                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="phone">Phone / WhatsApp</span>
-                    <input id="account-access-phone" autocomplete="tel" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="+256 7XX XXX XXX">
-                  </label>
+                <div id="account-access-create-details-step" data-auth-create-step="details" class="space-y-3">
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="firstName">First name</span>
+                      <input id="account-access-first-name" autocomplete="given-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="First name">
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
+                      <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="you@email.com">
+                    </label>
+                    <label class="block sm:col-span-2">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="phone">Phone / WhatsApp</span>
+                      <input id="account-access-phone" autocomplete="tel" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="+256 7XX XXX XXX">
+                    </label>
+                  </div>
+                  <div id="account-access-otp-method-wrap" class="rounded-2xl border border-green-100 bg-green-50 p-3">
+                    <div class="text-xs font-black text-green-950 mb-2" data-auth-text="otpMethod">How should we send your verification code?</div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                        <input type="radio" name="account-access-otp-method" value="email" class="accent-green-700" checked>
+                        <span data-auth-text="otpEmail">Email</span>
+                      </label>
+                      <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                        <input type="radio" name="account-access-otp-method" value="phone" class="accent-green-700">
+                        <span data-auth-text="otpPhone">SMS / Text</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
-                <div>
+                <div id="account-access-create-preferences-step" data-auth-create-step="preferences" class="hidden space-y-3">
                   <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
                   <div id="account-access-screening" class="grid sm:grid-cols-2 gap-3"></div>
                 </div>
-                <div class="grid sm:grid-cols-2 gap-3">
-                  <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="password">Password</span>
-                    <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Password">
-                  </label>
-                  <label class="block">
-                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
-                    <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Confirm password">
-                  </label>
-                </div>
-                <div id="account-access-otp-method-wrap" class="rounded-2xl border border-green-100 bg-green-50 p-3">
-                  <div class="text-xs font-black text-green-950 mb-2" data-auth-text="otpMethod">How should we send your verification code?</div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
-                      <input type="radio" name="account-access-otp-method" value="email" class="accent-green-700" checked>
-                      <span data-auth-text="otpEmail">Email</span>
+                <div id="account-access-create-password-step" data-auth-create-step="password" class="hidden space-y-3">
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="password">Password</span>
+                      <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Password">
                     </label>
-                    <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
-                      <input type="radio" name="account-access-otp-method" value="phone" class="accent-green-700">
-                      <span data-auth-text="otpPhone">SMS / Text</span>
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
+                      <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Confirm password">
                     </label>
                   </div>
+                  <label class="flex items-start gap-2 text-xs text-gray-700">
+                    <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
+                    <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
+                  </label>
+                  <label class="flex items-start gap-2 text-xs text-gray-700">
+                    <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
+                    <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
+                  </label>
                 </div>
-                <label class="flex items-start gap-2 text-xs text-gray-700">
-                  <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
-                </label>
-                <label class="flex items-start gap-2 text-xs text-gray-700">
-                  <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
-                </label>
               </div>
               <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
                 <div class="rounded-2xl bg-green-50 border border-green-100 p-3">
@@ -19579,6 +19713,43 @@
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="verificationCode">Verification code</span>
                   <input id="account-access-otp-code" inputmode="numeric" autocomplete="one-time-code" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-xl tracking-[0.3em] font-black text-center" placeholder="000000" maxlength="8">
                 </label>
+              </div>
+              <div id="account-access-forgot-wrap" class="hidden mt-4 space-y-3">
+                <div class="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-900">
+                  <div class="text-sm font-black text-green-950" data-auth-text="forgotTitle">Reset password</div>
+                  <p class="mt-1">We send a secure reset code. We never send or reveal your old password.</p>
+                </div>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="resetIdentifier">Email address or phone number</span>
+                  <input id="account-access-forgot-identifier" autocomplete="username" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Email address or phone number">
+                </label>
+                <div id="account-access-forgot-method-wrap" class="grid grid-cols-2 gap-2">
+                  <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                    <input type="radio" name="account-access-forgot-method" value="email" class="accent-green-700" checked>
+                    <span data-auth-text="otpEmail">Email</span>
+                  </label>
+                  <label class="flex items-center gap-2 rounded-xl bg-white border border-green-100 px-3 py-2 text-xs font-bold text-gray-700">
+                    <input type="radio" name="account-access-forgot-method" value="phone" class="accent-green-700">
+                    <span data-auth-text="otpPhone">SMS / Text</span>
+                  </label>
+                </div>
+                <div id="account-access-forgot-reset-fields" class="hidden space-y-3">
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="resetCode">Reset code</span>
+                    <input id="account-access-reset-code" inputmode="numeric" autocomplete="one-time-code" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-xl tracking-[0.3em] font-black text-center" placeholder="000000" maxlength="8">
+                  </label>
+                  <div class="grid sm:grid-cols-2 gap-3">
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="newPassword">New password</span>
+                      <input id="account-access-new-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="New password">
+                    </label>
+                    <label class="block">
+                      <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
+                      <input id="account-access-confirm-new-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Confirm password">
+                    </label>
+                  </div>
+                </div>
+                <button type="button" onclick="showAccountAccessSignIn()" class="text-xs font-bold" data-auth-text="backToSignIn" data-auth-accent-link="1">Back to sign in</button>
               </div>
               <div class="sticky bottom-0 -mx-4 mt-4 bg-white/95 backdrop-blur px-4 pb-1 pt-3 border-t border-gray-100">
                 <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="w-full min-h-[48px] bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
@@ -19676,6 +19847,9 @@
     function openAccountAccessDrawer(mode = "signin", audience = "finder") {
       accountAccessDrawerMode = mode === "create" ? "create" : "signin";
       accountAccessPendingOtp = null;
+      accountAccessContactVerificationToken = "";
+      accountAccessCreateStep = "details";
+      accountAccessForgotResetState = null;
       accountAccessDrawerLastFocus = document.activeElement;
       const drawer = ensureAccountAccessDrawer();
       drawer.classList.remove("hidden");
@@ -19688,13 +19862,16 @@
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
       const otpWrap = document.getElementById("account-access-otp-wrap");
+      const forgotWrap = document.getElementById("account-access-forgot-wrap");
       if (passwordWrap) passwordWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
       if (signInWrap) signInWrap.classList.toggle("hidden", accountAccessDrawerMode === "create");
       if (createWrap) createWrap.classList.toggle("hidden", accountAccessDrawerMode !== "create");
       if (otpWrap) otpWrap.classList.add("hidden");
+      if (forgotWrap) forgotWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
       if (continueBtn) continueBtn.textContent = accountAccessDrawerMode === "create" ? "Create account" : "Sign in";
       setAccountAccessRole(audience);
+      if (accountAccessDrawerMode === "create") setAccountAccessCreateStep("details");
       updateAccountAccessProgress(accountAccessDrawerMode === "create" ? "details" : "account");
       updateAccountAccessRoleFocus();
       applyAccountAccessLanguageUi();
@@ -19719,11 +19896,15 @@
     function showAccountAccessCreate() {
       accountAccessDrawerMode = "create";
       accountAccessPendingOtp = null;
+      accountAccessContactVerificationToken = "";
+      accountAccessCreateStep = "details";
+      accountAccessForgotResetState = null;
       setTextById("account-access-mode-label", "Create account");
       const signInWrap = document.getElementById("account-access-signin-wrap");
       const createWrap = document.getElementById("account-access-create-wrap");
       const passwordWrap = document.getElementById("account-access-password-wrap");
       const otpWrap = document.getElementById("account-access-otp-wrap");
+      const forgotWrap = document.getElementById("account-access-forgot-wrap");
       const identifier = (document.getElementById("account-access-identifier")?.value || "").trim();
       if (identifier) {
         if (identifier.includes("@")) {
@@ -19738,13 +19919,14 @@
       if (createWrap) createWrap.classList.remove("hidden");
       if (passwordWrap) passwordWrap.classList.add("hidden");
       if (otpWrap) otpWrap.classList.add("hidden");
+      if (forgotWrap) forgotWrap.classList.add("hidden");
       const continueBtn = document.getElementById("account-access-continue-btn");
-      if (continueBtn) continueBtn.textContent = "Create account";
+      if (continueBtn) continueBtn.textContent = accountAccessText("sendCode");
       setTextById("account-access-create-flow-note", accountAccessDrawerAudience === "field_agent"
         ? `Field Agents can apply here, but ${publicBrand()} Operations can also create approved agent accounts with a phone/email and 4-digit PIN from admin.`
-        : "Add your details and password, choose where to receive the OTP, then verify to open your dashboard.");
+        : accountAccessText("contactStepNote"));
       renderAccountAccessScreening();
-      updateAccountAccessProgress("details");
+      setAccountAccessCreateStep("details");
       updateAccountAccessRoleFocus();
       setTimeout(() => document.getElementById("account-access-first-name")?.focus(), 30);
     }
@@ -19756,10 +19938,23 @@
 
     async function continueAccountAccess() {
       if (accountAccessDrawerMode === "verify") {
-        await submitAccountAccessOtp();
+        await verifyAccountAccessContactOtp();
+        return;
+      }
+      if (accountAccessDrawerMode === "forgot") {
+        await continueAccountAccessForgotFlow();
         return;
       }
       if (accountAccessDrawerMode === "create") {
+        if (accountAccessCreateStep === "details") {
+          await submitAccountAccessContactOtp();
+          return;
+        }
+        if (accountAccessCreateStep === "preferences") {
+          setAccountAccessCreateStep("password");
+          setTimeout(() => document.getElementById("account-access-create-password")?.focus(), 30);
+          return;
+        }
         await submitAccountAccessCreate();
         return;
       }
@@ -19804,6 +19999,117 @@
         return `We sent a verification code by SMS to: ${masked}. Please enter it below.`;
       }
       return `We sent a verification code to your email: ${masked}. Please enter it below.`;
+    }
+
+    function getAccountAccessContactDetails() {
+      return {
+        firstName: (document.getElementById("account-access-first-name")?.value || "").trim(),
+        email: (document.getElementById("account-access-email")?.value || "").trim().toLowerCase(),
+        phone: normalizePhoneInput(document.getElementById("account-access-phone")?.value || ""),
+        preferredLanguage: (document.getElementById("auth-drawer-language")?.value || currentLang || "en").trim(),
+        otpChannel: selectedAccountAccessOtpChannel()
+      };
+    }
+
+    function validateAccountAccessContactDetails({ firstName, email, phone, otpChannel } = {}) {
+      const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "");
+      if (!firstName || !email || !phone) {
+        toast("Add your first name, email address, and mobile number.");
+        return false;
+      }
+      if (!emailLooksValid) {
+        toast("Enter a valid email address.");
+        return false;
+      }
+      if (otpChannel === "phone" && !/^\+256\d{9}$/.test(phone || "")) {
+        toast("Enter a valid Uganda mobile number for SMS verification.");
+        return false;
+      }
+      return true;
+    }
+
+    async function submitAccountAccessContactOtp() {
+      const details = getAccountAccessContactDetails();
+      if (!validateAccountAccessContactDetails(details)) return;
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || accountAccessText("sendCode");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Sending...";
+      }
+      try {
+        await apiRequest("/api/auth/request-signup-otp", {
+          method: "POST",
+          body: {
+            email: details.email,
+            phone: details.phone,
+            channel: details.otpChannel,
+            preferred_language: details.preferredLanguage
+          }
+        });
+        const destination = details.otpChannel === "phone" ? details.phone : details.email;
+        accountAccessPendingOtp = {
+          email: details.email,
+          phone: details.phone,
+          channel: details.otpChannel,
+          destination,
+          audience: accountAccessDrawerAudience
+        };
+        accountAccessDrawerMode = "verify";
+        setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(details.otpChannel, destination));
+        setAccountAccessCreateStep("verify");
+        toast(details.otpChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code.");
+        setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
+      } catch (error) {
+        toast(error.message || "Could not send verification code.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (accountAccessDrawerMode !== "verify") btn.textContent = original;
+        }
+      }
+    }
+
+    async function verifyAccountAccessContactOtp() {
+      const pending = accountAccessPendingOtp || {};
+      const code = (document.getElementById("account-access-otp-code")?.value || "").trim();
+      const channel = pending.channel === "phone" ? "phone" : "email";
+      if (!pending.destination || !code) {
+        toast(`Enter the verification code sent ${channel === "phone" ? "by SMS to your phone" : "to your email"}.`);
+        return;
+      }
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || accountAccessText("verifyCode");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Verifying...";
+      }
+      try {
+        const verify = await apiRequest("/api/auth/verify-signup-otp", {
+          method: "POST",
+          body: {
+            email: pending.email,
+            phone: pending.phone,
+            code,
+            channel
+          }
+        });
+        accountAccessContactVerificationToken = verify?.data?.contact_verification_token || "";
+        accountAccessDrawerMode = "create";
+        const codeInput = document.getElementById("account-access-otp-code");
+        if (codeInput) codeInput.value = "";
+        setAccountAccessCreateStep("preferences");
+        toast("Contact verified. Tell us what you are looking for next.");
+      } catch (error) {
+        toast(error.message || "Verification failed.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (accountAccessDrawerMode === "verify" || accountAccessCreateStep === "verify") {
+            btn.textContent = original;
+          }
+        }
+      }
     }
 
     function accountPolicyPreview(kind = "terms") {
@@ -19867,15 +20173,16 @@
     }
 
     async function submitAccountAccessCreate() {
-      const firstName = (document.getElementById("account-access-first-name")?.value || "").trim();
-      const email = (document.getElementById("account-access-email")?.value || "").trim().toLowerCase();
-      const phone = normalizePhoneInput(document.getElementById("account-access-phone")?.value || "");
+      const details = getAccountAccessContactDetails();
+      const firstName = details.firstName;
+      const email = details.email;
+      const phone = details.phone;
       const password = (document.getElementById("account-access-create-password")?.value || "").trim();
       const confirmPassword = (document.getElementById("account-access-confirm-password")?.value || "").trim();
-      const preferredLanguage = (document.getElementById("auth-drawer-language")?.value || currentLang || "en").trim();
+      const preferredLanguage = details.preferredLanguage;
       const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
       const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
-      const otpChannel = selectedAccountAccessOtpChannel();
+      const otpChannel = details.otpChannel;
       const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
       if (!firstName || !email || !phone || !password) {
         toast("Add your first name, email, phone/WhatsApp, and password.");
@@ -19897,7 +20204,11 @@
         toast("Please accept the Terms and Privacy Policy to continue.");
         return;
       }
-      updateAccountAccessProgress("verify");
+      if (!accountAccessContactVerificationToken) {
+        toast("Please verify your email or SMS code before creating the account.");
+        setAccountAccessCreateStep("details");
+        return;
+      }
       const profileData = collectAccountAccessScreeningData();
       const roleLabel = accountAccessDrawerAudience === "agent"
         ? "Broker"
@@ -19922,6 +20233,7 @@
             password,
             confirm_password: confirmPassword,
             otp_channel: otpChannel,
+            contact_verification_token: accountAccessContactVerificationToken,
             audience: accountAccessDrawerAudience,
             terms_accepted: termsAccepted,
             privacy_accepted: privacyAccepted,
@@ -19931,26 +20243,16 @@
             profile_data: profileData
           }
         });
-        const destination = otpChannel === "phone" ? phone : email;
-        accountAccessPendingOtp = { email, phone, channel: otpChannel, destination, audience: accountAccessDrawerAudience };
-        accountAccessDrawerMode = "verify";
-        document.getElementById("account-access-create-wrap")?.classList.add("hidden");
-        document.getElementById("account-access-signin-wrap")?.classList.add("hidden");
-        document.getElementById("account-access-password-wrap")?.classList.add("hidden");
-        document.getElementById("account-access-otp-wrap")?.classList.remove("hidden");
-        setTextById("account-access-mode-label", "Verify account");
-        setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(otpChannel, destination));
-        if (btn) btn.textContent = "Verify and continue";
-        updateAccountAccessProgress("verify");
-        toast(register?.message || (otpChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code."));
-        setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
+        accountAccessPendingOtp = null;
+        accountAccessContactVerificationToken = "";
+        toast(register?.data?.message || "Your makaug.com account has been set up. Opening your dashboard.");
+        await finalizeAuth(register?.data, "drawer_verified_signup", accountAccessDrawerAudience);
       } catch (error) {
-        updateAccountAccessProgress("details");
         toast(error.message || "Account creation failed.");
       } finally {
         if (btn) {
           btn.disabled = false;
-          if (accountAccessDrawerMode !== "verify") btn.textContent = original;
+          btn.textContent = original;
         }
       }
     }
@@ -20019,18 +20321,52 @@
     }
 
     function startAccountAccessForgotFlow() {
-      resetAccountAccessPasswordFromDrawer();
+      accountAccessDrawerMode = "forgot";
+      accountAccessForgotResetState = null;
+      const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
+      const forgotIdentifier = document.getElementById("account-access-forgot-identifier");
+      if (forgotIdentifier && identifierRaw) forgotIdentifier.value = identifierRaw;
+      document.getElementById("account-access-signin-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-password-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-create-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-otp-wrap")?.classList.add("hidden");
+      document.getElementById("account-access-forgot-wrap")?.classList.remove("hidden");
+      document.getElementById("account-access-forgot-reset-fields")?.classList.add("hidden");
+      setTextById("account-access-mode-label", accountAccessText("forgotTitle"));
+      const btn = document.getElementById("account-access-continue-btn");
+      if (btn) btn.textContent = accountAccessText("sendResetCode");
+      updateAccountAccessProgress("account");
+      updateAccountAccessRoleFocus();
+      setTimeout(() => forgotIdentifier?.focus(), 30);
     }
 
-    async function resetAccountAccessPasswordFromDrawer() {
-      const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
-      const prompted = identifierRaw || (window.prompt("Enter your account email address or phone number:") || "").trim();
-      const isEmailReset = prompted.includes("@");
-      const phone = isEmailReset ? "" : normalizePhoneInput(prompted);
-      const email = isEmailReset ? prompted.toLowerCase() : "";
-      if (!phone && !email) {
-        toast("Enter your email address or phone number to reset your password.");
+    function selectedAccountAccessForgotChannel() {
+      return document.querySelector('input[name="account-access-forgot-method"]:checked')?.value === "phone" ? "phone" : "email";
+    }
+
+    async function continueAccountAccessForgotFlow() {
+      if (!accountAccessForgotResetState) {
+        await sendAccountAccessPasswordResetCode();
+      } else {
+        await resetAccountAccessPasswordFromDrawer();
+      }
+    }
+
+    async function sendAccountAccessPasswordResetCode() {
+      const identifierRaw = (document.getElementById("account-access-forgot-identifier")?.value || "").trim();
+      const selectedChannel = selectedAccountAccessForgotChannel();
+      const isEmailReset = selectedChannel === "email";
+      const phone = isEmailReset ? "" : normalizePhoneInput(identifierRaw);
+      const email = isEmailReset ? identifierRaw.toLowerCase() : "";
+      if ((isEmailReset && !email) || (!isEmailReset && !phone)) {
+        toast(isEmailReset ? "Enter your account email address." : "Enter your account phone number.");
         return;
+      }
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || accountAccessText("sendResetCode");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Sending...";
       }
       try {
         await apiRequest("/api/auth/request-password-reset", {
@@ -20039,23 +20375,50 @@
             ? { email, channel: "email", preferred_language: currentLang || "en" }
             : { phone, channel: "phone", preferred_language: currentLang || "en" }
         });
+        accountAccessForgotResetState = { channel: isEmailReset ? "email" : "phone", email, phone };
+        document.getElementById("account-access-forgot-reset-fields")?.classList.remove("hidden");
+        document.getElementById("account-access-forgot-method-wrap")?.classList.add("hidden");
+        if (btn) btn.textContent = accountAccessText("resetPassword");
         const channelLabel = isEmailReset ? "email" : "SMS/text";
         toast(`We sent a password reset code by ${channelLabel}.`);
-        const code = (window.prompt(`Enter the password reset code sent by ${channelLabel}:`) || "").trim();
-        if (!code) {
-          toast("Password reset cancelled.");
-          return;
+        setTimeout(() => document.getElementById("account-access-reset-code")?.focus(), 30);
+      } catch (error) {
+        toast(error.message || "Password reset request failed.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          if (!accountAccessForgotResetState) btn.textContent = original;
         }
-        const newPassword = (window.prompt("Enter your new password (minimum 8 characters):") || "").trim();
-        if (!newPassword || newPassword.length < 8) {
-          toast("New password must be at least 8 characters.");
-          return;
-        }
-        const confirmPassword = (window.prompt("Confirm your new password:") || "").trim();
-        if (newPassword !== confirmPassword) {
-          toast("Passwords do not match.");
-          return;
-        }
+      }
+    }
+
+    async function resetAccountAccessPasswordFromDrawer() {
+      const state = accountAccessForgotResetState || {};
+      const isEmailReset = state.channel !== "phone";
+      const phone = state.phone || "";
+      const email = state.email || "";
+      const code = (document.getElementById("account-access-reset-code")?.value || "").trim();
+      const newPassword = (document.getElementById("account-access-new-password")?.value || "").trim();
+      const confirmPassword = (document.getElementById("account-access-confirm-new-password")?.value || "").trim();
+      if (!code) {
+        toast("Enter the password reset code.");
+        return;
+      }
+      if (!newPassword || newPassword.length < 8) {
+        toast("New password must be at least 8 characters.");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast("Passwords do not match.");
+        return;
+      }
+      const btn = document.getElementById("account-access-continue-btn");
+      const original = btn?.textContent || accountAccessText("resetPassword");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Resetting...";
+      }
+      try {
         await apiRequest("/api/auth/reset-password", {
           method: "POST",
           body: {
@@ -20070,10 +20433,17 @@
         const passwordEl = document.getElementById("account-access-password");
         if (identifierEl) identifierEl.value = isEmailReset ? email : phone;
         if (passwordEl) passwordEl.value = "";
+        accountAccessForgotResetState = null;
         await trackEvent("auth_password_reset", { source: "drawer", channel: isEmailReset ? "email" : "phone" });
         toast("Password reset successful. Sign in with your new password.");
+        showAccountAccessSignIn();
       } catch (error) {
         toast(error.message || "Password reset failed.");
+      } finally {
+        if (btn && accountAccessDrawerMode === "forgot") {
+          btn.disabled = false;
+          btn.textContent = original;
+        }
       }
     }
 
