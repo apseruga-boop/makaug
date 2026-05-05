@@ -20,6 +20,11 @@ const {
 
 const INTENTS = [
   'property_search',
+  'search_near_me',
+  'shared_location_search',
+  'save_search',
+  'create_alert',
+  'property_need_request',
   'property_listing',
   'agent_search',
   'agent_registration',
@@ -236,7 +241,15 @@ function formatUGX(value) {
 
 function buildIntentLink(intent) {
   const key = normalizeIntent(intent);
-  if (key === 'property_search' || key === 'looking_for_property_lead') return `${PUBLIC_BASE_URL}/#page-sale`;
+  if ([
+    'property_search',
+    'search_near_me',
+    'shared_location_search',
+    'save_search',
+    'create_alert',
+    'property_need_request',
+    'looking_for_property_lead'
+  ].includes(key)) return `${PUBLIC_BASE_URL}/#page-sale`;
   if (key === 'property_listing') return `${PUBLIC_BASE_URL}/#page-list-property`;
   if (key === 'agent_search') return `${PUBLIC_BASE_URL}/#page-brokers`;
   if (key === 'agent_registration') return `${PUBLIC_BASE_URL}/#page-brokers`;
@@ -357,7 +370,13 @@ function heuristicIntent(text) {
   if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
-  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|near me|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|ot|ot me)/.test(t)) {
+  if (/(near me|nearby|my location|share location|shared location|around me)/.test(t)) {
+    return { intent: 'search_near_me', confidence: 0.72, entities: { near_me: true } };
+  }
+  if (/(save search|save this search|notify me|alert me|create alert|tell me when|let me know)/.test(t)) {
+    return { intent: /(alert|notify|tell me|let me know)/.test(t) ? 'create_alert' : 'save_search', confidence: 0.7, entities: {} };
+  }
+  if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|ot|ot me)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
@@ -932,6 +951,8 @@ Return strict JSON only:
 }
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
+- search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
+- save_search and create_alert store location/radius when available. property_need_request is for no-results demand capture.
 - Agent search includes "find me an agent/broker" and equivalents in supported languages.
 - Language change requests like "respond in Luganda" should set entities.language and intent unknown unless another action is also requested.
 - Never treat language names as districts or areas.
@@ -1401,13 +1422,20 @@ async function suggestWhatsappAssistantReply({
       messages: [
         {
           role: 'system',
-          content: `You are MakaUg WhatsApp property assistant for Uganda.
+          content: `You are makaug.com WhatsApp property assistant for Uganda.
 Produce a short typed reply in ${SUPPORTED_AI_LANGUAGES[languageCode]}.
 Language guardrail: ${guardrail}
+Current search model:
+- Website search uses a manual area input plus a compact Location control.
+- Location search defaults to a 10 mile radius / 16.1 km.
+- WhatsApp users can share location for a shared_location_search or search_near_me intent.
+- Saved searches and alerts store location and radius.
+- If a location is outside Uganda, tell the user to choose a Ugandan area or search all Uganda.
+- Never invent or hallucinate listings. If no real listing data is present, offer save search, create alert, WhatsApp help, or real nearby alternatives only when context includes them.
 Requirements:
 - Keep under 550 characters.
 - Be practical and action-oriented.
-- Include exactly one relevant MakaUg link.
+- Include exactly one relevant makaug.com link.
 - Do not include markdown tables.
 Return strict JSON: {"text":"..."}`
         },

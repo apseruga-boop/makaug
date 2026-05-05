@@ -47,10 +47,10 @@
       background-position: center;
     }
     .hero-shell {
-      background: rgba(8, 18, 30, 0.34);
-      border: 1px solid rgba(255, 255, 255, 0.22);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
-      backdrop-filter: blur(16px);
+      background: rgba(10, 24, 38, 0.36);
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(18px);
     }
     .hero-tab {
       border-radius: 999px;
@@ -77,8 +77,9 @@
     .hero-search-row {
       background: rgba(255, 255, 255, 0.95);
       border-radius: 16px;
-      overflow: hidden;
+      overflow: visible;
       border: 1px solid rgba(255, 255, 255, 0.75);
+      box-shadow: 0 16px 38px rgba(3, 10, 20, 0.18);
     }
     .hero-field {
       height: 50px;
@@ -91,6 +92,63 @@
       width: 100%;
     }
     .hero-field:last-of-type { border-right: 0; }
+    .hero-location-wrap {
+      position: relative;
+      min-width: 142px;
+    }
+    .hero-location-control {
+      height: 50px;
+      width: 100%;
+      border: 0;
+      border-right: 1px solid #e5e7eb;
+      background: transparent;
+      color: #14532d;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 850;
+      outline: none;
+      transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+    }
+    .hero-location-control:hover,
+    .hero-location-control:focus-visible {
+      background: #ecfdf5;
+      color: #047857;
+      box-shadow: inset 0 0 0 2px rgba(16, 185, 129, 0.22);
+    }
+    .hero-location-control[aria-pressed="true"] {
+      background: #dcfce7;
+      color: #065f46;
+      box-shadow: inset 0 0 0 2px rgba(22, 163, 74, 0.24);
+    }
+    .hero-location-helper {
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 8px);
+      z-index: 40;
+      min-width: 238px;
+      max-width: 280px;
+      transform: translate(-50%, -4px);
+      border-radius: 12px;
+      background: rgba(6, 95, 70, 0.96);
+      color: #fff;
+      box-shadow: 0 14px 30px rgba(6, 78, 59, 0.24);
+      padding: 9px 11px;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.35;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+    .hero-location-wrap:hover .hero-location-helper,
+    .hero-location-wrap:focus-within .hero-location-helper,
+    .hero-location-helper.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
     .hero-search-btn {
       height: 50px;
       border: 0;
@@ -840,19 +898,40 @@
         border-right: 0;
         border-bottom: 1px solid #e5e7eb;
       }
+      .hero-location-wrap {
+        min-width: 0;
+        width: 100%;
+      }
+      .hero-location-control {
+        height: 46px;
+        border-right: 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .hero-location-helper {
+        position: static;
+        display: none;
+        min-width: 0;
+        max-width: none;
+        transform: none;
+        border-radius: 0;
+        box-shadow: none;
+        background: #ecfdf5;
+        color: #065f46;
+        padding: 8px 12px;
+        opacity: 1;
+      }
+      .hero-location-wrap:hover .hero-location-helper,
+      .hero-location-wrap:focus-within .hero-location-helper,
+      .hero-location-helper.is-visible {
+        display: block;
+        transform: none;
+      }
       .hero-search-btn {
         width: 100%;
         height: 46px;
         border-radius: 0 0 14px 14px;
         font-size: 16px;
         padding: 0 16px;
-      }
-      .hero-location-row {
-        align-items: stretch;
-      }
-      .hero-location-chip {
-        width: 100%;
-        justify-content: center;
       }
       .map-h { height: 260px; }
       #map-home.map-h { height: 400px; }
@@ -905,6 +984,7 @@
         padding-left: 38px !important;
       }
       #hero-district,
+      #hero-radius-f,
       #hero-context-f {
         padding-left: 12px !important;
       }
@@ -1063,25 +1143,27 @@
             </div>
           </div>
 
-          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[2.2fr_1fr_1fr_auto]">
+          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[minmax(220px,2.1fr)_minmax(132px,.72fr)_minmax(148px,.8fr)_auto]">
             <div id="hero-q-wrap" class="relative">
               <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-              <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area">
+              <label for="hero-q" class="sr-only">Search by city, area, suburb or landmark</label>
+              <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area, suburb or landmark">
             </div>
             <select id="hero-district" class="hidden">
               <option value=""></option>
             </select>
-            <select id="hero-radius-f" class="hero-field px-4">
+            <select id="hero-radius-f" class="hidden" aria-hidden="true" tabindex="-1">
               <option value="0">This area only</option>
             </select>
+            <div class="hero-location-wrap">
+              <button id="hero-location-control" type="button" onclick="applyNearMe('hero')" class="hero-location-control" aria-label="Use location search" aria-describedby="hero-location-helper" aria-pressed="false">
+                <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+                <span id="hero-location-label">Location</span>
+              </button>
+              <span id="hero-location-helper" class="hero-location-helper" role="status">Location search uses a 10 mile radius by default.</span>
+            </div>
             <select id="hero-context-f" class="hero-field px-4"></select>
             <button id="hero-search-btn" onclick="doSearch()" class="hero-search-btn">Search</button>
-          </div>
-          <div class="hero-location-row">
-            <button id="hero-use-location-btn" type="button" onclick="applyNearMe('hero')" class="hero-location-chip">
-              <i class="fas fa-location-crosshairs"></i> Use my location
-            </button>
-            <span id="hero-location-note" class="hero-location-note">Manual area, radius, and property filters stay active. Location search uses 10 miles by default.</span>
           </div>
         </div>
       </div>
@@ -5785,7 +5867,14 @@
         heroListFree: "List Property",
         heroSearch: "Search",
         heroUseLocation: "Use my location",
-        heroNearMeNote: "Manual area, radius, and property filters stay active. Location search uses 10 miles by default.",
+        heroLocationLabel: "Location",
+        heroLocationHelper: "Location search uses a 10 mile radius by default.",
+        heroLocationFinding: "Finding properties near your location...",
+        heroLocationActive: "Location active: searching within 10 miles of your location.",
+        heroLocationDenied: "Location permission was denied. Search by city, area, suburb or landmark instead.",
+        heroLocationUnavailable: "We could not get your location. Search by city, area, suburb or landmark instead.",
+        heroLocationOutside: "You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.",
+        heroNearMeNote: "Location search uses a 10 mile radius by default.",
         homeFeatured: "Featured Properties",
         homeMap: "Explore on Map",
         homeBrokers: "Featured Agents",
@@ -5809,11 +5898,11 @@
         mileUnitPlural: "miles",
         anyUniversity: "Any University",
         university: "University",
-        phSale: "City, area",
-        phRent: "Area",
-        phStudents: "University area",
-        phCommercial: "Area",
-        phLand: "Area",
+        phSale: "City, area, suburb or landmark",
+        phRent: "City, area, suburb or landmark",
+        phStudents: "City, area, suburb or landmark",
+        phCommercial: "City, area, suburb or landmark",
+        phLand: "City, area, suburb or landmark",
         ctxBedrooms: "Bedrooms",
         ctx1Bed: "1+ Bed",
         ctx2Beds: "2+ Beds",
@@ -5870,6 +5959,13 @@
         heroLand: "Ettaka",
         heroListFree: "Teka Property",
         heroSearch: "Noonya",
+        heroLocationLabel: "Ekifo",
+        heroLocationHelper: "Okunoonya okusinziira ku kifo kukozesa mayiro 10 nga default.",
+        heroLocationFinding: "Tunoonya properties ezikuli okumpi...",
+        heroLocationActive: "Ekifo kikozesebwa: tunoonya mu mayiro 10 okuva gy'oli.",
+        heroLocationDenied: "Okukozesa ekifo kugaaniddwa. Noonya n'ekibuga, ekitundu oba landmark.",
+        heroLocationUnavailable: "Tetuyinza kufuna kifo kyo. Noonya n'ekibuga, ekitundu oba landmark.",
+        heroLocationOutside: "Olaga nga oli bweru wa Uganda. Londa ekitundu kya Uganda oba noonyereza Uganda yonna.",
         homeFeatured: "Property Ezitwaliridde",
         homeMap: "Noonya ku Maapu",
         homeBrokers: "Agents Abalondedwa",
@@ -5889,11 +5985,11 @@
         langBanner: "Kozesa MakaUg mu nnimi 7 ez'e Uganda",
         areaOnly: "Ekitundu kino kyokka",
         anyUniversity: "Yunivasite yonna",
-        phSale: "Ekibuga, ekitundu",
-        phRent: "Ekitundu",
-        phStudents: "Ekitundu kya yunivasite",
-        phCommercial: "Ekitundu",
-        phLand: "Ekitundu",
+        phSale: "Ekibuga, ekitundu oba landmark",
+        phRent: "Ekibuga, ekitundu oba landmark",
+        phStudents: "Ekibuga, ekitundu oba landmark",
+        phCommercial: "Ekibuga, ekitundu oba landmark",
+        phLand: "Ekibuga, ekitundu oba landmark",
         badgeSale: "Kutunda",
         badgeRent: "Kupangisa",
         badgeStudent: "Muyizi",
@@ -5931,6 +6027,13 @@
         heroLand: "Ardhi",
         heroListFree: "Orodhesha Mali",
         heroSearch: "Tafuta",
+        heroLocationLabel: "Mahali",
+        heroLocationHelper: "Utafutaji wa eneo hutumia umbali wa maili 10 kwa kawaida.",
+        heroLocationFinding: "Tunatafuta mali zilizo karibu nawe...",
+        heroLocationActive: "Mahali pametumika: tunatafuta ndani ya maili 10 kutoka ulipo.",
+        heroLocationDenied: "Ruhusa ya mahali imekataliwa. Tafuta kwa jiji, eneo au alama maarufu.",
+        heroLocationUnavailable: "Hatukuweza kupata mahali ulipo. Tafuta kwa jiji, eneo au alama maarufu.",
+        heroLocationOutside: "Unaonekana kuwa nje ya Uganda. Chagua eneo la Uganda au tafuta Uganda yote.",
         homeFeatured: "Mali Zilizoangaziwa",
         homeMap: "Tafuta kwenye Ramani",
         homeBrokers: "Agents walioangaziwa",
@@ -5950,11 +6053,11 @@
         langBanner: "Tumia MakaUg kwa lugha 7 za Uganda",
         areaOnly: "Eneo hili tu",
         anyUniversity: "Chuo chochote",
-        phSale: "Jiji, eneo",
-        phRent: "Eneo",
-        phStudents: "Eneo la chuo",
-        phCommercial: "Eneo",
-        phLand: "Eneo",
+        phSale: "Jiji, eneo au alama maarufu",
+        phRent: "Jiji, eneo au alama maarufu",
+        phStudents: "Jiji, eneo au alama maarufu",
+        phCommercial: "Jiji, eneo au alama maarufu",
+        phLand: "Jiji, eneo au alama maarufu",
         badgeSale: "Ya Kuuza",
         badgeRent: "Ya Kupanga",
         badgeStudent: "Mwanafunzi",
@@ -8259,9 +8362,12 @@
       const heroListBtn = document.getElementById("hero-list-free-btn");
       if (heroListBtn) heroListBtn.innerHTML = `<i class="fas fa-plus"></i> ${tr("heroListFree")}`;
       setTextById("hero-search-btn", tr("heroSearch"));
-      const heroLocationBtn = document.getElementById("hero-use-location-btn");
-      if (heroLocationBtn) heroLocationBtn.innerHTML = `<i class="fas fa-location-crosshairs"></i> ${tr("heroUseLocation")}`;
-      setTextById("hero-location-note", tr("heroNearMeNote"));
+      const heroLocationLabel = document.getElementById("hero-location-label");
+      if (heroLocationLabel) heroLocationLabel.textContent = tr("heroLocationLabel");
+      const heroLocationHelper = document.getElementById("hero-location-helper");
+      if (heroLocationHelper) heroLocationHelper.textContent = getNearMeSearchState(currentTab) ? tr("heroLocationActive") : tr("heroLocationHelper");
+      const heroLocationControl = document.getElementById("hero-location-control");
+      if (heroLocationControl) heroLocationControl.setAttribute("aria-label", "Use location search");
 
       setTextById("home-featured-title", tr("homeFeatured"));
       setTextById("home-featured-link", translateListingLabel("View all"));
@@ -20801,6 +20907,22 @@
       if (nearMeSearchState[page]) nearMeSearchState[page] = null;
     }
 
+    function setHeroLocationStatus(message = "", state = "idle") {
+      const button = document.getElementById("hero-location-control");
+      const label = document.getElementById("hero-location-label");
+      const helper = document.getElementById("hero-location-helper");
+      const isActive = state === "active";
+      if (button) {
+        button.setAttribute("aria-pressed", isActive ? "true" : "false");
+        button.dataset.locationState = state;
+      }
+      if (label) label.textContent = tr("heroLocationLabel");
+      if (helper) {
+        helper.textContent = message || tr("heroLocationHelper");
+        helper.classList.toggle("is-visible", state !== "idle");
+      }
+    }
+
     const HERO_SEARCH_HANDOFF_KEY = "makaug_hero_search_handoff";
 
     function saveHeroSearchHandoff(page, payload = {}) {
@@ -20918,7 +21040,8 @@
 
     function applyNearMe(page) {
       if (!navigator.geolocation) {
-        toast("Geolocation is not supported on this device.");
+        if (page === "hero") setHeroLocationStatus(tr("heroLocationUnavailable"), "error");
+        toast(tr("heroLocationUnavailable"));
         return;
       }
 
@@ -20933,18 +21056,21 @@
       }[page === "hero" ? "hero" : targetPage];
 
       if (!cfg) return;
-      toast("Finding properties near your location...");
+      if (page === "hero") setHeroLocationStatus(tr("heroLocationFinding"), "loading");
+      toast(tr("heroLocationFinding"));
 
       navigator.geolocation.getCurrentPosition((pos) => {
         const lat = Number(pos.coords?.latitude);
         const lng = Number(pos.coords?.longitude);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-          toast("Could not read your location. Please try again.");
+          if (page === "hero") setHeroLocationStatus(tr("heroLocationUnavailable"), "error");
+          toast(tr("heroLocationUnavailable"));
           return;
         }
         if (!isPointInUgandaClient(lat, lng)) {
           clearNearMeSearchState(targetPage);
-          toast("You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.");
+          if (page === "hero") setHeroLocationStatus(tr("heroLocationOutside"), "error");
+          toast(tr("heroLocationOutside"));
           trackEvent("near_me_outside_uganda", {
             page: targetPage,
             lat: roundSearchCoord(lat),
@@ -20974,6 +21100,7 @@
           district: nearest.district || "",
           label: nearest.district ? `near ${nearest.district}` : "near your location"
         };
+        if (page === "hero") setHeroLocationStatus(tr("heroLocationActive"), "active");
 
         cfg.run();
 
@@ -20994,7 +21121,9 @@
         toast(nearest.district ? `Showing properties within 10 miles of you in/around ${nearest.district}` : "Showing properties within 10 miles of your location");
       }, (err) => {
         const denied = err?.code === 1;
-        toast(denied ? "Location permission denied. Enter an area, road, landmark, or district." : "Could not get your location. Search for address or place manually.");
+        const message = denied ? tr("heroLocationDenied") : tr("heroLocationUnavailable");
+        if (page === "hero") setHeroLocationStatus(message, "error");
+        toast(message);
       }, {
         enableHighAccuracy: true,
         timeout: 12000,
@@ -22712,6 +22841,7 @@
         wireSearchTypeahead();
         setLang(currentLang, true, false);
         showPage(page, { history: false, source, scroll: options.scroll !== false });
+        applyHeroSearchHandoff(page);
         return true;
       } catch (error) {
         console.warn("Falling back to full route navigation", error);
@@ -23159,6 +23289,7 @@
       setHeroLocationFilter(type);
       setHeroRadiusState(type);
       setHeroContextFilter(type);
+      setHeroLocationStatus(getNearMeSearchState(type) ? tr("heroLocationActive") : tr("heroLocationHelper"), getNearMeSearchState(type) ? "active" : "idle");
       closeHeroSuggestions();
       const heroInput = document.getElementById("hero-q");
       if (heroInput && document.activeElement === heroInput && heroInput.value.trim()) {
@@ -23166,8 +23297,68 @@
       }
     }
 
+    function buildHeroSearchBackendPayload({ query = "", area = "", context = "", nearState = null, resultsCount = 0 } = {}) {
+      const payload = {
+        query,
+        category: currentTab,
+        source: nearState ? "homepage_location_control" : "homepage_search",
+        language: currentLang || "en",
+        session: getAnalyticsClientId(),
+        resultsCount
+      };
+      if (currentTab === "students") {
+        payload.student_portal = "true";
+      } else {
+        payload.listing_type = currentTab;
+      }
+      if (area) payload.area = area;
+      if (context) {
+        if (currentTab === "sale" || currentTab === "rent") payload.bedrooms = context;
+        else payload.property_type = context;
+      }
+      if (nearState) {
+        payload.lat = nearState.lat;
+        payload.lng = nearState.lng;
+        payload.radiusMiles = nearState.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI;
+        payload.radiusKm = nearState.radiusKm || milesToKm(payload.radiusMiles);
+        payload.radiusUnit = "miles";
+      }
+      return payload;
+    }
+
+    function recordHeroSearchBackendPayload(payload = {}) {
+      const params = new URLSearchParams();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === "") return;
+        if (key === "resultsCount" || key === "category") return;
+        params.set(key, String(value));
+      });
+      params.set("limit", "12");
+      const endpoint = `${API_BASE}/api/properties/search?${params.toString()}`;
+      fetch(endpoint, { credentials: "same-origin" })
+        .then((res) => res.json().catch(() => ({})).then((body) => ({ ok: res.ok, body })))
+        .then(({ ok, body }) => {
+          trackEvent("homepage_search_backend_checked", {
+            category: payload.category,
+            source: payload.source,
+            radius_miles: payload.radiusMiles || null,
+            backend_ok: ok,
+            backend_results: Array.isArray(body?.data) ? body.data.length : null,
+            outside_uganda: Boolean(body?.data?.outside_uganda || body?.error?.includes?.("outside Uganda"))
+          });
+        })
+        .catch((error) => {
+          trackEvent("homepage_search_backend_check_failed", {
+            category: payload.category,
+            source: payload.source,
+            error: error?.message || "network_error"
+          });
+        });
+    }
+
     function doSearch() {
-      const q = (document.getElementById("hero-q").value || "").toLowerCase().trim();
+      const qRaw = document.getElementById("hero-q").value || "";
+      const q = qRaw.toLowerCase().trim();
       const areaOrUniRaw = document.getElementById("hero-district").value || "";
       const areaOrUni = currentTab === "students"
         ? (areaOrUniRaw || (document.getElementById("hero-q").value || ""))
@@ -23199,8 +23390,16 @@
       results = decorateAndSortNearMeResults(results, heroNearState);
       incrementUserSearchCount();
       const destinationPage = pageMap[currentTab] || "sale";
+      const backendPayload = buildHeroSearchBackendPayload({
+        query: qRaw.trim(),
+        area: areaOrUni || "",
+        context: contextVal || "",
+        nearState: heroNearState,
+        resultsCount: results.length
+      });
+      recordHeroSearchBackendPayload(backendPayload);
       saveHeroSearchHandoff(destinationPage, {
-        query: document.getElementById("hero-q").value || "",
+        query: qRaw || "",
         area: areaOrUni || "",
         radius: routedRadiusValue,
         radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
@@ -23276,6 +23475,8 @@
         context: contextVal || "",
         results_count: results.length,
         radius_miles: heroNearState?.radiusMiles || null,
+        radius_unit: heroNearState ? "miles" : null,
+        search_source: heroNearState ? "homepage_location_control" : "homepage_search",
         near_me: Boolean(heroNearState)
       });
     }

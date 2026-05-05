@@ -121,10 +121,15 @@ function normalizeLocationObject(value) {
       'country',
       'latitude',
       'longitude',
+      'lat',
+      'lng',
       'plusCode',
       'radius',
       'radiusKm',
       'radiusMiles',
+      'radiusUnit',
+      'source',
+      'language',
       'locationConfidence',
       'locationPrivacy'
     ].forEach((key) => {
@@ -848,7 +853,23 @@ router.get('/saved-searches', requireAuth, async (req, res, next) => {
 
 router.post('/saved-searches', requireAuth, async (req, res, next) => {
   try {
-    const locationObject = normalizeLocationObject(req.body.location || req.body.locationObject || req.body.filters?.location || req.body.query);
+    const incomingLocation = req.body.location || req.body.locationObject || req.body.filters?.location || (
+      req.body.lat || req.body.latitude || req.body.lng || req.body.longitude
+        ? {
+            query: req.body.query,
+            latitude: req.body.latitude || req.body.lat,
+            longitude: req.body.longitude || req.body.lng,
+            lat: req.body.lat || req.body.latitude,
+            lng: req.body.lng || req.body.longitude,
+            radiusKm: req.body.radiusKm || req.body.radius_km,
+            radiusMiles: req.body.radiusMiles || req.body.radius_miles || req.body.radius,
+            radiusUnit: req.body.radiusUnit || req.body.radius_unit || 'miles',
+            source: req.body.source || req.body.created_from || req.body.createdFrom,
+            language: req.body.language || req.body.language_preference || req.body.languagePreference
+          }
+        : req.body.query
+    );
+    const locationObject = normalizeLocationObject(incomingLocation);
     const category = normalizeCategory(req.body.category || req.body.listing_type || req.body.listingType) || 'any';
     const filters = {
       ...safeJson(req.body.filters, {}),

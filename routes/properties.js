@@ -533,13 +533,17 @@ async function listPropertiesHandler(req, res, next) {
     const listingType = normalizeListingType(req.query.listing_type);
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
-    const area = cleanText(req.query.area || req.query.search);
+    const area = cleanText(req.query.area || req.query.search || req.query.query);
     const status = cleanText(req.query.status || 'approved').toLowerCase();
     const minPrice = toNullableInt(req.query.min_price);
     const maxPrice = toNullableInt(req.query.max_price);
-    const minBeds = toNullableInt(req.query.min_beds);
+    const minBeds = toNullableInt(req.query.min_beds || req.query.bedrooms);
     const maxBeds = toNullableInt(req.query.max_beds);
     const propertyType = cleanText(req.query.property_type);
+    const source = cleanText(req.query.source || 'web_search');
+    const language = cleanText(req.query.language || req.query.lang || 'en').toLowerCase();
+    const sessionId = cleanText(req.query.session || req.query.session_id || req.query.guest_session_id);
+    const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
     const searchLng = toNullableFloat(req.query.lng || req.query.longitude);
@@ -605,12 +609,15 @@ async function listPropertiesHandler(req, res, next) {
             `INSERT INTO property_search_requests (user_phone, payload)
              VALUES (NULL, $1::jsonb)`,
             [JSON.stringify({
-              source: 'web_radius_search',
+              source: source || 'web_radius_search',
+              language,
+              session_id: sessionId || null,
               location: {
                 analytics: roundLocationForAnalytics(searchLat, searchLng)
               },
               radius_km: Number(radiusKm.toFixed(3)),
               radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
+              radius_unit: radiusUnit || 'miles',
               outside_uganda: true,
               fallback: 'manual_uganda_search'
             })]
@@ -642,6 +649,39 @@ async function listPropertiesHandler(req, res, next) {
 
     const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
     const total = countResult.rows[0]?.total || 0;
+    if (total === 0) {
+      try {
+        await db.query(
+          `INSERT INTO property_search_requests (user_phone, payload)
+           VALUES (NULL, $1::jsonb)`,
+          [JSON.stringify({
+            source: hasRadiusSearch ? 'web_radius_no_results' : 'web_no_results',
+            original_source: source || null,
+            search_type: listingType || (studentPortal ? 'student' : 'any'),
+            query: area || null,
+            filters: {
+              min_price: minPrice,
+              max_price: maxPrice,
+              bedrooms: minBeds,
+              property_type: propertyType || null
+            },
+            location: hasRadiusSearch ? {
+              lat: Number(searchLat.toFixed(5)),
+              lng: Number(searchLng.toFixed(5)),
+              analytics: roundLocationForAnalytics(searchLat, searchLng)
+            } : null,
+            radius_km: hasRadiusSearch ? Number(radiusKm.toFixed(3)) : null,
+            radius_miles: hasRadiusSearch ? Number(kmToMiles(radiusKm).toFixed(2)) : null,
+            radius_unit: hasRadiusSearch ? (radiusUnit || 'miles') : null,
+            language,
+            session_id: sessionId || null,
+            result_count: 0
+          })]
+        );
+      } catch (logError) {
+        logger.warn('Failed to log no-results property search', { error: logError.message });
+      }
+    }
 
     const sortMap = {
       newest: 'p.created_at DESC',
@@ -723,9 +763,11 @@ async function listPropertiesHandler(req, res, next) {
           `INSERT INTO property_search_requests (user_phone, payload)
            VALUES (NULL, $1::jsonb)`,
           [JSON.stringify({
-            source: 'web_radius_search',
+            source: source || 'web_radius_search',
             search_type: listingType || (studentPortal ? 'student' : 'any'),
             query: area || null,
+            language,
+            session_id: sessionId || null,
             location: {
               lat: Number(searchLat.toFixed(5)),
               lng: Number(searchLng.toFixed(5)),
@@ -733,6 +775,7 @@ async function listPropertiesHandler(req, res, next) {
             },
             radius_km: Number(radiusKm.toFixed(3)),
             radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
+            radius_unit: radiusUnit || 'miles',
             result_count: listResult.rows.length,
             outside_uganda: false
           })]
