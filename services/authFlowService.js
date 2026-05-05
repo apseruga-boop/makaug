@@ -71,7 +71,7 @@ function buildOtpSuccessPayload({ user, token, preferredAudience = '', pendingIn
     nextAction: 'open_dashboard',
     redirectUrl,
     pendingIntentCompleted: Boolean(pendingIntentCompleted),
-    message: message || 'Verification complete. Your MakaUg account is ready.'
+    message: message || 'Verification complete. Your makaug.com account is ready.'
   };
 }
 

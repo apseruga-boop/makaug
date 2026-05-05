@@ -238,7 +238,7 @@ async function fetchJson(url, options = {}) {
 
 function splitDisplayName(profile = {}) {
   const fullName = cleanText(profile.name || profile.displayName || '');
-  const firstName = cleanText(profile.given_name || profile.first_name || (fullName.split(/\s+/)[0] || 'MakaUg'));
+  const firstName = cleanText(profile.given_name || profile.first_name || (fullName.split(/\s+/)[0] || 'User'));
   const lastName = cleanText(profile.family_name || profile.last_name || (fullName.split(/\s+/).slice(1).join(' ') || 'User'));
   return { firstName, lastName };
 }
@@ -347,39 +347,39 @@ function getOtpCopy(language = 'en', { otp, expiresMinutes, purpose = 'login' } 
     : 'en';
   const catalog = {
     en: {
-      signup: `MakaUg account verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
-      login: `MakaUg sign-in verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
-      reset_password: `MakaUg password reset: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`
+      signup: `makaug.com account verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
+      login: `makaug.com sign-in verification: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`,
+      reset_password: `makaug.com password reset: your code is ${otp}. It expires in ${expiresMinutes} minutes. Do not share it with anyone.`
     },
     lg: {
-      signup: `MakaUg okukakasa akawunti: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
-      login: `MakaUg okukakasa okuyingira: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
-      reset_password: `MakaUg okukyusa password: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`
+      signup: `makaug.com okukakasa akawunti: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
+      login: `makaug.com okukakasa okuyingira: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`,
+      reset_password: `makaug.com okukyusa password: koodi yo ye ${otp}. Egwaako mu ddakiika ${expiresMinutes}. Tokigabana na muntu yenna.`
     },
     sw: {
-      signup: `Uthibitishaji wa akaunti ya MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
-      login: `Uthibitishaji wa kuingia MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
-      reset_password: `Kubadilisha nenosiri la MakaUg: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`
+      signup: `Uthibitishaji wa akaunti ya makaug.com: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
+      login: `Uthibitishaji wa kuingia makaug.com: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`,
+      reset_password: `Kubadilisha nenosiri la makaug.com: msimbo wako ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Usiushiriki na mtu yeyote.`
     },
     ac: {
-      signup: `MakaUg kubeero me account: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
-      login: `MakaUg kubeero me donyo: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
-      reset_password: `MakaUg loko password: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`
+      signup: `makaug.com kubeero me account: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
+      login: `makaug.com kubeero me donyo: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`,
+      reset_password: `makaug.com loko password: code mamegi tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Pe i nywak kwede dano mo.`
     },
     ny: {
-      signup: `Okwehamya akawunti ya MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
-      login: `Okwehamya okuyingira MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
-      reset_password: `Okugarura password ya MakaUg: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`
+      signup: `Okwehamya akawunti ya makaug.com: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
+      login: `Okwehamya okuyingira makaug.com: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`,
+      reset_password: `Okugarura password ya makaug.com: koodi yawe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Otakigambira muntu.`
     },
     rn: {
-      signup: `Okuhamya account ya MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
-      login: `Okuhamya okwinjira MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
-      reset_password: `Okuhindura password ya MakaUg: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`
+      signup: `Okuhamya account ya makaug.com: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
+      login: `Okuhamya okwinjira makaug.com: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`,
+      reset_password: `Okuhindura password ya makaug.com: code yawe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Otagigambira muntu.`
     },
     sm: {
-      signup: `Okukakasa account ya MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
-      login: `Okukakasa okuyingira MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
-      reset_password: `Okukyusa password ya MakaUg: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`
+      signup: `Okukakasa account ya makaug.com: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
+      login: `Okukakasa okuyingira makaug.com: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`,
+      reset_password: `Okukyusa password ya makaug.com: code yo ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Totigabana na muntu yenna.`
     }
   };
   return catalog[lang]?.[purpose] || catalog.en[purpose] || catalog.en.login;
@@ -416,7 +416,7 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
     try {
       delivery = await sendSupportEmail({
         to: identifier,
-        subject: 'MakaUg verification code',
+        subject: 'makaug.com verification code',
         text: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
       });
     } catch (error) {
@@ -667,8 +667,10 @@ router.post('/register', async (req, res, next) => {
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
     if (confirmPassword && confirmPassword !== password) errors.push('confirm_password must match password');
-    if (req.body.terms_accepted === false || req.body.terms_accepted === 'false') errors.push('terms_accepted is required');
-    if (req.body.privacy_accepted === false || req.body.privacy_accepted === 'false') errors.push('privacy_accepted is required');
+    const termsAccepted = parseBooleanLike(req.body.terms_accepted, false);
+    const privacyAccepted = parseBooleanLike(req.body.privacy_accepted, false);
+    if (!termsAccepted) errors.push('terms_accepted is required');
+    if (!privacyAccepted) errors.push('privacy_accepted is required');
     if (phone && !isValidPhone(phone)) errors.push('phone is invalid');
     if (phone && !isValidUgPhone(phone)) errors.push('phone must be a valid Uganda number');
     if (email && !isValidEmail(email)) errors.push('email is invalid');
@@ -1171,7 +1173,7 @@ router.post('/verify-otp', async (req, res, next) => {
       token,
       user: publicPayload,
       preferredAudience: publicPayload.profile_data?.audience || '',
-      message: 'Verification complete. Opening your MakaUg dashboard.'
+      message: 'Verification complete. Opening your makaug.com dashboard.'
     });
     if (adminSecurity) {
       successPayload.admin_security = {

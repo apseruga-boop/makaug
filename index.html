@@ -4719,7 +4719,7 @@
   <div id="policy-preview-modal" class="modal-overlay" data-auth-legal-preview-modal="1">
     <div class="modal-box" style="max-width:620px">
       <button onclick="closeModal('policy-preview-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50" aria-label="Close policy preview">✕</button>
-      <p class="text-xs font-bold uppercase tracking-wide text-green-700">MakaUg account safety</p>
+      <p class="text-xs font-bold tracking-normal text-green-700">makaug.com account safety</p>
       <h2 id="policy-preview-title" class="text-2xl font-black text-gray-800 serif mt-1">Terms preview</h2>
       <div id="policy-preview-body" class="mt-4 space-y-2 text-sm text-gray-700"></div>
       <div class="mt-5 flex gap-3 flex-wrap">
@@ -18009,6 +18009,58 @@
     let accountAccessDrawerStep = "account";
     let accountAccessPendingOtp = null;
 
+    const ACCOUNT_ACCESS_ROLE_THEME = {
+      finder: {
+        name: "property finder",
+        primary: "#16803a",
+        secondary: "#0f5f2d",
+        soft: "#ecfdf3",
+        border: "#86efac",
+        text: "#14532d",
+        header: "linear-gradient(135deg, #064e3b 0%, #147a3f 52%, #22c55e 100%)"
+      },
+      student: {
+        name: "student",
+        primary: "#0e7490",
+        secondary: "#155e75",
+        soft: "#ecfeff",
+        border: "#67e8f9",
+        text: "#164e63",
+        header: "linear-gradient(135deg, #083344 0%, #0e7490 56%, #38bdf8 100%)"
+      },
+      agent: {
+        name: "broker",
+        primary: "#a16207",
+        secondary: "#854d0e",
+        soft: "#fffbeb",
+        border: "#facc15",
+        text: "#713f12",
+        header: "linear-gradient(135deg, #064e3b 0%, #8a5a05 52%, #f59e0b 100%)"
+      },
+      field_agent: {
+        name: "field agent",
+        primary: "#2563eb",
+        secondary: "#1d4ed8",
+        soft: "#eff6ff",
+        border: "#93c5fd",
+        text: "#1e3a8a",
+        header: "linear-gradient(135deg, #052e2b 0%, #2563eb 54%, #60a5fa 100%)"
+      },
+      advertiser: {
+        name: "advertiser",
+        primary: "#c2410c",
+        secondary: "#9a3412",
+        soft: "#fff7ed",
+        border: "#fdba74",
+        text: "#7c2d12",
+        header: "linear-gradient(135deg, #064e3b 0%, #b45309 55%, #fb923c 100%)"
+      }
+    };
+
+    function accountAccessRoleTheme(role = "finder") {
+      return ACCOUNT_ACCESS_ROLE_THEME[normalizeAuthAudience(role)] || ACCOUNT_ACCESS_ROLE_THEME.finder;
+    }
+
     const ACCOUNT_ACCESS_SCREENING = {
       finder: [
         { key: "primary_goal", label: "What are you looking for?", options: ["Rent", "Buy", "Land", "Student accommodation", "Commercial", "Not sure yet"] },
@@ -18070,14 +18122,48 @@
 
     function accountAccessRouteBenefit() {
       const path = String(window.location.pathname || "/").toLowerCase();
-      if (path.includes("to-rent")) return "Renting? Save rentals, create alerts, book viewings, and track callbacks.";
-      if (path.includes("for-sale")) return "Buying? Save homes, compare options, check mortgage estimates, and track viewing requests.";
-      if (path.includes("student")) return "Students can save campus searches, track rooms, create alerts, and request callbacks.";
-      if (path.includes("land")) return "Land seekers can save plots, track title-status notes, create alerts, and use safety checklists.";
-      if (path.includes("commercial")) return "Find business space, save searches, request callbacks, and track commercial enquiries.";
-      if (path.includes("list-property")) return "Create an account to manage listings, receive enquiries, track viewings, and get listing updates.";
-      if (path.includes("advertise")) return "Advertisers can create campaigns, manage payments, and track leads.";
-      return `Your ${publicBrand()} account helps you save properties, create alerts, book viewings, and manage your property search.`;
+      const lang = currentLang || "en";
+      const copy = {
+        en: {
+          rent: "Renting? Save rentals, create alerts, book viewings, and track callbacks.",
+          sale: "Buying? Save homes, compare options, check mortgage estimates, and track viewing requests.",
+          student: "Students can save campus searches, track rooms, create alerts, and request callbacks.",
+          land: "Land seekers can save plots, track title-status notes, create alerts, and use safety checklists.",
+          commercial: "Find business space, save searches, request callbacks, and track commercial enquiries.",
+          list: "Create an account to manage listings, receive enquiries, track viewings, and get listing updates.",
+          advertise: "Advertisers can create campaigns, manage payments, and track leads.",
+          fallback: `Your ${publicBrand()} account helps you save properties, create alerts, book viewings, and manage your property search.`
+        },
+        lg: {
+          rent: "Opangisa? Tereka rentals, kola alerts, saba viewings, era landirira callbacks.",
+          sale: "Ogula? Tereka amaka, geraageranya, kebera mortgage, era landirira viewings.",
+          student: "Abayizi basobola okutereka okunoonya okwa campus, okulondoola rooms, alerts, ne callbacks.",
+          land: "Abaagala ettaka basobola okutereka plots, title notes, alerts, n'obukodyo bw'obukuumi.",
+          commercial: "Noonya business space, tereka okunoonya, saba callbacks, era landirira enquiries.",
+          list: "Kola account okulabirira listings, enquiries, viewings, n'amawulire ga listing.",
+          advertise: "Advertisers basobola okukola campaigns, okulabirira payments, n'okulondoola leads.",
+          fallback: `Account ya ${publicBrand()} ekuyamba okutereka properties, alerts, viewings, n'okunoonya kwo.`
+        },
+        sw: {
+          rent: "Unapangisha? Hifadhi rentals, tengeneza arifa, omba viewings, na fuatilia callbacks.",
+          sale: "Unanunua? Hifadhi nyumba, linganisha, angalia mortgage, na fuatilia viewings.",
+          student: "Wanafunzi wanaweza kuhifadhi utafutaji wa campus, kufuatilia rooms, arifa, na callbacks.",
+          land: "Watafutaji wa ardhi wanaweza kuhifadhi plots, title notes, arifa, na vidokezo vya usalama.",
+          commercial: "Tafuta nafasi ya biashara, hifadhi utafutaji, omba callbacks, na fuatilia enquiries.",
+          list: "Fungua akaunti kusimamia listings, enquiries, viewings, na updates za listing.",
+          advertise: "Advertisers wanaweza kuunda campaigns, kusimamia malipo, na kufuatilia leads.",
+          fallback: `Akaunti ya ${publicBrand()} hukusaidia kuhifadhi mali, arifa, viewings, na utafutaji wako.`
+        }
+      };
+      const langCopy = copy[lang] || copy.en;
+      if (path.includes("to-rent")) return langCopy.rent;
+      if (path.includes("for-sale")) return langCopy.sale;
+      if (path.includes("student")) return langCopy.student;
+      if (path.includes("land")) return langCopy.land;
+      if (path.includes("commercial")) return langCopy.commercial;
+      if (path.includes("list-property")) return langCopy.list;
+      if (path.includes("advertise")) return langCopy.advertise;
+      return langCopy.fallback;
     }
 
     function accountAccessRoleCopy(role = "finder") {
@@ -18102,6 +18188,34 @@
           student: ["Mwanafunzi", "Vyumba karibu na campus."],
           agent: ["Broker", "Listings, leads, viewings."],
           field_agent: ["Field Agent", "Omba, wasilisha, fuatilia."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        ac: {
+          finder: ["Lanwo property", "Yeny, gwok, alert."],
+          student: ["Lanyut", "Rooms macok ki campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Kwac, cwal, lub kore."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        ny: {
+          finder: ["Omunooni wa property", "Noonya, bika, alert."],
+          student: ["Omwegi", "Ebisenge bya campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Shaba, tuma, kuratira."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        rn: {
+          finder: ["Omunooni wa property", "Noonya, bika, alert."],
+          student: ["Omwegi", "Ebisenge bya campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Shaba, tuma, kuratira."],
+          advertiser: ["Advertiser", "Campaigns, payments, leads."]
+        },
+        sm: {
+          finder: ["Anoonya property", "Noonya, tereka, alert."],
+          student: ["Omuyizi", "Ebisulo bya campus."],
+          agent: ["Broker", "Listings, leads, viewings."],
+          field_agent: ["Field Agent", "Saba, weereza, landirira."],
           advertiser: ["Advertiser", "Campaigns, payments, leads."]
         }
       }[lang] || null;
@@ -18148,14 +18262,15 @@
     function renderAccountAccessRoleCards() {
       return ["finder", "student", "agent", "field_agent", "advertiser"].map((role) => {
         const copy = accountAccessRoleCopy(role);
-        return `<button type="button" data-auth-drawer-role="${role}" data-auth-role-card="1" onclick="setAccountAccessRole('${role}')" class="group text-left rounded-2xl border border-gray-200 px-3.5 py-3 hover:border-green-300 hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500">
+        const theme = accountAccessRoleTheme(role);
+        return `<button type="button" data-auth-drawer-role="${role}" data-auth-role-card="1" data-auth-role-accent="${theme.name}" onclick="setAccountAccessRole('${role}')" class="group text-left rounded-2xl border px-3.5 py-3 focus:outline-none focus:ring-2 focus:ring-offset-1 transition" style="border-color:#e5e7eb; --tw-ring-color:${theme.primary};">
           <span class="flex items-center gap-3">
-            <span class="w-10 h-10 rounded-2xl bg-green-50 text-green-700 flex items-center justify-center group-hover:bg-white">
+            <span class="w-10 h-10 rounded-2xl flex items-center justify-center transition" style="background:${theme.soft}; color:${theme.primary};">
               <i class="fas ${copy.icon}" aria-hidden="true"></i>
             </span>
             <span>
-              <span class="block text-sm font-black text-gray-900">${copy.label}</span>
-              <span class="block text-xs text-gray-600 mt-0.5">${copy.body}</span>
+              <span class="block text-sm font-black text-gray-900">${adminEscape(copy.label)}</span>
+              <span class="block text-xs text-gray-600 mt-0.5">${adminEscape(copy.body)}</span>
             </span>
           </span>
         </button>`;
@@ -18235,15 +18350,254 @@
           verificationCode: "Msimbo wa uthibitisho",
           continue: "Endelea",
           forgot: "Umesahau nenosiri?"
+        },
+        ac: {
+          heading: `Donyo onyo yub account me ${publicBrand()}`,
+          subheading: "Gwok properties, yub alerts, kwac viewings, ki tic me yeny mamegi oyot.",
+          language: "Leb",
+          continueAs: "Kit account",
+          createAccount: "Yub account",
+          signIn: "Donyo",
+          identifier: "Email onyo namba me cim",
+          password: "Password",
+          firstName: "Nying mukwongo",
+          email: "Email",
+          phone: "Cim / WhatsApp",
+          quickPreferences: "Gin ma imito oyot",
+          confirmPassword: "Mok password",
+          otpMethod: "Wa cwalo code bot kwene?",
+          otpEmail: "Email",
+          otpPhone: "SMS / Text",
+          terms: `Aye Terms & Conditions me ${publicBrand()}.`,
+          privacy: `Asomo Privacy Policy me ${publicBrand()}.`,
+          verifyTitle: "Mok account mamegi",
+          verificationCode: "Code me moko",
+          continue: "Mede anyim",
+          forgot: "Wiyi owil ki password?"
+        },
+        ny: {
+          heading: `Taaha nari kola account ya ${publicBrand()}`,
+          subheading: "Bika properties, kola alerts, shaba viewings, kandi kuratira okunoonya kwawe.",
+          language: "Orurimi",
+          continueAs: "Ekika kya account",
+          createAccount: "Kola account",
+          signIn: "Taaha",
+          identifier: "Email nari namba ya telefone",
+          password: "Password",
+          firstName: "Eiziina ry'okubanza",
+          email: "Email",
+          phone: "Telefone / WhatsApp",
+          quickPreferences: "Eby'okukunda byangu",
+          confirmPassword: "Hamya password",
+          otpMethod: "Tukwohereze code hehe?",
+          otpEmail: "Email",
+          otpPhone: "SMS / Text",
+          terms: `Ninyikiriza Terms & Conditions za ${publicBrand()}.`,
+          privacy: `Ninsomire Privacy Policy ya ${publicBrand()}.`,
+          verifyTitle: "Hamya account yawe",
+          verificationCode: "Code y'okuhamya",
+          continue: "Gumizamu",
+          forgot: "Oyebirwe password?"
+        },
+        rn: {
+          heading: `Taaha nari kola account ya ${publicBrand()}`,
+          subheading: "Bika properties, kola alerts, shaba viewings, kandi kuratira okunoonya kwawe.",
+          language: "Orurimi",
+          continueAs: "Ekika kya account",
+          createAccount: "Kola account",
+          signIn: "Taaha",
+          identifier: "Email nari namba ya telefone",
+          password: "Password",
+          firstName: "Eiziina ry'okubanza",
+          email: "Email",
+          phone: "Telefone / WhatsApp",
+          quickPreferences: "Eby'okukunda byangu",
+          confirmPassword: "Hamya password",
+          otpMethod: "Tukwohereze code hehe?",
+          otpEmail: "Email",
+          otpPhone: "SMS / Text",
+          terms: `Ninyikiriza Terms & Conditions za ${publicBrand()}.`,
+          privacy: `Ninsomire Privacy Policy ya ${publicBrand()}.`,
+          verifyTitle: "Hamya account yawe",
+          verificationCode: "Code y'okuhamya",
+          continue: "Gumizamu",
+          forgot: "Oyebirwe password?"
+        },
+        sm: {
+          heading: `Yingira oba kola account ya ${publicBrand()}`,
+          subheading: "Tereka properties, kola alerts, saba viewings, era landirira okunoonya kwo.",
+          language: "Olulimi",
+          continueAs: "Ekika kya account",
+          createAccount: "Kola account",
+          signIn: "Yingira",
+          identifier: "Email oba ennamba ya simu",
+          password: "Password",
+          firstName: "Erinnya erisooka",
+          email: "Email",
+          phone: "Simu / WhatsApp",
+          quickPreferences: "By'oyagala mu bwangu",
+          confirmPassword: "Kakasa password",
+          otpMethod: "Tukusindikire wa code?",
+          otpEmail: "Email",
+          otpPhone: "SMS / Text",
+          terms: `Nzikiriza Terms & Conditions za ${publicBrand()}.`,
+          privacy: `Nsomedde Privacy Policy ya ${publicBrand()}.`,
+          verifyTitle: "Kakasa account yo",
+          verificationCode: "Code y'okukakasa",
+          continue: "Genda mu maaso",
+          forgot: "Werabidde password?"
         }
       };
       return (dict[currentLang] && dict[currentLang][key]) || dict.en[key] || key;
+    }
+
+    function accountAccessScreeningText(text) {
+      const lang = currentLang || "en";
+      const dict = {
+        lg: {
+          "What are you looking for?": "Onoonya ki?",
+          "Preferred area?": "Kitundu ki ky'oyagala?",
+          "Budget range?": "Budget yo eri etya?",
+          "How soon do you need it?": "Okigala ddi?",
+          "Preferred contact?": "Okwagala tukukwatire wa?",
+          "Which campus/university?": "Campus oba university ki?",
+          "Monthly or semester budget?": "Budget ya mwezi oba semester?",
+          "Room preference?": "Ekika ky'ekisenge?",
+          "Must-have?": "Ekisinga obukulu?",
+          "Move-in timeline?": "Oyingira ddi?",
+          "Main speciality?": "Ekikukugu ekikulu?",
+          "Main operating area?": "Kitundu ky'okoleramu?",
+          "Agency status?": "Embeera ya agency?",
+          "Languages spoken?": "Ennimi z'oyogera?",
+          "Approximate active listings?": "Listings z'olaga kati?",
+          "Preferred territory?": "Territory gy'oyagala?",
+          "Field experience?": "Obumanyirivu bwa field?",
+          "Availability?": "Osobola ddi?",
+          "Transport access?": "Entambula gy'olina?",
+          "Campaign goal?": "Ekigendererwa kya campaign?",
+          "Audience?": "Baani b'oyagala okutuukako?",
+          "Campaign location?": "Campaign egende wa?",
+          "Rent": "Kupangisa",
+          "Buy": "Kugula",
+          "Land": "Ettaka",
+          "Student accommodation": "Ebisulo by'abayizi",
+          "Commercial": "Eby'obusuubuzi",
+          "Not sure yet": "Sinnamanya",
+          "Other / I'll choose later": "Ekirala / Nja kulonda oluvannyuma",
+          "I'll choose later": "Nja kulonda oluvannyuma",
+          "Immediately": "Kati",
+          "This month": "Omwezi guno",
+          "1-3 months": "Emyezi 1-3",
+          "Under USh 500K": "Wansi wa USh 500K",
+          "Under USh 300K": "Wansi wa USh 300K",
+          "Just browsing": "Nkyanoonya",
+          "WhatsApp": "WhatsApp",
+          "Phone call": "Okukuba essimu",
+          "Email": "Email",
+          "Hostel room": "Ekisenge kya hostel",
+          "Shared room": "Ekisenge eky'okugabana",
+          "Self-contained": "Self-contained",
+          "Studio": "Studio",
+          "Apartment room": "Ekisenge mu apartment",
+          "Not sure": "Sinnamanya",
+          "Security": "Obukuumi",
+          "Water": "Amazzi",
+          "Meals": "Emmere",
+          "Parking": "Parking",
+          "No preference": "Tewali kyenjawulo",
+          "Next semester": "Semester eddako",
+          "Independent broker": "Broker eyeetongodde",
+          "Agency/company": "Agency/company",
+          "Land specialist": "Omukugu w'ettaka",
+          "New": "Omutandisi",
+          "Under 1 year": "Wansi w'omwaka 1",
+          "1-3 years": "Emyaka 1-3",
+          "3+ years": "Emyaka 3+",
+          "Walking/public transport": "Okutambula / public transport",
+          "Motorcycle": "Pikipiki",
+          "Car": "Motoka",
+          "Other": "Ekirala",
+          "Full time": "Full time",
+          "Part time": "Part time",
+          "Weekends": "Weekends",
+          "Flexible": "Flexible"
+        },
+        sw: {
+          "What are you looking for?": "Unatafuta nini?",
+          "Preferred area?": "Eneo unalopendelea?",
+          "Budget range?": "Kiwango cha bajeti?",
+          "How soon do you need it?": "Unahitaji lini?",
+          "Preferred contact?": "Njia bora ya mawasiliano?",
+          "Which campus/university?": "Campus/chuo gani?",
+          "Monthly or semester budget?": "Bajeti ya mwezi au muhula?",
+          "Room preference?": "Unapendelea chumba gani?",
+          "Must-have?": "Muhimu zaidi?",
+          "Move-in timeline?": "Unahamia lini?",
+          "Main speciality?": "Utaalamu mkuu?",
+          "Main operating area?": "Eneo kuu la kazi?",
+          "Agency status?": "Hali ya agency?",
+          "Languages spoken?": "Lugha unazozungumza?",
+          "Approximate active listings?": "Listings hai takriban?",
+          "Preferred territory?": "Territory unayopendelea?",
+          "Field experience?": "Uzoefu wa field?",
+          "Availability?": "Unapatikana lini?",
+          "Transport access?": "Usafiri unaopata?",
+          "Campaign goal?": "Lengo la campaign?",
+          "Audience?": "Walengwa?",
+          "Campaign location?": "Eneo la campaign?",
+          "Rent": "Kupanga",
+          "Buy": "Kununua",
+          "Land": "Ardhi",
+          "Student accommodation": "Makazi ya wanafunzi",
+          "Commercial": "Biashara",
+          "Not sure yet": "Sina uhakika bado",
+          "Other / I'll choose later": "Nyingine / nitachagua baadaye",
+          "I'll choose later": "Nitachagua baadaye",
+          "Immediately": "Mara moja",
+          "This month": "Mwezi huu",
+          "1-3 months": "Miezi 1-3",
+          "Under USh 500K": "Chini ya USh 500K",
+          "Under USh 300K": "Chini ya USh 300K",
+          "Just browsing": "Natazama tu",
+          "Phone call": "Simu",
+          "Hostel room": "Chumba cha hostel",
+          "Shared room": "Chumba cha kushiriki",
+          "Self-contained": "Self-contained",
+          "Studio": "Studio",
+          "Apartment room": "Chumba cha apartment",
+          "Not sure": "Sina uhakika",
+          "Security": "Usalama",
+          "Water": "Maji",
+          "Meals": "Chakula",
+          "Parking": "Parking",
+          "No preference": "Hakuna maalum",
+          "Next semester": "Muhula ujao",
+          "Independent broker": "Broker binafsi",
+          "Agency/company": "Agency/company",
+          "Land specialist": "Mtaalamu wa ardhi",
+          "New": "Mpya",
+          "Under 1 year": "Chini ya mwaka 1",
+          "1-3 years": "Miaka 1-3",
+          "3+ years": "Miaka 3+",
+          "Walking/public transport": "Kutembea / usafiri wa umma",
+          "Motorcycle": "Pikipiki",
+          "Car": "Gari",
+          "Other": "Nyingine",
+          "Full time": "Muda wote",
+          "Part time": "Muda mfupi",
+          "Weekends": "Wikiendi",
+          "Flexible": "Flexible"
+        }
+      };
+      return dict[lang]?.[text] || translateListingLabel(text);
     }
 
     function applyAccountAccessLanguageUi() {
       const drawer = document.getElementById("account-access-drawer");
       if (!drawer) return;
       setTextById("account-access-title", accountAccessText("heading"));
+      setTextById("account-access-brand-kicker", `${publicBrand()} account`);
+      setTextById("auth-drawer-benefits", accountAccessRouteBenefit());
       const sub = drawer.querySelector("[data-auth-drawer-subheading]");
       if (sub) sub.textContent = accountAccessText("subheading");
       const roleList = document.getElementById("account-access-role-list");
@@ -18258,13 +18612,14 @@
       });
       const termsCopy = document.getElementById("account-access-terms-copy");
       if (termsCopy) {
-        termsCopy.innerHTML = `${accountAccessText("terms").replace("Terms & Conditions", `<button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>`)}`;
+        termsCopy.innerHTML = `${accountAccessText("terms").replace("Terms & Conditions", `<button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>`)}`;
       }
       const privacyCopy = document.getElementById("account-access-privacy-copy");
       if (privacyCopy) {
-        privacyCopy.innerHTML = `${accountAccessText("privacy").replace("Privacy Policy", `<button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>`)}`;
+        privacyCopy.innerHTML = `${accountAccessText("privacy").replace("Privacy Policy", `<button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>`)}`;
       }
       setAccountAccessRole(accountAccessDrawerAudience);
+      applyAccountAccessTheme();
       updateAccountAccessProgress(accountAccessDrawerStep);
     }
 
@@ -18274,9 +18629,9 @@
       const questions = (ACCOUNT_ACCESS_SCREENING[accountAccessDrawerAudience] || ACCOUNT_ACCESS_SCREENING.finder).slice(0, 5);
       wrap.innerHTML = questions.map((question) => `
         <label class="block">
-          <span class="block text-xs font-bold text-gray-600 mb-1">${question.label}</span>
-          <select data-auth-screening-key="${question.key}" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-            ${question.options.map((option) => `<option value="${option}">${option}</option>`).join("")}
+          <span class="block text-xs font-bold text-gray-600 mb-1">${adminEscape(accountAccessScreeningText(question.label))}</span>
+          <select data-auth-screening-key="${question.key}" class="w-full min-h-[48px] border rounded-xl px-4 py-3 text-sm bg-white" style="border-color:var(--auth-role-border, #bbf7d0);">
+            ${question.options.map((option) => `<option value="${adminAttr(option)}">${adminEscape(accountAccessScreeningText(option))}</option>`).join("")}
           </select>
         </label>
       `).join("");
@@ -18304,16 +18659,61 @@
       if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow);
       if (selectedWrap) {
         const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
+        const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
         selectedWrap.classList.toggle("hidden", !isFocusedFlow);
+        selectedWrap.style.borderColor = theme.border;
+        selectedWrap.style.background = theme.soft;
         selectedWrap.innerHTML = isFocusedFlow ? `<div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-3">
-            <span class="w-10 h-10 rounded-2xl bg-white text-green-700 flex items-center justify-center"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
-            <span><span class="block text-sm font-black text-gray-900">${copy.label}</span><span class="block text-xs text-gray-600">${copy.body}</span></span>
+            <span class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center" style="color:${theme.primary};"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
+            <span><span class="block text-sm font-black text-gray-900">${adminEscape(copy.label)}</span><span class="block text-xs text-gray-600">${adminEscape(copy.body)}</span></span>
           </div>
-          ${accountAccessDrawerMode === "create" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold text-green-700">Back to account type</button>` : ""}
+          ${accountAccessDrawerMode === "create" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold" style="color:${theme.primary};">Back to account type</button>` : ""}
         </div>` : "";
       }
       if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify");
+    }
+
+    function applyAccountAccessTheme() {
+      const drawer = document.getElementById("account-access-drawer");
+      if (!drawer) return;
+      const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
+      drawer.setAttribute("data-auth-role-theme", normalizeAuthAudience(accountAccessDrawerAudience));
+      drawer.style.setProperty("--auth-role-primary", theme.primary);
+      drawer.style.setProperty("--auth-role-secondary", theme.secondary);
+      drawer.style.setProperty("--auth-role-soft", theme.soft);
+      drawer.style.setProperty("--auth-role-border", theme.border);
+      drawer.style.setProperty("--auth-role-text", theme.text);
+      const header = document.getElementById("account-access-header");
+      if (header) header.style.background = theme.header;
+      const benefit = document.getElementById("auth-drawer-benefits");
+      if (benefit) {
+        benefit.style.background = theme.soft;
+        benefit.style.borderColor = theme.border;
+        benefit.style.color = theme.text;
+      }
+      const modeLabel = document.getElementById("account-access-mode-label");
+      if (modeLabel) modeLabel.style.color = theme.text;
+      const roleLabel = document.getElementById("account-access-role-label");
+      if (roleLabel) roleLabel.style.color = theme.primary;
+      const progress = document.getElementById("account-access-progress-summary");
+      if (progress) progress.style.background = "rgba(255,255,255,0.18)";
+      const otpWrap = document.getElementById("account-access-otp-method-wrap");
+      if (otpWrap) {
+        otpWrap.style.background = theme.soft;
+        otpWrap.style.borderColor = theme.border;
+      }
+      const continueBtn = document.getElementById("account-access-continue-btn");
+      if (continueBtn) {
+        continueBtn.style.background = theme.primary;
+        continueBtn.style.borderColor = theme.primary;
+      }
+      drawer.querySelectorAll("#account-access-secondary-actions button, [data-auth-accent-link]").forEach((el) => {
+        el.style.color = theme.primary;
+      });
+      drawer.querySelectorAll(".accent-green-700").forEach((el) => {
+        el.style.accentColor = theme.primary;
+      });
     }
 
     function showAccountAccessRolePicker() {
@@ -18347,10 +18747,10 @@
       drawer.innerHTML = `
         <div class="absolute inset-0 bg-black/45" data-auth-drawer-overlay="1" onclick="closeAccountAccessDrawer()"></div>
         <aside class="absolute right-0 top-0 h-full w-full sm:max-w-md bg-white shadow-2xl flex flex-col sm:rounded-l-3xl overflow-hidden overflow-x-hidden">
-          <div class="bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 px-5 py-5 text-white shrink-0">
+          <div id="account-access-header" class="px-5 py-5 text-white shrink-0" style="background:linear-gradient(135deg, #064e3b 0%, #147a3f 52%, #22c55e 100%);">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <p class="text-xs uppercase tracking-wide text-green-200 font-bold">makaug.com account</p>
+                <p id="account-access-brand-kicker" class="text-xs tracking-normal text-white/85 font-bold">makaug.com account</p>
                 <h2 id="account-access-title" class="text-2xl font-black serif mt-1">Sign in or create your makaug.com account</h2>
                 <p class="text-sm text-green-50 mt-2" data-auth-drawer-subheading="1">Save properties, create alerts, book viewings, and manage your property search faster.</p>
               </div>
@@ -18387,7 +18787,7 @@
                   <p class="text-xs uppercase tracking-wide text-green-700 font-bold" id="account-access-role-label">Property Finder</p>
                   <h3 class="text-lg font-black text-gray-900" id="account-access-mode-label">Sign in</h3>
                 </div>
-                <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700" data-auth-text="createAccount">Create an account</button>
+                <button type="button" onclick="showAccountAccessCreate()" class="text-sm font-bold text-green-700" data-auth-text="createAccount" data-auth-accent-link="1">Create an account</button>
               </div>
               <p id="account-access-role-body" class="text-sm text-gray-600 mt-2"></p>
               <div id="account-access-signin-wrap">
@@ -18450,11 +18850,11 @@
                 </div>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
+                  <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
                 </label>
                 <label class="flex items-start gap-2 text-xs text-gray-700">
                   <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
-                  <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
+                  <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
                 </label>
               </div>
               <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
@@ -18471,7 +18871,7 @@
                 <button id="account-access-continue-btn" type="button" onclick="continueAccountAccess()" class="w-full min-h-[48px] bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Continue</button>
               </div>
               <div id="account-access-secondary-actions" class="mt-4 flex flex-wrap gap-3 text-sm">
-                <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold" data-auth-text="createAccount">Create an account</button>
+                <button type="button" onclick="showAccountAccessCreate()" class="text-green-700 font-bold" data-auth-text="createAccount" data-auth-accent-link="1">Create an account</button>
                 <button type="button" onclick="startAccountAccessForgotFlow()" class="text-gray-600 font-bold" data-auth-text="forgot">Forgot password?</button>
               </div>
             </div>
@@ -18514,14 +18914,19 @@
     function setAccountAccessRole(role = "finder") {
       accountAccessDrawerAudience = normalizeAuthAudience(role);
       const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
+      const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
       setTextById("account-access-role-label", copy.label);
       setTextById("account-access-role-body", copy.body);
       document.querySelectorAll("[data-auth-drawer-role]").forEach((btn) => {
         const active = btn.getAttribute("data-auth-drawer-role") === accountAccessDrawerAudience;
-        btn.classList.toggle("border-green-500", active);
-        btn.classList.toggle("bg-green-50", active);
+        const roleTheme = accountAccessRoleTheme(btn.getAttribute("data-auth-drawer-role"));
+        btn.style.borderColor = active ? roleTheme.primary : "#e5e7eb";
+        btn.style.background = active ? roleTheme.soft : "#ffffff";
+        btn.style.boxShadow = active ? `0 0 0 1px ${roleTheme.primary}` : "none";
+        btn.style.setProperty("--tw-ring-color", roleTheme.primary);
         btn.setAttribute("aria-pressed", active ? "true" : "false");
       });
+      applyAccountAccessTheme();
       renderAccountAccessScreening();
       updateAccountAccessSignInCopy();
       updateAccountAccessRoleFocus();
@@ -18691,26 +19096,26 @@
     function accountPolicyPreview(kind = "terms") {
       if (kind === "privacy") {
         return {
-          title: "MakaUg Privacy Policy preview",
+          title: `${publicBrand()} Privacy Policy preview`,
           link: "/privacy-policy",
           items: [
-            "We collect account, listing, contact, WhatsApp/email/SMS, saved-search, alert, and support data needed to run MakaUg.",
+            `We collect account, listing, contact, WhatsApp/email/SMS, saved-search, alert, and support data needed to run ${publicBrand()}.`,
             "We use this data for account access, listings, alerts, enquiries, safety checks, fraud prevention, advertising operations, and support.",
             "You can manage contact preferences, opt out of marketing, and request access, correction, export, or deletion where applicable.",
-            "MakaUg applies Uganda data protection principles and GDPR-style rights where relevant. AI/data use must be consent-aware and privacy-safe.",
-            "Legal review note: the full policy should be reviewed by MakaUg legal counsel before formal reliance."
+            `${publicBrand()} applies Uganda data protection principles and GDPR-style rights where relevant. AI/data use must be consent-aware and privacy-safe.`,
+            `Legal review note: the full policy should be reviewed by ${publicBrand()} legal counsel before formal reliance.`
           ]
         };
       }
       return {
-        title: "MakaUg Terms & Conditions preview",
+        title: `${publicBrand()} Terms & Conditions preview`,
         link: "/terms",
         items: [
-          "MakaUg is a property marketplace and communication platform; it does not guarantee title, ownership, availability, or approval unless clearly verified.",
+          `${publicBrand()} is a property marketplace and communication platform; it does not guarantee title, ownership, availability, or approval unless clearly verified.`,
           "Users must provide accurate account, listing, pricing, location, and contact information and must not misuse the platform.",
           "Do not pay before viewing, verification, or proper due diligence. Report suspicious listings or payment pressure.",
           "Advertising, sponsored placements, and payment links are subject to review, approval, and applicable campaign terms.",
-          "Legal review note: the full terms should be reviewed by MakaUg legal counsel before formal reliance."
+          `Legal review note: the full terms should be reviewed by ${publicBrand()} legal counsel before formal reliance.`
         ]
       };
     }

@@ -460,6 +460,17 @@ function run() {
   assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
   assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
   assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(sourceHtml.includes('id="account-access-brand-kicker"'), 'auth drawer should expose a brand kicker that can be verified');
+  assert(sourceHtml.includes('tracking-normal text-white/85 font-bold">makaug.com account'), 'auth drawer brand kicker should display lowercase makaug.com, not uppercase');
+  assert(sourceHtml.includes('ACCOUNT_ACCESS_ROLE_THEME'), 'auth drawer should define role-specific accent themes');
+  for (const roleTheme of ['name: "property finder"', 'name: "student"', 'name: "broker"', 'name: "field agent"', 'name: "advertiser"']) {
+    assert(sourceHtml.includes(roleTheme), `auth drawer should expose role accent: ${roleTheme}`);
+  }
+  assert(sourceHtml.includes('data-auth-role-theme'), 'auth drawer should apply selected role theme to the panel');
+  assert(sourceHtml.includes('accountAccessScreeningText'), 'auth drawer screening questions should be language-aware');
+  for (const langKey of ['ac: {', 'ny: {', 'rn: {', 'sm: {']) {
+    assert(sourceHtml.includes(langKey), `auth drawer should have safe language text for ${langKey}`);
+  }
   assert(sourceHtml.includes('Password or 4-digit PIN'), 'field-agent sign-in should visibly support the admin-issued 4-digit PIN');
   assert(sourceHtml.includes('admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
   assert(sourceHtml.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
@@ -481,6 +492,9 @@ function run() {
   assert(sourceHtml.includes('SMS / Text'), 'auth drawer should label phone OTP as SMS/Text');
   assert(sourceHtml.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
   assert(authRoutes.includes('Verification OTP sent by SMS'), 'auth register route should report SMS OTP delivery accurately');
+  assert(authRoutes.includes('terms_accepted is required'), 'auth register route should enforce terms acceptance on the backend');
+  assert(authRoutes.includes('privacy_accepted is required'), 'auth register route should enforce privacy acceptance on the backend');
+  assert(authRoutes.includes('makaug.com account verification'), 'auth OTP copy should use lowercase public brand display');
   assert(propertiesRoutes.includes('OTP sent by SMS'), 'listing OTP route should report SMS OTP delivery accurately');
   assert(sourceHtml.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
   assert(sourceHtml.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
