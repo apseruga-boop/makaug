@@ -1286,11 +1286,6 @@
               <label class="sr-only" for="hero-amenities-f">Amenities</label>
               <select id="hero-amenities-f" class="hero-advanced-field" aria-label="Amenities">
                 <option value="">Amenities</option>
-                <option value="security">Security</option>
-                <option value="parking">Parking</option>
-                <option value="water">Water</option>
-                <option value="wifi">Wi-Fi</option>
-                <option value="furnished">Furnished</option>
               </select>
 
               <label class="sr-only" for="hero-radius-advanced-f">Radius</label>
@@ -6110,12 +6105,59 @@
       { value: "4", label: "4" },
       { value: "5", label: "5+" }
     ];
+    const HERO_AMENITY_OPTIONS_BY_TAB = {
+      sale: [
+        { value: "", labelKey: "heroAmenities" },
+        { value: "parking", labelKey: "heroAmenityParking" },
+        { value: "security", labelKey: "heroAmenityGuarded" },
+        { value: "garden", labelKey: "heroAmenityGarden" },
+        { value: "swimming pool", labelKey: "heroAmenityPool" },
+        { value: "servants quarter", labelKey: "heroAmenityServantsQuarter" },
+        { value: "titled land", labelKey: "heroAmenityTitleReady" }
+      ],
+      rent: [
+        { value: "", labelKey: "heroAmenities" },
+        { value: "parking", labelKey: "heroAmenityParking" },
+        { value: "security", labelKey: "heroAmenityGuarded" },
+        { value: "water", labelKey: "heroAmenityWater" },
+        { value: "furnished", labelKey: "heroAmenityFurnished" },
+        { value: "wifi", labelKey: "heroAmenityWifi" },
+        { value: "pet friendly", labelKey: "heroAmenityPetFriendly" }
+      ],
+      students: [
+        { value: "", labelKey: "heroStudentAmenities" },
+        { value: "wifi", labelKey: "heroAmenityWifi" },
+        { value: "security", labelKey: "heroAmenityGuarded" },
+        { value: "water", labelKey: "heroAmenityWater" },
+        { value: "meals", labelKey: "heroAmenityMeals" },
+        { value: "study area", labelKey: "heroAmenityStudyArea" },
+        { value: "near campus", labelKey: "heroAmenityNearCampus" }
+      ],
+      commercial: [
+        { value: "", labelKey: "heroCommercialFeatures" },
+        { value: "parking", labelKey: "heroAmenityParking" },
+        { value: "security", labelKey: "heroAmenityGuarded" },
+        { value: "main road", labelKey: "heroAmenityMainRoad" },
+        { value: "loading bay", labelKey: "heroAmenityLoadingBay" },
+        { value: "power backup", labelKey: "heroAmenityPowerBackup" },
+        { value: "storefront", labelKey: "heroAmenityStorefront" }
+      ],
+      land: [
+        { value: "", labelKey: "heroLandFeatures" },
+        { value: "road access", labelKey: "heroAmenityRoadAccess" },
+        { value: "electricity nearby", labelKey: "heroAmenityElectricityNearby" },
+        { value: "water nearby", labelKey: "heroAmenityWaterNearby" },
+        { value: "titled land", labelKey: "heroAmenityTitleReady" },
+        { value: "boundary markers", labelKey: "heroAmenityBoundaryMarkers" },
+        { value: "main road", labelKey: "heroAmenityMainRoad" }
+      ]
+    };
     const HERO_FILTER_CONFIG_BY_TAB = {
-      sale: { propertyLabelKey: "heroPropertyType", showBedrooms: true, showBathrooms: true },
-      rent: { propertyLabelKey: "heroPropertyType", showBedrooms: true, showBathrooms: true },
-      students: { propertyLabelKey: "heroRoomType", showBedrooms: true, showBathrooms: true },
-      commercial: { propertyLabelKey: "heroCommercialType", showBedrooms: false, showBathrooms: false },
-      land: { propertyLabelKey: "heroLandType", showBedrooms: false, showBathrooms: false }
+      sale: { propertyLabelKey: "heroPropertyType", amenityOptionsKey: "sale", showBedrooms: true, showBathrooms: true },
+      rent: { propertyLabelKey: "heroPropertyType", amenityOptionsKey: "rent", showBedrooms: true, showBathrooms: true },
+      students: { propertyLabelKey: "heroRoomType", amenityOptionsKey: "students", showBedrooms: true, showBathrooms: true },
+      commercial: { propertyLabelKey: "heroCommercialType", amenityOptionsKey: "commercial", showBedrooms: false, showBathrooms: false },
+      land: { propertyLabelKey: "heroLandType", amenityOptionsKey: "land", showBedrooms: false, showBathrooms: false }
     };
 
     const SAVED_IDS_STORAGE_KEY = "makaug_saved_ids_by_user";
@@ -6185,6 +6227,30 @@
         heroTypeSharedRoom: "Shared room",
         heroBathrooms: "Bathrooms",
         heroAmenities: "Amenities",
+        heroStudentAmenities: "Student Amenities",
+        heroCommercialFeatures: "Commercial Features",
+        heroLandFeatures: "Land Features",
+        heroAmenityParking: "Parking",
+        heroAmenityGuarded: "Guarded access",
+        heroAmenityGarden: "Garden",
+        heroAmenityPool: "Swimming pool",
+        heroAmenityServantsQuarter: "Servants quarter",
+        heroAmenityTitleReady: "Titled land",
+        heroAmenityWater: "Water",
+        heroAmenityFurnished: "Furnished",
+        heroAmenityWifi: "Wi-Fi",
+        heroAmenityPetFriendly: "Pet friendly",
+        heroAmenityMeals: "Meals",
+        heroAmenityStudyArea: "Study area",
+        heroAmenityNearCampus: "Near campus",
+        heroAmenityMainRoad: "Main road",
+        heroAmenityLoadingBay: "Loading bay",
+        heroAmenityPowerBackup: "Power backup",
+        heroAmenityStorefront: "Storefront",
+        heroAmenityRoadAccess: "Road access",
+        heroAmenityElectricityNearby: "Electricity nearby",
+        heroAmenityWaterNearby: "Water nearby",
+        heroAmenityBoundaryMarkers: "Boundary markers",
         heroRadius: "Radius",
         heroSortNewest: "Sort: Newest",
         heroSortPriceAsc: "Price low to high",
@@ -6313,6 +6379,30 @@
         heroTypeSharedRoom: "Shared room",
         heroBathrooms: "Bathrooms",
         heroAmenities: "Amenities",
+        heroStudentAmenities: "Ebiriwo by'abayizi",
+        heroCommercialFeatures: "Ebiriwo by'obusuubuzi",
+        heroLandFeatures: "Ebiri ku ttaka",
+        heroAmenityParking: "Parking",
+        heroAmenityGuarded: "Obukuumi",
+        heroAmenityGarden: "Garden",
+        heroAmenityPool: "Swimming pool",
+        heroAmenityServantsQuarter: "Servants quarter",
+        heroAmenityTitleReady: "Titled land",
+        heroAmenityWater: "Water",
+        heroAmenityFurnished: "Furnished",
+        heroAmenityWifi: "Wi-Fi",
+        heroAmenityPetFriendly: "Pet friendly",
+        heroAmenityMeals: "Meals",
+        heroAmenityStudyArea: "Study area",
+        heroAmenityNearCampus: "Near campus",
+        heroAmenityMainRoad: "Main road",
+        heroAmenityLoadingBay: "Loading bay",
+        heroAmenityPowerBackup: "Power backup",
+        heroAmenityStorefront: "Storefront",
+        heroAmenityRoadAccess: "Road access",
+        heroAmenityElectricityNearby: "Electricity nearby",
+        heroAmenityWaterNearby: "Water nearby",
+        heroAmenityBoundaryMarkers: "Boundary markers",
         heroRadius: "Radius",
         heroSortNewest: "Sooka ebipya",
         heroSortPriceAsc: "Omuwendo mutono okudda ku munene",
@@ -6417,6 +6507,30 @@
         heroTypeSharedRoom: "Chumba cha pamoja",
         heroBathrooms: "Bafu",
         heroAmenities: "Vistawishi",
+        heroStudentAmenities: "Vistawishi vya wanafunzi",
+        heroCommercialFeatures: "Vipengele vya biashara",
+        heroLandFeatures: "Vipengele vya ardhi",
+        heroAmenityParking: "Maegesho",
+        heroAmenityGuarded: "Ulinzi",
+        heroAmenityGarden: "Bustani",
+        heroAmenityPool: "Bwawa la kuogelea",
+        heroAmenityServantsQuarter: "Chumba cha mfanyakazi",
+        heroAmenityTitleReady: "Ardhi yenye hati",
+        heroAmenityWater: "Maji",
+        heroAmenityFurnished: "Ina samani",
+        heroAmenityWifi: "Wi-Fi",
+        heroAmenityPetFriendly: "Wanyama wanaruhusiwa",
+        heroAmenityMeals: "Chakula",
+        heroAmenityStudyArea: "Eneo la kusomea",
+        heroAmenityNearCampus: "Karibu na chuo",
+        heroAmenityMainRoad: "Barabara kuu",
+        heroAmenityLoadingBay: "Eneo la kupakia mizigo",
+        heroAmenityPowerBackup: "Umeme wa akiba",
+        heroAmenityStorefront: "Sehemu ya mbele ya duka",
+        heroAmenityRoadAccess: "Njia ya kufika",
+        heroAmenityElectricityNearby: "Umeme karibu",
+        heroAmenityWaterNearby: "Maji karibu",
+        heroAmenityBoundaryMarkers: "Mipaka imewekwa",
         heroRadius: "Radius",
         heroSortNewest: "Panga: Mpya kwanza",
         heroSortPriceAsc: "Bei chini hadi juu",
@@ -21362,8 +21476,8 @@
       const bathrooms = document.getElementById("hero-bathrooms-f");
       if (bathrooms?.options?.[0]) bathrooms.options[0].textContent = tr("heroBathrooms");
       setHeroFilterControlVisible("hero-bathrooms-f", Boolean(config.showBathrooms));
-      const amenities = document.getElementById("hero-amenities-f");
-      if (amenities?.options?.[0]) amenities.options[0].textContent = tr("heroAmenities");
+      const amenityOptions = HERO_AMENITY_OPTIONS_BY_TAB[config.amenityOptionsKey || currentTab] || HERO_AMENITY_OPTIONS_BY_TAB.sale;
+      setHeroSelectOptions("hero-amenities-f", amenityOptions, "");
       const radius = document.getElementById("hero-radius-advanced-f");
       if (radius?.options?.[0]) radius.options[0].textContent = "10 miles";
       const sort = document.getElementById("hero-sort-f");
