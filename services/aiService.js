@@ -22,6 +22,7 @@ const INTENTS = [
   'property_search',
   'search_near_me',
   'shared_location_search',
+  'apply_filters',
   'save_search',
   'create_alert',
   'property_need_request',
@@ -375,6 +376,9 @@ function heuristicIntent(text) {
   }
   if (/(save search|save this search|notify me|alert me|create alert|tell me when|let me know)/.test(t)) {
     return { intent: /(alert|notify|tell me|let me know)/.test(t) ? 'create_alert' : 'save_search', confidence: 0.7, entities: {} };
+  }
+  if (/(filter|bedroom|bedrooms|min price|max price|under|above|house|apartment|studio|hostel|office|shop|warehouse|furnished|bathroom|amenit)/.test(t)) {
+    return { intent: 'apply_filters', confidence: 0.66, entities: {} };
   }
   if (/(find|search|looking|rent|buy|sale|house|apartment|property|student|accommodation|hostel|area|nyumba|shamba|kiwanja|ardhi|plot|ttaka|enju|ot|ot me)/.test(t)) {
     return { intent: 'property_search', confidence: 0.62, entities: {} };
@@ -933,7 +937,7 @@ async function classifyWhatsappIntent({ text, language = 'en', step = '', sessio
       messages: [
         {
           role: 'system',
-          content: `You classify intents for MakaUg WhatsApp assistant for Uganda.
+          content: `You classify intents for makaug.com WhatsApp assistant for Uganda.
 Return strict JSON only:
 {
   "intent": one of ${JSON.stringify(INTENTS)},
@@ -952,6 +956,7 @@ Return strict JSON only:
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
 - search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
+- apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, land title, or commercial type.
 - save_search and create_alert store location/radius when available. property_need_request is for no-results demand capture.
 - Agent search includes "find me an agent/broker" and equivalents in supported languages.
 - Language change requests like "respond in Luganda" should set entities.language and intent unknown unless another action is also requested.
@@ -1427,9 +1432,10 @@ Produce a short typed reply in ${SUPPORTED_AI_LANGUAGES[languageCode]}.
 Language guardrail: ${guardrail}
 Current search model:
 - Website search uses a manual area input plus a compact Location control.
+- Homepage search has tabs for Rent, Buy, Commercial, Students, and Land plus a lower filter row for Property Type, Min Price, Max Price, Bedrooms, and Filters.
 - Location search defaults to a 10 mile radius / 16.1 km.
 - WhatsApp users can share location for a shared_location_search or search_near_me intent.
-- Saved searches and alerts store location and radius.
+- Saved searches and alerts store property type, min/max price, bedrooms, advanced filters, location, and radius.
 - If a location is outside Uganda, tell the user to choose a Ugandan area or search all Uganda.
 - Never invent or hallucinate listings. If no real listing data is present, offer save search, create alert, WhatsApp help, or real nearby alternatives only when context includes them.
 Requirements:

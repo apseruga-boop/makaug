@@ -535,14 +535,21 @@ async function listPropertiesHandler(req, res, next) {
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);
     const status = cleanText(req.query.status || 'approved').toLowerCase();
-    const minPrice = toNullableInt(req.query.min_price);
-    const maxPrice = toNullableInt(req.query.max_price);
+    const minPrice = toNullableInt(req.query.min_price || req.query.minPrice);
+    const maxPrice = toNullableInt(req.query.max_price || req.query.maxPrice);
     const minBeds = toNullableInt(req.query.min_beds || req.query.bedrooms);
     const maxBeds = toNullableInt(req.query.max_beds);
-    const propertyType = cleanText(req.query.property_type);
+    const bathrooms = toNullableInt(req.query.bathrooms);
+    const propertyType = cleanText(req.query.property_type || req.query.propertyType);
+    const amenities = asArray(req.query.amenities).map((item) => cleanText(item).toLowerCase()).filter(Boolean);
+    const studentCampus = cleanText(req.query.studentCampus || req.query.student_campus);
+    const landTitleType = cleanText(req.query.landTitleType || req.query.land_title_type);
+    const commercialType = cleanText(req.query.commercialType || req.query.commercial_type);
+    const currency = cleanText(req.query.currency || 'UGX').toUpperCase();
     const source = cleanText(req.query.source || 'web_search');
     const language = cleanText(req.query.language || req.query.lang || 'en').toLowerCase();
     const sessionId = cleanText(req.query.session || req.query.session_id || req.query.guest_session_id);
+    const locationSource = cleanText(req.query.locationSource || req.query.location_source);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -600,7 +607,46 @@ async function listPropertiesHandler(req, res, next) {
     if (maxPrice != null) addFilter(filters, values, 'p.price <= ?', maxPrice);
     if (minBeds != null) addFilter(filters, values, 'p.bedrooms >= ?', minBeds);
     if (maxBeds != null) addFilter(filters, values, 'p.bedrooms <= ?', maxBeds);
-    if (propertyType) addFilter(filters, values, 'p.property_type = ?', propertyType);
+    if (bathrooms != null) addFilter(filters, values, 'p.bathrooms >= ?', bathrooms);
+    if (propertyType) {
+      addFilter(
+        filters,
+        values,
+        "(p.property_type ILIKE ? OR p.listing_type ILIKE ? OR COALESCE(p.extra_fields->>'room_type', '') ILIKE ? OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ?)",
+        `%${propertyType}%`,
+        `%${propertyType}%`,
+        `%${propertyType}%`,
+        `%${propertyType}%`
+      );
+    }
+    if (amenities.length) {
+      amenities.forEach((amenity) => {
+        addFilter(
+          filters,
+          values,
+          "(LOWER(COALESCE(p.amenities::text, '')) LIKE ? OR LOWER(COALESCE(p.description, '')) LIKE ? OR LOWER(COALESCE(p.extra_fields::text, '')) LIKE ?)",
+          `%${amenity}%`,
+          `%${amenity}%`,
+          `%${amenity}%`
+        );
+      });
+    }
+    if (studentCampus) {
+      addFilter(
+        filters,
+        values,
+        "(COALESCE(p.extra_fields->>'nearest_university', '') ILIKE ? OR COALESCE(p.extra_fields->>'student_campus', '') ILIKE ? OR COALESCE(p.description, '') ILIKE ?)",
+        `%${studentCampus}%`,
+        `%${studentCampus}%`,
+        `%${studentCampus}%`
+      );
+    }
+    if (landTitleType) {
+      addFilter(filters, values, "(COALESCE(p.title_type, '') ILIKE ? OR COALESCE(p.extra_fields->>'title_type', '') ILIKE ?)", `%${landTitleType}%`, `%${landTitleType}%`);
+    }
+    if (commercialType) {
+      addFilter(filters, values, "(p.property_type ILIKE ? OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ?)", `%${commercialType}%`, `%${commercialType}%`);
+    }
 
     if (hasRadiusSearch) {
       if (!isPointInUganda(searchLat, searchLng)) {
@@ -618,6 +664,7 @@ async function listPropertiesHandler(req, res, next) {
               radius_km: Number(radiusKm.toFixed(3)),
               radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
               radius_unit: radiusUnit || 'miles',
+              location_source: locationSource || null,
               outside_uganda: true,
               fallback: 'manual_uganda_search'
             })]
@@ -662,8 +709,14 @@ async function listPropertiesHandler(req, res, next) {
             filters: {
               min_price: minPrice,
               max_price: maxPrice,
+              currency,
               bedrooms: minBeds,
-              property_type: propertyType || null
+              bathrooms,
+              property_type: propertyType || null,
+              amenities,
+              student_campus: studentCampus || null,
+              land_title_type: landTitleType || null,
+              commercial_type: commercialType || null
             },
             location: hasRadiusSearch ? {
               lat: Number(searchLat.toFixed(5)),
@@ -673,6 +726,7 @@ async function listPropertiesHandler(req, res, next) {
             radius_km: hasRadiusSearch ? Number(radiusKm.toFixed(3)) : null,
             radius_miles: hasRadiusSearch ? Number(kmToMiles(radiusKm).toFixed(2)) : null,
             radius_unit: hasRadiusSearch ? (radiusUnit || 'miles') : null,
+            location_source: hasRadiusSearch ? (locationSource || null) : null,
             language,
             session_id: sessionId || null,
             result_count: 0
@@ -776,6 +830,19 @@ async function listPropertiesHandler(req, res, next) {
             radius_km: Number(radiusKm.toFixed(3)),
             radius_miles: Number(kmToMiles(radiusKm).toFixed(2)),
             radius_unit: radiusUnit || 'miles',
+            location_source: locationSource || null,
+            filters: {
+              min_price: minPrice,
+              max_price: maxPrice,
+              currency,
+              bedrooms: minBeds,
+              bathrooms,
+              property_type: propertyType || null,
+              amenities,
+              student_campus: studentCampus || null,
+              land_title_type: landTitleType || null,
+              commercial_type: commercialType || null
+            },
             result_count: listResult.rows.length,
             outside_uganda: false
           })]
@@ -787,11 +854,26 @@ async function listPropertiesHandler(req, res, next) {
 
     return res.json({
       ok: true,
-      data: listResult.rows.map((row) => ({
-        ...row,
-        distance_km: row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3)),
-        distance_miles: row.distance_km == null ? null : Number(kmToMiles(Number(row.distance_km)).toFixed(2))
-      })),
+      data: listResult.rows.map((row) => {
+        const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
+        return {
+          ...row,
+          listingId: row.id,
+          slug: row.id,
+          url: `/property/${row.id}`,
+          category: row.listing_type,
+          currency,
+          location: [row.area, row.district].filter(Boolean).join(', '),
+          image: row.primary_image_url || null,
+          verification_status: row.registration_status || null,
+          availability: row.status,
+          sponsored: row.featured === true,
+          distance_km: distanceKm,
+          distanceKm,
+          distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
+          distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2))
+        };
+      }),
       search: hasRadiusSearch ? {
         latitude: searchLat,
         longitude: searchLng,

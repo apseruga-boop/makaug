@@ -110,7 +110,7 @@ const T = {
     seeAllAgents: 'See all agents: {url}',
     nextPropertySearchActions: 'Next: tap a listing link to view photos, map, book a viewing, or request a callback. Reply *2* to search again, *MENU* for the main menu, or *WIDEN* if this was a nearby search.',
     nextAgentActions: 'Next: tap a broker profile to view details. Reply *3* to find another broker, *2* to search property, or *MENU* for the main menu.',
-    noMatchNextActions: 'Next: reply with another area, district, budget, or property type. You can also reply *2* to search again or *MENU* for the main menu.',
+    noMatchNextActions: 'Next: reply with another area, district, budget, property type, bedrooms, or share your location. You can also reply *2* to search again or *MENU* for the main menu.',
     replySearchAgain: 'Reply 2 to search again.',
     replyAgentAgain: 'Reply 3 to find another agent.',
     areasLabel: 'Areas',
@@ -421,7 +421,7 @@ Object.assign(T.rn, {
   askPhotos: '📸 Ohereza ifoto ya *front/outside* mbere.',
   askSearchType: '🔎 Urashaka iki?\n1️⃣ Kugurisha\n2️⃣ Gukodesha\n3️⃣ Ubutaka\n4️⃣ Student accommodation\n5️⃣ Commercial\n6️⃣ Vyose',
   askSearchArea: '📍 Andika area canke district uronderamwo, canke share location yawe.',
-  locationSharedReceived: '📍 Location yawe yakiriwe. Rukiga translation is not fully available yet, so MakaUg uses English fallback instead of guessing another language. I am searching within 10 miles first.',
+  locationSharedReceived: '📍 Location yawe yakiriwe. Rukiga translation is not fully available yet, so makaug.com uses English fallback instead of guessing another language. I am searching within 10 miles first.',
   widenNearbySearch: 'Subiza *WIDEN* nimba ushaka nagure aho kurondera.',
   searchNoNearbyResults: 'No approved listings found within 10 miles. Showing the nearest available options.',
   menuHint: 'Andika MENU igihe cose gusubira kuri main menu.',
@@ -2125,7 +2125,7 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
       sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa. Nitaanza ndani ya maili 10, kisha ujibu WIDEN ukitaka chaguo zaidi.`,
       ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp. Abicako i miles 10, dok iromo dwoko WIDEN pi me yaro.`,
       ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati. Ninyija kutandika omu miles 10, kandi wangarukamu WIDEN waba noyenda ebindi.`,
-      rn: `📍 I can search near you. Rukiga translation is not fully available yet, so MakaUg will use English fallback rather than guessing another language. Please share your WhatsApp location now. I will start within 10 miles.`,
+      rn: `📍 I can search near you. Rukiga translation is not fully available yet, so makaug.com will use English fallback rather than guessing another language. Please share your WhatsApp location now. I will start within 10 miles.`,
       sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 10, olwo oddemu WIDEN bwoyagala ebisingawo.`
     }
   };

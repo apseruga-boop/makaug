@@ -92,6 +92,66 @@
       width: 100%;
     }
     .hero-field:last-of-type { border-right: 0; }
+    .hero-filter-row {
+      margin-top: 8px;
+    }
+    .hero-filter-field,
+    .hero-filter-button {
+      min-height: 44px;
+      border-radius: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(255, 255, 255, 0.96);
+      color: #1f2937;
+      font-size: 13px;
+      font-weight: 750;
+      outline: none;
+      width: 100%;
+      transition: box-shadow .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+    .hero-filter-field {
+      padding: 0 14px;
+    }
+    .hero-filter-field:focus-visible,
+    .hero-filter-button:focus-visible {
+      border-color: rgba(34, 197, 94, 0.65);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+    }
+    .hero-filter-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: #ecfdf5;
+      color: #14532d;
+      cursor: pointer;
+    }
+    .hero-filter-button:hover {
+      background: #dcfce7;
+      transform: translateY(-1px);
+    }
+    .hero-advanced-panel {
+      margin-top: 8px;
+      border-radius: 16px;
+      border: 1px solid rgba(187, 247, 208, 0.78);
+      background: rgba(240, 253, 244, 0.96);
+      color: #14532d;
+      padding: 10px;
+      box-shadow: 0 14px 30px rgba(3, 10, 20, 0.14);
+    }
+    .hero-advanced-panel[hidden] {
+      display: none;
+    }
+    .hero-advanced-field {
+      min-height: 40px;
+      border-radius: 11px;
+      border: 1px solid #bbf7d0;
+      background: #fff;
+      color: #1f2937;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      outline: none;
+    }
     .hero-location-wrap {
       position: relative;
       min-width: 142px;
@@ -933,6 +993,17 @@
         font-size: 16px;
         padding: 0 16px;
       }
+      .hero-filter-row {
+        margin-top: 10px;
+      }
+      .hero-filter-field,
+      .hero-filter-button {
+        min-height: 46px;
+        font-size: 14px;
+      }
+      .hero-advanced-panel {
+        padding: 12px;
+      }
       .map-h { height: 260px; }
       #map-home.map-h { height: 400px; }
       .map-h-sm { height: 220px; }
@@ -985,7 +1056,10 @@
       }
       #hero-district,
       #hero-radius-f,
-      #hero-context-f {
+      #hero-property-type-f,
+      #hero-min-price-f,
+      #hero-max-price-f,
+      #hero-bedrooms-f {
         padding-left: 12px !important;
       }
       #hero-q,
@@ -1143,11 +1217,11 @@
             </div>
           </div>
 
-          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[minmax(220px,2.1fr)_minmax(132px,.72fr)_minmax(148px,.8fr)_auto]">
+          <div class="hero-search-row grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_minmax(142px,.34fr)_auto]">
             <div id="hero-q-wrap" class="relative">
               <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
               <label for="hero-q" class="sr-only">Search by city, area, suburb or landmark</label>
-              <input id="hero-q" autocomplete="off" class="hero-field pl-11 pr-4" placeholder="City, area, suburb or landmark">
+              <input id="hero-q" autocomplete="off" onkeydown="handleHeroSearchKeydown(event)" class="hero-field pl-11 pr-4" placeholder="City, area, suburb or landmark">
             </div>
             <select id="hero-district" class="hidden">
               <option value=""></option>
@@ -1162,8 +1236,71 @@
               </button>
               <span id="hero-location-helper" class="hero-location-helper" role="status">Location search uses a 10 mile radius by default.</span>
             </div>
-            <select id="hero-context-f" class="hero-field px-4"></select>
             <button id="hero-search-btn" onclick="doSearch()" class="hero-search-btn">Search</button>
+          </div>
+
+          <div id="hero-filter-row" class="hero-filter-row grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_.8fr_auto] gap-2">
+            <label for="hero-property-type-f" class="sr-only">Property Type</label>
+            <select id="hero-property-type-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Property Type"></select>
+
+            <label for="hero-min-price-f" class="sr-only">Min Price</label>
+            <select id="hero-min-price-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Min Price"></select>
+
+            <label for="hero-max-price-f" class="sr-only">Max Price</label>
+            <select id="hero-max-price-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Max Price"></select>
+
+            <label for="hero-bedrooms-f" class="sr-only">Bedrooms</label>
+            <select id="hero-bedrooms-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Bedrooms"></select>
+
+            <button id="hero-filters-btn" type="button" onclick="toggleHeroAdvancedFilters()" class="hero-filter-button" aria-expanded="false" aria-controls="hero-advanced-filters-panel">
+              <i class="fas fa-sliders" aria-hidden="true"></i>
+              <span id="hero-filters-label">Filters</span>
+            </button>
+          </div>
+
+          <div id="hero-advanced-filters-panel" class="hero-advanced-panel" hidden>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+              <label class="sr-only" for="hero-bathrooms-f">Bathrooms</label>
+              <select id="hero-bathrooms-f" class="hero-advanced-field" aria-label="Bathrooms">
+                <option value="">Bathrooms</option>
+                <option value="1">1+</option>
+                <option value="2">2+</option>
+                <option value="3">3+</option>
+                <option value="4">4+</option>
+              </select>
+
+              <label class="sr-only" for="hero-amenities-f">Amenities</label>
+              <select id="hero-amenities-f" class="hero-advanced-field" aria-label="Amenities">
+                <option value="">Amenities</option>
+                <option value="security">Security</option>
+                <option value="parking">Parking</option>
+                <option value="water">Water</option>
+                <option value="wifi">Wi-Fi</option>
+                <option value="furnished">Furnished</option>
+              </select>
+
+              <label class="sr-only" for="hero-radius-advanced-f">Radius</label>
+              <select id="hero-radius-advanced-f" class="hero-advanced-field" aria-label="Radius">
+                <option value="10">10 miles</option>
+                <option value="5">5 miles</option>
+                <option value="20">20 miles</option>
+                <option value="50">50 miles</option>
+              </select>
+
+              <label class="sr-only" for="hero-sort-f">Sort</label>
+              <select id="hero-sort-f" class="hero-advanced-field" aria-label="Sort">
+                <option value="newest">Sort: Newest</option>
+                <option value="price_asc">Price low to high</option>
+                <option value="price_desc">Price high to low</option>
+                <option value="distance_asc">Distance</option>
+              </select>
+
+              <div class="grid grid-cols-2 gap-2">
+                <button id="hero-apply-filters-btn" type="button" onclick="applyHeroAdvancedFilters()" class="rounded-xl bg-green-700 text-white text-sm font-black px-3 py-2">Apply</button>
+                <button id="hero-clear-filters-btn" type="button" onclick="clearHeroFilters()" class="rounded-xl bg-white border border-green-200 text-green-800 text-sm font-black px-3 py-2">Clear</button>
+              </div>
+            </div>
+            <p id="hero-advanced-helper" class="mt-2 text-xs font-bold text-green-800">Manual area, radius, and property filters stay active.</p>
           </div>
         </div>
       </div>
@@ -1313,7 +1450,7 @@
         <p class="text-sm text-gray-600 mb-4"><strong id="sale-count">0</strong> properties found</p>
         <div id="sale-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div class="rounded-2xl border border-green-100 bg-green-50 p-5 text-green-950 sm:col-span-2">
-            <h2 class="font-black text-lg">No homes for sale match this search yet.</h2>
+            <h2 class="font-black text-lg">No exact matches yet. No homes for sale match this search yet.</h2>
             <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will help you find similar properties.</p>
           </div>
         </div>
@@ -1425,7 +1562,7 @@
         <p class="text-sm text-gray-600 mb-4"><strong id="rent-count">0</strong> properties found</p>
         <div id="rent-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div class="rounded-2xl border border-blue-100 bg-blue-50 p-5 text-blue-950 sm:col-span-2">
-            <h2 class="font-black text-lg">No rentals match this search yet.</h2>
+            <h2 class="font-black text-lg">No exact matches yet. No rentals match this search yet.</h2>
             <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will keep watching for suitable rentals.</p>
           </div>
         </div>
@@ -1550,7 +1687,7 @@
           </div>
           <div id="student-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div class="rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950 md:col-span-2">
-              <h2 class="font-black text-lg">No student rooms match this search yet.</h2>
+              <h2 class="font-black text-lg">No exact matches yet. No student rooms match this search yet.</h2>
               <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need near campus.</p>
             </div>
           </div>
@@ -1656,7 +1793,7 @@
       <div class="lg:col-span-2">
         <div id="commercial-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div class="rounded-2xl border border-amber-100 bg-amber-50 p-5 text-amber-950 md:col-span-2">
-            <h2 class="font-black text-lg">No commercial spaces match this search yet.</h2>
+            <h2 class="font-black text-lg">No exact matches yet. No commercial spaces match this search yet.</h2>
             <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what your business needs.</p>
           </div>
         </div>
@@ -1757,7 +1894,7 @@
       <div class="lg:col-span-2">
         <div id="land-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-emerald-950 md:col-span-2">
-            <h2 class="font-black text-lg">No land listings match this search yet.</h2>
+            <h2 class="font-black text-lg">No exact matches yet. No land listings match this search yet.</h2>
             <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what plot you need. Always verify title and ownership before payment.</p>
           </div>
         </div>
@@ -5835,6 +5972,43 @@
         match: (p, value) => !value || (p.subtype || "").toLowerCase().includes(value)
       }
     };
+    const HERO_PROPERTY_TYPE_OPTIONS = [
+      { value: "", labelKey: "heroAny" },
+      { value: "house", labelKey: "heroTypeHouse" },
+      { value: "apartment", labelKey: "heroTypeApartment" },
+      { value: "bungalow", labelKey: "heroTypeBungalow" },
+      { value: "studio", labelKey: "heroTypeStudio" },
+      { value: "room", labelKey: "heroTypeRoom" },
+      { value: "hostel", labelKey: "heroTypeHostel" },
+      { value: "land", labelKey: "heroTypeLand" },
+      { value: "commercial space", labelKey: "heroTypeCommercialSpace" },
+      { value: "office", labelKey: "heroTypeOffice" },
+      { value: "shop", labelKey: "heroTypeShop" },
+      { value: "warehouse", labelKey: "heroTypeWarehouse" }
+    ];
+    const HERO_PRICE_OPTIONS_UGX = [
+      { value: "", labelKey: "heroAny" },
+      { value: "100000", label: "USh 100K" },
+      { value: "300000", label: "USh 300K" },
+      { value: "500000", label: "USh 500K" },
+      { value: "1000000", label: "USh 1M" },
+      { value: "2000000", label: "USh 2M" },
+      { value: "5000000", label: "USh 5M" },
+      { value: "10000000", label: "USh 10M" },
+      { value: "50000000", label: "USh 50M" },
+      { value: "100000000", label: "USh 100M" },
+      { value: "500000000", label: "USh 500M" },
+      { value: "1000000000", label: "USh 1B+" }
+    ];
+    const HERO_BEDROOM_OPTIONS = [
+      { value: "", labelKey: "heroAny" },
+      { value: "studio", labelKey: "heroBedroomStudio" },
+      { value: "1", label: "1" },
+      { value: "2", label: "2" },
+      { value: "3", label: "3" },
+      { value: "4", label: "4" },
+      { value: "5", label: "5+" }
+    ];
 
     const SAVED_IDS_STORAGE_KEY = "makaug_saved_ids_by_user";
     const PENDING_SAVE_STORAGE_KEY = "makaug_pending_save_property_id";
@@ -5874,6 +6048,34 @@
         heroLocationDenied: "Location permission was denied. Search by city, area, suburb or landmark instead.",
         heroLocationUnavailable: "We could not get your location. Search by city, area, suburb or landmark instead.",
         heroLocationOutside: "You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.",
+        heroPropertyType: "Property Type",
+        heroMinPrice: "Min Price",
+        heroMaxPrice: "Max Price",
+        heroBedrooms: "Bedrooms",
+        heroFilters: "Filters",
+        heroAny: "Any",
+        heroBedroomStudio: "Studio",
+        heroTypeHouse: "House",
+        heroTypeApartment: "Apartment",
+        heroTypeBungalow: "Bungalow",
+        heroTypeStudio: "Studio",
+        heroTypeRoom: "Room",
+        heroTypeHostel: "Hostel",
+        heroTypeLand: "Land",
+        heroTypeCommercialSpace: "Commercial space",
+        heroTypeOffice: "Office",
+        heroTypeShop: "Shop",
+        heroTypeWarehouse: "Warehouse",
+        heroAdvancedHelper: "Manual area, radius, and property filters stay active.",
+        heroBathrooms: "Bathrooms",
+        heroAmenities: "Amenities",
+        heroRadius: "Radius",
+        heroSortNewest: "Sort: Newest",
+        heroSortPriceAsc: "Price low to high",
+        heroSortPriceDesc: "Price high to low",
+        heroSortDistance: "Distance",
+        heroApply: "Apply",
+        heroClear: "Clear",
         heroNearMeNote: "Location search uses a 10 mile radius by default.",
         homeFeatured: "Featured Properties",
         homeMap: "Explore on Map",
@@ -5966,6 +6168,34 @@
         heroLocationDenied: "Okukozesa ekifo kugaaniddwa. Noonya n'ekibuga, ekitundu oba landmark.",
         heroLocationUnavailable: "Tetuyinza kufuna kifo kyo. Noonya n'ekibuga, ekitundu oba landmark.",
         heroLocationOutside: "Olaga nga oli bweru wa Uganda. Londa ekitundu kya Uganda oba noonyereza Uganda yonna.",
+        heroPropertyType: "Ekika kya property",
+        heroMinPrice: "Omuwendo ogutandika",
+        heroMaxPrice: "Omuwendo ogusembayo",
+        heroBedrooms: "Ebisenge",
+        heroFilters: "Filters",
+        heroAny: "Kyonna",
+        heroBedroomStudio: "Studio",
+        heroTypeHouse: "Ennyumba",
+        heroTypeApartment: "Apartment",
+        heroTypeBungalow: "Bungalow",
+        heroTypeStudio: "Studio",
+        heroTypeRoom: "Room",
+        heroTypeHostel: "Hostel",
+        heroTypeLand: "Ettaka",
+        heroTypeCommercialSpace: "Commercial space",
+        heroTypeOffice: "Office",
+        heroTypeShop: "Shop",
+        heroTypeWarehouse: "Warehouse",
+        heroAdvancedHelper: "Ekifo, radius, ne filters bisigala bikola.",
+        heroBathrooms: "Bathrooms",
+        heroAmenities: "Amenities",
+        heroRadius: "Radius",
+        heroSortNewest: "Sooka ebipya",
+        heroSortPriceAsc: "Omuwendo mutono okudda ku munene",
+        heroSortPriceDesc: "Omuwendo munene okudda ku mutono",
+        heroSortDistance: "Distance",
+        heroApply: "Kozesa",
+        heroClear: "Gyawo",
         homeFeatured: "Property Ezitwaliridde",
         homeMap: "Noonya ku Maapu",
         homeBrokers: "Agents Abalondedwa",
@@ -6034,6 +6264,34 @@
         heroLocationDenied: "Ruhusa ya mahali imekataliwa. Tafuta kwa jiji, eneo au alama maarufu.",
         heroLocationUnavailable: "Hatukuweza kupata mahali ulipo. Tafuta kwa jiji, eneo au alama maarufu.",
         heroLocationOutside: "Unaonekana kuwa nje ya Uganda. Chagua eneo la Uganda au tafuta Uganda yote.",
+        heroPropertyType: "Aina ya mali",
+        heroMinPrice: "Bei ya chini",
+        heroMaxPrice: "Bei ya juu",
+        heroBedrooms: "Vyumba",
+        heroFilters: "Vichujio",
+        heroAny: "Yoyote",
+        heroBedroomStudio: "Studio",
+        heroTypeHouse: "Nyumba",
+        heroTypeApartment: "Apartment",
+        heroTypeBungalow: "Bungalow",
+        heroTypeStudio: "Studio",
+        heroTypeRoom: "Chumba",
+        heroTypeHostel: "Hostel",
+        heroTypeLand: "Ardhi",
+        heroTypeCommercialSpace: "Nafasi ya biashara",
+        heroTypeOffice: "Ofisi",
+        heroTypeShop: "Duka",
+        heroTypeWarehouse: "Ghala",
+        heroAdvancedHelper: "Eneo, radius, na vichujio vya mali vinabaki kutumika.",
+        heroBathrooms: "Bafu",
+        heroAmenities: "Vistawishi",
+        heroRadius: "Radius",
+        heroSortNewest: "Panga: Mpya kwanza",
+        heroSortPriceAsc: "Bei chini hadi juu",
+        heroSortPriceDesc: "Bei juu hadi chini",
+        heroSortDistance: "Umbali",
+        heroApply: "Tumia",
+        heroClear: "Futa",
         homeFeatured: "Mali Zilizoangaziwa",
         homeMap: "Tafuta kwenye Ramani",
         homeBrokers: "Agents walioangaziwa",
@@ -8368,6 +8626,7 @@
       if (heroLocationHelper) heroLocationHelper.textContent = getNearMeSearchState(currentTab) ? tr("heroLocationActive") : tr("heroLocationHelper");
       const heroLocationControl = document.getElementById("hero-location-control");
       if (heroLocationControl) heroLocationControl.setAttribute("aria-label", "Use location search");
+      applyHeroSearchLanguageUI();
 
       setTextById("home-featured-title", tr("homeFeatured"));
       setTextById("home-featured-link", translateListingLabel("View all"));
@@ -20923,6 +21182,128 @@
       }
     }
 
+    function heroOptionLabel(option) {
+      if (!option) return "";
+      return option.labelKey ? tr(option.labelKey) : option.label;
+    }
+
+    function setHeroSelectOptions(selectId, options = [], placeholderKey = "") {
+      const el = document.getElementById(selectId);
+      if (!el) return;
+      const previous = el.value;
+      el.innerHTML = options.map((option, index) => {
+        const label = index === 0 && placeholderKey ? tr(placeholderKey) : heroOptionLabel(option);
+        return `<option value="${adminEscape(option.value || "")}">${adminEscape(label || "")}</option>`;
+      }).join("");
+      if (Array.from(el.options).some((option) => option.value === previous)) {
+        el.value = previous;
+      }
+    }
+
+    function applyHeroSearchLanguageUI() {
+      const heroInput = document.getElementById("hero-q");
+      if (heroInput) {
+        heroInput.placeholder = tr(`ph${currentTab === "sale" ? "Sale" : currentTab === "rent" ? "Rent" : currentTab === "students" ? "Students" : currentTab === "commercial" ? "Commercial" : "Land"}`) || "City, area, suburb or landmark";
+      }
+      setHeroSelectOptions("hero-property-type-f", HERO_PROPERTY_TYPE_OPTIONS, "heroPropertyType");
+      setHeroSelectOptions("hero-min-price-f", HERO_PRICE_OPTIONS_UGX, "heroMinPrice");
+      setHeroSelectOptions("hero-max-price-f", HERO_PRICE_OPTIONS_UGX, "heroMaxPrice");
+      setHeroSelectOptions("hero-bedrooms-f", HERO_BEDROOM_OPTIONS, "heroBedrooms");
+      setTextById("hero-filters-label", tr("heroFilters"));
+      setTextById("hero-advanced-helper", tr("heroAdvancedHelper"));
+
+      const bathrooms = document.getElementById("hero-bathrooms-f");
+      if (bathrooms?.options?.[0]) bathrooms.options[0].textContent = tr("heroBathrooms");
+      const amenities = document.getElementById("hero-amenities-f");
+      if (amenities?.options?.[0]) amenities.options[0].textContent = tr("heroAmenities");
+      const radius = document.getElementById("hero-radius-advanced-f");
+      if (radius?.options?.[0]) radius.options[0].textContent = "10 miles";
+      const sort = document.getElementById("hero-sort-f");
+      if (sort?.options?.[0]) sort.options[0].textContent = tr("heroSortNewest");
+      if (sort?.options?.[1]) sort.options[1].textContent = tr("heroSortPriceAsc");
+      if (sort?.options?.[2]) sort.options[2].textContent = tr("heroSortPriceDesc");
+      if (sort?.options?.[3]) sort.options[3].textContent = tr("heroSortDistance");
+      setTextById("hero-apply-filters-btn", tr("heroApply"));
+      setTextById("hero-clear-filters-btn", tr("heroClear"));
+    }
+
+    function getHeroFilterValues() {
+      const minPrice = parseInt(document.getElementById("hero-min-price-f")?.value || "0", 10) || 0;
+      const maxPrice = parseInt(document.getElementById("hero-max-price-f")?.value || "0", 10) || 0;
+      const bedroomsRaw = document.getElementById("hero-bedrooms-f")?.value || "";
+      const radiusMiles = parseFloat(document.getElementById("hero-radius-advanced-f")?.value || String(DEFAULT_NEAR_ME_RADIUS_MI)) || DEFAULT_NEAR_ME_RADIUS_MI;
+      return {
+        propertyType: (document.getElementById("hero-property-type-f")?.value || "").trim(),
+        minPrice,
+        maxPrice,
+        currency: activeCur || "UGX",
+        bedrooms: bedroomsRaw,
+        bathrooms: parseInt(document.getElementById("hero-bathrooms-f")?.value || "0", 10) || 0,
+        amenities: (document.getElementById("hero-amenities-f")?.value || "").trim(),
+        radiusMiles,
+        radiusKm: milesToKm(radiusMiles),
+        sort: document.getElementById("hero-sort-f")?.value || "newest"
+      };
+    }
+
+    function heroListingMatchesFilters(property, filters = {}) {
+      const searchText = getPropertySearchText(property);
+      const propertyType = String(filters.propertyType || "").toLowerCase();
+      const bedrooms = String(filters.bedrooms || "").toLowerCase();
+      const amenities = String(filters.amenities || "").toLowerCase();
+      if (propertyType && !((property.subtype || "").toLowerCase().includes(propertyType) || searchText.includes(propertyType))) return false;
+      if (filters.minPrice && Number(property.price || 0) < filters.minPrice) return false;
+      if (filters.maxPrice && Number(property.price || 0) > filters.maxPrice) return false;
+      if (bedrooms === "studio" && !searchText.includes("studio") && Number(property.beds || property.bedrooms || 0) > 1) return false;
+      if (bedrooms && bedrooms !== "studio") {
+        const wantedBeds = parseInt(bedrooms, 10);
+        if (Number.isFinite(wantedBeds) && wantedBeds > 0 && Number(property.beds || property.bedrooms || 0) < wantedBeds) return false;
+      }
+      if (filters.bathrooms && Number(property.baths || property.bathrooms || 0) < filters.bathrooms) return false;
+      if (amenities && !searchText.includes(amenities)) return false;
+      return true;
+    }
+
+    function toggleHeroAdvancedFilters(forceOpen) {
+      const panel = document.getElementById("hero-advanced-filters-panel");
+      const button = document.getElementById("hero-filters-btn");
+      if (!panel) return;
+      const open = typeof forceOpen === "boolean" ? forceOpen : panel.hasAttribute("hidden");
+      panel.hidden = !open;
+      if (button) button.setAttribute("aria-expanded", open ? "true" : "false");
+      trackEvent("homepage_filters_panel_toggled", { open });
+    }
+
+    function onHeroFilterChanged() {
+      trackEvent("homepage_filter_changed", getHeroFilterValues());
+    }
+
+    function applyHeroAdvancedFilters() {
+      toggleHeroAdvancedFilters(false);
+      doSearch();
+    }
+
+    function clearHeroFilters() {
+      ["hero-property-type-f", "hero-min-price-f", "hero-max-price-f", "hero-bedrooms-f", "hero-bathrooms-f", "hero-amenities-f"].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.value = "";
+      });
+      const radius = document.getElementById("hero-radius-advanced-f");
+      if (radius) radius.value = String(DEFAULT_NEAR_ME_RADIUS_MI);
+      const sort = document.getElementById("hero-sort-f");
+      if (sort) sort.value = "newest";
+      clearNearMeSearchState(currentTab);
+      setHeroLocationStatus(tr("heroLocationHelper"), "idle");
+      trackEvent("homepage_filters_cleared", { category: currentTab });
+    }
+
+    function handleHeroSearchKeydown(event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        doSearch();
+      }
+    }
+
     const HERO_SEARCH_HANDOFF_KEY = "makaug_hero_search_handoff";
 
     function saveHeroSearchHandoff(page, payload = {}) {
@@ -20966,35 +21347,47 @@
         if (!el) return;
         el.value = value || "";
       };
+      const filters = payload.filters || {};
       if (page === "rent") {
         setValue("rent-location-f", payload.query);
         setValue("rent-district-f", payload.area);
         setValue("rent-radius-f", radiusValue);
-        setValue("rent-min-beds-f", payload.context);
+        setValue("rent-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
+        setValue("rent-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+        setValue("rent-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
+        setValue("rent-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
         filterListings("rent");
       } else if (page === "students") {
         setValue("student-q-f", payload.query);
         setValue("student-uni-f", payload.area);
         setValue("student-radius-f", radiusValue);
-        setValue("student-type-quick-f", payload.context);
+        setValue("student-type-quick-f", filters.propertyType || payload.context);
+        setValue("student-budget-f", filters.maxPrice ? String(filters.maxPrice) : "");
         filterStudents();
       } else if (page === "commercial") {
         setValue("commercial-q-f", payload.query);
         setValue("commercial-district-f", payload.area);
         setValue("commercial-radius-f", radiusValue);
-        setValue("commercial-type-f", payload.context);
+        setValue("commercial-type-f", filters.propertyType || payload.context);
+        setValue("commercial-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+        setValue("commercial-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
         filterCommercial();
       } else if (page === "land") {
         setValue("land-q-f", payload.query);
         setValue("land-district-f", payload.area);
         setValue("land-radius-f", radiusValue);
-        setValue("land-type-f", payload.context);
+        setValue("land-type-f", filters.propertyType || payload.context);
+        setValue("land-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+        setValue("land-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
         filterLand();
       } else if (page === "sale") {
         setValue("sale-location-f", payload.query);
         setValue("sale-district-f", payload.area);
         setValue("sale-radius-f", radiusValue);
-        setValue("sale-min-beds-f", payload.context);
+        setValue("sale-min-beds-f", /^\d+$/.test(String(filters.bedrooms || "")) ? filters.bedrooms : payload.context);
+        setValue("sale-min-price-f", filters.minPrice ? String(filters.minPrice) : "");
+        setValue("sale-price-f", filters.maxPrice ? String(filters.maxPrice) : "");
+        setValue("sale-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
         filterListings("sale");
       }
       return true;
@@ -21083,7 +21476,8 @@
         const nearest = findNearestDistrictFromCoords(lat, lng);
         const districtEl = document.getElementById(cfg.districtId);
         const radiusEl = document.getElementById(cfg.radiusId);
-        const radiusMiles = DEFAULT_NEAR_ME_RADIUS_MI;
+        const heroFilters = page === "hero" ? getHeroFilterValues() : {};
+        const radiusMiles = page === "hero" ? (heroFilters.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI) : DEFAULT_NEAR_ME_RADIUS_MI;
         const radiusKm = milesToKm(radiusMiles);
 
         if (districtEl && nearest.district && Array.from(districtEl.options).some((o) => o.value === nearest.district)) {
@@ -21118,7 +21512,7 @@
           district: nearest.district || "",
           nearest_distance_km: Number.isFinite(nearest.distanceKm) ? Number(nearest.distanceKm.toFixed(2)) : null
         });
-        toast(nearest.district ? `Showing properties within 10 miles of you in/around ${nearest.district}` : "Showing properties within 10 miles of your location");
+        toast(nearest.district ? `Showing properties within ${radiusMiles} miles of you in/around ${nearest.district}` : `Showing properties within ${radiusMiles} miles of your location`);
       }, (err) => {
         const denied = err?.code === 1;
         const message = denied ? tr("heroLocationDenied") : tr("heroLocationUnavailable");
@@ -22303,29 +22697,29 @@
       const states = {
         "sale-grid": {
           cls: "border-green-100 bg-green-50 text-green-950 sm:col-span-2",
-          title: "No homes for sale match this search yet.",
-          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will help you find similar properties."
+          title: "No exact matches yet. No homes for sale match this search yet.",
+          body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what you need and we will help you find similar properties."
         },
         "rent-grid": {
           cls: "border-blue-100 bg-blue-50 text-blue-950 sm:col-span-2",
-          title: "No rentals match this search yet.",
-          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need and we will keep watching for suitable rentals."
+          title: "No exact matches yet. No rentals match this search yet.",
+          body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what you need and we will keep watching for suitable rentals."
         },
         "commercial-grid": {
           cls: "border-amber-100 bg-amber-50 text-amber-950 md:col-span-2",
-          title: "No commercial spaces match this search yet.",
-          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what your business needs."
+          title: "No exact matches yet. No commercial spaces match this search yet.",
+          body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what your business needs."
         },
         "land-grid": {
           cls: "border-emerald-100 bg-emerald-50 text-emerald-950 md:col-span-2",
-          title: "No land listings match this search yet.",
-          body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what plot you need. Always verify title and ownership before payment."
+          title: "No exact matches yet. No land listings match this search yet.",
+          body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what plot you need. Always verify title and ownership before payment."
         }
       };
       const state = states[id] || {
         cls: "border-gray-200 bg-gray-50 text-gray-700",
-        title: "No properties found.",
-        body: "Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need."
+        title: "No exact matches yet.",
+        body: "Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what you need."
       };
       return `
         <div class="col-span-full rounded-2xl border ${state.cls} p-5">
@@ -22457,8 +22851,8 @@
       if (!list.length) {
         el.innerHTML = `
           <div class="col-span-full rounded-2xl border border-purple-100 bg-purple-50 p-5 text-purple-950">
-            <h2 class="font-black text-lg">No student rooms match this search yet.</h2>
-            <p class="text-sm mt-2">Save Search, Create Alert, Ask MakaUg on WhatsApp, or tell MakaUg what you need near campus.</p>
+            <h2 class="font-black text-lg">No exact matches yet. No student rooms match this search yet.</h2>
+            <p class="text-sm mt-2">Save Search, Create Alert, Ask makaug.com on WhatsApp, or tell makaug.com what you need near campus.</p>
           </div>`;
         return;
       }
@@ -23289,6 +23683,7 @@
       setHeroLocationFilter(type);
       setHeroRadiusState(type);
       setHeroContextFilter(type);
+      applyHeroSearchLanguageUI();
       setHeroLocationStatus(getNearMeSearchState(type) ? tr("heroLocationActive") : tr("heroLocationHelper"), getNearMeSearchState(type) ? "active" : "idle");
       closeHeroSuggestions();
       const heroInput = document.getElementById("hero-q");
@@ -23297,7 +23692,7 @@
       }
     }
 
-    function buildHeroSearchBackendPayload({ query = "", area = "", context = "", nearState = null, resultsCount = 0 } = {}) {
+    function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, resultsCount = 0 } = {}) {
       const payload = {
         query,
         category: currentTab,
@@ -23312,16 +23707,24 @@
         payload.listing_type = currentTab;
       }
       if (area) payload.area = area;
-      if (context) {
-        if (currentTab === "sale" || currentTab === "rent") payload.bedrooms = context;
-        else payload.property_type = context;
-      }
+      if (filters.propertyType) payload.propertyType = filters.propertyType;
+      if (filters.propertyType) payload.property_type = filters.propertyType;
+      if (filters.minPrice) payload.minPrice = filters.minPrice;
+      if (filters.minPrice) payload.min_price = filters.minPrice;
+      if (filters.maxPrice) payload.maxPrice = filters.maxPrice;
+      if (filters.maxPrice) payload.max_price = filters.maxPrice;
+      if (filters.currency) payload.currency = filters.currency;
+      if (filters.bedrooms) payload.bedrooms = filters.bedrooms;
+      if (filters.bathrooms) payload.bathrooms = filters.bathrooms;
+      if (filters.amenities) payload.amenities = filters.amenities;
+      if (filters.sort) payload.sort = filters.sort;
       if (nearState) {
         payload.lat = nearState.lat;
         payload.lng = nearState.lng;
-        payload.radiusMiles = nearState.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI;
-        payload.radiusKm = nearState.radiusKm || milesToKm(payload.radiusMiles);
+        payload.radiusMiles = nearState.radiusMiles || filters.radiusMiles || DEFAULT_NEAR_ME_RADIUS_MI;
+        payload.radiusKm = nearState.radiusKm || filters.radiusKm || milesToKm(payload.radiusMiles);
         payload.radiusUnit = "miles";
+        payload.locationSource = "browser_geolocation";
       }
       return payload;
     }
@@ -23366,8 +23769,7 @@
       const uniValue = areaOrUni.toLowerCase().trim();
       const heroRadiusValue = document.getElementById("hero-radius-f")?.value || "0";
       const heroRadiusKm = getRadiusKmFromSelect("hero-radius-f");
-      const contextVal = (document.getElementById("hero-context-f")?.value || "").toLowerCase().trim();
-      const contextCfg = HERO_CONTEXT_FILTERS[currentTab] || HERO_CONTEXT_FILTERS.sale;
+      const heroFilters = getHeroFilterValues();
       const pageMap = { sale: "sale", rent: "rent", students: "students", commercial: "commercial", land: "land" };
       const heroNearState = getNearMeSearchState(currentTab);
       const routedRadiusValue = heroNearState
@@ -23384,8 +23786,8 @@
               || (p.area || "").toLowerCase().includes(uniValue))
             : matchDistrictRadius(p, areaOrUni, heroRadiusKm);
         const qMatch = !q || getPropertySearchText(p).includes(q);
-        const contextMatch = contextCfg.match ? contextCfg.match(p, contextVal) : true;
-        return typeMatch && districtMatch && qMatch && contextMatch;
+        const filterMatch = heroListingMatchesFilters(p, heroFilters);
+        return typeMatch && districtMatch && qMatch && filterMatch;
       });
       results = decorateAndSortNearMeResults(results, heroNearState);
       incrementUserSearchCount();
@@ -23393,7 +23795,7 @@
       const backendPayload = buildHeroSearchBackendPayload({
         query: qRaw.trim(),
         area: areaOrUni || "",
-        context: contextVal || "",
+        filters: heroFilters,
         nearState: heroNearState,
         resultsCount: results.length
       });
@@ -23403,7 +23805,7 @@
         area: areaOrUni || "",
         radius: routedRadiusValue,
         radiusMiles: heroNearState?.radiusMiles || (parseFloat(heroRadiusValue || "0") || null),
-        context: contextVal || "",
+        filters: heroFilters,
         nearState: heroNearState ? {
           lat: heroNearState.lat,
           lng: heroNearState.lng,
@@ -23419,52 +23821,74 @@
         const rd = document.getElementById("rent-district-f");
         const rr = document.getElementById("rent-radius-f");
         const rb = document.getElementById("rent-min-beds-f");
+        const rMax = document.getElementById("rent-price-f");
+        const rMin = document.getElementById("rent-min-price-f");
+        const rType = document.getElementById("rent-type-f");
         if (rq) rq.value = document.getElementById("hero-q").value || "";
         if (rd) rd.value = areaOrUni;
         if (rr) rr.value = routedRadiusValue;
-        if (rb) rb.value = contextVal || "";
+        if (rb) rb.value = /^\d+$/.test(heroFilters.bedrooms) ? heroFilters.bedrooms : "";
+        if (rMin) rMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
+        if (rMax) rMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
+        if (rType) rType.value = heroFilters.bedrooms === "studio" ? "studio" : heroFilters.propertyType;
         filterListings("rent");
       } else if (currentTab === "students") {
         const sq = document.getElementById("student-q-f");
         const su = document.getElementById("student-uni-f");
         const sr = document.getElementById("student-radius-f");
         const stQuick = document.getElementById("student-type-quick-f");
+        const sbudget = document.getElementById("student-budget-f");
         if (sq) sq.value = document.getElementById("hero-q").value || "";
         if (su) su.value = areaOrUni;
         if (sr) sr.value = routedRadiusValue;
-        if (stQuick) stQuick.value = contextVal || "";
+        if (stQuick) stQuick.value = heroFilters.propertyType === "hostel" || heroFilters.propertyType === "room" || heroFilters.propertyType === "studio" || heroFilters.propertyType === "apartment" ? heroFilters.propertyType : "";
+        if (sbudget) sbudget.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
         filterStudents();
       } else if (currentTab === "commercial") {
         const cq = document.getElementById("commercial-q-f");
         const cd = document.getElementById("commercial-district-f");
         const cr = document.getElementById("commercial-radius-f");
         const ct = document.getElementById("commercial-type-f");
+        const cMin = document.getElementById("commercial-min-price-f");
+        const cMax = document.getElementById("commercial-price-f");
         const commercialTypeMap = { office: "Office", retail: "Retail", warehouse: "Warehouse", shop: "Shop" };
         if (cq) cq.value = document.getElementById("hero-q").value || "";
         if (cd) cd.value = areaOrUni;
         if (cr) cr.value = routedRadiusValue;
-        if (ct) ct.value = commercialTypeMap[contextVal] || "";
+        if (ct) ct.value = commercialTypeMap[heroFilters.propertyType] || (heroFilters.propertyType === "commercial space" ? "" : "");
+        if (cMin) cMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
+        if (cMax) cMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
         filterCommercial();
       } else if (currentTab === "land") {
         const lq = document.getElementById("land-q-f");
         const ld = document.getElementById("land-district-f");
         const lr = document.getElementById("land-radius-f");
         const lt = document.getElementById("land-type-f");
+        const lMin = document.getElementById("land-min-price-f");
+        const lMax = document.getElementById("land-price-f");
         const landTypeMap = { residential: "Residential", commercial: "Commercial", agricultural: "Agricultural" };
         if (lq) lq.value = document.getElementById("hero-q").value || "";
         if (ld) ld.value = areaOrUni;
         if (lr) lr.value = routedRadiusValue;
-        if (lt) lt.value = landTypeMap[contextVal] || "";
+        if (lt) lt.value = landTypeMap[heroFilters.propertyType] || "";
+        if (lMin) lMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
+        if (lMax) lMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
         filterLand();
       } else {
         const sq = document.getElementById("sale-location-f");
         const sd = document.getElementById("sale-district-f");
         const sr = document.getElementById("sale-radius-f");
         const sb = document.getElementById("sale-min-beds-f");
+        const sMin = document.getElementById("sale-min-price-f");
+        const sMax = document.getElementById("sale-price-f");
+        const sType = document.getElementById("sale-type-f");
         if (sq) sq.value = document.getElementById("hero-q").value || "";
         if (sd) sd.value = areaOrUni;
         if (sr) sr.value = routedRadiusValue;
-        if (sb) sb.value = contextVal || "";
+        if (sb) sb.value = /^\d+$/.test(heroFilters.bedrooms) ? heroFilters.bedrooms : "";
+        if (sMin) sMin.value = heroFilters.minPrice ? String(heroFilters.minPrice) : "";
+        if (sMax) sMax.value = heroFilters.maxPrice ? String(heroFilters.maxPrice) : "";
+        if (sType) sType.value = heroFilters.bedrooms === "studio" ? "studio" : heroFilters.propertyType;
         filterListings("sale");
       }
       toast(`Found ${results.length} properties`);
@@ -23472,7 +23896,7 @@
         listing_type: currentTab,
         query: q || "",
         district_or_university: areaOrUni || "",
-        context: contextVal || "",
+        filters: heroFilters,
         results_count: results.length,
         radius_miles: heroNearState?.radiusMiles || null,
         radius_unit: heroNearState ? "miles" : null,

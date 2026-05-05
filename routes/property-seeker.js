@@ -874,7 +874,22 @@ router.post('/saved-searches', requireAuth, async (req, res, next) => {
     const filters = {
       ...safeJson(req.body.filters, {}),
       location: locationObject,
-      category
+      category,
+      query: asText(req.body.query || req.body.search || req.body.area) || null,
+      propertyType: asText(req.body.property_type || req.body.propertyType) || null,
+      minPrice: asBigIntNumber(req.body.min_price || req.body.minPrice || req.body.minBudget),
+      maxPrice: asBigIntNumber(req.body.max_price || req.body.maxPrice || req.body.maxBudget || req.body.budget),
+      currency: asText(req.body.currency, 'UGX').toUpperCase().slice(0, 8),
+      bedrooms: asInteger(req.body.bedrooms),
+      bathrooms: asInteger(req.body.bathrooms),
+      amenities: asArray(req.body.amenities),
+      studentCampus: asText(req.body.student_campus || req.body.studentCampus || req.body.campus) || null,
+      landTitleType: asText(req.body.land_title_type || req.body.landTitleType) || null,
+      commercialType: asText(req.body.commercial_type || req.body.commercialType || req.body.commercial_subtype || req.body.commercialSubtype) || null,
+      radiusKm: locationObject?.radiusKm || null,
+      radiusMiles: locationObject?.radiusMiles || null,
+      language: asLanguage(req.body.language_preference || req.body.languagePreference || req.body.language || req.userAuth.preferred_language),
+      createdFrom: asText(req.body.created_from || req.body.createdFrom, 'web')
     };
     const alertChannels = normalizeAlertChannels(req.body.alert_channels || req.body.alertChannels);
     const result = await db.query(
