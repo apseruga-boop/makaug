@@ -618,6 +618,13 @@ function run() {
   assert(sourceHtml.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');
   assert(sourceHtml.includes('data-map-broker-link="1"'), 'broker map popups should expose real broker profile links');
   assert(sourceHtml.includes('openMapBrokerProfile(event'), 'broker map popup should use a delegated broker click handler');
+  assert(sourceHtml.includes('function clearStaleMapRegistry()'), 'public maps should clear stale registry entries after SPA route fragment swaps');
+  assert(sourceHtml.includes('function mapInstanceMatchesDom(mapId)'), 'public maps should verify map instances still belong to the live DOM node');
+  assert(sourceHtml.includes('function refreshActivePublicMapsAfterRoute()'), 'public maps should refresh/rebuild after route changes and browser back navigation');
+  assert(sourceHtml.includes('scheduleMapsInit({ force: targetPage !== previousPage })'), 'public route changes should force map recovery when the active map page changes');
+  assert(sourceHtml.includes('source: "popstate_missing_fragment"'), 'browser back/forward should reload a missing public route fragment before map recovery');
+  assert(sourceHtml.includes('google.maps.event.trigger(map, "resize")'), 'Google map routes should trigger resize when returning to a map page');
+  assert(sourceHtml.includes('if (!(await ensureLeafletApi())) return;'), 'property detail maps should load Leaflet fallback when Google Maps is unavailable');
   assert(sourceHtml.includes('recordRemoteRecentlyViewed'), 'property detail opens should record backend recently-viewed events when possible');
   assert(sourceHtml.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
   assert(sourceHtml.includes('map_property_click'), 'map View Property click should emit analytics');

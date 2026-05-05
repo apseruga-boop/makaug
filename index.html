@@ -9167,6 +9167,8 @@
     let googlePlacesAutocompleteService = null;
     let lpPlacesSuggestTimer = null;
     const mapProviders = {};
+    const PUBLIC_MAP_IDS = ["map-home", "map-sale", "map-rent", "map-students", "map-commercial", "map-land", "map-brokers"];
+    const PUBLIC_MAP_SELECTOR = PUBLIC_MAP_IDS.map((id) => `#${id}`).join(", ");
 
     function apiUrl(path) {
       const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -23501,12 +23503,8 @@
         }
       }
       closeMobile();
-      window.setTimeout(() => {
-        Object.values(maps).forEach((m) => {
-          try { m.invalidateSize(); } catch (e) {}
-        });
-      }, 120);
-      window.requestAnimationFrame(() => scheduleMapsInit());
+      window.setTimeout(() => refreshActivePublicMapsAfterRoute(), 120);
+      window.requestAnimationFrame(() => scheduleMapsInit({ force: targetPage !== previousPage }));
       if (targetPage && targetPage !== previousPage) {
         trackEvent("page_view", { page: targetPage });
       }
@@ -23567,6 +23565,7 @@
         const footer = document.querySelector("footer");
         document.body.insertBefore(imported, footer || document.body.lastElementChild);
       }
+      clearStaleMapRegistry();
       doc.querySelectorAll(".modal-overlay").forEach((modal) => {
         if (!modal.id || document.getElementById(modal.id)) return;
         document.body.appendChild(document.importNode(modal, true));
@@ -24033,6 +24032,13 @@
 
       const publicRoutePage = pageForPublicRoute(path);
       if (publicRoutePage) {
+        if (!document.getElementById(`page-${publicRoutePage}`)) {
+          await loadPublicRouteFragment(`${path}${window.location.search || ""}${window.location.hash || ""}`, publicRoutePage, {
+            source: "popstate_missing_fragment",
+            scroll: false
+          });
+          return true;
+        }
         showPage(publicRoutePage, { history: false, source: "deep_link" });
         applyHeroSearchHandoff(publicRoutePage);
         return true;
@@ -28635,6 +28641,89 @@
       return leafletLoadPromise;
     }
 
+    function getActivePublicMapIds() {
+      const activePage = document.querySelector(".page.active");
+      if (!activePage) return [];
+      return PUBLIC_MAP_IDS.filter((id) => activePage.querySelector(`#${id}`));
+    }
+
+    function mapInstanceMatchesDom(mapId) {
+      const el = document.getElementById(mapId);
+      const map = maps[mapId];
+      if (!el || !map) return false;
+      const provider = mapProviders[mapId] || "leaflet";
+      if (provider === "google" && typeof map.getDiv === "function") return map.getDiv() === el;
+      if (provider === "leaflet" && map._container) return map._container === el;
+      return true;
+    }
+
+    function destroyMapInstance(mapId) {
+      const provider = mapProviders[mapId];
+      const map = maps[mapId];
+      try { clearMapMarkers(mapId); } catch (e) {}
+      if (provider === "leaflet" && map?.remove) {
+        try { map.remove(); } catch (e) {}
+      }
+      const el = document.getElementById(mapId);
+      if (el) {
+        if (provider === "leaflet" && el._leaflet_id) {
+          try { el._leaflet_id = null; } catch (e) {}
+        }
+        if (provider === "google" || provider === "leaflet") {
+          try { el.innerHTML = ""; } catch (e) {}
+        }
+      }
+      delete maps[mapId];
+      delete markers[mapId];
+      delete mapProviders[mapId];
+    }
+
+    function clearStaleMapRegistry() {
+      PUBLIC_MAP_IDS.forEach((mapId) => {
+        if (!maps[mapId]) return;
+        if (!document.getElementById(mapId) || !mapInstanceMatchesDom(mapId)) destroyMapInstance(mapId);
+      });
+    }
+
+    function publicMapNeedsInit(mapId) {
+      const el = document.getElementById(mapId);
+      return !!el && (!maps[mapId] || !mapInstanceMatchesDom(mapId));
+    }
+
+    function activePublicMapsNeedInit() {
+      clearStaleMapRegistry();
+      return getActivePublicMapIds().some((id) => publicMapNeedsInit(id));
+    }
+
+    function resizePublicMap(mapId, delay = 80) {
+      const map = maps[mapId];
+      if (!map) return;
+      window.setTimeout(() => {
+        try {
+          if (mapProviders[mapId] === "google" && window.google?.maps) {
+            google.maps.event.trigger(map, "resize");
+          } else if (map.invalidateSize) {
+            map.invalidateSize();
+          }
+        } catch (e) {}
+      }, delay);
+    }
+
+    function refreshActivePublicMapsAfterRoute() {
+      clearStaleMapRegistry();
+      const activeMapIds = getActivePublicMapIds();
+      if (!activeMapIds.length) return;
+      if (activeMapIds.some((id) => publicMapNeedsInit(id))) {
+        scheduleMapsInit({ force: true });
+        return;
+      }
+      activeMapIds.forEach((id) => {
+        resizePublicMap(id, 40);
+        resizePublicMap(id, 240);
+      });
+      resetMaps();
+    }
+
     function clearMapMarkers(mapId) {
       const provider = mapProviders[mapId] || "leaflet";
       (markers[mapId] || []).forEach((marker) => {
@@ -28812,6 +28901,14 @@
         mapSpecs.forEach((spec) => {
           const el = document.getElementById(spec.id);
           if (!el) return;
+          const initialList = spec.filter();
+          if (maps[spec.id] && mapProviders[spec.id] === "google" && mapInstanceMatchesDom(spec.id)) {
+            setMapMarkers(spec.id, initialList);
+            resizePublicMap(spec.id, 80);
+            return;
+          }
+          if (maps[spec.id]) destroyMapInstance(spec.id);
+          el.innerHTML = "";
           const map = new google.maps.Map(el, {
             center: MAP_DEFAULT_CENTER,
             zoom: MAP_DEFAULT_ZOOM,
@@ -28822,13 +28919,20 @@
           maps[spec.id] = map;
           mapProviders[spec.id] = "google";
           markers[spec.id] = [];
-          const initialList = spec.filter();
           addMarkers(spec.id, initialList);
           fitMapToListings(spec.id, initialList);
+          resizePublicMap(spec.id, 80);
         });
 
         const brokerMapEl = document.getElementById("map-brokers");
         if (brokerMapEl) {
+          if (maps["map-brokers"] && mapProviders["map-brokers"] === "google" && mapInstanceMatchesDom("map-brokers")) {
+            setBrokerMapMarkers(getBrokerDirectory());
+            resizePublicMap("map-brokers", 80);
+            return;
+          }
+          if (maps["map-brokers"]) destroyMapInstance("map-brokers");
+          brokerMapEl.innerHTML = "";
           const brokerMap = new google.maps.Map(brokerMapEl, {
             center: { lat: 1.3733, lng: 32.2903 },
             zoom: MAP_BROKER_DEFAULT_ZOOM,
@@ -28840,6 +28944,7 @@
           mapProviders["map-brokers"] = "google";
           markers["map-brokers"] = [];
           setBrokerMapMarkers(getBrokerDirectory());
+          resizePublicMap("map-brokers", 80);
         }
         return;
       }
@@ -28848,6 +28953,17 @@
       mapSpecs.forEach((spec) => {
         const el = document.getElementById(spec.id);
         if (!el) return;
+        const initialList = spec.filter();
+        if (maps[spec.id] && mapProviders[spec.id] === "leaflet" && mapInstanceMatchesDom(spec.id)) {
+          setMapMarkers(spec.id, initialList);
+          resizePublicMap(spec.id, 80);
+          return;
+        }
+        if (maps[spec.id]) destroyMapInstance(spec.id);
+        if (el._leaflet_id) {
+          try { el._leaflet_id = null; } catch (e) {}
+        }
+        el.innerHTML = "";
         const map = L.map(spec.id).setView([MAP_DEFAULT_CENTER.lat, MAP_DEFAULT_CENTER.lng], MAP_DEFAULT_ZOOM);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
@@ -28856,13 +28972,23 @@
         maps[spec.id] = map;
         mapProviders[spec.id] = "leaflet";
         markers[spec.id] = [];
-        const initialList = spec.filter();
         addMarkers(spec.id, initialList);
         fitMapToListings(spec.id, initialList);
+        resizePublicMap(spec.id, 80);
       });
 
       const brokerMapEl = document.getElementById("map-brokers");
       if (brokerMapEl) {
+        if (maps["map-brokers"] && mapProviders["map-brokers"] === "leaflet" && mapInstanceMatchesDom("map-brokers")) {
+          setBrokerMapMarkers(getBrokerDirectory());
+          resizePublicMap("map-brokers", 80);
+          return;
+        }
+        if (maps["map-brokers"]) destroyMapInstance("map-brokers");
+        if (brokerMapEl._leaflet_id) {
+          try { brokerMapEl._leaflet_id = null; } catch (e) {}
+        }
+        brokerMapEl.innerHTML = "";
         const brokerMap = L.map("map-brokers").setView([1.3733, 32.2903], MAP_BROKER_DEFAULT_ZOOM);
         L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
           attribution: "&copy; OpenStreetMap contributors",
@@ -28872,27 +28998,43 @@
         mapProviders["map-brokers"] = "leaflet";
         markers["map-brokers"] = [];
         setBrokerMapMarkers(getBrokerDirectory());
+        resizePublicMap("map-brokers", 80);
       }
     }
 
     let mapsInitScheduled = false;
     let mapsInitStarted = false;
+    let mapsInitPromise = null;
 
-    function scheduleMapsInit() {
-      if (mapsInitStarted || mapsInitScheduled) return;
-      mapsInitScheduled = true;
+    function scheduleMapsInit(options = {}) {
       const activePage = document.querySelector(".page.active");
-      const hasActiveMap = !!activePage?.querySelector(".map-h, #map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers");
-      if (!hasActiveMap) {
-        mapsInitScheduled = false;
+      const hasActiveMap = !!activePage?.querySelector(PUBLIC_MAP_SELECTOR);
+      if (!hasActiveMap) return;
+      const needsInit = Boolean(options.force) || activePublicMapsNeedInit();
+      if (mapsInitStarted && !needsInit) {
+        refreshActivePublicMapsAfterRoute();
         return;
       }
+      if (mapsInitScheduled && !options.force) return;
+      mapsInitScheduled = true;
       const onHomeOnly = activePage?.id === "page-home";
       const delay = hasActiveMap && !onHomeOnly ? 300 : 2500;
       const start = () => {
-        if (mapsInitStarted) return;
+        mapsInitScheduled = false;
+        if (mapsInitPromise) return;
         mapsInitStarted = true;
-        initMaps().catch((error) => console.warn("Map initialization skipped", error));
+        mapsInitPromise = initMaps()
+          .then(() => {
+            getActivePublicMapIds().forEach((id) => {
+              resizePublicMap(id, 80);
+              resizePublicMap(id, 300);
+            });
+            resetMaps();
+          })
+          .catch((error) => console.warn("Map initialization skipped", error))
+          .finally(() => {
+            mapsInitPromise = null;
+          });
       };
       if (onHomeOnly) {
         window.setTimeout(start, delay);
@@ -29017,10 +29159,11 @@
         marker.addListener("click", () => info.open(map, marker));
         return;
       }
-      if (!window.L) return;
+      if (!(await ensureLeafletApi())) return;
       if (el._leaflet_id) {
         try { el._leaflet_id = null; } catch (e) {}
       }
+      el.innerHTML = "";
       const map = L.map("map-detail").setView([lat, lng], MAP_PROPERTY_ZOOM);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "&copy; OpenStreetMap contributors",
