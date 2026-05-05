@@ -173,15 +173,61 @@ async function ensurePostVerificationRecords(db, user = {}) {
       false
     ]
   );
+
+  const category = categoryFromGoal(profile.primary_goal);
+  const preferredLocations = profile.preferred_areas ? [profile.preferred_areas] : [];
+  await db.query(
+    `INSERT INTO property_seeker_preferences (
+      user_id,
+      categories,
+      preferred_locations,
+      max_budget,
+      currency,
+      timeline,
+      alert_channels
+    ) VALUES ($1,$2::jsonb,$3::jsonb,$4,'UGX',$5,$6::jsonb)
+    ON CONFLICT (user_id) DO UPDATE
+    SET categories = EXCLUDED.categories,
+        preferred_locations = EXCLUDED.preferred_locations,
+        max_budget = EXCLUDED.max_budget,
+        timeline = EXCLUDED.timeline,
+        alert_channels = EXCLUDED.alert_channels,
+        updated_at = NOW()`,
+    [
+      user.id,
+      JSON.stringify(category ? [category] : []),
+      JSON.stringify(preferredLocations),
+      parseBudgetUpper(profile.budget_range),
+      profile.moving_timeline || null,
+      JSON.stringify(['in_app', user.preferred_contact_channel || 'whatsapp'])
+    ]
+  );
 }
 
 function parseBudgetUpper(value = '') {
-  const numbers = String(value || '').match(/\d[\d,\s]*/g);
-  if (!numbers?.length) return null;
-  const parsed = numbers
-    .map((item) => parseInt(item.replace(/[^\d]/g, ''), 10))
-    .filter((item) => Number.isFinite(item));
+  const text = String(value || '').toUpperCase();
+  const matches = text.match(/\d+(?:\.\d+)?\s*[KMB]?/g);
+  if (!matches?.length) return null;
+  const parsed = matches.map((item) => {
+    const compact = item.replace(/\s+/g, '');
+    const number = parseFloat(compact);
+    if (!Number.isFinite(number)) return null;
+    if (compact.endsWith('B')) return Math.round(number * 1000000000);
+    if (compact.endsWith('M')) return Math.round(number * 1000000);
+    if (compact.endsWith('K')) return Math.round(number * 1000);
+    return Math.round(number);
+  }).filter((item) => Number.isFinite(item));
   return parsed.length ? Math.max(...parsed) : null;
+}
+
+function categoryFromGoal(value = '') {
+  const text = String(value || '').toLowerCase();
+  if (text.includes('rent')) return 'rent';
+  if (text.includes('buy')) return 'sale';
+  if (text.includes('land')) return 'land';
+  if (text.includes('student')) return 'student';
+  if (text.includes('commercial')) return 'commercial';
+  return '';
 }
 
 module.exports = {

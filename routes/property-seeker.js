@@ -461,7 +461,7 @@ function scoreListing(row, preferences = {}) {
     reasons.push('matches your property type');
   }
   if (row.status === 'approved') score += 5;
-  if (!reasons.length) reasons.push('new live MakaUg listing you may want to review');
+  if (!reasons.length) reasons.push('new live makaug.com listing you may want to review');
   return { score, reason: reasons.slice(0, 2).join(' and ') };
 }
 
@@ -553,7 +553,7 @@ async function dashboardPayload(user) {
   ]);
 
   const nextActions = [];
-  if (profile.profile_completion_percent < 80) nextActions.push('Complete your property brief so MakaUg can recommend better matches.');
+  if (profile.profile_completion_percent < 80) nextActions.push('Complete your property brief so makaug.com can recommend better matches.');
   if (!searches.rows.length) nextActions.push('Create a saved search and choose WhatsApp or email alerts.');
   if (!saved.rows.length) nextActions.push('Save promising listings so you can compare and revisit them.');
   if (!nextActions.length) nextActions.push('Review today’s recommendations and book a viewing for your favourite option.');
@@ -579,7 +579,7 @@ async function dashboardPayload(user) {
     callbacks: callbacks.rows,
     nextActions,
     insights: {
-      message: 'MakaUg is using your saved preferences, searches, views, and WhatsApp-ready demand data to improve matches safely.'
+      message: 'makaug.com is using your saved preferences, searches, views, and WhatsApp-ready demand data to improve matches safely.'
     }
   };
 }

@@ -167,6 +167,7 @@ function run() {
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
   const authRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
+  const authFlowServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'authFlowService.js'), 'utf8');
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
@@ -529,7 +530,7 @@ function run() {
     'My Property Brief',
     'Recommended For You',
     'Saved Searches and Alerts',
-    'Enquiries and WhatsApp Contacts',
+    'Property enquiries',
     'Viewing Bookings',
     'Callback Requests',
     'Compare Properties',
@@ -569,6 +570,17 @@ function run() {
   for (const expected of requiredDashboardShellText) {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
   }
+  assert(sourceHtml.includes('id="finder-weather-context"'), 'property finder dashboard should show weather-ready context');
+  assert(sourceHtml.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
+  assert(sourceHtml.includes('getLocalFinderRecommendations'), 'property finder dashboard should derive fallback recommendations from signup preferences');
+  assert(sourceHtml.includes('id="account-pref-goal"'), 'account settings should expose property finder goal preferences');
+  assert(sourceHtml.includes('id="account-pref-area"'), 'account settings should expose property finder area preferences');
+  assert(sourceHtml.includes('id="account-profile-status-msg"'), 'account profile updates should show inline confirmation');
+  assert(sourceHtml.includes('id="account-password-status-msg"'), 'password updates should show inline confirmation');
+  assert(!sourceHtml.includes('id="account-phone" disabled'), 'account phone number should be editable');
+  assert(authRoutes.includes('phone = $4') && authRoutes.includes('account_phone_changed'), 'auth profile backend should update phone safely and log changed numbers');
+  assert(authFlowServiceSource.includes('property_seeker_preferences'), 'verified property finder signup should create backend preference records');
+  assert(authFlowServiceSource.includes('parseBudgetUpper(profile.budget_range)'), 'signup preferences should convert budget labels into usable recommendation budgets');
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
   assert(sourceHtml.includes('id="page-admin-setup-status"'), 'owner setup status page should exist for protected admin route');
   assert(sourceHtml.includes('Owner Setup Status'), 'owner setup status page should be visible to signed-in admins');

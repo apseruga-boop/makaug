@@ -3121,57 +3121,86 @@
 
       <div id="account-body" class="hidden space-y-6">
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">Profile Information</h2>
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h2 id="account-profile-title" class="text-xl font-bold text-gray-800">Profile Information</h2>
+              <p id="account-profile-sub" class="text-sm text-gray-500 mt-1">Update your contact details and property search preferences.</p>
+            </div>
+            <button id="account-back-dashboard-btn" onclick="openSignedInDashboard()" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-lg px-4 py-2 text-sm font-semibold">Back to dashboard</button>
+          </div>
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">First Name</label>
+              <label id="account-first-name-label" class="block text-sm font-semibold text-gray-700 mb-1.5">First Name</label>
               <input id="account-first-name" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="First name">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Last Name</label>
+              <label id="account-last-name-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Last Name</label>
               <input id="account-last-name" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Last name">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Phone Number</label>
-              <input id="account-phone" disabled class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-500">
+              <label id="account-phone-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Phone Number</label>
+              <input id="account-phone" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="+256 7XX XXX XXX">
+              <p id="account-phone-help" class="text-xs text-gray-500 mt-1">Changing this number will require re-verification before SMS updates are trusted.</p>
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
+              <label id="account-email-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Email</label>
               <input id="account-email" type="email" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="your@email.com">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Account Type</label>
+              <label id="account-role-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Account Type</label>
               <div id="account-role" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-700">-</div>
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
+              <label id="account-status-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Status</label>
               <div id="account-status" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-600">-</div>
             </div>
           </div>
+          <div class="mt-5 rounded-2xl border border-green-100 bg-green-50 p-4">
+            <h3 id="account-finder-pref-title" class="text-base font-bold text-green-950 mb-3">Property Finder Preferences</h3>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <label id="account-pref-goal-label" class="block text-sm font-semibold text-gray-700 mb-1.5">What are you looking for?</label>
+                <select id="account-pref-goal" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
+              </div>
+              <div>
+                <label id="account-pref-area-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred area</label>
+                <select id="account-pref-area" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
+              </div>
+              <div>
+                <label id="account-pref-budget-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Budget range</label>
+                <select id="account-pref-budget" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
+              </div>
+              <div>
+                <label id="account-pref-timeline-label" class="block text-sm font-semibold text-gray-700 mb-1.5">How soon do you need it?</label>
+                <select id="account-pref-timeline" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"></select>
+              </div>
+            </div>
+            <p id="account-finder-pref-help" class="text-xs text-green-900 mt-3">These preferences feed your recommendations, saved-search demand, and follow-up dashboard.</p>
+          </div>
+          <div id="account-profile-status-msg" class="hidden mt-4 rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3 text-sm font-semibold"></div>
           <button id="account-save-btn" onclick="submitAccountProfile()" class="mt-5 bg-green-700 hover:bg-green-600 text-white px-6 py-2.5 rounded-xl font-semibold">Save Changes</button>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">Account Benefits & Contact</h2>
+          <h2 id="account-benefits-title" class="text-xl font-bold text-gray-800 mb-4">Account Benefits & Contact</h2>
           <div class="grid md:grid-cols-2 gap-4">
             <label class="flex items-start gap-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-gray-700">
               <input id="account-weekly-tips" type="checkbox" class="mt-1 accent-green-700">
-              <span><strong class="block text-gray-900">Weekly property tips</strong>Receive market updates, safety tips, and reminders about saved listings.</span>
+              <span><strong id="account-weekly-title" class="block text-gray-900">Weekly property tips</strong><span id="account-weekly-copy">Receive market updates, safety tips, and reminders about saved listings.</span></span>
             </label>
             <label class="flex items-start gap-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-gray-700">
               <input id="account-marketing-opt-in" type="checkbox" class="mt-1 accent-green-700">
-              <span><strong class="block text-gray-900">Account activity alerts</strong>Receive updates about enquiries, saves, listing progress, and new matching properties.</span>
+              <span><strong id="account-alerts-title" class="block text-gray-900">Account activity alerts</strong><span id="account-alerts-copy">Receive updates about enquiries, saves, listing progress, and new matching properties.</span></span>
             </label>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Contact</label>
+              <label id="account-contact-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Contact</label>
               <select id="account-contact-channel" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
                 <option value="whatsapp">WhatsApp</option>
-                <option value="phone">Phone call / SMS</option>
                 <option value="email">Email</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Communication Language</label>
+              <label id="account-language-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Preferred Communication Language</label>
               <select id="account-preferred-language" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
                 <option value="en">English</option>
                 <option value="lg">Luganda</option>
@@ -3181,26 +3210,27 @@
                 <option value="rn">Rukiga</option>
                 <option value="sm">Lusoga</option>
               </select>
-              <p class="text-xs text-gray-500 mt-1">English remains the default. We use this for account updates where available.</p>
+              <p id="account-language-help" class="text-xs text-gray-500 mt-1">English remains the default. We use this for account updates where available.</p>
             </div>
-            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+            <div id="account-tracking-copy" class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
               Your dashboard tracks saved properties, views, enquiries sent, route opens, and recent search activity once you are signed in.
             </div>
           </div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">Security</h2>
+          <h2 id="account-security-title" class="text-xl font-bold text-gray-800 mb-4">Security</h2>
           <div class="grid md:grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">Current Password</label>
+              <label id="account-current-password-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Current Password</label>
               <input id="account-old-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="••••••••">
             </div>
             <div>
-              <label class="block text-sm font-semibold text-gray-700 mb-1.5">New Password</label>
+              <label id="account-new-password-label" class="block text-sm font-semibold text-gray-700 mb-1.5">New Password</label>
               <input id="account-new-password" type="password" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Min 8 characters">
             </div>
           </div>
+          <div id="account-password-status-msg" class="hidden mt-4 rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3 text-sm font-semibold"></div>
           <button id="account-password-btn" onclick="submitAccountPassword()" class="mt-5 bg-green-800 hover:bg-green-700 text-white px-6 py-2.5 rounded-xl font-semibold">Update Password</button>
         </div>
 
@@ -3216,8 +3246,8 @@
   <div id="page-finder-dashboard" class="page">
     <div class="bg-green-800 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Property Finder Dashboard</h1>
-        <p class="text-green-200 mt-1">Saved listings, recent views, and your activity</p>
+	        <h1 id="finder-dashboard-title" class="text-3xl font-black serif">Property Finder Dashboard</h1>
+	        <p id="finder-dashboard-subtitle" class="text-green-200 mt-1">Saved listings, recent views, and your activity</p>
       </div>
     </div>
     <div class="max-w-6xl mx-auto px-4 py-8">
@@ -3234,127 +3264,134 @@
             <div>
               <div id="finder-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
               <p id="finder-greeting-sub" class="text-sm text-gray-500 mt-1">Your saved listings, recent views, enquiries, and route opens are tracked here.</p>
-              <div class="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
-                <span id="finder-current-time" data-dashboard-current-time="1">Current time will appear here.</span>
-                <span id="finder-location-context" data-dashboard-location-context="1">Location context follows your preferences.</span>
-              </div>
-            </div>
-            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-950" data-dashboard-ad-slot="top-advertising-banner">
-              <strong>Sponsored slot</strong><br><span class="text-xs">Relevant paid placements appear here and are labelled Sponsored.</span>
-            </div>
+	              <div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
+	                <span id="finder-current-time" data-dashboard-current-time="1" class="inline-flex items-center gap-1 rounded-full border border-green-100 bg-green-50 px-3 py-1">Current time will appear here.</span>
+	                <span id="finder-weather-context" class="inline-flex items-center gap-1 rounded-full border border-sky-100 bg-sky-50 px-3 py-1">Weather-ready when an area is set.</span>
+	                <span id="finder-location-context" data-dashboard-location-context="1" class="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-3 py-1">Location context follows your preferences.</span>
+	              </div>
+	            </div>
+	            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-950" data-dashboard-ad-slot="top-advertising-banner">
+	              <strong id="finder-sponsored-title">Sponsored slot</strong><br><span id="finder-sponsored-copy" class="text-xs">Relevant paid placements appear here and are labelled Sponsored.</span>
+	            </div>
           </div>
         </div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="grid md:grid-cols-3 gap-4">
             <div>
-              <h2 class="text-xl font-bold text-gray-800">Search preference summary</h2>
+	              <h2 id="finder-preference-title" class="text-xl font-bold text-gray-800">Search preference summary</h2>
               <div id="finder-preference-summary" class="mt-2 text-sm text-gray-600">Your role preferences, budget, contact channel, and language personalize this dashboard.</div>
             </div>
             <label class="block">
-              <span class="block text-sm font-semibold text-gray-700 mb-1.5">Dashboard order</span>
+	              <span id="finder-dashboard-order-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Dashboard order</span>
               <select id="finder-dashboard-order" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-                <option value="saved">Show saved first</option>
-                <option value="newest">Show newest first</option>
-                <option value="recommended">Show recommended first</option>
-                <option value="viewings">Show viewings first</option>
+	                <option id="finder-order-saved" value="saved">Show saved first</option>
+	                <option id="finder-order-newest" value="newest">Show newest first</option>
+	                <option id="finder-order-recommended" value="recommended">Show recommended first</option>
+	                <option id="finder-order-viewings" value="viewings">Show viewings first</option>
               </select>
             </label>
-            <div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm text-green-950">
-              <strong>Account settings</strong><br>Change password, contact preferences, language, and alert channels from Account Settings.
+	            <div class="rounded-xl bg-green-50 border border-green-100 p-4 text-sm text-green-950">
+	              <strong id="finder-account-settings-title">Account settings</strong><br><span id="finder-account-settings-copy">Change password, contact preferences, language, and alert channels from Account Settings.</span>
             </div>
           </div>
         </div>
         <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Saved Properties</div>
+	            <div id="finder-stat-saved-label" class="text-sm text-gray-500">Saved Properties</div>
             <div id="finder-stat-saved" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Properties Viewed</div>
+	            <div id="finder-stat-viewed-label" class="text-sm text-gray-500">Properties Viewed</div>
             <div id="finder-stat-viewed" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Enquiries Sent</div>
+	            <div id="finder-stat-inquiries-label" class="text-sm text-gray-500">Enquiries Sent</div>
             <div id="finder-stat-inquiries" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Routes Opened</div>
+	            <div id="finder-stat-routes-label" class="text-sm text-gray-500">Routes Opened</div>
             <div id="finder-stat-routes" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <div class="text-sm text-gray-500">Searches Performed</div>
+	            <div id="finder-stat-searches-label" class="text-sm text-gray-500">Searches Performed</div>
             <div id="finder-stat-searches" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
-            <h2 class="text-xl font-bold text-gray-800">Saved Properties</h2>
+	            <h2 id="finder-saved-title" class="text-xl font-bold text-gray-800">Saved Properties</h2>
             <div class="flex gap-2">
-              <button onclick="showPage('saved')" class="border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Saved Page</button>
-              <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
-              <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
+	              <button id="finder-open-saved-btn" onclick="showPage('saved')" class="border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Saved Page</button>
+	              <button id="finder-account-btn" onclick="openAccountSettings()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
+	              <button id="finder-signout-btn" onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
           </div>
           <div id="finder-saved-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">Recently Viewed</h2>
+	          <h2 id="finder-recent-title" class="text-xl font-bold text-gray-800 mb-4">Recently Viewed</h2>
           <div id="finder-recent-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
 
         <div class="grid md:grid-cols-2 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">My Property Brief</h2>
-            <p class="text-sm text-gray-500">Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.</p>
-            <div id="finder-brief" class="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">Complete your profile to personalize recommendations.</div>
-            <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Edit Preferences</button>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Recommended For You</h2>
-            <p class="text-sm text-gray-500">Exact, close, nearby, verified, new, and sponsored matches will appear here with clear reasons.</p>
-            <div id="finder-recommendations-grid" class="grid gap-3 mt-3"></div>
-            <button onclick="showPage('for-sale')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Matches</button>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Saved Searches and Alerts</h2>
-            <p class="text-sm text-gray-500">Save searches, choose WhatsApp/email/SMS/in-app alerts, and pause or edit alerts any time.</p>
-            <div id="finder-saved-searches" class="mt-3 space-y-2 text-sm"></div>
-            <button onclick="saveCurrentDashboardSearch()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Save Current Search</button>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Enquiries and WhatsApp Contacts</h2>
-            <p class="text-sm text-gray-500">Listing enquiries, WhatsApp clicks, broker/owner context, and follow-up status will be tracked here.</p>
-            <div id="finder-contact-history" class="mt-3 space-y-2 text-sm"></div>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Viewing Bookings</h2>
-            <p class="text-sm text-gray-500">Pending, confirmed, rescheduled, cancelled, and completed viewings will appear here.</p>
+	            <h2 id="finder-brief-title" class="text-xl font-bold text-gray-800 mb-2">My Property Brief</h2>
+	            <p id="finder-brief-copy" class="text-sm text-gray-500">Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.</p>
+	            <div id="finder-brief" class="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">Complete your profile to personalize recommendations.</div>
+	            <button id="finder-edit-preferences-btn" onclick="openAccountSettings()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Edit Preferences</button>
+	          </div>
+	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+	            <h2 id="finder-recommended-title" class="text-xl font-bold text-gray-800 mb-2">Recommended For You</h2>
+	            <p id="finder-recommended-copy" class="text-sm text-gray-500">Exact, close, nearby, verified, new, and sponsored matches will appear here with clear reasons.</p>
+	            <div id="finder-recommendations-grid" class="grid gap-3 mt-3"></div>
+	            <button id="finder-browse-matches-btn" onclick="showPage('for-sale')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Matches</button>
+	          </div>
+	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+	            <h2 id="finder-saved-searches-title" class="text-xl font-bold text-gray-800 mb-2">Saved Searches and Alerts</h2>
+	            <p id="finder-saved-searches-copy" class="text-sm text-gray-500">Save searches, choose WhatsApp/email/SMS/in-app alerts, and pause or edit alerts any time.</p>
+	            <div id="finder-saved-searches" class="mt-3 space-y-2 text-sm"></div>
+	            <button id="finder-save-current-search-btn" onclick="saveCurrentDashboardSearch()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Save Current Search</button>
+	          </div>
+	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+	            <h2 id="finder-contact-title" class="text-xl font-bold text-gray-800 mb-2">Property enquiries</h2>
+	            <p id="finder-contact-copy" class="text-sm text-gray-500">Messages, viewing interest, and follow-up status will be tracked here.</p>
+	            <div id="finder-contact-history" class="mt-3 space-y-2 text-sm"></div>
+	          </div>
+	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+	            <h2 id="finder-viewings-title" class="text-xl font-bold text-gray-800 mb-2">Viewing Bookings</h2>
+	            <p id="finder-viewings-copy" class="text-sm text-gray-500">Pending, confirmed, rescheduled, cancelled, and completed viewings will appear here.</p>
             <div id="finder-viewings" class="mt-3 space-y-2 text-sm"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Callback Requests</h2>
-            <p class="text-sm text-gray-500">Track requested, contacted, missed, and closed callbacks from MakaUg or property contacts.</p>
+	            <h2 id="finder-callbacks-title" class="text-xl font-bold text-gray-800 mb-2">Callback Requests</h2>
+	            <p id="finder-callbacks-copy" class="text-sm text-gray-500">Track requested, contacted, missed, and closed callbacks from makaug.com or property contacts.</p>
             <div id="finder-callbacks" class="mt-3 space-y-2 text-sm"></div>
           </div>
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Compare Properties</h2>
-            <p class="text-sm text-gray-500">Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.</p>
-          </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
-            <p class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
-          </div>
-          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-green-900 mb-2">Safety and Trust Centre</h2>
-            <p class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
-          </div>
-          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
-            <h2 class="text-xl font-bold text-green-900 mb-2">Area Watch</h2>
-            <p class="text-sm text-green-950">Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.</p>
-            <button onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20property%20on%20MakaUg','_blank')" class="mt-4 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Help / WhatsApp MakaUg</button>
-          </div>
+	            <h2 id="finder-compare-title" class="text-xl font-bold text-gray-800 mb-2">Compare Properties</h2>
+	            <p id="finder-compare-copy" class="text-sm text-gray-500">Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.</p>
+	            <div id="finder-compare-visual" class="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-600">
+	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Price</span>
+	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Location</span>
+	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Safety</span>
+	            </div>
+	          </div>
+	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+	            <h2 id="finder-budget-title" class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
+	            <p id="finder-budget-copy" class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
+	            <button id="finder-budget-btn" onclick="showPage('mortgage')" class="mt-3 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Mortgage Finder</button>
+	          </div>
+	          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+	            <h2 id="finder-safety-title" class="text-xl font-bold text-green-900 mb-2">Safety and Trust Centre</h2>
+	            <p id="finder-safety-copy" class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
+	          </div>
+	          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+	            <h2 id="finder-area-watch-title" class="text-xl font-bold text-green-900 mb-2">Area Watch</h2>
+	            <p id="finder-area-watch-copy" class="text-sm text-green-950">Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.</p>
+	            <button id="finder-area-watch-btn" onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20property%20on%20makaug.com','_blank')" class="mt-4 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Help / WhatsApp makaug.com</button>
+	          </div>
         </div>
       </div>
     </div>
@@ -5811,6 +5848,7 @@
     let currentTab = "sale";
     let savedIds = new Set();
     let authState = { token: null, user: null };
+    let finderDashboardViewLoggedForUser = "";
     let socialAuthConfig = { providers: {} };
     let authSignInAudience = "finder";
     let authSignUpAudience = "finder";
@@ -8952,6 +8990,8 @@
       setTextById("nav-list-btn", tr("advertiseProperty"));
       setTextById("mnav-advertise", tr("advertiseProperty"));
       setTextById("footer-growth-note", tr("footerGrowth"));
+      applyAccountLanguageUI();
+      applyFinderDashboardLanguageUI();
 
       const heroBadge = document.getElementById("hero-badge");
       if (heroBadge) heroBadge.innerHTML = `<i class="fas fa-check-circle text-green-300"></i> ${tr("heroBadge")}`;
@@ -9429,9 +9469,498 @@
 
     function timeOfDayGreeting() {
       const hour = new Date().getHours();
-      if (hour < 12) return "Good morning";
-      if (hour < 17) return "Good afternoon";
-      return "Good evening";
+      if (hour < 12) return dashboardText("greetingMorning");
+      if (hour < 17) return dashboardText("greetingAfternoon");
+      return dashboardText("greetingEvening");
+    }
+
+    const FINDER_DASHBOARD_I18N = {
+      en: {
+        greetingMorning: "Good morning",
+        greetingAfternoon: "Good afternoon",
+        greetingEvening: "Good evening",
+        title: "Property Finder Dashboard",
+        subtitle: "Saved listings, recent views, and your activity",
+        greetingSub: "We will use {language} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.",
+        currentTime: "Current time: {time}",
+        weatherReady: "Weather: add an area for local weather context",
+        weatherArea: "Weather: local context for {area}",
+        locationArea: "Preferred area: {area}",
+        locationMissing: "Location context: add an area preference to personalize matches.",
+        preferenceTitle: "Search preference summary",
+        preferenceDefault: "Your role preferences, budget, contact channel, and language personalize this dashboard.",
+        goal: "Goal",
+        budget: "Budget",
+        contact: "Contact",
+        language: "Language",
+        sponsoredTitle: "Sponsored slot",
+        sponsoredCopy: "Relevant paid placements appear here and are labelled Sponsored.",
+        dashboardOrder: "Dashboard order",
+        orderSaved: "Show saved first",
+        orderNewest: "Show newest first",
+        orderRecommended: "Show recommended first",
+        orderViewings: "Show viewings first",
+        accountSettings: "Account settings",
+        accountSettingsCopy: "Change password, contact preferences, language, and alert channels from Account Settings.",
+        savedProperties: "Saved Properties",
+        noSavedProperties: "No saved properties yet.",
+        propertiesViewed: "Properties Viewed",
+        noRecentlyViewed: "No recently viewed properties yet.",
+        enquiriesSent: "Enquiries Sent",
+        routesOpened: "Routes Opened",
+        searchesPerformed: "Searches Performed",
+        openSavedPage: "Open Saved Page",
+        signOut: "Sign Out",
+        recentlyViewed: "Recently Viewed",
+        briefTitle: "My Property Brief",
+        briefCopy: "Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.",
+        briefEmpty: "Complete your profile to personalize recommendations.",
+        addPreferredArea: "Add a preferred area",
+        notSet: "Not set",
+        budgetNotSet: "Budget not set",
+        propertySearch: "Property search",
+        editPreferences: "Edit Preferences",
+        recommendedTitle: "Recommended For You",
+        recommendedCopy: "Exact, close, nearby, verified, new, and sponsored matches appear here with clear reasons.",
+        noRecommendations: "No exact matches yet. Add your preferred area or save a search and we will show similar properties.",
+        browseMatches: "Browse Matches",
+        savedSearchesTitle: "Saved Searches and Alerts",
+        savedSearchesCopy: "Save searches, choose WhatsApp/email alerts, and pause or edit alerts any time.",
+        noSavedSearches: "No saved searches yet. Save one to start alerting makaug.com about what you need.",
+        saveCurrentSearch: "Save Current Search",
+        contactTitle: "Property enquiries",
+        contactCopy: "Messages, viewing interest, and follow-up status will be tracked here.",
+        noContactHistory: "No property enquiries or WhatsApp contact history yet.",
+        viewingsTitle: "Viewing Bookings",
+        viewingsCopy: "Pending, confirmed, rescheduled, cancelled, and completed viewings will appear here.",
+        noViewings: "No viewing bookings yet.",
+        callbacksTitle: "Callback Requests",
+        callbacksCopy: "Track requested, contacted, missed, and closed callbacks from makaug.com or property contacts.",
+        noCallbacks: "No callback requests yet.",
+        compareTitle: "Compare Properties",
+        compareCopy: "Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.",
+        comparePrice: "Price",
+        compareLocation: "Location",
+        compareSafety: "Safety",
+        budgetTitle: "Mortgage/Budget Centre",
+        budgetCopy: "Mortgage estimates, rent affordability, deposits, and budget guidance are grouped here.",
+        budgetButton: "Open Mortgage Finder",
+        safetyTitle: "Safety and Trust Centre",
+        safetyCopy: "Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.",
+        areaWatchTitle: "Area Watch",
+        areaWatchCopy: "Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.",
+        areaWatchButton: "Help / WhatsApp makaug.com",
+        profileTitle: "Profile Information",
+        profileSub: "Update your contact details and property search preferences.",
+        backToDashboard: "Back to dashboard",
+        firstName: "First Name",
+        lastName: "Last Name",
+        phoneNumber: "Phone Number",
+        phoneHelp: "Changing this number will require re-verification before SMS updates are trusted.",
+        email: "Email",
+        accountType: "Account Type",
+        status: "Status",
+        profileSaved: "Profile updated. Your dashboard will refresh with the latest preferences.",
+        passwordChanged: "Password changed successfully. Use the new password next time you sign in.",
+        finderPrefTitle: "Property Finder Preferences",
+        finderPrefHelp: "These preferences feed your recommendations, saved-search demand, and follow-up dashboard.",
+        lookingFor: "What are you looking for?",
+        preferredArea: "Preferred area",
+        budgetRange: "Budget range",
+        timeline: "How soon do you need it?",
+        benefitsTitle: "Account Benefits & Contact",
+        weeklyTitle: "Weekly property tips",
+        weeklyCopy: "Receive market updates, safety tips, and reminders about saved listings.",
+        alertsTitle: "Account activity alerts",
+        alertsCopy: "Receive updates about enquiries, saves, listing progress, and new matching properties.",
+        preferredContact: "Preferred Contact",
+        communicationLanguage: "Preferred Communication Language",
+        languageHelp: "English remains the default. We use this for account updates where available.",
+        trackingCopy: "Your dashboard tracks saved properties, views, enquiries sent, route opens, and recent search activity once you are signed in.",
+        security: "Security",
+        currentPassword: "Current Password",
+        newPassword: "New Password",
+        saveChanges: "Save Changes",
+        updatePassword: "Update Password"
+      },
+      lg: {
+        greetingMorning: "Wasuze otya",
+        greetingAfternoon: "Osiibye otya",
+        greetingEvening: "Osiibye otya",
+        title: "Dashboard y'omunoonya property",
+        subtitle: "Listings z'oterese, by'olabye, n'emirimu gyo",
+        greetingSub: "Tujja kukozesa {language} we kisoboka. Listings z'oterese, by'olabye, enquiries, ne route opens birondoolerwa wano.",
+        currentTime: "Essaawa kati: {time}",
+        weatherReady: "Obudde: ssaamu ekitundu okufuna context y'obudde",
+        weatherArea: "Obudde: context y'ekitundu {area}",
+        locationArea: "Ekitundu ky'oyagala: {area}",
+        locationMissing: "Location context: ssaamu ekitundu okusobola okufuna matches ennungi.",
+        preferenceTitle: "Summary y'ebyo by'oyagala",
+        preferenceDefault: "Role, budget, contact, n'olulimi byo biyamba dashboard okukuwa ebikukwatako.",
+        goal: "Ekigendererwa",
+        budget: "Budget",
+        contact: "Contact",
+        language: "Olulimi",
+        sponsoredTitle: "Ekifo ky'obulango",
+        sponsoredCopy: "Paid placements ezikukwatako zijja kulabika wano nga zirina Sponsored.",
+        dashboardOrder: "Ensengeka ya dashboard",
+        orderSaved: "Laga ezitereddwa ku mwanjo",
+        orderNewest: "Laga empya ku mwanjo",
+        orderRecommended: "Laga ezikusembezeddwa ku mwanjo",
+        orderViewings: "Laga viewings ku mwanjo",
+        accountSettings: "Account settings",
+        accountSettingsCopy: "Kyusa password, contact preferences, olulimi, ne alert channels mu Account Settings.",
+        savedProperties: "Property z'oterese",
+        noSavedProperties: "Tewali property z'oterese.",
+        propertiesViewed: "Property z'olabye",
+        noRecentlyViewed: "Tewali property z'olabye gye buvuddeko.",
+        enquiriesSent: "Enquiries ezisindikiddwa",
+        routesOpened: "Routes ezigguddwawo",
+        searchesPerformed: "Searches ezikoleddwa",
+        openSavedPage: "Ggulawo ezitereddwa",
+        signOut: "Fuluma",
+        recentlyViewed: "By'olabye gye buvuddeko",
+        briefTitle: "Property brief yange",
+        briefCopy: "Teekamu ekigendererwa, ebitundu, budget, bedrooms, type, timeline, olulimi, ne contact channel.",
+        briefEmpty: "Maliriza profile yo okufuna recommendations ezikukwatako.",
+        addPreferredArea: "Ssaamu ekitundu ky'oyagala",
+        notSet: "Tekinnateekebwa",
+        budgetNotSet: "Budget tenateekebwa",
+        propertySearch: "Okunoonya property",
+        editPreferences: "Kyusa preferences",
+        recommendedTitle: "Ebikusembezeddwa",
+        recommendedCopy: "Matches ezituufu, eziri okumpi, ezikakasiddwa, empya, ne sponsored zijja kulabika n'ensonga.",
+        noRecommendations: "Tewali exact matches kati. Ssaamu ekitundu oba tereka search tufune ebifaanagana.",
+        browseMatches: "Laba matches",
+        savedSearchesTitle: "Saved Searches ne Alerts",
+        savedSearchesCopy: "Tereka searches, londa WhatsApp/email alerts, era osobola okuziyimiriza oba okuzikyusa.",
+        noSavedSearches: "Tewali saved searches. Tereka emu makaug.com etandike okukulabira ky'oyagala.",
+        saveCurrentSearch: "Tereka search eno",
+        contactTitle: "Property enquiries",
+        contactCopy: "Messages, viewing interest, ne follow-up status bijja kulondoolerwa wano.",
+        noContactHistory: "Tewali enquiries oba WhatsApp history.",
+        viewingsTitle: "Viewing Bookings",
+        viewingsCopy: "Pending, confirmed, rescheduled, cancelled, ne completed viewings bijja kulabika wano.",
+        noViewings: "Tewali viewing bookings.",
+        callbacksTitle: "Callback requests",
+        callbacksCopy: "Londoola requested, contacted, missed, ne closed callbacks okuva ku makaug.com oba property contacts.",
+        noCallbacks: "Tewali callback requests.",
+        compareTitle: "Gerageranya properties",
+        compareCopy: "Gerageranya listings okutuuka ku nnya ku price, location, beds, baths, size, title, verification, mortgage, ne notes.",
+        comparePrice: "Price",
+        compareLocation: "Location",
+        compareSafety: "Safety",
+        budgetTitle: "Mortgage/Budget Centre",
+        budgetCopy: "Mortgage estimates, rent affordability, deposits, ne budget guidance bigattibwa wano.",
+        budgetButton: "Ggulawo Mortgage Finder",
+        safetyTitle: "Safety and Trust Centre",
+        safetyCopy: "Safety prompts eri renters, buyers, students, land seekers, ne diaspora buyers.",
+        areaWatchTitle: "Area Watch",
+        areaWatchCopy: "Goberera ebitundu nga Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, ne Naalya.",
+        areaWatchButton: "Help / WhatsApp makaug.com",
+        profileTitle: "Ebikwata ku profile",
+        profileSub: "Kyusa contact details n'ebyo by'oyagala mu property search.",
+        backToDashboard: "Ddayo ku dashboard",
+        firstName: "Erinnya erisooka",
+        lastName: "Erinnya ery'oluvannyuma",
+        phoneNumber: "Namba y'essimu",
+        phoneHelp: "Bw'okyusa namba eno, ejja kwetaaga okuddamu okukakasibwa nga SMS updates tezinnesigamizibwa.",
+        email: "Email",
+        accountType: "Ekika kya account",
+        status: "Status",
+        profileSaved: "Profile ekyusiddwa. Dashboard ejja kuzzaamu preferences empya.",
+        passwordChanged: "Password ekyusiddwa bulungi. Kozesa password empya bw'oddamu okuyingira.",
+        finderPrefTitle: "Property Finder Preferences",
+        finderPrefHelp: "Bino biyamba recommendations, saved-search demand, ne follow-up dashboard.",
+        lookingFor: "Onoonya ki?",
+        preferredArea: "Ekitundu ky'oyagala",
+        budgetRange: "Budget range",
+        timeline: "Okyetaaga ddi?",
+        benefitsTitle: "Account benefits ne contact",
+        weeklyTitle: "Tips za property buli wiiki",
+        weeklyCopy: "Funa market updates, safety tips, ne reminders ku saved listings.",
+        alertsTitle: "Account activity alerts",
+        alertsCopy: "Funa updates ku enquiries, saves, listing progress, ne matching properties empya.",
+        preferredContact: "Engeri y'okukukwatako",
+        communicationLanguage: "Olulimi lw'empuliziganya",
+        languageHelp: "English esigala default. Tukozesa olulimi luno ku account updates we kisoboka.",
+        trackingCopy: "Dashboard yo erondoola saved properties, views, enquiries sent, route opens, ne recent search activity nga oyingidde.",
+        security: "Obukuumi",
+        currentPassword: "Password eriwo",
+        newPassword: "Password empya",
+        saveChanges: "Tereka enkyukakyuka",
+        updatePassword: "Kyusa Password"
+      },
+      sw: {
+        greetingMorning: "Habari za asubuhi",
+        greetingAfternoon: "Habari za mchana",
+        greetingEvening: "Habari za jioni",
+        title: "Dashibodi ya Mtafutaji wa Mali",
+        subtitle: "Mali ulizohifadhi, ulizotazama hivi karibuni, na shughuli zako",
+        greetingSub: "Tutatumia {language} inapopatikana. Mali ulizohifadhi, ulizotazama, enquiries, na route opens vinafuatiliwa hapa.",
+        currentTime: "Saa ya sasa: {time}",
+        weatherReady: "Hali ya hewa: ongeza eneo kwa muktadha wa eneo",
+        weatherArea: "Hali ya hewa: muktadha wa eneo la {area}",
+        locationArea: "Eneo unalopendelea: {area}",
+        locationMissing: "Muktadha wa eneo: ongeza eneo unalopendelea ili kupata matches bora.",
+        preferenceTitle: "Muhtasari wa mapendeleo ya search",
+        preferenceDefault: "Role, budget, contact channel, na lugha yako hubinafsisha dashibodi hii.",
+        goal: "Lengo",
+        budget: "Budget",
+        contact: "Mawasiliano",
+        language: "Lugha",
+        sponsoredTitle: "Nafasi ya tangazo",
+        sponsoredCopy: "Paid placements zinazofaa zitaonekana hapa na kuandikwa Sponsored.",
+        dashboardOrder: "Mpangilio wa dashibodi",
+        orderSaved: "Onyesha saved kwanza",
+        orderNewest: "Onyesha mpya kwanza",
+        orderRecommended: "Onyesha recommended kwanza",
+        orderViewings: "Onyesha viewings kwanza",
+        accountSettings: "Account settings",
+        accountSettingsCopy: "Badilisha password, contact preferences, lugha, na alert channels kutoka Account Settings.",
+        savedProperties: "Mali zilizohifadhiwa",
+        noSavedProperties: "Hakuna mali zilizohifadhiwa bado.",
+        propertiesViewed: "Mali zilizotazamwa",
+        noRecentlyViewed: "Hakuna mali ulizotazama hivi karibuni.",
+        enquiriesSent: "Enquiries zilizotumwa",
+        routesOpened: "Routes zilizofunguliwa",
+        searchesPerformed: "Searches zilizofanywa",
+        openSavedPage: "Fungua Saved Page",
+        signOut: "Toka",
+        recentlyViewed: "Ulizotazama hivi karibuni",
+        briefTitle: "Property Brief yangu",
+        briefCopy: "Weka lengo, maeneo, budget, bedrooms, property type, timeline, lugha, na contact channel.",
+        briefEmpty: "Kamilisha profile yako ili kupata recommendations bora.",
+        addPreferredArea: "Ongeza eneo unalopendelea",
+        notSet: "Haijawekwa",
+        budgetNotSet: "Budget haijawekwa",
+        propertySearch: "Property search",
+        editPreferences: "Badilisha Preferences",
+        recommendedTitle: "Recommended For You",
+        recommendedCopy: "Exact, close, nearby, verified, new, na sponsored matches zitaonekana hapa na sababu.",
+        noRecommendations: "Hakuna exact matches bado. Ongeza eneo au hifadhi search ili tuonyeshe mali zinazofanana.",
+        browseMatches: "Browse Matches",
+        savedSearchesTitle: "Saved Searches na Alerts",
+        savedSearchesCopy: "Hifadhi searches, chagua WhatsApp/email alerts, na simamisha au badilisha alerts wakati wowote.",
+        noSavedSearches: "Hakuna saved searches bado. Hifadhi moja ili makaug.com ianze kukujulisha unachohitaji.",
+        saveCurrentSearch: "Hifadhi Search Hii",
+        contactTitle: "Property enquiries",
+        contactCopy: "Messages, viewing interest, na follow-up status vitafuatiliwa hapa.",
+        noContactHistory: "Hakuna enquiries au WhatsApp contact history bado.",
+        viewingsTitle: "Viewing Bookings",
+        viewingsCopy: "Pending, confirmed, rescheduled, cancelled, na completed viewings zitaonekana hapa.",
+        noViewings: "Hakuna viewing bookings bado.",
+        callbacksTitle: "Callback Requests",
+        callbacksCopy: "Fuatilia requested, contacted, missed, na closed callbacks kutoka makaug.com au property contacts.",
+        noCallbacks: "Hakuna callback requests bado.",
+        compareTitle: "Compare Properties",
+        compareCopy: "Linganisha hadi listings nne kwa price, location, beds, baths, size, title, verification, mortgage, na notes.",
+        comparePrice: "Bei",
+        compareLocation: "Eneo",
+        compareSafety: "Usalama",
+        budgetTitle: "Mortgage/Budget Centre",
+        budgetCopy: "Mortgage estimates, rent affordability, deposits, na budget guidance zitawekwa hapa.",
+        budgetButton: "Fungua Mortgage Finder",
+        safetyTitle: "Safety and Trust Centre",
+        safetyCopy: "Personal safety prompts kwa renters, buyers, students, land seekers, na diaspora buyers.",
+        areaWatchTitle: "Area Watch",
+        areaWatchCopy: "Fuatilia maeneo kama Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, na Naalya.",
+        areaWatchButton: "Help / WhatsApp makaug.com",
+        profileTitle: "Profile Information",
+        profileSub: "Sasisha mawasiliano yako na mapendeleo ya search ya mali.",
+        backToDashboard: "Rudi kwenye dashibodi",
+        firstName: "Jina la kwanza",
+        lastName: "Jina la mwisho",
+        phoneNumber: "Namba ya simu",
+        phoneHelp: "Ukibadilisha namba hii, itahitaji kuthibitishwa tena kabla SMS updates kuaminika.",
+        email: "Email",
+        accountType: "Aina ya account",
+        status: "Status",
+        profileSaved: "Profile imesasishwa. Dashibodi itatumia preferences mpya.",
+        passwordChanged: "Password imebadilishwa vizuri. Tumia password mpya wakati ujao.",
+        finderPrefTitle: "Property Finder Preferences",
+        finderPrefHelp: "Mapendeleo haya hulisha recommendations, saved-search demand, na follow-up dashboard.",
+        lookingFor: "Unatafuta nini?",
+        preferredArea: "Eneo unalopendelea",
+        budgetRange: "Budget range",
+        timeline: "Unaihitaji lini?",
+        benefitsTitle: "Account Benefits & Contact",
+        weeklyTitle: "Weekly property tips",
+        weeklyCopy: "Pokea market updates, safety tips, na reminders kuhusu saved listings.",
+        alertsTitle: "Account activity alerts",
+        alertsCopy: "Pokea updates kuhusu enquiries, saves, listing progress, na matching properties mpya.",
+        preferredContact: "Preferred Contact",
+        communicationLanguage: "Preferred Communication Language",
+        languageHelp: "English inabaki default. Tunatumia hii kwa account updates inapopatikana.",
+        trackingCopy: "Dashibodi yako hufuatilia saved properties, views, enquiries sent, route opens, na recent search activity ukiwa signed in.",
+        security: "Security",
+        currentPassword: "Current Password",
+        newPassword: "New Password",
+        saveChanges: "Hifadhi Changes",
+        updatePassword: "Update Password"
+      }
+    };
+
+    function dashboardText(key, replacements = {}) {
+      const lang = currentLang || "en";
+      const fallback = LANG_FALLBACK[lang] || "en";
+      let value = FINDER_DASHBOARD_I18N[lang]?.[key]
+        || FINDER_DASHBOARD_I18N[fallback]?.[key]
+        || FINDER_DASHBOARD_I18N.en?.[key]
+        || key;
+      Object.entries(replacements || {}).forEach(([name, replacement]) => {
+        value = value.replace(new RegExp(`\\{${name}\\}`, "g"), String(replacement ?? ""));
+      });
+      return value;
+    }
+
+    function languageDisplayName(code = "en") {
+      return {
+        en: "English",
+        lg: "Luganda",
+        sw: "Kiswahili",
+        ac: "Acholi",
+        ny: "Runyankole",
+        rn: "Rukiga",
+        sm: "Lusoga"
+      }[code || "en"] || "English";
+    }
+
+    const ACCOUNT_FINDER_PREF_OPTIONS = {
+      goal: ["Rent", "Buy", "Land", "Student accommodation", "Commercial", "Not sure yet"],
+      area: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"],
+      budget: ["Under USh 500K", "USh 500K-1M", "USh 1M-2M", "USh 2M-5M", "USh 50M+", "I'll choose later"],
+      timeline: ["Immediately", "This month", "1-3 months", "Just browsing"]
+    };
+
+    function setDashboardText(id, key, replacements = {}) {
+      setTextById(id, dashboardText(key, replacements));
+    }
+
+    function setSelectOptions(id, values = [], selected = "") {
+      const select = document.getElementById(id);
+      if (!select) return;
+      const current = selected || select.value || "";
+      select.innerHTML = values.map((value) => `<option value="${adminAttr(value)}">${adminEscape(translateListingLabel(value))}</option>`).join("");
+      select.value = values.includes(current) ? current : (values[0] || "");
+    }
+
+    function applyAccountLanguageUI() {
+      setDashboardText("account-profile-title", "profileTitle");
+      setDashboardText("account-profile-sub", "profileSub");
+      setDashboardText("account-back-dashboard-btn", "backToDashboard");
+      setDashboardText("account-first-name-label", "firstName");
+      setDashboardText("account-last-name-label", "lastName");
+      setDashboardText("account-phone-label", "phoneNumber");
+      setDashboardText("account-phone-help", "phoneHelp");
+      setDashboardText("account-email-label", "email");
+      setDashboardText("account-role-label", "accountType");
+      setDashboardText("account-status-label", "status");
+      setDashboardText("account-finder-pref-title", "finderPrefTitle");
+      setDashboardText("account-pref-goal-label", "lookingFor");
+      setDashboardText("account-pref-area-label", "preferredArea");
+      setDashboardText("account-pref-budget-label", "budgetRange");
+      setDashboardText("account-pref-timeline-label", "timeline");
+      setDashboardText("account-finder-pref-help", "finderPrefHelp");
+      setDashboardText("account-benefits-title", "benefitsTitle");
+      setDashboardText("account-weekly-title", "weeklyTitle");
+      setDashboardText("account-weekly-copy", "weeklyCopy");
+      setDashboardText("account-alerts-title", "alertsTitle");
+      setDashboardText("account-alerts-copy", "alertsCopy");
+      setDashboardText("account-contact-label", "preferredContact");
+      setDashboardText("account-language-label", "communicationLanguage");
+      setDashboardText("account-language-help", "languageHelp");
+      setDashboardText("account-tracking-copy", "trackingCopy");
+      setDashboardText("account-security-title", "security");
+      setDashboardText("account-current-password-label", "currentPassword");
+      setDashboardText("account-new-password-label", "newPassword");
+      setDashboardText("account-save-btn", "saveChanges");
+      setDashboardText("account-password-btn", "updatePassword");
+      setSelectOptions("account-pref-goal", ACCOUNT_FINDER_PREF_OPTIONS.goal);
+      setSelectOptions("account-pref-area", ACCOUNT_FINDER_PREF_OPTIONS.area);
+      setSelectOptions("account-pref-budget", ACCOUNT_FINDER_PREF_OPTIONS.budget);
+      setSelectOptions("account-pref-timeline", ACCOUNT_FINDER_PREF_OPTIONS.timeline);
+    }
+
+    function applyFinderDashboardLanguageUI() {
+      setDashboardText("finder-dashboard-title", "title");
+      setDashboardText("finder-dashboard-subtitle", "subtitle");
+      setDashboardText("finder-sponsored-title", "sponsoredTitle");
+      setDashboardText("finder-sponsored-copy", "sponsoredCopy");
+      setDashboardText("finder-preference-title", "preferenceTitle");
+      setDashboardText("finder-dashboard-order-label", "dashboardOrder");
+      setDashboardText("finder-order-saved", "orderSaved");
+      setDashboardText("finder-order-newest", "orderNewest");
+      setDashboardText("finder-order-recommended", "orderRecommended");
+      setDashboardText("finder-order-viewings", "orderViewings");
+      setDashboardText("finder-account-settings-title", "accountSettings");
+      setDashboardText("finder-account-settings-copy", "accountSettingsCopy");
+      setDashboardText("finder-stat-saved-label", "savedProperties");
+      setDashboardText("finder-stat-viewed-label", "propertiesViewed");
+      setDashboardText("finder-stat-inquiries-label", "enquiriesSent");
+      setDashboardText("finder-stat-routes-label", "routesOpened");
+      setDashboardText("finder-stat-searches-label", "searchesPerformed");
+      setDashboardText("finder-saved-title", "savedProperties");
+      setDashboardText("finder-open-saved-btn", "openSavedPage");
+      setDashboardText("finder-account-btn", "accountSettings");
+      setDashboardText("finder-signout-btn", "signOut");
+      setDashboardText("finder-recent-title", "recentlyViewed");
+      setDashboardText("finder-brief-title", "briefTitle");
+      setDashboardText("finder-brief-copy", "briefCopy");
+      setDashboardText("finder-edit-preferences-btn", "editPreferences");
+      setDashboardText("finder-recommended-title", "recommendedTitle");
+      setDashboardText("finder-recommended-copy", "recommendedCopy");
+      setDashboardText("finder-browse-matches-btn", "browseMatches");
+      setDashboardText("finder-saved-searches-title", "savedSearchesTitle");
+      setDashboardText("finder-saved-searches-copy", "savedSearchesCopy");
+      setDashboardText("finder-save-current-search-btn", "saveCurrentSearch");
+      setDashboardText("finder-contact-title", "contactTitle");
+      setDashboardText("finder-contact-copy", "contactCopy");
+      setDashboardText("finder-viewings-title", "viewingsTitle");
+      setDashboardText("finder-viewings-copy", "viewingsCopy");
+      setDashboardText("finder-callbacks-title", "callbacksTitle");
+      setDashboardText("finder-callbacks-copy", "callbacksCopy");
+      setDashboardText("finder-compare-title", "compareTitle");
+      setDashboardText("finder-compare-copy", "compareCopy");
+      setDashboardText("finder-budget-title", "budgetTitle");
+      setDashboardText("finder-budget-copy", "budgetCopy");
+      setDashboardText("finder-budget-btn", "budgetButton");
+      setDashboardText("finder-safety-title", "safetyTitle");
+      setDashboardText("finder-safety-copy", "safetyCopy");
+      setDashboardText("finder-area-watch-title", "areaWatchTitle");
+      setDashboardText("finder-area-watch-copy", "areaWatchCopy");
+      setDashboardText("finder-area-watch-btn", "areaWatchButton");
+      const compareVisual = document.getElementById("finder-compare-visual");
+      if (compareVisual) {
+        compareVisual.innerHTML = ["comparePrice", "compareLocation", "compareSafety"]
+          .map((key) => `<span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">${adminEscape(dashboardText(key))}</span>`)
+          .join("");
+      }
+    }
+
+    function budgetMaxFromLabel(value = "") {
+      const map = {
+        "Under USh 500K": 500000,
+        "USh 500K-1M": 1000000,
+        "USh 1M-2M": 2000000,
+        "USh 2M-5M": 5000000,
+        "USh 50M+": 50000000,
+        "Under USh 300K": 300000,
+        "USh 300K-600K": 600000,
+        "USh 600K-1M": 1000000,
+        "USh 1M+": 1000000
+      };
+      return map[value] || null;
+    }
+
+    function categoryFromFinderGoal(value = "") {
+      const normalized = String(value || "").toLowerCase();
+      if (normalized.includes("rent")) return "rent";
+      if (normalized.includes("buy")) return "sale";
+      if (normalized.includes("land")) return "land";
+      if (normalized.includes("student")) return "student";
+      if (normalized.includes("commercial")) return "commercial";
+      return "";
     }
 
     function getSignedInUserStorageId() {
@@ -10102,33 +10631,79 @@
       return broker || null;
     }
 
-    function renderDashboardCard(p) {
-      const idArg = propertyIdArg(p.id);
-      return `
-        <div class="border border-gray-200 rounded-xl p-3 bg-white">
-          <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
-          <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
-          <div class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</div>
-          <div class="mt-2 text-xs text-gray-500 flex gap-3">
-            <span>👁 ${getPropertyViewCount(p.id)} views</span>
-            <span>❤️ ${getPropertySaveCount(p.id)} saves</span>
-          </div>
-        </div>
+	    function renderDashboardCard(p) {
+	      const idArg = propertyIdArg(p.id);
+	      const reason = p.reason || p.match_reason || "";
+	      return `
+	        <div class="border border-gray-200 rounded-xl p-3 bg-white">
+	          <button onclick="openPropertyCardDetail(event, ${idArg})" class="text-left font-bold text-gray-800 line-clamp-1 hover:text-green-700">${p.title}</button>
+	          <p class="text-xs text-gray-500 mt-1">${p.area}, ${p.district}</p>
+	          <div class="text-sm font-bold text-green-700 mt-1">${fmtP(p.price, p.period)}</div>
+	          ${reason ? `<div class="mt-2 inline-flex rounded-full bg-green-50 border border-green-100 px-2 py-1 text-[11px] font-semibold text-green-800">${adminEscape(reason)}</div>` : ""}
+	          <div class="mt-2 text-xs text-gray-500 flex gap-3">
+	            <span>👁 ${getPropertyViewCount(p.id)} views</span>
+	            <span>❤️ ${getPropertySaveCount(p.id)} saves</span>
+	          </div>
+	        </div>
       `;
     }
 
     function normalizeDashboardProperty(item) {
       const property = item?.property || item || {};
       return {
-        ...property,
-        id: property.id || property.listing_id || property.listingId || "",
-        title: property.title || "MakaUg listing",
-        area: property.area || property.location || property.neighbourhood || "",
-        district: property.district || "",
-        price: property.price || 0,
-        period: property.period || property.price_period || property.pricePeriod || ""
-      };
-    }
+	        ...property,
+	        id: property.id || property.listing_id || property.listingId || "",
+	        title: property.title || "makaug.com listing",
+	        area: property.area || property.location || property.neighbourhood || "",
+	        district: property.district || "",
+	        price: property.price || 0,
+	        period: property.period || property.price_period || property.pricePeriod || ""
+	      };
+	    }
+
+	    function scoreLocalRecommendation(property, profile = {}) {
+	      const preferredArea = String(profile.preferred_areas || "").toLowerCase();
+	      const primaryGoal = String(profile.primary_goal || "").toLowerCase();
+	      const budgetMax = budgetMaxFromLabel(profile.budget_range);
+	      let score = 0;
+	      const reasons = [];
+	      const type = normalizeType(property.type || property.listing_type || "");
+	      const locationText = [property.area, property.district, property.location, property.address].filter(Boolean).join(" ").toLowerCase();
+	      if (preferredArea && !preferredArea.includes("choose later") && locationText.includes(preferredArea.toLowerCase())) {
+	        score += 30;
+	        reasons.push("preferred area");
+	      }
+	      if (primaryGoal.includes("rent") && type === "rent") {
+	        score += 20;
+	        reasons.push("rental match");
+	      } else if (primaryGoal.includes("buy") && type === "sale") {
+	        score += 20;
+	        reasons.push("buying match");
+	      } else if (primaryGoal.includes("land") && type === "land") {
+	        score += 20;
+	        reasons.push("land match");
+	      } else if (primaryGoal.includes("student") && isStudentDiscoverable(property)) {
+	        score += 20;
+	        reasons.push("student match");
+	      } else if (primaryGoal.includes("commercial") && type === "commercial") {
+	        score += 20;
+	        reasons.push("commercial match");
+	      }
+	      if (budgetMax && Number(property.price || 0) && Number(property.price || 0) <= budgetMax) {
+	        score += 15;
+	        reasons.push("within budget");
+	      }
+	      if (!reasons.length) reasons.push("similar live property");
+	      return { score, reason: reasons.slice(0, 2).join(" • ") };
+	    }
+
+	    function getLocalFinderRecommendations(profile = {}, limit = 4) {
+	      return getPublicListings()
+	        .map((property) => ({ property, ...scoreLocalRecommendation(property, profile) }))
+	        .sort((a, b) => b.score - a.score)
+	        .slice(0, limit)
+	        .map(({ property, reason }) => normalizeDashboardProperty({ ...property, reason }));
+	    }
 
     function renderCompactDashboardRows(targetId, rows, emptyText, renderer) {
       const target = document.getElementById(targetId);
@@ -10178,12 +10753,13 @@
         return;
       }
 
-      gate.classList.add("hidden");
-      body.classList.remove("hidden");
+	      gate.classList.add("hidden");
+	      body.classList.remove("hidden");
+	      applyFinderDashboardLanguageUI();
 
-      let payload = null;
-      if (authState?.token && !authState?.user?.is_demo) {
-        try {
+	      let payload = null;
+	      if (authState?.token && !authState?.user?.is_demo) {
+	        try {
           const res = await apiRequest("/api/property-seeker/dashboard");
           payload = res?.data || null;
         } catch (error) {
@@ -10191,41 +10767,50 @@
         }
       }
 
-      const activity = getCurrentUserActivity();
-      const greetingEl = document.getElementById("finder-greeting");
-      const greetingSubEl = document.getElementById("finder-greeting-sub");
-      if (greetingEl) {
-        const first = authState.user.first_name || "there";
-        greetingEl.textContent = `${timeOfDayGreeting()}, ${first}`;
-      }
-      if (greetingSubEl) {
-        const languageLabel = {
-          en: "English",
-          lg: "Luganda",
-          sw: "Kiswahili",
-          ac: "Acholi",
-          ny: "Runyankole",
-          rn: "Rukiga",
-          sm: "Lusoga"
-        }[authState.user.preferred_language || currentLang] || "English";
-        greetingSubEl.textContent = `We will use ${languageLabel} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.`;
-      }
-      const now = new Date();
-      setTextById("finder-current-time", `Current time: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
-      const profile = authState.user.profile_data || {};
-      const preferredArea = profile.preferred_areas || profile.student_campus || profile.agent_districts || profile.campaign_location || "";
-      setTextById("finder-location-context", preferredArea ? `Preferred area: ${preferredArea}` : "Location context: add an area preference to personalize matches.");
-      setTextById("finder-preference-summary", [
-        profile.primary_goal ? `Goal: ${profile.primary_goal}` : "",
-        profile.budget_range ? `Budget: ${profile.budget_range}` : "",
-        authState.user.preferred_contact_channel ? `Contact: ${authState.user.preferred_contact_channel}` : "",
-        authState.user.preferred_language ? `Language: ${authState.user.preferred_language}` : ""
-      ].filter(Boolean).join(" • ") || "Your role preferences, budget, contact channel, and language personalize this dashboard.");
-      const viewedIds = Object.keys(activity.viewed || {});
-      const backendSaved = Array.isArray(payload?.savedListings) ? payload.savedListings.map(normalizeDashboardProperty) : [];
-      const backendRecent = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed.map(normalizeDashboardProperty) : [];
-      const backendRecommendations = Array.isArray(payload?.recommendations) ? payload.recommendations.map(normalizeDashboardProperty) : [];
-      const savedList = backendSaved.length ? backendSaved : getPublicListings().filter((p) => isPropertySaved(p.id));
+	      const activity = getCurrentUserActivity();
+	      const greetingEl = document.getElementById("finder-greeting");
+	      const greetingSubEl = document.getElementById("finder-greeting-sub");
+	      const userProfile = authState.user.profile_data || {};
+	      const preferredArea = userProfile.preferred_areas || userProfile.student_campus || userProfile.agent_districts || userProfile.campaign_location || "";
+	      const languageLabel = languageDisplayName(authState.user.preferred_language || currentLang);
+	      if (greetingEl) {
+	        const first = authState.user.first_name || "there";
+	        greetingEl.textContent = `${timeOfDayGreeting()}, ${first}`;
+	      }
+	      if (greetingSubEl) {
+	        greetingSubEl.textContent = dashboardText("greetingSub", { language: languageLabel });
+	      }
+	      const now = new Date();
+	      setTextById("finder-current-time", `🕒 ${dashboardText("currentTime", { time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}`);
+	      setTextById("finder-weather-context", preferredArea ? `☀️ ${dashboardText("weatherArea", { area: preferredArea })}` : `☀️ ${dashboardText("weatherReady")}`);
+	      setTextById("finder-location-context", preferredArea ? `📍 ${dashboardText("locationArea", { area: preferredArea })}` : `📍 ${dashboardText("locationMissing")}`);
+	      setTextById("finder-preference-summary", [
+	        userProfile.primary_goal ? `${dashboardText("goal")}: ${userProfile.primary_goal}` : "",
+	        userProfile.budget_range ? `${dashboardText("budget")}: ${userProfile.budget_range}` : "",
+	        authState.user.preferred_contact_channel ? `${dashboardText("contact")}: ${authState.user.preferred_contact_channel}` : "",
+	        authState.user.preferred_language ? `${dashboardText("language")}: ${languageLabel}` : ""
+	      ].filter(Boolean).join(" • ") || dashboardText("preferenceDefault"));
+	      if (authState?.token && authState?.user?.id && finderDashboardViewLoggedForUser !== authState.user.id) {
+	        finderDashboardViewLoggedForUser = authState.user.id;
+	        apiRequest("/api/property-seeker/activity", {
+	          method: "POST",
+	          body: {
+	            activity_type: "dashboard_view",
+	            metadata: {
+	              source: "property_finder_dashboard",
+	              language: currentLang,
+	              preferred_area: preferredArea,
+	              primary_goal: userProfile.primary_goal || ""
+	            }
+	          }
+	        }).catch(() => {});
+	      }
+	      const viewedIds = Object.keys(activity.viewed || {});
+	      const backendSaved = Array.isArray(payload?.savedListings) ? payload.savedListings.map(normalizeDashboardProperty) : [];
+	      const backendRecent = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed.map(normalizeDashboardProperty) : [];
+	      const backendRecommendations = Array.isArray(payload?.recommendations) ? payload.recommendations.map(normalizeDashboardProperty) : [];
+	      const localRecommendations = backendRecommendations.length ? backendRecommendations : getLocalFinderRecommendations(userProfile, 4);
+	      const savedList = backendSaved.length ? backendSaved : getPublicListings().filter((p) => isPropertySaved(p.id));
       const recentViewed = backendRecent.length ? backendRecent : (activity.recentViewed || [])
         .map((id) => PROPERTIES.find((p) => String(p.id) === String(id)))
         .filter((item) => item && isListingPublicVisible(item))
@@ -10248,59 +10833,59 @@
 
       const savedGrid = document.getElementById("finder-saved-grid");
       if (savedGrid) {
-        if (!savedList.length) {
-          savedGrid.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No saved properties yet.</div>`;
-        } else {
-          savedGrid.innerHTML = savedList.slice(0, 6).map(renderDashboardCard).join("");
-        }
-      }
+	        if (!savedList.length) {
+	          savedGrid.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">${dashboardText("noSavedProperties")}</div>`;
+	        } else {
+	          savedGrid.innerHTML = savedList.slice(0, 6).map(renderDashboardCard).join("");
+	        }
+	      }
 
       const recentGrid = document.getElementById("finder-recent-grid");
       if (recentGrid) {
-        if (!recentViewed.length) {
-          recentGrid.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No recently viewed properties yet.</div>`;
-        } else {
-          recentGrid.innerHTML = recentViewed.map(renderDashboardCard).join("");
-        }
+	        if (!recentViewed.length) {
+	          recentGrid.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">${dashboardText("noRecentlyViewed")}</div>`;
+	        } else {
+	          recentGrid.innerHTML = recentViewed.map(renderDashboardCard).join("");
+	        }
       }
 
       const brief = document.getElementById("finder-brief");
       if (brief) {
-        const pref = payload?.preferences || {};
-        const profile = payload?.profile || {};
-        const categories = Array.isArray(pref.categories) ? pref.categories.join(", ") : "Not set";
-        const locations = Array.isArray(pref.preferred_locations) ? pref.preferred_locations.join(", ") : "Not set";
-        const budget = pref.max_budget ? `up to UGX ${Number(pref.max_budget).toLocaleString("en-UG")}` : "Budget not set";
-        brief.innerHTML = `<strong>${adminEscape(profile.current_goal || categories || "Property search")}</strong><br>${adminEscape(locations || "Add a preferred area")} • ${adminEscape(budget)} • ${adminEscape(profile.preferred_contact_channel || authState.user.preferred_contact_channel || "WhatsApp")}`;
-      }
+	        const pref = payload?.preferences || {};
+	        const profile = payload?.profile || {};
+	        const categories = Array.isArray(pref.categories) && pref.categories.length ? pref.categories.join(", ") : (userProfile.primary_goal || dashboardText("notSet"));
+	        const locations = Array.isArray(pref.preferred_locations) && pref.preferred_locations.length ? pref.preferred_locations.join(", ") : (preferredArea || dashboardText("addPreferredArea"));
+	        const budget = pref.max_budget ? `up to UGX ${Number(pref.max_budget).toLocaleString("en-UG")}` : (userProfile.budget_range || dashboardText("budgetNotSet"));
+	        brief.innerHTML = `<strong>${adminEscape(profile.current_goal || categories || dashboardText("propertySearch"))}</strong><br>${adminEscape(locations)} • ${adminEscape(budget)} • ${adminEscape(profile.preferred_contact_channel || authState.user.preferred_contact_channel || "WhatsApp")}`;
+	      }
 
-      const recGrid = document.getElementById("finder-recommendations-grid");
-      if (recGrid) {
-        recGrid.innerHTML = backendRecommendations.length
-          ? backendRecommendations.slice(0, 4).map(renderDashboardCard).join("")
-          : `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">No personalized matches yet. Save a search or browse listings to improve recommendations.</div>`;
-      }
+	      const recGrid = document.getElementById("finder-recommendations-grid");
+	      if (recGrid) {
+	        recGrid.innerHTML = localRecommendations.length
+	          ? localRecommendations.slice(0, 4).map(renderDashboardCard).join("")
+	          : `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">${dashboardText("noRecommendations")}</div>`;
+	      }
 
-      renderCompactDashboardRows("finder-saved-searches", savedSearches, "No saved searches yet. Save one to start alerting MakaUg about what you need.", (item) => `
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <div class="font-bold text-gray-900">${adminEscape(item.label || item.category || "Saved search")}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(Array.isArray(item.alert_channels) ? item.alert_channels.join(", ") : "in-app")}</div>
-        </div>`);
-      renderCompactDashboardRows("finder-viewings", viewings, "No viewing bookings yet.", (item) => `
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <div class="font-bold text-gray-900">${adminEscape(item.title || "Viewing request")}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_date || "date pending")} ${adminEscape(item.preferred_time || "")}</div>
-        </div>`);
-      renderCompactDashboardRows("finder-callbacks", callbacks, "No callback requests yet.", (item) => `
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <div class="font-bold text-gray-900">${adminEscape(item.title || "Callback request")}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_callback_time || "time pending")}</div>
-        </div>`);
-      renderCompactDashboardRows("finder-contact-history", needs, "No property need requests or WhatsApp contact history yet.", (item) => `
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-          <div class="font-bold text-gray-900">${adminEscape(item.category || "Property need")}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any area")} • ${adminEscape(item.status || "new")}</div>
-        </div>`);
+	      renderCompactDashboardRows("finder-saved-searches", savedSearches, dashboardText("noSavedSearches"), (item) => `
+	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+	          <div class="font-bold text-gray-900">${adminEscape(item.label || item.category || "Saved search")}</div>
+	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(Array.isArray(item.alert_channels) ? item.alert_channels.join(", ") : "in-app")}</div>
+	        </div>`);
+	      renderCompactDashboardRows("finder-viewings", viewings, dashboardText("noViewings"), (item) => `
+	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+	          <div class="font-bold text-gray-900">${adminEscape(item.title || "Viewing request")}</div>
+	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_date || "date pending")} ${adminEscape(item.preferred_time || "")}</div>
+	        </div>`);
+	      renderCompactDashboardRows("finder-callbacks", callbacks, dashboardText("noCallbacks"), (item) => `
+	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+	          <div class="font-bold text-gray-900">${adminEscape(item.title || "Callback request")}</div>
+	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_callback_time || "time pending")}</div>
+	        </div>`);
+	      renderCompactDashboardRows("finder-contact-history", needs, dashboardText("noContactHistory"), (item) => `
+	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+	          <div class="font-bold text-gray-900">${adminEscape(item.category || "Property need")}</div>
+	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any area")} • ${adminEscape(item.status || "new")}</div>
+	        </div>`);
     }
 
     function normalizeStudentDashboardProperty(item) {
@@ -14628,19 +15213,25 @@
       setVal("account-phone", user.phone);
       setVal("account-email", user.email);
       setVal("account-role", user.role);
-      const weeklyEl = document.getElementById("account-weekly-tips");
-      const marketingEl = document.getElementById("account-marketing-opt-in");
-      const contactEl = document.getElementById("account-contact-channel");
-      const preferredLanguageEl = document.getElementById("account-preferred-language");
-      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
-      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
-      if (contactEl) contactEl.value = user.preferred_contact_channel || "whatsapp";
-      if (preferredLanguageEl) preferredLanguageEl.value = user.preferred_language || currentLang || "en";
-      const statusEl = document.getElementById("account-status");
-      if (statusEl) {
-        const verified = user.phone_verified ? "Verified phone" : "Phone not verified";
-        statusEl.textContent = `${mapRoleLabel(user.role)} • ${verified}`;
-      }
+	      const weeklyEl = document.getElementById("account-weekly-tips");
+	      const marketingEl = document.getElementById("account-marketing-opt-in");
+	      const contactEl = document.getElementById("account-contact-channel");
+	      const preferredLanguageEl = document.getElementById("account-preferred-language");
+	      const profile = user.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
+	      applyAccountLanguageUI();
+	      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
+	      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
+	      if (contactEl) contactEl.value = user.preferred_contact_channel === "email" ? "email" : "whatsapp";
+	      if (preferredLanguageEl) preferredLanguageEl.value = user.preferred_language || currentLang || "en";
+	      setSelectOptions("account-pref-goal", ACCOUNT_FINDER_PREF_OPTIONS.goal, profile.primary_goal || "Rent");
+	      setSelectOptions("account-pref-area", ACCOUNT_FINDER_PREF_OPTIONS.area, profile.preferred_areas || "Kampala");
+	      setSelectOptions("account-pref-budget", ACCOUNT_FINDER_PREF_OPTIONS.budget, profile.budget_range || "Under USh 500K");
+	      setSelectOptions("account-pref-timeline", ACCOUNT_FINDER_PREF_OPTIONS.timeline, profile.moving_timeline || "Immediately");
+	      const statusEl = document.getElementById("account-status");
+	      if (statusEl) {
+	        const verified = user.phone_verified ? "Verified phone" : "Phone not verified";
+	        statusEl.textContent = `${mapRoleLabel(user.role)} • ${verified}`;
+	      }
     }
 
     async function refreshAuthSession() {
@@ -14675,43 +15266,89 @@
         return;
       }
 
-      const firstName = (document.getElementById("account-first-name")?.value || "").trim();
-      const lastName = (document.getElementById("account-last-name")?.value || "").trim();
-      const email = (document.getElementById("account-email")?.value || "").trim();
-      const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
-      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
-      const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
-      const preferredLanguage = (document.getElementById("account-preferred-language")?.value || currentLang || "en").trim();
+	      const firstName = (document.getElementById("account-first-name")?.value || "").trim();
+	      const lastName = (document.getElementById("account-last-name")?.value || "").trim();
+	      const phone = normalizePhoneInput(document.getElementById("account-phone")?.value || "");
+	      const email = (document.getElementById("account-email")?.value || "").trim();
+	      const weeklyTipsOptIn = document.getElementById("account-weekly-tips")?.checked !== false;
+	      const marketingOptIn = document.getElementById("account-marketing-opt-in")?.checked !== false;
+	      const preferredContactChannel = (document.getElementById("account-contact-channel")?.value || "whatsapp").trim();
+	      const preferredLanguage = (document.getElementById("account-preferred-language")?.value || currentLang || "en").trim();
+	      const profileData = {
+	        primary_goal: (document.getElementById("account-pref-goal")?.value || "").trim(),
+	        preferred_areas: (document.getElementById("account-pref-area")?.value || "").trim(),
+	        budget_range: (document.getElementById("account-pref-budget")?.value || "").trim(),
+	        moving_timeline: (document.getElementById("account-pref-timeline")?.value || "").trim(),
+	        preferred_contact_channel: preferredContactChannel
+	      };
 
-      if (!firstName || !lastName) {
-        toast("First name and last name are required.");
-        return;
-      }
+	      if (!firstName || !lastName) {
+	        toast("First name and last name are required.");
+	        return;
+	      }
+	      if (!phone || !/^\+256\d{9}$/.test(phone)) {
+	        toast("Enter a valid Uganda phone number.");
+	        return;
+	      }
 
-      setButtonLoading("account-save-btn", true);
-      try {
-        const res = await apiRequest("/api/auth/me", {
-          method: "PATCH",
+	      setButtonLoading("account-save-btn", true);
+	      try {
+	        const res = await apiRequest("/api/auth/me", {
+	          method: "PATCH",
           body: {
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            weekly_tips_opt_in: weeklyTipsOptIn,
-            marketing_opt_in: marketingOptIn,
-            preferred_contact_channel: preferredContactChannel,
-            preferred_language: preferredLanguage
-          }
-        });
-        const updatedUser = res?.data?.user;
-        persistAuthState(authState.token, updatedUser || authState.user);
-        await trackEvent("account_profile_update", { role: authState?.user?.role || "" });
-        toast("Profile updated.");
-      } catch (error) {
-        toast(error.message || "Could not update profile.");
-      } finally {
-        setButtonLoading("account-save-btn", false, "Save Changes");
-      }
-    }
+	            first_name: firstName,
+	            last_name: lastName,
+	            phone,
+	            email,
+	            weekly_tips_opt_in: weeklyTipsOptIn,
+	            marketing_opt_in: marketingOptIn,
+	            preferred_contact_channel: preferredContactChannel,
+	            preferred_language: preferredLanguage,
+	            profile_data: profileData
+	          }
+	        });
+	        if (derivePortalMode(authState?.user, authState?.user?.portal_mode) === "finder") {
+	          await apiRequest("/api/property-seeker/onboarding", {
+	            method: "POST",
+	            body: {
+	              create_saved_search: false,
+	              profile: {
+	                first_name: firstName,
+	                last_name: lastName,
+	                preferred_language: preferredLanguage,
+	                preferred_contact_channel: preferredContactChannel,
+	                current_goal: categoryFromFinderGoal(profileData.primary_goal),
+	                timeline: profileData.moving_timeline,
+	                onboarding_completed: true
+	              },
+	              preferences: {
+	                categories: categoryFromFinderGoal(profileData.primary_goal) ? [categoryFromFinderGoal(profileData.primary_goal)] : [],
+	                preferred_locations: profileData.preferred_areas && !profileData.preferred_areas.toLowerCase().includes("choose later") ? [profileData.preferred_areas] : [],
+	                max_budget: budgetMaxFromLabel(profileData.budget_range),
+	                currency: "UGX",
+	                timeline: profileData.moving_timeline,
+	                alert_channels: [preferredContactChannel, "in_app"].filter(Boolean),
+	                alert_frequency: "weekly"
+	              }
+	            }
+	          });
+	        }
+	        const updatedUser = res?.data?.user;
+	        persistAuthState(authState.token, updatedUser || authState.user);
+	        await trackEvent("account_profile_update", { role: authState?.user?.role || "" });
+	        const msg = document.getElementById("account-profile-status-msg");
+	        if (msg) {
+	          msg.textContent = dashboardText("profileSaved");
+	          msg.classList.remove("hidden");
+	        }
+	        toast(dashboardText("profileSaved"));
+	        renderFinderDashboard();
+	      } catch (error) {
+	        toast(error.message || "Could not update profile.");
+	      } finally {
+	        setButtonLoading("account-save-btn", false, dashboardText("saveChanges"));
+	      }
+	    }
 
     async function submitAccountPassword() {
       if (!authState?.token) {
@@ -14739,17 +15376,22 @@
           }
         });
         const oldEl = document.getElementById("account-old-password");
-        const newEl = document.getElementById("account-new-password");
-        if (oldEl) oldEl.value = "";
-        if (newEl) newEl.value = "";
-        await trackEvent("account_password_change", {});
-        toast("Password updated.");
-      } catch (error) {
-        toast(error.message || "Could not update password.");
-      } finally {
-        setButtonLoading("account-password-btn", false, "Update Password");
-      }
-    }
+	        const newEl = document.getElementById("account-new-password");
+	        if (oldEl) oldEl.value = "";
+	        if (newEl) newEl.value = "";
+	        await trackEvent("account_password_change", {});
+	        const msg = document.getElementById("account-password-status-msg");
+	        if (msg) {
+	          msg.textContent = dashboardText("passwordChanged");
+	          msg.classList.remove("hidden");
+	        }
+	        toast(dashboardText("passwordChanged"));
+	      } catch (error) {
+	        toast(error.message || "Could not update password.");
+	      } finally {
+	        setButtonLoading("account-password-btn", false, dashboardText("updatePassword"));
+	      }
+	    }
 
     function signOut() {
       trackEvent("auth_sign_out", {});
@@ -14784,14 +15426,14 @@
         resolvedUser.portal_mode = "finder";
         toast("This account is not marked as admin. Opening property finder dashboard.");
       }
-      persistAuthState(token, resolvedUser);
-      hydrateAccountForm();
-      closeModal("auth-modal");
-      closeAccountAccessDrawer();
-      await trackEvent("auth_success", { source, role: user.role || "" });
-      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
-      openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
-    }
+	      persistAuthState(token, resolvedUser);
+	      hydrateAccountForm();
+	      closeModal("auth-modal");
+	      closeAccountAccessDrawer();
+	      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
+	      openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
+	      trackEvent("auth_success", { source, role: user.role || "" }).catch(() => {});
+	    }
 
     function socialProviderSetupMessage(provider) {
       return "Social sign-in is temporarily disabled. Please use phone/email and password.";

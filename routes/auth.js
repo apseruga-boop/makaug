@@ -88,6 +88,7 @@ function sanitizeProfileData(input = {}) {
     'preferred_areas',
     'budget_range',
     'moving_timeline',
+    'preferred_contact_channel',
     'university',
     'student_campus',
     'student_university',
@@ -1464,40 +1465,73 @@ router.patch('/me', async (req, res, next) => {
     const user = current.rows[0];
     const firstName = cleanText(req.body.first_name) || user.first_name;
     const lastName = cleanText(req.body.last_name) || user.last_name;
+    const nextPhone = req.body.phone !== undefined ? normalizeUgPhone(req.body.phone) : user.phone;
     const emailInput = req.body.email !== undefined ? cleanText(req.body.email).toLowerCase() : user.email;
     const marketingOptIn = req.body.marketing_opt_in === undefined ? user.marketing_opt_in : parseBooleanLike(req.body.marketing_opt_in, true);
     const weeklyTipsOptIn = req.body.weekly_tips_opt_in === undefined ? user.weekly_tips_opt_in : parseBooleanLike(req.body.weekly_tips_opt_in, true);
     const preferredContactInput = cleanText(req.body.preferred_contact_channel).toLowerCase();
-    const preferredContactChannel = ['whatsapp', 'phone', 'email'].includes(preferredContactInput)
+    const preferredContactChannel = ['whatsapp', 'email'].includes(preferredContactInput)
       ? preferredContactInput
-      : (user.preferred_contact_channel || 'whatsapp');
+      : (['whatsapp', 'email'].includes(user.preferred_contact_channel) ? user.preferred_contact_channel : 'whatsapp');
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
     const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
       ? preferredLanguageInput
       : (user.preferred_language || 'en');
+    const profileDataPatch = sanitizeProfileData(req.body.profile_data);
+    const phoneChanged = Boolean(nextPhone && nextPhone !== user.phone);
 
     if (emailInput && !isValidEmail(emailInput)) {
       return res.status(400).json({ ok: false, error: 'email is invalid' });
+    }
+    if (nextPhone && (!isValidPhone(nextPhone) || !isValidUgPhone(nextPhone))) {
+      return res.status(400).json({ ok: false, error: 'phone must be a valid Uganda number' });
     }
 
     const updated = await db.query(
       `UPDATE users
        SET first_name = $2,
            last_name = $3,
-           email = $4,
-           marketing_opt_in = $5,
-           weekly_tips_opt_in = $6,
-           preferred_contact_channel = $7,
-           preferred_language = $8
+           phone = $4,
+           phone_verified = CASE WHEN $5 THEN FALSE ELSE phone_verified END,
+           email = $6,
+           marketing_opt_in = $7,
+           weekly_tips_opt_in = $8,
+           preferred_contact_channel = $9,
+           preferred_language = $10,
+           profile_data = COALESCE(profile_data, '{}'::jsonb) || $11::jsonb,
+           updated_at = NOW()
        WHERE id = $1
        RETURNING *`,
-      [auth.userId, firstName, lastName, emailInput || null, marketingOptIn, weeklyTipsOptIn, preferredContactChannel, preferredLanguage]
+      [
+        auth.userId,
+        firstName,
+        lastName,
+        nextPhone || null,
+        phoneChanged,
+        emailInput || null,
+        marketingOptIn,
+        weeklyTipsOptIn,
+        preferredContactChannel,
+        preferredLanguage,
+        JSON.stringify(profileDataPatch)
+      ]
     );
+
+    if (phoneChanged) {
+      await logNotification(db, {
+        userId: auth.userId,
+        recipientPhone: nextPhone,
+        channel: 'in_app',
+        type: 'account_phone_changed',
+        status: 'logged',
+        payloadSummary: { verification_required: true }
+      });
+    }
 
     return res.json({ ok: true, data: { user: publicUser(updated.rows[0]) } });
   } catch (error) {
     if (error.code === '23505') {
-      return res.status(409).json({ ok: false, error: 'Email already in use' });
+      return res.status(409).json({ ok: false, error: 'Email or phone already in use' });
     }
     return next(error);
   }
