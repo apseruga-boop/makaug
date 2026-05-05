@@ -634,6 +634,15 @@ function run() {
   assert(sourceHtml.includes('id="hero-bedrooms-f"'), 'homepage lower filter row should include Bedrooms');
   assert(sourceHtml.includes('id="hero-filters-btn"'), 'homepage lower filter row should include a Filters button');
   assert(sourceHtml.includes('id="hero-advanced-filters-panel"'), 'Filters button should open a real advanced filters panel');
+  assert(sourceHtml.includes('HERO_FILTER_CONFIG_BY_TAB'), 'homepage filters should be category-aware');
+  assert(sourceHtml.includes('commercial: { propertyLabelKey: "heroCommercialType", showBedrooms: false'), 'Commercial homepage search should hide bedroom filters');
+  assert(sourceHtml.includes('land: { propertyLabelKey: "heroLandType", showBedrooms: false'), 'Land homepage search should hide bedroom filters');
+  assert(sourceHtml.includes('HERO_PROPERTY_TYPE_OPTIONS_BY_TAB'), 'homepage Property Type options should change by category');
+  assert(sourceHtml.includes('HERO_PRICE_OPTIONS_BY_TAB'), 'homepage Min/Max Price options should change by category');
+  assert(sourceHtml.includes('setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms))'), 'homepage should toggle Bedrooms visibility from category config');
+  assert(sourceHtml.includes('payload.commercialType = filters.commercialType'), 'homepage commercial searches should send commercialType to the backend');
+  assert(sourceHtml.includes('payload.landTitleType = filters.landTitleType'), 'homepage land searches should send landTitleType to the backend');
+  assert(!sourceHtml.includes('Manual area, radius, and property filters stay active.'), 'homepage advanced filters should not show the removed manual/radius helper copy');
   assert(sourceHtml.includes('No exact matches yet.'), 'search no-results state should use the required launch copy');
   assert(sourceHtml.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
   assert(sourceHtml.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');

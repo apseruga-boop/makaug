@@ -111,6 +111,10 @@
     .hero-filter-field {
       padding: 0 14px;
     }
+    .hero-filter-field[hidden],
+    .hero-filter-button[hidden] {
+      display: none;
+    }
     .hero-filter-field:focus-visible,
     .hero-filter-button:focus-visible {
       border-color: rgba(34, 197, 94, 0.65);
@@ -119,14 +123,21 @@
     .hero-filter-button {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      gap: 8px;
-      background: #ecfdf5;
-      color: #14532d;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 14px;
+      background: rgba(255, 255, 255, 0.96);
+      color: #1f2937;
       cursor: pointer;
     }
+    .hero-filter-button-main {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
     .hero-filter-button:hover {
-      background: #dcfce7;
+      background: #ffffff;
+      border-color: rgba(187, 247, 208, 0.9);
       transform: translateY(-1px);
     }
     .hero-advanced-panel {
@@ -1239,7 +1250,7 @@
             <button id="hero-search-btn" onclick="doSearch()" class="hero-search-btn">Search</button>
           </div>
 
-          <div id="hero-filter-row" class="hero-filter-row grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_.8fr_auto] gap-2">
+          <div id="hero-filter-row" class="hero-filter-row grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <label for="hero-property-type-f" class="sr-only">Property Type</label>
             <select id="hero-property-type-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Property Type"></select>
 
@@ -1253,8 +1264,11 @@
             <select id="hero-bedrooms-f" onchange="onHeroFilterChanged()" class="hero-filter-field" aria-label="Bedrooms"></select>
 
             <button id="hero-filters-btn" type="button" onclick="toggleHeroAdvancedFilters()" class="hero-filter-button" aria-expanded="false" aria-controls="hero-advanced-filters-panel">
-              <i class="fas fa-sliders" aria-hidden="true"></i>
-              <span id="hero-filters-label">Filters</span>
+              <span class="hero-filter-button-main">
+                <i class="fas fa-sliders" aria-hidden="true"></i>
+                <span id="hero-filters-label">Filters</span>
+              </span>
+              <i class="fas fa-chevron-down text-sm text-gray-700" aria-hidden="true"></i>
             </button>
           </div>
 
@@ -1300,7 +1314,6 @@
                 <button id="hero-clear-filters-btn" type="button" onclick="clearHeroFilters()" class="rounded-xl bg-white border border-green-200 text-green-800 text-sm font-black px-3 py-2">Clear</button>
               </div>
             </div>
-            <p id="hero-advanced-helper" class="mt-2 text-xs font-bold text-green-800">Manual area, radius, and property filters stay active.</p>
           </div>
         </div>
       </div>
@@ -5986,6 +5999,47 @@
       { value: "shop", labelKey: "heroTypeShop" },
       { value: "warehouse", labelKey: "heroTypeWarehouse" }
     ];
+    const HERO_PROPERTY_TYPE_OPTIONS_BY_TAB = {
+      sale: [
+        { value: "", labelKey: "heroAny" },
+        { value: "house", labelKey: "heroTypeHouse" },
+        { value: "apartment", labelKey: "heroTypeApartment" },
+        { value: "bungalow", labelKey: "heroTypeBungalow" },
+        { value: "studio", labelKey: "heroTypeStudio" }
+      ],
+      rent: [
+        { value: "", labelKey: "heroAny" },
+        { value: "house", labelKey: "heroTypeHouse" },
+        { value: "apartment", labelKey: "heroTypeApartment" },
+        { value: "bungalow", labelKey: "heroTypeBungalow" },
+        { value: "studio", labelKey: "heroTypeStudio" },
+        { value: "room", labelKey: "heroTypeRoom" }
+      ],
+      students: [
+        { value: "", labelKey: "heroAny" },
+        { value: "hostel", labelKey: "heroTypeHostel" },
+        { value: "room", labelKey: "heroTypeRoom" },
+        { value: "shared", labelKey: "heroTypeSharedRoom" },
+        { value: "self-contained", labelKey: "heroTypeSelfContained" },
+        { value: "studio", labelKey: "heroTypeStudio" },
+        { value: "apartment", labelKey: "heroTypeApartment" }
+      ],
+      commercial: [
+        { value: "", labelKey: "heroAny" },
+        { value: "commercial space", labelKey: "heroTypeCommercialSpace" },
+        { value: "office", labelKey: "heroTypeOffice" },
+        { value: "shop", labelKey: "heroTypeShop" },
+        { value: "retail", labelKey: "heroTypeRetail" },
+        { value: "warehouse", labelKey: "heroTypeWarehouse" }
+      ],
+      land: [
+        { value: "", labelKey: "heroAny" },
+        { value: "residential", labelKey: "heroTypeResidentialPlot" },
+        { value: "commercial", labelKey: "heroTypeCommercialPlot" },
+        { value: "agricultural", labelKey: "heroTypeAgriculturalLand" },
+        { value: "land", labelKey: "heroTypeLand" }
+      ]
+    };
     const HERO_PRICE_OPTIONS_UGX = [
       { value: "", labelKey: "heroAny" },
       { value: "100000", label: "USh 100K" },
@@ -6000,6 +6054,53 @@
       { value: "500000000", label: "USh 500M" },
       { value: "1000000000", label: "USh 1B+" }
     ];
+    const HERO_PRICE_OPTIONS_BY_TAB = {
+      sale: [
+        { value: "", labelKey: "heroAny" },
+        { value: "50000000", label: "USh 50M" },
+        { value: "100000000", label: "USh 100M" },
+        { value: "200000000", label: "USh 200M" },
+        { value: "500000000", label: "USh 500M" },
+        { value: "1000000000", label: "USh 1B+" }
+      ],
+      rent: [
+        { value: "", labelKey: "heroAny" },
+        { value: "100000", label: "USh 100K" },
+        { value: "300000", label: "USh 300K" },
+        { value: "500000", label: "USh 500K" },
+        { value: "1000000", label: "USh 1M" },
+        { value: "2000000", label: "USh 2M" },
+        { value: "5000000", label: "USh 5M" },
+        { value: "10000000", label: "USh 10M" }
+      ],
+      students: [
+        { value: "", labelKey: "heroAny" },
+        { value: "100000", label: "USh 100K" },
+        { value: "300000", label: "USh 300K" },
+        { value: "500000", label: "USh 500K" },
+        { value: "1000000", label: "USh 1M" },
+        { value: "2000000", label: "USh 2M" },
+        { value: "5000000", label: "USh 5M" }
+      ],
+      commercial: [
+        { value: "", labelKey: "heroAny" },
+        { value: "500000", label: "USh 500K" },
+        { value: "1000000", label: "USh 1M" },
+        { value: "2000000", label: "USh 2M" },
+        { value: "5000000", label: "USh 5M" },
+        { value: "10000000", label: "USh 10M" },
+        { value: "50000000", label: "USh 50M" },
+        { value: "100000000", label: "USh 100M" }
+      ],
+      land: [
+        { value: "", labelKey: "heroAny" },
+        { value: "10000000", label: "USh 10M" },
+        { value: "50000000", label: "USh 50M" },
+        { value: "100000000", label: "USh 100M" },
+        { value: "500000000", label: "USh 500M" },
+        { value: "1000000000", label: "USh 1B+" }
+      ]
+    };
     const HERO_BEDROOM_OPTIONS = [
       { value: "", labelKey: "heroAny" },
       { value: "studio", labelKey: "heroBedroomStudio" },
@@ -6009,6 +6110,13 @@
       { value: "4", label: "4" },
       { value: "5", label: "5+" }
     ];
+    const HERO_FILTER_CONFIG_BY_TAB = {
+      sale: { propertyLabelKey: "heroPropertyType", showBedrooms: true, showBathrooms: true },
+      rent: { propertyLabelKey: "heroPropertyType", showBedrooms: true, showBathrooms: true },
+      students: { propertyLabelKey: "heroRoomType", showBedrooms: true, showBathrooms: true },
+      commercial: { propertyLabelKey: "heroCommercialType", showBedrooms: false, showBathrooms: false },
+      land: { propertyLabelKey: "heroLandType", showBedrooms: false, showBathrooms: false }
+    };
 
     const SAVED_IDS_STORAGE_KEY = "makaug_saved_ids_by_user";
     const PENDING_SAVE_STORAGE_KEY = "makaug_pending_save_property_id";
@@ -6066,7 +6174,15 @@
         heroTypeOffice: "Office",
         heroTypeShop: "Shop",
         heroTypeWarehouse: "Warehouse",
-        heroAdvancedHelper: "Manual area, radius, and property filters stay active.",
+        heroCommercialType: "Commercial Type",
+        heroLandType: "Land Type",
+        heroRoomType: "Room Type",
+        heroTypeRetail: "Retail",
+        heroTypeResidentialPlot: "Residential plot",
+        heroTypeCommercialPlot: "Commercial plot",
+        heroTypeAgriculturalLand: "Agricultural land",
+        heroTypeSelfContained: "Self-contained",
+        heroTypeSharedRoom: "Shared room",
         heroBathrooms: "Bathrooms",
         heroAmenities: "Amenities",
         heroRadius: "Radius",
@@ -6186,7 +6302,15 @@
         heroTypeOffice: "Office",
         heroTypeShop: "Shop",
         heroTypeWarehouse: "Warehouse",
-        heroAdvancedHelper: "Ekifo, radius, ne filters bisigala bikola.",
+        heroCommercialType: "Ekika kya commercial",
+        heroLandType: "Ekika ky'ettaka",
+        heroRoomType: "Ekika ky'ekisenge",
+        heroTypeRetail: "Retail",
+        heroTypeResidentialPlot: "Residential plot",
+        heroTypeCommercialPlot: "Commercial plot",
+        heroTypeAgriculturalLand: "Agricultural land",
+        heroTypeSelfContained: "Self-contained",
+        heroTypeSharedRoom: "Shared room",
         heroBathrooms: "Bathrooms",
         heroAmenities: "Amenities",
         heroRadius: "Radius",
@@ -6282,7 +6406,15 @@
         heroTypeOffice: "Ofisi",
         heroTypeShop: "Duka",
         heroTypeWarehouse: "Ghala",
-        heroAdvancedHelper: "Eneo, radius, na vichujio vya mali vinabaki kutumika.",
+        heroCommercialType: "Aina ya biashara",
+        heroLandType: "Aina ya ardhi",
+        heroRoomType: "Aina ya chumba",
+        heroTypeRetail: "Rejareja",
+        heroTypeResidentialPlot: "Kiwanja cha makazi",
+        heroTypeCommercialPlot: "Kiwanja cha biashara",
+        heroTypeAgriculturalLand: "Ardhi ya kilimo",
+        heroTypeSelfContained: "Self-contained",
+        heroTypeSharedRoom: "Chumba cha pamoja",
         heroBathrooms: "Bafu",
         heroAmenities: "Vistawishi",
         heroRadius: "Radius",
@@ -21200,20 +21332,36 @@
       }
     }
 
+    function heroCurrentFilterConfig() {
+      return HERO_FILTER_CONFIG_BY_TAB[currentTab] || HERO_FILTER_CONFIG_BY_TAB.sale;
+    }
+
+    function setHeroFilterControlVisible(id, visible) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.hidden = !visible;
+      el.disabled = !visible;
+      if (!visible) el.value = "";
+    }
+
     function applyHeroSearchLanguageUI() {
       const heroInput = document.getElementById("hero-q");
       if (heroInput) {
         heroInput.placeholder = tr(`ph${currentTab === "sale" ? "Sale" : currentTab === "rent" ? "Rent" : currentTab === "students" ? "Students" : currentTab === "commercial" ? "Commercial" : "Land"}`) || "City, area, suburb or landmark";
       }
-      setHeroSelectOptions("hero-property-type-f", HERO_PROPERTY_TYPE_OPTIONS, "heroPropertyType");
-      setHeroSelectOptions("hero-min-price-f", HERO_PRICE_OPTIONS_UGX, "heroMinPrice");
-      setHeroSelectOptions("hero-max-price-f", HERO_PRICE_OPTIONS_UGX, "heroMaxPrice");
+      const config = heroCurrentFilterConfig();
+      const typeOptions = HERO_PROPERTY_TYPE_OPTIONS_BY_TAB[currentTab] || HERO_PROPERTY_TYPE_OPTIONS;
+      const priceOptions = HERO_PRICE_OPTIONS_BY_TAB[currentTab] || HERO_PRICE_OPTIONS_UGX;
+      setHeroSelectOptions("hero-property-type-f", typeOptions, config.propertyLabelKey || "heroPropertyType");
+      setHeroSelectOptions("hero-min-price-f", priceOptions, "heroMinPrice");
+      setHeroSelectOptions("hero-max-price-f", priceOptions, "heroMaxPrice");
       setHeroSelectOptions("hero-bedrooms-f", HERO_BEDROOM_OPTIONS, "heroBedrooms");
+      setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms));
       setTextById("hero-filters-label", tr("heroFilters"));
-      setTextById("hero-advanced-helper", tr("heroAdvancedHelper"));
 
       const bathrooms = document.getElementById("hero-bathrooms-f");
       if (bathrooms?.options?.[0]) bathrooms.options[0].textContent = tr("heroBathrooms");
+      setHeroFilterControlVisible("hero-bathrooms-f", Boolean(config.showBathrooms));
       const amenities = document.getElementById("hero-amenities-f");
       if (amenities?.options?.[0]) amenities.options[0].textContent = tr("heroAmenities");
       const radius = document.getElementById("hero-radius-advanced-f");
@@ -21228,18 +21376,22 @@
     }
 
     function getHeroFilterValues() {
+      const config = heroCurrentFilterConfig();
       const minPrice = parseInt(document.getElementById("hero-min-price-f")?.value || "0", 10) || 0;
       const maxPrice = parseInt(document.getElementById("hero-max-price-f")?.value || "0", 10) || 0;
-      const bedroomsRaw = document.getElementById("hero-bedrooms-f")?.value || "";
+      const bedroomsRaw = config.showBedrooms ? (document.getElementById("hero-bedrooms-f")?.value || "") : "";
       const radiusMiles = parseFloat(document.getElementById("hero-radius-advanced-f")?.value || String(DEFAULT_NEAR_ME_RADIUS_MI)) || DEFAULT_NEAR_ME_RADIUS_MI;
+      const propertyType = (document.getElementById("hero-property-type-f")?.value || "").trim();
       return {
-        propertyType: (document.getElementById("hero-property-type-f")?.value || "").trim(),
+        propertyType,
         minPrice,
         maxPrice,
         currency: activeCur || "UGX",
         bedrooms: bedroomsRaw,
-        bathrooms: parseInt(document.getElementById("hero-bathrooms-f")?.value || "0", 10) || 0,
+        bathrooms: config.showBathrooms ? (parseInt(document.getElementById("hero-bathrooms-f")?.value || "0", 10) || 0) : 0,
         amenities: (document.getElementById("hero-amenities-f")?.value || "").trim(),
+        commercialType: currentTab === "commercial" ? propertyType : "",
+        landTitleType: currentTab === "land" ? propertyType : "",
         radiusMiles,
         radiusKm: milesToKm(radiusMiles),
         sort: document.getElementById("hero-sort-f")?.value || "newest"
@@ -23717,6 +23869,10 @@
       if (filters.bedrooms) payload.bedrooms = filters.bedrooms;
       if (filters.bathrooms) payload.bathrooms = filters.bathrooms;
       if (filters.amenities) payload.amenities = filters.amenities;
+      if (filters.commercialType) payload.commercialType = filters.commercialType;
+      if (filters.commercialType) payload.commercial_type = filters.commercialType;
+      if (filters.landTitleType) payload.landTitleType = filters.landTitleType;
+      if (filters.landTitleType) payload.land_title_type = filters.landTitleType;
       if (filters.sort) payload.sort = filters.sort;
       if (nearState) {
         payload.lat = nearState.lat;
