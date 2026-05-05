@@ -9389,8 +9389,42 @@
       if (user?.role === "field_agent") return "field_agent";
       if (user?.role === "agent_broker") return "agent";
       if (profileData.account_kind === "advertiser" || profileData.audience === "advertiser") return "advertiser";
-      if (profileData.account_kind === "student" || profileData.seeker_type === "student") return "student";
-      return "finder";
+	      if (profileData.account_kind === "student" || profileData.seeker_type === "student") return "student";
+	      return "finder";
+	    }
+
+    function portalModeForDashboardUrl(url = "") {
+      const path = String(url || "").split("#")[0].split("?")[0].replace(/\/+$/, "") || "/";
+      return {
+        "/admin": "admin",
+        "/dashboard": "finder",
+        "/student-dashboard": "student",
+        "/broker-dashboard": "agent",
+        "/field-agent-dashboard": "field_agent",
+        "/advertiser-dashboard": "advertiser"
+      }[path] || "";
+    }
+
+    function dashboardRouteForPortalMode(mode = "finder") {
+      return {
+        admin: "/admin",
+        finder: "/dashboard",
+        student: "/student-dashboard",
+        agent: "/broker-dashboard",
+        field_agent: "/field-agent-dashboard",
+        advertiser: "/advertiser-dashboard"
+      }[String(mode || "finder").toLowerCase()] || "/dashboard";
+    }
+
+    function dashboardPageForPortalMode(mode = "finder") {
+      return {
+        admin: "admin-dashboard",
+        finder: "finder-dashboard",
+        student: "student-dashboard",
+        agent: "agent-dashboard",
+        field_agent: "field-dashboard",
+        advertiser: "advertiser-dashboard"
+      }[String(mode || "finder").toLowerCase()] || "finder-dashboard";
     }
 
     function timeOfDayGreeting() {
@@ -10018,15 +10052,21 @@
       updateAuthSignUpUi();
     }
 
-    function openSignedInDashboard() {
-      if (!authState?.user) {
-        openAuthSignIn("finder");
-        return;
-      }
-      const mode = derivePortalMode(authState.user, authState.user.portal_mode);
-      if (mode === "admin") {
-        showPage("admin-dashboard");
-        renderAdminDashboard();
+	    function openSignedInDashboard(targetUrl = "") {
+	      if (!authState?.user) {
+	        openAuthSignIn("finder");
+	        return;
+	      }
+	      const mode = portalModeForDashboardUrl(targetUrl) || derivePortalMode(authState.user, authState.user.portal_mode);
+	      const targetPage = dashboardPageForPortalMode(mode);
+	      const targetRoute = targetUrl || dashboardRouteForPortalMode(mode);
+	      if (!document.getElementById(`page-${targetPage}`) && targetRoute) {
+	        window.location.href = targetRoute;
+	        return;
+	      }
+	      if (mode === "admin") {
+	        showPage("admin-dashboard");
+	        renderAdminDashboard();
       } else if (mode === "agent") {
         showPage("agent-dashboard");
         renderAgentDashboard();
@@ -14464,9 +14504,10 @@
       const previousUser = authState?.user || null;
       let resolvedUser = user || null;
       if (resolvedUser) {
+        const sameUser = previousUser && String(previousUser.id || "") === String(resolvedUser.id || "");
         resolvedUser = {
           ...resolvedUser,
-          portal_mode: resolvedUser.portal_mode || previousUser?.portal_mode || derivePortalMode(resolvedUser),
+          portal_mode: resolvedUser.portal_mode || (sameUser ? previousUser?.portal_mode : "") || derivePortalMode(resolvedUser),
           is_demo: Boolean(resolvedUser.is_demo)
         };
       }
@@ -14728,7 +14769,8 @@
       const token = data?.token;
       const user = data?.user;
       if (!token || !user) throw new Error("Authentication response is incomplete");
-      const resolvedMode = derivePortalMode(user, preferredAudience);
+      const responseRedirect = data?.redirectUrl || data?.redirect_url || "";
+      const resolvedMode = derivePortalMode(user, preferredAudience || portalModeForDashboardUrl(responseRedirect));
       const resolvedUser = { ...user, portal_mode: resolvedMode };
       if (preferredAudience === "agent" && user.role !== "agent_broker") {
         resolvedUser.portal_mode = "finder";
@@ -14748,7 +14790,7 @@
       closeAccountAccessDrawer();
       await trackEvent("auth_success", { source, role: user.role || "" });
       toast(data?.message || `Welcome, ${user.first_name || "user"}`);
-      openSignedInDashboard();
+      openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
     }
 
     function socialProviderSetupMessage(provider) {
@@ -14824,7 +14866,7 @@
       try {
         const res = await apiRequest("/api/auth/login", {
           method: "POST",
-          body: isEmailLogin ? { email, password } : { phone, password }
+          body: isEmailLogin ? { email, password, audience } : { phone, password, audience }
         });
         await finalizeAuth(res?.data, "password", audience);
       } catch (error) {
@@ -20307,7 +20349,7 @@
       try {
         const res = await apiRequest("/api/auth/login", {
           method: "POST",
-          body: isEmailLogin ? { email, password } : { phone, password }
+          body: isEmailLogin ? { email, password, audience: accountAccessDrawerAudience } : { phone, password, audience: accountAccessDrawerAudience }
         });
         await finalizeAuth(res?.data, "password", accountAccessDrawerAudience);
       } catch (error) {

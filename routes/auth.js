@@ -1051,6 +1051,7 @@ router.post('/login', async (req, res, next) => {
     const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
     const password = cleanText(req.body.password);
+    const preferredAudience = normalizeSignupAudience(req.body.audience || req.body.preferred_audience || '');
 
     if ((!phone && !email) || !password) {
       return res.status(400).json({ ok: false, error: 'phone/email and password are required' });
@@ -1084,16 +1085,22 @@ router.post('/login', async (req, res, next) => {
     await recordAdminLogin(db, user, req);
     setAuthCookie(req, res, token);
 
+    const successPayload = buildOtpSuccessPayload({
+      token,
+      user: publicUser(user),
+      preferredAudience,
+      message: 'Signed in. Opening your makaug.com dashboard.'
+    });
+    if (adminSecurity) {
+      successPayload.admin_security = {
+        mfa_enabled: adminSecurity.mfa_enabled === true,
+        force_password_change: adminSecurity.force_password_change === true
+      };
+    }
+
     return res.json({
       ok: true,
-      data: {
-        token,
-        user: publicUser(user),
-        admin_security: adminSecurity ? {
-          mfa_enabled: adminSecurity.mfa_enabled === true,
-          force_password_change: adminSecurity.force_password_change === true
-        } : undefined
-      }
+      data: successPayload
     });
   } catch (error) {
     return next(error);

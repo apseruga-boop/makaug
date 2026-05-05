@@ -497,6 +497,9 @@ function run() {
   assert(sourceHtml.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
   assert(authRoutes.includes("router.post('/request-signup-otp'"), 'auth route should support pre-account signup OTP delivery');
   assert(authRoutes.includes("router.post('/verify-signup-otp'"), 'auth route should verify signup contact before account creation');
+  assert(authRoutes.includes("const preferredAudience = normalizeSignupAudience(req.body.audience"), 'password login should accept selected account audience for dashboard redirect');
+  assert(authRoutes.includes("message: 'Signed in. Opening your makaug.com dashboard.'"), 'password login should return a dashboard handoff message');
+  assert(authRoutes.includes('data: successPayload'), 'password login should return redirectUrl/session handoff payload');
   assert(authRoutes.includes('Verification OTP sent by SMS'), 'auth register route should report SMS OTP delivery accurately');
   assert(authRoutes.includes('terms_accepted is required'), 'auth register route should enforce terms acceptance on the backend');
   assert(authRoutes.includes('privacy_accepted is required'), 'auth register route should enforce privacy acceptance on the backend');
@@ -508,6 +511,11 @@ function run() {
   assert(sourceHtml.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
   assert(sourceHtml.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
   assert(sourceHtml.includes('id="account-access-forgot-wrap"'), 'forgot password should use inline drawer fields instead of prompt-only reset');
+  assert(sourceHtml.includes('portalModeForDashboardUrl'), 'auth success should understand backend dashboard redirect URLs');
+  assert(sourceHtml.includes('dashboardPageForPortalMode'), 'auth success should map dashboard redirects to mounted dashboard pages');
+  assert(sourceHtml.includes('window.location.href = targetRoute'), 'auth success should full-load protected dashboards when public HTML does not contain them');
+  assert(sourceHtml.includes('openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode)'), 'auth success should force the role-specific dashboard route after sign-in');
+  assert(sourceHtml.includes('audience: accountAccessDrawerAudience'), 'drawer sign-in should send the selected role to the backend');
   const finderScreening = sourceHtml.match(/finder: \[([\s\S]*?)\n\s*\],\n\s*student:/m)?.[1] || '';
   assert(finderScreening.includes('["WhatsApp", "Email"]'), 'property finder preferred contact should be limited to WhatsApp and Email');
 
