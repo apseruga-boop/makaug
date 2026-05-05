@@ -14,11 +14,23 @@ const ROUTES = [
   '/for-sale',
   '/land',
   '/student-accommodation',
+  '/students',
   '/commercial',
   '/brokers',
   '/list-property',
+  '/about',
+  '/how-it-works',
+  '/careers',
+  '/help',
+  '/safety',
+  '/anti-fraud',
+  '/report-fraud',
+  '/privacy-policy',
+  '/cookie-policy',
+  '/terms',
   '/advertise',
   '/mortgage',
+  '/discover-ai-chatbot',
   '/login'
 ];
 
@@ -28,11 +40,23 @@ const EXPECTED_PAGE_IDS = {
   '/for-sale': 'page-sale',
   '/land': 'page-land',
   '/student-accommodation': 'page-students',
+  '/students': 'page-students',
   '/commercial': 'page-commercial',
   '/brokers': 'page-brokers',
   '/list-property': 'page-list-property',
+  '/about': 'page-about',
+  '/how-it-works': 'page-how-it-works',
+  '/careers': 'page-careers',
+  '/help': 'page-help',
+  '/safety': 'page-safety',
+  '/anti-fraud': 'page-fraud',
+  '/report-fraud': 'page-fraud',
+  '/privacy-policy': 'page-privacy-policy',
+  '/cookie-policy': 'page-cookie-policy',
+  '/terms': 'page-terms',
   '/advertise': 'page-advertise',
   '/mortgage': 'page-mortgage',
+  '/discover-ai-chatbot': 'page-ai-chatbot',
   '/login': 'page-login'
 };
 
@@ -154,7 +178,7 @@ async function probeRoute(page, route, viewportName = 'desktop') {
   if (visibleMs > 1500) failures.push(`route body visible after ${visibleMs}ms (target <= 1500ms)`);
   if (significantResponses.length) failures.push(`HTTP failures: ${significantResponses.slice(0, 2).map((f) => `${f.status} ${f.url}`).join(' | ')}`);
   if (consoleErrors.length) failures.push(`console errors: ${consoleErrors.slice(0, 2).join(' | ')}`);
-  if (['/', '/advertise', '/mortgage', '/login'].includes(route) && metrics.googleMapsLoaded) {
+  if (['/', '/about', '/how-it-works', '/careers', '/help', '/safety', '/anti-fraud', '/report-fraud', '/privacy-policy', '/cookie-policy', '/terms', '/advertise', '/mortgage', '/discover-ai-chatbot', '/login'].includes(route) && metrics.googleMapsLoaded) {
     failures.push(`Google Maps loaded on ${route} before active map use`);
   }
 

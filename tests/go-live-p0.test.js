@@ -250,6 +250,12 @@ function run() {
     assert(!sourceHtml.includes(badBrandText), `public-facing brand text should use MakaUg casing: ${badBrandText}`);
   }
   assert(sourceHtml.includes('BrandConfig') && sourceHtml.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
+  assert(sourceHtml.includes('function navigatePublicRoute'), 'frontend should have a SPA route navigator to prevent full-page public route reloads');
+  assert(sourceHtml.includes('installPublicRouteInterceptor'), 'frontend should install the public route click interceptor');
+  assert(sourceHtml.includes('window.history.pushState({ page, source: options.source || "spa_link" }'), 'public route navigation should push history without reloading');
+  assert(!sourceHtml.includes('window.scrollTo({ top: 0, behavior: "smooth" })'), 'route switches should not use smooth scrolling that causes visible transition lag');
+  assert(sourceHtml.includes('closeRouteTransientModals'), 'route switches should close route-specific modal overlays');
+  assert(fs.existsSync(path.join(__dirname, '..', 'scripts', 'probe-route-transitions.js')), 'route transition probe should exist');
   assert(!sourceHtml.includes('Makar') && !sourceHtml.includes('Makai') && !sourceHtml.includes('Makaid') && !sourceHtml.includes('makaug.co.uk'), 'public source should not contain wrong brand variants');
   assert.strictEqual(toCanonicalLanguageCode('rukiga'), 'rkg', 'Rukiga should have a canonical language code');
   assert.strictEqual(toCanonicalLanguageCode('runyankole'), 'rnynk', 'Runyankole should have a canonical language code');

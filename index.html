@@ -17,6 +17,10 @@
   <meta name="twitter:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="twitter:image" content="https://makaug.com/assets/og-cover.jpg">
   <link rel="canonical" href="https://makaug.com/">
+  <link rel="preconnect" href="https://images.unsplash.com">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
   <script src="https://cdn.tailwindcss.com" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -38,7 +42,7 @@
       position: relative;
       min-height: 54vh;
       background-image: linear-gradient(180deg, rgba(4, 21, 33, 0.35) 0%, rgba(3, 20, 31, 0.62) 100%),
-        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=2200&q=80");
+        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=72");
       background-size: cover;
       background-position: center;
     }
@@ -17851,7 +17855,7 @@
         window.location.href = "/advertiser-dashboard?tab=create-campaign";
         return;
       }
-      window.location.href = "/advertise";
+      navigatePublicRoute("/advertise", null, { source: "advertise_cta" });
     }
 
     function handleListPropertyFreeCta(event) {
@@ -17861,7 +17865,7 @@
         signed_in: !!authState?.user
       });
       const inferredType = inferListTypeFromCurrentRoute();
-      window.location.href = `/list-property?type=${encodeURIComponent(inferredType)}`;
+      navigatePublicRoute(`/list-property?type=${encodeURIComponent(inferredType)}`, null, { source: "list_property_cta" });
     }
 
     function getSelectedListPropertyTypeLabel() {
@@ -21478,12 +21482,11 @@
     function openPropertyLinkDetail(event, id, source = "property_link") {
       const anchor = event?.currentTarget?.closest?.("a[href]") || event?.target?.closest?.("a[href]");
       if (!canRenderInlinePropertyDetail()) {
-        if (anchor) return true;
         if (event) {
           event.preventDefault();
           event.stopPropagation();
         }
-        window.location.href = getPropertyDetailPath(id);
+        window.location.href = anchor?.href || getPropertyDetailPath(id);
         return false;
       }
       if (event) {
@@ -22063,76 +22066,165 @@
       ensureRevenuePlacements();
     }
 
-    function routeForPage(page) {
-      const routes = {
-        home: "/",
-        sale: "/for-sale",
-        rent: "/to-rent",
-        students: "/students",
-        commercial: "/commercial",
-        land: "/land",
-        brokers: "/brokers",
-        mortgage: "/mortgage",
-        "ai-chatbot": "/discover-ai-chatbot",
-        advertise: "/advertise",
-        "how-it-works": "/how-it-works",
-        careers: "/careers",
-        help: "/help",
-        safety: "/safety",
-        fraud: "/fraud",
-        "privacy-policy": "/privacy-policy",
-        "cookie-policy": "/cookie-policy",
-        terms: "/terms",
-        "list-property": "/list-property",
-        about: "/about",
-        saved: "/saved",
-        "finder-dashboard": "/dashboard",
-        "student-dashboard": "/student-dashboard",
-        "agent-dashboard": "/broker-dashboard",
-        "field-dashboard": "/field-agent-dashboard",
-        "advertiser-dashboard": "/advertiser-dashboard",
-        "admin-dashboard": "/admin",
-        "admin-docs": "/admin/docs",
-        "admin-setup-status": "/admin/setup-status"
-      };
-      return routes[page] || "";
+    const PAGE_ROUTE_MAP = Object.freeze({
+      home: "/",
+      sale: "/for-sale",
+      rent: "/to-rent",
+      students: "/student-accommodation",
+      commercial: "/commercial",
+      land: "/land",
+      brokers: "/brokers",
+      mortgage: "/mortgage",
+      "ai-chatbot": "/discover-ai-chatbot",
+      advertise: "/advertise",
+      "how-it-works": "/how-it-works",
+      careers: "/careers",
+      help: "/help",
+      safety: "/safety",
+      fraud: "/anti-fraud",
+      "privacy-policy": "/privacy-policy",
+      "cookie-policy": "/cookie-policy",
+      terms: "/terms",
+      "list-property": "/list-property",
+      about: "/about",
+      saved: "/saved",
+      account: "/account",
+      "finder-dashboard": "/dashboard",
+      "student-dashboard": "/student-dashboard",
+      "agent-dashboard": "/broker-dashboard",
+      "field-dashboard": "/field-agent-dashboard",
+      "advertiser-dashboard": "/advertiser-dashboard",
+      "admin-dashboard": "/admin",
+      "admin-docs": "/admin/docs",
+      "admin-setup-status": "/admin/setup-status"
+    });
+
+    const PUBLIC_ROUTE_PAGE_MAP = Object.freeze({
+      "/": "home",
+      "/for-sale": "sale",
+      "/sale": "sale",
+      "/to-rent": "rent",
+      "/rent": "rent",
+      "/students": "students",
+      "/student-accommodation": "students",
+      "/commercial": "commercial",
+      "/land": "land",
+      "/brokers": "brokers",
+      "/find-brokers": "brokers",
+      "/mortgage": "mortgage",
+      "/mortgage-finder": "mortgage",
+      "/discover-ai-chatbot": "ai-chatbot",
+      "/ai-chatbot": "ai-chatbot",
+      "/advertise": "advertise",
+      "/how-it-works": "how-it-works",
+      "/careers": "careers",
+      "/help": "help",
+      "/safety": "safety",
+      "/fraud": "fraud",
+      "/anti-fraud": "fraud",
+      "/report-fraud": "fraud",
+      "/privacy-policy": "privacy-policy",
+      "/cookie-policy": "cookie-policy",
+      "/terms": "terms",
+      "/list-property": "list-property",
+      "/about": "about",
+      "/saved": "saved",
+      "/account": "account"
+    });
+
+    function normalizePageKey(page) {
+      const key = String(page || "").trim();
+      return {
+        "for-sale": "sale",
+        "to-rent": "rent",
+        "student-accommodation": "students",
+        "anti-fraud": "fraud",
+        "report-fraud": "fraud",
+        "broker-dashboard": "agent-dashboard",
+        "field-agent-dashboard": "field-dashboard"
+      }[key] || key;
     }
 
-    function showPage(page) {
+    function normalizeRoutePath(path = "/") {
+      const clean = String(path || "/").split("#")[0].split("?")[0].replace(/\/+$/, "");
+      return clean || "/";
+    }
+
+    function routeForPage(page) {
+      return PAGE_ROUTE_MAP[normalizePageKey(page)] || "";
+    }
+
+    function pageForPublicRoute(path) {
+      return PUBLIC_ROUTE_PAGE_MAP[normalizeRoutePath(path)] || "";
+    }
+
+    function currentPathWithQueryAndHash() {
+      return `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
+    }
+
+    function updateRouteHistoryForPage(page, source = "show_page") {
+      const route = routeForPage(page);
+      if (!route || currentPathWithQueryAndHash() === route) return;
+      try {
+        window.history.pushState({ page, source }, "", route);
+      } catch (error) {}
+    }
+
+    function closeRouteTransientModals(nextPage, previousPage) {
+      if (!previousPage || nextPage === previousPage) return;
+      const modalIds = [];
+      if (nextPage !== "list-property") modalIds.push("list-choice-modal", "listing-submit-modal");
+      if (nextPage !== "detail") modalIds.push("save-property-modal", "report-modal");
+      if (nextPage !== "ai-chatbot") modalIds.push("howto-video-modal");
+      modalIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el?.classList.contains("open")) el.classList.remove("open");
+      });
+      if (modalIds.length) syncModalOpenState();
+    }
+
+    function showPage(page, options = {}) {
+      const targetPage = normalizePageKey(page);
       const previousPage = currentPage;
-      document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
-      const el = document.getElementById("page-" + page);
+      const el = document.getElementById("page-" + targetPage);
       if (el) {
-        el.classList.add("active");
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (!el.classList.contains("active")) {
+          document.querySelectorAll(".page.active").forEach((p) => {
+            if (p !== el) p.classList.remove("active");
+          });
+          el.classList.add("active");
+        }
+        if (options.scroll !== false) window.scrollTo({ top: 0, left: 0, behavior: "auto" });
         lastPage = currentPage;
-        currentPage = page;
+        currentPage = targetPage;
+        closeRouteTransientModals(targetPage, previousPage);
+        if (options.history !== false) updateRouteHistoryForPage(targetPage, options.source || "show_page");
       } else {
-        const route = routeForPage(page);
+        const route = routeForPage(targetPage);
         if (route && window.location.pathname !== route) {
-          window.location.href = route;
+          navigatePublicRoute(route, null, { source: "show_page_fallback" });
           return;
         }
       }
       closeMobile();
-      setTimeout(() => {
+      window.setTimeout(() => {
         Object.values(maps).forEach((m) => {
           try { m.invalidateSize(); } catch (e) {}
         });
-      }, 200);
-      scheduleMapsInit();
-      if (page && page !== previousPage) {
-        trackEvent("page_view", { page });
+      }, 120);
+      window.requestAnimationFrame(() => scheduleMapsInit());
+      if (targetPage && targetPage !== previousPage) {
+        trackEvent("page_view", { page: targetPage });
       }
-      if (page === "finder-dashboard") renderFinderDashboard();
-      if (page === "student-dashboard") renderStudentDashboard();
-      if (page === "saved") renderSaved();
-      if (page === "agent-dashboard") renderAgentDashboard();
-      if (page === "field-dashboard") renderFieldDashboard();
-      if (page === "advertiser-dashboard") renderAdvertiserDashboard();
-      if (page === "admin-dashboard") renderAdminDashboard();
-      if (page === "admin-setup-status") renderAdminSetupStatus();
-      if (page === "list-property") {
+      if (targetPage === "finder-dashboard") renderFinderDashboard();
+      if (targetPage === "student-dashboard") renderStudentDashboard();
+      if (targetPage === "saved") renderSaved();
+      if (targetPage === "agent-dashboard") renderAgentDashboard();
+      if (targetPage === "field-dashboard") renderFieldDashboard();
+      if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
+      if (targetPage === "admin-dashboard") renderAdminDashboard();
+      if (targetPage === "admin-setup-status") renderAdminSetupStatus();
+      if (targetPage === "list-property") {
         if (previousPage !== "list-property") {
           listWizardStep = 1;
           lpListingPathChoice = "";
@@ -22164,6 +22256,138 @@
           maybeOpenListPropertyChoiceModal();
         }
       }
+    }
+
+    function mountPublicRouteFragment(doc, page) {
+      const incoming = doc.getElementById(`page-${page}`);
+      if (!incoming) return false;
+      const imported = document.importNode(incoming, true);
+      imported.classList.add("active");
+      document.querySelectorAll(".page").forEach((el) => {
+        if (el.id !== imported.id) el.remove();
+      });
+      const existing = document.getElementById(imported.id);
+      if (existing) {
+        existing.replaceWith(imported);
+      } else {
+        const footer = document.querySelector("footer");
+        document.body.insertBefore(imported, footer || document.body.lastElementChild);
+      }
+      doc.querySelectorAll(".modal-overlay").forEach((modal) => {
+        if (!modal.id || document.getElementById(modal.id)) return;
+        document.body.appendChild(document.importNode(modal, true));
+      });
+      return true;
+    }
+
+    async function loadPublicRouteFragment(nextUrl, page, options = {}) {
+      const source = options.source || "spa_fragment";
+      document.documentElement.classList.add("route-loading");
+      try {
+        const response = await fetch(nextUrl, {
+          method: "GET",
+          headers: { Accept: "text/html", "X-MakaUg-Route-Fragment": "1" },
+          credentials: "same-origin"
+        });
+        if (!response.ok) throw new Error(`Route fetch failed (${response.status})`);
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, "text/html");
+        if (!mountPublicRouteFragment(doc, page)) throw new Error(`Route fragment missing page-${page}`);
+        const url = new URL(nextUrl, window.location.origin);
+        const nextPath = `${normalizeRoutePath(url.pathname)}${url.search || ""}${url.hash || ""}`;
+        if (currentPathWithQueryAndHash() !== nextPath) {
+          try { window.history.pushState({ page, source }, "", nextPath); } catch (error) {}
+        }
+        renderAll();
+        renderHowToVideoSections();
+        renderMortgageFinder();
+        filterStudents();
+        filterCommercial();
+        filterLand();
+        wireSearchTypeahead();
+        setLang(currentLang, true, false);
+        showPage(page, { history: false, source, scroll: options.scroll !== false });
+        return true;
+      } catch (error) {
+        console.warn("Falling back to full route navigation", error);
+        window.location.href = nextUrl;
+        return false;
+      } finally {
+        document.documentElement.classList.remove("route-loading");
+      }
+    }
+
+    function navigatePublicRoute(target, event, options = {}) {
+      if (event) event.preventDefault();
+      let url;
+      try {
+        url = new URL(String(target || "/"), window.location.origin);
+      } catch (error) {
+        return true;
+      }
+      if (url.origin !== window.location.origin) return true;
+      const path = normalizeRoutePath(url.pathname);
+      if (path === "/login") {
+        openAuthSignIn(url.searchParams.get("role") || url.searchParams.get("audience") || "finder");
+        const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
+        if (currentPathWithQueryAndHash() !== nextUrl) {
+          try { window.history.pushState({ page: "auth", source: options.source || "spa_login" }, "", nextUrl); } catch (error) {}
+        }
+        return false;
+      }
+      if (["/signup", "/student-signup", "/broker-signup", "/field-agent-signup", "/advertiser-signup"].includes(path) || url.searchParams.get("auth") === "create") {
+        const role = path.includes("student")
+          ? "student"
+          : (path.includes("broker")
+            ? "agent"
+            : (path.includes("field-agent")
+              ? "field_agent"
+              : (path.includes("advertiser") ? "advertiser" : (url.searchParams.get("role") || url.searchParams.get("audience") || "finder"))));
+        openAuthSignUp(role);
+        const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
+        if (currentPathWithQueryAndHash() !== nextUrl) {
+          try { window.history.pushState({ page: "auth-create", role, source: options.source || "spa_signup" }, "", nextUrl); } catch (error) {}
+        }
+        return false;
+      }
+      const page = pageForPublicRoute(path);
+      if (!page) return true;
+      const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
+      if (!document.getElementById(`page-${page}`)) {
+        loadPublicRouteFragment(nextUrl, page, options);
+        return false;
+      }
+      if (currentPathWithQueryAndHash() !== nextUrl) {
+        try { window.history.pushState({ page, source: options.source || "spa_link" }, "", nextUrl); } catch (error) {}
+      }
+      showPage(page, { history: false, source: options.source || "spa_link" });
+      applyHeroSearchHandoff(page);
+      return false;
+    }
+
+    let publicRouteInterceptorInstalled = false;
+    function installPublicRouteInterceptor() {
+      if (publicRouteInterceptorInstalled) return;
+      publicRouteInterceptorInstalled = true;
+      document.addEventListener("click", (event) => {
+        if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const anchor = event.target?.closest?.("a[href]");
+        if (!anchor || anchor.target || anchor.hasAttribute("download") || anchor.dataset.noSpa === "true") return;
+        let url;
+        try {
+          url = new URL(anchor.getAttribute("href"), window.location.origin);
+        } catch (error) {
+          return;
+        }
+        if (url.origin !== window.location.origin) return;
+        const handled = navigatePublicRoute(url, event, { source: "internal_link" });
+        if (handled === false) {
+          event.stopPropagation();
+        }
+      });
+      window.addEventListener("popstate", () => {
+        parseInitialDeepLink();
+      });
     }
 
     function returnToLastPageFromDetail() {
@@ -22427,7 +22651,7 @@
         const bid = agentFromPath || brokerFromQuery;
         const found = findBrokerById(bid);
         if (found) {
-          showPage("brokers");
+          showPage("brokers", { history: false, source: "deep_link" });
           openBrokerProfile(found.id);
           return true;
         }
@@ -22435,7 +22659,7 @@
 
       if (path === "/admin/setup-status") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-          showPage("admin-setup-status");
+          showPage("admin-setup-status", { history: false, source: "deep_link" });
           renderAdminSetupStatus();
         } else {
           openAuthSignIn("admin");
@@ -22445,7 +22669,7 @@
 
       if (path === "/admin/docs") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-          showPage("admin-docs");
+          showPage("admin-docs", { history: false, source: "deep_link" });
         } else {
           openAuthSignIn("admin");
         }
@@ -22454,7 +22678,7 @@
 
       if (path === "/admin" || path === "/admin-dashboard" || path.startsWith("/admin/")) {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-          showPage("admin-dashboard");
+          showPage("admin-dashboard", { history: false, source: "deep_link" });
           renderAdminDashboard();
         } else {
           openAuthSignIn("admin");
@@ -22464,7 +22688,7 @@
 
       if (path === "/advertiser-dashboard") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "advertiser") {
-          showPage("advertiser-dashboard");
+          showPage("advertiser-dashboard", { history: false, source: "deep_link" });
           renderAdvertiserDashboard();
         } else {
           openAuthSignIn("advertiser");
@@ -22474,7 +22698,7 @@
 
       if (path === "/dashboard") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "finder") {
-          showPage("finder-dashboard");
+          showPage("finder-dashboard", { history: false, source: "deep_link" });
           renderFinderDashboard();
         } else {
           openAuthSignIn("finder");
@@ -22484,7 +22708,7 @@
 
       if (path === "/student-dashboard") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "student") {
-          showPage("student-dashboard");
+          showPage("student-dashboard", { history: false, source: "deep_link" });
           renderStudentDashboard();
         } else {
           openAuthSignIn("student");
@@ -22494,7 +22718,7 @@
 
       if (path === "/broker-dashboard") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "agent") {
-          showPage("agent-dashboard");
+          showPage("agent-dashboard", { history: false, source: "deep_link" });
           renderAgentDashboard();
         } else {
           openAuthSignIn("agent");
@@ -22504,7 +22728,7 @@
 
       if (path === "/field-agent-dashboard") {
         if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "field_agent") {
-          showPage("field-dashboard");
+          showPage("field-dashboard", { history: false, source: "deep_link" });
           renderFieldDashboard();
         } else {
           openAuthSignIn("field_agent");
@@ -22512,39 +22736,9 @@
         return true;
       }
 
-      const publicRoutePage = {
-        "/": "home",
-        "/for-sale": "sale",
-        "/sale": "sale",
-        "/to-rent": "rent",
-        "/rent": "rent",
-        "/students": "students",
-        "/student-accommodation": "students",
-        "/commercial": "commercial",
-        "/land": "land",
-        "/brokers": "brokers",
-        "/find-brokers": "brokers",
-        "/mortgage": "mortgage",
-        "/mortgage-finder": "mortgage",
-        "/discover-ai-chatbot": "ai-chatbot",
-        "/ai-chatbot": "ai-chatbot",
-        "/advertise": "advertise",
-        "/how-it-works": "how-it-works",
-        "/careers": "careers",
-        "/help": "help",
-        "/safety": "safety",
-        "/fraud": "fraud",
-        "/anti-fraud": "fraud",
-        "/report-fraud": "fraud",
-        "/privacy-policy": "privacy-policy",
-        "/cookie-policy": "cookie-policy",
-        "/terms": "terms",
-        "/list-property": "list-property",
-        "/about": "about",
-        "/saved": "saved"
-      }[path];
+      const publicRoutePage = pageForPublicRoute(path);
       if (publicRoutePage) {
-        showPage(publicRoutePage);
+        showPage(publicRoutePage, { history: false, source: "deep_link" });
         applyHeroSearchHandoff(publicRoutePage);
         return true;
       }
@@ -27508,6 +27702,7 @@
     }
 
     document.addEventListener("DOMContentLoaded", () => {
+      installPublicRouteInterceptor();
       let savedLang = null;
       try {
         savedLang = localStorage.getItem("makaug_lang");

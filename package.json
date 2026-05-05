@@ -33,6 +33,7 @@
     "probe:public-routes:browser": "node scripts/probe-public-routes-browser.js",
     "probe:click-actions": "node scripts/probe-click-actions.js",
     "probe:backend-connections": "node scripts/probe-backend-connections.js",
+    "probe:route-transitions": "node scripts/probe-route-transitions.js",
     "probe:performance": "node scripts/probe-performance.js",
     "check": "node --check server.js",
     "test:go-live-p0": "node tests/go-live-p0.test.js",

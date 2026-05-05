@@ -314,6 +314,11 @@ async function main() {
         } else {
           await page.waitForLoadState('domcontentloaded', { timeout: 8000 }).catch(() => {});
           await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
+          await page.waitForFunction(({ expectUrl, marker }) => {
+            const pathMatches = expectUrl ? window.location.pathname.startsWith(expectUrl) : true;
+            const textMatches = marker ? document.body.innerText.toLowerCase().includes(String(marker).toLowerCase()) : true;
+            return pathMatches && textMatches;
+          }, { expectUrl: action.expectUrl, marker: action.marker || '' }, { timeout: 6000 }).catch(() => {});
           await page.waitForTimeout(180);
         }
         const text = await visibleText(page);
