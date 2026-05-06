@@ -10,7 +10,12 @@ const BASE_URL = String(process.env.BASE_URL || process.env.QA_BASE_URL || 'http
 let probeRequestCounter = 0;
 
 function read(relPath) {
-  return fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+  const source = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+  if (relPath === 'index.html') {
+    const appPath = path.join(ROOT, 'assets', 'makaug-app.js');
+    if (fs.existsSync(appPath)) return `${source}\n${fs.readFileSync(appPath, 'utf8')}`;
+  }
+  return source;
 }
 
 function has(relPath, needle) {

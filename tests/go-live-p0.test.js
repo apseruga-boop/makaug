@@ -163,6 +163,8 @@ function assertNoProtectedIds(label, html) {
 
 function run() {
   const sourceHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'assets', 'makaug-app.js'), 'utf8');
+  const frontendSource = `${sourceHtml}\n${appSource}`;
   const propertySeekerRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'property-seeker.js'), 'utf8');
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
@@ -231,10 +233,10 @@ function run() {
   assert(!homeText.includes('Discover your perfect maka'), 'old incomplete homepage hero copy should be gone');
   assert(/id="top-signout-link"[^>]*><\/a>/.test(sourceHtml), 'public header sign-out link should start empty until auth is present');
   assert(/id="top-dashboard-link"[^>]*><\/a>/.test(sourceHtml), 'public header dashboard link should start empty until auth is present');
-  assert(sourceHtml.includes('id="top-dashboard-link"'), 'logged-in header dashboard link target should exist');
-  assert(sourceHtml.includes('openSignedInDashboard()'), 'dashboard header link should route to the role dashboard');
-  assert(sourceHtml.includes('translateListingLabel("Sign Out")'), 'logged-in header should inject Sign Out through auth UI');
-  assert(sourceHtml.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
+  assert(frontendSource.includes('id="top-dashboard-link"'), 'logged-in header dashboard link target should exist');
+  assert(frontendSource.includes('openSignedInDashboard()'), 'dashboard header link should route to the role dashboard');
+  assert(frontendSource.includes('translateListingLabel("Sign Out")'), 'logged-in header should inject Sign Out through auth UI');
+  assert(frontendSource.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
   assert(homeText.includes('© 2026 makaug.com. All rights reserved.'), 'homepage footer should use lowercase public brand copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
   for (const badBrandText of [
@@ -251,14 +253,14 @@ function run() {
   ]) {
     assert(!homeText.includes(badBrandText), `public-facing homepage text should use makaug.com display: ${badBrandText}`);
   }
-  assert(sourceHtml.includes('BrandConfig') && sourceHtml.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
-  assert(sourceHtml.includes('function navigatePublicRoute'), 'frontend should have a SPA route navigator to prevent full-page public route reloads');
-  assert(sourceHtml.includes('installPublicRouteInterceptor'), 'frontend should install the public route click interceptor');
-  assert(sourceHtml.includes('window.history.pushState({ page, source: options.source || "spa_link" }'), 'public route navigation should push history without reloading');
-  assert(!sourceHtml.includes('window.scrollTo({ top: 0, behavior: "smooth" })'), 'route switches should not use smooth scrolling that causes visible transition lag');
-  assert(sourceHtml.includes('closeRouteTransientModals'), 'route switches should close route-specific modal overlays');
+  assert(frontendSource.includes('BrandConfig') && frontendSource.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
+  assert(frontendSource.includes('function navigatePublicRoute'), 'frontend should have a SPA route navigator to prevent full-page public route reloads');
+  assert(frontendSource.includes('installPublicRouteInterceptor'), 'frontend should install the public route click interceptor');
+  assert(frontendSource.includes('window.history.pushState({ page, source: options.source || "spa_link" }'), 'public route navigation should push history without reloading');
+  assert(!frontendSource.includes('window.scrollTo({ top: 0, behavior: "smooth" })'), 'route switches should not use smooth scrolling that causes visible transition lag');
+  assert(frontendSource.includes('closeRouteTransientModals'), 'route switches should close route-specific modal overlays');
   assert(fs.existsSync(path.join(__dirname, '..', 'scripts', 'probe-route-transitions.js')), 'route transition probe should exist');
-  assert(!sourceHtml.includes('Makar') && !sourceHtml.includes('Makai') && !sourceHtml.includes('Makaid') && !sourceHtml.includes('makaug.co.uk'), 'public source should not contain wrong brand variants');
+  assert(!frontendSource.includes('Makar') && !frontendSource.includes('Makai') && !frontendSource.includes('Makaid') && !frontendSource.includes('makaug.co.uk'), 'public source should not contain wrong brand variants');
   assert.strictEqual(toCanonicalLanguageCode('rukiga'), 'rkg', 'Rukiga should have a canonical language code');
   assert.strictEqual(toCanonicalLanguageCode('runyankole'), 'rnynk', 'Runyankole should have a canonical language code');
   assert.strictEqual(normalizeLanguageCode('rkg'), 'rn', 'Rukiga should preserve legacy rn code for current UI compatibility');
@@ -269,9 +271,9 @@ function run() {
   assert(languageRegistrySource.includes('providerSupport'), 'language registry should document provider support per language');
   assert(languageRegistrySource.includes('humanReviewRequired'), 'language registry should document human review status per language');
   assert(translationProviderServiceSource.includes('human_table_then_provider_then_english'), 'translation provider should use safe fallback strategy');
-  assert(sourceHtml.includes('data-content-i18n="about.heroStatement"'), 'About page body should use content i18n keys');
-  assert(sourceHtml.includes('function applyAboutLanguageUI'), 'About page should apply body translations on language switch');
-  assert(sourceHtml.includes('window.MAKAUG_MISSING_TRANSLATIONS'), 'missing content translations should be logged in the browser session');
+  assert(frontendSource.includes('data-content-i18n="about.heroStatement"'), 'About page body should use content i18n keys');
+  assert(frontendSource.includes('function applyAboutLanguageUI'), 'About page should apply body translations on language switch');
+  assert(frontendSource.includes('window.MAKAUG_MISSING_TRANSLATIONS'), 'missing content translations should be logged in the browser session');
   assert(aiServiceSource.includes('wrong_nearby_language_guard'), 'AI replies should guard against nearby-language substitution');
   assert(aiServiceSource.includes('Do not use Kinyarwanda'), 'AI prompts should explicitly block Kinyarwanda fallback for Rukiga/Runyankole');
   assert(whatsappRoutes.includes("shouldUseEnglishFallback(raw)"), 'WhatsApp language resolver should apply registry fallback rules');
@@ -286,7 +288,7 @@ function run() {
   assert(listPropertyHtml.includes('chooseListPropertyOnline'), '/list-property should open the form only after choosing online listing');
   assert(listPropertyHtml.includes('chooseListPropertyWhatsApp'), '/list-property should open WhatsApp AI from the listing choice');
   assert(listPropertyHtml.includes('lp-theme-student'), '/list-property should include the student accommodation theme');
-  assert(listPropertyHtml.includes('Student accommodation uses a purple campus flow'), '/list-property should explain the student accommodation colour/theme flow');
+  assert(frontendSource.includes('Student accommodation uses a purple campus flow'), '/list-property should explain the student accommodation colour/theme flow');
   assert(listPropertyHtml.includes('id="lp-wizard-shell" class="hidden'), '/list-property form should be gated until the user chooses List online');
   assert(listPropertyHtml.includes('id="listing-submit-modal"'), '/list-property should include the hidden post-submit success modal');
   assert(/id="listing-submit-modal"[^>]*class="modal-overlay"/.test(listPropertyHtml), 'listing submit modal should be hidden by default');
@@ -296,12 +298,12 @@ function run() {
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');
-  assert(sourceHtml.includes('function shareLpCurrentLocation'), '/list-property current-location button needs a JS handler');
-  assert(sourceHtml.includes('Location captured. Please move the pin if needed'), 'current-location flow should tell users to adjust and confirm the pin');
-  assert(sourceHtml.includes('Location permission was denied. Search for an address or place instead.'), 'current-location flow should handle denied permission');
-  assert(sourceHtml.includes('The location appears outside Uganda. Search for a Ugandan address or place instead.'), 'current-location flow should block overseas listing pins');
-  assert(sourceHtml.includes('&libraries=places'), 'Google Maps loader should include Places library for typed address autocomplete');
-  assert(sourceHtml.includes('getGooglePlacePredictions'), 'typed address flow should request Google Places predictions when configured');
+  assert(frontendSource.includes('function shareLpCurrentLocation'), '/list-property current-location button needs a JS handler');
+  assert(frontendSource.includes('Location captured. Please move the pin if needed'), 'current-location flow should tell users to adjust and confirm the pin');
+  assert(frontendSource.includes('Location permission was denied. Search for an address or place instead.'), 'current-location flow should handle denied permission');
+  assert(frontendSource.includes('The location appears outside Uganda. Search for a Ugandan address or place instead.'), 'current-location flow should block overseas listing pins');
+  assert(frontendSource.includes('&libraries=places'), 'Google Maps loader should include Places library for typed address autocomplete');
+  assert(frontendSource.includes('getGooglePlacePredictions'), 'typed address flow should request Google Places predictions when configured');
   assert(/<details\s+id="lp-location-advanced"[^>]*>/i.test(listPropertyHtml), '/list-property should keep advanced location details collapsed');
   assert(!/<details\s+id="lp-location-advanced"[^>]*\sopen\b/i.test(listPropertyHtml), 'advanced location details should be collapsed by default');
   assert(listPropertyHtml.includes('data-listing-translation-preview="1"'), 'listing description translation preview should exist');
@@ -325,14 +327,14 @@ function run() {
   ]) {
     assert(!listPropertyText.includes(invalidReference), `/list-property leaked invalid default reference: ${invalidReference}`);
   }
-  assert(sourceHtml.includes('data-listing-submit-success-modal="1"'), 'listing submission success modal should exist in source');
-  assert(sourceHtml.includes('Your property has been submitted'), 'success modal should use the go-live submission title');
-  assert(sourceHtml.includes('listing-submit-email-status'), 'success modal should show email confirmation status');
-  assert(sourceHtml.includes('listing-submit-whatsapp-status'), 'success modal should show WhatsApp confirmation status');
-  assert(sourceHtml.includes('List another property'), 'success modal should offer list-another action');
-  assert(sourceHtml.includes('Go to dashboard'), 'success modal should offer dashboard action');
-  assert(sourceHtml.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
-  assert(sourceHtml.includes('WhatsApp confirmation logged for admin follow-up.'), 'success modal should explain WhatsApp fallback');
+  assert(frontendSource.includes('data-listing-submit-success-modal="1"'), 'listing submission success modal should exist in source');
+  assert(frontendSource.includes('Your property has been submitted'), 'success modal should use the go-live submission title');
+  assert(frontendSource.includes('listing-submit-email-status'), 'success modal should show email confirmation status');
+  assert(frontendSource.includes('listing-submit-whatsapp-status'), 'success modal should show WhatsApp confirmation status');
+  assert(frontendSource.includes('List another property'), 'success modal should offer list-another action');
+  assert(frontendSource.includes('Go to dashboard'), 'success modal should offer dashboard action');
+  assert(frontendSource.includes('Email confirmation has been logged and will send when email is configured.'), 'success modal should explain provider-missing email fallback');
+  assert(frontendSource.includes('WhatsApp confirmation logged for admin follow-up.'), 'success modal should explain WhatsApp fallback');
   assert(propertiesRoutes.includes('logEmailEvent'), 'property submission should create EmailLog entries');
   assert(propertiesRoutes.includes('National ID must be uploaded as a photo image. PDFs are not accepted'), 'property submission backend should reject National ID PDFs');
   assert(propertiesRoutes.includes("router.post('/listing-intent'"), 'listing path choice should have a backend intent endpoint');
@@ -405,13 +407,13 @@ function run() {
   assert(contactRoutes.includes('fraud_report_received'), 'fraud reports should create notification/email coverage');
   assert(contactRoutes.includes('property_need_request_created'), 'tell-MakaUg property need requests should create CRM/log events');
   assert(contactRoutes.includes('createLead'), 'help/fraud/careers/property need contact routes should create CRM leads');
-  assert(sourceHtml.includes('id="career-interest-form"'), '/careers should include a real lead capture form');
-  assert(sourceHtml.includes('submitCareerInterest'), '/careers form should submit to the backend');
+  assert(frontendSource.includes('id="career-interest-form"'), '/careers should include a real lead capture form');
+  assert(frontendSource.includes('submitCareerInterest'), '/careers form should submit to the backend');
   assert(howItWorksText.includes('How MakaUg Works'), '/how-it-works should show route heading');
   for (const expected of ['Search property', 'Use filters', 'Save options', 'Create alerts', 'WhatsApp contact', 'Book viewing', 'List property', 'Review checks', 'Use dashboards', 'Report suspicious']) {
     assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
   }
-  assert(sourceHtml.includes('data-howto-video-modal="1"'), 'how-to video modal should exist');
+  assert(frontendSource.includes('data-howto-video-modal="1"'), 'how-to video modal should exist');
   const generalHowToKeys = ['what-is-makaug', 'search-property', 'use-filters', 'student-accommodation', 'list-property', 'location-and-photos', 'whatsapp-contact', 'save-searches-alerts', 'book-viewing-callback', 'stay-safe-report'];
   const aiHowToKeys = ['ai-can-help', 'ai-search-whatsapp', 'ai-list-property', 'ai-alerts-recommendations', 'ai-fraud-handoff'];
   assert.strictEqual(generalHowToKeys.filter((key) => HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === key)).length, 10, 'there should be 10 general how-to video slots');
@@ -420,10 +422,10 @@ function run() {
     assert(HOW_TO_VIDEO_SLOTS.some((slot) => slot.key === requiredVideo), `missing how-to video slot: ${requiredVideo}`);
   }
   for (const context of ['about', 'how-it-works', 'help', 'list-property', 'students', 'safety', 'ai-chatbot']) {
-    assert(sourceHtml.includes(`data-howto-video-grid="${context}"`) || [aboutHtml, howItWorksHtml, helpHtml, listPropertyHtml, safetyHtml].some((html) => html.includes(`data-howto-video-grid="${context}"`)), `missing how-to video grid for ${context}`);
+    assert(frontendSource.includes(`data-howto-video-grid="${context}"`) || [aboutHtml, howItWorksHtml, helpHtml, listPropertyHtml, safetyHtml].some((html) => html.includes(`data-howto-video-grid="${context}"`)), `missing how-to video grid for ${context}`);
   }
-  assert(sourceHtml.includes('openHowToVideo'), 'how-to videos should open in a modal');
-  assert(sourceHtml.includes('youtubeVideoId'), 'how-to videos should support YouTube IDs');
+  assert(frontendSource.includes('openHowToVideo'), 'how-to videos should open in a modal');
+  assert(frontendSource.includes('youtubeVideoId'), 'how-to videos should support YouTube IDs');
   assert(mortgageHtml.includes('id="page-mortgage"'), '/mortgage should render the mortgage route');
   assert(!normalizeText(mortgageHtml).includes('Mortgage Playground'), '/mortgage should not use old playground wording');
   assert(!normalizeText(mortgageHtml).includes('Move sliders'), '/mortgage should not use slider playground copy');
@@ -437,66 +439,66 @@ function run() {
   for (const unrelated of ['Find your perfect rental property', 'Mortgage Finder Mortgage Finder', 'Fraud Prevention', 'Commercial Property Hub']) {
     assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
   }
-  assert(sourceHtml.includes('data-testid="list-property-free-cta"'), 'header should expose List Property CTA');
-  assert(sourceHtml.includes('id="nav-about"') && sourceHtml.includes('>About Us</a>'), 'primary nav should show About Us');
-  assert(!sourceHtml.includes('id="nav-fraud"'), 'primary nav should not show Fraud as the main nav item');
-  assert(sourceHtml.includes('id="footer-link-anti-fraud"'), 'Anti-Fraud should remain available from footer/support');
-  assert(!sourceHtml.includes('List your property for free'), 'source should not keep old header CTA wording');
-  assert(!sourceHtml.includes('List a Property Free'), 'source should not keep old footer CTA wording');
-  assert(!sourceHtml.includes('data-testid="advertise-property-cta"'), 'header should not keep old Advertise Property CTA test id');
-  assert(sourceHtml.includes('handleListPropertyFreeCta(event)'), 'header List your property CTA should be wired');
-  assert(sourceHtml.includes('data-list-property-choice="1"'), '/list-property should offer online and WhatsApp listing choices');
-  assert(sourceHtml.includes('openListPropertyWhatsApp'), '/list-property WhatsApp listing action should be wired');
-  assert(sourceHtml.includes('id="student-login-cta"'), 'student login CTA should be globally addressable for tests');
-  assert(sourceHtml.includes('data-auth-role-card="1"'), 'auth drawer should use icon role cards');
+  assert(frontendSource.includes('data-testid="list-property-free-cta"'), 'header should expose List Property CTA');
+  assert(frontendSource.includes('id="nav-about"') && frontendSource.includes('>About Us</a>'), 'primary nav should show About Us');
+  assert(!frontendSource.includes('id="nav-fraud"'), 'primary nav should not show Fraud as the main nav item');
+  assert(frontendSource.includes('id="footer-link-anti-fraud"'), 'Anti-Fraud should remain available from footer/support');
+  assert(!frontendSource.includes('List your property for free'), 'source should not keep old header CTA wording');
+  assert(!frontendSource.includes('List a Property Free'), 'source should not keep old footer CTA wording');
+  assert(!frontendSource.includes('data-testid="advertise-property-cta"'), 'header should not keep old Advertise Property CTA test id');
+  assert(frontendSource.includes('handleListPropertyFreeCta(event)'), 'header List your property CTA should be wired');
+  assert(frontendSource.includes('data-list-property-choice="1"'), '/list-property should offer online and WhatsApp listing choices');
+  assert(frontendSource.includes('openListPropertyWhatsApp'), '/list-property WhatsApp listing action should be wired');
+  assert(frontendSource.includes('id="student-login-cta"'), 'student login CTA should be globally addressable for tests');
+  assert(frontendSource.includes('data-auth-role-card="1"'), 'auth drawer should use icon role cards');
   for (const iconClass of ['fa-house-chimney', 'fa-graduation-cap', 'fa-briefcase', 'fa-clipboard-list', 'fa-bullhorn']) {
-    assert(sourceHtml.includes(iconClass), `auth drawer missing role icon: ${iconClass}`);
+    assert(frontendSource.includes(iconClass), `auth drawer missing role icon: ${iconClass}`);
   }
-  assert(sourceHtml.includes('ACCOUNT_ACCESS_SCREENING'), 'auth drawer should define quick screening questions');
+  assert(frontendSource.includes('ACCOUNT_ACCESS_SCREENING'), 'auth drawer should define quick screening questions');
   for (const role of ['finder', 'student', 'agent', 'field_agent', 'advertiser']) {
-    const match = sourceHtml.match(new RegExp(`${role}: \\[([\\s\\S]*?)\\n\\s*\\]`, 'm'));
+    const match = frontendSource.match(new RegExp(`${role}: \\[([\\s\\S]*?)\\n\\s*\\]`, 'm'));
     assert(match, `missing auth screening questions for ${role}`);
     const count = (match[1].match(/key:/g) || []).length;
     assert(count > 0 && count <= 5, `${role} should have 1-5 screening questions, got ${count}`);
   }
-  assert(sourceHtml.includes('id="account-access-email"'), 'create account journey should collect email');
-  assert(sourceHtml.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
-  assert(sourceHtml.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
-  assert(sourceHtml.includes('id="account-access-create-details-step"'), 'create account should start with contact details before OTP');
-  assert(sourceHtml.includes('id="account-access-create-preferences-step"'), 'create account should move to role preferences after OTP');
-  assert(sourceHtml.includes('id="account-access-create-password-step"'), 'create account should collect password after preferences');
-  assert(sourceHtml.includes('contact_verification_token'), 'create account should use a verified-contact token before final registration');
-  assert(sourceHtml.includes('id="account-access-brand-kicker"'), 'auth drawer should expose a brand kicker that can be verified');
-  assert(sourceHtml.includes('tracking-normal text-white/85 font-bold">makaug.com account'), 'auth drawer brand kicker should display lowercase makaug.com, not uppercase');
-  assert(sourceHtml.includes('ACCOUNT_ACCESS_ROLE_THEME'), 'auth drawer should define role-specific accent themes');
+  assert(frontendSource.includes('id="account-access-email"'), 'create account journey should collect email');
+  assert(frontendSource.includes('id="account-access-phone"'), 'create account journey should collect phone/WhatsApp');
+  assert(frontendSource.includes('id="account-access-confirm-password"'), 'create account journey should collect password confirmation');
+  assert(frontendSource.includes('id="account-access-create-details-step"'), 'create account should start with contact details before OTP');
+  assert(frontendSource.includes('id="account-access-create-preferences-step"'), 'create account should move to role preferences after OTP');
+  assert(frontendSource.includes('id="account-access-create-password-step"'), 'create account should collect password after preferences');
+  assert(frontendSource.includes('contact_verification_token'), 'create account should use a verified-contact token before final registration');
+  assert(frontendSource.includes('id="account-access-brand-kicker"'), 'auth drawer should expose a brand kicker that can be verified');
+  assert(frontendSource.includes('tracking-normal text-white/85 font-bold">makaug.com account'), 'auth drawer brand kicker should display lowercase makaug.com, not uppercase');
+  assert(frontendSource.includes('ACCOUNT_ACCESS_ROLE_THEME'), 'auth drawer should define role-specific accent themes');
   for (const roleTheme of ['name: "property finder"', 'name: "student"', 'name: "broker"', 'name: "field agent"', 'name: "advertiser"']) {
-    assert(sourceHtml.includes(roleTheme), `auth drawer should expose role accent: ${roleTheme}`);
+    assert(frontendSource.includes(roleTheme), `auth drawer should expose role accent: ${roleTheme}`);
   }
-  assert(sourceHtml.includes('data-auth-role-theme'), 'auth drawer should apply selected role theme to the panel');
-  assert(sourceHtml.includes('accountAccessScreeningText'), 'auth drawer screening questions should be language-aware');
+  assert(frontendSource.includes('data-auth-role-theme'), 'auth drawer should apply selected role theme to the panel');
+  assert(frontendSource.includes('accountAccessScreeningText'), 'auth drawer screening questions should be language-aware');
   for (const langKey of ['ac: {', 'ny: {', 'rn: {', 'sm: {']) {
-    assert(sourceHtml.includes(langKey), `auth drawer should have safe language text for ${langKey}`);
+    assert(frontendSource.includes(langKey), `auth drawer should have safe language text for ${langKey}`);
   }
-  assert(sourceHtml.includes('Password or 4-digit PIN'), 'field-agent sign-in should visibly support the admin-issued 4-digit PIN');
-  assert(sourceHtml.includes('admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
-  assert(sourceHtml.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
-  assert(sourceHtml.includes('id="admin-fa-code"'), 'admin field-agent setup should let owner assign FA-0001 style agent codes');
-  assert(sourceHtml.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
-  assert(sourceHtml.includes('Create Field Agent login'), 'admin UI should expose the field-agent login setup path');
+  assert(frontendSource.includes('Password or 4-digit PIN'), 'field-agent sign-in should visibly support the admin-issued 4-digit PIN');
+  assert(frontendSource.includes('admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
+  assert(frontendSource.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
+  assert(frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should let owner assign FA-0001 style agent codes');
+  assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
+  assert(frontendSource.includes('Create Field Agent login'), 'admin UI should expose the field-agent login setup path');
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
   assert(adminRoutes.includes('bcrypt.hash(pin, 12)'), 'field-agent PIN should be hashed before storage');
   assert(adminRoutes.includes('field_agent_account_provisioned'), 'field-agent provisioning should create a safe notification log');
   assert(adminRoutes.includes('field_agent_provisioned'), 'field-agent provisioning should create an admin audit event');
   assert(!adminRoutes.includes('pin, password_hash'), 'admin field-agent provisioning must not store raw PIN values');
-  assert(sourceHtml.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
-  assert(sourceHtml.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
-  assert(sourceHtml.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
-  assert(!sourceHtml.includes('data-auth-progress-step="account"'), 'auth drawer should not show old Account/Details/Preferences/Verify pills on the first screen');
-  assert(sourceHtml.includes('id="account-access-progress-summary"'), 'auth drawer should show compact create-account progress only after create is selected');
-  assert(sourceHtml.includes('openPolicyPreviewModal'), 'auth drawer should expose terms/privacy preview interactions');
-  assert(sourceHtml.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or SMS OTP');
-  assert(sourceHtml.includes('SMS / Text'), 'auth drawer should label phone OTP as SMS/Text');
-  assert(sourceHtml.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
+  assert(frontendSource.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
+  assert(frontendSource.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
+  assert(frontendSource.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
+  assert(!frontendSource.includes('data-auth-progress-step="account"'), 'auth drawer should not show old Account/Details/Preferences/Verify pills on the first screen');
+  assert(frontendSource.includes('id="account-access-progress-summary"'), 'auth drawer should show compact create-account progress only after create is selected');
+  assert(frontendSource.includes('openPolicyPreviewModal'), 'auth drawer should expose terms/privacy preview interactions');
+  assert(frontendSource.includes('account-access-otp-method-wrap'), 'auth drawer should let users choose email or SMS OTP');
+  assert(frontendSource.includes('SMS / Text'), 'auth drawer should label phone OTP as SMS/Text');
+  assert(frontendSource.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
   assert(authRoutes.includes("router.post('/request-signup-otp'"), 'auth route should support pre-account signup OTP delivery');
   assert(authRoutes.includes("router.post('/verify-signup-otp'"), 'auth route should verify signup contact before account creation');
   assert(authRoutes.includes("const preferredAudience = normalizeSignupAudience(req.body.audience"), 'password login should accept selected account audience for dashboard redirect');
@@ -507,18 +509,18 @@ function run() {
   assert(authRoutes.includes('privacy_accepted is required'), 'auth register route should enforce privacy acceptance on the backend');
   assert(authRoutes.includes('makaug.com account verification'), 'auth OTP copy should use lowercase public brand display');
   assert(propertiesRoutes.includes('OTP sent by SMS'), 'listing OTP route should report SMS OTP delivery accurately');
-  assert(sourceHtml.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
-  assert(sourceHtml.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
-  assert(!sourceHtml.includes('data-auth-text="changeType"'), 'auth drawer should not show messy Change account type action in the main flow');
-  assert(sourceHtml.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
-  assert(sourceHtml.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
-  assert(sourceHtml.includes('id="account-access-forgot-wrap"'), 'forgot password should use inline drawer fields instead of prompt-only reset');
-  assert(sourceHtml.includes('portalModeForDashboardUrl'), 'auth success should understand backend dashboard redirect URLs');
-  assert(sourceHtml.includes('dashboardPageForPortalMode'), 'auth success should map dashboard redirects to mounted dashboard pages');
-  assert(sourceHtml.includes('window.location.href = targetRoute'), 'auth success should full-load protected dashboards when public HTML does not contain them');
-  assert(sourceHtml.includes('openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode)'), 'auth success should force the role-specific dashboard route after sign-in');
-  assert(sourceHtml.includes('audience: accountAccessDrawerAudience'), 'drawer sign-in should send the selected role to the backend');
-  const finderScreening = sourceHtml.match(/finder: \[([\s\S]*?)\n\s*\],\n\s*student:/m)?.[1] || '';
+  assert(frontendSource.includes('openAccountAccessDrawer("signin"'), 'header sign-in should open the new drawer');
+  assert(frontendSource.includes('openAccountAccessDrawer("create"'), 'create account should open the new drawer');
+  assert(!frontendSource.includes('data-auth-text="changeType"'), 'auth drawer should not show messy Change account type action in the main flow');
+  assert(frontendSource.includes('Back to account type'), 'create-account flow should expose only a subtle Back to account type link before OTP');
+  assert(frontendSource.includes('resetAccountAccessPasswordFromDrawer'), 'forgot password should run inside the shared auth drawer');
+  assert(frontendSource.includes('id="account-access-forgot-wrap"'), 'forgot password should use inline drawer fields instead of prompt-only reset');
+  assert(frontendSource.includes('portalModeForDashboardUrl'), 'auth success should understand backend dashboard redirect URLs');
+  assert(frontendSource.includes('dashboardPageForPortalMode'), 'auth success should map dashboard redirects to mounted dashboard pages');
+  assert(frontendSource.includes('window.location.href = targetRoute'), 'auth success should full-load protected dashboards when public HTML does not contain them');
+  assert(frontendSource.includes('openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode)'), 'auth success should force the role-specific dashboard route after sign-in');
+  assert(frontendSource.includes('audience: accountAccessDrawerAudience'), 'drawer sign-in should send the selected role to the backend');
+  const finderScreening = frontendSource.match(/finder: \[([\s\S]*?)\n\s*\],\n\s*student:/m)?.[1] || '';
   assert(finderScreening.includes('["WhatsApp", "Email"]'), 'property finder preferred contact should be limited to WhatsApp and Email');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
@@ -568,27 +570,27 @@ function run() {
     'WhatsApp Message Log'
   ];
   for (const expected of requiredDashboardShellText) {
-    assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
+    assert(frontendSource.includes(expected), `missing dashboard shell section: ${expected}`);
   }
-  assert(sourceHtml.includes('id="finder-weather-context"'), 'property finder dashboard should show weather-ready context');
-  assert(!sourceHtml.includes('id="finder-area-preference-context"'), 'property finder dashboard should remove the extra area preference tile');
-  assert(!sourceHtml.includes('id="finder-area-watch-title"'), 'property finder dashboard should remove Area Watch');
-  assert(sourceHtml.includes('id="finder-owned-listings"'), 'property finder dashboard should show listings linked to the signed-in account');
-  assert(sourceHtml.includes('openOwnedListingEditor'), 'property finder dashboard should let owners edit linked listings');
-  assert(sourceHtml.includes('deleteOwnedListing'), 'property finder dashboard should let owners remove linked listings from the site');
-  assert(!sourceHtml.includes('id="finder-compare-title"'), 'property finder dashboard should not show the removed Compare Properties panel');
-  assert(sourceHtml.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
-  assert(sourceHtml.includes('data-safety-stakeholder-grid="1"'), 'safety page should include stakeholder safety guidance');
-  assert(sourceHtml.includes('data-safety-illustration="renters"'), 'safety page should include illustrated renter safety guidance');
-  assert(sourceHtml.includes('safe-viewings'), 'safety how-to videos should include safe viewing slot');
-  assert(sourceHtml.includes('land-title-safety'), 'safety how-to videos should include land/title safety slot');
-  assert(sourceHtml.includes('data-content-i18n="safety.title"'), 'safety page should be wired to content language switching');
-  assert(sourceHtml.includes('getLocalFinderRecommendations'), 'property finder dashboard should derive fallback recommendations from signup preferences');
-  assert(sourceHtml.includes('id="account-pref-goal"'), 'account settings should expose property finder goal preferences');
-  assert(sourceHtml.includes('id="account-pref-area"'), 'account settings should expose property finder area preferences');
-  assert(sourceHtml.includes('id="account-profile-status-msg"'), 'account profile updates should show inline confirmation');
-  assert(sourceHtml.includes('id="account-password-status-msg"'), 'password updates should show inline confirmation');
-  assert(!sourceHtml.includes('id="account-phone" disabled'), 'account phone number should be editable');
+  assert(frontendSource.includes('id="finder-weather-context"'), 'property finder dashboard should show weather-ready context');
+  assert(!frontendSource.includes('id="finder-area-preference-context"'), 'property finder dashboard should remove the extra area preference tile');
+  assert(!frontendSource.includes('id="finder-area-watch-title"'), 'property finder dashboard should remove Area Watch');
+  assert(frontendSource.includes('id="finder-owned-listings"'), 'property finder dashboard should show listings linked to the signed-in account');
+  assert(frontendSource.includes('openOwnedListingEditor'), 'property finder dashboard should let owners edit linked listings');
+  assert(frontendSource.includes('deleteOwnedListing'), 'property finder dashboard should let owners remove linked listings from the site');
+  assert(!frontendSource.includes('id="finder-compare-title"'), 'property finder dashboard should not show the removed Compare Properties panel');
+  assert(frontendSource.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
+  assert(frontendSource.includes('data-safety-stakeholder-grid="1"'), 'safety page should include stakeholder safety guidance');
+  assert(frontendSource.includes('data-safety-illustration="renters"'), 'safety page should include illustrated renter safety guidance');
+  assert(frontendSource.includes('safe-viewings'), 'safety how-to videos should include safe viewing slot');
+  assert(frontendSource.includes('land-title-safety'), 'safety how-to videos should include land/title safety slot');
+  assert(frontendSource.includes('data-content-i18n="safety.title"'), 'safety page should be wired to content language switching');
+  assert(frontendSource.includes('getLocalFinderRecommendations'), 'property finder dashboard should derive fallback recommendations from signup preferences');
+  assert(frontendSource.includes('id="account-pref-goal"'), 'account settings should expose property finder goal preferences');
+  assert(frontendSource.includes('id="account-pref-area"'), 'account settings should expose property finder area preferences');
+  assert(frontendSource.includes('id="account-profile-status-msg"'), 'account profile updates should show inline confirmation');
+  assert(frontendSource.includes('id="account-password-status-msg"'), 'password updates should show inline confirmation');
+  assert(!frontendSource.includes('id="account-phone" disabled'), 'account phone number should be editable');
   assert(authRoutes.includes('phone = $4') && authRoutes.includes('account_phone_changed'), 'auth profile backend should update phone safely and log changed numbers');
   assert(propertySeekerRoutes.includes("router.get('/my-listings'"), 'property finder backend should expose linked owned listings');
   assert(propertySeekerRoutes.includes("router.patch('/my-listings/:id'"), 'property finder backend should update owned listings');
@@ -598,18 +600,18 @@ function run() {
   assert(propertySeekerRoutes.includes('listing_deleted_by_owner'), 'owned listing removals should be logged');
   assert(authFlowServiceSource.includes('property_seeker_preferences'), 'verified property finder signup should create backend preference records');
   assert(authFlowServiceSource.includes('parseBudgetUpper(profile.budget_range)'), 'signup preferences should convert budget labels into usable recommendation budgets');
-  assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
-  assert(sourceHtml.includes('id="page-admin-setup-status"'), 'owner setup status page should exist for protected admin route');
-  assert(sourceHtml.includes('Owner Setup Status'), 'owner setup status page should be visible to signed-in admins');
-  assert(sourceHtml.includes('Run safe property submission test'), 'setup status should include safe property submission proof action');
-  assert(sourceHtml.includes('Run AI chatbot smoke test'), 'setup status should include AI smoke proof action');
-  assert(sourceHtml.includes('Run alert matching now'), 'setup status should include alert matcher proof action');
-  assert(sourceHtml.includes('Create payment fallback test'), 'setup status should include payment fallback proof action');
-  assert(sourceHtml.includes('renderAdminSetupStatus'), 'setup status should be wired to live admin API rendering');
-  assert(sourceHtml.includes('/api/admin/setup-status'), 'setup status should call protected admin setup status API');
-  assert(sourceHtml.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
-  assert(sourceHtml.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
-  assert(sourceHtml.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
+  assert(frontendSource.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
+  assert(frontendSource.includes('id="page-admin-setup-status"'), 'owner setup status page should exist for protected admin route');
+  assert(frontendSource.includes('Owner Setup Status'), 'owner setup status page should be visible to signed-in admins');
+  assert(frontendSource.includes('Run safe property submission test'), 'setup status should include safe property submission proof action');
+  assert(frontendSource.includes('Run AI chatbot smoke test'), 'setup status should include AI smoke proof action');
+  assert(frontendSource.includes('Run alert matching now'), 'setup status should include alert matcher proof action');
+  assert(frontendSource.includes('Create payment fallback test'), 'setup status should include payment fallback proof action');
+  assert(frontendSource.includes('renderAdminSetupStatus'), 'setup status should be wired to live admin API rendering');
+  assert(frontendSource.includes('/api/admin/setup-status'), 'setup status should call protected admin setup status API');
+  assert(frontendSource.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
+  assert(frontendSource.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
+  assert(frontendSource.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
   assert(fieldAgentSetupDoc.includes('FA-0001') && fieldAgentSetupDoc.includes('4-digit PIN'), 'field-agent live setup doc should give starter codes and PIN instructions');
@@ -628,8 +630,8 @@ function run() {
   assert(backendConnectionProbeScript.includes('AFRICASTALKING_API_KEY'), 'backend probe should include Africa’s Talking SMS provider keys');
   assert(backendConnectionProbeScript.includes('SMS_TEST_PHONE'), 'backend probe should include explicit SMS test phone key');
   assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
-  assert(sourceHtml.includes('id="admin-launch-control"'), 'admin launch control should exist');
-  assert(sourceHtml.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
+  assert(frontendSource.includes('id="admin-launch-control"'), 'admin launch control should exist');
+  assert(frontendSource.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
   for (const expected of [
     'Public Route Health',
     'CTA health',
@@ -642,76 +644,76 @@ function run() {
     'Content / i18n Status',
     'Payment Status'
   ]) {
-    assert(sourceHtml.includes(expected), `admin launch control missing owner health section: ${expected}`);
+    assert(frontendSource.includes(expected), `admin launch control missing owner health section: ${expected}`);
   }
-  assert(sourceHtml.includes('data-admin-preview-links="1"'), 'super_admin dashboard preview links should exist');
-  assert(sourceHtml.includes('Admin preview mode — read only'), 'dashboard preview should show read-only admin banner');
+  assert(frontendSource.includes('data-admin-preview-links="1"'), 'super_admin dashboard preview links should exist');
+  assert(frontendSource.includes('Admin preview mode — read only'), 'dashboard preview should show read-only admin banner');
   for (const previewPath of ['/dashboard?admin_preview=1', '/student-dashboard?admin_preview=1', '/broker-dashboard?admin_preview=1', '/field-agent-dashboard?admin_preview=1', '/advertiser-dashboard?admin_preview=1']) {
-    assert(sourceHtml.includes(previewPath), `missing dashboard preview link: ${previewPath}`);
+    assert(frontendSource.includes(previewPath), `missing dashboard preview link: ${previewPath}`);
   }
   assert(healthRoutes.includes("router.get('/migrations'"), 'health migration status route should exist');
-  assert(sourceHtml.includes('data-ai-chatbot-live-panel="1"'), 'AI chatbot route should expose a connected live task panel');
-  assert(sourceHtml.includes('submitAiChatbotPrompt'), 'AI chatbot prompt should be wired to a safe API/fallback flow');
+  assert(frontendSource.includes('data-ai-chatbot-live-panel="1"'), 'AI chatbot route should expose a connected live task panel');
+  assert(frontendSource.includes('submitAiChatbotPrompt'), 'AI chatbot prompt should be wired to a safe API/fallback flow');
   assert(aiRoutes.includes('captureLearningEvent'), 'AI assistant API should capture conversation events');
   assert(aiRoutes.includes('conversation_logged'), 'AI assistant API should report that backend logging happened');
   assert(aiRoutes.includes('human_handoff_required'), 'AI assistant API should log human handoff events');
   assert(aiRoutes.includes('createLead'), 'AI assistant API should create CRM leads for handoff/fraud/mortgage/advertiser intents');
   for (const intent of ['search_property', 'search_rent', 'search_sale', 'search_student', 'search_land', 'search_commercial', 'save_search', 'create_alert', 'book_viewing', 'request_callback', 'list_property', 'list_property_whatsapp', 'report_fraud', 'ask_mortgage', 'ask_help', 'advertiser_interest', 'language_change', 'human_handoff']) {
-    assert(sourceHtml.includes(`value="${intent}"`) || sourceHtml.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
+    assert(frontendSource.includes(`value="${intent}"`) || frontendSource.includes(`"${intent}"`), `AI chatbot missing intent: ${intent}`);
   }
-  assert(sourceHtml.includes('data-map-property-link="1"'), 'map listing popups should expose real property detail links');
-  assert(sourceHtml.includes('href="${adminAttr(detailPath)}"'), 'map listing popup should have a real /property fallback URL');
-  assert(sourceHtml.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');
-  assert(sourceHtml.includes('data-map-broker-link="1"'), 'broker map popups should expose real broker profile links');
-  assert(sourceHtml.includes('openMapBrokerProfile(event'), 'broker map popup should use a delegated broker click handler');
-  assert(sourceHtml.includes('function clearStaleMapRegistry()'), 'public maps should clear stale registry entries after SPA route fragment swaps');
-  assert(sourceHtml.includes('function mapInstanceMatchesDom(mapId)'), 'public maps should verify map instances still belong to the live DOM node');
-  assert(sourceHtml.includes('function refreshActivePublicMapsAfterRoute()'), 'public maps should refresh/rebuild after route changes and browser back navigation');
-  assert(sourceHtml.includes('scheduleMapsInit({ force: targetPage !== previousPage })'), 'public route changes should force map recovery when the active map page changes');
-  assert(sourceHtml.includes('source: "popstate_missing_fragment"'), 'browser back/forward should reload a missing public route fragment before map recovery');
-  assert(sourceHtml.includes('google.maps.event.trigger(map, "resize")'), 'Google map routes should trigger resize when returning to a map page');
-  assert(sourceHtml.includes('if (!(await ensureLeafletApi())) return;'), 'property detail maps should load Leaflet fallback when Google Maps is unavailable');
-  assert(sourceHtml.includes('recordRemoteRecentlyViewed'), 'property detail opens should record backend recently-viewed events when possible');
-  assert(sourceHtml.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
-  assert(sourceHtml.includes('map_property_click'), 'map View Property click should emit analytics');
+  assert(frontendSource.includes('data-map-property-link="1"'), 'map listing popups should expose real property detail links');
+  assert(frontendSource.includes('href="${adminAttr(detailPath)}"'), 'map listing popup should have a real /property fallback URL');
+  assert(frontendSource.includes('openMapPropertyDetail(event'), 'map listing popup should use a delegated detail click handler');
+  assert(frontendSource.includes('data-map-broker-link="1"'), 'broker map popups should expose real broker profile links');
+  assert(frontendSource.includes('openMapBrokerProfile(event'), 'broker map popup should use a delegated broker click handler');
+  assert(frontendSource.includes('function clearStaleMapRegistry()'), 'public maps should clear stale registry entries after SPA route fragment swaps');
+  assert(frontendSource.includes('function mapInstanceMatchesDom(mapId)'), 'public maps should verify map instances still belong to the live DOM node');
+  assert(frontendSource.includes('function refreshActivePublicMapsAfterRoute()'), 'public maps should refresh/rebuild after route changes and browser back navigation');
+  assert(frontendSource.includes('scheduleMapsInit({ force: targetPage !== previousPage })'), 'public route changes should force map recovery when the active map page changes');
+  assert(frontendSource.includes('source: "popstate_missing_fragment"'), 'browser back/forward should reload a missing public route fragment before map recovery');
+  assert(frontendSource.includes('google.maps.event.trigger(map, "resize")'), 'Google map routes should trigger resize when returning to a map page');
+  assert(frontendSource.includes('if (!(await ensureLeafletApi())) return;'), 'property detail maps should load Leaflet fallback when Google Maps is unavailable');
+  assert(frontendSource.includes('recordRemoteRecentlyViewed'), 'property detail opens should record backend recently-viewed events when possible');
+  assert(frontendSource.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
+  assert(frontendSource.includes('map_property_click'), 'map View Property click should emit analytics');
   assert(clickProbeScript.includes('map popup View Property did not open a listing detail route/view'), 'click probe should fail if map View Property does not open detail');
-  assert(sourceHtml.includes('id="hero-location-control"'), 'homepage should include compact Location control');
-  assert(sourceHtml.includes('aria-label="Use location search"'), 'homepage Location control should be accessible');
-  assert(sourceHtml.includes('Location search uses a 10 mile radius by default.'), 'homepage Location helper should explain the default radius');
-  assert(sourceHtml.includes('City, area, suburb or landmark'), 'homepage search input should support city, area, suburb, or landmark');
-  assert(!sourceHtml.includes('id="hero-use-location-btn"'), 'homepage should not keep the old bulky Use my location button');
-  assert(sourceHtml.includes('id="hero-filter-row"'), 'homepage should render the lower filter row');
-  assert(sourceHtml.includes('id="hero-property-type-f"'), 'homepage lower filter row should include Property Type');
-  assert(sourceHtml.includes('id="hero-min-price-f"'), 'homepage lower filter row should include Min Price');
-  assert(sourceHtml.includes('id="hero-max-price-f"'), 'homepage lower filter row should include Max Price');
-  assert(sourceHtml.includes('id="hero-bedrooms-f"'), 'homepage lower filter row should include Bedrooms');
-  assert(sourceHtml.includes('id="hero-filters-btn"'), 'homepage lower filter row should include a Filters button');
-  assert(sourceHtml.includes('id="hero-advanced-filters-panel"'), 'Filters button should open a real advanced filters panel');
-  assert(sourceHtml.includes('HERO_FILTER_CONFIG_BY_TAB'), 'homepage filters should be category-aware');
-  assert(sourceHtml.includes('commercial: { propertyLabelKey: "heroCommercialType", amenityOptionsKey: "commercial", showBedrooms: false'), 'Commercial homepage search should hide bedroom filters');
-  assert(sourceHtml.includes('land: { propertyLabelKey: "heroLandType", amenityOptionsKey: "land", showBedrooms: false'), 'Land homepage search should hide bedroom filters');
-  assert(sourceHtml.includes('HERO_PROPERTY_TYPE_OPTIONS_BY_TAB'), 'homepage Property Type options should change by category');
-  assert(sourceHtml.includes('HERO_PRICE_OPTIONS_BY_TAB'), 'homepage Min/Max Price options should change by category');
-  assert(sourceHtml.includes('HERO_AMENITY_OPTIONS_BY_TAB'), 'homepage Amenities options should change by category');
-  assert(sourceHtml.includes('{ value: "road access", labelKey: "heroAmenityRoadAccess" }'), 'Land search should expose land-relevant amenity filters');
-  assert(sourceHtml.includes('{ value: "loading bay", labelKey: "heroAmenityLoadingBay" }'), 'Commercial search should expose commercial-relevant amenity filters');
-  assert(sourceHtml.includes('{ value: "study area", labelKey: "heroAmenityStudyArea" }'), 'Student search should expose student-relevant amenity filters');
-  assert(sourceHtml.includes('{ value: "security", labelKey: "heroAmenityGuarded" }'), 'Amenity labels should avoid protected public sanitizer terms while still filtering security');
-  assert(!sourceHtml.includes('heroAmenitySecurity'), 'Amenity labels should not use the sanitizer-sensitive Security key');
-  assert(sourceHtml.includes('setHeroSelectOptions("hero-amenities-f", amenityOptions'), 'homepage should refresh the Amenities dropdown from category config');
-  assert(sourceHtml.includes('setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms))'), 'homepage should toggle Bedrooms visibility from category config');
-  assert(sourceHtml.includes('payload.commercialType = filters.commercialType'), 'homepage commercial searches should send commercialType to the backend');
-  assert(sourceHtml.includes('payload.landTitleType = filters.landTitleType'), 'homepage land searches should send landTitleType to the backend');
-  assert(!sourceHtml.includes('Manual area, radius, and property filters stay active.'), 'homepage advanced filters should not show the removed manual/radius helper copy');
-  assert(sourceHtml.includes('No exact matches yet.'), 'search no-results state should use the required launch copy');
-  assert(sourceHtml.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
-  assert(sourceHtml.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');
-  assert(sourceHtml.includes('routedRadiusValue'), 'homepage near-me search should preserve radius when routing to category pages');
-  assert(sourceHtml.includes('HERO_SEARCH_HANDOFF_KEY'), 'homepage near-me search should persist search state across sanitized public route navigation');
-  assert(sourceHtml.includes('applyHeroSearchHandoff(publicRoutePage)'), 'public route loader should restore hero search handoff state');
-  assert(sourceHtml.includes('showPage(page, { history: false, source, scroll: options.scroll !== false });\n        applyHeroSearchHandoff(page);'), 'async public route fragments should apply hero search handoff after mounting');
-  assert(sourceHtml.includes('You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.'), 'near-me search should handle overseas coordinates');
-  assert(sourceHtml.includes('decorateAndSortNearMeResults'), 'near-me results should be decorated and sorted by distance');
+  assert(frontendSource.includes('id="hero-location-control"'), 'homepage should include compact Location control');
+  assert(frontendSource.includes('aria-label="Use location search"'), 'homepage Location control should be accessible');
+  assert(frontendSource.includes('Location search uses a 10 mile radius by default.'), 'homepage Location helper should explain the default radius');
+  assert(frontendSource.includes('City, area, suburb or landmark'), 'homepage search input should support city, area, suburb, or landmark');
+  assert(!frontendSource.includes('id="hero-use-location-btn"'), 'homepage should not keep the old bulky Use my location button');
+  assert(frontendSource.includes('id="hero-filter-row"'), 'homepage should render the lower filter row');
+  assert(frontendSource.includes('id="hero-property-type-f"'), 'homepage lower filter row should include Property Type');
+  assert(frontendSource.includes('id="hero-min-price-f"'), 'homepage lower filter row should include Min Price');
+  assert(frontendSource.includes('id="hero-max-price-f"'), 'homepage lower filter row should include Max Price');
+  assert(frontendSource.includes('id="hero-bedrooms-f"'), 'homepage lower filter row should include Bedrooms');
+  assert(frontendSource.includes('id="hero-filters-btn"'), 'homepage lower filter row should include a Filters button');
+  assert(frontendSource.includes('id="hero-advanced-filters-panel"'), 'Filters button should open a real advanced filters panel');
+  assert(frontendSource.includes('HERO_FILTER_CONFIG_BY_TAB'), 'homepage filters should be category-aware');
+  assert(frontendSource.includes('commercial: { propertyLabelKey: "heroCommercialType", amenityOptionsKey: "commercial", showBedrooms: false'), 'Commercial homepage search should hide bedroom filters');
+  assert(frontendSource.includes('land: { propertyLabelKey: "heroLandType", amenityOptionsKey: "land", showBedrooms: false'), 'Land homepage search should hide bedroom filters');
+  assert(frontendSource.includes('HERO_PROPERTY_TYPE_OPTIONS_BY_TAB'), 'homepage Property Type options should change by category');
+  assert(frontendSource.includes('HERO_PRICE_OPTIONS_BY_TAB'), 'homepage Min/Max Price options should change by category');
+  assert(frontendSource.includes('HERO_AMENITY_OPTIONS_BY_TAB'), 'homepage Amenities options should change by category');
+  assert(frontendSource.includes('{ value: "road access", labelKey: "heroAmenityRoadAccess" }'), 'Land search should expose land-relevant amenity filters');
+  assert(frontendSource.includes('{ value: "loading bay", labelKey: "heroAmenityLoadingBay" }'), 'Commercial search should expose commercial-relevant amenity filters');
+  assert(frontendSource.includes('{ value: "study area", labelKey: "heroAmenityStudyArea" }'), 'Student search should expose student-relevant amenity filters');
+  assert(frontendSource.includes('{ value: "security", labelKey: "heroAmenityGuarded" }'), 'Amenity labels should avoid protected public sanitizer terms while still filtering security');
+  assert(!frontendSource.includes('heroAmenitySecurity'), 'Amenity labels should not use the sanitizer-sensitive Security key');
+  assert(frontendSource.includes('setHeroSelectOptions("hero-amenities-f", amenityOptions'), 'homepage should refresh the Amenities dropdown from category config');
+  assert(frontendSource.includes('setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms))'), 'homepage should toggle Bedrooms visibility from category config');
+  assert(frontendSource.includes('payload.commercialType = filters.commercialType'), 'homepage commercial searches should send commercialType to the backend');
+  assert(frontendSource.includes('payload.landTitleType = filters.landTitleType'), 'homepage land searches should send landTitleType to the backend');
+  assert(!frontendSource.includes('Manual area, radius, and property filters stay active.'), 'homepage advanced filters should not show the removed manual/radius helper copy');
+  assert(frontendSource.includes('No exact matches yet.'), 'search no-results state should use the required launch copy');
+  assert(frontendSource.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
+  assert(frontendSource.includes('SEARCH_RADIUS_MI_OPTIONS = [0, 0.25, 0.5, 1, 3, 5, 10, 15, 20, 30, 40, 50]'), 'radius selector should preserve the detailed mile options');
+  assert(frontendSource.includes('routedRadiusValue'), 'homepage near-me search should preserve radius when routing to category pages');
+  assert(frontendSource.includes('HERO_SEARCH_HANDOFF_KEY'), 'homepage near-me search should persist search state across sanitized public route navigation');
+  assert(frontendSource.includes('applyHeroSearchHandoff(publicRoutePage)'), 'public route loader should restore hero search handoff state');
+  assert(/showPage\(page, \{ history: false, source, scroll: options\.scroll !== false \}\);\s*applyHeroSearchHandoff\(page\);/.test(frontendSource), 'async public route fragments should apply hero search handoff after mounting');
+  assert(frontendSource.includes('You appear to be outside Uganda. Choose a Ugandan area to search, or search all Uganda.'), 'near-me search should handle overseas coordinates');
+  assert(frontendSource.includes('decorateAndSortNearMeResults'), 'near-me results should be decorated and sorted by distance');
   assert(propertiesRoutes.includes("router.get('/search', listPropertiesHandler)"), 'backend should expose /api/properties/search');
   assert(propertiesRoutes.includes('req.query.area || req.query.search || req.query.query'), 'search API should accept query payloads from the homepage search module');
   assert(propertiesRoutes.includes('req.query.property_type || req.query.propertyType'), 'search API should accept propertyType payloads from the homepage filter row');
