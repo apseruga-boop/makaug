@@ -5753,6 +5753,21 @@ function renderCompactDashboardRows(targetId, rows, emptyText, renderer) {
   target.innerHTML = list.slice(0, 5).map(renderer).join("");
 }
 
+function formatAlertChannelLabel(channel = "") {
+  const normalized = String(channel || "").trim().toLowerCase();
+  return {
+    in_app: "in-app",
+    whatsapp: "WhatsApp",
+    email: "email",
+    sms: "SMS"
+  }[normalized] || normalized.replace(/_/g, " ");
+}
+
+function formatAlertChannels(channels) {
+  const list = Array.isArray(channels) ? channels : [];
+  return list.length ? list.map(formatAlertChannelLabel).join(", ") : "in-app";
+}
+
 async function saveCurrentDashboardSearch() {
   if (!authState?.token) {
     openAuthSignIn("finder");
@@ -6047,7 +6062,7 @@ async function renderFinderDashboard() {
 	      renderCompactDashboardRows("finder-saved-searches", savedSearches, dashboardText("noSavedSearches"), (item) => `
 	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
 	          <div class="font-bold text-gray-900">${adminEscape(item.label || item.category || "Saved search")}</div>
-	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(Array.isArray(item.alert_channels) ? item.alert_channels.join(", ") : "in-app")}</div>
+	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(formatAlertChannels(item.alert_channels))}</div>
 	        </div>`);
 	      renderCompactDashboardRows("finder-viewings", viewings, dashboardText("noViewings"), (item) => `
 	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">

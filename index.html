@@ -5646,8 +5646,9 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
+        window.__makaugAppVersion = "property-need-v2-20260506";
         var script = document.createElement("script");
-        script.src = "/assets/makaug-app.js";
+        script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
         document.body.appendChild(script);
       }
