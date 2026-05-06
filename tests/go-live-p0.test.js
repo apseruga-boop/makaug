@@ -239,16 +239,17 @@ function run() {
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
   for (const badBrandText of [
     'Use makaug in 7 Ugandan languages',
-    'About makaug.com',
     'Welcome to makaug',
     'Create your free makaug account to:',
     'You authorize makaug',
     'makaug may contact',
     'keep makaug safer',
-    'Hello+makaug',
-    'Hello%20makaug'
+    'Hello+makaug+',
+    'Hello%20makaug%20',
+    'MakarUG',
+    'Makar'
   ]) {
-    assert(!sourceHtml.includes(badBrandText), `public-facing brand text should use MakaUg casing: ${badBrandText}`);
+    assert(!homeText.includes(badBrandText), `public-facing homepage text should use makaug.com display: ${badBrandText}`);
   }
   assert(sourceHtml.includes('BrandConfig') && sourceHtml.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
   assert(sourceHtml.includes('function navigatePublicRoute'), 'frontend should have a SPA route navigator to prevent full-page public route reloads');
@@ -536,7 +537,6 @@ function run() {
     'Mortgage/Budget Centre',
     'My Listed Properties',
     'Safety Tips',
-    'Area Watch',
     'Search preference summary',
     'Sponsored slot',
     'Dashboard order',
@@ -571,12 +571,18 @@ function run() {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
   }
   assert(sourceHtml.includes('id="finder-weather-context"'), 'property finder dashboard should show weather-ready context');
-  assert(sourceHtml.includes('id="finder-area-preference-context"'), 'property finder dashboard should use area preference wording instead of location context');
+  assert(!sourceHtml.includes('id="finder-area-preference-context"'), 'property finder dashboard should remove the extra area preference tile');
+  assert(!sourceHtml.includes('id="finder-area-watch-title"'), 'property finder dashboard should remove Area Watch');
   assert(sourceHtml.includes('id="finder-owned-listings"'), 'property finder dashboard should show listings linked to the signed-in account');
   assert(sourceHtml.includes('openOwnedListingEditor'), 'property finder dashboard should let owners edit linked listings');
   assert(sourceHtml.includes('deleteOwnedListing'), 'property finder dashboard should let owners remove linked listings from the site');
   assert(!sourceHtml.includes('id="finder-compare-title"'), 'property finder dashboard should not show the removed Compare Properties panel');
   assert(sourceHtml.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
+  assert(sourceHtml.includes('data-safety-stakeholder-grid="1"'), 'safety page should include stakeholder safety guidance');
+  assert(sourceHtml.includes('data-safety-illustration="renters"'), 'safety page should include illustrated renter safety guidance');
+  assert(sourceHtml.includes('safe-viewings'), 'safety how-to videos should include safe viewing slot');
+  assert(sourceHtml.includes('land-title-safety'), 'safety how-to videos should include land/title safety slot');
+  assert(sourceHtml.includes('data-content-i18n="safety.title"'), 'safety page should be wired to content language switching');
   assert(sourceHtml.includes('getLocalFinderRecommendations'), 'property finder dashboard should derive fallback recommendations from signup preferences');
   assert(sourceHtml.includes('id="account-pref-goal"'), 'account settings should expose property finder goal preferences');
   assert(sourceHtml.includes('id="account-pref-area"'), 'account settings should expose property finder area preferences');

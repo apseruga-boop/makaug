@@ -17,6 +17,17 @@
   <meta name="twitter:description" content="Uganda's free property portal. Buy, rent, sell and find brokers across all districts.">
   <meta name="twitter:image" content="https://makaug.com/assets/og-cover.jpg">
   <link rel="canonical" href="https://makaug.com/">
+  <script>
+    (function () {
+      document.documentElement.classList.add("app-booting");
+      window.__releaseMakaugBoot = function () {
+        document.documentElement.classList.remove("app-booting");
+        document.documentElement.classList.add("app-ready");
+      };
+      window.addEventListener("DOMContentLoaded", window.__releaseMakaugBoot, { once: true });
+      window.setTimeout(window.__releaseMakaugBoot, 1600);
+    })();
+  </script>
   <link rel="preconnect" href="https://images.unsplash.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,6 +44,11 @@
   </script>
   <style>
     body { font-family: "Plus Jakarta Sans", sans-serif; }
+    html.app-booting body { opacity: 0; }
+    html.app-ready body { opacity: 1; transition: opacity .08s ease-out; }
+    @media (prefers-reduced-motion: reduce) {
+      html.app-ready body { transition: none; }
+    }
     .serif { font-family: "Plus Jakarta Sans", sans-serif; }
     input, select, textarea, button { font: inherit; }
     html { -webkit-text-size-adjust: 100%; }
@@ -223,14 +239,14 @@
     .finder-atmosphere {
       position: relative;
       overflow: hidden;
-      border-radius: 22px;
+      border-radius: 18px;
       border: 1px solid rgba(187, 247, 208, 0.9);
       background:
         radial-gradient(circle at 18% 25%, rgba(255, 255, 255, 0.92), transparent 16%),
         linear-gradient(135deg, #052e16 0%, #166534 48%, #d6a62a 125%);
       box-shadow: 0 18px 40px rgba(5, 46, 22, 0.16);
       color: #fff;
-      min-width: 250px;
+      min-width: 0;
       isolation: isolate;
     }
     .finder-atmosphere::before,
@@ -262,8 +278,8 @@
         linear-gradient(135deg, #031b13 0%, #0f2d3d 50%, #39275d 130%);
     }
     .finder-sky-orb {
-      width: 48px;
-      height: 48px;
+      width: 42px;
+      height: 42px;
       border-radius: 999px;
       display: grid;
       place-items: center;
@@ -3344,12 +3360,9 @@
                 <div class="flex items-center gap-4">
                   <div id="finder-sky-icon" class="finder-sky-orb text-2xl">☀️</div>
                   <div class="min-w-0">
-                    <div id="finder-current-time" data-dashboard-current-time="1" class="text-lg font-black leading-tight">Current time will appear here.</div>
-                    <div id="finder-weather-context" class="text-xs text-green-50/90 mt-1">Weather-ready when an area is set.</div>
+                    <div id="finder-current-time" data-dashboard-current-time="1" class="text-lg font-black leading-tight">Time: --:--</div>
+                    <div id="finder-weather-context" class="text-xs text-green-50/90 mt-1">Weather • local forecast when available</div>
                   </div>
-                </div>
-                <div class="mt-3 flex flex-wrap gap-2 text-xs">
-                  <span id="finder-area-preference-context" data-dashboard-area-preference="1" class="finder-info-chip">Area preference follows your matches.</span>
                 </div>
               </div>
 		            </div>
@@ -3468,16 +3481,11 @@
 	            <p id="finder-budget-copy" class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
 	            <button id="finder-budget-btn" onclick="showPage('mortgage')" class="mt-3 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Mortgage Finder</button>
 	          </div>
-		          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
-		            <h2 id="finder-safety-title" class="text-xl font-bold text-green-900 mb-2">Safety Tips</h2>
-		            <p id="finder-safety-copy" class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
-                <button id="finder-safety-btn" onclick="showPage('safety')" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open Safety Tips</button>
+		          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+		            <h2 id="finder-safety-title" class="text-xl font-bold text-gray-800 mb-2">Safety Tips</h2>
+		            <p id="finder-safety-copy" class="text-sm text-gray-500">Practical safety prompts for renters, buyers, students, land seekers, owners, brokers, and diaspora buyers.</p>
+                <button id="finder-safety-btn" onclick="showPage('safety')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Safety Tips</button>
 		          </div>
-	          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
-	            <h2 id="finder-area-watch-title" class="text-xl font-bold text-green-900 mb-2">Area Watch</h2>
-	            <p id="finder-area-watch-copy" class="text-sm text-green-950">Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.</p>
-	            <button id="finder-area-watch-btn" onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20property%20on%20makaug.com','_blank')" class="mt-4 bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Help / WhatsApp makaug.com</button>
-	          </div>
         </div>
       </div>
     </div>
@@ -5970,6 +5978,8 @@
       { key: "save-searches-alerts", title: "How to save searches and create alerts", description: "Keep track of demand and get notified when matching listings appear.", category: "alerts", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
       { key: "book-viewing-callback", title: "How to book a viewing or request callback", description: "Understand viewing buttons, callback requests, and follow-up tracking.", category: "viewings", youtubeVideoId: "", ctaLabel: "Find properties", ctaUrl: "/for-sale" },
       { key: "stay-safe-report", title: "How to stay safe and report suspicious listings", description: "Learn red flags, title checks, payment safety, and fraud-report steps.", category: "safety", youtubeVideoId: "", ctaLabel: "Read safety tips", ctaUrl: "/safety" },
+      { key: "safe-viewings", title: "How to view property safely", description: "Plan viewings, bring trusted support, confirm the address, and keep payment pressure away from the visit.", category: "safety", youtubeVideoId: "", ctaLabel: "Read viewing safety", ctaUrl: "/safety" },
+      { key: "land-title-safety", title: "How to check land and title safety", description: "Check title details, seller authority, boundaries, access, and written records before paying.", category: "safety", youtubeVideoId: "", ctaLabel: "Read land safety", ctaUrl: "/safety" },
       { key: "ai-can-help", title: "What MakaUg AI can help with", description: "Search, list, create alerts, request help, and understand next steps.", category: "ai", youtubeVideoId: "", ctaLabel: "Try AI", ctaUrl: "/discover-ai-chatbot" },
       { key: "ai-search-whatsapp", title: "How to search property using WhatsApp/AI", description: "Ask naturally by area, budget, category, campus, or land need.", category: "ai", youtubeVideoId: "", ctaLabel: "Open AI chatbot", ctaUrl: "/discover-ai-chatbot" },
       { key: "ai-list-property", title: "How to list property with AI help", description: "Use the guided online form or WhatsApp listing path with safe prompts.", category: "ai", youtubeVideoId: "", ctaLabel: "List Property", ctaUrl: "/list-property" },
@@ -7311,7 +7321,42 @@
         "about.trustReviewTitle": "Review before publishing",
         "about.trustReviewText": "Listing details, photos, location, and fraud signals are checked before approval.",
         "about.trustFraudTitle": "Fraud reporting",
-        "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure."
+        "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure.",
+        "safety.eyebrow": "Verify before paying",
+        "safety.title": "makaug.com Safety Tips",
+        "safety.subtitle": "Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.",
+        "safety.reportCta": "Report suspicious listing",
+        "safety.whatsappCta": "Ask makaug.com on WhatsApp",
+        "safety.fraudCta": "Read anti-fraud guidance",
+        "safety.introTitle": "A safer property journey starts before the viewing",
+        "safety.introBody": "Treat every listing as something to verify. Keep messages, compare prices, inspect in person, confirm documents, and avoid paying anyone who rushes you.",
+        "safety.rentersTitle": "Renters",
+        "safety.rentersText": "View the room or home first, check utilities, ask for the landlord or agent mandate, and never send reservation money before verification.",
+        "safety.buyersTitle": "Buyers",
+        "safety.buyersText": "Confirm seller authority, inspect the location, use a qualified legal professional, and keep every receipt and agreement traceable.",
+        "safety.studentsTitle": "Students and parents",
+        "safety.studentsText": "Check distance to campus, access at night, water, power, visitor rules, and who manages emergencies before committing.",
+        "safety.ownersTitle": "Owners and sellers",
+        "safety.ownersText": "Share only necessary documents, verify serious buyers or tenants, meet in controlled settings, and keep written records.",
+        "safety.brokersTitle": "Brokers",
+        "safety.brokersText": "Use accurate listing details, confirm owner authority, keep client communication recorded, and disclose fees clearly.",
+        "safety.landTitle": "Land seekers",
+        "safety.landText": "Check title, boundaries, access roads, seller authority, neighbours, and survey details before any payment.",
+        "safety.commercialTitle": "Commercial users",
+        "safety.commercialText": "Confirm zoning, access, loading, parking, power, lease terms, landlord authority, and business permits.",
+        "safety.diasporaTitle": "Diaspora buyers",
+        "safety.diasporaText": "Use trusted local verification, independent legal support, video walk-throughs, and traceable payments only.",
+        "safety.checklistTitle": "Before money changes hands",
+        "safety.check1": "View or verify the property through someone you trust.",
+        "safety.check2": "Confirm the identity and authority of the owner, broker, or caretaker.",
+        "safety.check3": "For land, verify title and boundaries through official channels.",
+        "safety.check4": "Use written terms, receipts, and traceable payment channels.",
+        "safety.check5": "Report pressure, fake documents, or suspicious payment requests.",
+        "safety.videoLabel": "Safety video guides",
+        "safety.videoTitle": "Two-minute safety walkthroughs",
+        "safety.videoCopy": "Video slots are ready for viewing safety, fraud reporting, land/title checks, and safe WhatsApp contact.",
+        "safety.reportTitle": "See something suspicious?",
+        "safety.reportBody": "Stop the conversation, keep screenshots and payment details, then report it so makaug.com can review the listing."
       },
       lg: {
         "about.heroLabel": "Ebitukwatako",
@@ -7354,7 +7399,42 @@
         "about.trustReviewTitle": "Review nga tennaba publishing",
         "about.trustReviewText": "Details, photos, location, ne fraud signals bikekebejjebwa nga listing tennakkirizibwa.",
         "about.trustFraudTitle": "Fraud reporting",
-        "about.trustFraudText": "Users basobola okuloopa listings eziteeberezebwa, land/title concerns, ne pressure y'okusasula."
+        "about.trustFraudText": "Users basobola okuloopa listings eziteeberezebwa, land/title concerns, ne pressure y'okusasula.",
+        "safety.eyebrow": "Kakasa nga tonnasasula",
+        "safety.title": "Safety tips za makaug.com",
+        "safety.subtitle": "Emitendera egyangu eri buli property journey: laba mu bukuumi, kakasa identity, kakasa obuyinza, sasula mu ngeri elondoolerwa, era loopa pressure etategeerekeka.",
+        "safety.reportCta": "Loopa listing eteeberezebwa",
+        "safety.whatsappCta": "Buuza makaug.com ku WhatsApp",
+        "safety.fraudCta": "Soma anti-fraud guidance",
+        "safety.introTitle": "Property journey ey'obukuumi etandika nga tonnalaba property",
+        "safety.introBody": "Buli listing erina okukakasibwa. Kuuma messages, geraageranya prices, laba property, kakasa documents, era weewale okusasula omuntu akupapya.",
+        "safety.rentersTitle": "Abapangisa",
+        "safety.rentersText": "Laba room oba house, kebera utilities, buuza landlord oba agent mandate, era tosindika reservation money nga tonnakakasa.",
+        "safety.buyersTitle": "Abagula",
+        "safety.buyersText": "Kakasa seller authority, laba ekifo, kozesa lawyer akugu, era kuuma receipts n'endagaano.",
+        "safety.studentsTitle": "Abayizi n'abazadde",
+        "safety.studentsText": "Kebera distance okuva ku campus, access ekiro, amazzi, amasannyalaze, rules, n'ani akola ku emergencies.",
+        "safety.ownersTitle": "Bannannyini property n'abatunda",
+        "safety.ownersText": "Gabana documents ezetaagisa zokka, kakasa buyers oba tenants, sisinkana mu bifo ebirungi, era kuuma records.",
+        "safety.brokersTitle": "Brokers",
+        "safety.brokersText": "Kozesa details entuufu, kakasa owner authority, kuuma communication, era tegeeza fees mu lwatu.",
+        "safety.landTitle": "Abanoonya ettaka",
+        "safety.landText": "Kakasa title, boundaries, access roads, seller authority, neighbours, ne survey details nga tonnasasula.",
+        "safety.commercialTitle": "Commercial users",
+        "safety.commercialText": "Kakasa zoning, access, loading, parking, power, lease terms, landlord authority, ne business permits.",
+        "safety.diasporaTitle": "Diaspora buyers",
+        "safety.diasporaText": "Kozesa omuntu yeesigika mu verification, legal support eyetongodde, video walk-throughs, ne payments ezirondoolerwa zokka.",
+        "safety.checklistTitle": "Nga ssente tezinnakyuka mikono",
+        "safety.check1": "Laba oba kakasa property ng'oyita mu muntu gw'oyesiga.",
+        "safety.check2": "Kakasa identity n'obuyinza bwa owner, broker, oba caretaker.",
+        "safety.check3": "Ku ttaka, kakasa title ne boundaries mu mitendera emitongole.",
+        "safety.check4": "Kozesa terms, receipts, ne payment channels ezirondoolerwa.",
+        "safety.check5": "Loopa pressure, fake documents, oba payment requests eziteeberezebwa.",
+        "safety.videoLabel": "Safety video guides",
+        "safety.videoTitle": "Safety walkthroughs ez'eddakiika bbiri",
+        "safety.videoCopy": "Video slots zitegekeddwa ku viewing safety, fraud reporting, land/title checks, ne WhatsApp contact ey'obukuumi.",
+        "safety.reportTitle": "Olaba ekintu ekiteeberezebwa?",
+        "safety.reportBody": "Yimiriza conversation, kuuma screenshots ne payment details, olyoke oloope makaug.com ekebere listing."
       },
       sw: {
         "about.heroLabel": "Kuhusu Sisi",
@@ -7397,7 +7477,42 @@
         "about.trustReviewTitle": "Review kabla ya publishing",
         "about.trustReviewText": "Listing details, photos, location, na fraud signals hukaguliwa kabla ya approval.",
         "about.trustFraudTitle": "Fraud reporting",
-        "about.trustFraudText": "Users wanaweza kuripoti suspicious listings, land/title concerns, na payment pressure."
+        "about.trustFraudText": "Users wanaweza kuripoti suspicious listings, land/title concerns, na payment pressure.",
+        "safety.eyebrow": "Thibitisha kabla ya kulipa",
+        "safety.title": "Vidokezo vya usalama vya makaug.com",
+        "safety.subtitle": "Hatua rahisi kwa kila safari ya mali: tembelea kwa usalama, thibitisha utambulisho, hakikisha mamlaka, tumia malipo yanayofuatilika, na ripoti shinikizo la ulaghai haraka.",
+        "safety.reportCta": "Ripoti listing yenye shaka",
+        "safety.whatsappCta": "Uliza makaug.com kwenye WhatsApp",
+        "safety.fraudCta": "Soma mwongozo wa anti-fraud",
+        "safety.introTitle": "Safari salama ya mali huanza kabla ya viewing",
+        "safety.introBody": "Chukulia kila listing kama kitu cha kuthibitisha. Hifadhi ujumbe, linganisha bei, tembelea, hakiki nyaraka, na usilipe mtu anayekukimbiza.",
+        "safety.rentersTitle": "Wapangaji",
+        "safety.rentersText": "Tembelea nyumba au chumba kwanza, kagua huduma, uliza mamlaka ya landlord au agent, na usitume reservation money kabla ya verification.",
+        "safety.buyersTitle": "Wanunuzi",
+        "safety.buyersText": "Thibitisha mamlaka ya muuzaji, kagua eneo, tumia mtaalamu wa sheria, na hifadhi risiti na mikataba yote.",
+        "safety.studentsTitle": "Wanafunzi na wazazi",
+        "safety.studentsText": "Kagua umbali wa campus, usalama wa usiku, maji, umeme, rules, na anayeshughulikia dharura.",
+        "safety.ownersTitle": "Wamiliki na wauzaji",
+        "safety.ownersText": "Shiriki nyaraka muhimu tu, hakiki buyers au tenants, kutana mahali salama, na hifadhi records.",
+        "safety.brokersTitle": "Brokers",
+        "safety.brokersText": "Tumia listing details sahihi, hakiki owner authority, hifadhi communication, na eleza fees wazi.",
+        "safety.landTitle": "Watafuta ardhi",
+        "safety.landText": "Hakiki title, boundaries, access roads, seller authority, neighbours, na survey details kabla ya kulipa.",
+        "safety.commercialTitle": "Watumiaji commercial",
+        "safety.commercialText": "Hakiki zoning, access, loading, parking, power, lease terms, landlord authority, na business permits.",
+        "safety.diasporaTitle": "Wanunuzi wa diaspora",
+        "safety.diasporaText": "Tumia verification ya mtu unayemwamini, legal support huru, video walk-throughs, na malipo yanayofuatilika tu.",
+        "safety.checklistTitle": "Kabla pesa hazijabadilisha mikono",
+        "safety.check1": "Tembelea au hakiki property kupitia mtu unayemwamini.",
+        "safety.check2": "Thibitisha identity na authority ya owner, broker, au caretaker.",
+        "safety.check3": "Kwa ardhi, hakiki title na boundaries kupitia njia rasmi.",
+        "safety.check4": "Tumia written terms, receipts, na payment channels zinazofuatilika.",
+        "safety.check5": "Ripoti pressure, fake documents, au suspicious payment requests.",
+        "safety.videoLabel": "Video za mwongozo wa usalama",
+        "safety.videoTitle": "Safety walkthroughs za dakika mbili",
+        "safety.videoCopy": "Video slots ziko tayari kwa viewing safety, fraud reporting, land/title checks, na safe WhatsApp contact.",
+        "safety.reportTitle": "Unaona kitu cha shaka?",
+        "safety.reportBody": "Simamisha mazungumzo, hifadhi screenshots na payment details, kisha ripoti ili makaug.com ikague listing."
       }
     };
 
@@ -9199,7 +9314,7 @@
       setPageHeading("page-about", tr("pageAbout"));
       setPageHeading("page-saved", tr("pageSaved"));
       setPageHeading("page-account", tr("pageAccount"));
-      applyAboutLanguageUI();
+      applyContentLanguageUI(document);
       applyAuthUi();
       applyAccountAccessLanguageUi();
       applyListingWizardLanguageUI();
@@ -9618,11 +9733,8 @@
         title: "Property Finder Dashboard",
         subtitle: "Saved listings, recent views, and your activity",
         greetingSub: "We will use {language} where available. Your saved listings, recent views, enquiries, and route opens are tracked here.",
-        currentTime: "Current time: {time}",
-        weatherReady: "Weather: add an area for local weather context",
-        weatherArea: "Weather: local context for {area}",
-        locationArea: "Area preference: {area}",
-        locationMissing: "Area preference: add one to personalize matches.",
+        currentTime: "Time: {time}",
+        weatherReady: "Weather • local forecast when available",
         preferenceTitle: "Search preference summary",
         preferenceDefault: "Your role preferences, budget, contact channel, and language personalize this dashboard.",
         goal: "Goal",
@@ -9694,11 +9806,8 @@
         budgetCopy: "Mortgage estimates, rent affordability, deposits, and budget guidance are grouped here.",
         budgetButton: "Open Mortgage Finder",
         safetyTitle: "Safety Tips",
-        safetyCopy: "Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.",
+        safetyCopy: "Practical safety prompts for renters, buyers, students, land seekers, owners, brokers, and diaspora buyers.",
         safetyButton: "Open Safety Tips",
-        areaWatchTitle: "Area Watch",
-        areaWatchCopy: "Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.",
-        areaWatchButton: "Help / WhatsApp makaug.com",
         profileTitle: "Profile Information",
         profileSub: "Update your contact details and property search preferences.",
         backToDashboard: "Back to dashboard",
@@ -9739,11 +9848,8 @@
         title: "Dashboard y'omunoonya property",
         subtitle: "Listings z'oterese, by'olabye, n'emirimu gyo",
         greetingSub: "Tujja kukozesa {language} we kisoboka. Listings z'oterese, by'olabye, enquiries, ne route opens birondoolerwa wano.",
-        currentTime: "Essaawa kati: {time}",
-        weatherReady: "Obudde: ssaamu ekitundu okufuna context y'obudde",
-        weatherArea: "Obudde: context y'ekitundu {area}",
-        locationArea: "Ekitundu ky'oyagala: {area}",
-        locationMissing: "Ekitundu ky'oyagala: ssaamu ekitundu okusobola okufuna matches ennungi.",
+        currentTime: "Essaawa: {time}",
+        weatherReady: "Obudde • forecast y'ekitundu bw'ebaawo",
         preferenceTitle: "Summary y'ebyo by'oyagala",
         preferenceDefault: "Role, budget, contact, n'olulimi byo biyamba dashboard okukuwa ebikukwatako.",
         goal: "Ekigendererwa",
@@ -9815,11 +9921,8 @@
         budgetCopy: "Mortgage estimates, rent affordability, deposits, ne budget guidance bigattibwa wano.",
         budgetButton: "Ggulawo Mortgage Finder",
         safetyTitle: "Safety Tips",
-        safetyCopy: "Safety prompts eri renters, buyers, students, land seekers, ne diaspora buyers.",
+        safetyCopy: "Safety prompts eri renters, buyers, students, land seekers, owners, brokers, ne diaspora buyers.",
         safetyButton: "Ggulawo Safety Tips",
-        areaWatchTitle: "Area Watch",
-        areaWatchCopy: "Goberera ebitundu nga Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, ne Naalya.",
-        areaWatchButton: "Help / WhatsApp makaug.com",
         profileTitle: "Ebikwata ku profile",
         profileSub: "Kyusa contact details n'ebyo by'oyagala mu property search.",
         backToDashboard: "Ddayo ku dashboard",
@@ -9860,11 +9963,8 @@
         title: "Dashibodi ya Mtafutaji wa Mali",
         subtitle: "Mali ulizohifadhi, ulizotazama hivi karibuni, na shughuli zako",
         greetingSub: "Tutatumia {language} inapopatikana. Mali ulizohifadhi, ulizotazama, enquiries, na route opens vinafuatiliwa hapa.",
-        currentTime: "Saa ya sasa: {time}",
-        weatherReady: "Hali ya hewa: ongeza eneo kwa muktadha wa eneo",
-        weatherArea: "Hali ya hewa: muktadha wa eneo la {area}",
-        locationArea: "Eneo unalopendelea: {area}",
-        locationMissing: "Eneo unalopendelea: ongeza eneo ili kupata matches bora.",
+        currentTime: "Saa: {time}",
+        weatherReady: "Hali ya hewa • utabiri wa eneo unapopatikana",
         preferenceTitle: "Muhtasari wa mapendeleo ya search",
         preferenceDefault: "Role, budget, contact channel, na lugha yako hubinafsisha dashibodi hii.",
         goal: "Lengo",
@@ -9936,11 +10036,8 @@
         budgetCopy: "Mortgage estimates, rent affordability, deposits, na budget guidance zitawekwa hapa.",
         budgetButton: "Fungua Mortgage Finder",
         safetyTitle: "Safety Tips",
-        safetyCopy: "Personal safety prompts kwa renters, buyers, students, land seekers, na diaspora buyers.",
+        safetyCopy: "Safety prompts kwa renters, buyers, students, land seekers, owners, brokers, na diaspora buyers.",
         safetyButton: "Fungua Safety Tips",
-        areaWatchTitle: "Area Watch",
-        areaWatchCopy: "Fuatilia maeneo kama Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, na Naalya.",
-        areaWatchButton: "Help / WhatsApp makaug.com",
         profileTitle: "Profile Information",
         profileSub: "Sasisha mawasiliano yako na mapendeleo ya search ya mali.",
         backToDashboard: "Rudi kwenye dashibodi",
@@ -10104,9 +10201,6 @@
       setDashboardText("finder-safety-title", "safetyTitle");
       setDashboardText("finder-safety-copy", "safetyCopy");
       setDashboardText("finder-safety-btn", "safetyButton");
-      setDashboardText("finder-area-watch-title", "areaWatchTitle");
-      setDashboardText("finder-area-watch-copy", "areaWatchCopy");
-      setDashboardText("finder-area-watch-btn", "areaWatchButton");
     }
 
     function budgetMaxFromLabel(value = "") {
@@ -11082,8 +11176,7 @@
 	      if (scene) scene.classList.toggle("finder-atmosphere-night", isNight);
 	      setTextById("finder-sky-icon", isNight ? "🌙" : (isMorning ? "🌤️" : "☀️"));
 	      setTextById("finder-current-time", dashboardText("currentTime", { time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }));
-	      setTextById("finder-weather-context", preferredArea ? dashboardText("weatherArea", { area: preferredArea }) : dashboardText("weatherReady"));
-	      setTextById("finder-area-preference-context", preferredArea ? `📍 ${dashboardText("locationArea", { area: preferredArea })}` : `📍 ${dashboardText("locationMissing")}`);
+	      setTextById("finder-weather-context", dashboardText("weatherReady"));
 	      setTextById("finder-preference-summary", [
 	        userProfile.primary_goal ? `${dashboardText("goal")}: ${userProfile.primary_goal}` : "",
 	        userProfile.budget_range ? `${dashboardText("budget")}: ${userProfile.budget_range}` : "",
@@ -21539,7 +21632,7 @@
         const videos = howToVideosForContext(context).slice(0, 6);
         container.innerHTML = `<div class="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
-            <p class="text-xs font-black uppercase tracking-wide text-green-700">MakaUg video guides</p>
+            <p class="text-xs font-black uppercase tracking-wide text-green-700">${publicBrand()} video guides</p>
             <h2 class="text-2xl font-black text-gray-900 serif mt-1">One-minute how-to videos</h2>
             <p class="text-sm text-gray-600 mt-1">Video slots are ready. Add YouTube IDs in the how-to video config when the videos are published.</p>
           </div>
@@ -21834,38 +21927,88 @@
         </form>
         <div class="mt-6 rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="help"></div>`,
       safety: `
-        <h2 class="text-2xl font-bold text-gray-800 mb-1">Safety Tips</h2>
-        <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
-        <h3 class="font-bold text-gray-800 mb-1">Before You View Any Property</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Confirm the lister identity and keep communication records.</li>
-          <li>Compare asking price with similar local listings.</li>
-          <li>Avoid anyone demanding "reservation" money before viewing.</li>
-          <li>Bring another person for first viewing where possible.</li>
-        </ul>
-        <h3 class="font-bold text-gray-800 mb-1">During Viewing and Negotiation</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Inspect utilities, boundaries, access roads, and neighborhood conditions.</li>
-          <li>Ask for ownership evidence, tenancy authority, or management mandate.</li>
-          <li>For land, verify title details through official records before paying.</li>
-          <li>Use written offer terms and keep dated documentation.</li>
-        </ul>
-        <h3 class="font-bold text-gray-800 mb-1">Payments and Contracts</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Do not pay cash without signed acknowledgement and identity trace.</li>
-          <li>Use formal agreements reviewed by a qualified legal professional.</li>
-          <li>Confirm taxes, fees, and registration requirements before completion.</li>
-          <li>Keep transfer proofs, receipts, and witness records securely.</li>
-        </ul>
-        <h3 class="font-bold text-gray-800 mb-1">For Owners and Brokers</h3>
-        <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
-          <li>Avoid sharing excessive personal documents in open chat channels.</li>
-          <li>Meet prospects in controlled environments for first appointments.</li>
-          <li>Verify buyer identity before releasing sensitive property documents.</li>
-        </ul>
-        <p class="text-sm">
-          If you suspect a scam, stop communication, keep all records, and submit a report immediately through the platform.
-        </p>`,
+        <div class="rounded-3xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-6 mb-6 overflow-hidden relative">
+          <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10"></div>
+          <p class="text-green-200 text-xs font-black uppercase tracking-wide" data-content-i18n="safety.eyebrow">Verify before paying</p>
+          <h2 class="text-3xl font-black serif mt-1" data-content-i18n="safety.title">makaug.com Safety Tips</h2>
+          <p class="text-green-50 mt-2 max-w-3xl" data-content-i18n="safety.subtitle">Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.</p>
+          <div class="flex flex-wrap gap-2 mt-5">
+            <a href="/report-fraud" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.reportCta">Report suspicious listing</a>
+            <a href="https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
+            <a href="/anti-fraud" class="inline-flex rounded-xl bg-white/90 px-4 py-2 text-sm font-black text-green-900" data-content-i18n="safety.fraudCta">Read anti-fraud guidance</a>
+          </div>
+        </div>
+        <div class="rounded-3xl bg-white border border-green-100 p-5 mb-6">
+          <h3 class="text-2xl font-black text-gray-900" data-content-i18n="safety.introTitle">A safer property journey starts before the viewing</h3>
+          <p class="text-sm text-gray-600 mt-2 max-w-3xl" data-content-i18n="safety.introBody">Treat every listing as something to verify. Keep messages, compare prices, inspect in person, confirm documents, and avoid paying anyone who rushes you.</p>
+        </div>
+        <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-safety-stakeholder-grid="1">
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="renters" class="h-28 rounded-2xl bg-gradient-to-br from-green-100 to-emerald-50 grid place-items-center text-green-800"><i class="fas fa-house-user text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.rentersTitle">Renters</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.rentersText">View the room or home first, check utilities, ask for the landlord or agent mandate, and never send reservation money before verification.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="buyers" class="h-28 rounded-2xl bg-gradient-to-br from-amber-100 to-white grid place-items-center text-amber-700"><i class="fas fa-file-signature text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.buyersTitle">Buyers</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.buyersText">Confirm seller authority, inspect the location, use a qualified legal professional, and keep every receipt and agreement traceable.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="students" class="h-28 rounded-2xl bg-gradient-to-br from-blue-100 to-white grid place-items-center text-blue-700"><i class="fas fa-graduation-cap text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.studentsTitle">Students and parents</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.studentsText">Check distance to campus, access at night, water, power, visitor rules, and who manages emergencies before committing.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="owners" class="h-28 rounded-2xl bg-gradient-to-br from-orange-100 to-white grid place-items-center text-orange-700"><i class="fas fa-key text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.ownersTitle">Owners and sellers</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.ownersText">Share only necessary documents, verify serious buyers or tenants, meet in controlled settings, and keep written records.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="brokers" class="h-28 rounded-2xl bg-gradient-to-br from-lime-100 to-white grid place-items-center text-lime-700"><i class="fas fa-briefcase text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.brokersTitle">Brokers</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.brokersText">Use accurate listing details, confirm owner authority, keep client communication recorded, and disclose fees clearly.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="land" class="h-28 rounded-2xl bg-gradient-to-br from-emerald-100 to-white grid place-items-center text-emerald-700"><i class="fas fa-map-marked-alt text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.landTitle">Land seekers</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.landText">Check title, boundaries, access roads, seller authority, neighbours, and survey details before any payment.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="commercial" class="h-28 rounded-2xl bg-gradient-to-br from-slate-100 to-white grid place-items-center text-slate-700"><i class="fas fa-store text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.commercialTitle">Commercial users</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.commercialText">Confirm zoning, access, loading, parking, power, lease terms, landlord authority, and business permits.</p>
+          </article>
+          <article class="rounded-3xl bg-white border border-green-100 p-4 hover:shadow-lg transition">
+            <div data-safety-illustration="diaspora" class="h-28 rounded-2xl bg-gradient-to-br from-purple-100 to-white grid place-items-center text-purple-700"><i class="fas fa-globe-africa text-5xl"></i></div>
+            <h3 class="font-black text-gray-900 mt-4" data-content-i18n="safety.diasporaTitle">Diaspora buyers</h3>
+            <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.diasporaText">Use trusted local verification, independent legal support, video walk-throughs, and traceable payments only.</p>
+          </article>
+        </div>
+        <div class="grid lg:grid-cols-2 gap-5 mb-6">
+          <section class="rounded-3xl bg-green-50 border border-green-100 p-5">
+            <h3 class="text-xl font-black text-green-950" data-content-i18n="safety.checklistTitle">Before money changes hands</h3>
+            <ul class="mt-4 space-y-3 text-sm text-green-950">
+              <li class="flex gap-3"><i class="fas fa-check-circle text-green-700 mt-0.5"></i><span data-content-i18n="safety.check1">View or verify the property through someone you trust.</span></li>
+              <li class="flex gap-3"><i class="fas fa-check-circle text-green-700 mt-0.5"></i><span data-content-i18n="safety.check2">Confirm the identity and authority of the owner, broker, or caretaker.</span></li>
+              <li class="flex gap-3"><i class="fas fa-check-circle text-green-700 mt-0.5"></i><span data-content-i18n="safety.check3">For land, verify title and boundaries through official channels.</span></li>
+              <li class="flex gap-3"><i class="fas fa-check-circle text-green-700 mt-0.5"></i><span data-content-i18n="safety.check4">Use written terms, receipts, and traceable payment channels.</span></li>
+              <li class="flex gap-3"><i class="fas fa-check-circle text-green-700 mt-0.5"></i><span data-content-i18n="safety.check5">Report pressure, fake documents, or suspicious payment requests.</span></li>
+            </ul>
+          </section>
+          <section class="rounded-3xl bg-white border border-red-100 p-5">
+            <h3 class="text-xl font-black text-gray-900" data-content-i18n="safety.reportTitle">See something suspicious?</h3>
+            <p class="text-sm text-gray-600 mt-2" data-content-i18n="safety.reportBody">Stop the conversation, keep screenshots and payment details, then report it so makaug.com can review the listing.</p>
+            <div class="flex flex-wrap gap-2 mt-4">
+              <a href="/report-fraud" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white" data-content-i18n="safety.reportCta">Report suspicious listing</a>
+              <a href="https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help" target="_blank" rel="noopener" class="rounded-xl border border-green-700 px-4 py-2 text-sm font-black text-green-700" data-content-i18n="safety.whatsappCta">Ask makaug.com on WhatsApp</a>
+            </div>
+          </section>
+        </div>
+        <section class="rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="safety">
+          <p class="text-green-700 text-xs font-black uppercase tracking-wide" data-content-i18n="safety.videoLabel">Safety video guides</p>
+          <h3 class="text-2xl font-black text-gray-900 mt-1" data-content-i18n="safety.videoTitle">Two-minute safety walkthroughs</h3>
+          <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.videoCopy">Video slots are ready for viewing safety, fraud reporting, land/title checks, and safe WhatsApp contact.</p>
+        </section>`,
       advertise: `
         <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
         <p class="text-xs text-gray-500 mb-4">Grow through MakaUg search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>

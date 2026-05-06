@@ -221,11 +221,46 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     links: ['https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
   },
   '/safety': {
-    title: 'MakaUg Safety Tips',
+    i18nPrefix: 'safety',
+    ctaKeys: ['reportCta', 'whatsappCta', 'fraudCta'],
+    title: 'makaug.com Safety Tips',
     eyebrow: 'Verify before paying',
-    body: 'View property before payment, verify broker or owner identity, use traceable payments, check land title and seller authority, and report suspicious listings quickly.',
-    ctas: ['Report suspicious listing', 'Ask MakaUg on WhatsApp', 'Read anti-fraud guidance'],
-    links: ['/report-fraud', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20safety%20help', '/anti-fraud']
+    body: 'Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.',
+    extraHtml: `
+      <div class="rounded-3xl bg-white border border-green-100 p-5 mt-6">
+        <h3 class="text-2xl font-black text-gray-900" data-content-i18n="safety.introTitle">A safer property journey starts before the viewing</h3>
+        <p class="text-sm text-gray-600 mt-2 max-w-3xl" data-content-i18n="safety.introBody">Treat every listing as something to verify. Keep messages, compare prices, inspect in person, confirm documents, and avoid paying anyone who rushes you.</p>
+      </div>
+      <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mt-6" data-safety-stakeholder-grid="1">
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="renters" class="h-24 rounded-2xl bg-green-50 grid place-items-center text-green-800"><i class="fas fa-house-user text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.rentersTitle">Renters</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.rentersText">View first, check utilities, confirm authority, and never send reservation money before verification.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="buyers" class="h-24 rounded-2xl bg-amber-50 grid place-items-center text-amber-700"><i class="fas fa-file-signature text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.buyersTitle">Buyers</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.buyersText">Confirm seller authority, inspect the location, use legal support, and keep traceable records.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="students" class="h-24 rounded-2xl bg-blue-50 grid place-items-center text-blue-700"><i class="fas fa-graduation-cap text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.studentsTitle">Students and parents</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.studentsText">Check campus distance, access, water, power, rules, and emergency support before paying.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="owners" class="h-24 rounded-2xl bg-orange-50 grid place-items-center text-orange-700"><i class="fas fa-key text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.ownersTitle">Owners and sellers</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.ownersText">Share only necessary documents, verify serious prospects, and keep written records.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="brokers" class="h-24 rounded-2xl bg-lime-50 grid place-items-center text-lime-700"><i class="fas fa-briefcase text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.brokersTitle">Brokers</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.brokersText">Use accurate details, confirm owner authority, record communication, and disclose fees clearly.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="land" class="h-24 rounded-2xl bg-emerald-50 grid place-items-center text-emerald-700"><i class="fas fa-map-marked-alt text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.landTitle">Land seekers</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.landText">Check title, boundaries, access roads, neighbours, and survey details before any payment.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="commercial" class="h-24 rounded-2xl bg-slate-50 grid place-items-center text-slate-700"><i class="fas fa-store text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.commercialTitle">Commercial users</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.commercialText">Confirm zoning, loading, parking, power, lease terms, and business permits.</span></article>
+        <article class="rounded-3xl bg-white border border-green-100 p-4"><div data-safety-illustration="diaspora" class="h-24 rounded-2xl bg-purple-50 grid place-items-center text-purple-700"><i class="fas fa-globe-africa text-4xl"></i></div><strong class="block mt-3" data-content-i18n="safety.diasporaTitle">Diaspora buyers</strong><span class="block text-sm text-gray-600 mt-1" data-content-i18n="safety.diasporaText">Use trusted local verification, legal support, video walk-throughs, and traceable payments only.</span></article>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-5 mt-6">
+        <section class="rounded-3xl bg-green-50 border border-green-100 p-5">
+          <h3 class="text-xl font-black text-green-950">Before money changes hands</h3>
+          <ul class="mt-4 space-y-2 text-sm text-green-950">
+            <li>View or verify the property through someone you trust.</li>
+            <li>Confirm the identity and authority of the owner, broker, or caretaker.</li>
+            <li>For land, verify title and boundaries through official channels.</li>
+            <li>Use written terms, receipts, and traceable payment channels.</li>
+            <li>Report pressure, fake documents, or suspicious payment requests.</li>
+          </ul>
+        </section>
+        <section class="rounded-3xl bg-white border border-red-100 p-5">
+          <h3 class="text-xl font-black text-gray-900">See something suspicious?</h3>
+          <p class="text-sm text-gray-600 mt-2">Stop the conversation, keep screenshots and payment details, then report it so makaug.com can review the listing.</p>
+          <a href="/report-fraud" class="inline-flex mt-4 rounded-xl bg-red-600 px-4 py-2 text-sm font-black text-white">Report suspicious listing</a>
+        </section>
+      </div>
+    `,
+    ctas: ['Report suspicious listing', 'Ask makaug.com on WhatsApp', 'Read anti-fraud guidance'],
+    links: ['/report-fraud', 'https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help', '/anti-fraud']
   },
   '/terms': {
     title: 'MakaUg Terms and Conditions',
@@ -382,7 +417,10 @@ function renderSyntheticRouteContent(pathname = '/') {
   const ctaHtml = content.ctas.map((item, index) => {
     const href = (content.links || [])[index] || '/help';
     const external = /^https?:|^mailto:/i.test(href);
-    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900">${item}</a>`;
+    const ctaKey = content.i18nPrefix && content.ctaKeys?.[index]
+      ? ` data-content-i18n="${content.i18nPrefix}.${content.ctaKeys[index]}"`
+      : '';
+    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900"${ctaKey}>${item}</a>`;
   }).join('');
   const videoContext = {
     '/about': 'about',
@@ -401,18 +439,18 @@ function renderSyntheticRouteContent(pathname = '/') {
   <main id="page-${pathName.slice(1).replace(/[^a-z0-9-]/g, '-')}" class="page active" data-public-route="${pathName}">
     <section class="bg-green-800 py-10 text-white">
       <div class="max-w-5xl mx-auto px-4">
-        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">${content.eyebrow}</p>
-        <h1 class="text-4xl font-black serif mt-2">${content.title}</h1>
-        <p class="text-green-50 mt-3 max-w-3xl">${content.body}</p>
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.eyebrow"` : ''}>${content.eyebrow}</p>
+        <h1 class="text-4xl font-black serif mt-2"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.title"` : ''}>${content.title}</h1>
+        <p class="text-green-50 mt-3 max-w-3xl"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.subtitle"` : ''}>${content.body}</p>
         <div class="flex flex-wrap gap-2 mt-5">${ctaHtml}</div>
       </div>
     </section>
     <section class="max-w-5xl mx-auto px-4 py-10">
       <div class="bg-white border border-green-100 rounded-2xl p-6">
-        <h2 class="text-2xl font-bold text-gray-900 serif">${content.title}</h2>
-        <p class="text-gray-600 mt-3">${content.body}</p>
+        <h2 class="text-2xl font-bold text-gray-900 serif"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.title"` : ''}>${content.title}</h2>
+        <p class="text-gray-600 mt-3"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.subtitle"` : ''}>${content.body}</p>
         ${content.extraHtml || ''}
-        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Ask MakaUg on WhatsApp</a>
+        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Ask makaug.com on WhatsApp</a>
       </div>
     </section>
     ${videoSection}
