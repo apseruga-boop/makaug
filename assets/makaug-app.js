@@ -25184,7 +25184,9 @@ function toast(message, duration = 2400) {
   el._timer = setTimeout(() => el.classList.remove("show"), duration);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+function initializeMakaugApp() {
+  if (window.__makaugAppInitialized) return;
+  window.__makaugAppInitialized = true;
   installPublicRouteInterceptor();
   let savedLang = null;
   try {
@@ -25263,4 +25265,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("resize", closeHeroSuggestions);
   window.addEventListener("scroll", closeHeroSuggestions, true);
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeMakaugApp, { once: true });
+} else {
+  initializeMakaugApp();
+}

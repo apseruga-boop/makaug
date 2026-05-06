@@ -5563,6 +5563,22 @@
     </div>
   </div>
 
-  <script src="/assets/makaug-app.js" defer></script>
+  <script>
+    (function () {
+      function loadMakaugApp() {
+        if (window.__makaugAppLoading) return;
+        window.__makaugAppLoading = true;
+        var script = document.createElement("script");
+        script.src = "/assets/makaug-app.js";
+        script.async = true;
+        document.body.appendChild(script);
+      }
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", loadMakaugApp, { once: true });
+      } else {
+        loadMakaugApp();
+      }
+    })();
+  </script>
 </body>
 </html>
