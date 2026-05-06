@@ -4211,8 +4211,16 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Open Saved Page",
     signOut: "Sign Out",
     recentlyViewed: "Recently Viewed",
-    briefTitle: "Can't Find What You're Looking For?",
-    briefCopy: "Tell us the top-line details and makaug.com will turn it into a tracked property request.",
+    briefTitle: "How can makaug.com help you find what you're looking for?",
+    briefCopy: "Choose the basics and makaug.com will create a tracked request the team can follow up by email or WhatsApp.",
+    briefCopyByCategory: {
+      rent: "Tell us where, budget, bedrooms, and timing so makaug.com can help you find a rental.",
+      sale: "Tell us the area, budget, and property style so makaug.com can help you find a home to buy.",
+      student: "Tell us the campus or area, budget, room needs, and timing so makaug.com can help with student accommodation.",
+      land: "Tell us the area, budget, and land need so makaug.com can help with suitable plots.",
+      commercial: "Tell us the location, budget, and business use so makaug.com can help find commercial space.",
+      broker: "Tell us the area and support you need so makaug.com can connect you with the right broker or agent."
+    },
     briefEmpty: "No property requests yet. Send one when you cannot find the right match.",
     needCategoryLabel: "What are you looking for?",
     needLocationLabel: "Location",
@@ -4222,10 +4230,18 @@ const FINDER_DASHBOARD_I18N = {
     needContactLabel: "How should we reply?",
     needMessageLabel: "Anything else we should know?",
     needMessagePlaceholder: "Tell us the exact area, must-haves, deadline, or anything we missed.",
+    needSummaryLabel: "Request summary",
+    needGeneratedLabel: "Message to makaug.com",
     needPreviewDefault: "I am looking for a rental in Kampala.",
+    needGeneratedDefault: "Hi makaug.com, please help me find a rental in Kampala.",
+    needNoteLine: "Extra note: {note}",
+    needNoExtraNote: "No extra note added yet.",
+    needGeneratedMessage: "Hi makaug.com, please help me find {category} in {location}{bedrooms}{budget}{urgency}. Please reply by {contact}.{note}",
     needSubmit: "Send request",
     needSending: "Sending...",
     needSent: "Request sent. It is now tracked as unresolved until the team closes it.",
+    needSentEmail: "Request sent. We emailed confirmation and it is tracked as unresolved.",
+    needSentWhatsapp: "Request sent. We logged a WhatsApp confirmation and it is tracked as unresolved.",
     needError: "Could not send request. Please try again or contact makaug.com on WhatsApp.",
     needHistoryTitle: "Your property requests",
     needUnresolved: "Unresolved",
@@ -4266,8 +4282,7 @@ const FINDER_DASHBOARD_I18N = {
       },
       contact: {
         whatsapp: "WhatsApp",
-        email: "Email",
-        phone: "Phone call"
+        email: "Email"
       },
       bedroomAny: "Any"
     },
@@ -4281,10 +4296,10 @@ const FINDER_DASHBOARD_I18N = {
     recommendedCopy: "Exact, close, nearby, verified, new, and sponsored matches appear here with clear reasons.",
     noRecommendations: "No exact matches yet. Add your preferred area or save a search and we will show similar properties.",
     browseMatches: "Browse Matches",
-    savedSearchesTitle: "Saved Searches and Alerts",
-    savedSearchesCopy: "Save searches, choose WhatsApp/email alerts, and pause or edit alerts any time.",
-    noSavedSearches: "No saved searches yet. Save one to start alerting makaug.com about what you need.",
-    saveCurrentSearch: "Save Current Search",
+    savedSearchesTitle: "Alerts",
+    savedSearchesCopy: "Choose WhatsApp or email alerts, and pause or edit alerts any time.",
+    noSavedSearches: "No alerts yet. Create one to let makaug.com notify you about new matches.",
+    saveCurrentSearch: "Create Alert",
     contactTitle: "Property enquiries",
     contactCopy: "Messages, viewing interest, and follow-up status will be tracked here.",
     noContactHistory: "No property enquiries or WhatsApp contact history yet.",
@@ -4384,8 +4399,16 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Ggulawo ezitereddwa",
     signOut: "Fuluma",
     recentlyViewed: "By'olabye gye buvuddeko",
-    briefTitle: "Tosobodde kuzuula ky'onoonya?",
-    briefCopy: "Tubuulire ebikulu era makaug.com ejja kukifuula request erondoolerwa.",
+    briefTitle: "makaug.com eyinza etya okukuyamba okufuna ky'onoonya?",
+    briefCopy: "Londa ebikulu era makaug.com ejja kukola request erondoolerwa, team eddemu ku email oba WhatsApp.",
+    briefCopyByCategory: {
+      rent: "Tubuulire ekitundu, budget, bedrooms, n'obudde bwe okyetaagiramu makaug.com ekuyambe okufuna rental.",
+      sale: "Tubuulire ekitundu, budget, n'ekika kya property makaug.com ekuyambe okufuna eky'okugula.",
+      student: "Tubuulire campus oba ekitundu, budget, room needs, n'obudde makaug.com ekuyambe ku student accommodation.",
+      land: "Tubuulire ekitundu, budget, n'ettaka ly'oyagala makaug.com ekuyambe okufuna plots.",
+      commercial: "Tubuulire location, budget, n'omulimu gw'ogenda okukoleramu makaug.com ekuyambe okufuna commercial space.",
+      broker: "Tubuulire ekitundu n'obuyambi bw'oyagala makaug.com ekuyambe okukuyunga ku broker oba agent."
+    },
     briefEmpty: "Tewali property requests. Sindika emu bw'oba tofunye ekituufu.",
     needCategoryLabel: "Onoonya ki?",
     needLocationLabel: "Ekitundu",
@@ -4395,10 +4418,18 @@ const FINDER_DASHBOARD_I18N = {
     needContactLabel: "Tukuddemu tutya?",
     needMessageLabel: "Waliwo ekirala kye twandimanye?",
     needMessagePlaceholder: "Tubuulire ekitundu ekituufu, must-haves, deadline, oba kye twosizza.",
+    needSummaryLabel: "Summary ya request",
+    needGeneratedLabel: "Message eri makaug.com",
     needPreviewDefault: "Noonya rental mu Kampala.",
+    needGeneratedDefault: "Hi makaug.com, nnyamba okufuna rental mu Kampala.",
+    needNoteLine: "Ekyongerezeddwa: {note}",
+    needNoExtraNote: "Tewali note endala.",
+    needGeneratedMessage: "Hi makaug.com, nnyamba okufuna {category} mu {location}{bedrooms}{budget}{urgency}. Muddemu nga mukozesa {contact}.{note}",
     needSubmit: "Sindika request",
     needSending: "Tusindika...",
     needSent: "Request esindikiddwa. Erondoolerwa nga unresolved okutuusa team lw'egimaliriza.",
+    needSentEmail: "Request esindikiddwa. Tusindise confirmation ku email era erondoolerwa nga unresolved.",
+    needSentWhatsapp: "Request esindikiddwa. Tusindise oba tulogged confirmation ya WhatsApp era erondoolerwa nga unresolved.",
     needError: "Request tesobodde kusindikibwa. Ddamu ogezeeko oba tuwandiikire ku WhatsApp.",
     needHistoryTitle: "Property requests zo",
     needUnresolved: "Tennamalirizibwa",
@@ -4439,8 +4470,7 @@ const FINDER_DASHBOARD_I18N = {
       },
       contact: {
         whatsapp: "WhatsApp",
-        email: "Email",
-        phone: "Phone call"
+        email: "Email"
       },
       bedroomAny: "Yonna"
     },
@@ -4454,10 +4484,10 @@ const FINDER_DASHBOARD_I18N = {
     recommendedCopy: "Matches ezituufu, eziri okumpi, ezikakasiddwa, empya, ne sponsored zijja kulabika n'ensonga.",
     noRecommendations: "Tewali exact matches kati. Ssaamu ekitundu oba tereka search tufune ebifaanagana.",
     browseMatches: "Laba matches",
-    savedSearchesTitle: "Saved Searches ne Alerts",
-    savedSearchesCopy: "Tereka searches, londa WhatsApp/email alerts, era osobola okuziyimiriza oba okuzikyusa.",
-    noSavedSearches: "Tewali saved searches. Tereka emu makaug.com etandike okukulabira ky'oyagala.",
-    saveCurrentSearch: "Tereka search eno",
+    savedSearchesTitle: "Alerts",
+    savedSearchesCopy: "Londa WhatsApp oba email alerts, era osobola okuziyimiriza oba okuzikyusa.",
+    noSavedSearches: "Tewali alerts. Kolawo emu makaug.com ekutegeeze ku matches empya.",
+    saveCurrentSearch: "Kolawo Alert",
     contactTitle: "Property enquiries",
     contactCopy: "Messages, viewing interest, ne follow-up status bijja kulondoolerwa wano.",
     noContactHistory: "Tewali enquiries oba WhatsApp history.",
@@ -4557,8 +4587,16 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Fungua Saved Page",
     signOut: "Toka",
     recentlyViewed: "Ulizotazama hivi karibuni",
-    briefTitle: "Hujapata unachotafuta?",
-    briefCopy: "Tuambie maelezo muhimu na makaug.com itaweka ombi lako kwenye mfumo wa kufuatilia.",
+    briefTitle: "makaug.com inaweza kukusaidiaje kupata unachotafuta?",
+    briefCopy: "Chagua maelezo muhimu na makaug.com itaunda ombi linalofuatiliwa, kisha timu itakujibu kwa email au WhatsApp.",
+    briefCopyByCategory: {
+      rent: "Tuambie eneo, budget, bedrooms, na muda ili makaug.com ikusaidie kupata rental.",
+      sale: "Tuambie eneo, budget, na aina ya property ili makaug.com ikusaidie kupata nyumba ya kununua.",
+      student: "Tuambie campus au eneo, budget, room needs, na muda ili makaug.com ikusaidie na student accommodation.",
+      land: "Tuambie eneo, budget, na aina ya land ili makaug.com ikusaidie kupata plots zinazofaa.",
+      commercial: "Tuambie location, budget, na matumizi ya biashara ili makaug.com ikusaidie kupata commercial space.",
+      broker: "Tuambie eneo na support unayohitaji ili makaug.com ikuunganishe na broker au agent sahihi."
+    },
     briefEmpty: "Hakuna property requests bado. Tuma moja usipopata match sahihi.",
     needCategoryLabel: "Unatafuta nini?",
     needLocationLabel: "Eneo",
@@ -4568,10 +4606,18 @@ const FINDER_DASHBOARD_I18N = {
     needContactLabel: "Tukujibu vipi?",
     needMessageLabel: "Kuna maelezo mengine?",
     needMessagePlaceholder: "Tuambie eneo kamili, vitu muhimu, deadline, au chochote tulichokosa.",
+    needSummaryLabel: "Muhtasari wa request",
+    needGeneratedLabel: "Ujumbe kwa makaug.com",
     needPreviewDefault: "Natafuta rental Kampala.",
+    needGeneratedDefault: "Hi makaug.com, tafadhali nisaidie kupata rental Kampala.",
+    needNoteLine: "Maelezo zaidi: {note}",
+    needNoExtraNote: "Hakuna maelezo zaidi bado.",
+    needGeneratedMessage: "Hi makaug.com, tafadhali nisaidie kupata {category} katika {location}{bedrooms}{budget}{urgency}. Tafadhali nijibu kwa {contact}.{note}",
     needSubmit: "Tuma request",
     needSending: "Inatuma...",
     needSent: "Request imetumwa. Itaonekana unresolved hadi timu ikifunga.",
+    needSentEmail: "Request imetumwa. Tumetuma confirmation kwa email na bado inafuatiliwa kama unresolved.",
+    needSentWhatsapp: "Request imetumwa. Tumetuma au kuweka log ya WhatsApp confirmation na bado inafuatiliwa kama unresolved.",
     needError: "Request haikutumwa. Jaribu tena au wasiliana na makaug.com WhatsApp.",
     needHistoryTitle: "Property requests zako",
     needUnresolved: "Unresolved",
@@ -4612,8 +4658,7 @@ const FINDER_DASHBOARD_I18N = {
       },
       contact: {
         whatsapp: "WhatsApp",
-        email: "Email",
-        phone: "Phone call"
+        email: "Email"
       },
       bedroomAny: "Any"
     },
@@ -4627,10 +4672,10 @@ const FINDER_DASHBOARD_I18N = {
     recommendedCopy: "Exact, close, nearby, verified, new, na sponsored matches zitaonekana hapa na sababu.",
     noRecommendations: "Hakuna exact matches bado. Ongeza eneo au hifadhi search ili tuonyeshe mali zinazofanana.",
     browseMatches: "Browse Matches",
-    savedSearchesTitle: "Saved Searches na Alerts",
-    savedSearchesCopy: "Hifadhi searches, chagua WhatsApp/email alerts, na simamisha au badilisha alerts wakati wowote.",
-    noSavedSearches: "Hakuna saved searches bado. Hifadhi moja ili makaug.com ianze kukujulisha unachohitaji.",
-    saveCurrentSearch: "Hifadhi Search Hii",
+    savedSearchesTitle: "Alerts",
+    savedSearchesCopy: "Chagua WhatsApp au email alerts, na simamisha au badilisha alerts wakati wowote.",
+    noSavedSearches: "Hakuna alerts bado. Tengeneza moja ili makaug.com ikujulishe kuhusu matches mpya.",
+    saveCurrentSearch: "Tengeneza Alert",
     contactTitle: "Property enquiries",
     contactCopy: "Messages, viewing interest, na follow-up status vitafuatiliwa hapa.",
     noContactHistory: "Hakuna enquiries au WhatsApp contact history bado.",
@@ -4810,6 +4855,8 @@ function applyFinderDashboardLanguageUI() {
   setDashboardText("finder-need-urgency-label", "needUrgencyLabel");
   setDashboardText("finder-need-contact-label", "needContactLabel");
   setDashboardText("finder-need-message-label", "needMessageLabel");
+  setDashboardText("finder-need-summary-label", "needSummaryLabel");
+  setDashboardText("finder-need-generated-label", "needGeneratedLabel");
   setDashboardText("finder-need-submit-btn", "needSubmit");
   setDashboardText("finder-need-history-title", "needHistoryTitle");
   const needMessage = document.getElementById("finder-need-message");
@@ -5780,14 +5827,14 @@ async function saveCurrentDashboardSearch() {
       method: "POST",
       body: {
         category: currentCategory,
-        label: currentLocation ? `${currentCategory} in ${currentLocation}` : `${currentCategory} search`,
+        label: currentLocation ? `${currentCategory} alert in ${currentLocation}` : `${currentCategory} alert`,
         location: { query: currentLocation, fullAddress: currentLocation },
-        alert_channels: ["in_app", "whatsapp"],
+        alert_channels: ["whatsapp", "email"],
         alert_frequency: "weekly",
         created_from: "dashboard"
       }
     });
-    toast("Saved search created.");
+    toast("Alert created.");
     renderFinderDashboard();
   } catch (error) {
     toast(`Could not save search: ${error.message || "error"}`);
@@ -5810,6 +5857,14 @@ function finderNeedUrgencyLabel(value) {
   return dashboardNeedOption("urgency", value || "immediately");
 }
 
+function finderNeedCategoryCopy(value) {
+  const copies = dashboardRawValue("briefCopyByCategory");
+  if (copies && typeof copies === "object") {
+    return copies[value] || copies.rent || dashboardText("briefCopy");
+  }
+  return dashboardText("briefCopy");
+}
+
 function currentFinderNeedPayload() {
   const category = document.getElementById("finder-need-category")?.value || "rent";
   const location = document.getElementById("finder-need-location")?.value || "";
@@ -5827,6 +5882,18 @@ function currentFinderNeedPayload() {
     urgency: ` • ${finderNeedUrgencyLabel(urgency)}`,
     contact: finderNeedContactLabel(preferredContactChannel)
   });
+  const noteLine = message
+    ? dashboardText("needNoteLine", { note: message })
+    : dashboardText("needNoExtraNote");
+  const generatedMessage = dashboardText("needGeneratedMessage", {
+    category: finderNeedCategoryLabel(category).toLowerCase(),
+    location: dashboardNeedOption("location", location) || location || "Uganda",
+    bedrooms: categoryNeedsBedrooms && bedrooms ? ` • ${bedrooms} ${dashboardText("needBedroomsLabel").toLowerCase()}` : "",
+    budget: budget ? ` • ${finderNeedBudgetLabel(budget)}` : "",
+    urgency: ` • ${finderNeedUrgencyLabel(urgency)}`,
+    contact: finderNeedContactLabel(preferredContactChannel),
+    note: message ? ` ${noteLine}` : ""
+  });
   return {
     category,
     location,
@@ -5834,8 +5901,10 @@ function currentFinderNeedPayload() {
     bedrooms: categoryNeedsBedrooms ? bedrooms : "",
     urgency,
     preferred_contact_channel: preferredContactChannel,
+    delivery_method: preferredContactChannel,
     message,
-    summary: preview,
+    summary: [preview, noteLine].filter(Boolean).join(" "),
+    generated_message: generatedMessage,
     source: "property_finder_dashboard",
     language: currentLang || "en",
     currency: "UGX"
@@ -5849,6 +5918,10 @@ function updateFinderNeedForm() {
   if (bedroomsWrap) bedroomsWrap.classList.toggle("hidden", !categoryNeedsBedrooms);
   const preview = document.getElementById("finder-need-preview");
   if (preview) preview.textContent = payload.summary || dashboardText("needPreviewDefault");
+  const generated = document.getElementById("finder-need-generated-message");
+  if (generated) generated.textContent = payload.generated_message || dashboardText("needGeneratedDefault");
+  const copy = document.getElementById("finder-brief-copy");
+  if (copy) copy.textContent = finderNeedCategoryCopy(payload.category);
 }
 
 function propertyNeedStatusLabel(status = "") {
@@ -5892,7 +5965,9 @@ async function submitFinderNeedRequest(event) {
     goal: payload.category,
     property_type: payload.category === "student" ? "student accommodation" : payload.category,
     preferredContactChannel: payload.preferred_contact_channel,
-    message: [payload.summary, payload.message].filter(Boolean).join("\n\n"),
+    deliveryMethod: payload.delivery_method,
+    generatedMessage: payload.generated_message,
+    message: [payload.generated_message, payload.message ? `Extra note: ${payload.message}` : ""].filter(Boolean).join("\n\n"),
     email: authState.user?.email || "",
     phone: authState.user?.phone || ""
   };
@@ -5906,12 +5981,13 @@ async function submitFinderNeedRequest(event) {
       method: "POST",
       body
     });
-    if (status) status.textContent = dashboardText("needSent");
+    const sentKey = payload.preferred_contact_channel === "email" ? "needSentEmail" : "needSentWhatsapp";
+    if (status) status.textContent = dashboardText(sentKey);
     const message = document.getElementById("finder-need-message");
     if (message) message.value = "";
     updateFinderNeedForm();
     await renderFinderDashboard();
-    toast(dashboardText("needSent"));
+    toast(dashboardText(sentKey));
   } catch (error) {
     if (status) status.textContent = dashboardText("needError");
     toast(`${dashboardText("needError")} ${error.message || ""}`.trim());
@@ -6061,7 +6137,7 @@ async function renderFinderDashboard() {
 
 	      renderCompactDashboardRows("finder-saved-searches", savedSearches, dashboardText("noSavedSearches"), (item) => `
 	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-	          <div class="font-bold text-gray-900">${adminEscape(item.label || item.category || "Saved search")}</div>
+	          <div class="font-bold text-gray-900">${adminEscape(item.label || (item.category ? `${item.category} alert` : "Alert"))}</div>
 	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any location")} • ${adminEscape(item.alert_frequency || "weekly")} • ${adminEscape(formatAlertChannels(item.alert_channels))}</div>
 	        </div>`);
 	      renderCompactDashboardRows("finder-viewings", viewings, dashboardText("noViewings"), (item) => `

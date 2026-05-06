@@ -9,6 +9,7 @@ const { getSupportEmail, sendSupportEmail } = require('../services/emailService'
 const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const { sendWhatsAppText } = require('../services/whatsappNotificationService');
 
 const router = express.Router();
 
@@ -1143,10 +1144,15 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
       `Status: ${item.status}`,
       `Reference: ${item.id}`
     ].filter(Boolean).join('\n');
-    let userDelivery = { sent: false, reason: requesterEmail ? 'not_attempted' : 'no_email_recipient' };
+    let userDelivery = {
+      sent: false,
+      skipped: true,
+      reason: preferredContactChannel === 'email' ? 'no_email_recipient' : 'no_whatsapp_recipient'
+    };
+    let userDeliveryChannel = preferredContactChannel === 'email' ? 'email' : 'whatsapp';
     let adminDelivery = { sent: false, reason: 'not_attempted' };
     try {
-      if (requesterEmail) {
+      if (preferredContactChannel === 'email' && requesterEmail) {
         userDelivery = await sendSupportEmail({
           to: requesterEmail,
           subject: userSubject,
@@ -1161,28 +1167,51 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
             'You can see your request status in your Property Finder dashboard.'
           ].join('\n')
         });
+      } else if (preferredContactChannel === 'whatsapp' && requesterPhone) {
+        userDelivery = await sendWhatsAppText({
+          to: requesterPhone,
+          body: [
+            `Hi ${requesterName || 'there'}, makaug.com has received your property request.`,
+            'Status: unresolved while our team searches.',
+            'Target follow-up: within 24-48 hours.',
+            '',
+            requestText
+          ].join('\n')
+        });
+      } else if (preferredContactChannel === 'email') {
+        userDelivery = { sent: false, skipped: true, reason: 'no_email_recipient' };
+      } else {
+        userDelivery = { sent: false, skipped: true, reason: 'no_whatsapp_recipient' };
       }
-      adminDelivery = await sendSupportEmail({
-        to: getSupportEmail(),
-        subject: adminSubject,
-        text: [
-          'A property finder could not find what they need.',
-          '',
-          requestText,
-          '',
-          requesterName ? `Name: ${requesterName}` : '',
-          requesterEmail ? `Email: ${requesterEmail}` : '',
-          requesterPhone ? `Phone: ${requesterPhone}` : '',
-          lead?.id ? `CRM lead: ${lead.id}` : '',
-          '',
-          'Admin action: review in CRM/leads, assign an agent, then mark resolved when completed.'
-        ].filter(Boolean).join('\n'),
-        replyTo: requesterEmail || undefined
-      });
-    } catch (emailError) {
-      logger.warn('Property need request email notification failed', { error: emailError.message, leadId: lead?.id || null });
-      adminDelivery = { sent: false, error: emailError.message || 'email_failed' };
-    }
+	    } catch (deliveryError) {
+	      logger.warn('Property need request user notification failed', { error: deliveryError.message, leadId: lead?.id || null, channel: userDeliveryChannel });
+	      userDelivery = { sent: false, error: deliveryError.message || 'delivery_failed' };
+	    }
+	    try {
+	      adminDelivery = await sendSupportEmail({
+	        to: getSupportEmail(),
+	        subject: adminSubject,
+	        text: [
+	          'A property finder could not find what they need.',
+	          '',
+	          requestText,
+	          '',
+	          requesterName ? `Name: ${requesterName}` : '',
+	          requesterEmail ? `Email: ${requesterEmail}` : '',
+	          requesterPhone ? `Phone: ${requesterPhone}` : '',
+	          lead?.id ? `CRM lead: ${lead.id}` : '',
+	          '',
+	          'Admin action: review in CRM/leads, assign an agent, then mark resolved when completed.'
+	        ].filter(Boolean).join('\n'),
+	        replyTo: requesterEmail || undefined
+	      });
+	    } catch (adminEmailError) {
+	      logger.warn('Property need request admin notification failed', { error: adminEmailError.message, leadId: lead?.id || null });
+	      adminDelivery = { sent: false, error: adminEmailError.message || 'admin_email_failed' };
+	    }
+    const userDeliveryStatus = userDeliveryChannel === 'whatsapp' && userDelivery.reason === 'no_whatsapp_provider_configured'
+      ? 'provider_missing'
+      : notificationStatusFromDelivery(userDelivery);
     await Promise.allSettled([
       logEmailEvent(db, {
         eventType: 'property_need_request_submitted',
@@ -1192,12 +1221,12 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         templateKey: 'property_need_request_user_confirmation',
         subject: userSubject,
         language,
-        status: notificationStatusFromDelivery(userDelivery),
+        status: userDeliveryChannel === 'email' ? userDeliveryStatus : 'skipped',
         provider: userDelivery.provider || null,
         providerMessageId: userDelivery.messageId || userDelivery.provider_message_id || null,
         relatedLeadId: lead?.id || null,
-        failureReason: userDelivery.error || userDelivery.reason || null,
-        sentAt: userDelivery.sent ? new Date() : null
+        failureReason: userDeliveryChannel === 'email' ? (userDelivery.error || userDelivery.reason || null) : 'preferred_channel_whatsapp',
+        sentAt: userDeliveryChannel === 'email' && userDelivery.sent ? new Date() : null
       }),
       logEmailEvent(db, {
         eventType: 'property_need_request_submitted_admin',
@@ -1215,16 +1244,17 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
       }),
       logNotification(db, {
         userId: req.userAuth?.id || null,
-        recipientEmail: requesterEmail,
-        recipientPhone: requesterPhone,
-        channel: 'email',
+        recipientEmail: userDeliveryChannel === 'email' ? requesterEmail : null,
+        recipientPhone: userDeliveryChannel === 'whatsapp' ? requesterPhone : null,
+        channel: userDeliveryChannel,
         type: 'property_need_request_submitted',
-        status: notificationStatusFromDelivery(userDelivery),
+        status: userDeliveryStatus,
         payloadSummary: {
           property_need_request_id: item.id,
           category: item.category,
           location: item.location,
           status: item.status,
+          preferred_contact_channel: item.preferred_contact_channel,
           response_target_hours: 48
         },
         relatedLeadId: lead?.id || null,
@@ -1253,9 +1283,12 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         templateKey: 'property_need_request_submitted',
         messageType: 'property_need_request',
         language,
-        status: preferredContactChannel === 'whatsapp' ? 'logged' : 'skipped',
-        failureReason: preferredContactChannel === 'whatsapp' ? 'whatsapp_follow_up_required' : 'preferred_channel_not_whatsapp',
-        relatedLeadId: lead?.id || null
+        status: userDeliveryChannel === 'whatsapp' ? userDeliveryStatus : 'skipped',
+        failureReason: userDeliveryChannel === 'whatsapp'
+          ? (userDelivery.error || userDelivery.reason || null)
+          : 'preferred_channel_not_whatsapp',
+        relatedLeadId: lead?.id || null,
+        sentAt: userDeliveryChannel === 'whatsapp' && userDelivery.sent ? new Date() : null
       })
     ]);
     return res.status(201).json({
@@ -1265,7 +1298,8 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         lead_id: lead?.id || null,
         response_target_hours: 48,
         delivery: {
-          userEmail: notificationStatusFromDelivery(userDelivery),
+          userChannel: userDeliveryChannel,
+          user: userDeliveryStatus,
           adminEmail: notificationStatusFromDelivery(adminDelivery)
         }
       }

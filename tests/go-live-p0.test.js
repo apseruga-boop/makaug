@@ -530,10 +530,11 @@ function run() {
   assert(mortgageEstimate.onceOffCosts > mortgageEstimate.depositAmount, 'mortgage estimate should include once-off costs beyond deposit');
 
   const requiredDashboardShellText = [
-    "Can't Find What You're Looking For?",
+    "How can makaug.com help you find what you're looking for?",
+    'Message to makaug.com',
     'Your property requests',
     'Recommended For You',
-    'Saved Searches and Alerts',
+    'Alerts',
     'Property enquiries',
     'Viewing Bookings',
     'Callback Requests',
@@ -585,6 +586,7 @@ function run() {
   assert(frontendSource.includes('finder-need-category'), 'property finder need form should collect category');
   assert(frontendSource.includes('finder-need-location'), 'property finder need form should collect location');
   assert(frontendSource.includes('finder-need-contact'), 'property finder need form should collect preferred reply channel');
+  assert(frontendSource.includes('finder-need-generated-message'), 'property finder need form should generate a message before sending');
   assert(frontendSource.includes('needUnresolved'), 'property finder need form should show unresolved status copy');
   assert(frontendSource.includes('data-safety-stakeholder-grid="1"'), 'safety page should include stakeholder safety guidance');
   assert(frontendSource.includes('data-safety-illustration="renters"'), 'safety page should include illustrated renter safety guidance');
@@ -602,6 +604,8 @@ function run() {
   assert(propertySeekerRoutes.includes("router.post('/need-request'"), 'property finder backend should accept property need requests');
   assert(propertySeekerRoutes.includes('property_need_request_user_confirmation'), 'property need request should create user confirmation email logs');
   assert(propertySeekerRoutes.includes('property_need_request_admin_alert'), 'property need request should create admin alert notification logs');
+  assert(propertySeekerRoutes.includes('sendWhatsAppText'), 'property need request should attempt WhatsApp confirmation when WhatsApp is selected');
+  assert(propertySeekerRoutes.includes('userChannel'), 'property need request response should report the selected user delivery channel');
   assert(adminRoutes.includes("router.get('/property-need-requests'"), 'admin backend should list property need requests');
   assert(adminRoutes.includes("router.patch('/property-need-requests/:id'"), 'admin backend should update property need request status');
   assert(propertySeekerRoutes.includes("router.patch('/my-listings/:id'"), 'property finder backend should update owned listings');

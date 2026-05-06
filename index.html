@@ -3444,8 +3444,8 @@
 
         <div class="grid md:grid-cols-2 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-	            <h2 id="finder-brief-title" class="text-xl font-bold text-gray-800 mb-2">Can't Find What You're Looking For?</h2>
-	            <p id="finder-brief-copy" class="text-sm text-gray-500">Tell us the top-line details and makaug.com will turn it into a tracked property request.</p>
+	            <h2 id="finder-brief-title" class="text-xl font-bold text-gray-800 mb-2">How can makaug.com help you find what you're looking for?</h2>
+	            <p id="finder-brief-copy" class="text-sm text-gray-500">Choose the basics and makaug.com will create a tracked request the team can follow up by email or WhatsApp.</p>
 	            <form id="finder-need-form" onsubmit="submitFinderNeedRequest(event)" class="mt-4 space-y-3">
 	              <div class="grid sm:grid-cols-2 gap-3">
 	                <label class="text-xs font-bold text-gray-600">
@@ -3508,7 +3508,6 @@
 	                  <select id="finder-need-contact" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
 	                    <option value="whatsapp">WhatsApp</option>
 	                    <option value="email">Email</option>
-	                    <option value="phone">Phone call</option>
 	                  </select>
 	                </label>
 	              </div>
@@ -3516,7 +3515,16 @@
 	                <span id="finder-need-message-label">Anything else we should know?</span>
 	                <textarea id="finder-need-message" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm min-h-[76px]" maxlength="700" oninput="updateFinderNeedForm()" placeholder="Tell us the exact area, must-haves, deadline, or anything we missed."></textarea>
 	              </label>
-	              <div id="finder-need-preview" class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">I am looking for a rental in Kampala.</div>
+	              <div class="grid gap-3">
+	                <div class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">
+	                  <div id="finder-need-summary-label" class="text-xs font-black uppercase tracking-wide text-green-700 mb-1">Request summary</div>
+	                  <div id="finder-need-preview">I am looking for a rental in Kampala.</div>
+	                </div>
+	                <div class="text-sm text-gray-700 bg-green-50 border border-green-100 rounded-xl p-3">
+	                  <div id="finder-need-generated-label" class="text-xs font-black uppercase tracking-wide text-green-700 mb-1">Message to makaug.com</div>
+	                  <div id="finder-need-generated-message">Hi makaug.com, please help me find a rental in Kampala.</div>
+	                </div>
+	              </div>
 	              <div class="flex flex-wrap items-center gap-3">
 	                <button id="finder-need-submit-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send request</button>
 	                <span id="finder-need-status" class="text-xs text-gray-500"></span>
@@ -3534,10 +3542,10 @@
 	            <button id="finder-browse-matches-btn" onclick="showPage('for-sale')" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Browse Matches</button>
 	          </div>
 	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-	            <h2 id="finder-saved-searches-title" class="text-xl font-bold text-gray-800 mb-2">Saved Searches and Alerts</h2>
-	            <p id="finder-saved-searches-copy" class="text-sm text-gray-500">Save searches, choose WhatsApp/email/SMS/in-app alerts, and pause or edit alerts any time.</p>
+	            <h2 id="finder-saved-searches-title" class="text-xl font-bold text-gray-800 mb-2">Alerts</h2>
+	            <p id="finder-saved-searches-copy" class="text-sm text-gray-500">Choose WhatsApp or email alerts, and pause or edit alerts any time.</p>
 	            <div id="finder-saved-searches" class="mt-3 space-y-2 text-sm"></div>
-	            <button id="finder-save-current-search-btn" onclick="saveCurrentDashboardSearch()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Save Current Search</button>
+	            <button id="finder-save-current-search-btn" onclick="saveCurrentDashboardSearch()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Create Alert</button>
 	          </div>
 	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
 	            <h2 id="finder-contact-title" class="text-xl font-bold text-gray-800 mb-2">Property enquiries</h2>
@@ -5646,7 +5654,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "property-need-v2-20260506";
+        window.__makaugAppVersion = "property-need-delivery-v3-20260506";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
