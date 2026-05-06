@@ -522,6 +522,18 @@ function run() {
   assert(frontendSource.includes('audience: accountAccessDrawerAudience'), 'drawer sign-in should send the selected role to the backend');
   const finderScreening = frontendSource.match(/finder: \[([\s\S]*?)\n\s*\],\n\s*student:/m)?.[1] || '';
   assert(finderScreening.includes('["WhatsApp", "Email"]'), 'property finder preferred contact should be limited to WhatsApp and Email');
+  assert(frontendSource.includes('ACCOUNT_ACCESS_FINDER_DYNAMIC_BY_GOAL'), 'property finder signup should use dynamic questions after the first preference');
+  for (const dynamicKey of ['student_room_type', 'land_need', 'commercial_space_type', 'buyer_property_type']) {
+    assert(frontendSource.includes(dynamicKey), `property finder signup should capture dynamic preference: ${dynamicKey}`);
+  }
+  assert(frontendSource.includes('handleAccountAccessFinderGoalChange'), 'property finder signup should update questions when the selected need changes');
+  assert(frontendSource.includes('data-auth-password-toggle="account-access-create-password"'), 'create-account password field should have a show/hide control');
+  assert(frontendSource.includes('data-auth-password-toggle="account-access-confirm-password"'), 'confirm password field should have a show/hide control');
+  assert(frontendSource.includes('toggleAccountAccessPasswordField'), 'auth drawer should use a shared password visibility toggle');
+  const emailServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailService.js'), 'utf8');
+  assert(emailServiceSource.includes('buildWelcomeEmailHtml'), 'welcome email should use a branded account-created template');
+  assert(emailServiceSource.includes('What your account opens up'), 'welcome email should explain what the account unlocks');
+  assert(emailServiceSource.includes('Your makaug.com account is ready'), 'welcome email should use lowercase public brand display');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');

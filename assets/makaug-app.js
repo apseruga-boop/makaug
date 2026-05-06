@@ -14769,6 +14769,79 @@ const ACCOUNT_ACCESS_SCREENING = {
   ]
 };
 
+const ACCOUNT_ACCESS_FINDER_DYNAMIC_BY_GOAL = {
+  rent: [
+    { key: "preferred_areas", label: "Preferred rental area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Monthly rent budget?", options: ["Under USh 500K", "USh 500K-1M", "USh 1M-2M", "USh 2M-5M", "USh 5M+", "I'll choose later"] },
+    { key: "bedrooms", label: "Bedrooms?", options: ["Studio", "1", "2", "3", "4", "5+", "Not sure"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ],
+  buy: [
+    { key: "preferred_areas", label: "Preferred buying area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Purchase budget?", options: ["Under USh 50M", "USh 50M-100M", "USh 100M-250M", "USh 250M-500M", "USh 500M+", "I'll choose later"] },
+    { key: "buyer_property_type", label: "Property type?", options: ["House", "Apartment", "Bungalow", "Townhouse", "Land", "Not sure"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ],
+  land: [
+    { key: "preferred_areas", label: "Preferred land area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Land budget?", options: ["Under USh 50M", "USh 50M-100M", "USh 100M-250M", "USh 250M-500M", "USh 500M+", "I'll choose later"] },
+    { key: "land_need", label: "Land need?", options: ["Residential plot", "Commercial plot", "Farm land", "Titled land", "Not sure"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ],
+  student: [
+    { key: "student_campus", label: "Campus or university?", options: ["Makerere", "Kyambogo", "MUBS", "UCU", "KIU", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Student budget?", options: ["Under USh 300K", "USh 300K-600K", "USh 600K-1M", "USh 1M+", "I'll choose later"] },
+    { key: "student_room_type", label: "Room preference?", options: ["Hostel room", "Shared room", "Self-contained", "Studio", "Apartment room", "Not sure"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ],
+  commercial: [
+    { key: "preferred_areas", label: "Business area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Commercial budget?", options: ["Under USh 1M", "USh 1M-2M", "USh 2M-5M", "USh 5M-10M", "USh 10M+", "I'll choose later"] },
+    { key: "commercial_space_type", label: "Commercial space type?", options: ["Office", "Shop", "Warehouse", "Mixed-use", "Commercial land", "Not sure"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ],
+  unsure: [
+    { key: "preferred_areas", label: "Preferred area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Jinja", "Other / I'll choose later"] },
+    { key: "budget_range", label: "Budget range?", options: ["Under USh 500K", "USh 500K-1M", "USh 1M-2M", "USh 2M-5M", "USh 50M+", "I'll choose later"] },
+    { key: "moving_timeline", label: "How soon do you need it?", options: ["Immediately", "This month", "1-3 months", "Just browsing"] },
+    { key: "preferred_contact_channel", label: "Preferred contact?", options: ["WhatsApp", "Email"] }
+  ]
+};
+
+function accountAccessFinderGoalKey(goal = "") {
+  const normalized = String(goal || "").toLowerCase();
+  if (normalized.includes("student")) return "student";
+  if (normalized.includes("commercial")) return "commercial";
+  if (normalized.includes("land")) return "land";
+  if (normalized.includes("buy")) return "buy";
+  if (normalized.includes("rent")) return "rent";
+  return "unsure";
+}
+
+function collectAccountAccessScreeningValues() {
+  const values = {};
+  document.querySelectorAll("[data-auth-screening-key]").forEach((el) => {
+    const key = el.getAttribute("data-auth-screening-key");
+    if (key) values[key] = el.value || "";
+  });
+  return values;
+}
+
+function accountAccessQuestionsForAudience(audience = "finder", values = {}) {
+  const normalized = normalizeAuthAudience(audience);
+  if (normalized !== "finder") {
+    return (ACCOUNT_ACCESS_SCREENING[normalized] || ACCOUNT_ACCESS_SCREENING.finder).slice(0, 5);
+  }
+  const primary = ACCOUNT_ACCESS_SCREENING.finder[0];
+  const selectedGoal = values.primary_goal || primary.options[0];
+  const dynamic = ACCOUNT_ACCESS_FINDER_DYNAMIC_BY_GOAL[accountAccessFinderGoalKey(selectedGoal)] || ACCOUNT_ACCESS_FINDER_DYNAMIC_BY_GOAL.unsure;
+  return [primary, ...dynamic].slice(0, 5);
+}
+
+function handleAccountAccessFinderGoalChange() {
+  renderAccountAccessScreening(collectAccountAccessScreeningValues());
+}
+
 function normalizeAuthAudience(audience = "finder", allowAdmin = false) {
   const normalized = String(audience || "").toLowerCase();
   if (allowAdmin && normalized === "admin") return "admin";
@@ -14958,6 +15031,8 @@ function accountAccessText(key) {
       signIn: "Sign in",
       identifier: "Email address or phone number",
       password: "Password",
+      showPassword: "Show",
+      hidePassword: "Hide",
       firstName: "First name",
       email: "Email address",
       phone: "Phone / WhatsApp",
@@ -14998,6 +15073,8 @@ function accountAccessText(key) {
       signIn: "Yingira",
       identifier: "Email oba ennamba ya simu",
       password: "Password",
+      showPassword: "Laga",
+      hidePassword: "Kweka",
       firstName: "Erinnya erisooka",
       email: "Email",
       phone: "Simu / WhatsApp",
@@ -15038,6 +15115,8 @@ function accountAccessText(key) {
       signIn: "Ingia",
       identifier: "Barua pepe au nambari ya simu",
       password: "Nenosiri",
+      showPassword: "Onyesha",
+      hidePassword: "Ficha",
       firstName: "Jina la kwanza",
       email: "Barua pepe",
       phone: "Simu / WhatsApp",
@@ -15175,6 +15254,20 @@ function accountAccessScreeningText(text) {
     lg: {
       "What are you looking for?": "Onoonya ki?",
       "Preferred area?": "Kitundu ki ky'oyagala?",
+      "Preferred rental area?": "Kitundu ky'okupangisa ky'oyagala?",
+      "Monthly rent budget?": "Budget ya rent buli mwezi?",
+      "Bedrooms?": "Bedrooms mmeka?",
+      "Preferred buying area?": "Kitundu ky'okugula ky'oyagala?",
+      "Purchase budget?": "Budget y'okugula?",
+      "Property type?": "Ekika kya property?",
+      "Preferred land area?": "Kitundu ky'ettaka ky'oyagala?",
+      "Land budget?": "Budget y'ettaka?",
+      "Land need?": "Ekika ky'ettaka ly'oyagala?",
+      "Campus or university?": "Campus oba university?",
+      "Student budget?": "Budget y'omuyizi?",
+      "Business area?": "Kitundu kya business?",
+      "Commercial budget?": "Budget y'obusuubuzi?",
+      "Commercial space type?": "Ekika kya business space?",
       "Budget range?": "Budget yo eri etya?",
       "How soon do you need it?": "Okigala ddi?",
       "Preferred contact?": "Okwagala tukukwatire wa?",
@@ -15208,6 +15301,8 @@ function accountAccessScreeningText(text) {
       "1-3 months": "Emyezi 1-3",
       "Under USh 500K": "Wansi wa USh 500K",
       "Under USh 300K": "Wansi wa USh 300K",
+      "Under USh 50M": "Wansi wa USh 50M",
+      "Under USh 1M": "Wansi wa USh 1M",
       "Just browsing": "Nkyanoonya",
       "WhatsApp": "WhatsApp",
       "Phone call": "Okukuba essimu",
@@ -15216,6 +15311,24 @@ function accountAccessScreeningText(text) {
       "Shared room": "Ekisenge eky'okugabana",
       "Self-contained": "Self-contained",
       "Studio": "Studio",
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5+": "5+",
+      "House": "Ennyumba",
+      "Apartment": "Apartment",
+      "Bungalow": "Bungalow",
+      "Townhouse": "Townhouse",
+      "Residential plot": "Plot y'amaka",
+      "Commercial plot": "Plot y'obusuubuzi",
+      "Farm land": "Ettaka ly'okulima",
+      "Titled land": "Ettaka eririna title",
+      "Office": "Office",
+      "Shop": "Dduuka",
+      "Warehouse": "Warehouse",
+      "Mixed-use": "Mixed-use",
+      "Commercial land": "Ettaka ly'obusuubuzi",
       "Apartment room": "Ekisenge mu apartment",
       "Not sure": "Sinnamanya",
       "Security": "Obukuumi",
@@ -15243,6 +15356,20 @@ function accountAccessScreeningText(text) {
     sw: {
       "What are you looking for?": "Unatafuta nini?",
       "Preferred area?": "Eneo unalopendelea?",
+      "Preferred rental area?": "Eneo la kupangisha unalopendelea?",
+      "Monthly rent budget?": "Bajeti ya kodi kwa mwezi?",
+      "Bedrooms?": "Vyumba vya kulala?",
+      "Preferred buying area?": "Eneo la kununua unalopendelea?",
+      "Purchase budget?": "Bajeti ya kununua?",
+      "Property type?": "Aina ya property?",
+      "Preferred land area?": "Eneo la ardhi unalopendelea?",
+      "Land budget?": "Bajeti ya ardhi?",
+      "Land need?": "Aina ya ardhi unayotaka?",
+      "Campus or university?": "Campus au chuo?",
+      "Student budget?": "Bajeti ya mwanafunzi?",
+      "Business area?": "Eneo la biashara?",
+      "Commercial budget?": "Bajeti ya biashara?",
+      "Commercial space type?": "Aina ya nafasi ya biashara?",
       "Budget range?": "Kiwango cha bajeti?",
       "How soon do you need it?": "Unahitaji lini?",
       "Preferred contact?": "Njia bora ya mawasiliano?",
@@ -15276,12 +15403,32 @@ function accountAccessScreeningText(text) {
       "1-3 months": "Miezi 1-3",
       "Under USh 500K": "Chini ya USh 500K",
       "Under USh 300K": "Chini ya USh 300K",
+      "Under USh 50M": "Chini ya USh 50M",
+      "Under USh 1M": "Chini ya USh 1M",
       "Just browsing": "Natazama tu",
       "Phone call": "Simu",
       "Hostel room": "Chumba cha hostel",
       "Shared room": "Chumba cha kushiriki",
       "Self-contained": "Self-contained",
       "Studio": "Studio",
+      "1": "1",
+      "2": "2",
+      "3": "3",
+      "4": "4",
+      "5+": "5+",
+      "House": "Nyumba",
+      "Apartment": "Apartment",
+      "Bungalow": "Bungalow",
+      "Townhouse": "Townhouse",
+      "Residential plot": "Plot ya makazi",
+      "Commercial plot": "Plot ya biashara",
+      "Farm land": "Ardhi ya kilimo",
+      "Titled land": "Ardhi yenye title",
+      "Office": "Ofisi",
+      "Shop": "Duka",
+      "Warehouse": "Ghala",
+      "Mixed-use": "Matumizi mchanganyiko",
+      "Commercial land": "Ardhi ya biashara",
       "Apartment room": "Chumba cha apartment",
       "Not sure": "Sina uhakika",
       "Security": "Usalama",
@@ -15328,6 +15475,7 @@ function applyAccountAccessLanguageUi() {
     const key = el.getAttribute("data-auth-text");
     if (key) el.textContent = accountAccessText(key);
   });
+  syncAccountAccessPasswordToggleLabels();
   const termsCopy = document.getElementById("account-access-terms-copy");
   if (termsCopy) {
     termsCopy.innerHTML = `${accountAccessText("terms").replace("Terms & Conditions", `<button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>`)}`;
@@ -15352,15 +15500,16 @@ function applyAccountAccessLanguageUi() {
   updateAccountAccessProgress(accountAccessDrawerStep);
 }
 
-function renderAccountAccessScreening() {
+function renderAccountAccessScreening(preservedValues = null) {
   const wrap = document.getElementById("account-access-screening");
   if (!wrap) return;
-  const questions = (ACCOUNT_ACCESS_SCREENING[accountAccessDrawerAudience] || ACCOUNT_ACCESS_SCREENING.finder).slice(0, 5);
+  const values = preservedValues || collectAccountAccessScreeningValues();
+  const questions = accountAccessQuestionsForAudience(accountAccessDrawerAudience, values);
   wrap.innerHTML = questions.map((question) => `
     <label class="block">
       <span class="block text-xs font-bold text-gray-600 mb-1">${adminEscape(accountAccessScreeningText(question.label))}</span>
-      <select data-auth-screening-key="${question.key}" class="w-full min-h-[48px] border rounded-xl px-4 py-3 text-sm bg-white" style="border-color:var(--auth-role-border, #bbf7d0);">
-        ${question.options.map((option) => `<option value="${adminAttr(option)}">${adminEscape(accountAccessScreeningText(option))}</option>`).join("")}
+      <select data-auth-screening-key="${question.key}" ${accountAccessDrawerAudience === "finder" && question.key === "primary_goal" ? 'onchange="handleAccountAccessFinderGoalChange()"' : ""} class="w-full min-h-[48px] border rounded-xl px-4 py-3 text-sm bg-white" style="border-color:var(--auth-role-border, #bbf7d0);">
+        ${question.options.map((option) => `<option value="${adminAttr(option)}"${values[question.key] === option ? " selected" : ""}>${adminEscape(accountAccessScreeningText(option))}</option>`).join("")}
       </select>
     </label>
   `).join("");
@@ -15596,7 +15745,7 @@ function ensureAccountAccessDrawer() {
             <label id="account-access-password-label" class="block text-xs font-bold text-gray-600 mt-3 mb-1">Password</label>
             <div class="relative">
               <input id="account-access-password" type="password" autocomplete="current-password" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 pr-12 text-base sm:text-sm" placeholder="Password">
-              <button type="button" onclick="toggleAccountAccessPassword()" aria-label="Show or hide password" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"><i class="fas fa-eye"></i></button>
+              <button type="button" data-auth-password-toggle="account-access-password" onclick="toggleAccountAccessPassword()" aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500"><span data-password-toggle-label>Show</span></button>
             </div>
             <p id="account-access-password-help" class="text-xs text-gray-500 mt-1">Use the password you created for your makaug.com account.</p>
           </div>
@@ -15641,11 +15790,17 @@ function ensureAccountAccessDrawer() {
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="password">Password</span>
-                  <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Password">
+                  <div class="relative">
+                    <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Password">
+                    <button type="button" data-auth-password-toggle="account-access-create-password" onclick="toggleAccountAccessPasswordField('account-access-create-password', this)" aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500"><span data-password-toggle-label>Show</span></button>
+                  </div>
                 </label>
                 <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
-                  <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Confirm password">
+                  <div class="relative">
+                    <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Confirm password">
+                    <button type="button" data-auth-password-toggle="account-access-confirm-password" onclick="toggleAccountAccessPasswordField('account-access-confirm-password', this)" aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500"><span data-password-toggle-label>Show</span></button>
+                  </div>
                 </label>
               </div>
               <label class="flex items-start gap-2 text-xs text-gray-700">
@@ -15885,9 +16040,28 @@ function showAccountAccessCreate() {
   setTimeout(() => document.getElementById("account-access-first-name")?.focus(), 30);
 }
 
+function syncAccountAccessPasswordToggleLabels() {
+  document.querySelectorAll("[data-auth-password-toggle]").forEach((button) => {
+    const inputId = button.getAttribute("data-auth-password-toggle");
+    const input = document.getElementById(inputId);
+    const visible = input?.type === "text";
+    const label = accountAccessText(visible ? "hidePassword" : "showPassword");
+    button.setAttribute("aria-label", visible ? "Hide password" : "Show password");
+    const labelEl = button.querySelector("[data-password-toggle-label]");
+    if (labelEl) labelEl.textContent = label;
+  });
+}
+
+function toggleAccountAccessPasswordField(inputId = "account-access-password", button = null) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.type = input.type === "password" ? "text" : "password";
+  syncAccountAccessPasswordToggleLabels();
+  if (button && typeof button.focus === "function") button.focus();
+}
+
 function toggleAccountAccessPassword() {
-  const input = document.getElementById("account-access-password");
-  if (input) input.type = input.type === "password" ? "text" : "password";
+  toggleAccountAccessPasswordField("account-access-password", document.querySelector('[data-auth-password-toggle="account-access-password"]'));
 }
 
 async function continueAccountAccess() {
@@ -15928,6 +16102,14 @@ function collectAccountAccessScreeningData() {
       profile[key] = value;
     }
   });
+  if (profile.student_campus && !profile.preferred_areas) profile.preferred_areas = profile.student_campus;
+  if (profile.buyer_property_type && !profile.property_type_interest) profile.property_type_interest = profile.buyer_property_type;
+  if (profile.land_need && !profile.property_type_interest) profile.property_type_interest = profile.land_need;
+  if (profile.commercial_space_type && !profile.property_type_interest) profile.property_type_interest = profile.commercial_space_type;
+  if (profile.student_room_type && !profile.property_type_interest) profile.property_type_interest = profile.student_room_type;
+  if (profile.primary_goal) {
+    profile.search_intent = accountAccessFinderGoalKey(profile.primary_goal);
+  }
   return profile;
 }
 

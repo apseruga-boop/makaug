@@ -86,8 +86,8 @@ function buildBrandedEmailHtml({ subject, text }) {
   const supportPhone = getSupportPhone();
   const whatsappUrl = getSupportWhatsappUrl();
   const ctaUrl = getFirstUrlFromText(text) || siteUrl;
-  const ctaLabel = ctaUrl === siteUrl ? 'Visit MakaUg' : 'Open link';
-  const safeSubject = escapeHtml(subject || 'MakaUg update');
+  const ctaLabel = ctaUrl === siteUrl ? 'Visit makaug.com' : 'Open link';
+  const safeSubject = escapeHtml(subject || 'makaug.com update');
   const bodyHtml = renderPlainTextAsEmailHtml(text);
 
   return `<!doctype html>
@@ -106,21 +106,21 @@ function buildBrandedEmailHtml({ subject, text }) {
             <tr>
               <td style="background:#0b3d1f;padding:24px 28px;">
                 <div style="font-size:28px;font-weight:900;letter-spacing:.2px;line-height:1;">
-                  <span style="color:#ffffff;">MakaUg</span><span style="color:#d6a62a;">.com</span>
+                  <span style="color:#ffffff;">makaug</span><span style="color:#d6a62a;">.com</span>
                 </div>
-                <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">MakaUg</div>
+                <div style="margin-top:7px;color:#cde7d0;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Uganda Property</div>
               </td>
             </tr>
             <tr>
               <td style="padding:28px;">
-                <div style="display:inline-block;background:#ecfdf3;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800;margin-bottom:16px;">MakaUg update</div>
+                <div style="display:inline-block;background:#ecfdf3;color:#166534;border:1px solid #bbf7d0;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:800;margin-bottom:16px;">makaug.com update</div>
                 <h1 style="margin:0 0 16px;color:#111827;font-size:24px;line-height:1.25;font-weight:900;">${safeSubject}</h1>
                 ${bodyHtml}
                 <div style="margin-top:24px;">
                   <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#166534;color:#ffffff;text-decoration:none;border-radius:12px;padding:13px 18px;font-size:14px;font-weight:800;">${ctaLabel}</a>
                 </div>
                 <div style="margin-top:18px;border-top:1px solid #e5efe2;padding-top:18px;">
-                  <div style="color:#6b7280;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Contact MakaUg</div>
+                  <div style="color:#6b7280;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Contact makaug.com</div>
                   <a href="${escapeHtml(whatsappUrl)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#16a34a;color:#ffffff;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">WA</span>WhatsApp</a>
                   <a href="mailto:${escapeHtml(supportEmail)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#166534;color:#ffffff;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">@</span>Email</a>
                   <a href="${escapeHtml(siteUrl)}" style="display:inline-block;text-decoration:none;color:#166534;border:1px solid #bbf7d0;background:#ecfdf3;border-radius:999px;padding:9px 12px;font-size:13px;font-weight:800;margin:4px 6px 4px 0;"><span style="display:inline-block;background:#d6a62a;color:#111827;border-radius:999px;width:24px;height:24px;line-height:24px;text-align:center;margin-right:7px;">M</span>Website</a>
@@ -130,7 +130,7 @@ function buildBrandedEmailHtml({ subject, text }) {
             <tr>
               <td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">
                 Need help? WhatsApp <a href="${escapeHtml(whatsappUrl)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportPhone)}</a> or email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a>.<br>
-                MakaUg helps property seekers, owners, students, brokers, and land buyers find trusted opportunities in Uganda.
+                makaug.com helps property seekers, owners, students, brokers, and land buyers find trusted opportunities in Uganda.
               </td>
             </tr>
           </table>
@@ -367,7 +367,7 @@ async function sendViaSmtp({ to, subject, text, html, replyTo }) {
   const transporter = getSmtpTransporter();
   if (!transporter) return { sent: false, reason: 'smtp_not_configured' };
 
-  const from = process.env.EMAIL_FROM || 'MakaUg <noreply@makaug.com>';
+  const from = process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>';
   const message = {
     from,
     to,
@@ -398,7 +398,7 @@ async function sendViaResend({ to, subject, text, html, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { sent: false, reason: 'resend_not_configured' };
 
-  const from = process.env.EMAIL_FROM || 'MakaUg <noreply@makaug.com>';
+  const from = process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>';
 
   const payload = {
     from,
@@ -438,7 +438,7 @@ async function sendViaWebhook({ to, subject, text, html, replyTo }) {
     text,
     html,
     reply_to: replyTo || null,
-    from: process.env.EMAIL_FROM || 'MakaUg <noreply@makaug.com>'
+    from: process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>'
   };
 
   const resp = await fetch(webhook, {
@@ -457,7 +457,7 @@ async function sendViaWebhook({ to, subject, text, html, replyTo }) {
 
 async function sendSupportEmail({ to, subject, text, html, replyTo }) {
   const recipient = to || getSupportEmail();
-  const safeSubject = stripHtml(subject || 'MakaUg Notification');
+  const safeSubject = stripHtml(subject || 'makaug.com notification');
   const safeText = String(text || '').trim();
   const safeHtml = html || buildBrandedEmailHtml({ subject: safeSubject, text: safeText });
   let lastProviderError = '';
@@ -614,6 +614,145 @@ async function sendListingModerationNotification({ to, listing = {}, status, rea
   });
 }
 
+function normalizeWelcomeRole(user = {}) {
+  const role = String(user?.role || user?.account_type || user?.portal_mode || '').toLowerCase();
+  const profile = user?.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
+  const accountKind = String(profile.account_kind || user?.preferred_audience || '').toLowerCase();
+  if (role.includes('student') || accountKind.includes('student')) return 'student';
+  if (role.includes('advertiser') || accountKind.includes('advertiser')) return 'advertiser';
+  if (role.includes('field') || accountKind.includes('field')) return 'field_agent';
+  if (role.includes('broker') || role.includes('agent') || accountKind === 'agent') return 'broker';
+  return 'property_finder';
+}
+
+function welcomeRoleContent(user = {}) {
+  const role = normalizeWelcomeRole(user);
+  const content = {
+    property_finder: {
+      title: 'Your property finder dashboard is open',
+      dashboardPath: '/dashboard',
+      accent: '#16803a',
+      cards: [
+        ['Save and track', 'Save properties, view recently opened listings, and keep your shortlist in one place.'],
+        ['Alerts', 'Create alerts from your search preferences so the team can follow up when matching homes appear.'],
+        ['Requests', 'Tell makaug.com what you cannot find and choose email or WhatsApp for the reply.'],
+        ['Viewings and enquiries', 'Track property enquiries, viewing interest, callbacks, and safety follow-up.']
+      ]
+    },
+    student: {
+      title: 'Your student housing dashboard is open',
+      dashboardPath: '/student-dashboard',
+      accent: '#0e7490',
+      cards: [
+        ['Campus search', 'Save campus, budget, room type, and move-in preferences.'],
+        ['Room alerts', 'Get updates when rooms near your campus match your budget.'],
+        ['Student safety', 'Use safety tips before paying or visiting accommodation.'],
+        ['WhatsApp support', 'Ask for help on WhatsApp when you need a room faster.']
+      ]
+    },
+    broker: {
+      title: 'Your broker dashboard is open',
+      dashboardPath: '/broker-dashboard',
+      accent: '#a16207',
+      cards: [
+        ['Listings', 'Manage listing progress, enquiries, viewings, and performance.'],
+        ['Leads', 'Track property seeker interest and follow-up status.'],
+        ['Verification', 'Keep broker profile and trust details up to date.'],
+        ['WhatsApp context', 'Keep enquiry context connected between WhatsApp and the dashboard.']
+      ]
+    },
+    field_agent: {
+      title: 'Your field agent dashboard is open',
+      dashboardPath: '/field-agent-dashboard',
+      accent: '#2563eb',
+      cards: [
+        ['Tasks', 'Track assigned listing tasks and submitted properties.'],
+        ['Approvals', 'See pending, approved, rejected, and rejection reasons.'],
+        ['Payouts', 'Track balance, payout status, contracts, and performance.'],
+        ['Updates', 'Receive operational updates from makaug.com admin.']
+      ]
+    },
+    advertiser: {
+      title: 'Your advertiser dashboard is open',
+      dashboardPath: '/advertiser-dashboard',
+      accent: '#c2410c',
+      cards: [
+        ['Campaigns', 'Create campaign drafts and manage sponsored placements.'],
+        ['Creatives', 'Upload and review creative details before approval.'],
+        ['Invoices', 'Track invoices, payment links, and manual payment status.'],
+        ['Leads', 'See campaign enquiries and audience performance.']
+      ]
+    }
+  };
+  return content[role] || content.property_finder;
+}
+
+function buildWelcomeEmailHtml({ firstName, roleContent, preferredLanguage, preferredChannel, siteUrl, whatsappUrl, weeklyTipsEnabled }) {
+  const dashboardUrl = `${siteUrl}${roleContent.dashboardPath}`;
+  const cardCells = roleContent.cards.map(([title, body]) => `
+    <td style="width:50%;padding:7px;" valign="top">
+      <div style="min-height:112px;border:1px solid #d6f5df;background:#f7fff9;border-radius:16px;padding:16px;">
+        <div style="width:34px;height:34px;border-radius:12px;background:${roleContent.accent};color:#ffffff;text-align:center;line-height:34px;font-size:14px;font-weight:900;margin-bottom:10px;">${escapeHtml(title.slice(0, 1))}</div>
+        <div style="color:#111827;font-size:15px;font-weight:900;margin-bottom:6px;">${escapeHtml(title)}</div>
+        <div style="color:#4b5563;font-size:13px;line-height:1.55;">${escapeHtml(body)}</div>
+      </div>
+    </td>
+  `);
+  const firstRowCards = cardCells.slice(0, 2).join('');
+  const secondRowCards = cardCells.slice(2).join('');
+
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Your makaug.com account is ready</title>
+  </head>
+  <body style="margin:0;background:#f4f7f2;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <div style="display:none;max-height:0;overflow:hidden;color:#f4f7f2;">Your makaug.com account is active and ready to use.</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f2;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #dbe7d7;box-shadow:0 18px 40px rgba(15,23,42,0.10);">
+            <tr>
+              <td style="background:linear-gradient(135deg,#064e3b 0%,#16803a 55%,#d6a62a 100%);padding:30px 30px 34px;color:#ffffff;">
+                <div style="font-size:30px;font-weight:900;letter-spacing:.2px;line-height:1;"><span>makaug</span><span style="color:#f8d767;">.com</span></div>
+                <div style="margin-top:10px;color:#dcfce7;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;">Uganda Property</div>
+                <div style="display:inline-block;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.24);border-radius:999px;padding:8px 12px;margin-top:24px;font-size:12px;font-weight:900;">Account created</div>
+                <h1 style="margin:14px 0 0;font-size:28px;line-height:1.2;font-weight:900;">Hello ${escapeHtml(firstName)}, your account is ready.</h1>
+                <p style="margin:12px 0 0;color:#ecfdf3;font-size:15px;line-height:1.6;max-width:540px;">${escapeHtml(roleContent.title)}. We have saved your preferences so your dashboard can start showing relevant actions and matches.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px 30px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:18px;">
+                  <tr>
+                    <td style="padding:12px 14px;background:#ecfdf3;border:1px solid #bbf7d0;border-radius:14px;color:#14532d;font-size:13px;line-height:1.6;">
+                      <strong>Saved setup:</strong> Preferred language: ${escapeHtml(preferredLanguage)}. Reply channel: ${escapeHtml(preferredChannel)}.${weeklyTipsEnabled ? ' Weekly tips are enabled.' : ''}
+                    </td>
+                  </tr>
+                </table>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                  <tr>${firstRowCards}</tr>
+                </table>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                  <tr>${secondRowCards}</tr>
+                </table>
+                <div style="margin-top:24px;">
+                  <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:${roleContent.accent};color:#ffffff;text-decoration:none;border-radius:13px;padding:14px 18px;font-size:14px;font-weight:900;margin-right:8px;">Open your dashboard</a>
+                  <a href="${escapeHtml(whatsappUrl)}" style="display:inline-block;background:#ecfdf3;color:#166534;text-decoration:none;border:1px solid #bbf7d0;border-radius:13px;padding:13px 16px;font-size:14px;font-weight:900;">WhatsApp support</a>
+                </div>
+                <p style="margin:22px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">You can update your contact details, password, language, and preferences from Account Settings. We never send or reveal your password.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
 async function sendWelcomeEmail({ to, user = {} }) {
   const recipient = String(to || user?.email || '').trim();
   if (!recipient) return { sent: false, reason: 'no_recipient' };
@@ -624,32 +763,42 @@ async function sendWelcomeEmail({ to, user = {} }) {
   const preferredLanguage = getLanguageDisplayName(user?.preferred_language);
   const preferredChannel = getContactChannelLabel(user?.preferred_contact_channel);
   const weeklyTipsEnabled = user?.weekly_tips_opt_in !== false;
-
-  const subject = `Welcome to MakaUg, ${firstName}`;
+  const roleContent = welcomeRoleContent(user);
+  const dashboardUrl = `${siteUrl}${roleContent.dashboardPath}`;
+  const subject = `Your makaug.com account is ready, ${firstName}`;
   const text = [
     `Hello ${firstName},`,
     '',
-    'Welcome to MakaUg. Your free account is now active and ready to use.',
+    'Welcome to makaug.com. Your free account is now active and ready to use.',
+    roleContent.title,
     `Preferred language: ${preferredLanguage}`,
     `Preferred contact channel: ${preferredChannel}`,
     '',
-    'Here is what you can do next:',
-    '- Save properties and build your shortlist.',
-    '- Track recent views, enquiries, and route opens from your account dashboard.',
-    '- Update your language, alerts, and contact preferences any time.',
-    '- Contact brokers, owners, and the MakaUg team from one place.',
-    weeklyTipsEnabled ? '- Receive weekly property tips and market updates from the MakaUg team.' : '',
+    'What your account opens up:',
+    ...roleContent.cards.map(([title, body]) => `- ${title}: ${body}`),
+    weeklyTipsEnabled ? '- Weekly property tips and market updates from the makaug.com team.' : '',
     '',
-    `Open MakaUg: ${siteUrl}`,
-    `WhatsApp MakaUg: ${whatsappUrl}`,
+    `Open your dashboard: ${dashboardUrl}`,
+    `Open makaug.com: ${siteUrl}`,
+    `WhatsApp makaug.com: ${whatsappUrl}`,
     '',
     'We are happy to be part of your property journey.'
   ].filter(Boolean).join('\n');
+  const html = buildWelcomeEmailHtml({
+    firstName,
+    roleContent,
+    preferredLanguage,
+    preferredChannel,
+    siteUrl,
+    whatsappUrl,
+    weeklyTipsEnabled
+  });
 
   return sendSupportEmail({
     to: recipient,
     subject,
-    text
+    text,
+    html
   });
 }
 
