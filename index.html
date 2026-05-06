@@ -220,6 +220,82 @@
       opacity: 1;
       transform: translate(-50%, 0);
     }
+    .finder-atmosphere {
+      position: relative;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid rgba(187, 247, 208, 0.9);
+      background:
+        radial-gradient(circle at 18% 25%, rgba(255, 255, 255, 0.92), transparent 16%),
+        linear-gradient(135deg, #052e16 0%, #166534 48%, #d6a62a 125%);
+      box-shadow: 0 18px 40px rgba(5, 46, 22, 0.16);
+      color: #fff;
+      min-width: 250px;
+      isolation: isolate;
+    }
+    .finder-atmosphere::before,
+    .finder-atmosphere::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.24);
+      filter: blur(1px);
+      z-index: -1;
+      animation: finderCloudDrift 10s ease-in-out infinite alternate;
+    }
+    .finder-atmosphere::before {
+      width: 110px;
+      height: 42px;
+      left: 42%;
+      top: 16px;
+    }
+    .finder-atmosphere::after {
+      width: 88px;
+      height: 34px;
+      left: 62%;
+      top: 36px;
+      animation-duration: 13s;
+    }
+    .finder-atmosphere-night {
+      background:
+        radial-gradient(circle at 20% 22%, rgba(255, 255, 255, 0.95), transparent 11%),
+        linear-gradient(135deg, #031b13 0%, #0f2d3d 50%, #39275d 130%);
+    }
+    .finder-sky-orb {
+      width: 48px;
+      height: 48px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(255, 255, 255, 0.18);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 10px 24px rgba(0,0,0,0.14);
+      transform: perspective(240px) rotateX(10deg) rotateY(-12deg);
+    }
+    .finder-info-chip {
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      padding: 6px 10px;
+      color: #f8fafc;
+      backdrop-filter: blur(10px);
+    }
+    .finder-owned-card {
+      border: 1px solid #dbe7d7;
+      border-radius: 16px;
+      padding: 14px;
+      background: linear-gradient(180deg, #ffffff, #f7fff8);
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    }
+    @keyframes finderCloudDrift {
+      from { transform: translateX(-12px) translateY(0); }
+      to { transform: translateX(12px) translateY(4px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .finder-atmosphere::before,
+      .finder-atmosphere::after {
+        animation: none;
+      }
+    }
     .hero-search-btn {
       height: 50px;
       border: 0;
@@ -3264,12 +3340,19 @@
             <div>
               <div id="finder-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
               <p id="finder-greeting-sub" class="text-sm text-gray-500 mt-1">Your saved listings, recent views, enquiries, and route opens are tracked here.</p>
-	              <div class="mt-3 flex flex-wrap gap-2 text-xs text-gray-600">
-	                <span id="finder-current-time" data-dashboard-current-time="1" class="inline-flex items-center gap-1 rounded-full border border-green-100 bg-green-50 px-3 py-1">Current time will appear here.</span>
-	                <span id="finder-weather-context" class="inline-flex items-center gap-1 rounded-full border border-sky-100 bg-sky-50 px-3 py-1">Weather-ready when an area is set.</span>
-	                <span id="finder-location-context" data-dashboard-location-context="1" class="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-3 py-1">Location context follows your preferences.</span>
-	              </div>
-	            </div>
+              <div id="finder-dashboard-scene" class="finder-atmosphere mt-4 p-4 max-w-xl" data-dashboard-atmosphere="1">
+                <div class="flex items-center gap-4">
+                  <div id="finder-sky-icon" class="finder-sky-orb text-2xl">☀️</div>
+                  <div class="min-w-0">
+                    <div id="finder-current-time" data-dashboard-current-time="1" class="text-lg font-black leading-tight">Current time will appear here.</div>
+                    <div id="finder-weather-context" class="text-xs text-green-50/90 mt-1">Weather-ready when an area is set.</div>
+                  </div>
+                </div>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span id="finder-area-preference-context" data-dashboard-area-preference="1" class="finder-info-chip">Area preference follows your matches.</span>
+                </div>
+              </div>
+		            </div>
 	            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-3 text-sm text-amber-950" data-dashboard-ad-slot="top-advertising-banner">
 	              <strong id="finder-sponsored-title">Sponsored slot</strong><br><span id="finder-sponsored-copy" class="text-xs">Relevant paid placements appear here and are labelled Sponsored.</span>
 	            </div>
@@ -3316,6 +3399,17 @@
 	            <div id="finder-stat-searches-label" class="text-sm text-gray-500">Searches Performed</div>
             <div id="finder-stat-searches" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
+        </div>
+
+        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h2 id="finder-owned-title" class="text-xl font-bold text-gray-800">My Listed Properties</h2>
+              <p id="finder-owned-copy" class="text-sm text-gray-500 mt-1">Listings linked by your account email or phone appear here for edits, review updates, or removal.</p>
+            </div>
+            <button id="finder-list-property-btn" onclick="showPage('list-property')" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">List Property</button>
+          </div>
+          <div id="finder-owned-listings" class="grid md:grid-cols-2 gap-4"></div>
         </div>
 
         <div class="bg-white border border-gray-200 rounded-2xl p-5">
@@ -3369,24 +3463,16 @@
 	            <p id="finder-callbacks-copy" class="text-sm text-gray-500">Track requested, contacted, missed, and closed callbacks from makaug.com or property contacts.</p>
             <div id="finder-callbacks" class="mt-3 space-y-2 text-sm"></div>
           </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-	            <h2 id="finder-compare-title" class="text-xl font-bold text-gray-800 mb-2">Compare Properties</h2>
-	            <p id="finder-compare-copy" class="text-sm text-gray-500">Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.</p>
-	            <div id="finder-compare-visual" class="mt-3 grid grid-cols-3 gap-2 text-xs text-gray-600">
-	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Price</span>
-	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Location</span>
-	              <span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">Safety</span>
-	            </div>
-	          </div>
-	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-	            <h2 id="finder-budget-title" class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
+		          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+		            <h2 id="finder-budget-title" class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
 	            <p id="finder-budget-copy" class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
 	            <button id="finder-budget-btn" onclick="showPage('mortgage')" class="mt-3 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Mortgage Finder</button>
 	          </div>
-	          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
-	            <h2 id="finder-safety-title" class="text-xl font-bold text-green-900 mb-2">Safety and Trust Centre</h2>
-	            <p id="finder-safety-copy" class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
-	          </div>
+		          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+		            <h2 id="finder-safety-title" class="text-xl font-bold text-green-900 mb-2">Safety Tips</h2>
+		            <p id="finder-safety-copy" class="text-sm text-green-950">Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.</p>
+                <button id="finder-safety-btn" onclick="showPage('safety')" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open Safety Tips</button>
+		          </div>
 	          <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
 	            <h2 id="finder-area-watch-title" class="text-xl font-bold text-green-900 mb-2">Area Watch</h2>
 	            <p id="finder-area-watch-copy" class="text-sm text-green-950">Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.</p>
@@ -4957,6 +5043,56 @@
         <button id="save-property-signin-btn" onclick="continueSavePropertyAuth('signin')" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm">Sign In</button>
       </div>
       <p id="save-property-footnote" class="text-xs text-gray-500 mt-3">No property is saved publicly. Saved homes stay inside the signed-in account only.</p>
+    </div>
+  </div>
+
+  <div id="owned-listing-edit-modal" class="modal-overlay" data-owned-listing-edit-modal="1">
+    <div class="modal-box" style="max-width:680px">
+      <button onclick="closeModal('owned-listing-edit-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50" aria-label="Close listing editor">✕</button>
+      <p class="text-xs font-black uppercase tracking-wide text-green-700">makaug.com listing</p>
+      <h2 id="owned-edit-title" class="text-2xl font-black text-gray-900 mt-1">Edit your listing</h2>
+      <p id="owned-edit-copy" class="text-sm text-gray-600 mt-2">Changes are saved to makaug.com and sent back to admin review before they appear publicly.</p>
+      <form id="owned-listing-edit-form" onsubmit="submitOwnedListingEdit(event)" class="mt-5 space-y-3">
+        <input type="hidden" id="owned-edit-id">
+        <label class="block">
+          <span class="block text-sm font-bold text-gray-700 mb-1">Title</span>
+          <input id="owned-edit-title-input" name="title" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" required>
+        </label>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="block text-sm font-bold text-gray-700 mb-1">Price</span>
+            <input id="owned-edit-price-input" name="price" inputmode="numeric" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-bold text-gray-700 mb-1">Price period</span>
+            <select id="owned-edit-price-period-input" name="price_period" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+              <option value="once">Once</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+              <option value="semester">Per semester</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="block text-sm font-bold text-gray-700 mb-1">Area</span>
+            <input id="owned-edit-area-input" name="area" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm">
+          </label>
+          <label class="block">
+            <span class="block text-sm font-bold text-gray-700 mb-1">District</span>
+            <input id="owned-edit-district-input" name="district" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm">
+          </label>
+        </div>
+        <label class="block">
+          <span class="block text-sm font-bold text-gray-700 mb-1">Description</span>
+          <textarea id="owned-edit-description-input" name="description" rows="4" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm"></textarea>
+        </label>
+        <div id="owned-edit-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <button id="owned-edit-submit-btn" type="submit" class="flex-1 bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-bold">Save changes</button>
+          <button id="owned-edit-cancel-btn" type="button" onclick="closeModal('owned-listing-edit-modal')" class="flex-1 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold">Cancel</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -9485,8 +9621,8 @@
         currentTime: "Current time: {time}",
         weatherReady: "Weather: add an area for local weather context",
         weatherArea: "Weather: local context for {area}",
-        locationArea: "Preferred area: {area}",
-        locationMissing: "Location context: add an area preference to personalize matches.",
+        locationArea: "Area preference: {area}",
+        locationMissing: "Area preference: add one to personalize matches.",
         preferenceTitle: "Search preference summary",
         preferenceDefault: "Your role preferences, budget, contact channel, and language personalize this dashboard.",
         goal: "Goal",
@@ -9509,6 +9645,23 @@
         enquiriesSent: "Enquiries Sent",
         routesOpened: "Routes Opened",
         searchesPerformed: "Searches Performed",
+        ownedTitle: "My Listed Properties",
+        ownedCopy: "Listings linked by your account email or phone appear here for edits, review updates, or removal.",
+        ownedEmpty: "No listings are linked to this account yet. Use the same email or phone when you list a property so it appears here.",
+        ownedStatus: "Status",
+        ownedReference: "Reference",
+        ownedUpdated: "Updated",
+        ownedEdit: "Edit listing",
+        ownedDelete: "Remove from site",
+        ownedView: "View",
+        ownedEditTitle: "Edit your listing",
+        ownedEditCopy: "Changes are saved to makaug.com and sent back to admin review before they appear publicly.",
+        ownedSave: "Save changes",
+        ownedCancel: "Cancel",
+        ownedDeleteConfirm: "Remove this listing from the public site? This action is logged and makaug.com will email confirmation where configured.",
+        ownedUpdatedToast: "Listing changes saved and sent to review.",
+        ownedDeletedToast: "Listing removed from the public site.",
+        listProperty: "List Property",
         openSavedPage: "Open Saved Page",
         signOut: "Sign Out",
         recentlyViewed: "Recently Viewed",
@@ -9537,16 +9690,12 @@
         callbacksTitle: "Callback Requests",
         callbacksCopy: "Track requested, contacted, missed, and closed callbacks from makaug.com or property contacts.",
         noCallbacks: "No callback requests yet.",
-        compareTitle: "Compare Properties",
-        compareCopy: "Compare up to four listings by price, location, beds, baths, size, title, verification, mortgage, and notes.",
-        comparePrice: "Price",
-        compareLocation: "Location",
-        compareSafety: "Safety",
         budgetTitle: "Mortgage/Budget Centre",
         budgetCopy: "Mortgage estimates, rent affordability, deposits, and budget guidance are grouped here.",
         budgetButton: "Open Mortgage Finder",
-        safetyTitle: "Safety and Trust Centre",
+        safetyTitle: "Safety Tips",
         safetyCopy: "Personal safety prompts for renters, buyers, students, land seekers, and diaspora buyers.",
+        safetyButton: "Open Safety Tips",
         areaWatchTitle: "Area Watch",
         areaWatchCopy: "Follow areas like Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, and Naalya.",
         areaWatchButton: "Help / WhatsApp makaug.com",
@@ -9594,7 +9743,7 @@
         weatherReady: "Obudde: ssaamu ekitundu okufuna context y'obudde",
         weatherArea: "Obudde: context y'ekitundu {area}",
         locationArea: "Ekitundu ky'oyagala: {area}",
-        locationMissing: "Location context: ssaamu ekitundu okusobola okufuna matches ennungi.",
+        locationMissing: "Ekitundu ky'oyagala: ssaamu ekitundu okusobola okufuna matches ennungi.",
         preferenceTitle: "Summary y'ebyo by'oyagala",
         preferenceDefault: "Role, budget, contact, n'olulimi byo biyamba dashboard okukuwa ebikukwatako.",
         goal: "Ekigendererwa",
@@ -9617,6 +9766,23 @@
         enquiriesSent: "Enquiries ezisindikiddwa",
         routesOpened: "Routes ezigguddwawo",
         searchesPerformed: "Searches ezikoleddwa",
+        ownedTitle: "Property ze walistinga",
+        ownedCopy: "Listings ezikwatagana ne email oba essimu yo zijja kulabika wano okuzikyusa, okulaba review, oba okuziggyawo.",
+        ownedEmpty: "Tewali listing ekwataganye ne account eno. Kozesa email oba essimu y'emu bw'oba olisting property.",
+        ownedStatus: "Status",
+        ownedReference: "Reference",
+        ownedUpdated: "Ekyuse ddi",
+        ownedEdit: "Kyusa listing",
+        ownedDelete: "Ggyawo ku site",
+        ownedView: "Laba",
+        ownedEditTitle: "Kyusa listing yo",
+        ownedEditCopy: "Enkyukakyuka ziterekebwa ku makaug.com era ziddamu okugenda mu admin review nga tezinnalabika ku public.",
+        ownedSave: "Tereka enkyukakyuka",
+        ownedCancel: "Sazaamu",
+        ownedDeleteConfirm: "Oggyawo listing eno ku public site? Kino kirondoolerwa era makaug.com ejja kusindika email we kisoboka.",
+        ownedUpdatedToast: "Listing ekyusiddwa era egenda mu review.",
+        ownedDeletedToast: "Listing eggiddwa ku public site.",
+        listProperty: "List Property",
         openSavedPage: "Ggulawo ezitereddwa",
         signOut: "Fuluma",
         recentlyViewed: "By'olabye gye buvuddeko",
@@ -9645,16 +9811,12 @@
         callbacksTitle: "Callback requests",
         callbacksCopy: "Londoola requested, contacted, missed, ne closed callbacks okuva ku makaug.com oba property contacts.",
         noCallbacks: "Tewali callback requests.",
-        compareTitle: "Gerageranya properties",
-        compareCopy: "Gerageranya listings okutuuka ku nnya ku price, location, beds, baths, size, title, verification, mortgage, ne notes.",
-        comparePrice: "Price",
-        compareLocation: "Location",
-        compareSafety: "Safety",
         budgetTitle: "Mortgage/Budget Centre",
         budgetCopy: "Mortgage estimates, rent affordability, deposits, ne budget guidance bigattibwa wano.",
         budgetButton: "Ggulawo Mortgage Finder",
-        safetyTitle: "Safety and Trust Centre",
+        safetyTitle: "Safety Tips",
         safetyCopy: "Safety prompts eri renters, buyers, students, land seekers, ne diaspora buyers.",
+        safetyButton: "Ggulawo Safety Tips",
         areaWatchTitle: "Area Watch",
         areaWatchCopy: "Goberera ebitundu nga Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, ne Naalya.",
         areaWatchButton: "Help / WhatsApp makaug.com",
@@ -9702,7 +9864,7 @@
         weatherReady: "Hali ya hewa: ongeza eneo kwa muktadha wa eneo",
         weatherArea: "Hali ya hewa: muktadha wa eneo la {area}",
         locationArea: "Eneo unalopendelea: {area}",
-        locationMissing: "Muktadha wa eneo: ongeza eneo unalopendelea ili kupata matches bora.",
+        locationMissing: "Eneo unalopendelea: ongeza eneo ili kupata matches bora.",
         preferenceTitle: "Muhtasari wa mapendeleo ya search",
         preferenceDefault: "Role, budget, contact channel, na lugha yako hubinafsisha dashibodi hii.",
         goal: "Lengo",
@@ -9725,6 +9887,23 @@
         enquiriesSent: "Enquiries zilizotumwa",
         routesOpened: "Routes zilizofunguliwa",
         searchesPerformed: "Searches zilizofanywa",
+        ownedTitle: "Mali Zako Ulizoorodhesha",
+        ownedCopy: "Listings zilizounganishwa na email au simu yako zinaonekana hapa kwa kuhariri, kuona review, au kuziondoa.",
+        ownedEmpty: "Hakuna listings zilizounganishwa na account hii bado. Tumia email au simu ileile unapoorodhesha mali.",
+        ownedStatus: "Status",
+        ownedReference: "Reference",
+        ownedUpdated: "Imesasishwa",
+        ownedEdit: "Hariri listing",
+        ownedDelete: "Ondoa kwenye site",
+        ownedView: "Tazama",
+        ownedEditTitle: "Hariri listing yako",
+        ownedEditCopy: "Mabadiliko huhifadhiwa kwenye makaug.com na kurudi kwa admin review kabla ya kuonekana hadharani.",
+        ownedSave: "Hifadhi mabadiliko",
+        ownedCancel: "Ghairi",
+        ownedDeleteConfirm: "Ondoa listing hii kwenye public site? Hatua hii itawekwa kwenye log na makaug.com itatuma email inapowezekana.",
+        ownedUpdatedToast: "Listing imesasishwa na kutumwa kwa review.",
+        ownedDeletedToast: "Listing imeondolewa kwenye public site.",
+        listProperty: "List Property",
         openSavedPage: "Fungua Saved Page",
         signOut: "Toka",
         recentlyViewed: "Ulizotazama hivi karibuni",
@@ -9753,16 +9932,12 @@
         callbacksTitle: "Callback Requests",
         callbacksCopy: "Fuatilia requested, contacted, missed, na closed callbacks kutoka makaug.com au property contacts.",
         noCallbacks: "Hakuna callback requests bado.",
-        compareTitle: "Compare Properties",
-        compareCopy: "Linganisha hadi listings nne kwa price, location, beds, baths, size, title, verification, mortgage, na notes.",
-        comparePrice: "Bei",
-        compareLocation: "Eneo",
-        compareSafety: "Usalama",
         budgetTitle: "Mortgage/Budget Centre",
         budgetCopy: "Mortgage estimates, rent affordability, deposits, na budget guidance zitawekwa hapa.",
         budgetButton: "Fungua Mortgage Finder",
-        safetyTitle: "Safety and Trust Centre",
+        safetyTitle: "Safety Tips",
         safetyCopy: "Personal safety prompts kwa renters, buyers, students, land seekers, na diaspora buyers.",
+        safetyButton: "Fungua Safety Tips",
         areaWatchTitle: "Area Watch",
         areaWatchCopy: "Fuatilia maeneo kama Ntinda, Kira, Wakiso, Makerere, Mukono, Kololo, na Naalya.",
         areaWatchButton: "Help / WhatsApp makaug.com",
@@ -9900,6 +10075,9 @@
       setDashboardText("finder-stat-inquiries-label", "enquiriesSent");
       setDashboardText("finder-stat-routes-label", "routesOpened");
       setDashboardText("finder-stat-searches-label", "searchesPerformed");
+      setDashboardText("finder-owned-title", "ownedTitle");
+      setDashboardText("finder-owned-copy", "ownedCopy");
+      setDashboardText("finder-list-property-btn", "listProperty");
       setDashboardText("finder-saved-title", "savedProperties");
       setDashboardText("finder-open-saved-btn", "openSavedPage");
       setDashboardText("finder-account-btn", "accountSettings");
@@ -9920,22 +10098,15 @@
       setDashboardText("finder-viewings-copy", "viewingsCopy");
       setDashboardText("finder-callbacks-title", "callbacksTitle");
       setDashboardText("finder-callbacks-copy", "callbacksCopy");
-      setDashboardText("finder-compare-title", "compareTitle");
-      setDashboardText("finder-compare-copy", "compareCopy");
       setDashboardText("finder-budget-title", "budgetTitle");
       setDashboardText("finder-budget-copy", "budgetCopy");
       setDashboardText("finder-budget-btn", "budgetButton");
       setDashboardText("finder-safety-title", "safetyTitle");
       setDashboardText("finder-safety-copy", "safetyCopy");
+      setDashboardText("finder-safety-btn", "safetyButton");
       setDashboardText("finder-area-watch-title", "areaWatchTitle");
       setDashboardText("finder-area-watch-copy", "areaWatchCopy");
       setDashboardText("finder-area-watch-btn", "areaWatchButton");
-      const compareVisual = document.getElementById("finder-compare-visual");
-      if (compareVisual) {
-        compareVisual.innerHTML = ["comparePrice", "compareLocation", "compareSafety"]
-          .map((key) => `<span class="rounded-lg bg-gray-50 border border-gray-200 px-2 py-2 text-center">${adminEscape(dashboardText(key))}</span>`)
-          .join("");
-      }
     }
 
     function budgetMaxFromLabel(value = "") {
@@ -10661,6 +10832,129 @@
 	      };
 	    }
 
+    let finderOwnedListingsCache = [];
+
+    function normalizeOwnedListing(item) {
+      const listing = normalizeDashboardProperty(item);
+      return {
+        ...listing,
+        description: item?.description || "",
+        status: item?.status || "pending",
+        moderation_stage: item?.moderation_stage || "",
+        moderation_reason: item?.moderation_reason || "",
+        inquiry_reference: item?.inquiry_reference || item?.reference || "",
+        updated_at: item?.updated_at || item?.owner_last_edited_at || item?.created_at || "",
+        owner_last_edited_at: item?.owner_last_edited_at || ""
+      };
+    }
+
+    function renderOwnedListingCard(item) {
+      const listing = normalizeOwnedListing(item);
+      const idArg = propertyIdArg(listing.id);
+      const badge = adminStatusBadge(listing.status);
+      const updated = listing.updated_at ? new Date(listing.updated_at).toLocaleDateString("en-GB") : "-";
+      const reference = listing.inquiry_reference || listing.id || "-";
+      return `
+        <div class="finder-owned-card rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-black text-gray-900 line-clamp-2">${adminEscape(listing.title || "makaug.com listing")}</div>
+              <div class="text-xs text-gray-500 mt-1">${adminEscape([listing.area, listing.district].filter(Boolean).join(", ") || "Location pending")}</div>
+            </div>
+            <span class="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-black ${badge.cls}">${adminEscape(badge.label)}</span>
+          </div>
+          <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs text-gray-600">
+            <div class="rounded-xl bg-gray-50 border border-gray-100 p-2"><strong>${adminEscape(dashboardText("ownedReference"))}:</strong> ${adminEscape(reference)}</div>
+            <div class="rounded-xl bg-gray-50 border border-gray-100 p-2"><strong>${adminEscape(dashboardText("ownedUpdated"))}:</strong> ${adminEscape(updated)}</div>
+          </div>
+          ${listing.moderation_reason ? `<div class="mt-3 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(listing.moderation_reason)}</div>` : ""}
+          <div class="mt-4 flex flex-wrap gap-2">
+            ${String(listing.status).toLowerCase() === "approved" ? `<button type="button" onclick="openPropertyCardDetail(event, ${idArg})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedView"))}</button>` : ""}
+            <button type="button" onclick="openOwnedListingEditor(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedEdit"))}</button>
+            <button type="button" onclick="deleteOwnedListing(${idArg})" class="border border-red-200 text-red-600 hover:bg-red-50 rounded-lg px-3 py-2 text-xs font-bold">${adminEscape(dashboardText("ownedDelete"))}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function openOwnedListingEditor(id) {
+      const listing = finderOwnedListingsCache.find((item) => String(item.id) === String(id));
+      if (!listing) {
+        toast("Listing details are still loading.");
+        return;
+      }
+      setDashboardText("owned-edit-title", "ownedEditTitle");
+      setDashboardText("owned-edit-copy", "ownedEditCopy");
+      setDashboardText("owned-edit-submit-btn", "ownedSave");
+      setDashboardText("owned-edit-cancel-btn", "ownedCancel");
+      const setValue = (fieldId, value) => {
+        const field = document.getElementById(fieldId);
+        if (field) field.value = value ?? "";
+      };
+      setValue("owned-edit-id", listing.id);
+      setValue("owned-edit-title-input", listing.title || "");
+      setValue("owned-edit-price-input", listing.price || "");
+      setValue("owned-edit-price-period-input", listing.period || listing.price_period || "once");
+      setValue("owned-edit-area-input", listing.area || "");
+      setValue("owned-edit-district-input", listing.district || "");
+      setValue("owned-edit-description-input", listing.description || "");
+      const status = document.getElementById("owned-edit-status");
+      if (status) {
+        status.textContent = "";
+        status.classList.add("hidden");
+      }
+      openModal("owned-listing-edit-modal");
+    }
+
+    async function submitOwnedListingEdit(event) {
+      event.preventDefault();
+      if (!authState?.token) {
+        openAuthSignIn("finder");
+        return;
+      }
+      const status = document.getElementById("owned-edit-status");
+      const id = document.getElementById("owned-edit-id")?.value;
+      const body = {
+        title: document.getElementById("owned-edit-title-input")?.value || "",
+        price: document.getElementById("owned-edit-price-input")?.value || "",
+        price_period: document.getElementById("owned-edit-price-period-input")?.value || "",
+        area: document.getElementById("owned-edit-area-input")?.value || "",
+        district: document.getElementById("owned-edit-district-input")?.value || "",
+        description: document.getElementById("owned-edit-description-input")?.value || ""
+      };
+      try {
+        const res = await apiRequest(`/api/property-seeker/my-listings/${encodeURIComponent(id)}`, { method: "PATCH", body });
+        if (status) {
+          status.textContent = dashboardText("ownedUpdatedToast");
+          status.classList.remove("hidden");
+        }
+        toast(dashboardText("ownedUpdatedToast"));
+        closeModal("owned-listing-edit-modal");
+        await renderFinderDashboard();
+      } catch (error) {
+        if (status) {
+          status.textContent = error.message || "Could not save listing changes.";
+          status.classList.remove("hidden");
+        }
+        toast(error.message || "Could not save listing changes.");
+      }
+    }
+
+    async function deleteOwnedListing(id) {
+      if (!authState?.token) {
+        openAuthSignIn("finder");
+        return;
+      }
+      if (!window.confirm(dashboardText("ownedDeleteConfirm"))) return;
+      try {
+        await apiRequest(`/api/property-seeker/my-listings/${encodeURIComponent(id)}`, { method: "DELETE" });
+        toast(dashboardText("ownedDeletedToast"));
+        await renderFinderDashboard();
+      } catch (error) {
+        toast(error.message || "Could not remove listing.");
+      }
+    }
+
 	    function scoreLocalRecommendation(property, profile = {}) {
 	      const preferredArea = String(profile.preferred_areas || "").toLowerCase();
 	      const primaryGoal = String(profile.primary_goal || "").toLowerCase();
@@ -10781,9 +11075,15 @@
 	        greetingSubEl.textContent = dashboardText("greetingSub", { language: languageLabel });
 	      }
 	      const now = new Date();
-	      setTextById("finder-current-time", `🕒 ${dashboardText("currentTime", { time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) })}`);
-	      setTextById("finder-weather-context", preferredArea ? `☀️ ${dashboardText("weatherArea", { area: preferredArea })}` : `☀️ ${dashboardText("weatherReady")}`);
-	      setTextById("finder-location-context", preferredArea ? `📍 ${dashboardText("locationArea", { area: preferredArea })}` : `📍 ${dashboardText("locationMissing")}`);
+	      const hour = now.getHours();
+	      const isNight = hour >= 18 || hour < 6;
+	      const isMorning = hour >= 5 && hour < 12;
+	      const scene = document.getElementById("finder-dashboard-scene");
+	      if (scene) scene.classList.toggle("finder-atmosphere-night", isNight);
+	      setTextById("finder-sky-icon", isNight ? "🌙" : (isMorning ? "🌤️" : "☀️"));
+	      setTextById("finder-current-time", dashboardText("currentTime", { time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }));
+	      setTextById("finder-weather-context", preferredArea ? dashboardText("weatherArea", { area: preferredArea }) : dashboardText("weatherReady"));
+	      setTextById("finder-area-preference-context", preferredArea ? `📍 ${dashboardText("locationArea", { area: preferredArea })}` : `📍 ${dashboardText("locationMissing")}`);
 	      setTextById("finder-preference-summary", [
 	        userProfile.primary_goal ? `${dashboardText("goal")}: ${userProfile.primary_goal}` : "",
 	        userProfile.budget_range ? `${dashboardText("budget")}: ${userProfile.budget_range}` : "",
@@ -10809,6 +11109,8 @@
 	      const backendSaved = Array.isArray(payload?.savedListings) ? payload.savedListings.map(normalizeDashboardProperty) : [];
 	      const backendRecent = Array.isArray(payload?.recentlyViewed) ? payload.recentlyViewed.map(normalizeDashboardProperty) : [];
 	      const backendRecommendations = Array.isArray(payload?.recommendations) ? payload.recommendations.map(normalizeDashboardProperty) : [];
+	      const ownedListings = Array.isArray(payload?.ownedListings) ? payload.ownedListings.map(normalizeOwnedListing) : [];
+	      finderOwnedListingsCache = ownedListings;
 	      const localRecommendations = backendRecommendations.length ? backendRecommendations : getLocalFinderRecommendations(userProfile, 4);
 	      const savedList = backendSaved.length ? backendSaved : getPublicListings().filter((p) => isPropertySaved(p.id));
       const recentViewed = backendRecent.length ? backendRecent : (activity.recentViewed || [])
@@ -10830,6 +11132,13 @@
       if (inquiriesStat) inquiriesStat.textContent = String(Object.keys(activity.inquiries || {}).length);
       if (routesStat) routesStat.textContent = String(Object.keys(activity.routes || {}).length);
       if (searchesStat) searchesStat.textContent = String(savedSearches.length || parseInt(activity.searchCount || 0, 10) || 0);
+
+      const ownedGrid = document.getElementById("finder-owned-listings");
+      if (ownedGrid) {
+        ownedGrid.innerHTML = ownedListings.length
+          ? ownedListings.map(renderOwnedListingCard).join("")
+          : `<div class="md:col-span-2 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">${dashboardText("ownedEmpty")}</div>`;
+      }
 
       const savedGrid = document.getElementById("finder-saved-grid");
       if (savedGrid) {

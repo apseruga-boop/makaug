@@ -5,7 +5,10 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { cleanText } = require('../middleware/validation');
 const { createLead } = require('../services/leadService');
-const { logNotification } = require('../services/notificationLogService');
+const { sendSupportEmail } = require('../services/emailService');
+const { logEmailEvent } = require('../services/emailLogService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
+const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 
 const router = express.Router();
 
@@ -101,6 +104,37 @@ function propertyToCard(row, reason = 'Recommended for your saved preferences') 
     url: propertyUrl(row.id),
     reason
   };
+}
+
+function ownedListingToCard(row) {
+  return {
+    ...propertyToCard(row, row.status === 'approved' ? 'Live listing linked to your account' : `Status: ${row.status || 'pending'}`),
+    description: row.description || '',
+    status: row.status || 'pending',
+    moderation_stage: row.moderation_stage || 'submitted',
+    moderation_reason: row.moderation_reason || null,
+    inquiry_reference: row.inquiry_reference || null,
+    updated_at: row.updated_at || row.created_at || null,
+    owner_last_edited_at: row.owner_last_edited_at || null
+  };
+}
+
+function phoneDigits(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function ownerContactParams(user = {}) {
+  return {
+    email: asText(user.email).toLowerCase() || null,
+    phoneDigits: phoneDigits(user.phone) || null
+  };
+}
+
+function ownerMatchSql(alias = 'p', emailParam = '$1', phoneParam = '$2') {
+  return `(
+    (${emailParam}::text IS NOT NULL AND ${emailParam}::text <> '' AND LOWER(COALESCE(${alias}.lister_email, '')) = LOWER(${emailParam}::text))
+    OR (${phoneParam}::text IS NOT NULL AND ${phoneParam}::text <> '' AND regexp_replace(COALESCE(${alias}.lister_phone, ''), '\\D', '', 'g') = ${phoneParam}::text)
+  )`;
 }
 
 function normalizeLocationObject(value) {
@@ -497,11 +531,151 @@ async function fetchRecommendations(userId, preferences = {}, limit = 12) {
     .map((item) => propertyToCard(item.row, item.reason));
 }
 
+async function fetchOwnedListings(user = {}, limit = 24) {
+  const contact = ownerContactParams(user);
+  if (!contact.email && !contact.phoneDigits) return [];
+  const result = await db.query(
+    `SELECT p.id, p.listing_type, p.title, p.description, p.district, p.area, p.address,
+            p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.status, p.moderation_stage, p.moderation_reason, p.inquiry_reference,
+            p.owner_last_edited_at, p.updated_at, p.created_at,
+            img.url AS primary_image_url
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT url
+       FROM property_images
+       WHERE property_id = p.id
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+       LIMIT 1
+     ) img ON true
+     WHERE ${ownerMatchSql('p', '$1', '$2')}
+       AND p.status <> 'deleted'
+     ORDER BY p.updated_at DESC, p.created_at DESC
+     LIMIT $3`,
+    [contact.email, contact.phoneDigits, limit]
+  );
+  return result.rows.map(ownedListingToCard);
+}
+
+async function findOwnedListing(user = {}, id = '') {
+  if (!isUuid(id)) return null;
+  const contact = ownerContactParams(user);
+  if (!contact.email && !contact.phoneDigits) return null;
+  const result = await db.query(
+    `SELECT *
+     FROM properties p
+     WHERE p.id = $1
+       AND ${ownerMatchSql('p', '$2', '$3')}
+       AND p.status <> 'deleted'
+     LIMIT 1`,
+    [id, contact.email, contact.phoneDigits]
+  );
+  return result.rows[0] || null;
+}
+
+async function logOwnedListingChange({ user = {}, listing = {}, action, previousStatus = null, delivery = {} }) {
+  const eventType = action === 'delete' ? 'listing_deleted_by_owner' : 'listing_updated_by_owner';
+  const subject = action === 'delete'
+    ? `Your makaug.com listing was removed: ${listing.title || 'property listing'}`
+    : `Your makaug.com listing update is in review: ${listing.title || 'property listing'}`;
+  const text = action === 'delete'
+    ? [
+        `Hello ${user.first_name || 'there'},`,
+        '',
+        `Your makaug.com listing "${listing.title || 'property listing'}" has been removed from the public site.`,
+        listing.inquiry_reference ? `Reference: ${listing.inquiry_reference}` : '',
+        '',
+        'If this was not you, contact makaug.com support immediately.',
+        'https://makaug.com/dashboard'
+      ].filter(Boolean).join('\n')
+    : [
+        `Hello ${user.first_name || 'there'},`,
+        '',
+        `Your makaug.com listing "${listing.title || 'property listing'}" has been updated and sent back to review.`,
+        listing.inquiry_reference ? `Reference: ${listing.inquiry_reference}` : '',
+        'We will notify you after admin review.',
+        '',
+        'https://makaug.com/dashboard'
+      ].filter(Boolean).join('\n');
+
+  const recipientEmail = user.email || listing.lister_email || null;
+  let emailDelivery = delivery.email || { sent: false, reason: 'no_email_recipient' };
+  if (recipientEmail) {
+    try {
+      emailDelivery = await sendSupportEmail({ to: recipientEmail, subject, text });
+    } catch (error) {
+      emailDelivery = { sent: false, error: error.message || 'email_failed' };
+    }
+  }
+
+  await Promise.allSettled([
+    db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+      [
+        listing.id,
+        user.id || 'property_finder',
+        eventType,
+        previousStatus,
+        listing.status || null,
+        action === 'delete' ? 'owner removed listing from dashboard' : 'owner edited listing from dashboard',
+        'Owner dashboard action',
+        JSON.stringify({ email: emailDelivery, dashboard: true })
+      ]
+    ),
+    logActivity(user.id, eventType, {
+      listing_id: listing.id,
+      inquiry_reference: listing.inquiry_reference || null,
+      status: listing.status || null
+    }, { listingId: listing.id }),
+    logEmailEvent(db, {
+      eventType,
+      recipientEmail,
+      recipientUserId: user.id,
+      recipientRole: 'property_finder',
+      templateKey: eventType,
+      subject,
+      language: asLanguage(user.preferred_language),
+      status: notificationStatusFromDelivery(emailDelivery),
+      provider: emailDelivery.provider || null,
+      providerMessageId: emailDelivery.messageId || emailDelivery.provider_message_id || null,
+      relatedListingId: listing.id,
+      failureReason: emailDelivery.error || emailDelivery.reason || null,
+      sentAt: emailDelivery.sent ? new Date() : null
+    }),
+    logNotification(db, {
+      userId: user.id || null,
+      recipientEmail,
+      recipientPhone: user.phone || listing.lister_phone || null,
+      channel: 'email',
+      type: eventType,
+      status: notificationStatusFromDelivery(emailDelivery),
+      payloadSummary: { title: listing.title, inquiry_reference: listing.inquiry_reference || null, action },
+      relatedListingId: listing.id,
+      sentAt: emailDelivery.sent ? new Date() : null,
+      failureReason: emailDelivery.error || emailDelivery.reason || null
+    }),
+    logWhatsAppMessage(db, {
+      userId: user.id || null,
+      recipientPhone: user.phone || listing.lister_phone || null,
+      templateKey: eventType,
+      messageType: 'dashboard_action',
+      language: asLanguage(user.preferred_language),
+      status: 'skipped',
+      relatedListingId: listing.id,
+      failureReason: 'dashboard_action_logged_email_primary'
+    })
+  ]);
+
+  return { email: emailDelivery };
+}
+
 async function dashboardPayload(user) {
   const profile = await upsertProfile(user, {});
   const preferences = await upsertPreferences(user.id, {});
-  const [recommendations, saved, recent, searches, needRequests, notes, comparisons, viewings, callbacks] = await Promise.all([
+  const [recommendations, ownedListings, saved, recent, searches, needRequests, notes, comparisons, viewings, callbacks] = await Promise.all([
     fetchRecommendations(user.id, preferences, 12),
+    fetchOwnedListings(user, 24),
     db.query(
       `SELECT sl.*, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
               img.url AS primary_image_url
@@ -564,11 +738,13 @@ async function dashboardPayload(user) {
     stats: {
       recommendations: recommendations.length,
       savedListings: saved.rows.length,
+      ownedListings: ownedListings.length,
       savedSearches: searches.rows.length,
       recentlyViewed: recent.rows.length,
       needRequests: needRequests.rows.length
     },
     recommendations,
+    ownedListings,
     savedListings: saved.rows.map((row) => propertyToCard(row, row.note || row.list_name || 'Saved to your shortlist')),
     recentlyViewed: recent.rows.map((row) => propertyToCard(row, `Viewed ${new Date(row.viewed_at).toLocaleDateString('en-GB')}`)),
     savedSearches: searches.rows,
@@ -690,6 +866,123 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
     return res.json({ ok: true, data: await dashboardPayload(req.userAuth) });
   } catch (error) {
     logger.error('Failed to load property seeker dashboard', { error: error.message, userId: req.userAuth?.id });
+    return next(error);
+  }
+});
+
+router.get('/my-listings', requireAuth, async (req, res, next) => {
+  try {
+    const items = await fetchOwnedListings(req.userAuth, asInteger(req.query.limit, 50));
+    return res.json({ ok: true, data: { items, total: items.length } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/my-listings/:id', requireAuth, async (req, res, next) => {
+  try {
+    const listing = await findOwnedListing(req.userAuth, req.params.id);
+    if (!listing) return res.status(404).json({ ok: false, error: 'Listing not found for this account' });
+
+    const updates = [];
+    const values = [listing.id, ownerContactParams(req.userAuth).email, ownerContactParams(req.userAuth).phoneDigits];
+    const add = (column, value) => {
+      values.push(value);
+      updates.push(`${column} = $${values.length}`);
+    };
+
+    const title = asText(req.body.title);
+    const description = asText(req.body.description);
+    const district = asText(req.body.district);
+    const area = asText(req.body.area);
+    const address = asText(req.body.address);
+    const propertyType = asText(req.body.property_type || req.body.propertyType);
+    const pricePeriod = asText(req.body.price_period || req.body.pricePeriod);
+    const price = asBigIntNumber(req.body.price, null);
+    const bedrooms = asInteger(req.body.bedrooms, null);
+    const bathrooms = asInteger(req.body.bathrooms, null);
+
+    if (title) add('title', title);
+    if (description) add('description', description);
+    if (district) add('district', district);
+    if (area) add('area', area);
+    if (address) add('address', address);
+    if (propertyType) add('property_type', propertyType);
+    if (pricePeriod) add('price_period', pricePeriod);
+    if (price !== null) add('price', price);
+    if (bedrooms !== null) add('bedrooms', bedrooms);
+    if (bathrooms !== null) add('bathrooms', bathrooms);
+
+    if (!updates.length) return res.status(400).json({ ok: false, error: 'No valid listing changes supplied' });
+
+    values.push(JSON.stringify({
+      owner_dashboard_updated_by: req.userAuth.id,
+      owner_dashboard_updated_at: new Date().toISOString()
+    }));
+    updates.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
+    updates.push(`status = CASE WHEN status = 'approved' THEN 'pending' ELSE status END`);
+    updates.push(`moderation_stage = 'owner_updated'`);
+    updates.push(`owner_last_edited_at = NOW()`);
+    updates.push(`updated_at = NOW()`);
+
+    const updateResult = await db.query(
+      `UPDATE properties p
+       SET ${updates.join(', ')}
+       WHERE p.id = $1
+         AND ${ownerMatchSql('p', '$2', '$3')}
+         AND p.status <> 'deleted'
+       RETURNING p.*`,
+      values
+    );
+    const updated = updateResult.rows[0];
+    const delivery = await logOwnedListingChange({
+      user: req.userAuth,
+      listing: updated,
+      action: 'update',
+      previousStatus: listing.status
+    });
+    return res.json({ ok: true, data: { listing: ownedListingToCard(updated), delivery } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.delete('/my-listings/:id', requireAuth, async (req, res, next) => {
+  try {
+    const listing = await findOwnedListing(req.userAuth, req.params.id);
+    if (!listing) return res.status(404).json({ ok: false, error: 'Listing not found for this account' });
+
+    const contact = ownerContactParams(req.userAuth);
+    const updateResult = await db.query(
+      `UPDATE properties p
+       SET status = 'deleted',
+           moderation_stage = 'owner_deleted',
+           owner_last_edited_at = NOW(),
+           updated_at = NOW(),
+           extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $4::jsonb
+       WHERE p.id = $1
+         AND ${ownerMatchSql('p', '$2', '$3')}
+         AND p.status <> 'deleted'
+       RETURNING p.*`,
+      [
+        listing.id,
+        contact.email,
+        contact.phoneDigits,
+        JSON.stringify({
+          owner_deleted_by_user_id: req.userAuth.id,
+          owner_deleted_at: new Date().toISOString()
+        })
+      ]
+    );
+    const updated = updateResult.rows[0];
+    const delivery = await logOwnedListingChange({
+      user: req.userAuth,
+      listing: updated,
+      action: 'delete',
+      previousStatus: listing.status
+    });
+    return res.json({ ok: true, data: { listing: ownedListingToCard(updated), delivery } });
+  } catch (error) {
     return next(error);
   }
 });

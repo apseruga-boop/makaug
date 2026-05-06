@@ -533,9 +533,9 @@ function run() {
     'Property enquiries',
     'Viewing Bookings',
     'Callback Requests',
-    'Compare Properties',
     'Mortgage/Budget Centre',
-    'Safety and Trust Centre',
+    'My Listed Properties',
+    'Safety Tips',
     'Area Watch',
     'Search preference summary',
     'Sponsored slot',
@@ -571,6 +571,11 @@ function run() {
     assert(sourceHtml.includes(expected), `missing dashboard shell section: ${expected}`);
   }
   assert(sourceHtml.includes('id="finder-weather-context"'), 'property finder dashboard should show weather-ready context');
+  assert(sourceHtml.includes('id="finder-area-preference-context"'), 'property finder dashboard should use area preference wording instead of location context');
+  assert(sourceHtml.includes('id="finder-owned-listings"'), 'property finder dashboard should show listings linked to the signed-in account');
+  assert(sourceHtml.includes('openOwnedListingEditor'), 'property finder dashboard should let owners edit linked listings');
+  assert(sourceHtml.includes('deleteOwnedListing'), 'property finder dashboard should let owners remove linked listings from the site');
+  assert(!sourceHtml.includes('id="finder-compare-title"'), 'property finder dashboard should not show the removed Compare Properties panel');
   assert(sourceHtml.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
   assert(sourceHtml.includes('getLocalFinderRecommendations'), 'property finder dashboard should derive fallback recommendations from signup preferences');
   assert(sourceHtml.includes('id="account-pref-goal"'), 'account settings should expose property finder goal preferences');
@@ -579,6 +584,12 @@ function run() {
   assert(sourceHtml.includes('id="account-password-status-msg"'), 'password updates should show inline confirmation');
   assert(!sourceHtml.includes('id="account-phone" disabled'), 'account phone number should be editable');
   assert(authRoutes.includes('phone = $4') && authRoutes.includes('account_phone_changed'), 'auth profile backend should update phone safely and log changed numbers');
+  assert(propertySeekerRoutes.includes("router.get('/my-listings'"), 'property finder backend should expose linked owned listings');
+  assert(propertySeekerRoutes.includes("router.patch('/my-listings/:id'"), 'property finder backend should update owned listings');
+  assert(propertySeekerRoutes.includes("router.delete('/my-listings/:id'"), 'property finder backend should remove owned listings from the public site');
+  assert(propertySeekerRoutes.includes('ownerMatchSql'), 'owned listings should be matched by owner email or phone');
+  assert(propertySeekerRoutes.includes('listing_updated_by_owner'), 'owned listing updates should be logged');
+  assert(propertySeekerRoutes.includes('listing_deleted_by_owner'), 'owned listing removals should be logged');
   assert(authFlowServiceSource.includes('property_seeker_preferences'), 'verified property finder signup should create backend preference records');
   assert(authFlowServiceSource.includes('parseBudgetUpper(profile.budget_range)'), 'signup preferences should convert budget labels into usable recommendation budgets');
   assert(sourceHtml.includes('id="page-admin-docs"'), 'admin docs page should exist for protected admin route');
