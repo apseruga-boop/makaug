@@ -530,7 +530,8 @@ function run() {
   assert(mortgageEstimate.onceOffCosts > mortgageEstimate.depositAmount, 'mortgage estimate should include once-off costs beyond deposit');
 
   const requiredDashboardShellText = [
-    'My Property Brief',
+    "Can't Find What You're Looking For?",
+    'Your property requests',
     'Recommended For You',
     'Saved Searches and Alerts',
     'Property enquiries',
@@ -580,6 +581,11 @@ function run() {
   assert(frontendSource.includes('deleteOwnedListing'), 'property finder dashboard should let owners remove linked listings from the site');
   assert(!frontendSource.includes('id="finder-compare-title"'), 'property finder dashboard should not show the removed Compare Properties panel');
   assert(frontendSource.includes('FINDER_DASHBOARD_I18N'), 'property finder dashboard should have language-aware labels');
+  assert(frontendSource.includes('submitFinderNeedRequest'), 'property finder dashboard should submit property need requests');
+  assert(frontendSource.includes('finder-need-category'), 'property finder need form should collect category');
+  assert(frontendSource.includes('finder-need-location'), 'property finder need form should collect location');
+  assert(frontendSource.includes('finder-need-contact'), 'property finder need form should collect preferred reply channel');
+  assert(frontendSource.includes('needUnresolved'), 'property finder need form should show unresolved status copy');
   assert(frontendSource.includes('data-safety-stakeholder-grid="1"'), 'safety page should include stakeholder safety guidance');
   assert(frontendSource.includes('data-safety-illustration="renters"'), 'safety page should include illustrated renter safety guidance');
   assert(frontendSource.includes('safe-viewings'), 'safety how-to videos should include safe viewing slot');
@@ -593,6 +599,11 @@ function run() {
   assert(!frontendSource.includes('id="account-phone" disabled'), 'account phone number should be editable');
   assert(authRoutes.includes('phone = $4') && authRoutes.includes('account_phone_changed'), 'auth profile backend should update phone safely and log changed numbers');
   assert(propertySeekerRoutes.includes("router.get('/my-listings'"), 'property finder backend should expose linked owned listings');
+  assert(propertySeekerRoutes.includes("router.post('/need-request'"), 'property finder backend should accept property need requests');
+  assert(propertySeekerRoutes.includes('property_need_request_user_confirmation'), 'property need request should create user confirmation email logs');
+  assert(propertySeekerRoutes.includes('property_need_request_admin_alert'), 'property need request should create admin alert notification logs');
+  assert(adminRoutes.includes("router.get('/property-need-requests'"), 'admin backend should list property need requests');
+  assert(adminRoutes.includes("router.patch('/property-need-requests/:id'"), 'admin backend should update property need request status');
   assert(propertySeekerRoutes.includes("router.patch('/my-listings/:id'"), 'property finder backend should update owned listings');
   assert(propertySeekerRoutes.includes("router.delete('/my-listings/:id'"), 'property finder backend should remove owned listings from the public site');
   assert(propertySeekerRoutes.includes('ownerMatchSql'), 'owned listings should be matched by owner email or phone');

@@ -3444,10 +3444,88 @@
 
         <div class="grid md:grid-cols-2 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
-	            <h2 id="finder-brief-title" class="text-xl font-bold text-gray-800 mb-2">My Property Brief</h2>
-	            <p id="finder-brief-copy" class="text-sm text-gray-500">Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.</p>
-	            <div id="finder-brief" class="mt-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">Complete your profile to personalize recommendations.</div>
-	            <button id="finder-edit-preferences-btn" onclick="openAccountSettings()" class="mt-4 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Edit Preferences</button>
+	            <h2 id="finder-brief-title" class="text-xl font-bold text-gray-800 mb-2">Can't Find What You're Looking For?</h2>
+	            <p id="finder-brief-copy" class="text-sm text-gray-500">Tell us the top-line details and makaug.com will turn it into a tracked property request.</p>
+	            <form id="finder-need-form" onsubmit="submitFinderNeedRequest(event)" class="mt-4 space-y-3">
+	              <div class="grid sm:grid-cols-2 gap-3">
+	                <label class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-category-label">What are you looking for?</span>
+	                  <select id="finder-need-category" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="rent">Rent</option>
+	                    <option value="sale">Buy</option>
+	                    <option value="student">Student accommodation</option>
+	                    <option value="land">Land</option>
+	                    <option value="commercial">Commercial</option>
+	                    <option value="broker">Broker or agent help</option>
+	                  </select>
+	                </label>
+	                <label class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-location-label">Location</span>
+	                  <select id="finder-need-location" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="Kampala">Kampala</option>
+	                    <option value="Wakiso">Wakiso</option>
+	                    <option value="Mukono">Mukono</option>
+	                    <option value="Entebbe">Entebbe</option>
+	                    <option value="Jinja">Jinja</option>
+	                    <option value="Makerere">Makerere</option>
+	                    <option value="Other">Other / I will explain below</option>
+	                  </select>
+	                </label>
+	                <label class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-budget-label">Budget</span>
+	                  <select id="finder-need-budget" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="">Budget not sure yet</option>
+	                    <option value="300000">Under USh 300K</option>
+	                    <option value="500000">Under USh 500K</option>
+	                    <option value="1000000">USh 500K-1M</option>
+	                    <option value="2000000">USh 1M-2M</option>
+	                    <option value="5000000">USh 2M-5M</option>
+	                    <option value="50000000">USh 50M+</option>
+	                  </select>
+	                </label>
+	                <label id="finder-need-bedrooms-wrap" class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-bedrooms-label">Bedrooms</span>
+	                  <select id="finder-need-bedrooms" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="">Any</option>
+	                    <option value="1">1</option>
+	                    <option value="2">2</option>
+	                    <option value="3">3</option>
+	                    <option value="4">4</option>
+	                    <option value="5">5+</option>
+	                  </select>
+	                </label>
+	                <label class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-urgency-label">When do you need it?</span>
+	                  <select id="finder-need-urgency" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="immediately">Immediately</option>
+	                    <option value="this_month">This month</option>
+	                    <option value="one_to_three_months">1-3 months</option>
+	                    <option value="just_browsing">Just browsing</option>
+	                  </select>
+	                </label>
+	                <label class="text-xs font-bold text-gray-600">
+	                  <span id="finder-need-contact-label">How should we reply?</span>
+	                  <select id="finder-need-contact" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm" onchange="updateFinderNeedForm()">
+	                    <option value="whatsapp">WhatsApp</option>
+	                    <option value="email">Email</option>
+	                    <option value="phone">Phone call</option>
+	                  </select>
+	                </label>
+	              </div>
+	              <label class="text-xs font-bold text-gray-600 block">
+	                <span id="finder-need-message-label">Anything else we should know?</span>
+	                <textarea id="finder-need-message" class="mt-1 w-full rounded-xl border border-green-100 px-3 py-2 text-sm min-h-[76px]" maxlength="700" oninput="updateFinderNeedForm()" placeholder="Tell us the exact area, must-haves, deadline, or anything we missed."></textarea>
+	              </label>
+	              <div id="finder-need-preview" class="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-xl p-3">I am looking for a rental in Kampala.</div>
+	              <div class="flex flex-wrap items-center gap-3">
+	                <button id="finder-need-submit-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Send request</button>
+	                <span id="finder-need-status" class="text-xs text-gray-500"></span>
+	              </div>
+	            </form>
+	            <div class="mt-5">
+	              <h3 id="finder-need-history-title" class="text-sm font-black text-gray-800">Your property requests</h3>
+	              <div id="finder-brief" class="mt-2 space-y-2 text-sm text-gray-700"></div>
+	            </div>
 	          </div>
 	          <div class="bg-white border border-gray-200 rounded-2xl p-5">
 	            <h2 id="finder-recommended-title" class="text-xl font-bold text-gray-800 mb-2">Recommended For You</h2>

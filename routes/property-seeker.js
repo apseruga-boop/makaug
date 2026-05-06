@@ -5,7 +5,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const { cleanText } = require('../middleware/validation');
 const { createLead } = require('../services/leadService');
-const { sendSupportEmail } = require('../services/emailService');
+const { getSupportEmail, sendSupportEmail } = require('../services/emailService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
@@ -1060,6 +1060,8 @@ router.post('/activity', optionalAuth, async (req, res, next) => {
 
 router.post('/need-request', optionalAuth, async (req, res, next) => {
   try {
+    const preferredContactChannel = asContactChannel(req.body.preferred_contact_channel || req.body.preferredContactChannel, 'whatsapp');
+    const language = asLanguage(req.body.language || req.body.preferred_language || req.userAuth?.preferred_language);
     const result = await db.query(
       `INSERT INTO property_need_requests (
          user_id, source, category, location, budget, currency, bedrooms, property_type,
@@ -1080,18 +1082,22 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
         asText(req.body.land_title_preference || req.body.landTitlePreference) || null,
         asText(req.body.message) || null,
         asText(req.body.urgency) || null,
-        asContactChannel(req.body.preferred_contact_channel || req.body.preferredContactChannel, 'whatsapp'),
-        asLanguage(req.body.language || req.body.preferred_language)
+        preferredContactChannel,
+        language
       ]
     );
     const item = result.rows[0];
+    const requesterName = req.userAuth ? [req.userAuth.first_name, req.userAuth.last_name].filter(Boolean).join(' ') : asText(req.body.name);
+    const requesterEmail = asText(req.body.email || req.userAuth?.email) || null;
+    const requesterPhone = asText(req.body.phone || req.userAuth?.phone) || null;
+    const responseTarget = new Date(Date.now() + 48 * 60 * 60 * 1000);
     const lead = await createLead(db, {
       userId: req.userAuth?.id || null,
       contact: {
         userId: req.userAuth?.id || null,
-        name: req.userAuth ? [req.userAuth.first_name, req.userAuth.last_name].filter(Boolean).join(' ') : asText(req.body.name),
-        phone: asText(req.body.phone || req.userAuth?.phone) || null,
-        email: asText(req.body.email || req.userAuth?.email) || null,
+        name: requesterName,
+        phone: requesterPhone,
+        email: requesterEmail,
         preferredContactChannel: item.preferred_contact_channel,
         preferredLanguage: item.language,
         roleType: 'property_seeker',
@@ -1105,10 +1111,165 @@ router.post('/need-request', optionalAuth, async (req, res, next) => {
       location: item.location,
       budget: item.budget,
       message: item.message,
-      metadata: { property_need_request_id: item.id }
+      priority: item.urgency === 'immediately' ? 'high' : 'normal',
+      nextFollowUpAt: responseTarget.toISOString(),
+      activityType: 'property_need_request_created',
+      activityMessage: 'Property need request submitted from property finder dashboard',
+      metadata: {
+        property_need_request_id: item.id,
+        request_status: item.status,
+        urgency: item.urgency,
+        bedrooms: item.bedrooms,
+        property_type: item.property_type,
+        preferred_contact_channel: item.preferred_contact_channel,
+        response_target_hours: 48,
+        summary: asText(req.body.summary)
+      }
     });
+    if (lead?.contact_id) {
+      await db.query('UPDATE property_need_requests SET contact_id = $1 WHERE id = $2', [lead.contact_id, item.id]);
+      item.contact_id = lead.contact_id;
+    }
     await logActivity(req.userAuth?.id || null, 'property_need_request_created', { property_need_request_id: item.id }, { leadId: lead?.id || null });
-    return res.status(201).json({ ok: true, data: result.rows[0] });
+    const userSubject = 'Your makaug.com property request is now being tracked';
+    const adminSubject = 'New makaug.com property need request';
+    const requestText = [
+      `Request: ${item.category || 'property'} in ${item.location || 'any area'}`,
+      item.budget ? `Budget: USh ${Number(item.budget).toLocaleString('en-UG')}` : '',
+      item.bedrooms ? `Bedrooms: ${item.bedrooms}` : '',
+      item.urgency ? `Timing: ${item.urgency}` : '',
+      `Preferred reply: ${item.preferred_contact_channel}`,
+      item.message ? `Notes: ${item.message}` : '',
+      `Status: ${item.status}`,
+      `Reference: ${item.id}`
+    ].filter(Boolean).join('\n');
+    let userDelivery = { sent: false, reason: requesterEmail ? 'not_attempted' : 'no_email_recipient' };
+    let adminDelivery = { sent: false, reason: 'not_attempted' };
+    try {
+      if (requesterEmail) {
+        userDelivery = await sendSupportEmail({
+          to: requesterEmail,
+          subject: userSubject,
+          text: [
+            `Hello ${requesterName || 'there'},`,
+            '',
+            'We received your makaug.com property request and marked it as unresolved while the team searches.',
+            'Target follow-up: within 24-48 hours.',
+            '',
+            requestText,
+            '',
+            'You can see your request status in your Property Finder dashboard.'
+          ].join('\n')
+        });
+      }
+      adminDelivery = await sendSupportEmail({
+        to: getSupportEmail(),
+        subject: adminSubject,
+        text: [
+          'A property finder could not find what they need.',
+          '',
+          requestText,
+          '',
+          requesterName ? `Name: ${requesterName}` : '',
+          requesterEmail ? `Email: ${requesterEmail}` : '',
+          requesterPhone ? `Phone: ${requesterPhone}` : '',
+          lead?.id ? `CRM lead: ${lead.id}` : '',
+          '',
+          'Admin action: review in CRM/leads, assign an agent, then mark resolved when completed.'
+        ].filter(Boolean).join('\n'),
+        replyTo: requesterEmail || undefined
+      });
+    } catch (emailError) {
+      logger.warn('Property need request email notification failed', { error: emailError.message, leadId: lead?.id || null });
+      adminDelivery = { sent: false, error: emailError.message || 'email_failed' };
+    }
+    await Promise.allSettled([
+      logEmailEvent(db, {
+        eventType: 'property_need_request_submitted',
+        recipientEmail: requesterEmail,
+        recipientUserId: req.userAuth?.id || null,
+        recipientRole: 'property_finder',
+        templateKey: 'property_need_request_user_confirmation',
+        subject: userSubject,
+        language,
+        status: notificationStatusFromDelivery(userDelivery),
+        provider: userDelivery.provider || null,
+        providerMessageId: userDelivery.messageId || userDelivery.provider_message_id || null,
+        relatedLeadId: lead?.id || null,
+        failureReason: userDelivery.error || userDelivery.reason || null,
+        sentAt: userDelivery.sent ? new Date() : null
+      }),
+      logEmailEvent(db, {
+        eventType: 'property_need_request_submitted_admin',
+        recipientEmail: getSupportEmail(),
+        recipientRole: 'admin',
+        templateKey: 'property_need_request_admin_alert',
+        subject: adminSubject,
+        language,
+        status: notificationStatusFromDelivery(adminDelivery),
+        provider: adminDelivery.provider || null,
+        providerMessageId: adminDelivery.messageId || adminDelivery.provider_message_id || null,
+        relatedLeadId: lead?.id || null,
+        failureReason: adminDelivery.error || adminDelivery.reason || null,
+        sentAt: adminDelivery.sent ? new Date() : null
+      }),
+      logNotification(db, {
+        userId: req.userAuth?.id || null,
+        recipientEmail: requesterEmail,
+        recipientPhone: requesterPhone,
+        channel: 'email',
+        type: 'property_need_request_submitted',
+        status: notificationStatusFromDelivery(userDelivery),
+        payloadSummary: {
+          property_need_request_id: item.id,
+          category: item.category,
+          location: item.location,
+          status: item.status,
+          response_target_hours: 48
+        },
+        relatedLeadId: lead?.id || null,
+        sentAt: userDelivery.sent ? new Date() : null,
+        failureReason: userDelivery.error || userDelivery.reason || null
+      }),
+      logNotification(db, {
+        userId: req.userAuth?.id || null,
+        recipientEmail: getSupportEmail(),
+        channel: 'email',
+        type: 'property_need_request_admin_alert',
+        status: notificationStatusFromDelivery(adminDelivery),
+        payloadSummary: {
+          property_need_request_id: item.id,
+          category: item.category,
+          location: item.location,
+          preferred_contact_channel: item.preferred_contact_channel
+        },
+        relatedLeadId: lead?.id || null,
+        sentAt: adminDelivery.sent ? new Date() : null,
+        failureReason: adminDelivery.error || adminDelivery.reason || null
+      }),
+      logWhatsAppMessage(db, {
+        userId: req.userAuth?.id || null,
+        recipientPhone: requesterPhone,
+        templateKey: 'property_need_request_submitted',
+        messageType: 'property_need_request',
+        language,
+        status: preferredContactChannel === 'whatsapp' ? 'logged' : 'skipped',
+        failureReason: preferredContactChannel === 'whatsapp' ? 'whatsapp_follow_up_required' : 'preferred_channel_not_whatsapp',
+        relatedLeadId: lead?.id || null
+      })
+    ]);
+    return res.status(201).json({
+      ok: true,
+      data: {
+        ...item,
+        lead_id: lead?.id || null,
+        response_target_hours: 48,
+        delivery: {
+          userEmail: notificationStatusFromDelivery(userDelivery),
+          adminEmail: notificationStatusFromDelivery(adminDelivery)
+        }
+      }
+    });
   } catch (error) {
     return next(error);
   }

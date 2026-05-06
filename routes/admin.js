@@ -3885,6 +3885,94 @@ router.post('/leads/:id/tasks', async (req, res, next) => {
   }
 });
 
+router.get('/property-need-requests', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const status = cleanText(req.query.status);
+    const values = [];
+    const filters = [];
+    if (status && status !== 'all') {
+      values.push(status);
+      filters.push(`pnr.status = $${values.length}`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const count = await db.query(`SELECT COUNT(*)::int AS total FROM property_need_requests pnr ${where}`, values);
+    const total = count.rows[0]?.total || 0;
+    const rows = await db.query(
+      `SELECT pnr.*, c.name AS contact_name, c.email AS contact_email, c.phone AS contact_phone,
+              l.id AS lead_id, l.lead_status, l.priority, l.next_follow_up_at
+       FROM property_need_requests pnr
+       LEFT JOIN contacts c ON c.id = pnr.contact_id
+       LEFT JOIN leads l ON l.metadata->>'property_need_request_id' = pnr.id::text
+       ${where}
+       ORDER BY pnr.created_at DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+    return res.json({ ok: true, data: rows.rows, pagination: toPagination(total, page, limit) });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.json({ ok: true, data: [], pagination: toPagination(0, 1, 50), provider_missing: true });
+    }
+    return next(error);
+  }
+});
+
+router.patch('/property-need-requests/:id', async (req, res, next) => {
+  try {
+    const requestId = req.params.id;
+    const status = cleanText(req.body.status || req.body.lead_status || req.body.leadStatus);
+    const allowed = new Set(['new', 'in_review', 'agent_contacted', 'matched', 'resolved', 'closed']);
+    if (!allowed.has(status)) return res.status(400).json({ ok: false, error: 'Unsupported property need status' });
+    const previous = await db.query('SELECT * FROM property_need_requests WHERE id = $1 LIMIT 1', [requestId]);
+    if (!previous.rows.length) return res.status(404).json({ ok: false, error: 'Property need request not found' });
+    const updated = await db.query(
+      `UPDATE property_need_requests
+       SET status = $2,
+           assigned_to_user_id = COALESCE($3, assigned_to_user_id),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [requestId, status, cleanText(req.body.assigned_to_user_id) || req.adminAuth?.userId || null]
+    );
+    const lead = await db.query(
+      `SELECT id, lead_status FROM leads WHERE metadata->>'property_need_request_id' = $1 LIMIT 1`,
+      [requestId]
+    );
+    if (lead.rows[0]?.id) {
+      const leadStatus = ['resolved', 'closed'].includes(status) ? 'closed' : 'open';
+      await db.query(
+        `UPDATE leads
+         SET lead_status = $2,
+             lifecycle_stage = $3,
+             outcome = CASE WHEN $3 = 'resolved' THEN 'resolved' ELSE outcome END,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [lead.rows[0].id, leadStatus, status]
+      );
+      await addLeadActivity(db, {
+        leadId: lead.rows[0].id,
+        actorUserId: req.adminAuth?.userId || null,
+        actorType: 'admin',
+        activityType: 'property_need_status_changed',
+        oldStatus: previous.rows[0].status,
+        newStatus: status,
+        message: cleanText(req.body.note) || `Property need marked ${status}`,
+        metadata: { property_need_request_id: requestId }
+      });
+    }
+    await writeAudit('property_need_request_status_updated', {
+      property_need_request_id: requestId,
+      status,
+      previous_status: previous.rows[0].status
+    }, adminActorId(req));
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 async function buildSetupStatus() {
   const superAdmin = await safeOne(
     `SELECT COUNT(*)::int AS total,
@@ -3965,6 +4053,9 @@ async function buildSetupStatus() {
     failedWhatsApp: await safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing')"),
     failedSms: await safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE channel = 'sms' AND status IN ('failed','provider_missing')"),
     savedSearches: await safeCount("SELECT COUNT(*)::int AS total FROM saved_searches WHERE status = 'active'"),
+    propertyNeedRequests: await safeCount("SELECT COUNT(*)::int AS total FROM property_need_requests"),
+    unresolvedPropertyNeedRequests: await safeCount("SELECT COUNT(*)::int AS total FROM property_need_requests WHERE status NOT IN ('resolved','closed')"),
+    resolvedPropertyNeedRequests: await safeCount("SELECT COUNT(*)::int AS total FROM property_need_requests WHERE status IN ('resolved','closed')"),
     alertMatches: await safeCount("SELECT COUNT(*)::int AS total FROM alert_matches"),
     viewings: await safeCount('SELECT COUNT(*)::int AS total FROM viewing_bookings'),
     callbacks: await safeCount('SELECT COUNT(*)::int AS total FROM callback_requests'),

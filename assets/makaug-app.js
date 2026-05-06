@@ -4211,9 +4211,67 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Open Saved Page",
     signOut: "Sign Out",
     recentlyViewed: "Recently Viewed",
-    briefTitle: "My Property Brief",
-    briefCopy: "Set your goal, locations, budget, bedrooms, property type, timeline, language, and contact channel.",
-    briefEmpty: "Complete your profile to personalize recommendations.",
+    briefTitle: "Can't Find What You're Looking For?",
+    briefCopy: "Tell us the top-line details and makaug.com will turn it into a tracked property request.",
+    briefEmpty: "No property requests yet. Send one when you cannot find the right match.",
+    needCategoryLabel: "What are you looking for?",
+    needLocationLabel: "Location",
+    needBudgetLabel: "Budget",
+    needBedroomsLabel: "Bedrooms",
+    needUrgencyLabel: "When do you need it?",
+    needContactLabel: "How should we reply?",
+    needMessageLabel: "Anything else we should know?",
+    needMessagePlaceholder: "Tell us the exact area, must-haves, deadline, or anything we missed.",
+    needPreviewDefault: "I am looking for a rental in Kampala.",
+    needSubmit: "Send request",
+    needSending: "Sending...",
+    needSent: "Request sent. It is now tracked as unresolved until the team closes it.",
+    needError: "Could not send request. Please try again or contact makaug.com on WhatsApp.",
+    needHistoryTitle: "Your property requests",
+    needUnresolved: "Unresolved",
+    needResolved: "Resolved",
+    needEta: "Target follow-up: within 24-48 hours",
+    needOptions: {
+      category: {
+        rent: "Rent",
+        sale: "Buy",
+        student: "Student accommodation",
+        land: "Land",
+        commercial: "Commercial",
+        broker: "Broker or agent help"
+      },
+      location: {
+        Kampala: "Kampala",
+        Wakiso: "Wakiso",
+        Mukono: "Mukono",
+        Entebbe: "Entebbe",
+        Jinja: "Jinja",
+        Makerere: "Makerere",
+        Other: "Other / I will explain below"
+      },
+      budget: {
+        "": "Budget not sure yet",
+        "300000": "Under USh 300K",
+        "500000": "Under USh 500K",
+        "1000000": "USh 500K-1M",
+        "2000000": "USh 1M-2M",
+        "5000000": "USh 2M-5M",
+        "50000000": "USh 50M+"
+      },
+      urgency: {
+        immediately: "Immediately",
+        this_month: "This month",
+        one_to_three_months: "1-3 months",
+        just_browsing: "Just browsing"
+      },
+      contact: {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        phone: "Phone call"
+      },
+      bedroomAny: "Any"
+    },
+    needPreview: "Looking for {category} in {location}{bedrooms}{budget}{urgency}. Reply by {contact}.",
     addPreferredArea: "Add a preferred area",
     notSet: "Not set",
     budgetNotSet: "Budget not set",
@@ -4326,9 +4384,67 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Ggulawo ezitereddwa",
     signOut: "Fuluma",
     recentlyViewed: "By'olabye gye buvuddeko",
-    briefTitle: "Property brief yange",
-    briefCopy: "Teekamu ekigendererwa, ebitundu, budget, bedrooms, type, timeline, olulimi, ne contact channel.",
-    briefEmpty: "Maliriza profile yo okufuna recommendations ezikukwatako.",
+    briefTitle: "Tosobodde kuzuula ky'onoonya?",
+    briefCopy: "Tubuulire ebikulu era makaug.com ejja kukifuula request erondoolerwa.",
+    briefEmpty: "Tewali property requests. Sindika emu bw'oba tofunye ekituufu.",
+    needCategoryLabel: "Onoonya ki?",
+    needLocationLabel: "Ekitundu",
+    needBudgetLabel: "Budget",
+    needBedroomsLabel: "Bedrooms",
+    needUrgencyLabel: "Okyetaaga ddi?",
+    needContactLabel: "Tukuddemu tutya?",
+    needMessageLabel: "Waliwo ekirala kye twandimanye?",
+    needMessagePlaceholder: "Tubuulire ekitundu ekituufu, must-haves, deadline, oba kye twosizza.",
+    needPreviewDefault: "Noonya rental mu Kampala.",
+    needSubmit: "Sindika request",
+    needSending: "Tusindika...",
+    needSent: "Request esindikiddwa. Erondoolerwa nga unresolved okutuusa team lw'egimaliriza.",
+    needError: "Request tesobodde kusindikibwa. Ddamu ogezeeko oba tuwandiikire ku WhatsApp.",
+    needHistoryTitle: "Property requests zo",
+    needUnresolved: "Tennamalirizibwa",
+    needResolved: "Emaliriziddwa",
+    needEta: "Target follow-up: mu ssaawa 24-48",
+    needOptions: {
+      category: {
+        rent: "Kupangisa",
+        sale: "Kugula",
+        student: "Student accommodation",
+        land: "Ettaka",
+        commercial: "Commercial",
+        broker: "Broker oba agent help"
+      },
+      location: {
+        Kampala: "Kampala",
+        Wakiso: "Wakiso",
+        Mukono: "Mukono",
+        Entebbe: "Entebbe",
+        Jinja: "Jinja",
+        Makerere: "Makerere",
+        Other: "Ekirala / Nja kunnyonnyola wansi"
+      },
+      budget: {
+        "": "Budget tenategeerekeka",
+        "300000": "Wansi wa USh 300K",
+        "500000": "Wansi wa USh 500K",
+        "1000000": "USh 500K-1M",
+        "2000000": "USh 1M-2M",
+        "5000000": "USh 2M-5M",
+        "50000000": "USh 50M+"
+      },
+      urgency: {
+        immediately: "Kati",
+        this_month: "Omwezi guno",
+        one_to_three_months: "Omwezi 1-3",
+        just_browsing: "Ndaba bulabi"
+      },
+      contact: {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        phone: "Phone call"
+      },
+      bedroomAny: "Yonna"
+    },
+    needPreview: "Noonya {category} mu {location}{bedrooms}{budget}{urgency}. Muddemu nga mukozesa {contact}.",
     addPreferredArea: "Ssaamu ekitundu ky'oyagala",
     notSet: "Tekinnateekebwa",
     budgetNotSet: "Budget tenateekebwa",
@@ -4441,9 +4557,67 @@ const FINDER_DASHBOARD_I18N = {
     openSavedPage: "Fungua Saved Page",
     signOut: "Toka",
     recentlyViewed: "Ulizotazama hivi karibuni",
-    briefTitle: "Property Brief yangu",
-    briefCopy: "Weka lengo, maeneo, budget, bedrooms, property type, timeline, lugha, na contact channel.",
-    briefEmpty: "Kamilisha profile yako ili kupata recommendations bora.",
+    briefTitle: "Hujapata unachotafuta?",
+    briefCopy: "Tuambie maelezo muhimu na makaug.com itaweka ombi lako kwenye mfumo wa kufuatilia.",
+    briefEmpty: "Hakuna property requests bado. Tuma moja usipopata match sahihi.",
+    needCategoryLabel: "Unatafuta nini?",
+    needLocationLabel: "Eneo",
+    needBudgetLabel: "Budget",
+    needBedroomsLabel: "Bedrooms",
+    needUrgencyLabel: "Unaihitaji lini?",
+    needContactLabel: "Tukujibu vipi?",
+    needMessageLabel: "Kuna maelezo mengine?",
+    needMessagePlaceholder: "Tuambie eneo kamili, vitu muhimu, deadline, au chochote tulichokosa.",
+    needPreviewDefault: "Natafuta rental Kampala.",
+    needSubmit: "Tuma request",
+    needSending: "Inatuma...",
+    needSent: "Request imetumwa. Itaonekana unresolved hadi timu ikifunga.",
+    needError: "Request haikutumwa. Jaribu tena au wasiliana na makaug.com WhatsApp.",
+    needHistoryTitle: "Property requests zako",
+    needUnresolved: "Unresolved",
+    needResolved: "Resolved",
+    needEta: "Target follow-up: ndani ya saa 24-48",
+    needOptions: {
+      category: {
+        rent: "Rent",
+        sale: "Buy",
+        student: "Student accommodation",
+        land: "Land",
+        commercial: "Commercial",
+        broker: "Broker or agent help"
+      },
+      location: {
+        Kampala: "Kampala",
+        Wakiso: "Wakiso",
+        Mukono: "Mukono",
+        Entebbe: "Entebbe",
+        Jinja: "Jinja",
+        Makerere: "Makerere",
+        Other: "Other / Nitaeleza chini"
+      },
+      budget: {
+        "": "Budget bado sijui",
+        "300000": "Chini ya USh 300K",
+        "500000": "Chini ya USh 500K",
+        "1000000": "USh 500K-1M",
+        "2000000": "USh 1M-2M",
+        "5000000": "USh 2M-5M",
+        "50000000": "USh 50M+"
+      },
+      urgency: {
+        immediately: "Immediately",
+        this_month: "This month",
+        one_to_three_months: "1-3 months",
+        just_browsing: "Just browsing"
+      },
+      contact: {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        phone: "Phone call"
+      },
+      bedroomAny: "Any"
+    },
+    needPreview: "Natafuta {category} katika {location}{bedrooms}{budget}{urgency}. Nijibu kwa {contact}.",
     addPreferredArea: "Ongeza eneo unalopendelea",
     notSet: "Haijawekwa",
     budgetNotSet: "Budget haijawekwa",
@@ -4508,16 +4682,29 @@ const FINDER_DASHBOARD_I18N = {
 };
 
 function dashboardText(key, replacements = {}) {
-  const lang = currentLang || "en";
-  const fallback = LANG_FALLBACK[lang] || "en";
-  let value = FINDER_DASHBOARD_I18N[lang]?.[key]
-    || FINDER_DASHBOARD_I18N[fallback]?.[key]
-    || FINDER_DASHBOARD_I18N.en?.[key]
-    || key;
+  let value = dashboardRawValue(key);
+  if (value && typeof value === "object") return key;
+  value = String(value ?? key);
   Object.entries(replacements || {}).forEach(([name, replacement]) => {
     value = value.replace(new RegExp(`\\{${name}\\}`, "g"), String(replacement ?? ""));
   });
   return value;
+}
+
+function dashboardRawValue(key) {
+  const lang = currentLang || "en";
+  const fallback = LANG_FALLBACK[lang] || "en";
+  return FINDER_DASHBOARD_I18N[lang]?.[key]
+    || FINDER_DASHBOARD_I18N[fallback]?.[key]
+    || FINDER_DASHBOARD_I18N.en?.[key]
+    || key;
+}
+
+function dashboardNeedOption(group, value) {
+  const options = dashboardRawValue("needOptions") || {};
+  if (typeof options?.[group] === "string") return options[group];
+  if (typeof FINDER_DASHBOARD_I18N.en.needOptions?.[group] === "string") return FINDER_DASHBOARD_I18N.en.needOptions[group];
+  return options?.[group]?.[value] || FINDER_DASHBOARD_I18N.en.needOptions?.[group]?.[value] || value || "";
 }
 
 function languageDisplayName(code = "en") {
@@ -4616,7 +4803,18 @@ function applyFinderDashboardLanguageUI() {
   setDashboardText("finder-recent-title", "recentlyViewed");
   setDashboardText("finder-brief-title", "briefTitle");
   setDashboardText("finder-brief-copy", "briefCopy");
-  setDashboardText("finder-edit-preferences-btn", "editPreferences");
+  setDashboardText("finder-need-category-label", "needCategoryLabel");
+  setDashboardText("finder-need-location-label", "needLocationLabel");
+  setDashboardText("finder-need-budget-label", "needBudgetLabel");
+  setDashboardText("finder-need-bedrooms-label", "needBedroomsLabel");
+  setDashboardText("finder-need-urgency-label", "needUrgencyLabel");
+  setDashboardText("finder-need-contact-label", "needContactLabel");
+  setDashboardText("finder-need-message-label", "needMessageLabel");
+  setDashboardText("finder-need-submit-btn", "needSubmit");
+  setDashboardText("finder-need-history-title", "needHistoryTitle");
+  const needMessage = document.getElementById("finder-need-message");
+  if (needMessage) needMessage.placeholder = dashboardText("needMessagePlaceholder");
+  localizeFinderNeedSelects();
   setDashboardText("finder-recommended-title", "recommendedTitle");
   setDashboardText("finder-recommended-copy", "recommendedCopy");
   setDashboardText("finder-browse-matches-btn", "browseMatches");
@@ -4635,6 +4833,23 @@ function applyFinderDashboardLanguageUI() {
   setDashboardText("finder-safety-title", "safetyTitle");
   setDashboardText("finder-safety-copy", "safetyCopy");
   setDashboardText("finder-safety-btn", "safetyButton");
+  updateFinderNeedForm();
+}
+
+function localizeFinderNeedSelects() {
+  const setLabels = (selectId, group) => {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    Array.from(select.options || []).forEach((option) => {
+      if (group === "bedrooms" && option.value === "") option.textContent = dashboardNeedOption("bedroomAny", "bedroomAny");
+      else option.textContent = dashboardNeedOption(group, option.value);
+    });
+  };
+  setLabels("finder-need-category", "category");
+  setLabels("finder-need-location", "location");
+  setLabels("finder-need-budget", "budget");
+  setLabels("finder-need-urgency", "urgency");
+  setLabels("finder-need-contact", "contact");
 }
 
 function budgetMaxFromLabel(value = "") {
@@ -5564,6 +5779,135 @@ async function saveCurrentDashboardSearch() {
   }
 }
 
+function finderNeedCategoryLabel(value) {
+  return dashboardNeedOption("category", value || "rent");
+}
+
+function finderNeedBudgetLabel(value) {
+  return dashboardNeedOption("budget", String(value ?? ""));
+}
+
+function finderNeedContactLabel(value) {
+  return dashboardNeedOption("contact", value || "whatsapp");
+}
+
+function finderNeedUrgencyLabel(value) {
+  return dashboardNeedOption("urgency", value || "immediately");
+}
+
+function currentFinderNeedPayload() {
+  const category = document.getElementById("finder-need-category")?.value || "rent";
+  const location = document.getElementById("finder-need-location")?.value || "";
+  const budget = document.getElementById("finder-need-budget")?.value || "";
+  const bedrooms = document.getElementById("finder-need-bedrooms")?.value || "";
+  const urgency = document.getElementById("finder-need-urgency")?.value || "immediately";
+  const preferredContactChannel = document.getElementById("finder-need-contact")?.value || "whatsapp";
+  const message = (document.getElementById("finder-need-message")?.value || "").trim();
+  const categoryNeedsBedrooms = !["land", "commercial", "broker"].includes(category);
+  const preview = dashboardText("needPreview", {
+    category: finderNeedCategoryLabel(category).toLowerCase(),
+    location: dashboardNeedOption("location", location) || location || "Uganda",
+    bedrooms: categoryNeedsBedrooms && bedrooms ? ` • ${bedrooms} ${dashboardText("needBedroomsLabel").toLowerCase()}` : "",
+    budget: budget ? ` • ${finderNeedBudgetLabel(budget)}` : "",
+    urgency: ` • ${finderNeedUrgencyLabel(urgency)}`,
+    contact: finderNeedContactLabel(preferredContactChannel)
+  });
+  return {
+    category,
+    location,
+    budget,
+    bedrooms: categoryNeedsBedrooms ? bedrooms : "",
+    urgency,
+    preferred_contact_channel: preferredContactChannel,
+    message,
+    summary: preview,
+    source: "property_finder_dashboard",
+    language: currentLang || "en",
+    currency: "UGX"
+  };
+}
+
+function updateFinderNeedForm() {
+  const payload = currentFinderNeedPayload();
+  const categoryNeedsBedrooms = !["land", "commercial", "broker"].includes(payload.category);
+  const bedroomsWrap = document.getElementById("finder-need-bedrooms-wrap");
+  if (bedroomsWrap) bedroomsWrap.classList.toggle("hidden", !categoryNeedsBedrooms);
+  const preview = document.getElementById("finder-need-preview");
+  if (preview) preview.textContent = payload.summary || dashboardText("needPreviewDefault");
+}
+
+function propertyNeedStatusLabel(status = "") {
+  const normalized = String(status || "new").toLowerCase();
+  if (["resolved", "closed", "completed"].includes(normalized)) return dashboardText("needResolved");
+  return dashboardText("needUnresolved");
+}
+
+function renderFinderNeedRequestRow(item = {}) {
+  const status = String(item.status || "new").toLowerCase();
+  const isResolved = ["resolved", "closed", "completed"].includes(status);
+  const category = finderNeedCategoryLabel(item.category || "rent");
+  const budget = item.budget ? ` • USh ${Number(item.budget).toLocaleString("en-UG")}` : "";
+  const bedrooms = item.bedrooms ? ` • ${item.bedrooms} ${dashboardText("needBedroomsLabel").toLowerCase()}` : "";
+  const date = item.created_at ? formatListingDate(item.created_at) : "";
+  return `
+    <div class="rounded-xl border ${isResolved ? "border-green-100 bg-green-50" : "border-amber-100 bg-amber-50"} p-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="font-bold text-gray-900">${adminEscape(category)} ${item.location ? `in ${adminEscape(item.location)}` : ""}</div>
+          <div class="text-xs text-gray-600 mt-1">${adminEscape([item.urgency, item.preferred_contact_channel, date].filter(Boolean).join(" • "))}${budget}${bedrooms}</div>
+          ${item.message ? `<div class="text-xs text-gray-700 mt-2">${adminEscape(item.message)}</div>` : ""}
+        </div>
+        <span class="shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${isResolved ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-800"}">${adminEscape(propertyNeedStatusLabel(status))}</span>
+      </div>
+      ${isResolved ? "" : `<div class="text-xs text-amber-800 mt-2">${adminEscape(dashboardText("needEta"))}</div>`}
+    </div>`;
+}
+
+async function submitFinderNeedRequest(event) {
+  if (event) event.preventDefault();
+  if (!authState?.token) {
+    openAuthSignIn("finder");
+    return;
+  }
+  const status = document.getElementById("finder-need-status");
+  const button = document.getElementById("finder-need-submit-btn");
+  const payload = currentFinderNeedPayload();
+  const body = {
+    ...payload,
+    goal: payload.category,
+    property_type: payload.category === "student" ? "student accommodation" : payload.category,
+    preferredContactChannel: payload.preferred_contact_channel,
+    message: [payload.summary, payload.message].filter(Boolean).join("\n\n"),
+    email: authState.user?.email || "",
+    phone: authState.user?.phone || ""
+  };
+  if (status) status.textContent = dashboardText("needSending");
+  if (button) {
+    button.disabled = true;
+    button.textContent = dashboardText("needSending");
+  }
+  try {
+    await apiRequest("/api/property-seeker/need-request", {
+      method: "POST",
+      body
+    });
+    if (status) status.textContent = dashboardText("needSent");
+    const message = document.getElementById("finder-need-message");
+    if (message) message.value = "";
+    updateFinderNeedForm();
+    await renderFinderDashboard();
+    toast(dashboardText("needSent"));
+  } catch (error) {
+    if (status) status.textContent = dashboardText("needError");
+    toast(`${dashboardText("needError")} ${error.message || ""}`.trim());
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = dashboardText("needSubmit");
+    }
+  }
+}
+
 async function renderFinderDashboard() {
   const gate = document.getElementById("finder-auth-gate");
   const body = document.getElementById("finder-body");
@@ -5687,13 +6031,11 @@ async function renderFinderDashboard() {
 
   const brief = document.getElementById("finder-brief");
   if (brief) {
-	        const pref = payload?.preferences || {};
-	        const profile = payload?.profile || {};
-	        const categories = Array.isArray(pref.categories) && pref.categories.length ? pref.categories.join(", ") : (userProfile.primary_goal || dashboardText("notSet"));
-	        const locations = Array.isArray(pref.preferred_locations) && pref.preferred_locations.length ? pref.preferred_locations.join(", ") : (preferredArea || dashboardText("addPreferredArea"));
-	        const budget = pref.max_budget ? `up to UGX ${Number(pref.max_budget).toLocaleString("en-UG")}` : (userProfile.budget_range || dashboardText("budgetNotSet"));
-	        brief.innerHTML = `<strong>${adminEscape(profile.current_goal || categories || dashboardText("propertySearch"))}</strong><br>${adminEscape(locations)} • ${adminEscape(budget)} • ${adminEscape(profile.preferred_contact_channel || authState.user.preferred_contact_channel || "WhatsApp")}`;
+	        brief.innerHTML = needs.length
+	          ? needs.slice(0, 4).map(renderFinderNeedRequestRow).join("")
+	          : `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-3">${dashboardText("briefEmpty")}</div>`;
 	      }
+	      updateFinderNeedForm();
 
 	      const recGrid = document.getElementById("finder-recommendations-grid");
 	      if (recGrid) {
@@ -7187,6 +7529,7 @@ function renderAdminSetupProof(status = {}) {
     ["Migrations", (dbStatus.missingMigrations || []).length ? `missing ${(dbStatus.missingMigrations || []).join(", ")}` : "033 and 034 applied"],
     ["Property submission tests", counts.listingTests || 0],
     ["Saved searches / alert matches", `${counts.savedSearches || 0} / ${counts.alertMatches || 0}`],
+    ["Property need requests", `${counts.unresolvedPropertyNeedRequests || 0} unresolved / ${counts.resolvedPropertyNeedRequests || 0} resolved`],
     ["Viewing / callbacks", `${counts.viewings || 0} / ${counts.callbacks || 0}`],
     ["Campaigns / invoices", `${counts.campaigns || 0} / ${counts.invoices || 0}`],
     ["Failed email / WhatsApp / SMS", `${counts.failedEmails || 0} / ${counts.failedWhatsApp || 0} / ${counts.failedSms || 0}`],
