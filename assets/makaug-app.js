@@ -15033,6 +15033,13 @@ function accountAccessText(key) {
       password: "Password",
       showPassword: "Show",
       hidePassword: "Hide",
+      finalNextStep: "Next: we create your active account, send your welcome email, and open your dashboard.",
+      passwordRequirement: "Use at least 8 characters.",
+      confirmRequirement: "Confirm password must match.",
+      termsRequirement: "Agree to the Terms & Conditions.",
+      privacyRequirement: "Confirm you have read the Privacy Policy.",
+      verifiedRequirement: "Verify your email or SMS code first.",
+      readyToCreate: "Ready. Click Create account to open your dashboard.",
       firstName: "First name",
       email: "Email address",
       phone: "Phone / WhatsApp",
@@ -15075,6 +15082,13 @@ function accountAccessText(key) {
       password: "Password",
       showPassword: "Laga",
       hidePassword: "Kweka",
+      finalNextStep: "Ekiddako: tukola account yo, tukusindikira email, era tuggula dashboard yo.",
+      passwordRequirement: "Kozesa characters waakiri 8.",
+      confirmRequirement: "Password ziteekwa okufaanagana.",
+      termsRequirement: "Kkiriza Terms & Conditions.",
+      privacyRequirement: "Kakasa nti osomedde Privacy Policy.",
+      verifiedRequirement: "Sooka okakase email oba SMS code.",
+      readyToCreate: "Kiwedde. Nyiga Create account okuggula dashboard yo.",
       firstName: "Erinnya erisooka",
       email: "Email",
       phone: "Simu / WhatsApp",
@@ -15117,6 +15131,13 @@ function accountAccessText(key) {
       password: "Nenosiri",
       showPassword: "Onyesha",
       hidePassword: "Ficha",
+      finalNextStep: "Hatua inayofuata: tutafungua akaunti yako, tutakutumia barua ya makaribisho, na kufungua dashibodi yako.",
+      passwordRequirement: "Tumia angalau herufi 8.",
+      confirmRequirement: "Nenosiri la kuthibitisha lazima lilingane.",
+      termsRequirement: "Kubali Sheria na Masharti.",
+      privacyRequirement: "Thibitisha kuwa umesoma Sera ya Faragha.",
+      verifiedRequirement: "Thibitisha barua pepe au msimbo wa SMS kwanza.",
+      readyToCreate: "Tayari. Bofya Create account kufungua dashibodi yako.",
       firstName: "Jina la kwanza",
       email: "Barua pepe",
       phone: "Simu / WhatsApp",
@@ -15498,6 +15519,7 @@ function applyAccountAccessLanguageUi() {
     if (btn) btn.textContent = accountAccessText("signIn");
   }
   updateAccountAccessProgress(accountAccessDrawerStep);
+  updateAccountAccessCreateFinalState();
 }
 
 function renderAccountAccessScreening(preservedValues = null) {
@@ -15595,6 +15617,51 @@ function applyAccountAccessTheme() {
   });
 }
 
+function getAccountAccessCreatePasswordReadiness() {
+  const password = (document.getElementById("account-access-create-password")?.value || "").trim();
+  const confirmPassword = (document.getElementById("account-access-confirm-password")?.value || "").trim();
+  const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
+  const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
+  const missing = [];
+  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
+  if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
+  if (!confirmPassword || password !== confirmPassword) missing.push(accountAccessText("confirmRequirement"));
+  if (!termsAccepted) missing.push(accountAccessText("termsRequirement"));
+  if (!privacyAccepted) missing.push(accountAccessText("privacyRequirement"));
+  return {
+    ready: missing.length === 0,
+    message: missing.length ? missing.join(" ") : accountAccessText("readyToCreate")
+  };
+}
+
+function updateAccountAccessCreateFinalState() {
+  const btn = document.getElementById("account-access-continue-btn");
+  const status = document.getElementById("account-access-create-status");
+  const shouldGuard = accountAccessDrawerMode === "create" && accountAccessCreateStep === "password";
+  if (!btn) return;
+  if (!shouldGuard) {
+    if (!btn.dataset.accountSubmitting) {
+      btn.disabled = false;
+      btn.classList.remove("opacity-60", "cursor-not-allowed");
+      btn.removeAttribute("aria-disabled");
+    }
+    return;
+  }
+  const readiness = getAccountAccessCreatePasswordReadiness();
+  if (!btn.dataset.accountSubmitting) {
+    btn.disabled = !readiness.ready;
+    btn.classList.toggle("opacity-60", !readiness.ready);
+    btn.classList.toggle("cursor-not-allowed", !readiness.ready);
+    btn.setAttribute("aria-disabled", readiness.ready ? "false" : "true");
+  }
+  if (status) {
+    status.textContent = readiness.message;
+    status.className = readiness.ready
+      ? "rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs font-bold text-green-800"
+      : "rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900";
+  }
+}
+
 function setAccountAccessCreateStep(step = "details") {
   accountAccessCreateStep = ["details", "verify", "preferences", "password"].includes(step) ? step : "details";
   const isVerify = accountAccessCreateStep === "verify";
@@ -15638,6 +15705,7 @@ function setAccountAccessCreateStep(step = "details") {
   updateAccountAccessProgress(accountAccessCreateStep);
   updateAccountAccessRoleFocus();
   applyAccountAccessTheme();
+  updateAccountAccessCreateFinalState();
 }
 
 function showAccountAccessRolePicker() {
@@ -15787,30 +15855,36 @@ function ensureAccountAccessDrawer() {
               <div id="account-access-screening" class="grid sm:grid-cols-2 gap-3"></div>
             </div>
             <div id="account-access-create-password-step" data-auth-create-step="password" class="hidden space-y-3">
+              <div id="account-access-final-next-step" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900" data-auth-text="finalNextStep">
+                Next: we create your active account, send your welcome email, and open your dashboard.
+              </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="password">Password</span>
                   <div class="relative">
-                    <input id="account-access-create-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Password">
+                    <input id="account-access-create-password" type="password" autocomplete="new-password" oninput="updateAccountAccessCreateFinalState()" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Password">
                     <button type="button" data-auth-password-toggle="account-access-create-password" onclick="toggleAccountAccessPasswordField('account-access-create-password', this)" aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500"><span data-password-toggle-label>Show</span></button>
                   </div>
                 </label>
                 <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="confirmPassword">Confirm password</span>
                   <div class="relative">
-                    <input id="account-access-confirm-password" type="password" autocomplete="new-password" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Confirm password">
+                    <input id="account-access-confirm-password" type="password" autocomplete="new-password" oninput="updateAccountAccessCreateFinalState()" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 pr-16 text-base" placeholder="Confirm password">
                     <button type="button" data-auth-password-toggle="account-access-confirm-password" onclick="toggleAccountAccessPasswordField('account-access-confirm-password', this)" aria-label="Show password" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500"><span data-password-toggle-label>Show</span></button>
                   </div>
                 </label>
               </div>
               <label class="flex items-start gap-2 text-xs text-gray-700">
-                <input id="account-access-terms" type="checkbox" class="mt-0.5 accent-green-700">
+                <input id="account-access-terms" type="checkbox" onchange="updateAccountAccessCreateFinalState()" class="mt-0.5 accent-green-700">
                 <span id="account-access-terms-copy">I agree to the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('terms')" onfocus="showPolicyPreviewCard(this, 'terms')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'terms')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Terms & Conditions</button>.</span>
               </label>
               <label class="flex items-start gap-2 text-xs text-gray-700">
-                <input id="account-access-privacy" type="checkbox" class="mt-0.5 accent-green-700">
+                <input id="account-access-privacy" type="checkbox" onchange="updateAccountAccessCreateFinalState()" class="mt-0.5 accent-green-700">
                 <span id="account-access-privacy-copy">I have read the makaug.com <button type="button" data-auth-accent-link="1" onclick="openPolicyPreviewModal('privacy')" onfocus="showPolicyPreviewCard(this, 'privacy')" onblur="hidePolicyPreviewCard()" onmouseenter="showPolicyPreviewCard(this, 'privacy')" onmouseleave="hidePolicyPreviewCard()" class="font-bold text-green-700 underline decoration-green-200">Privacy Policy</button>.</span>
               </label>
+              <div id="account-access-create-status" class="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900" aria-live="polite">
+                Use at least 8 characters. Confirm password must match. Agree to the Terms & Conditions. Confirm you have read the Privacy Policy.
+              </div>
             </div>
           </div>
           <div id="account-access-otp-wrap" class="hidden mt-4 space-y-3">
@@ -16354,6 +16428,7 @@ async function submitAccountAccessCreate() {
   const btn = document.getElementById("account-access-continue-btn");
   const original = btn?.textContent || "Create account";
   if (btn) {
+    btn.dataset.accountSubmitting = "1";
     btn.disabled = true;
     btn.textContent = "Creating...";
   }
@@ -16384,11 +16459,18 @@ async function submitAccountAccessCreate() {
     toast(register?.data?.message || "Your makaug.com account has been set up. Opening your dashboard.");
     await finalizeAuth(register?.data, "drawer_verified_signup", accountAccessDrawerAudience);
   } catch (error) {
+    const status = document.getElementById("account-access-create-status");
+    if (status) {
+      status.textContent = error.message || "Account creation failed. Please check your details and try again.";
+      status.className = "rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800";
+    }
     toast(error.message || "Account creation failed.");
   } finally {
     if (btn) {
+      delete btn.dataset.accountSubmitting;
       btn.disabled = false;
       btn.textContent = original;
+      updateAccountAccessCreateFinalState();
     }
   }
 }

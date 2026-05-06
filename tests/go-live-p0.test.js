@@ -530,6 +530,14 @@ function run() {
   assert(frontendSource.includes('data-auth-password-toggle="account-access-create-password"'), 'create-account password field should have a show/hide control');
   assert(frontendSource.includes('data-auth-password-toggle="account-access-confirm-password"'), 'confirm password field should have a show/hide control');
   assert(frontendSource.includes('toggleAccountAccessPasswordField'), 'auth drawer should use a shared password visibility toggle');
+  assert(frontendSource.includes('id="account-access-final-next-step"'), 'final create-account step should explain that the account, welcome email, and dashboard come next');
+  assert(frontendSource.includes('id="account-access-create-status"'), 'final create-account step should show inline readiness/error status');
+  assert(frontendSource.includes('updateAccountAccessCreateFinalState'), 'final create-account step should update readiness as the user types and accepts policies');
+  assert(frontendSource.includes('password.length < 8'), 'final create-account step should guard short passwords before submitting');
+  assert(frontendSource.includes('Agree to the Terms & Conditions'), 'final create-account step should require Terms acceptance visibly');
+  assert(frontendSource.includes('Confirm you have read the Privacy Policy'), 'final create-account step should require Privacy confirmation visibly');
+  assert(frontendSource.includes('Ready. Click Create account to open your dashboard'), 'final create-account step should show the ready-to-open-dashboard state');
+  assert(frontendSource.includes('status.textContent = error.message || "Account creation failed'), 'final create-account step should show backend errors inline instead of appearing to do nothing');
   const emailServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailService.js'), 'utf8');
   assert(emailServiceSource.includes('buildWelcomeEmailHtml'), 'welcome email should use a branded account-created template');
   assert(emailServiceSource.includes('What your account opens up'), 'welcome email should explain what the account unlocks');
