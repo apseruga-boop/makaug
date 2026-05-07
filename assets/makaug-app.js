@@ -10782,7 +10782,7 @@ async function finalizeAuth(data, source, preferredAudience = "") {
     resolvedUser.portal_mode = "finder";
     toast("This account is not marked as a Field Agent. Opening Property Finder dashboard.");
   }
-  if (preferredAudience === "admin" && user.role !== "admin") {
+  if (preferredAudience === "admin" && user.role !== "admin" && user.role !== "super_admin") {
     resolvedUser.portal_mode = "finder";
     toast("This account is not marked as admin. Opening property finder dashboard.");
   }

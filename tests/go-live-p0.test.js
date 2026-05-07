@@ -482,6 +482,7 @@ function run() {
   assert(frontendSource.includes('Admin email address'), 'admin drawer should ask for an admin email address');
   assert(frontendSource.includes('Admin access is invite-only and is not available through public signup.'), 'admin drawer should hide public signup ambiguity');
   assert(frontendSource.includes('Sign in with your admin or super_admin account to open Launch Control'), 'admin drawer should explain protected owner dashboard access');
+  assert(frontendSource.includes('preferredAudience === "admin" && user.role !== "admin" && user.role !== "super_admin"'), 'admin drawer login should allow both admin and super_admin users to reach /admin');
   assert(frontendSource.includes('accountAccessScreeningText'), 'auth drawer screening questions should be language-aware');
   for (const langKey of ['ac: {', 'ny: {', 'rn: {', 'sm: {']) {
     assert(frontendSource.includes(langKey), `auth drawer should have safe language text for ${langKey}`);
