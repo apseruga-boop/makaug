@@ -12,7 +12,7 @@ The King Dashboard is the protected owner control centre for makaug.com. Public 
 | Listing moderation | `/admin/moderation`, `/admin/listings`, `/admin/rejected`, `/admin/live`, `/admin/featured` | `/api/admin/summary`, `/api/admin/recent`, `/api/admin/properties/*` | Pending review, actioned, live follow-up, featured controls | moderation audit, listing activity, EmailLog/NotificationLog where used | Working |
 | Fraud and safety | `/admin/fraud`, `/admin/notifications` | `/api/admin/reports/*`, `/api/admin/leads`, contact/fraud APIs | Fraud reports and lead follow-up | FraudReport, LeadActivity, NotificationLog | Working |
 | Accounts and roles | `/admin/accounts`, `/admin/users`, `/admin/data-protection` | `/api/admin/users`, auth APIs | Contacts & Account Control | user activity, AdminAuditLog | Working |
-| Field agents | `/admin/field-agents`, `/admin/field-agent-payouts`, `/admin/field-agent-training`, `/admin/field-agent-notices`, `/admin/contracts` | `/api/admin/field-agents/provision`, field-agent dashboard APIs | Field Agent Control Centre: ID/PIN setup, directory, notice board, payout control, training/contracts, support details | hashed PIN only, onboarding EmailLog/WhatsAppMessageLog/NotificationLog, AdminAuditLog, activity logs | Working for admin-created agents |
+| Field agents | `/admin/field-agents`, `/admin/field-agent-payouts`, `/admin/field-agent-training`, `/admin/field-agent-notices`, `/admin/contracts` | `/api/admin/field-agents/provision`, `/api/admin/field-agents/broadcast`, field-agent dashboard APIs | Field Agent Control Centre: auto-generated ID/PIN setup, directory, delete/pause controls, accepted/pending/rejected counts, Friday payout review at USh 5,000 per approved listing, territory broadcasts, dashboard banner, resources | hashed PIN only, onboarding EmailLog/WhatsAppMessageLog/NotificationLog, broadcast logs, AdminAuditLog, activity logs | Working for admin-created agents |
 | Property finder needs | `/admin/property-needs`, `/admin/property-requests`, `/admin/crm` | `/api/admin/property-need-requests`, `/api/admin/property-requests`, `/api/contact/looking-for-property` | People Looking for Property, CRM Lead Centre | LeadActivity, EmailLog/NotificationLog, request status | Working |
 | Saved alerts | `/admin/alerts`, `/admin/saved-searches` | alert matcher and saved search APIs | Leads & Notifications, Setup Status alert proof | AlertMatch, NotificationLog/provider_missing | Working with scheduled cron still owner-configured if external |
 | Viewings and callbacks | `/admin/viewings`, `/admin/callbacks` | viewing/callback APIs, `/api/admin/setup-status/viewing-callback-test` | Leads & Notifications, CRM Lead Centre | ViewingBooking, CallbackRequest, LeadActivity, EmailLog/NotificationLog | Working |
@@ -27,7 +27,7 @@ The King Dashboard is the protected owner control centre for makaug.com. Public 
 ## Owner Rules
 
 - The King Dashboard must never expose passwords, raw OTPs, tokens, NINs, or exact private user locations.
-- Admin-created Field Agent PINs are hashed and cannot be viewed after save.
+- Admin-created Field Agent IDs are generated automatically. PINs are hashed and cannot be viewed after save.
 - Provider values are named in setup status but never printed.
 - Public routes must not leak King/Admin dashboard text.
 - If a route opens a status-only panel, the next action is shown in `/admin/setup-status`.

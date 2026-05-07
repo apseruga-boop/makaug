@@ -6468,7 +6468,7 @@ async function renderFieldDashboard() {
   const pending = sourcedListings.filter((p) => ["pending", "draft", "submitted"].includes(String(p.review_status || p.status || "").toLowerCase()));
   const submitted = Number.isFinite(Number(liveStats.submitted)) ? Number(liveStats.submitted) : sourcedListings.length;
   const conv = Number.isFinite(Number(liveStats.conversion_rate)) ? Number(liveStats.conversion_rate) : (submitted ? Math.round((approved.length / submitted) * 100) : 0);
-  const payoutPerApproved = Number(liveAgent.payout_rate_ugx || profile.payout_rate_ugx || user.payout_rate_ugx || 15000) || 15000;
+  const payoutPerApproved = Number(liveAgent.payout_rate_ugx || profile.payout_rate_ugx || user.payout_rate_ugx || 5000) || 5000;
   const payable = Number.isFinite(Number(liveStats.payable_ugx)) ? Number(liveStats.payable_ugx) : (approved.length * payoutPerApproved);
   const rank = liveStats.rank || (submitted ? Math.max(1, Math.min(99, 20 - approved.length)) : "-");
 
@@ -7687,6 +7687,7 @@ async function renderAdminDashboard() {
   renderAdminBrokerRows(adminAgents);
   renderAdminFeaturedAgentsRows(adminAgents);
   renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
+  renderAdminFieldAgentPerformance(remoteSnap?.fieldAgents || localSnap.fieldAgents || []);
   renderAdminFieldAgentRows(remoteSnap?.fieldAgents || localSnap.fieldAgents || []);
   renderAdminWhatsappOverview(remoteSnap?.whatsappSummary || localSnap.whatsappSummary || {});
   renderAdminWhatsappConversationList(remoteSnap?.whatsappConversations || localSnap.whatsappConversations || []);
@@ -9055,28 +9056,22 @@ async function adminProvisionFieldAgent(event) {
     return;
   }
   const firstName = (document.getElementById("admin-fa-first-name")?.value || "").trim();
+  const lastName = (document.getElementById("admin-fa-last-name")?.value || "").trim();
   const email = (document.getElementById("admin-fa-email")?.value || "").trim();
+  const idNumber = (document.getElementById("admin-fa-id-number")?.value || "").trim();
   const phone = (document.getElementById("admin-fa-phone")?.value || "").trim();
+  const whatsappPhone = (document.getElementById("admin-fa-whatsapp")?.value || "").trim();
   const pin = (document.getElementById("admin-fa-pin")?.value || "").trim();
-  const fieldAgentCode = normalizeFieldAgentCode((document.getElementById("admin-fa-code")?.value || "").trim());
   const territory = (document.getElementById("admin-fa-territory")?.value || "").trim();
   const payoutRate = (document.getElementById("admin-fa-payout-rate")?.value || "").trim();
-  const supportPhone = (document.getElementById("admin-fa-support-phone")?.value || "").trim();
-  const broadcastGroup = (document.getElementById("admin-fa-broadcast-group")?.value || "").trim();
-  const trainingVideo1 = (document.getElementById("admin-fa-video-1")?.value || "").trim();
-  const trainingVideo2 = (document.getElementById("admin-fa-video-2")?.value || "").trim();
   const notes = (document.getElementById("admin-fa-notes")?.value || "").trim();
   const result = document.getElementById("admin-fa-provision-result");
-  if (!firstName || !email || !phone || !/^\d{4}$/.test(pin)) {
-    toast("Add first name, email, phone, and a 4-digit PIN.");
-    return;
-  }
-  if ((document.getElementById("admin-fa-code")?.value || "").trim() && !fieldAgentCode) {
-    toast("Field Agent ID must look like FA-0001.");
+  if (!firstName || !lastName || !email || !idNumber || !phone || !whatsappPhone || !/^\d{4}$/.test(pin)) {
+    toast("Add first name, surname, email, ID number, phone, WhatsApp number, and a 4-digit PIN.");
     return;
   }
   const btn = document.getElementById("admin-fa-provision-btn");
-  const original = btn?.textContent || "Create / update agent";
+  const original = btn?.textContent || "Save Field Agent";
   if (btn) {
     btn.disabled = true;
     btn.textContent = "Saving...";
@@ -9087,18 +9082,15 @@ async function adminProvisionFieldAgent(event) {
       headers: adminAuthHeaders(),
       body: {
         first_name: firstName,
+        last_name: lastName,
         email,
+        id_number: idNumber,
         phone,
+        whatsapp_phone: whatsappPhone,
         pin,
-        field_agent_code: fieldAgentCode,
-        employee_number: fieldAgentCode,
         territory,
-        payout_rate_ugx: payoutRate || 15000,
+        payout_rate_ugx: payoutRate || 5000,
         preferred_language: currentLang || "en",
-        support_phone: supportPhone,
-        whatsapp_broadcast_group: broadcastGroup,
-        training_video_1_url: trainingVideo1,
-        training_video_2_url: trainingVideo2,
         notes
       }
     });
@@ -9108,6 +9100,8 @@ async function adminProvisionFieldAgent(event) {
     }
     const pinInput = document.getElementById("admin-fa-pin");
     if (pinInput) pinInput.value = "";
+    const nextCode = document.getElementById("admin-fa-next-code");
+    if (nextCode) nextCode.textContent = `Last saved Field Agent ID: ${data.field_agent_code || "auto-generated"}. Next save will auto-generate the next available number.`;
     await trackEvent("admin_field_agent_provisioned", { field_agent_code: data.field_agent_code || "", source_page: currentPage });
     toast("Field Agent ID and PIN created.");
     await renderAdminDashboard();
@@ -9122,6 +9116,79 @@ async function adminProvisionFieldAgent(event) {
   }
 }
 
+async function adminBroadcastFieldAgents(event) {
+  if (event) event.preventDefault();
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY before broadcasting to Field Agents.");
+    return;
+  }
+  const territory = (document.getElementById("admin-fa-broadcast-territory")?.value || "").trim();
+  const channel = (document.getElementById("admin-fa-broadcast-channel")?.value || "whatsapp").trim();
+  const message = (document.getElementById("admin-fa-broadcast-message")?.value || "").trim();
+  const bannerMessage = (document.getElementById("admin-fa-banner-message")?.value || "").trim();
+  const result = document.getElementById("admin-fa-broadcast-result");
+  if (!message && !bannerMessage) {
+    toast("Add a broadcast message or dashboard banner first.");
+    return;
+  }
+  const btn = document.getElementById("admin-fa-broadcast-btn");
+  const original = btn?.textContent || "Send / publish";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+  }
+  try {
+    const res = await apiRequest("/api/admin/field-agents/broadcast", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { territory, channel, message, banner_message: bannerMessage }
+    });
+    const data = res?.data || {};
+    if (result) {
+      const sentBits = [
+        `${data.target_count || 0} agents`,
+        data.banner_updated ? "banner updated" : "",
+        `WhatsApp ${data.whatsapp_sent || 0}/${data.whatsapp_failed || 0}`,
+        `Email ${data.email_sent || 0}/${data.email_failed || 0}`
+      ].filter(Boolean).join(" • ");
+      result.textContent = `Broadcast processed: ${sentBits}`;
+    }
+    await trackEvent("admin_field_agent_broadcast_sent", { territory: territory || "all", channel, source_page: currentPage });
+    toast("Field Agent broadcast processed.");
+    await renderAdminDashboard();
+  } catch (error) {
+    if (result) result.textContent = error.message || "Could not process Field Agent broadcast.";
+    toast(error.message || "Could not process Field Agent broadcast.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+}
+
+async function adminDeleteFieldAgent(userId) {
+  if (!userId) return;
+  await adminSetUserStatus(userId, "deleted");
+}
+
+function renderAdminFieldAgentPerformance(users) {
+  const rows = Array.isArray(users) ? users : [];
+  const countByStatus = (status) => rows.filter((user) => String(user.status || "active").toLowerCase() === status).length;
+  const sum = (key) => rows.reduce((total, user) => total + (Number(user[key] || 0) || 0), 0);
+  const payoutFor = (user) => {
+    const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+    return Number(profile.payout_rate_ugx || 5000) || 5000;
+  };
+  const weeklyPay = rows.reduce((total, user) => total + ((Number(user.approved_this_week_count || user.approved_listings_count || 0) || 0) * payoutFor(user)), 0);
+  setText("admin-field-agent-total", rows.length);
+  setText("admin-field-agent-active", countByStatus("active"));
+  setText("admin-field-agent-pending", sum("pending_listings_count"));
+  setText("admin-field-agent-approved", sum("approved_listings_count"));
+  setText("admin-field-agent-rejected", sum("rejected_listings_count"));
+  setText("admin-field-agent-weekly-pay", fmtP(weeklyPay, ""));
+}
+
 function renderAdminFieldAgentRows(users) {
   const wrap = document.getElementById("admin-field-agents-table");
   if (!wrap) return;
@@ -9134,31 +9201,39 @@ function renderAdminFieldAgentRows(users) {
     const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
     const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
     const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
-    const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is MakaUg operations. We are following up on your field activity and account access.`) : "";
+    const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
+    const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com operations. We are following up on your field activity and account access.`) : "";
     const code = profile.field_agent_code || profile.employee_number || "-";
-    const payoutRate = Number(profile.payout_rate_ugx || 15000) || 15000;
+    const payoutRate = Number(profile.payout_rate_ugx || 5000) || 5000;
     const territory = profile.field_agent_territory || profile.territory || "Uganda";
+    const approvedCount = Number(user.approved_listings_count || 0) || 0;
+    const pendingCount = Number(user.pending_listings_count || 0) || 0;
+    const rejectedCount = Number(user.rejected_listings_count || 0) || 0;
+    const weekApproved = Number(user.approved_this_week_count || approvedCount || 0) || 0;
+    const weekPay = weekApproved * payoutRate;
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
-            <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Last activity: ${adminEscape(formatListingDate(user.last_activity_at) || "No recent event")}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Last listing: ${adminEscape(formatListingDate(user.last_listing_at) || "No listing yet")}</div>
           </div>
           <span class="text-[11px] font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">Field Agent</span>
         </div>
-        <div class="grid sm:grid-cols-5 gap-2 mt-3 text-xs">
-          <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Listings</div><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
-          <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Enquiries</div><div class="font-black text-gray-900">${adminEscape(user.inquiries_count || 0)}</div></div>
-          <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Views</div><div class="font-black text-gray-900">${adminEscape(user.property_views_count || 0)}</div></div>
-          <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Saves</div><div class="font-black text-gray-900">${adminEscape(user.property_saves_count || 0)}</div></div>
+        <div class="grid sm:grid-cols-6 gap-2 mt-3 text-xs">
+          <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Total listings</div><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
+          <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Accepted</div><div class="font-black text-green-900">${adminEscape(approvedCount)}</div></div>
+          <div class="rounded-lg bg-amber-50 border border-amber-100 p-2"><div class="text-amber-700">Pending</div><div class="font-black text-amber-900">${adminEscape(pendingCount)}</div></div>
+          <div class="rounded-lg bg-red-50 border border-red-100 p-2"><div class="text-red-700">Rejected</div><div class="font-black text-red-900">${adminEscape(rejectedCount)}</div></div>
+          <div class="rounded-lg bg-blue-50 border border-blue-100 p-2"><div class="text-blue-700">This Friday</div><div class="font-black text-blue-900">${adminEscape(fmtP(weekPay, ""))}</div></div>
           <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Payout/listing</div><div class="font-black text-green-900">${adminEscape(fmtP(payoutRate, ""))}</div></div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
           ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus('${adminEscape(user.id)}', '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
+          ${canUseLiveAdminApi() ? `<button onclick="adminDeleteFieldAgent('${adminEscape(user.id)}')" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Agent</button>` : ""}
         </div>
       </div>`;
   }).join("");

@@ -10,13 +10,16 @@ Use this for the first makaug.com Field Agents you are signing up manually.
 4. Use `Create Field Agent ID + PIN`.
 5. Enter:
    - First name
+   - Surname
    - Email address
-   - Phone / WhatsApp
+   - ID number
+   - Phone number
+   - WhatsApp number
    - Private 4-digit PIN
-   - Field Agent ID, for example `FA-0001` (optional; admin can generate the next ID)
    - Territory
-   - Payout per approved listing, usually `15000`
-6. Give the agent their Field Agent ID and PIN privately.
+   - Payout per approved listing, default `5000`
+6. Save the agent. The Field Agent ID is generated automatically, for example `FA-0001`.
+7. The agent receives their Field Agent ID by WhatsApp and their private PIN by email when providers are configured. If providers are missing, safe EmailLog/WhatsAppMessageLog/NotificationLog records are created.
 
 The PIN is saved through the same hashed password field as normal login. It is not returned by the API, not printed in logs, and should not be shared in group chats.
 
@@ -34,7 +37,7 @@ Use these as internal labels if useful:
 - `FA-0003`
 - `FA-0004`
 
-The admin endpoint generates the next available code automatically when no code is provided, and prevents duplicate Field Agent IDs.
+The admin endpoint generates the next available code automatically and prevents duplicate Field Agent IDs.
 
 ## Agent login
 
@@ -55,7 +58,7 @@ The field-agent dashboard shows:
 - Conversion rate
 - Agent rank
 - Weekly payable balance
-- Next payout/cut-off
+- Friday payout review based on the previous week’s approved listings
 - Money collection notes
 - WhatsApp Operations link
 - How to list online, via WhatsApp, and through the WhatsApp AI bot
@@ -87,11 +90,14 @@ These static resources are available from the Field Agent dashboard:
 
 Admin can:
 
-- Create/update field agent login
+- Save field agent login
 - Pause/restore field agent access
+- Delete field agent access from the active directory while preserving audit history
 - Contact the agent on WhatsApp or email
 - Review listing throughput and engagement
-- See payout/listing rate
+- See accepted, pending, rejected, weekly pay due, and payout/listing rate
+- Broadcast WhatsApp/email messages to all Field Agents or one territory
+- Publish a dashboard banner to all Field Agents or one territory
 
 ## Provider notes
 

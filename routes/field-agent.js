@@ -7,6 +7,8 @@ const { cleanText } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
 
 const router = express.Router();
+const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
+const FIELD_AGENT_PAYOUT_DAY = 'Friday';
 
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
@@ -221,7 +223,7 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
     const approved = listings.filter((item) => item.status === 'approved');
     const rejected = listings.filter((item) => item.status === 'rejected');
     const pending = listings.filter((item) => item.status === 'pending' || item.status === 'draft');
-    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || '15000', 10) || 15000;
+    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX, 10) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
     const rank = await calculateRank(code);
 
     await logNotification(db, {
@@ -253,8 +255,8 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           status: user.status,
           payout_rate_ugx: payoutRate,
           payout_frequency: profile.payout_frequency || 'weekly',
-          payout_day: profile.payout_day || 'Friday',
-          notice: profile.field_agent_notes || '',
+          payout_day: profile.payout_day || FIELD_AGENT_PAYOUT_DAY,
+          notice: profile.field_agent_banner_message || profile.field_agent_notes || '',
           support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587'
         },
         stats: {
@@ -340,7 +342,7 @@ router.get('/payout-slip.pdf', requireFieldAgent, async (req, res, next) => {
       return res.status(409).json({ ok: false, error: 'Field Agent ID is missing. Ask admin to re-save this account.' });
     }
     const period = String(req.query.period || 'week').toLowerCase() === 'month' ? 'month' : 'week';
-    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || '15000', 10) || 15000;
+    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX, 10) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
     const listingRows = await db.query(
       `SELECT id, title, status, moderation_stage, created_at
        FROM properties p

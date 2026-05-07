@@ -72,6 +72,9 @@ const router = express.Router();
 
 router.use(requireAdminApiKey);
 
+const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
+const FIELD_AGENT_PAYOUT_DAY = 'Friday';
+
 async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
   try {
     await db.query(
@@ -137,6 +140,7 @@ function escapeHtml(value = '') {
 
 function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territory, payoutRateUgx, dashboardUrl, supportUrl }) {
   const safeFirstName = firstName || 'there';
+  const safePayoutRate = Number(payoutRateUgx || FIELD_AGENT_DEFAULT_PAYOUT_UGX);
   const text = [
     `Hello ${safeFirstName},`,
     '',
@@ -145,7 +149,8 @@ function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territo
     `Field Agent ID: ${fieldAgentCode}`,
     `4-digit PIN: ${pin}`,
     `Territory: ${territory || 'Uganda'}`,
-    `Payout per approved listing: USh ${Number(payoutRateUgx || 0).toLocaleString('en-UG')}`,
+    `Payout per approved listing: USh ${safePayoutRate.toLocaleString('en-UG')}`,
+    `Payout schedule: every ${FIELD_AGENT_PAYOUT_DAY}, based on approved listings from the previous week.`,
     '',
     'Keep your PIN private. Use your Field Agent ID and PIN to sign in, track approved listings, see rejected listings, contest rejections, download payout slips, and read training resources.',
     `Open your dashboard: ${dashboardUrl}`,
@@ -171,6 +176,7 @@ function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territo
               <div style="font-size:24px;font-weight:900;color:#111827;margin-top:8px;">${escapeHtml(fieldAgentCode)}</div>
               <div style="font-size:16px;color:#111827;margin-top:8px;">PIN: <strong>${escapeHtml(pin)}</strong></div>
               <div style="font-size:13px;color:#475569;margin-top:8px;">Keep this PIN private. makaug.com admin will never ask you to post it publicly.</div>
+              <div style="font-size:13px;color:#475569;margin-top:8px;">Payout: <strong>USh ${safePayoutRate.toLocaleString('en-UG')}</strong> per approved listing, reviewed every ${FIELD_AGENT_PAYOUT_DAY}.</div>
             </div>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
@@ -1494,6 +1500,11 @@ router.get('/users', async (req, res, next) => {
         u.last_login_at,
         u.created_at,
         COALESCE(p.listings_count, 0) AS listings_count,
+        COALESCE(p.approved_listings_count, 0) AS approved_listings_count,
+        COALESCE(p.pending_listings_count, 0) AS pending_listings_count,
+        COALESCE(p.rejected_listings_count, 0) AS rejected_listings_count,
+        COALESCE(p.approved_this_week_count, 0) AS approved_this_week_count,
+        COALESCE(p.last_listing_at, NULL) AS last_listing_at,
         COALESCE(i.inquiries_count, 0) AS inquiries_count,
         COALESCE(e.property_views_count, 0) AS property_views_count,
         COALESCE(e.property_saves_count, 0) AS property_saves_count,
@@ -1501,7 +1512,16 @@ router.get('/users', async (req, res, next) => {
         e.last_activity_at
       FROM users u
       LEFT JOIN LATERAL (
-        SELECT COUNT(*)::int AS listings_count
+        SELECT
+          COUNT(*)::int AS listings_count,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published'))::int AS approved_listings_count,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('pending', 'pending_review', 'draft', 'submitted', 'in_review'))::int AS pending_listings_count,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('rejected', 'declined', 'fraud'))::int AS rejected_listings_count,
+          COUNT(*) FILTER (
+            WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published')
+              AND COALESCE(p.updated_at, p.created_at) >= NOW() - INTERVAL '7 days'
+          )::int AS approved_this_week_count,
+          MAX(p.created_at) AS last_listing_at
         FROM properties p
         WHERE p.lister_phone = u.phone
            OR (
@@ -2252,30 +2272,32 @@ router.patch('/users/:id', async (req, res, next) => {
 router.post('/field-agents/provision', async (req, res, next) => {
   try {
     const firstName = cleanText(req.body.first_name);
-    const lastName = cleanText(req.body.last_name);
+    const lastName = cleanText(req.body.last_name || req.body.surname);
     const email = normalizeEmail(req.body.email);
     const phone = normalizeUgPhone(req.body.phone);
+    const whatsappPhone = normalizeUgPhone(req.body.whatsapp_phone || req.body.whatsapp || req.body.phone);
+    const idNumber = cleanText(req.body.id_number || req.body.national_id_number || req.body.field_agent_id_number).slice(0, 80);
     const pin = cleanText(req.body.pin);
     const territory = cleanText(req.body.territory);
     const requestedFieldAgentCode = normalizeFieldAgentCode(req.body.field_agent_code || req.body.employee_number);
-    const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || 15000;
+    const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
-    const broadcastGroup = cleanText(req.body.whatsapp_broadcast_group);
     const notes = cleanText(req.body.notes);
     const supportPhone = normalizeUgPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
-    const trainingVideo1Url = cleanText(req.body.training_video_1_url).slice(0, 500);
-    const trainingVideo2Url = cleanText(req.body.training_video_2_url).slice(0, 500);
     const actorId = adminActorId(req);
 
-    if (!firstName || !email || !phone || !pin) {
-      return res.status(400).json({ ok: false, error: 'First name, email, phone, and 4-digit PIN are required' });
+    if (!firstName || !lastName || !email || !idNumber || !phone || !whatsappPhone || !pin) {
+      return res.status(400).json({ ok: false, error: 'First name, surname, email, ID number, phone, WhatsApp number, and 4-digit PIN are required' });
     }
     if (!isValidEmail(email)) {
       return res.status(400).json({ ok: false, error: 'Enter a valid email address' });
     }
     if (!isValidPhone(phone)) {
       return res.status(400).json({ ok: false, error: 'Enter a valid phone number' });
+    }
+    if (!isValidPhone(whatsappPhone)) {
+      return res.status(400).json({ ok: false, error: 'Enter a valid WhatsApp number' });
     }
     if (!/^\d{4}$/.test(pin)) {
       return res.status(400).json({ ok: false, error: 'Field Agent PIN must be exactly 4 digits' });
@@ -2287,9 +2309,12 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const existing = await db.query(
       `SELECT id, profile_data
        FROM users
-       WHERE phone = $1 OR LOWER(email) = LOWER($2)
+       WHERE phone = $1
+          OR LOWER(email) = LOWER($2)
+          OR COALESCE(profile_data->>'field_agent_whatsapp', '') = $3
+          OR COALESCE(profile_data->>'field_agent_id_number', '') = $4
        LIMIT 1`,
-      [phone, email]
+      [phone, email, whatsappPhone, idNumber]
     );
     const existingProfile = existing.rows[0]?.profile_data && typeof existing.rows[0].profile_data === 'object'
       ? existing.rows[0].profile_data
@@ -2334,16 +2359,18 @@ router.post('/field-agents/provision', async (req, res, next) => {
       field_agent_application_status: 'approved',
       field_agent_code: generatedCode,
       employee_number: generatedCode,
+      field_agent_id_number: idNumber,
+      national_id_number: idNumber,
+      field_agent_whatsapp: whatsappPhone,
+      whatsapp_phone: whatsappPhone,
       field_agent_territory: territory || existingProfile.field_agent_territory || '',
       payout_rate_ugx: payoutRateUgx,
       payout_frequency: 'weekly',
-      payout_day: 'Friday',
+      payout_day: FIELD_AGENT_PAYOUT_DAY,
+      payout_rule: `${FIELD_AGENT_DEFAULT_PAYOUT_UGX} UGX per approved listing, paid every ${FIELD_AGENT_PAYOUT_DAY} based on previous week approvals`,
       next_payout_source: 'admin_set',
       field_agent_support_phone: supportPhone || existingProfile.field_agent_support_phone || '',
-      whatsapp_broadcast_group: broadcastGroup || existingProfile.whatsapp_broadcast_group || '',
       field_agent_notes: notes || existingProfile.field_agent_notes || '',
-      field_agent_training_video_1_url: trainingVideo1Url || existingProfile.field_agent_training_video_1_url || '',
-      field_agent_training_video_2_url: trainingVideo2Url || existingProfile.field_agent_training_video_2_url || '',
       field_agent_pin_set: true,
       field_agent_pin_last_set_at: new Date().toISOString(),
       manual_review_required: true,
@@ -2417,14 +2444,16 @@ router.post('/field-agents/provision', async (req, res, next) => {
       user_id: saved.id,
       email,
       phone_masked: phone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
+      whatsapp_masked: whatsappPhone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
       field_agent_code: generatedCode,
       employee_number: generatedCode,
+      id_number_saved: Boolean(idNumber),
       pin_set: true
     }, actorId);
 
     await logNotification(db, {
       userId: saved.id,
-      recipientPhone: phone,
+      recipientPhone: whatsappPhone || phone,
       recipientEmail: email,
       channel: 'in_app',
       type: 'field_agent_account_provisioned',
@@ -2498,11 +2527,11 @@ router.post('/field-agents/provision', async (req, res, next) => {
       `Open your dashboard: ${dashboardUrl}`,
       'Use your Field Agent ID on owner listings so approved properties count toward your payout.'
     ].join('\n');
-    const whatsappDelivery = await sendWhatsAppText({ to: phone, body: whatsappMessage });
+    const whatsappDelivery = await sendWhatsAppText({ to: whatsappPhone || phone, body: whatsappMessage });
     const whatsappStatus = notificationStatusFromDelivery(whatsappDelivery);
     await logWhatsAppMessage(db, {
       userId: saved.id,
-      recipientPhone: phone,
+      recipientPhone: whatsappPhone || phone,
       templateKey: 'field_agent_registered',
       messageType: 'field_agent_onboarding',
       language: preferredLanguage || 'en',
@@ -2512,7 +2541,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
     });
     await logNotification(db, {
       userId: saved.id,
-      recipientPhone: phone,
+      recipientPhone: whatsappPhone || phone,
       recipientEmail: email,
       channel: 'whatsapp',
       type: 'field_agent_registered_whatsapp',
@@ -2533,6 +2562,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
         last_name: saved.last_name,
         email: saved.email,
         phone: saved.phone,
+        whatsapp_phone: saved.profile_data?.field_agent_whatsapp || whatsappPhone,
         role: saved.role,
         status: saved.status,
         phone_verified: saved.phone_verified,
@@ -2540,6 +2570,156 @@ router.post('/field-agents/provision', async (req, res, next) => {
         employee_number: saved.profile_data?.employee_number,
         payout_rate_ugx: saved.profile_data?.payout_rate_ugx,
         pin_set: true
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/field-agents/broadcast', async (req, res, next) => {
+  try {
+    const territory = cleanText(req.body.territory || '').slice(0, 80);
+    const channel = cleanText(req.body.channel || 'whatsapp').toLowerCase();
+    const message = cleanText(req.body.message || '').slice(0, 1200);
+    const bannerMessage = cleanText(req.body.banner_message || '').slice(0, 500);
+    const actorId = adminActorId(req);
+    const allowedChannels = ['whatsapp', 'email', 'both', 'banner'];
+
+    if (!allowedChannels.includes(channel)) {
+      return res.status(400).json({ ok: false, error: 'Choose WhatsApp, email, both, or banner' });
+    }
+    if (!message && !bannerMessage) {
+      return res.status(400).json({ ok: false, error: 'Add a message or dashboard banner before broadcasting' });
+    }
+
+    const values = [];
+    const filters = [`role = 'field_agent'`, `status <> 'deleted'`];
+    if (territory) {
+      values.push(territory);
+      filters.push(`LOWER(COALESCE(profile_data->>'field_agent_territory', profile_data->>'territory', '')) = LOWER($${values.length})`);
+    }
+    const targets = await db.query(
+      `SELECT id, first_name, last_name, phone, email, preferred_language, profile_data
+       FROM users
+       WHERE ${filters.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT 5000`,
+      values
+    );
+
+    if (bannerMessage) {
+      const bannerPayload = JSON.stringify({
+        field_agent_banner_message: bannerMessage,
+        field_agent_banner_territory: territory || 'all',
+        field_agent_banner_updated_at: new Date().toISOString()
+      });
+      await db.query(
+        `UPDATE users
+         SET profile_data = COALESCE(profile_data, '{}'::jsonb) || $${values.length + 1}::jsonb,
+             updated_at = NOW()
+         WHERE ${filters.join(' AND ')}`,
+        [...values, bannerPayload]
+      );
+    }
+
+    let whatsappSent = 0;
+    let whatsappFailed = 0;
+    let emailSent = 0;
+    let emailFailed = 0;
+    const sendWhatsApp = ['whatsapp', 'both'].includes(channel) && Boolean(message);
+    const sendEmail = ['email', 'both'].includes(channel) && Boolean(message);
+    const subject = `makaug.com Field Agent update${territory ? ` - ${territory}` : ''}`;
+
+    for (const agent of targets.rows) {
+      const profile = agent.profile_data && typeof agent.profile_data === 'object' ? agent.profile_data : {};
+      const toPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || agent.phone;
+      if (sendWhatsApp && toPhone) {
+        const delivery = await sendWhatsAppText({ to: toPhone, body: message });
+        const status = notificationStatusFromDelivery(delivery);
+        if (delivery.sent) whatsappSent += 1;
+        if (!delivery.sent) whatsappFailed += 1;
+        await logWhatsAppMessage(db, {
+          userId: agent.id,
+          recipientPhone: toPhone,
+          templateKey: 'field_agent_broadcast',
+          messageType: 'field_agent_broadcast',
+          language: agent.preferred_language || 'en',
+          status,
+          failureReason: delivery.error || delivery.reason || null,
+          sentAt: delivery.sent ? new Date() : null
+        });
+        await logNotification(db, {
+          userId: agent.id,
+          recipientPhone: toPhone,
+          channel: 'whatsapp',
+          type: 'field_agent_broadcast',
+          status,
+          failureReason: delivery.error || delivery.reason || null,
+          payloadSummary: { territory: territory || 'all', provider: delivery.provider || null }
+        });
+      }
+      if (sendEmail && agent.email) {
+        let delivery = { sent: false, reason: 'email_provider_missing' };
+        if (emailProviderConfigured()) {
+          delivery = await sendSupportEmail({
+            to: agent.email,
+            subject,
+            text: message,
+            html: `<p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>`
+          });
+        }
+        const status = emailProviderConfigured() ? notificationStatusFromDelivery(delivery) : 'provider_missing';
+        if (delivery.sent) emailSent += 1;
+        if (!delivery.sent) emailFailed += 1;
+        await logEmailEvent(db, {
+          eventType: 'field_agent_broadcast',
+          recipientUserId: agent.id,
+          recipientEmail: agent.email,
+          recipientRole: 'field_agent',
+          templateKey: 'field_agent_broadcast',
+          subject,
+          language: agent.preferred_language || 'en',
+          status,
+          provider: delivery.provider || null,
+          providerMessageId: delivery.id || null,
+          failureReason: delivery.error || delivery.reason || null,
+          sentAt: delivery.sent ? new Date() : null
+        });
+        await logNotification(db, {
+          userId: agent.id,
+          recipientEmail: agent.email,
+          channel: 'email',
+          type: 'field_agent_broadcast',
+          status,
+          failureReason: delivery.error || delivery.reason || null,
+          payloadSummary: { territory: territory || 'all', provider_configured: emailProviderConfigured() }
+        });
+      }
+    }
+
+    await writeAudit('field_agent_broadcast_sent', {
+      territory: territory || 'all',
+      channel,
+      target_count: targets.rows.length,
+      banner_updated: Boolean(bannerMessage),
+      whatsapp_sent: whatsappSent,
+      whatsapp_failed: whatsappFailed,
+      email_sent: emailSent,
+      email_failed: emailFailed
+    }, actorId);
+
+    return res.json({
+      ok: true,
+      data: {
+        territory: territory || 'all',
+        channel,
+        target_count: targets.rows.length,
+        banner_updated: Boolean(bannerMessage),
+        whatsapp_sent: whatsappSent,
+        whatsapp_failed: whatsappFailed,
+        email_sent: emailSent,
+        email_failed: emailFailed
       }
     });
   } catch (error) {

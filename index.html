@@ -4570,12 +4570,13 @@
             <button onclick="renderAdminDashboard()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Field Agents</button>
           </div>
 
-          <div id="admin-field-agent-performance-board" class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-5 text-sm">
-            <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4"><strong>Agent setup</strong><br><span class="text-gray-600">Auto-generate FA-0001 style IDs and private 4-digit PINs.</span></div>
-            <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>Listings tracked</strong><br><span class="text-gray-600">Listings are linked by Field Agent ID on web and WhatsApp submissions.</span></div>
-            <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4"><strong>Payout control</strong><br><span class="text-gray-600">Weekly/monthly slips and payout rate are visible in the agent dashboard.</span></div>
-            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><strong>Notice board</strong><br><span class="text-gray-600">King updates flow into the Field Agent dashboard notice area.</span></div>
-            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4"><strong>Training hub</strong><br><span class="text-gray-600">Contracts, welcome pack, FAQ, and two video URLs are controlled here.</span></div>
+          <div id="admin-field-agent-performance-board" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5 text-sm">
+            <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4"><span class="text-xs font-black text-blue-700 uppercase">Total agents</span><div id="admin-field-agent-total" class="text-2xl font-black text-blue-950 mt-1">0</div></div>
+            <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><span class="text-xs font-black text-green-700 uppercase">Active</span><div id="admin-field-agent-active" class="text-2xl font-black text-green-950 mt-1">0</div></div>
+            <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4"><span class="text-xs font-black text-amber-700 uppercase">Pending review</span><div id="admin-field-agent-pending" class="text-2xl font-black text-amber-950 mt-1">0</div></div>
+            <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-4"><span class="text-xs font-black text-emerald-700 uppercase">Accepted</span><div id="admin-field-agent-approved" class="text-2xl font-black text-emerald-950 mt-1">0</div></div>
+            <div class="rounded-2xl border border-red-100 bg-red-50 p-4"><span class="text-xs font-black text-red-700 uppercase">Rejected</span><div id="admin-field-agent-rejected" class="text-2xl font-black text-red-950 mt-1">0</div></div>
+            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><span class="text-xs font-black text-indigo-700 uppercase">Friday pay due</span><div id="admin-field-agent-weekly-pay" class="text-2xl font-black text-indigo-950 mt-1">USh 0</div></div>
           </div>
 
           <div class="grid xl:grid-cols-[0.95fr,1.05fr] gap-5">
@@ -4584,26 +4585,25 @@
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                   <div>
                     <h4 class="text-lg font-black text-blue-950">Create Field Agent ID + PIN</h4>
-                    <p class="text-xs text-gray-500 mt-0.5">Leave Field Agent ID blank to auto-generate the next FA-0001 style number. The PIN is hashed, never shown after save, and sent by email only when an email provider is configured.</p>
+                    <p class="text-xs text-gray-500 mt-0.5">Field Agent ID is auto-generated and saved. The PIN is hashed, never shown after save, and sent by email only when an email provider is configured.</p>
                   </div>
                   <span class="text-[11px] font-bold rounded-full bg-blue-100 text-blue-700 px-2 py-1">King only</span>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-2">
                   <input id="admin-fa-first-name" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="First name" required>
+                  <input id="admin-fa-last-name" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Surname" required>
                   <input id="admin-fa-email" type="email" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
-                  <input id="admin-fa-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone / WhatsApp" required>
+                  <input id="admin-fa-id-number" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="ID number" required>
+                  <input id="admin-fa-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone number" required>
+                  <input id="admin-fa-whatsapp" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp number" required>
                   <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
-                  <input id="admin-fa-code" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Field Agent ID, e.g. FA-0001 (optional)">
                   <input id="admin-fa-territory" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
-                  <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
-                  <input id="admin-fa-support-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Support phone / WhatsApp">
-                  <input id="admin-fa-broadcast-group" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp broadcast group / cohort">
-                  <input id="admin-fa-video-1" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 1">
-                  <input id="admin-fa-video-2" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 2">
+                  <input id="admin-fa-payout-rate" inputmode="numeric" value="5000" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing">
                 </div>
-                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="4" placeholder="Notice board message shown on the Field Agent dashboard"></textarea>
+                <div id="admin-fa-next-code" class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 font-semibold">Next Field Agent ID is generated automatically on save.</div>
+                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Internal notes or onboarding context"></textarea>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <button id="admin-fa-provision-btn" type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Create / update agent</button>
+                  <button id="admin-fa-provision-btn" type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save Field Agent</button>
                   <p id="admin-fa-provision-result" class="text-xs text-gray-500">The agent receives their ID by WhatsApp and their PIN by email when providers are configured.</p>
                 </div>
               </form>
@@ -4612,15 +4612,36 @@
             <div class="space-y-5">
               <div id="admin-field-agent-payout-control" class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
                 <h4 class="text-lg font-black text-amber-950">Payout & payment control</h4>
-                <p class="text-xs text-amber-900 mt-1">Field Agent dashboards show approved, pending, rejected, weekly earnings, monthly earnings, and downloadable PDF payout slips. King sets payout rate per approved listing here.</p>
+                <p class="text-xs text-amber-900 mt-1">Default payout is USh 5,000 per approved listing. Friday payout review uses the previous week’s approved listing count and downloadable PDF payout slips.</p>
               </div>
-              <div id="admin-field-agent-training-control" class="rounded-2xl border border-green-100 bg-green-50 p-4">
-                <h4 class="text-lg font-black text-green-950">Training, contract & FAQ control</h4>
-                <p class="text-xs text-green-900 mt-1">Training video URLs, contract/welcome-pack links, FAQ/support details, and notice-board guidance flow into each Field Agent dashboard.</p>
+              <div id="admin-field-agent-broadcast-control" class="rounded-2xl border border-green-100 bg-green-50 p-4">
+                <h4 class="text-lg font-black text-green-950">Broadcast & dashboard banner</h4>
+                <p class="text-xs text-green-900 mt-1">Send a message to all agents or one territory, and publish a dashboard banner for targeted field instructions.</p>
+                <form id="admin-field-agent-broadcast-form" onsubmit="adminBroadcastFieldAgents(event)" class="mt-3 space-y-2">
+                  <div class="grid sm:grid-cols-2 gap-2">
+                    <input id="admin-fa-broadcast-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Territory, e.g. Kampala (blank = all)">
+                    <select id="admin-fa-broadcast-channel" class="border border-green-100 rounded-xl px-3 py-2 text-sm bg-white">
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="email">Email</option>
+                      <option value="both">WhatsApp + email</option>
+                      <option value="banner">Banner only</option>
+                    </select>
+                  </div>
+                  <textarea id="admin-fa-broadcast-message" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" rows="3" placeholder="Message to send to selected field agents"></textarea>
+                  <textarea id="admin-fa-banner-message" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm bg-white" rows="2" placeholder="Dashboard banner message shown to selected field agents"></textarea>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <button id="admin-fa-broadcast-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Send / publish</button>
+                    <p id="admin-fa-broadcast-result" class="text-xs text-green-900">Broadcasts create email, WhatsApp, notification, and audit logs.</p>
+                  </div>
+                </form>
+              </div>
+              <div id="admin-field-agent-training-control" class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <h4 class="text-lg font-black text-gray-900">Resources preview</h4>
+                <p class="text-xs text-gray-600 mt-1">Contracts, welcome pack, FAQ, and training documents remain available to preview and download from the Field Agent dashboard.</p>
                 <div class="mt-3 flex flex-wrap gap-2 text-xs font-bold">
-                  <a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Welcome pack</a>
-                  <a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Contract</a>
-                  <a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Training deck</a>
+                  <a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Welcome pack</a>
+                  <a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Contract</a>
+                  <a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800">Training deck</a>
                 </div>
               </div>
             </div>

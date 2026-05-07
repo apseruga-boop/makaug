@@ -492,7 +492,9 @@ function run() {
   assert(frontendSource.includes('admin-issued Field Agent ID and PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
   assert(frontendSource.includes('body: { field_agent_code: fieldAgentCode, password, audience: "field_agent" }'), 'field-agent drawer should send Field Agent ID to auth login');
   assert(frontendSource.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
-  assert(frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should let owner assign FA-0001 style agent codes');
+  assert(!frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should auto-generate FA-0001 style agent codes instead of asking for them');
+  assert(frontendSource.includes('id="admin-fa-last-name"') && frontendSource.includes('id="admin-fa-id-number"') && frontendSource.includes('id="admin-fa-whatsapp"'), 'admin field-agent setup should capture surname, ID number, and WhatsApp number');
+  assert(frontendSource.includes('value="5000"'), 'admin field-agent setup should default payout to USh 5,000 per approved listing');
   assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
   assert(frontendSource.includes('Create Field Agent ID + PIN'), 'admin UI should expose the field-agent ID + PIN setup path');
   assert(frontendSource.includes('King Field Agent Command Centre'), 'King dashboard should expose a dedicated field-agent command centre');
@@ -508,8 +510,10 @@ function run() {
     assert(frontendSource.includes(`data-king-shortcut="${fieldAgentShortcutPath}"`), `King shortcuts should include field-agent path: ${fieldAgentShortcutPath}`);
   }
   assert(frontendSource.includes('id="admin-fa-notes"'), 'King dashboard should let owner control the Field Agent notice board');
-  assert(frontendSource.includes('id="admin-fa-video-1"') && frontendSource.includes('id="admin-fa-video-2"'), 'King dashboard should control Field Agent training video URLs');
-  assert(frontendSource.includes('id="admin-fa-support-phone"'), 'King dashboard should control the Field Agent support number');
+  assert(!frontendSource.includes('id="admin-fa-video-1"') && !frontendSource.includes('id="admin-fa-video-2"'), 'King dashboard field-agent setup should not ask for training video URLs');
+  assert(!frontendSource.includes('id="admin-fa-support-phone"') && !frontendSource.includes('id="admin-fa-broadcast-group"'), 'King dashboard field-agent setup should not ask for support phone or broadcast group fields');
+  assert(frontendSource.includes('id="admin-field-agent-broadcast-form"') && frontendSource.includes('adminBroadcastFieldAgents'), 'King dashboard should broadcast messages and dashboard banners to Field Agents');
+  assert(frontendSource.includes('adminDeleteFieldAgent'), 'King dashboard should allow Field Agent deletion from the directory');
   assert(frontendSource.includes('id="field-agent-dashboard-tabs"'), 'Field Agent dashboard should have standalone tabs');
   assert(frontendSource.includes('data-field-agent-tab-button="payouts"'), 'Field Agent dashboard should expose an earnings and payout tab');
   assert(frontendSource.includes('id="field-agent-earnings-chart"'), 'Field Agent dashboard should render an earnings graph');
@@ -521,6 +525,9 @@ function run() {
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
   assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential FA-0001 style field-agent IDs');
   assert(adminRoutes.includes('Field Agent ID is already assigned'), 'admin should prevent duplicate Field Agent IDs');
+  assert(adminRoutes.includes('FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000'), 'admin API should default Field Agent payout to USh 5,000');
+  assert(adminRoutes.includes("router.post('/field-agents/broadcast'"), 'admin API should broadcast Field Agent WhatsApp/email/banner messages');
+  assert(adminRoutes.includes('field_agent_broadcast_sent'), 'Field Agent broadcasts should create admin audit events');
   assert(authRoutes.includes('profile_data->>\'field_agent_code\'') && authRoutes.includes('Invalid Field Agent ID or PIN'), 'auth login should support Field Agent ID + PIN');
   assert(serverSource.includes("app.use('/api/field-agent', fieldAgentRoutes)"), 'server should mount field-agent dashboard APIs');
   assert(fieldAgentRoutes.includes("router.get('/dashboard'") && fieldAgentRoutes.includes('requireFieldAgent'), 'field-agent API should expose a protected dashboard');
