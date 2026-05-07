@@ -9089,8 +9089,10 @@ async function adminProvisionFieldAgent(event) {
   const lastName = (document.getElementById("admin-fa-last-name")?.value || "").trim();
   const email = (document.getElementById("admin-fa-email")?.value || "").trim();
   const idNumber = (document.getElementById("admin-fa-id-number")?.value || "").trim();
-  const phone = (document.getElementById("admin-fa-phone")?.value || "").trim();
-  const whatsappPhone = (document.getElementById("admin-fa-whatsapp")?.value || "").trim();
+  const phoneInput = document.getElementById("admin-fa-phone");
+  const whatsappInput = document.getElementById("admin-fa-whatsapp");
+  const phone = normalizeAdminFieldAgentPhone(phoneInput?.value || "");
+  const whatsappPhone = normalizeAdminFieldAgentPhone(whatsappInput?.value || "");
   const pin = (document.getElementById("admin-fa-pin")?.value || "").trim();
   const territory = (document.getElementById("admin-fa-territory")?.value || "").trim();
   const payoutRate = (document.getElementById("admin-fa-payout-rate")?.value || "").trim();
@@ -9098,8 +9100,25 @@ async function adminProvisionFieldAgent(event) {
   const result = document.getElementById("admin-fa-provision-result");
   if (!firstName || !lastName || !email || !idNumber || !phone || !whatsappPhone || !/^\d{4}$/.test(pin)) {
     toast("Add first name, surname, email, ID number, phone, WhatsApp number, and a 4-digit PIN.");
+    if (result) result.textContent = "The agent has not been saved. Add first name, surname, email, ID number, full phone, full WhatsApp number, and a 4-digit PIN.";
     return;
   }
+  if (!isValidAdminFieldAgentPhone(phone)) {
+    const message = adminFieldAgentPhoneHelp("phone");
+    if (result) result.textContent = message;
+    toast(message);
+    phoneInput?.focus();
+    return;
+  }
+  if (!isValidAdminFieldAgentPhone(whatsappPhone)) {
+    const message = adminFieldAgentPhoneHelp("whatsapp");
+    if (result) result.textContent = message;
+    toast(message);
+    whatsappInput?.focus();
+    return;
+  }
+  if (phoneInput) phoneInput.value = phone;
+  if (whatsappInput) whatsappInput.value = whatsappPhone;
   const btn = document.getElementById("admin-fa-provision-btn");
   const original = btn?.textContent || "Save Field Agent";
   if (btn) {
@@ -9130,7 +9149,7 @@ async function adminProvisionFieldAgent(event) {
     });
     const data = res?.data || {};
     if (result) {
-      result.textContent = `Created ${data.field_agent_code || "Field Agent"} for ${data.first_name || firstName}. Give the agent their Field Agent ID and 4-digit PIN privately.`;
+      result.textContent = `Saved ${data.field_agent_code || "Field Agent"} for ${data.first_name || firstName}. Directory refreshed below; the saved agent is highlighted. Give the agent their Field Agent ID and 4-digit PIN privately.`;
     }
     const pinInput = document.getElementById("admin-fa-pin");
     if (pinInput) pinInput.value = "";
@@ -9143,6 +9162,9 @@ async function adminProvisionFieldAgent(event) {
     await trackEvent("admin_field_agent_provisioned", { field_agent_code: data.field_agent_code || "", source_page: currentPage });
     toast("Field Agent ID and PIN created.");
     await renderAdminDashboard();
+    if (data.id) {
+      adminHighlightFieldAgentRow(data.id);
+    }
   } catch (error) {
     if (result) result.textContent = error.message || "Could not create Field Agent account.";
     toast(error.message || "Could not create Field Agent account.");
@@ -9315,6 +9337,36 @@ function enrichAdminFieldAgents(users = []) {
   return rows;
 }
 
+function normalizeAdminFieldAgentPhone(value = "") {
+  const raw = String(value || "").trim().replace(/[^\d+]/g, "");
+  if (!raw) return "";
+  if (/^00\d{10,15}$/.test(raw)) return `+${raw.slice(2)}`;
+  if (/^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
+  if (/^256\d{9}$/.test(raw)) return `+${raw}`;
+  return raw;
+}
+
+function isValidAdminFieldAgentPhone(value = "") {
+  return /^\+?[0-9]{10,15}$/.test(normalizeAdminFieldAgentPhone(value));
+}
+
+function adminFieldAgentPhoneHelp(kind = "phone") {
+  const label = kind === "whatsapp" ? "WhatsApp" : "phone";
+  return `Enter a full ${label} number with country code, e.g. +256701123456 or +447757773202. Short local test numbers are not saved.`;
+}
+
+function adminFieldAgentRowElementId(userId) {
+  return `admin-field-agent-row-${String(userId || "").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function adminHighlightFieldAgentRow(userId) {
+  const row = document.getElementById(adminFieldAgentRowElementId(userId));
+  if (!row) return;
+  row.scrollIntoView({ behavior: "smooth", block: "center" });
+  row.classList.add("ring-2", "ring-blue-500", "ring-offset-2");
+  window.setTimeout(() => row.classList.remove("ring-2", "ring-blue-500", "ring-offset-2"), 2600);
+}
+
 function adminFieldAgentFilePayload(inputId, label) {
   const input = document.getElementById(inputId);
   const file = input?.files?.[0];
@@ -9336,14 +9388,25 @@ function adminFieldAgentFilePayload(inputId, label) {
   });
 }
 
-function adminFieldAgentDetailPanel(userId) {
-  const user = adminFindFieldAgent(userId);
+async function adminFieldAgentDetailPanel(userId) {
+  let user = adminFindFieldAgent(userId);
   const panel = document.getElementById("admin-field-agent-detail-panel");
   if (!panel) return;
   if (!user) {
     panel.classList.remove("hidden");
     panel.innerHTML = `<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">Field Agent not found in the current directory. Refresh Field Agents and try again.</div>`;
     return;
+  }
+  if (canUseLiveAdminApi()) {
+    try {
+      const detailRes = await apiRequest(`/api/admin/users/${encodeURIComponent(userId)}`, { headers: adminAuthHeaders() });
+      if (detailRes?.data) {
+        user = { ...user, ...detailRes.data };
+        adminFieldAgents = adminFieldAgents.map((item) => String(item.id) === String(userId) ? { ...item, ...user } : item);
+      }
+    } catch (error) {
+      console.warn("Could not load Field Agent detail", error);
+    }
   }
   const profile = adminFieldAgentProfile(user);
   const code = profile.field_agent_code || profile.employee_number || "-";
@@ -9358,6 +9421,7 @@ function adminFieldAgentDetailPanel(userId) {
   const signedContract = adminFieldAgentPublicDocument(profile, "field_agent_signed_contract");
   const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
   const payments = Array.isArray(profile.field_agent_payments) ? profile.field_agent_payments : [];
+  const linkedListings = Array.isArray(user.listings) ? user.listings : [];
   const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
   const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com Operations. I am checking your Field Agent account ${code}.`) : "";
   const today = new Date().toISOString().slice(0, 10);
@@ -9416,6 +9480,26 @@ function adminFieldAgentDetailPanel(userId) {
         ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Contact Agent</a>` : ""}
         ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("makaug.com Field Agent account")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Email Agent</a>` : ""}
         ${canUseLiveAdminApi() ? `<button type="button" onclick="adminDeleteFieldAgent(${userIdArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Delete account</button>` : ""}
+      </div>
+      <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <h5 class="font-black text-blue-950">Linked properties</h5>
+        <p class="text-xs text-blue-900 mt-1">These are pulled from the backend by the agent phone number and Field Agent ID/code. Open the record to review, approve, reject, or remove it.</p>
+        <div class="mt-3 space-y-2 text-xs">${linkedListings.length ? linkedListings.slice(0, 60).map((listing) => {
+          const listingId = String(listing.id || "");
+          const listingArg = adminListingIdArg(listingId);
+          const status = normalizeModerationStatus(listing.status);
+          const meta = adminStatusBadge(status);
+          return `<div class="rounded-xl border border-blue-100 bg-white p-3 flex items-start justify-between gap-3 flex-wrap">
+            <div class="min-w-0">
+              <div class="font-black text-gray-900">${adminEscape(listing.title || "Untitled property")}</div>
+              <div class="text-gray-500 mt-1">${adminEscape([listing.area, listing.district].filter(Boolean).join(", ") || "Location not set")} • ${adminEscape(listing.listing_type || "Property")} • ${adminEscape(formatListingDate(listing.created_at) || "-")}</div>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-[11px] font-bold rounded px-2 py-1 ${meta.cls}">${meta.label}</span>
+              ${listingId ? `<button type="button" onclick="openAdminListingReview(${listingArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Open record</button>` : ""}
+            </div>
+          </div>`;
+        }).join("") : `<div class="rounded-xl border border-blue-100 bg-white p-3 text-blue-900">No linked properties found yet. Make sure listing forms save the Field Agent ID/code or the same phone number used on this agent account.</div>`}</div>
       </div>
       <div class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
         <h5 class="font-black text-gray-900">Payment history</h5>
@@ -9567,7 +9651,7 @@ function renderAdminFieldAgentRows(users) {
     const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
     const userIdArg = adminListingIdArg(user.id);
     return `
-      <div class="border border-gray-200 rounded-xl p-4 bg-white">
+      <div id="${adminAttr(adminFieldAgentRowElementId(user.id))}" class="border border-gray-200 rounded-xl p-4 bg-white transition-shadow">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>

@@ -180,6 +180,17 @@ function normalizeFieldAgentCode(value = '') {
   return '';
 }
 
+function normalizeFieldAgentContactPhone(value = '') {
+  const raw = cleanText(value).replace(/[^\d+]/g, '');
+  if (!raw) return '';
+  if (/^00\d{10,15}$/.test(raw)) return `+${raw.slice(2)}`;
+  if (/^0\d{9}$/.test(raw)) return `+256${raw.slice(1)}`;
+  if (/^256\d{9}$/.test(raw)) return `+${raw}`;
+  if (/^\+\d{10,15}$/.test(raw)) return raw;
+  if (/^\d{10,15}$/.test(raw)) return raw;
+  return raw;
+}
+
 function isLegacyZeroFieldAgentCode(value = '') {
   return /^FA-0+$/.test(String(value || '').trim().toUpperCase());
 }
@@ -1753,6 +1764,7 @@ router.get('/users/:id', async (req, res, next) => {
          weekly_tips_opt_in,
          preferred_contact_channel,
          preferred_language,
+         profile_data,
          oauth_provider,
          last_login_at,
          last_weekly_tip_sent_at,
@@ -1768,14 +1780,22 @@ router.get('/users/:id', async (req, res, next) => {
       return res.status(404).json({ ok: false, error: 'User not found' });
     }
 
+    const profile = user.rows[0].profile_data && typeof user.rows[0].profile_data === 'object'
+      ? user.rows[0].profile_data
+      : {};
+    const fieldAgentCode = normalizeFieldAgentCode(profile.field_agent_code || profile.employee_number);
     const [listings, inquiries, engagement] = await Promise.all([
       db.query(
-        `SELECT id, title, listing_type, district, area, status, created_at
+        `SELECT id, title, listing_type, district, area, status, created_at, updated_at
          FROM properties
          WHERE lister_phone = $1
+            OR (
+              $2 <> ''
+              AND UPPER(COALESCE(extra_fields->>'field_agent_id', extra_fields->>'field_agent_code', extra_fields->>'field_agent_reference', extra_fields->>'agent_field_id', '')) = $2
+            )
          ORDER BY created_at DESC
-         LIMIT 100`,
-        [user.rows[0].phone]
+         LIMIT 1000`,
+        [user.rows[0].phone, fieldAgentCode]
       ),
       db.query(
         `SELECT id, property_id, message, channel, created_at
@@ -2447,8 +2467,8 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const firstName = cleanText(req.body.first_name);
     const lastName = cleanText(req.body.last_name || req.body.surname);
     const email = normalizeEmail(req.body.email);
-    const phone = normalizeUgPhone(req.body.phone);
-    const whatsappPhone = normalizeUgPhone(req.body.whatsapp_phone || req.body.whatsapp || req.body.phone);
+    const phone = normalizeFieldAgentContactPhone(req.body.phone);
+    const whatsappPhone = normalizeFieldAgentContactPhone(req.body.whatsapp_phone || req.body.whatsapp || req.body.phone);
     const idNumber = cleanText(req.body.id_number || req.body.national_id_number || req.body.field_agent_id_number).slice(0, 80);
     const pin = cleanText(req.body.pin);
     const territory = cleanText(req.body.territory);
@@ -2457,7 +2477,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
     const notes = cleanText(req.body.notes);
-	    const supportPhone = normalizeUgPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
+	    const supportPhone = normalizeFieldAgentContactPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
 	    const actorId = adminActorId(req);
 	    const idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
 	    const signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
@@ -2469,10 +2489,16 @@ router.post('/field-agents/provision', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Enter a valid email address' });
     }
     if (!isValidPhone(phone)) {
-      return res.status(400).json({ ok: false, error: 'Enter a valid phone number' });
+      return res.status(400).json({
+        ok: false,
+        error: 'Enter a full phone number with country code, e.g. +256701123456 or +447757773202'
+      });
     }
     if (!isValidPhone(whatsappPhone)) {
-      return res.status(400).json({ ok: false, error: 'Enter a valid WhatsApp number' });
+      return res.status(400).json({
+        ok: false,
+        error: 'Enter a full WhatsApp number with country code, e.g. +256701123456 or +447757773202'
+      });
     }
     if (!/^\d{4}$/.test(pin)) {
       return res.status(400).json({ ok: false, error: 'Field Agent PIN must be exactly 4 digits' });

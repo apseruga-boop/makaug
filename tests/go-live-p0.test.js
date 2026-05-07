@@ -496,6 +496,8 @@ function run() {
   assert(frontendSource.includes('id="admin-fa-last-name"') && frontendSource.includes('id="admin-fa-id-number"') && frontendSource.includes('id="admin-fa-whatsapp"'), 'admin field-agent setup should capture surname, ID number, and WhatsApp number');
   assert(frontendSource.includes('value="5000"'), 'admin field-agent setup should default payout to USh 5,000 per approved listing');
   assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
+  assert(frontendSource.includes('normalizeAdminFieldAgentPhone') && frontendSource.includes('Short local test numbers are not saved'), 'admin field-agent setup should normalize full phone numbers and explain why short numbers are not saved');
+  assert(frontendSource.includes('adminHighlightFieldAgentRow') && frontendSource.includes('Directory refreshed below'), 'admin field-agent save should refresh and highlight the newly saved directory row');
   assert(frontendSource.includes('Create Field Agent ID + PIN'), 'admin UI should expose the field-agent ID + PIN setup path');
   assert(frontendSource.includes('King Field Agent Command Centre'), 'King dashboard should expose a dedicated field-agent command centre');
   assert(frontendSource.includes('data-admin-tab-button="field-agents"'), 'King dashboard should expose Field Agents as its own workflow tab');
@@ -510,6 +512,8 @@ function run() {
   assert(frontendSource.includes('adminFieldAgentDetailPanel') && frontendSource.includes('adminRecordFieldAgentPayment') && frontendSource.includes('adminSaveFieldAgentDocuments'), 'admin field-agent directory should support review, document updates, and payment recording');
   assert(frontendSource.includes('limit: "10000", role: "field_agent"'), 'King Field Agent directory should request the full large-scale field-agent backend feed');
   assert(frontendSource.includes('const rows = adminFieldAgents;'), 'King Field Agent directory should render every returned field agent instead of a two-row or preview slice');
+  assert(frontendSource.includes('id="${adminAttr(adminFieldAgentRowElementId(user.id))}"'), 'Field Agent directory rows should have stable row IDs for post-save highlighting');
+  assert(frontendSource.includes('Linked properties') && frontendSource.includes('Open record'), 'Field Agent detail panel should show linked backend properties and open review records');
   assert(frontendSource.includes('adminFieldAgentFridayDue') && frontendSource.includes('adminFieldAgentAcceptedCount(user) * adminFieldAgentPayoutRate(user)'), 'Friday Field Agent payout should calculate accepted listings times payout/listing');
   assert(frontendSource.includes('admin-field-agent-region-board') && frontendSource.includes('Regional performance'), 'King Field Agent control centre should expose regional performance tracking');
   assert(frontendSource.includes('Region rank') && frontendSource.includes('Reach'), 'Field Agent rows should show position, reach, and regional ranking');
@@ -532,10 +536,12 @@ function run() {
   assert(frontendSource.includes('Preview / read') && frontendSource.includes('Download'), 'Field Agent resources should be previewable and downloadable');
   assert(frontendSource.includes('openAccountSettings()'), 'Field Agent settings should open role-aware account settings instead of falling back to Property Finder');
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
+  assert(adminRoutes.includes('normalizeFieldAgentContactPhone') && adminRoutes.includes('Enter a full phone number with country code'), 'admin API should normalize field-agent contact phones and return clear validation errors');
   assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential production-style field-agent IDs');
   assert(adminRoutes.includes('FIELD_AGENT_ID_START = 7300') && adminRoutes.includes('isLegacyZeroFieldAgentCode'), 'admin should start generated Field Agent IDs above legacy zero codes');
   assert(adminRoutes.includes('FIELD_AGENT_DIRECTORY_LIMIT = 10000'), 'admin API should support a 10,000-agent Field Agent directory feed');
   assert(adminRoutes.includes('decorateFieldAgentPerformanceRows') && adminRoutes.includes('field_agent_friday_due_ugx: accepted * payoutRate'), 'admin API should decorate Field Agents with rank, reach, region, and accepted-count payout due');
+  assert(adminRoutes.includes('LIMIT 1000') && adminRoutes.includes("extra_fields->>'field_agent_code'"), 'admin user detail should pull linked Field Agent properties by phone and Field Agent code');
   assert(adminRoutes.includes("router.post('/field-agents/:id/documents'"), 'admin API should save field-agent ID documents and signed contracts');
   assert(adminRoutes.includes("router.post('/field-agents/:id/payment'"), 'admin API should record field-agent payments and receipts');
   assert(adminRoutes.includes('field_agent_documents_updated') && adminRoutes.includes('field_agent_payment_recorded'), 'field-agent document/payment actions should create logs');
