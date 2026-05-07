@@ -95,6 +95,7 @@ async function main() {
     const response = await page.goto(`${BASE_URL}/?routeTransitionProbe=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     if ((response?.status() || 0) !== 200) throw new Error(`Home route returned ${response?.status() || 0}`);
     await waitForActivePage(page, 'page-home');
+    await page.waitForFunction(() => typeof window.navigatePublicRoute === 'function', { timeout: 10000 });
 
     for (const [route, expectedId] of ROUTES) {
       if (process.env.ROUTE_TRANSITION_VERBOSE === '1') console.log(`CHECK ${route} -> ${expectedId}`);
