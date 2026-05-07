@@ -496,6 +496,17 @@ function run() {
   assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
   assert(frontendSource.includes('Create Field Agent ID + PIN'), 'admin UI should expose the field-agent ID + PIN setup path');
   assert(frontendSource.includes('King Field Agent Command Centre'), 'King dashboard should expose a dedicated field-agent command centre');
+  assert(frontendSource.includes('data-admin-tab-button="field-agents"'), 'King dashboard should expose Field Agents as its own workflow tab');
+  assert(frontendSource.includes('id="admin-field-agent-control"'), 'Field Agent control centre should be a standalone admin panel');
+  assert(frontendSource.includes('id="admin-field-agent-performance-board"'), 'Field Agent control centre should show performance and operations status');
+  assert(frontendSource.includes('id="admin-field-agent-payout-control"'), 'Field Agent control centre should expose payout controls');
+  assert(frontendSource.includes('id="admin-field-agent-training-control"'), 'Field Agent control centre should expose training and contract controls');
+  assert(frontendSource.includes('id="admin-field-agent-notice-control"'), 'Field Agent control centre should expose notice-board controls');
+  assert(frontendSource.includes('id="admin-field-agents-table"'), 'Field Agent control centre should expose the agent directory');
+  assert(frontendSource.includes('openKingShortcut'), 'King shortcuts should use the admin control router instead of dead standalone links');
+  for (const fieldAgentShortcutPath of ['/admin/field-agents', '/admin/field-agent-payouts', '/admin/field-agent-training', '/admin/field-agent-notices']) {
+    assert(frontendSource.includes(`data-king-shortcut="${fieldAgentShortcutPath}"`), `King shortcuts should include field-agent path: ${fieldAgentShortcutPath}`);
+  }
   assert(frontendSource.includes('id="admin-fa-notes"'), 'King dashboard should let owner control the Field Agent notice board');
   assert(frontendSource.includes('id="admin-fa-video-1"') && frontendSource.includes('id="admin-fa-video-2"'), 'King dashboard should control Field Agent training video URLs');
   assert(frontendSource.includes('id="admin-fa-support-phone"'), 'King dashboard should control the Field Agent support number');
@@ -738,6 +749,9 @@ function run() {
     '/admin/moderation',
     '/admin/listings',
     '/admin/field-agents',
+    '/admin/field-agent-payouts',
+    '/admin/field-agent-training',
+    '/admin/field-agent-notices',
     '/admin/whatsapp-inbox',
     '/admin/crm',
     '/admin/property-needs',
@@ -763,13 +777,40 @@ function run() {
   for (const adminControlId of [
     'admin-review-queue-control',
     'admin-listings-control',
+    'admin-field-agent-control',
     'admin-field-agent-provision-form',
+    'admin-field-agent-payout-control',
+    'admin-field-agent-training-control',
+    'admin-field-agent-notice-control',
     'admin-property-requests-table',
     'admin-whatsapp-control',
     'admin-notifications-control',
     'admin-advertising-control'
   ]) {
     assert(frontendSource.includes(`id="${adminControlId}"`) || frontendSource.includes(`#${adminControlId}`), `admin control target missing: ${adminControlId}`);
+  }
+  for (const kingShortcutPath of [
+    '/admin/moderation',
+    '/admin/listings',
+    '/admin/field-agents',
+    '/admin/field-agent-payouts',
+    '/admin/field-agent-training',
+    '/admin/field-agent-notices',
+    '/admin/whatsapp-inbox',
+    '/admin/crm',
+    '/admin/property-needs',
+    '/admin/viewings',
+    '/admin/callbacks',
+    '/admin/notifications',
+    '/admin/advertising',
+    '/admin/setup-status',
+    '/admin/providers',
+    '/admin/language',
+    '/admin/location',
+    '/admin/docs'
+  ]) {
+    assert(frontendSource.includes(`data-king-shortcut="${kingShortcutPath}"`), `King shortcut should be directly wired: ${kingShortcutPath}`);
+    assert(frontendSource.includes(`openKingShortcut(event, '${kingShortcutPath}')`), `King shortcut should open routed control panel: ${kingShortcutPath}`);
   }
   for (const expected of [
     'Public Route Health',

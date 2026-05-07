@@ -7099,7 +7099,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "actioned", "live", "accounts", "ads", "whatsapp", "notifications", "listings"];
+  const allowed = ["review", "actioned", "live", "accounts", "field-agents", "ads", "whatsapp", "notifications", "listings"];
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -20535,10 +20535,15 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/advertising": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
   "/admin/revenue": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Revenue" },
   "/admin/payments": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Payments" },
-  "/admin/field-agents": { page: "admin-dashboard", tab: "accounts", selector: "#admin-field-agent-provision-form", label: "Field Agent Setup" },
+  "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+  "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+  "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
+  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-payout-control", label: "Field Agent Payouts" },
+  "/admin/field-agent-training": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Field Agent Training" },
+  "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
   "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
-  "/admin/contracts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-field-agent-provision-form", label: "Contracts and field team setup" },
+  "/admin/contracts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Contracts and field team setup" },
   "/admin/fraud": { page: "admin-dashboard", tab: "listings", selector: "#admin-recent-reports", label: "Fraud reports" },
   "/admin/data-protection": { page: "admin-dashboard", tab: "accounts", selector: "#admin-users-table", label: "Data protection" },
   "/admin/providers": { page: "admin-setup-status", label: "Provider Tests" },
@@ -20599,6 +20604,23 @@ async function openAdminControl(control, options = {}) {
   scrollAdminControlIntoView(target.selector);
   if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
   return true;
+}
+
+function openKingShortcut(event, path) {
+  if (event) event.preventDefault();
+  const targetPath = normalizeRoutePath(path || "/admin");
+  const control = adminControlForPath(targetPath);
+  if (!control) {
+    toast("That King shortcut is not connected yet.");
+    return false;
+  }
+  try {
+    if (currentPathWithQueryAndHash() !== targetPath) {
+      window.history.pushState({ page: "admin", source: "king_shortcut", adminPath: targetPath }, "", targetPath);
+    }
+  } catch (error) {}
+  openAdminControl(control, { source: "king_shortcut" });
+  return false;
 }
 
 function currentPathWithQueryAndHash() {

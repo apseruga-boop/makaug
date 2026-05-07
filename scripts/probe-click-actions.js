@@ -54,7 +54,17 @@ async function go(page, route) {
 }
 
 async function visibleText(page) {
-  return page.evaluate(() => document.body.innerText.replace(/\s+/g, ' ').trim());
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await page.evaluate(() => (document.body?.innerText || '').replace(/\s+/g, ' ').trim());
+    } catch (error) {
+      const message = error?.message || String(error);
+      if (!/Execution context was destroyed|Cannot find context|Target page/i.test(message) || attempt === 2) throw error;
+      await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(180);
+    }
+  }
+  return '';
 }
 
 async function waitForMapIfPresent(page) {
@@ -141,7 +151,9 @@ async function clickPopupDetailOrBrokerAction(page, checks) {
 }
 
 async function auditVisibleActions(page) {
-  return page.evaluate(() => {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await page.evaluate(() => {
     return Array.from(document.querySelectorAll('a,button,[role="button"],[onclick]'))
       .filter((el) => {
         const style = window.getComputedStyle(el);
@@ -160,7 +172,15 @@ async function auditVisibleActions(page) {
         disabled: el.disabled === true || el.getAttribute('aria-disabled') === 'true'
       }))
       .filter((item) => item.label || item.id);
-  });
+      });
+    } catch (error) {
+      const message = error?.message || String(error);
+      if (!/Execution context was destroyed|Cannot find context|Target page/i.test(message) || attempt === 2) throw error;
+      await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+      await page.waitForTimeout(180);
+    }
+  }
+  return [];
 }
 
 async function auditCardsAndMarkers(page, route) {

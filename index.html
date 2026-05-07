@@ -4077,9 +4077,9 @@
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
-              <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
-              <a href="/admin/field-agents" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Setup</a>
-              <a href="/admin/setup-status" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Setup Status</a>
+              <a href="/admin/launch-control" onclick="return openKingShortcut(event, '/admin/launch-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
+              <a href="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Control Centre</a>
+              <a href="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Setup Status</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
@@ -4095,21 +4095,24 @@
             <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Live King routes</span>
           </div>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-            <a href="/admin/moderation" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
-            <a href="/admin/listings" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">All Listings</a>
-            <a href="/admin/field-agents" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Create Field Agent ID + PIN</a>
-            <a href="/admin/whatsapp-inbox" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">WhatsApp AI Inbox</a>
-            <a href="/admin/crm" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">CRM Lead Centre</a>
-            <a href="/admin/property-needs" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Property Need Requests</a>
-            <a href="/admin/viewings" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Viewings</a>
-            <a href="/admin/callbacks" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Callbacks</a>
-            <a href="/admin/notifications" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Notifications & Logs</a>
-            <a href="/admin/advertising" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Advertising & Payments</a>
-            <a href="/admin/setup-status" class="rounded-xl border border-green-200 bg-white hover:bg-green-50 p-3 font-bold text-green-800">Owner Setup Status</a>
-            <a href="/admin/providers" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Provider Tests</a>
-            <a href="/admin/language" class="rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-white hover:border-indigo-300 p-3 font-bold text-indigo-800">Language & i18n</a>
-            <a href="/admin/location" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Location & Maps</a>
-            <a href="/admin/docs" class="rounded-xl border border-gray-900 bg-gray-900 hover:bg-gray-800 p-3 font-bold text-white">King Docs</a>
+            <a href="/admin/moderation" data-king-shortcut="/admin/moderation" onclick="return openKingShortcut(event, '/admin/moderation')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
+            <a href="/admin/listings" data-king-shortcut="/admin/listings" onclick="return openKingShortcut(event, '/admin/listings')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">All Listings</a>
+            <a href="/admin/field-agents" data-king-shortcut="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Control Centre</a>
+            <a href="/admin/field-agent-payouts" data-king-shortcut="/admin/field-agent-payouts" onclick="return openKingShortcut(event, '/admin/field-agent-payouts')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Payouts</a>
+            <a href="/admin/field-agent-training" data-king-shortcut="/admin/field-agent-training" onclick="return openKingShortcut(event, '/admin/field-agent-training')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Training</a>
+            <a href="/admin/field-agent-notices" data-king-shortcut="/admin/field-agent-notices" onclick="return openKingShortcut(event, '/admin/field-agent-notices')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Notice Board</a>
+            <a href="/admin/whatsapp-inbox" data-king-shortcut="/admin/whatsapp-inbox" onclick="return openKingShortcut(event, '/admin/whatsapp-inbox')" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">WhatsApp AI Inbox</a>
+            <a href="/admin/crm" data-king-shortcut="/admin/crm" onclick="return openKingShortcut(event, '/admin/crm')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">CRM Lead Centre</a>
+            <a href="/admin/property-needs" data-king-shortcut="/admin/property-needs" onclick="return openKingShortcut(event, '/admin/property-needs')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Property Need Requests</a>
+            <a href="/admin/viewings" data-king-shortcut="/admin/viewings" onclick="return openKingShortcut(event, '/admin/viewings')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Viewings</a>
+            <a href="/admin/callbacks" data-king-shortcut="/admin/callbacks" onclick="return openKingShortcut(event, '/admin/callbacks')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Callbacks</a>
+            <a href="/admin/notifications" data-king-shortcut="/admin/notifications" onclick="return openKingShortcut(event, '/admin/notifications')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Notifications & Logs</a>
+            <a href="/admin/advertising" data-king-shortcut="/admin/advertising" onclick="return openKingShortcut(event, '/admin/advertising')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Advertising & Payments</a>
+            <a href="/admin/setup-status" data-king-shortcut="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="rounded-xl border border-green-200 bg-white hover:bg-green-50 p-3 font-bold text-green-800">Owner Setup Status</a>
+            <a href="/admin/providers" data-king-shortcut="/admin/providers" onclick="return openKingShortcut(event, '/admin/providers')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Provider Tests</a>
+            <a href="/admin/language" data-king-shortcut="/admin/language" onclick="return openKingShortcut(event, '/admin/language')" class="rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-white hover:border-indigo-300 p-3 font-bold text-indigo-800">Language & i18n</a>
+            <a href="/admin/location" data-king-shortcut="/admin/location" onclick="return openKingShortcut(event, '/admin/location')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Location & Maps</a>
+            <a href="/admin/docs" data-king-shortcut="/admin/docs" onclick="return openKingShortcut(event, '/admin/docs')" class="rounded-xl border border-gray-900 bg-gray-900 hover:bg-gray-800 p-3 font-bold text-white">King Docs</a>
           </div>
         </div>
 
@@ -4391,6 +4394,7 @@
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
+            <button type="button" data-admin-tab-button="field-agents" onclick="setAdminWorkflowTab('field-agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Field Agent Control Centre</button>
             <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
             <button type="button" data-admin-tab-button="notifications" onclick="setAdminWorkflowTab('notifications')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Leads & Notifications</button>
@@ -4534,7 +4538,7 @@
             <div id="admin-users-table" class="space-y-3"></div>
           </div>
 
-          <div class="grid xl:grid-cols-3 gap-5 mt-5">
+          <div class="grid xl:grid-cols-2 gap-5 mt-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
@@ -4553,42 +4557,84 @@
               </div>
               <div id="admin-property-requests-table" class="space-y-3"></div>
             </div>
-            <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
-              <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <h4 class="text-lg font-bold text-gray-800">Field Agent Performance</h4>
-                  <p class="text-xs text-gray-500 mt-1">Review throughput, enquiries, saves, route opens, and recent activity for field teams.</p>
-                </div>
-              </div>
-              <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="mb-4 rounded-2xl border border-green-100 bg-white p-3 space-y-3">
+          </div>
+        </div>
+
+        <div id="admin-field-agent-control" data-admin-tab-panel="field-agents" class="admin-tab-panel bg-white border border-blue-100 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Field Agent Control Centre</h3>
+              <p class="text-xs uppercase tracking-wide font-black text-blue-700 mt-1">King Field Agent Command Centre</p>
+              <p class="text-xs text-gray-500 mt-1">Create Field Agent IDs, control notice-board copy, assign territories, track listings, manage payouts, and keep the field team trained from one King tab.</p>
+            </div>
+            <button onclick="renderAdminDashboard()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Field Agents</button>
+          </div>
+
+          <div id="admin-field-agent-performance-board" class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mb-5 text-sm">
+            <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4"><strong>Agent setup</strong><br><span class="text-gray-600">Auto-generate FA-0001 style IDs and private 4-digit PINs.</span></div>
+            <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>Listings tracked</strong><br><span class="text-gray-600">Listings are linked by Field Agent ID on web and WhatsApp submissions.</span></div>
+            <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4"><strong>Payout control</strong><br><span class="text-gray-600">Weekly/monthly slips and payout rate are visible in the agent dashboard.</span></div>
+            <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4"><strong>Notice board</strong><br><span class="text-gray-600">King updates flow into the Field Agent dashboard notice area.</span></div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4"><strong>Training hub</strong><br><span class="text-gray-600">Contracts, welcome pack, FAQ, and two video URLs are controlled here.</span></div>
+          </div>
+
+          <div class="grid xl:grid-cols-[0.95fr,1.05fr] gap-5">
+            <div id="admin-field-agent-notice-control" class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+              <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="rounded-2xl border border-blue-100 bg-white p-4 space-y-3">
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <h5 class="text-sm font-black text-green-950">King Field Agent Command Centre</h5>
-                    <p class="text-[11px] text-gray-500 mt-0.5">Create Field Agent ID + PIN, control their notice board, support line, training links, territory, and payout rate. Leave Field Agent ID blank to auto-generate the next FA-0001 style number.</p>
+                    <h4 class="text-lg font-black text-blue-950">Create Field Agent ID + PIN</h4>
+                    <p class="text-xs text-gray-500 mt-0.5">Leave Field Agent ID blank to auto-generate the next FA-0001 style number. The PIN is hashed, never shown after save, and sent by email only when an email provider is configured.</p>
                   </div>
-                  <span class="text-[11px] font-bold rounded-full bg-green-100 text-green-700 px-2 py-1">Admin only</span>
+                  <span class="text-[11px] font-bold rounded-full bg-blue-100 text-blue-700 px-2 py-1">King only</span>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-2">
-                  <input id="admin-fa-first-name" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="First name" required>
-                  <input id="admin-fa-email" type="email" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
-                  <input id="admin-fa-phone" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone / WhatsApp" required>
-                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
-                  <input id="admin-fa-code" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Field Agent ID, e.g. FA-0001 (optional)">
-                  <input id="admin-fa-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
-                  <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
-                  <input id="admin-fa-support-phone" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Support phone / WhatsApp">
-                  <input id="admin-fa-broadcast-group" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp broadcast group / cohort">
-                  <input id="admin-fa-video-1" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 1">
-                  <input id="admin-fa-video-2" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 2">
+                  <input id="admin-fa-first-name" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="First name" required>
+                  <input id="admin-fa-email" type="email" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
+                  <input id="admin-fa-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone / WhatsApp" required>
+                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
+                  <input id="admin-fa-code" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Field Agent ID, e.g. FA-0001 (optional)">
+                  <input id="admin-fa-territory" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
+                  <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
+                  <input id="admin-fa-support-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Support phone / WhatsApp">
+                  <input id="admin-fa-broadcast-group" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp broadcast group / cohort">
+                  <input id="admin-fa-video-1" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 1">
+                  <input id="admin-fa-video-2" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 2">
                 </div>
-                <textarea id="admin-fa-notes" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Notice board message shown on the Field Agent dashboard"></textarea>
+                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="4" placeholder="Notice board message shown on the Field Agent dashboard"></textarea>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <button id="admin-fa-provision-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Create / update agent</button>
-                  <p id="admin-fa-provision-result" class="text-xs text-gray-500">Use FA-0001 to FA-0004 internally if you want four starter agent codes.</p>
+                  <button id="admin-fa-provision-btn" type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Create / update agent</button>
+                  <p id="admin-fa-provision-result" class="text-xs text-gray-500">The agent receives their ID by WhatsApp and their PIN by email when providers are configured.</p>
                 </div>
               </form>
-              <div id="admin-field-agents-table" class="space-y-3"></div>
             </div>
+
+            <div class="space-y-5">
+              <div id="admin-field-agent-payout-control" class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+                <h4 class="text-lg font-black text-amber-950">Payout & payment control</h4>
+                <p class="text-xs text-amber-900 mt-1">Field Agent dashboards show approved, pending, rejected, weekly earnings, monthly earnings, and downloadable PDF payout slips. King sets payout rate per approved listing here.</p>
+              </div>
+              <div id="admin-field-agent-training-control" class="rounded-2xl border border-green-100 bg-green-50 p-4">
+                <h4 class="text-lg font-black text-green-950">Training, contract & FAQ control</h4>
+                <p class="text-xs text-green-900 mt-1">Training video URLs, contract/welcome-pack links, FAQ/support details, and notice-board guidance flow into each Field Agent dashboard.</p>
+                <div class="mt-3 flex flex-wrap gap-2 text-xs font-bold">
+                  <a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Welcome pack</a>
+                  <a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Contract</a>
+                  <a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-green-200 bg-white px-3 py-2 text-green-800">Training deck</a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <h4 class="text-lg font-bold text-gray-800">Field Agent Directory</h4>
+                <p class="text-xs text-gray-500 mt-1">See who exists, territory, status, listing count, engagement, payout rate, and direct contact actions.</p>
+              </div>
+              <span class="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-700">Backend fed</span>
+            </div>
+            <div id="admin-field-agents-table" class="space-y-3"></div>
           </div>
         </div>
 
@@ -5050,7 +5096,7 @@
             <a id="footer-link-commercial" href="/commercial" onclick="showPage('commercial')" class="block cursor-pointer hover:text-white">Commercial</a>
             <a id="footer-link-land" href="/land" onclick="showPage('land')" class="block cursor-pointer hover:text-white">Land for Sale</a>
             <a id="footer-link-mortgage" href="/mortgage" onclick="showPage('mortgage')" class="block cursor-pointer hover:text-white">Mortgage Finder</a>
-            <a id="footer-link-list-free" href="/list-property" onclick="showPage('list-property')" class="block cursor-pointer hover:text-white">List Property</a>
+            <a id="footer-link-list-free" href="/list-property" onclick="return navigatePublicRoute('/list-property', event)" class="block cursor-pointer hover:text-white">List Property</a>
             <a id="footer-link-looking" href="/dashboard?intent=property-need" onclick="handlePropertyNeedCta(event)" class="block cursor-pointer hover:text-white">Looking For...</a>
           </div>
         </div>
