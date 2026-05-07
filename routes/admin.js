@@ -180,6 +180,17 @@ function normalizeFieldAgentCode(value = '') {
   return '';
 }
 
+function normalizeAdminPropertyStatus(value = '') {
+  const raw = cleanText(value).toLowerCase();
+  if (['approved', 'live', 'published'].includes(raw)) return 'approved';
+  if (['pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'].includes(raw)) return 'pending';
+  if (['rejected', 'declined', 'fraud'].includes(raw)) return 'rejected';
+  if (['hidden', 'off_market', 'paused', 'archived'].includes(raw)) return 'hidden';
+  if (['sold', 'completed'].includes(raw)) return 'sold';
+  if (['deleted', 'removed', 'trash'].includes(raw)) return 'deleted';
+  return raw || 'pending';
+}
+
 function normalizeFieldAgentContactPhone(value = '') {
   const raw = cleanText(value).replace(/[^\d+]/g, '');
   if (!raw) return '';
@@ -1695,7 +1706,7 @@ router.get('/users', async (req, res, next) => {
         SELECT
           COUNT(*)::int AS listings_count,
           COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published'))::int AS approved_listings_count,
-          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review'))::int AS pending_listings_count,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'))::int AS pending_listings_count,
           COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('rejected', 'declined', 'fraud'))::int AS rejected_listings_count,
           COUNT(*) FILTER (
             WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published')
@@ -1706,6 +1717,7 @@ router.get('/users', async (req, res, next) => {
         WHERE p.lister_phone = u.phone
            OR (
              u.role = 'field_agent'
+             AND COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', '') <> ''
              AND UPPER(COALESCE(p.extra_fields->>'field_agent_id', p.extra_fields->>'field_agent_code', p.extra_fields->>'field_agent_reference', p.extra_fields->>'agent_field_id', ''))
                = UPPER(COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', ''))
            )
@@ -1826,6 +1838,108 @@ router.get('/users/:id', async (req, res, next) => {
         listings: listings.rows,
         inquiries: inquiries.rows,
         engagement: engagement.rows[0] || {}
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/field-agents/listings', async (req, res, next) => {
+  try {
+    const requestedStatus = normalizeAdminPropertyStatus(req.query.status || 'all');
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '1000', 10) || 1000, 1), 5000);
+    const statusExpr = "LOWER(COALESCE(p.status, p.moderation_stage, ''))";
+    let statusClause = '';
+    if (requestedStatus === 'approved') {
+      statusClause = `AND ${statusExpr} IN ('approved', 'live', 'published')`;
+    } else if (requestedStatus === 'pending') {
+      statusClause = `AND ${statusExpr} IN ('pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review')`;
+    } else if (requestedStatus === 'rejected') {
+      statusClause = `AND ${statusExpr} IN ('rejected', 'declined', 'fraud')`;
+    } else if (requestedStatus === 'hidden') {
+      statusClause = `AND ${statusExpr} IN ('hidden', 'off_market', 'paused', 'archived')`;
+    }
+
+    const rows = await db.query(
+      `SELECT
+         p.id,
+         p.title,
+         p.listing_type,
+         p.property_type,
+         p.district,
+         p.area,
+         p.price,
+         p.status,
+         p.moderation_stage,
+         p.created_at,
+         p.updated_at,
+         u.id AS field_agent_user_id,
+         u.first_name AS field_agent_first_name,
+         u.last_name AS field_agent_last_name,
+         u.phone AS field_agent_phone,
+         u.email AS field_agent_email,
+         u.status AS field_agent_status,
+         COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', '') AS field_agent_code,
+         COALESCE(u.profile_data->>'field_agent_territory', u.profile_data->>'territory', 'Uganda') AS field_agent_territory,
+         CASE
+           WHEN COALESCE(u.profile_data->>'payout_rate_ugx', '') ~ '^[0-9]+$'
+             THEN (u.profile_data->>'payout_rate_ugx')::int
+           ELSE ${FIELD_AGENT_DEFAULT_PAYOUT_UGX}
+         END AS payout_rate_ugx
+       FROM properties p
+       JOIN users u
+         ON u.role = 'field_agent'
+        AND (
+          p.lister_phone = u.phone
+          OR (
+            COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', '') <> ''
+            AND UPPER(COALESCE(p.extra_fields->>'field_agent_id', p.extra_fields->>'field_agent_code', p.extra_fields->>'field_agent_reference', p.extra_fields->>'agent_field_id', ''))
+              = UPPER(COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', ''))
+          )
+        )
+       WHERE 1=1
+       ${statusClause}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [limit]
+    );
+
+    const data = rows.rows.map((row) => {
+      const normalizedStatus = normalizeAdminPropertyStatus(row.status || row.moderation_stage);
+      const payoutRate = Number(row.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+      return {
+        id: row.id,
+        title: row.title,
+        listing_type: row.listing_type,
+        property_type: row.property_type,
+        district: row.district,
+        area: row.area,
+        price: row.price,
+        status: row.status,
+        moderation_stage: row.moderation_stage,
+        status_normalized: normalizedStatus,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        field_agent_user_id: row.field_agent_user_id,
+        field_agent_name: `${row.field_agent_first_name || ''} ${row.field_agent_last_name || ''}`.trim() || 'Field Agent',
+        field_agent_phone: row.field_agent_phone,
+        field_agent_email: row.field_agent_email,
+        field_agent_status: row.field_agent_status,
+        field_agent_code: row.field_agent_code,
+        field_agent_territory: row.field_agent_territory,
+        payout_rate_ugx: payoutRate,
+        payout_due_ugx: normalizedStatus === 'approved' ? payoutRate : 0
+      };
+    });
+
+    return res.json({
+      ok: true,
+      data,
+      meta: {
+        status: requestedStatus,
+        limit,
+        count: data.length
       }
     });
   } catch (error) {

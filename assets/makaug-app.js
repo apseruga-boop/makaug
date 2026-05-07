@@ -439,6 +439,7 @@ let adminLiveListings = [];
 let adminRemoteAgents = [];
 let adminPropertyRequests = [];
 let adminFieldAgents = [];
+let adminActiveFieldAgentKpi = "";
 let adminCurrentCampaigns = [];
 let adminAdvertisingPackages = [];
 let adminAdvertisingSummary = {};
@@ -9367,6 +9368,229 @@ function adminHighlightFieldAgentRow(userId) {
   window.setTimeout(() => row.classList.remove("ring-2", "ring-blue-500", "ring-offset-2"), 2600);
 }
 
+function adminFieldAgentName(user = {}) {
+  return `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent";
+}
+
+function adminFieldAgentCode(user = {}) {
+  const profile = adminFieldAgentProfile(user);
+  return profile.field_agent_code || profile.employee_number || "-";
+}
+
+function adminFieldAgentKpiTitle(kind = "agents") {
+  const titles = {
+    agents: "All Field Agents",
+    active: "Active Field Agents",
+    pending: "Pending listings",
+    approved: "Accepted listings",
+    rejected: "Rejected listings",
+    payouts: "Friday payday breakdown"
+  };
+  return titles[kind] || titles.agents;
+}
+
+function adminFieldAgentKpiDescription(kind = "agents") {
+  const descriptions = {
+    agents: "Every Field Agent account currently returned by the backend feed, with direct review, contact, and payment actions.",
+    active: "Field Agents whose accounts are active and able to sign in with their Field Agent ID and PIN.",
+    pending: "Pending Field Agent-linked property records. Open each property record or jump into the agent review panel.",
+    approved: "Accepted/live Field Agent-linked property records. These create the Friday payout calculation.",
+    rejected: "Rejected Field Agent-linked property records. Open records to see rejection reasons and follow-up actions.",
+    payouts: "Friday payout is calculated as accepted listings multiplied by each agent's payout/listing rate."
+  };
+  return descriptions[kind] || descriptions.agents;
+}
+
+function adminFieldAgentKpiEmpty(kind = "agents") {
+  if (kind === "active") return "No active Field Agents found.";
+  if (kind === "pending") return "No pending Field Agent-linked listings found.";
+  if (kind === "approved") return "No accepted Field Agent-linked listings found.";
+  if (kind === "rejected") return "No rejected Field Agent-linked listings found.";
+  if (kind === "payouts") return "No Field Agent payout rows found.";
+  return "No Field Agents found in the current backend feed.";
+}
+
+function adminFieldAgentKpiShell(kind, bodyHtml, extraHtml = "") {
+  const panel = document.getElementById("admin-field-agent-kpi-panel");
+  if (!panel) return;
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+      <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+        <div>
+          <div class="text-xs uppercase tracking-wide font-black text-blue-700">King drill-down</div>
+          <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(adminFieldAgentKpiTitle(kind))}</h4>
+          <p class="text-xs text-gray-500 mt-1">${adminEscape(adminFieldAgentKpiDescription(kind))}</p>
+        </div>
+        <button type="button" onclick="adminCloseFieldAgentKpi()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs font-bold">Close</button>
+      </div>
+      ${extraHtml}
+      ${bodyHtml}
+    </div>`;
+}
+
+function adminCloseFieldAgentKpi() {
+  adminActiveFieldAgentKpi = "";
+  document.getElementById("admin-field-agent-kpi-panel")?.classList.add("hidden");
+}
+
+function adminOpenFieldAgentKpi(kind = "agents") {
+  adminActiveFieldAgentKpi = String(kind || "agents");
+  adminRenderFieldAgentKpiPanel(adminActiveFieldAgentKpi);
+  window.setTimeout(() => document.getElementById("admin-field-agent-kpi-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+
+function adminRenderFieldAgentPersonRows(kind = "agents") {
+  const allRows = enrichAdminFieldAgents(adminFieldAgents);
+  const rows = kind === "active"
+    ? allRows.filter((user) => String(user.status || "active").toLowerCase() === "active")
+    : allRows;
+  if (!rows.length) {
+    return `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">${adminEscape(adminFieldAgentKpiEmpty(kind))}</div>`;
+  }
+  return `<div class="space-y-3">${rows.map((user) => {
+    const profile = adminFieldAgentProfile(user);
+    const code = adminFieldAgentCode(user);
+    const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
+    const territory = adminFieldAgentTerritory(user);
+    const approved = adminFieldAgentAcceptedCount(user);
+    const pending = adminFieldAgentPendingCount(user);
+    const rejected = adminFieldAgentRejectedCount(user);
+    const reach = adminFieldAgentReachScore(user);
+    const due = adminFieldAgentFridayDue(user);
+    const payoutRate = adminFieldAgentPayoutRate(user);
+    const userIdArg = adminListingIdArg(user.id);
+    const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
+    const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com Operations. I am checking your Field Agent account ${code}.`) : "";
+    return `
+      <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div class="font-black text-gray-900">${adminEscape(adminFieldAgentName(user))}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Overall ${adminEscape(user.field_agent_rank ? `#${user.field_agent_rank}` : "-")} • Region ${adminEscape(user.field_agent_region_rank ? `#${user.field_agent_region_rank}/${user.field_agent_region_count || "-"}` : "-")}</div>
+          </div>
+          <span class="text-[11px] font-bold rounded-full bg-blue-100 text-blue-700 px-2 py-1">Field Agent</span>
+        </div>
+        <div class="grid sm:grid-cols-3 xl:grid-cols-6 gap-2 mt-3 text-xs">
+          <div class="rounded-lg border border-gray-200 bg-gray-50 p-2"><span class="text-gray-500">Total listings</span><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
+          <div class="rounded-lg border border-amber-100 bg-amber-50 p-2"><span class="text-amber-700">Pending</span><div class="font-black text-amber-900">${adminEscape(pending)}</div></div>
+          <div class="rounded-lg border border-green-100 bg-green-50 p-2"><span class="text-green-700">Accepted</span><div class="font-black text-green-900">${adminEscape(approved)}</div></div>
+          <div class="rounded-lg border border-red-100 bg-red-50 p-2"><span class="text-red-700">Rejected</span><div class="font-black text-red-900">${adminEscape(rejected)}</div></div>
+          <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-2"><span class="text-emerald-700">Reach</span><div class="font-black text-emerald-900">${adminEscape(reach)}</div></div>
+          <div class="rounded-lg border border-blue-100 bg-blue-50 p-2"><span class="text-blue-700">Friday due</span><div class="font-black text-blue-900">${adminEscape(fmtP(due, ""))}</div><div class="text-[10px] text-blue-700">${adminEscape(approved)} x ${adminEscape(fmtP(payoutRate, ""))}</div></div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold">Review details</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'pending')" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Pending listings</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'approved')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Accepted listings</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Rejected listings</button>
+          <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Record payment</button>
+          ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Contact agent</a>` : ""}
+          ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("makaug.com Field Agent follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Email</a>` : ""}
+        </div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+function adminFieldAgentListingStatusParam(kind = "pending") {
+  if (kind === "approved") return "approved";
+  if (kind === "rejected") return "rejected";
+  return "pending";
+}
+
+async function adminLoadFieldAgentKpiListings(kind = "pending") {
+  if (!canUseLiveAdminApi()) return { rows: [], provider: "missing_auth" };
+  const status = adminFieldAgentListingStatusParam(kind);
+  const res = await apiRequest(`/api/admin/field-agents/listings?status=${encodeURIComponent(status)}&limit=1000`, { headers: adminAuthHeaders() });
+  return { rows: Array.isArray(res?.data) ? res.data : [], provider: "live" };
+}
+
+function adminRenderFieldAgentListingRows(kind, listings = []) {
+  if (!listings.length) {
+    return `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">${adminEscape(adminFieldAgentKpiEmpty(kind))}</div>`;
+  }
+  const statusLabel = adminFieldAgentKpiTitle(kind).replace(" listings", "");
+  return `<div class="space-y-2">${listings.map((listing) => {
+    const listingIdArg = adminListingIdArg(listing.id);
+    const userIdArg = adminListingIdArg(listing.field_agent_user_id);
+    const meta = adminStatusBadge(listing.status || listing.moderation_stage || kind);
+    const agentName = listing.field_agent_name || "Field Agent";
+    const location = [listing.area, listing.district].filter(Boolean).join(", ") || "Location not set";
+    return `
+      <div class="rounded-xl border border-gray-200 bg-white p-3 flex items-start justify-between gap-3 flex-wrap">
+        <div class="min-w-0">
+          <div class="font-black text-gray-900">${adminEscape(listing.title || "Untitled property")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(listing.listing_type || "Property")} • ${adminEscape(formatListingDate(listing.created_at) || "-")}</div>
+          <div class="text-xs text-blue-800 font-semibold mt-1">Listed by ${adminEscape(agentName)} ${listing.field_agent_code ? `• ${adminEscape(listing.field_agent_code)}` : ""} ${listing.field_agent_territory ? `• ${adminEscape(listing.field_agent_territory)}` : ""}</div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[11px] font-bold rounded px-2 py-1 ${meta.cls}">${adminEscape(meta.label || statusLabel)}</span>
+          ${listing.id ? `<button type="button" onclick="openAdminListingReview(${listingIdArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Open property</button>` : ""}
+          ${listing.field_agent_user_id ? `<button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, '${adminFieldAgentListingStatusParam(kind)}')" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold">Open agent</button>` : ""}
+        </div>
+      </div>`;
+  }).join("")}</div>`;
+}
+
+function adminRenderFieldAgentPayoutRows() {
+  const rows = enrichAdminFieldAgents(adminFieldAgents)
+    .slice()
+    .sort((a, b) => adminFieldAgentFridayDue(b) - adminFieldAgentFridayDue(a) || adminFieldAgentAcceptedCount(b) - adminFieldAgentAcceptedCount(a));
+  if (!rows.length) {
+    return `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">${adminEscape(adminFieldAgentKpiEmpty("payouts"))}</div>`;
+  }
+  const totalDue = rows.reduce((total, user) => total + adminFieldAgentFridayDue(user), 0);
+  const extra = `
+    <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 mb-3 text-sm text-indigo-950">
+      <strong>${adminEscape(fmtP(totalDue, ""))}</strong> due this Friday across ${adminEscape(rows.length)} Field Agent account${rows.length === 1 ? "" : "s"}. Calculation: accepted listings x payout/listing.
+    </div>`;
+  const body = `<div class="space-y-3">${rows.map((user) => {
+    const accepted = adminFieldAgentAcceptedCount(user);
+    const payoutRate = adminFieldAgentPayoutRate(user);
+    const due = adminFieldAgentFridayDue(user);
+    const userIdArg = adminListingIdArg(user.id);
+    return `
+      <div class="rounded-xl border border-indigo-100 bg-white p-4 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="font-black text-gray-900">${adminEscape(adminFieldAgentName(user))}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(adminFieldAgentCode(user))} • ${adminEscape(adminFieldAgentTerritory(user))} • ${adminEscape(user.email || user.phone || "-")}</div>
+          <div class="text-sm text-indigo-900 font-black mt-2">${adminEscape(accepted)} accepted listings x ${adminEscape(fmtP(payoutRate, ""))} = ${adminEscape(fmtP(due, ""))}</div>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'approved')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">View accepted</button>
+          <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Record payment</button>
+        </div>
+      </div>`;
+  }).join("")}</div>`;
+  return extra + body;
+}
+
+async function adminRenderFieldAgentKpiPanel(kind = adminActiveFieldAgentKpi) {
+  const panel = document.getElementById("admin-field-agent-kpi-panel");
+  if (!panel || !kind) return;
+  if (kind === "agents" || kind === "active") {
+    adminFieldAgentKpiShell(kind, adminRenderFieldAgentPersonRows(kind));
+    return;
+  }
+  if (kind === "payouts") {
+    adminFieldAgentKpiShell(kind, adminRenderFieldAgentPayoutRows());
+    return;
+  }
+  adminFieldAgentKpiShell(kind, `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">Loading ${adminEscape(adminFieldAgentKpiTitle(kind).toLowerCase())}...</div>`);
+  try {
+    const activeKind = kind;
+    const { rows, provider } = await adminLoadFieldAgentKpiListings(kind);
+    if (adminActiveFieldAgentKpi && adminActiveFieldAgentKpi !== activeKind) return;
+    const liveNote = provider === "live"
+      ? `<div class="rounded-xl border border-blue-100 bg-blue-50 p-3 mb-3 text-xs text-blue-900 font-semibold">Showing ${adminEscape(rows.length)} backend property record${rows.length === 1 ? "" : "s"} linked to Field Agent IDs or phone numbers.</div>`
+      : `<div class="rounded-xl border border-amber-100 bg-amber-50 p-3 mb-3 text-xs text-amber-900 font-semibold">Sign in as admin to load exact property records from the backend. The directory buttons still open agent-level linked listings.</div>`;
+    adminFieldAgentKpiShell(kind, adminRenderFieldAgentListingRows(kind, rows), liveNote);
+  } catch (error) {
+    adminFieldAgentKpiShell(kind, `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">Could not load linked listings: ${adminEscape(error.message || "request failed")}</div>`);
+  }
+}
+
 function adminFieldAgentFilePayload(inputId, label) {
   const input = document.getElementById(inputId);
   const file = input?.files?.[0];
@@ -9608,6 +9832,7 @@ function adminOpenFieldAgentPayment(userId) {
 
 function renderAdminFieldAgentPerformance(users) {
   const rows = enrichAdminFieldAgents(users);
+  adminFieldAgents = rows;
   const countByStatus = (status) => rows.filter((user) => String(user.status || "active").toLowerCase() === status).length;
   const sum = (key) => rows.reduce((total, user) => total + (Number(user[key] || 0) || 0), 0);
   const weeklyPay = rows.reduce((total, user) => total + adminFieldAgentFridayDue(user), 0);
@@ -9641,6 +9866,9 @@ function renderAdminFieldAgentPerformance(users) {
           <div><span class="text-blue-700">Friday due</span><div class="font-black text-blue-900">${adminEscape(fmtP(region.due, ""))}</div></div>
         </div>
       </div>`).join("") : `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No regional Field Agent performance yet.</div>`;
+  }
+  if (adminActiveFieldAgentKpi) {
+    adminRenderFieldAgentKpiPanel(adminActiveFieldAgentKpi);
   }
 }
 
