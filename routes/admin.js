@@ -1695,7 +1695,7 @@ router.get('/users', async (req, res, next) => {
         SELECT
           COUNT(*)::int AS listings_count,
           COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published'))::int AS approved_listings_count,
-          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('pending', 'pending_review', 'draft', 'submitted', 'in_review'))::int AS pending_listings_count,
+          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review'))::int AS pending_listings_count,
           COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('rejected', 'declined', 'fraud'))::int AS rejected_listings_count,
           COUNT(*) FILTER (
             WHERE LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published')
@@ -1786,7 +1786,7 @@ router.get('/users/:id', async (req, res, next) => {
     const fieldAgentCode = normalizeFieldAgentCode(profile.field_agent_code || profile.employee_number);
     const [listings, inquiries, engagement] = await Promise.all([
       db.query(
-        `SELECT id, title, listing_type, district, area, status, created_at, updated_at
+        `SELECT id, title, listing_type, district, area, status, moderation_stage, created_at, updated_at
          FROM properties
          WHERE lister_phone = $1
             OR (

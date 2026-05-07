@@ -6836,7 +6836,7 @@ function normalizeModerationStatus(status) {
   if (["approved", "live", "published"].includes(raw)) return "approved";
   if (["sold", "completed"].includes(raw)) return "sold";
   if (["rejected", "declined", "fraud"].includes(raw)) return "rejected";
-  if (["pending", "under_review", "submitted"].includes(raw)) return "pending";
+  if (["pending", "pending_review", "test_pending_review", "pending_review_hidden", "under_review", "submitted", "draft", "in_review"].includes(raw)) return "pending";
   if (["hidden", "off_market", "paused", "archived"].includes(raw)) return "hidden";
   if (["deleted", "removed", "trash"].includes(raw)) return "deleted";
   return "approved";
@@ -9388,7 +9388,7 @@ function adminFieldAgentFilePayload(inputId, label) {
   });
 }
 
-async function adminFieldAgentDetailPanel(userId) {
+async function adminFieldAgentDetailPanel(userId, statusFilter = "all") {
   let user = adminFindFieldAgent(userId);
   const panel = document.getElementById("admin-field-agent-detail-panel");
   if (!panel) return;
@@ -9422,10 +9422,29 @@ async function adminFieldAgentDetailPanel(userId) {
   const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
   const payments = Array.isArray(profile.field_agent_payments) ? profile.field_agent_payments : [];
   const linkedListings = Array.isArray(user.listings) ? user.listings : [];
+  const normalizedListingFilter = ["approved", "pending", "rejected", "hidden", "sold", "deleted"].includes(String(statusFilter || "").toLowerCase())
+    ? String(statusFilter || "").toLowerCase()
+    : "all";
+  const listingStatusCounts = linkedListings.reduce((counts, listing) => {
+    const status = normalizeModerationStatus(listing.status || listing.moderation_stage);
+    counts.all += 1;
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, { all: 0, approved: 0, pending: 0, rejected: 0, hidden: 0, sold: 0, deleted: 0 });
+  const visibleLinkedListings = normalizedListingFilter === "all"
+    ? linkedListings
+    : linkedListings.filter((listing) => normalizeModerationStatus(listing.status || listing.moderation_stage) === normalizedListingFilter);
   const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
   const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com Operations. I am checking your Field Agent account ${code}.`) : "";
   const today = new Date().toISOString().slice(0, 10);
   const userIdArg = adminListingIdArg(user.id);
+  const listingFilterButtons = [
+    { key: "all", label: "All properties", count: listingStatusCounts.all },
+    { key: "pending", label: "Pending", count: listingStatusCounts.pending },
+    { key: "approved", label: "Accepted", count: listingStatusCounts.approved },
+    { key: "rejected", label: "Rejected", count: listingStatusCounts.rejected },
+    { key: "hidden", label: "Hidden", count: listingStatusCounts.hidden }
+  ];
   panel.classList.remove("hidden");
   panel.innerHTML = `
     <div class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
@@ -9483,11 +9502,15 @@ async function adminFieldAgentDetailPanel(userId) {
       </div>
       <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4">
         <h5 class="font-black text-blue-950">Linked properties</h5>
-        <p class="text-xs text-blue-900 mt-1">These are pulled from the backend by the agent phone number and Field Agent ID/code. Open the record to review, approve, reject, or remove it.</p>
-        <div class="mt-3 space-y-2 text-xs">${linkedListings.length ? linkedListings.slice(0, 60).map((listing) => {
+        <p class="text-xs text-blue-900 mt-1">These are pulled from the backend by the agent phone number and Field Agent ID/code. This is where the pending, accepted, and rejected listing totals come from.</p>
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">${listingFilterButtons.map((item) => `
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, '${item.key}')" class="rounded-lg border px-3 py-1.5 font-bold ${normalizedListingFilter === item.key ? "border-blue-700 bg-blue-700 text-white" : "border-blue-100 bg-white text-blue-800 hover:border-blue-300"}">${adminEscape(item.label)} (${adminEscape(item.count || 0)})</button>
+        `).join("")}</div>
+        <div class="mt-3 rounded-xl border border-blue-100 bg-white px-3 py-2 text-xs text-blue-900 font-semibold">Showing ${adminEscape(visibleLinkedListings.length)} of ${adminEscape(linkedListings.length)} linked properties for ${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "this Field Agent")}.</div>
+        <div class="mt-3 space-y-2 text-xs">${visibleLinkedListings.length ? visibleLinkedListings.slice(0, 1000).map((listing) => {
           const listingId = String(listing.id || "");
           const listingArg = adminListingIdArg(listingId);
-          const status = normalizeModerationStatus(listing.status);
+          const status = normalizeModerationStatus(listing.status || listing.moderation_stage);
           const meta = adminStatusBadge(status);
           return `<div class="rounded-xl border border-blue-100 bg-white p-3 flex items-start justify-between gap-3 flex-wrap">
             <div class="min-w-0">
@@ -9499,7 +9522,7 @@ async function adminFieldAgentDetailPanel(userId) {
               ${listingId ? `<button type="button" onclick="openAdminListingReview(${listingArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Open record</button>` : ""}
             </div>
           </div>`;
-        }).join("") : `<div class="rounded-xl border border-blue-100 bg-white p-3 text-blue-900">No linked properties found yet. Make sure listing forms save the Field Agent ID/code or the same phone number used on this agent account.</div>`}</div>
+        }).join("") : `<div class="rounded-xl border border-blue-100 bg-white p-3 text-blue-900">${linkedListings.length ? "No properties match this status filter." : "No linked properties found yet. Make sure listing forms save the Field Agent ID/code or the same phone number used on this agent account."}</div>`}</div>
       </div>
       <div class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
         <h5 class="font-black text-gray-900">Payment history</h5>
@@ -9626,6 +9649,21 @@ function renderAdminFieldAgentRows(users) {
   if (!wrap) return;
   adminFieldAgents = enrichAdminFieldAgents(users);
   const rows = adminFieldAgents;
+  const summary = document.getElementById("admin-field-agent-directory-summary");
+  if (summary) {
+    const pendingListings = rows.reduce((total, user) => total + adminFieldAgentPendingCount(user), 0);
+    const acceptedListings = rows.reduce((total, user) => total + adminFieldAgentAcceptedCount(user), 0);
+    const rejectedListings = rows.reduce((total, user) => total + adminFieldAgentRejectedCount(user), 0);
+    summary.innerHTML = `
+      <div class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <strong>${adminEscape(rows.length)} Field Agent account${rows.length === 1 ? "" : "s"}</strong> in the directory.
+        The status totals above are linked property listings:
+        <strong>${adminEscape(pendingListings)} pending</strong>,
+        <strong>${adminEscape(acceptedListings)} accepted</strong>, and
+        <strong>${adminEscape(rejectedListings)} rejected</strong>.
+        Use the row buttons below to open the exact property records for each agent.
+      </div>`;
+  }
   if (!rows.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No field agents found in the current live dataset.</div>`;
     return;
@@ -9674,6 +9712,9 @@ function renderAdminFieldAgentRows(users) {
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Details</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'pending')" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">View pending (${adminEscape(pendingCount)})</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'approved')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">View accepted (${adminEscape(approvedCount)})</button>
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">View rejected (${adminEscape(rejectedCount)})</button>
           <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record Payment</button>
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
           ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
