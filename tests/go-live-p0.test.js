@@ -196,6 +196,7 @@ function run() {
   const backendTraceabilityMatrix = fs.readFileSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md'), 'utf8');
   const goLiveManualQa = fs.readFileSync(path.join(__dirname, '..', 'docs', 'go-live-manual-qa.md'), 'utf8');
   const fieldAgentSetupDoc = fs.readFileSync(path.join(__dirname, '..', 'docs', 'field-agent-live-setup.md'), 'utf8');
+  const kingDashboardControlMap = fs.readFileSync(path.join(__dirname, '..', 'docs', 'king-dashboard-control-map.md'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
@@ -703,19 +704,38 @@ function run() {
   assert(frontendSource.includes('id="admin-launch-control"'), 'admin launch control should exist');
   assert(frontendSource.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
   assert(frontendSource.includes('id="admin-control-shortcuts"'), 'admin dashboard should expose direct owner control shortcuts');
+  assert(frontendSource.includes('King Dashboard'), 'owner control centre should be labelled King Dashboard');
+  assert(frontendSource.includes('id="king-control-map"'), 'King dashboard should expose the full control map');
+  assert(frontendSource.includes('King Dashboard Control Map'), 'King control map should be visible in the protected dashboard');
+  assert(kingDashboardControlMap.includes('makaug.com King Dashboard Control Map'), 'King dashboard control map doc should exist');
+  assert(kingDashboardControlMap.includes('/admin/property-needs') && kingDashboardControlMap.includes('/admin/field-agents'), 'King dashboard doc should map property needs and field agents');
+  assert(kingDashboardControlMap.includes('Feature area') && kingDashboardControlMap.includes('Backend/API source'), 'King dashboard doc should keep feature-to-backend traceability');
   assert(frontendSource.includes('adminControlForPath'), 'admin deep links should route to the correct dashboard control panel');
   assert(frontendSource.includes('pendingAdminControlAfterAuth'), 'admin sign-in should preserve the requested admin control route after authentication');
   for (const adminControlPath of [
+    '/king',
+    '/king/dashboard',
     '/admin/launch-control',
     '/admin/moderation',
     '/admin/listings',
     '/admin/field-agents',
     '/admin/whatsapp-inbox',
     '/admin/crm',
+    '/admin/property-needs',
+    '/admin/viewings',
+    '/admin/callbacks',
+    '/admin/mortgage',
+    '/admin/help',
+    '/admin/careers',
     '/admin/notifications',
     '/admin/advertising',
     '/admin/revenue',
     '/admin/payments',
+    '/admin/providers',
+    '/admin/language',
+    '/admin/location',
+    '/admin/content-i18n',
+    '/admin/how-to-videos',
     '/admin/fraud',
     '/admin/data-protection'
   ]) {
@@ -725,6 +745,7 @@ function run() {
     'admin-review-queue-control',
     'admin-listings-control',
     'admin-field-agent-provision-form',
+    'admin-property-requests-table',
     'admin-whatsapp-control',
     'admin-notifications-control',
     'admin-advertising-control'
@@ -947,7 +968,7 @@ function run() {
   assert(adminRoutes.includes('logWhatsAppMessage'), 'admin proof actions should create WhatsAppMessageLog records');
   assert(adminRoutes.includes('matchListingToSavedSearches'), 'admin proof actions should run real alert matcher service');
 
-  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/admin/docs', '/admin/setup-status', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
+  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/king', '/king/dashboard', '/admin/docs', '/admin/setup-status', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);
     const shell = renderProtectedLoginShell(protectedPath);
     assert(shell.includes('noindex,noarchive'), `${protectedPath} protected shell needs noindex/noarchive`);
@@ -957,9 +978,10 @@ function run() {
     assert(!isProtectedPath(publicPath), `${publicPath} should be public`);
   }
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin'), 'admin should access admin');
+  assert(roleCanAccessProtectedPath({ role: 'admin' }, '/king'), 'admin should access King dashboard alias');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/crm'), 'admin should access CRM centre');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/leads'), 'admin should access lead centre');
-  for (const adminPath of ['/admin', '/admin/setup-status', '/admin/crm', '/admin/leads', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
+  for (const adminPath of ['/admin', '/king', '/king/dashboard', '/admin/setup-status', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
     assert(roleCanAccessProtectedPath({ role: 'super_admin', audience: 'super_admin' }, adminPath), `super_admin should access ${adminPath}`);
   }
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/admin'), 'normal users must not access admin');

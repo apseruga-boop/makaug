@@ -8,6 +8,7 @@ const PROTECTED_ROUTE_PREFIXES = [
   '/field-agent-dashboard',
   '/advertiser-dashboard',
   '/admin',
+  '/king',
   '/crm',
   '/revenue',
   '/moderation',
@@ -30,8 +31,11 @@ const PUBLIC_FORBIDDEN_STRINGS = [
   'Field Agent Dashboard',
   'Advertiser Dashboard',
   'Admin Dashboard',
+  'King Dashboard',
+  'King Control',
   'Admin API Key',
   'Platform control access',
+  'Protected King control access',
   'Ad Revenue',
   'Review Queue',
   'Advertising Desk',
@@ -306,6 +310,7 @@ function roleCanAccessProtectedPath(auth = {}, pathname = '') {
   const pathName = normalizePath(pathname).toLowerCase();
   const isAdminRole = role === 'admin' || role === 'super_admin';
   if (role === 'super_admin') return true;
+  if (pathName.startsWith('/king')) return isAdminRole;
   if (pathName.startsWith('/admin')) return isAdminRole;
   if (pathName.startsWith('/broker-dashboard')) return role === 'agent_broker' || isAdminRole;
   if (pathName.startsWith('/field-agent-dashboard')) return role === 'field_agent' || isAdminRole;

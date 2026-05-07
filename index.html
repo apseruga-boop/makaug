@@ -4032,8 +4032,9 @@
   <div id="page-admin-dashboard" class="page">
     <div class="bg-gray-900 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Admin Dashboard</h1>
-        <p class="text-gray-300 mt-1">Control approvals, monitor activity, and moderate platform operations</p>
+        <p class="text-green-200 text-sm font-black uppercase tracking-wide">makaug.com command centre</p>
+        <h1 class="text-3xl font-black serif mt-1">King Dashboard</h1>
+        <p class="text-gray-300 mt-1">The protected control brain for listings, accounts, leads, WhatsApp, payments, providers, language, location, and launch proof.</p>
       </div>
     </div>
     <div class="max-w-6xl mx-auto px-4 py-8">
@@ -4048,13 +4049,14 @@
         <div class="bg-white border border-gray-200 rounded-2xl p-6">
           <div class="flex justify-between items-center gap-4 flex-wrap">
             <div>
-              <h2 id="admin-dashboard-name" class="text-2xl font-black text-gray-900">Admin User</h2>
-              <p id="admin-dashboard-status" class="text-sm text-gray-500 mt-1">Platform control access</p>
+              <h2 id="admin-dashboard-name" class="text-2xl font-black text-gray-900">King User</h2>
+              <p id="admin-dashboard-status" class="text-sm text-gray-500 mt-1">Protected King control access</p>
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
               <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
               <a href="/admin/field-agents" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Setup</a>
+              <a href="/admin/setup-status" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Setup Status</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
@@ -4064,10 +4066,10 @@
         <div id="admin-control-shortcuts" class="bg-white border border-green-100 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h3 class="text-xl font-bold text-gray-800">Admin Control Shortcuts</h3>
-              <p class="text-sm text-gray-500 mt-1">Jump straight to the live control room you need. These links keep you inside the protected admin dashboard and open the matching backend-fed panel.</p>
+              <h3 class="text-xl font-bold text-gray-800">King Control Shortcuts</h3>
+              <p class="text-sm text-gray-500 mt-1">Jump straight to the protected control room you need. These links open the matching backend-fed panel inside the King Dashboard.</p>
             </div>
-            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Live admin routes</span>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Live King routes</span>
           </div>
           <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
             <a href="/admin/moderation" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
@@ -4075,9 +4077,84 @@
             <a href="/admin/field-agents" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Create Field Agent ID + PIN</a>
             <a href="/admin/whatsapp-inbox" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">WhatsApp AI Inbox</a>
             <a href="/admin/crm" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">CRM Lead Centre</a>
+            <a href="/admin/property-needs" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Property Need Requests</a>
+            <a href="/admin/viewings" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Viewings</a>
+            <a href="/admin/callbacks" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Callbacks</a>
             <a href="/admin/notifications" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Notifications & Logs</a>
             <a href="/admin/advertising" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Advertising & Payments</a>
             <a href="/admin/setup-status" class="rounded-xl border border-green-200 bg-white hover:bg-green-50 p-3 font-bold text-green-800">Owner Setup Status</a>
+            <a href="/admin/providers" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Provider Tests</a>
+            <a href="/admin/language" class="rounded-xl border border-indigo-100 bg-indigo-50 hover:bg-white hover:border-indigo-300 p-3 font-bold text-indigo-800">Language & i18n</a>
+            <a href="/admin/location" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Location & Maps</a>
+            <a href="/admin/docs" class="rounded-xl border border-gray-900 bg-gray-900 hover:bg-gray-800 p-3 font-bold text-white">King Docs</a>
+          </div>
+        </div>
+
+        <div id="king-control-map" class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">King Dashboard Control Map</h3>
+              <p class="text-sm text-gray-500 mt-1">Every major makaug.com flow should have a route, backend source, log trail, owner control, and proof status. Use this map as the King dashboard brain.</p>
+            </div>
+            <a href="/admin/setup-status" class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-800 hover:bg-green-200">Run proof actions</a>
+          </div>
+          <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">Listings & moderation</h4>
+              <p class="text-gray-500 mt-1">Create, approve, reject, hide, feature, delete, fraud-review, and inspect every listing.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/moderation" class="text-xs font-bold text-green-700">Pending review</a>
+                <a href="/admin/listings" class="text-xs font-bold text-green-700">All listings</a>
+                <a href="/admin/fraud" class="text-xs font-bold text-green-700">Fraud reports</a>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">Accounts, roles & field agents</h4>
+              <p class="text-gray-500 mt-1">Users, brokers, field-agent ID/PIN setup, account status, contracts, outreach, and data protection.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/accounts" class="text-xs font-bold text-blue-700">Accounts</a>
+                <a href="/admin/field-agents" class="text-xs font-bold text-blue-700">Field agents</a>
+                <a href="/admin/data-protection" class="text-xs font-bold text-blue-700">Data protection</a>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">CRM, leads & demand</h4>
+              <p class="text-gray-500 mt-1">Property needs, no-results demand, saved alerts, enquiries, viewings, callbacks, mortgage, help, careers, and fraud follow-up.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/crm" class="text-xs font-bold text-green-700">CRM</a>
+                <a href="/admin/property-needs" class="text-xs font-bold text-green-700">Property needs</a>
+                <a href="/admin/viewings" class="text-xs font-bold text-green-700">Viewings</a>
+                <a href="/admin/callbacks" class="text-xs font-bold text-green-700">Callbacks</a>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">WhatsApp AI & conversations</h4>
+              <p class="text-gray-500 mt-1">Conversation logs, language guardrails, shared-location search, human handoff, and owner/broker follow-up.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/whatsapp-inbox" class="text-xs font-bold text-green-700">Inbox</a>
+                <a href="/admin/language" class="text-xs font-bold text-green-700">Language status</a>
+                <a href="/admin/location" class="text-xs font-bold text-green-700">Location searches</a>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">Advertising, payments & revenue</h4>
+              <p class="text-gray-500 mt-1">Ad packages, campaign builder, placement controls, invoices, payment links, manual payments, and revenue reporting.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/advertising" class="text-xs font-bold text-amber-700">Advertising</a>
+                <a href="/admin/payments" class="text-xs font-bold text-amber-700">Payments</a>
+                <a href="/admin/revenue" class="text-xs font-bold text-amber-700">Revenue</a>
+              </div>
+            </div>
+            <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <h4 class="font-black text-gray-900">Providers, language, location & proof</h4>
+              <p class="text-gray-500 mt-1">Email, SMS, WhatsApp, OpenAI, maps, payments, migrations, route probes, click probes, performance, missing translations, and how-to videos.</p>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <a href="/admin/setup-status" class="text-xs font-bold text-green-700">Setup status</a>
+                <a href="/admin/providers" class="text-xs font-bold text-green-700">Providers</a>
+                <a href="/admin/content-i18n" class="text-xs font-bold text-green-700">Translations</a>
+                <a href="/admin/how-to-videos" class="text-xs font-bold text-green-700">Videos</a>
+              </div>
+            </div>
           </div>
         </div>
 

@@ -20324,6 +20324,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   "field-dashboard": "/field-agent-dashboard",
   "advertiser-dashboard": "/advertiser-dashboard",
   "admin-dashboard": "/admin",
+  "king-dashboard": "/king",
   "admin-docs": "/admin/docs",
   "admin-setup-status": "/admin/setup-status"
 });
@@ -20388,8 +20389,10 @@ function pageForPublicRoute(path) {
 }
 
 const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
-  "/admin": { page: "admin-dashboard", tab: "review", selector: "#admin-control-shortcuts", label: "Admin dashboard" },
-  "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#admin-control-shortcuts", label: "Admin dashboard" },
+  "/admin": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
+  "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
+  "/king": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
+  "/king/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Launch Control" },
   "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
@@ -20400,9 +20403,17 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/listings": { page: "admin-dashboard", tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
   "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "CRM Lead Centre" },
   "/admin/leads": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Lead Centre" },
+  "/admin/property-needs": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
+  "/admin/property-requests": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
+  "/admin/viewings": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Viewing Bookings" },
+  "/admin/callbacks": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Callback Requests" },
+  "/admin/mortgage": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Mortgage Leads" },
+  "/admin/help": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Help Requests" },
+  "/admin/careers": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "Career Submissions" },
   "/admin/notifications": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Notifications" },
   "/admin/emails": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Email Logs" },
   "/admin/alerts": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Alerts" },
+  "/admin/saved-searches": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Saved Alerts" },
   "/admin/whatsapp-inbox": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
   "/admin/whatsapp": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
   "/admin/advertising": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
@@ -20414,13 +20425,18 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/contracts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-field-agent-provision-form", label: "Contracts and field team setup" },
   "/admin/fraud": { page: "admin-dashboard", tab: "listings", selector: "#admin-recent-reports", label: "Fraud reports" },
   "/admin/data-protection": { page: "admin-dashboard", tab: "accounts", selector: "#admin-users-table", label: "Data protection" },
+  "/admin/providers": { page: "admin-setup-status", label: "Provider Tests" },
+  "/admin/language": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Language Status" },
+  "/admin/content-i18n": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Translation Status" },
+  "/admin/location": { page: "admin-setup-status", label: "Location and Maps Status" },
+  "/admin/how-to-videos": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "How-to Video Status" },
   "/admin/docs": { page: "admin-docs", label: "Admin Docs" },
   "/admin/setup-status": { page: "admin-setup-status", label: "Owner Setup Status" }
 });
 
 function adminControlForPath(path = "/admin") {
   const clean = normalizeRoutePath(path);
-  return ADMIN_ROUTE_CONTROL_MAP[clean] || (clean.startsWith("/admin/") ? ADMIN_ROUTE_CONTROL_MAP["/admin"] : null);
+  return ADMIN_ROUTE_CONTROL_MAP[clean] || ((clean.startsWith("/admin/") || clean.startsWith("/king/")) ? ADMIN_ROUTE_CONTROL_MAP["/admin"] : null);
 }
 
 function isSignedInAdminUser() {
