@@ -20581,6 +20581,66 @@ function showPage(page, options = {}) {
   }
 }
 
+const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
+  sale: "For Sale",
+  rent: "To Rent",
+  students: "Student Accommodation",
+  commercial: "Commercial",
+  land: "Land",
+  brokers: "Brokers",
+  mortgage: "Mortgage Finder",
+  "ai-chatbot": "Discover AI Chatbot",
+  advertise: "Advertise",
+  "how-it-works": "How it works",
+  careers: "Careers",
+  help: "Help Centre",
+  safety: "Safety Tips",
+  fraud: "Anti-Fraud",
+  "privacy-policy": "Privacy Policy",
+  "cookie-policy": "Cookie Policy",
+  terms: "Terms",
+  "list-property": "List Property",
+  about: "About Us",
+  saved: "Saved"
+});
+
+function mountPublicRouteSkeleton(page) {
+  const targetPage = normalizePageKey(page);
+  if (!targetPage || document.getElementById(`page-${targetPage}`)) return false;
+  const label = PUBLIC_ROUTE_SKELETON_LABELS[targetPage] || "Loading";
+  const main = document.createElement("main");
+  main.id = `page-${targetPage}`;
+  main.className = "page active route-fragment-loading";
+  main.setAttribute("data-public-route-skeleton", targetPage);
+  main.innerHTML = `
+    <section class="bg-green-800 py-12 text-white">
+      <div class="max-w-5xl mx-auto px-4">
+        <p class="text-green-200 text-sm font-bold uppercase tracking-wide">makaug.com</p>
+        <h1 class="text-4xl font-black serif mt-2">${label}</h1>
+        <p class="text-green-50 mt-3">Loading the latest makaug.com page.</p>
+      </div>
+    </section>
+    <section class="max-w-5xl mx-auto px-4 py-10">
+      <div class="rounded-3xl border border-green-100 bg-white p-6 min-h-[220px]">
+        <div class="h-4 w-40 rounded-full bg-green-100"></div>
+        <div class="mt-5 grid gap-3 md:grid-cols-3">
+          <div class="h-28 rounded-2xl bg-gray-50"></div>
+          <div class="h-28 rounded-2xl bg-gray-50"></div>
+          <div class="h-28 rounded-2xl bg-gray-50"></div>
+        </div>
+      </div>
+    </section>
+  `;
+  document.querySelectorAll(".page.active").forEach((el) => el.classList.remove("active"));
+  const footer = document.querySelector("footer");
+  document.body.insertBefore(main, footer || document.body.lastElementChild);
+  closeRouteTransientModals(targetPage, currentPage);
+  lastPage = currentPage;
+  currentPage = targetPage;
+  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  return true;
+}
+
 function mountPublicRouteFragment(doc, page) {
   const incoming = doc.getElementById(`page-${page}`);
   if (!incoming) return false;
@@ -20688,6 +20748,10 @@ function navigatePublicRoute(target, event, options = {}) {
   if (!page) return true;
   const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
   if (!document.getElementById(`page-${page}`)) {
+    mountPublicRouteSkeleton(page);
+    if (currentPathWithQueryAndHash() !== nextUrl) {
+      try { window.history.pushState({ page, source: options.source || "spa_link_loading" }, "", nextUrl); } catch (error) {}
+    }
     loadPublicRouteFragment(nextUrl, page, options);
     return false;
   }
