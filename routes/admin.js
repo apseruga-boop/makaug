@@ -74,6 +74,8 @@ router.use(requireAdminApiKey);
 
 const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
 const FIELD_AGENT_PAYOUT_DAY = 'Friday';
+const FIELD_AGENT_ID_START = 7300;
+const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 
 async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
   try {
@@ -100,6 +102,10 @@ function normalizeFieldAgentCode(value = '') {
   return '';
 }
 
+function isLegacyZeroFieldAgentCode(value = '') {
+  return /^FA-0+$/.test(String(value || '').trim().toUpperCase());
+}
+
 async function generateNextFieldAgentCode() {
   const result = await db.query(
     `SELECT profile_data->>'field_agent_code' AS field_agent_code,
@@ -107,7 +113,7 @@ async function generateNextFieldAgentCode() {
      FROM users
      WHERE role = 'field_agent'`
   );
-  let max = 0;
+  let max = FIELD_AGENT_ID_START;
   for (const row of result.rows) {
     for (const value of [row.field_agent_code, row.employee_number]) {
       const normalized = normalizeFieldAgentCode(value);
@@ -116,6 +122,34 @@ async function generateNextFieldAgentCode() {
     }
   }
   return `FA-${String(max + 1).padStart(4, '0')}`;
+}
+
+function cleanFieldAgentUpload(value, fallbackName = 'document') {
+  if (!value || typeof value !== 'object') return null;
+  const name = cleanText(value.name || fallbackName).slice(0, 160) || fallbackName;
+  const type = cleanText(value.type || value.mime || 'application/octet-stream').slice(0, 120);
+  const size = Number(value.size || 0) || 0;
+  const dataUrl = String(value.data_url || value.dataUrl || '').trim();
+  const url = cleanText(value.url || value.href || '').slice(0, 2000);
+  if (size > FIELD_AGENT_UPLOAD_MAX_BYTES) {
+    const err = new Error(`${fallbackName} is too large. Upload must be 2MB or smaller.`);
+    err.status = 400;
+    throw err;
+  }
+  const allowedDataUrl = dataUrl.startsWith('data:application/pdf')
+    || dataUrl.startsWith('data:image/')
+    || dataUrl.startsWith('data:application/msword')
+    || dataUrl.startsWith('data:application/vnd.openxmlformats-officedocument');
+  const allowedUrl = /^https?:\/\//i.test(url) || url.startsWith('/assets/docs/field-agent/');
+  if (!allowedDataUrl && !allowedUrl) return null;
+  return {
+    name,
+    type,
+    size,
+    data_url: allowedDataUrl ? dataUrl : undefined,
+    url: allowedUrl ? url : undefined,
+    uploaded_at: new Date().toISOString()
+  };
 }
 
 function envSet(key) {
@@ -191,6 +225,58 @@ function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territo
             <div style="margin-top:22px;">
               <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:13px;padding:14px 18px;font-size:14px;font-weight:900;margin-right:8px;">Open Field Agent dashboard</a>
               <a href="${escapeHtml(supportUrl)}" style="display:inline-block;background:#ecfdf3;color:#166534;text-decoration:none;border:1px solid #bbf7d0;border-radius:13px;padding:13px 16px;font-size:14px;font-weight:900;">WhatsApp Operations</a>
+            </div>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  return { text, html };
+}
+
+function buildFieldAgentPaymentEmail({ firstName, fieldAgentCode, amountUgx, paymentReference, paymentMethod, paidAt, receiptHref, dashboardUrl }) {
+  const safeFirstName = firstName || 'there';
+  const safeAmount = Number(amountUgx || 0);
+  const methodLabel = cleanText(paymentMethod || 'mobile_money').replace(/_/g, ' ');
+  const text = [
+    `Hello ${safeFirstName},`,
+    '',
+    'A makaug.com Field Agent payment has been recorded for your account.',
+    '',
+    `Field Agent ID: ${fieldAgentCode}`,
+    `Amount: USh ${safeAmount.toLocaleString('en-UG')}`,
+    `Payment method: ${methodLabel}`,
+    `Payment reference: ${paymentReference}`,
+    `Payment date: ${paidAt}`,
+    receiptHref ? `Receipt/proof: ${receiptHref}` : '',
+    '',
+    `You can also see this payment inside your dashboard: ${dashboardUrl}`,
+    '',
+    'Thank you for your field work.'
+  ].filter(Boolean).join('\n');
+  const html = `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>makaug.com Field Agent payment</title></head>
+  <body style="margin:0;background:#fffbeb;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;background:#fffbeb;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border:1px solid #fde68a;border-radius:22px;overflow:hidden;">
+          <tr><td style="padding:26px;background:linear-gradient(135deg,#14532d,#15803d,#f59e0b);color:#ffffff;">
+            <div style="font-size:26px;font-weight:900;"><span>makaug</span><span style="color:#fde68a;">.com</span></div>
+            <h1 style="margin:16px 0 0;font-size:25px;line-height:1.2;">Payment recorded for ${escapeHtml(safeFirstName)}</h1>
+          </td></tr>
+          <tr><td style="padding:26px;">
+            <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:18px;padding:16px;">
+              <div style="font-size:13px;color:#92400e;font-weight:900;text-transform:uppercase;">Field Agent payment</div>
+              <div style="font-size:28px;font-weight:900;color:#14532d;margin-top:8px;">USh ${safeAmount.toLocaleString('en-UG')}</div>
+              <div style="font-size:14px;color:#374151;margin-top:10px;">Reference: <strong>${escapeHtml(paymentReference)}</strong></div>
+              <div style="font-size:14px;color:#374151;margin-top:6px;">Method: <strong>${escapeHtml(methodLabel)}</strong></div>
+              <div style="font-size:14px;color:#374151;margin-top:6px;">Date: <strong>${escapeHtml(paidAt)}</strong></div>
+            </div>
+            <div style="margin-top:22px;">
+              <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#15803d;color:#ffffff;text-decoration:none;border-radius:13px;padding:14px 18px;font-size:14px;font-weight:900;margin-right:8px;">Open dashboard</a>
+              ${receiptHref ? `<a href="${escapeHtml(receiptHref)}" style="display:inline-block;background:#fffbeb;color:#92400e;text-decoration:none;border:1px solid #fde68a;border-radius:13px;padding:13px 16px;font-size:14px;font-weight:900;">View receipt</a>` : ''}
             </div>
           </td></tr>
         </table>
@@ -2284,8 +2370,10 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
     const notes = cleanText(req.body.notes);
-    const supportPhone = normalizeUgPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
-    const actorId = adminActorId(req);
+	    const supportPhone = normalizeUgPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
+	    const actorId = adminActorId(req);
+	    const idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
+	    const signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
 
     if (!firstName || !lastName || !email || !idNumber || !phone || !whatsappPhone || !pin) {
       return res.status(400).json({ ok: false, error: 'First name, surname, email, ID number, phone, WhatsApp number, and 4-digit PIN are required' });
@@ -2319,10 +2407,12 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const existingProfile = existing.rows[0]?.profile_data && typeof existing.rows[0].profile_data === 'object'
       ? existing.rows[0].profile_data
       : {};
-    const existingCode = normalizeFieldAgentCode(existingProfile.field_agent_code || existingProfile.employee_number);
-    const generatedCode = existingCode || requestedFieldAgentCode || await generateNextFieldAgentCode();
-    if ((req.body.field_agent_code || req.body.employee_number) && !requestedFieldAgentCode) {
-      return res.status(400).json({ ok: false, error: 'Field Agent ID must look like FA-0001' });
+	    const existingCode = normalizeFieldAgentCode(existingProfile.field_agent_code || existingProfile.employee_number);
+	    const reusableExistingCode = existingCode && !isLegacyZeroFieldAgentCode(existingCode) ? existingCode : '';
+	    const reusableRequestedCode = requestedFieldAgentCode && !isLegacyZeroFieldAgentCode(requestedFieldAgentCode) ? requestedFieldAgentCode : '';
+	    const generatedCode = reusableExistingCode || reusableRequestedCode || await generateNextFieldAgentCode();
+	    if ((req.body.field_agent_code || req.body.employee_number) && !reusableRequestedCode) {
+	      return res.status(400).json({ ok: false, error: 'Field Agent ID must look like FA-7301, or leave it blank to auto-generate' });
     }
     const conflictQuery = existing.rows.length
       ? await db.query(
@@ -2370,12 +2460,20 @@ router.post('/field-agents/provision', async (req, res, next) => {
       payout_rule: `${FIELD_AGENT_DEFAULT_PAYOUT_UGX} UGX per approved listing, paid every ${FIELD_AGENT_PAYOUT_DAY} based on previous week approvals`,
       next_payout_source: 'admin_set',
       field_agent_support_phone: supportPhone || existingProfile.field_agent_support_phone || '',
-      field_agent_notes: notes || existingProfile.field_agent_notes || '',
-      field_agent_pin_set: true,
-      field_agent_pin_last_set_at: new Date().toISOString(),
-      manual_review_required: true,
-      approved_by_admin: true
-    };
+	      field_agent_notes: notes || existingProfile.field_agent_notes || '',
+	      field_agent_pin_set: true,
+	      field_agent_pin_last_set_at: new Date().toISOString(),
+	      manual_review_required: true,
+	      approved_by_admin: true,
+	      ...(idDocument ? {
+	        field_agent_id_document: idDocument,
+	        field_agent_id_document_uploaded_at: idDocument.uploaded_at
+	      } : {}),
+	      ...(signedContract ? {
+	        field_agent_signed_contract: signedContract,
+	        field_agent_signed_contract_uploaded_at: signedContract.uploaded_at
+	      } : {})
+	    };
 
     let saved;
     if (existing.rows.length) {
@@ -2445,11 +2543,13 @@ router.post('/field-agents/provision', async (req, res, next) => {
       email,
       phone_masked: phone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
       whatsapp_masked: whatsappPhone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
-      field_agent_code: generatedCode,
-      employee_number: generatedCode,
-      id_number_saved: Boolean(idNumber),
-      pin_set: true
-    }, actorId);
+	      field_agent_code: generatedCode,
+	      employee_number: generatedCode,
+	      id_number_saved: Boolean(idNumber),
+	      id_document_uploaded: Boolean(idDocument),
+	      signed_contract_uploaded: Boolean(signedContract),
+	      pin_set: true
+	    }, actorId);
 
     await logNotification(db, {
       userId: saved.id,
@@ -2554,9 +2654,9 @@ router.post('/field-agents/provision', async (req, res, next) => {
       }
     });
 
-    return res.status(existing.rows.length ? 200 : 201).json({
-      ok: true,
-      data: {
+	    return res.status(existing.rows.length ? 200 : 201).json({
+	      ok: true,
+	      data: {
         id: saved.id,
         first_name: saved.first_name,
         last_name: saved.last_name,
@@ -2572,6 +2672,225 @@ router.post('/field-agents/provision', async (req, res, next) => {
         pin_set: true
       }
     });
+	  } catch (error) {
+	    return next(error);
+	  }
+	});
+
+router.post('/field-agents/:id/documents', async (req, res, next) => {
+  try {
+    const userResult = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, preferred_language, profile_data
+       FROM users
+       WHERE id = $1 AND role = 'field_agent'
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const user = userResult.rows[0];
+    if (!user) return res.status(404).json({ ok: false, error: 'Field Agent not found' });
+
+    const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
+    const idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
+    const signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
+    if (!idDocument && !signedContract) {
+      return res.status(400).json({ ok: false, error: 'Upload an ID document or signed contract first' });
+    }
+
+    const patch = {
+      ...(idDocument ? {
+        field_agent_id_document: idDocument,
+        field_agent_id_document_uploaded_at: idDocument.uploaded_at
+      } : {}),
+      ...(signedContract ? {
+        field_agent_signed_contract: signedContract,
+        field_agent_signed_contract_uploaded_at: signedContract.uploaded_at
+      } : {})
+    };
+
+    const updated = await db.query(
+      `UPDATE users
+       SET profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, first_name, last_name, email, phone, role, status, profile_data, updated_at`,
+      [user.id, JSON.stringify(patch)]
+    );
+
+    await writeAudit('field_agent_documents_updated', {
+      user_id: user.id,
+      field_agent_code: profile.field_agent_code || profile.employee_number || null,
+      id_document_uploaded: Boolean(idDocument),
+      signed_contract_uploaded: Boolean(signedContract)
+    }, adminActorId(req));
+
+    await logNotification(db, {
+      userId: user.id,
+      recipientPhone: user.phone,
+      recipientEmail: user.email,
+      channel: 'in_app',
+      type: 'field_agent_documents_updated',
+      status: 'logged',
+      payloadSummary: {
+        id_document_uploaded: Boolean(idDocument),
+        signed_contract_uploaded: Boolean(signedContract)
+      }
+    });
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/field-agents/:id/payment', async (req, res, next) => {
+  try {
+    const userResult = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, preferred_language, profile_data
+       FROM users
+       WHERE id = $1 AND role = 'field_agent'
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const user = userResult.rows[0];
+    if (!user) return res.status(404).json({ ok: false, error: 'Field Agent not found' });
+
+    const amountUgx = toNullableInt(req.body.amount_ugx || req.body.amount);
+    const paymentReference = cleanText(req.body.payment_reference || req.body.reference).slice(0, 120);
+    const paymentMethod = cleanText(req.body.payment_method || 'mobile_money').slice(0, 80);
+    const paidAt = cleanText(req.body.paid_at || new Date().toISOString().slice(0, 10)).slice(0, 40);
+    const periodStart = cleanText(req.body.period_start || '').slice(0, 40);
+    const periodEnd = cleanText(req.body.period_end || '').slice(0, 40);
+    const notes = cleanText(req.body.notes || '').slice(0, 800);
+    let receipt = cleanFieldAgentUpload(req.body.receipt || req.body.receipt_file, 'Field Agent payment receipt');
+    const receiptUrl = cleanText(req.body.receipt_url || '').slice(0, 2000);
+    if (!receipt && receiptUrl) {
+      receipt = cleanFieldAgentUpload({ url: receiptUrl, name: 'Payment receipt link' }, 'Field Agent payment receipt');
+    }
+
+    if (!amountUgx || amountUgx <= 0) {
+      return res.status(400).json({ ok: false, error: 'Payment amount is required' });
+    }
+    if (!paymentReference) {
+      return res.status(400).json({ ok: false, error: 'Payment reference is required' });
+    }
+
+    const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
+    const fieldAgentCode = profile.field_agent_code || profile.employee_number || '';
+    const payment = {
+      id: `FAP-${Date.now()}`,
+      amount_ugx: amountUgx,
+      payment_reference: paymentReference,
+      payment_method: paymentMethod,
+      paid_at: paidAt,
+      period_start: periodStart || undefined,
+      period_end: periodEnd || undefined,
+      receipt: receipt || undefined,
+      notes: notes || undefined,
+      created_at: new Date().toISOString(),
+      created_by: adminActorId(req)
+    };
+    const payments = [payment, ...asArray(profile.field_agent_payments)].slice(0, 100);
+    const patch = {
+      field_agent_payments: payments,
+      field_agent_latest_payment: payment,
+      field_agent_last_payment_at: payment.created_at,
+      field_agent_payment_status: 'paid'
+    };
+
+    const updated = await db.query(
+      `UPDATE users
+       SET profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, first_name, last_name, email, phone, role, status, profile_data, updated_at`,
+      [user.id, JSON.stringify(patch)]
+    );
+
+    const siteUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+    const dashboardUrl = `${siteUrl}/field-agent-dashboard`;
+    const receiptHref = receipt?.url || '';
+    const emailPayload = buildFieldAgentPaymentEmail({
+      firstName: user.first_name,
+      fieldAgentCode,
+      amountUgx,
+      paymentReference,
+      paymentMethod,
+      paidAt,
+      receiptHref,
+      dashboardUrl
+    });
+    let emailDelivery = { sent: false, reason: 'email_provider_missing' };
+    if (user.email && emailProviderConfigured()) {
+      emailDelivery = await sendSupportEmail({
+        to: user.email,
+        subject: `makaug.com Field Agent payment ${paymentReference}`,
+        text: emailPayload.text,
+        html: emailPayload.html
+      });
+    }
+    const emailStatus = user.email
+      ? (emailProviderConfigured() ? notificationStatusFromDelivery(emailDelivery) : 'provider_missing')
+      : 'skipped';
+    await logEmailEvent(db, {
+      eventType: 'field_agent_payment_recorded',
+      recipientUserId: user.id,
+      recipientEmail: user.email,
+      recipientRole: 'field_agent',
+      templateKey: 'field_agent_payment_recorded',
+      subject: `makaug.com Field Agent payment ${paymentReference}`,
+      language: user.preferred_language || 'en',
+      status: emailStatus,
+      provider: emailDelivery.provider || null,
+      providerMessageId: emailDelivery.id || null,
+      failureReason: emailDelivery.error || emailDelivery.reason || null,
+      sentAt: emailDelivery.sent ? new Date() : null
+    });
+
+    const whatsappBody = [
+      `Hello ${user.first_name || 'there'}, makaug.com has recorded a Field Agent payment for ${fieldAgentCode || 'your account'}.`,
+      `Amount: USh ${amountUgx.toLocaleString('en-UG')}`,
+      `Reference: ${paymentReference}`,
+      `Date: ${paidAt}`,
+      `Open your dashboard: ${dashboardUrl}`
+    ].join('\n');
+    const whatsappTo = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
+    const whatsappDelivery = whatsappTo ? await sendWhatsAppText({ to: whatsappTo, body: whatsappBody }) : { sent: false, reason: 'missing_phone' };
+    const whatsappStatus = whatsappTo ? notificationStatusFromDelivery(whatsappDelivery) : 'skipped';
+    await logWhatsAppMessage(db, {
+      userId: user.id,
+      recipientPhone: whatsappTo || null,
+      templateKey: 'field_agent_payment_recorded',
+      messageType: 'field_agent_payment_recorded',
+      language: user.preferred_language || 'en',
+      status: whatsappStatus,
+      failureReason: whatsappDelivery.error || whatsappDelivery.reason || null,
+      sentAt: whatsappDelivery.sent ? new Date() : null
+    });
+    await logNotification(db, {
+      userId: user.id,
+      recipientPhone: whatsappTo || null,
+      recipientEmail: user.email,
+      channel: 'in_app',
+      type: 'field_agent_payment_recorded',
+      status: 'logged',
+      payloadSummary: {
+        field_agent_code: fieldAgentCode,
+        amount_ugx: amountUgx,
+        payment_reference: paymentReference,
+        email_status: emailStatus,
+        whatsapp_status: whatsappStatus
+      }
+    });
+    await writeAudit('field_agent_payment_recorded', {
+      user_id: user.id,
+      field_agent_code: fieldAgentCode,
+      amount_ugx: amountUgx,
+      payment_reference: paymentReference,
+      payment_method: paymentMethod,
+      receipt_uploaded: Boolean(receipt)
+    }, adminActorId(req));
+
+    return res.json({ ok: true, data: { payment, user: updated.rows[0], email_status: emailStatus, whatsapp_status: whatsappStatus } });
   } catch (error) {
     return next(error);
   }

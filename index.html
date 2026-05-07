@@ -3085,7 +3085,7 @@
             </div>
             <div id="lp-field-agent-id-wrap" class="hidden">
               <label id="lp-field-agent-id-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
-              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-0001">
+              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-7301">
               <p id="lp-field-agent-id-help" class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
             </div>
           </div>
@@ -3851,6 +3851,7 @@
           <div class="bg-white border border-amber-100 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-amber-900 mb-2">Money collected tracker</h3>
             <p id="field-money-summary" class="text-sm text-gray-600">MakaUg Operations updates collections and payout notes after review.</p>
+            <div id="field-agent-payment-history" class="mt-4 space-y-2 text-sm text-gray-700"></div>
           </div>
           <div class="bg-white border border-blue-100 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-blue-950 mb-2">Team communication</h3>
@@ -4596,13 +4597,25 @@
                   <input id="admin-fa-id-number" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="ID number" required>
                   <input id="admin-fa-phone" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone number" required>
                   <input id="admin-fa-whatsapp" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp number" required>
-                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
-                  <input id="admin-fa-territory" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
-                  <input id="admin-fa-payout-rate" inputmode="numeric" value="5000" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing">
-                </div>
-                <div id="admin-fa-next-code" class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 font-semibold">Next Field Agent ID is generated automatically on save.</div>
-                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Internal notes or onboarding context"></textarea>
-                <div class="flex items-center gap-2 flex-wrap">
+	                  <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
+	                  <input id="admin-fa-territory" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
+	                  <input id="admin-fa-payout-rate" inputmode="numeric" value="5000" class="border border-blue-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing">
+	                </div>
+	                <div class="grid sm:grid-cols-2 gap-2 text-xs">
+	                  <label class="rounded-xl border border-blue-100 bg-blue-50 p-3 font-semibold text-blue-950">
+	                    National ID photo / document
+	                    <input id="admin-fa-id-document-file" type="file" accept="image/*,.pdf,.doc,.docx" class="mt-2 block w-full text-xs text-blue-900">
+	                    <span class="block mt-1 text-[11px] text-blue-700">Admin-private. Not shown on the Field Agent dashboard.</span>
+	                  </label>
+	                  <label class="rounded-xl border border-blue-100 bg-blue-50 p-3 font-semibold text-blue-950">
+	                    Signed contract
+	                    <input id="admin-fa-contract-file" type="file" accept=".pdf,.doc,.docx,image/*" class="mt-2 block w-full text-xs text-blue-900">
+	                    <span class="block mt-1 text-[11px] text-blue-700">Visible to this Field Agent from their dashboard.</span>
+	                  </label>
+	                </div>
+	                <div id="admin-fa-next-code" class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800 font-semibold">Next Field Agent ID is generated automatically on save.</div>
+	                <textarea id="admin-fa-notes" class="w-full border border-blue-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Internal notes or onboarding context"></textarea>
+	                <div class="flex items-center gap-2 flex-wrap">
                   <button id="admin-fa-provision-btn" type="submit" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save Field Agent</button>
                   <p id="admin-fa-provision-result" class="text-xs text-gray-500">The agent receives their ID by WhatsApp and their PIN by email when providers are configured.</p>
                 </div>
@@ -4653,11 +4666,12 @@
                 <h4 class="text-lg font-bold text-gray-800">Field Agent Directory</h4>
                 <p class="text-xs text-gray-500 mt-1">See who exists, territory, status, listing count, engagement, payout rate, and direct contact actions.</p>
               </div>
-              <span class="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-700">Backend fed</span>
-            </div>
-            <div id="admin-field-agents-table" class="space-y-3"></div>
-          </div>
-        </div>
+	              <span class="text-[11px] font-bold px-2 py-1 rounded bg-blue-100 text-blue-700">Backend fed</span>
+	            </div>
+	            <div id="admin-field-agent-detail-panel" class="hidden mb-4"></div>
+	            <div id="admin-field-agents-table" class="space-y-3"></div>
+	          </div>
+	        </div>
 
         <div id="admin-advertising-control" data-admin-tab-panel="ads" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -5455,7 +5469,7 @@
         <div id="auth-field-login-wrap" class="hidden grid sm:grid-cols-2 gap-3 mb-4">
           <div>
             <label class="block text-sm font-medium text-gray-800 mb-2">Field Agent ID</label>
-            <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-0001">
+            <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-7301">
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-800 mb-2">4-digit PIN</label>
@@ -5781,7 +5795,7 @@
           </select>
           <p class="text-xs text-gray-500 mt-1">If a Field Agent helped with this registration, choose Yes and enter their ID.</p>
           <div id="agent-field-id-wrap" class="hidden mt-2">
-            <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-0001)">
+            <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-7301)">
           </div>
         </div>
 
@@ -5853,7 +5867,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "king-route-skeleton-v1-20260507";
+        window.__makaugAppVersion = "field-agent-control-v2-20260507";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;

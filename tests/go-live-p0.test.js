@@ -492,7 +492,7 @@ function run() {
   assert(frontendSource.includes('admin-issued Field Agent ID and PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
   assert(frontendSource.includes('body: { field_agent_code: fieldAgentCode, password, audience: "field_agent" }'), 'field-agent drawer should send Field Agent ID to auth login');
   assert(frontendSource.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
-  assert(!frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should auto-generate FA-0001 style agent codes instead of asking for them');
+  assert(!frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should auto-generate production-style agent codes instead of asking for them');
   assert(frontendSource.includes('id="admin-fa-last-name"') && frontendSource.includes('id="admin-fa-id-number"') && frontendSource.includes('id="admin-fa-whatsapp"'), 'admin field-agent setup should capture surname, ID number, and WhatsApp number');
   assert(frontendSource.includes('value="5000"'), 'admin field-agent setup should default payout to USh 5,000 per approved listing');
   assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
@@ -505,6 +505,9 @@ function run() {
   assert(frontendSource.includes('id="admin-field-agent-training-control"'), 'Field Agent control centre should expose training and contract controls');
   assert(frontendSource.includes('id="admin-field-agent-notice-control"'), 'Field Agent control centre should expose notice-board controls');
   assert(frontendSource.includes('id="admin-field-agents-table"'), 'Field Agent control centre should expose the agent directory');
+  assert(frontendSource.includes('id="admin-fa-id-document-file"') && frontendSource.includes('id="admin-fa-contract-file"'), 'admin field-agent setup should upload ID document and signed contract');
+  assert(frontendSource.includes('id="admin-field-agent-detail-panel"'), 'admin field-agent directory should expose a review details panel');
+  assert(frontendSource.includes('adminFieldAgentDetailPanel') && frontendSource.includes('adminRecordFieldAgentPayment') && frontendSource.includes('adminSaveFieldAgentDocuments'), 'admin field-agent directory should support review, document updates, and payment recording');
   assert(frontendSource.includes('openKingShortcut'), 'King shortcuts should use the admin control router instead of dead standalone links');
   for (const fieldAgentShortcutPath of ['/admin/field-agents', '/admin/field-agent-payouts', '/admin/field-agent-training', '/admin/field-agent-notices']) {
     assert(frontendSource.includes(`data-king-shortcut="${fieldAgentShortcutPath}"`), `King shortcuts should include field-agent path: ${fieldAgentShortcutPath}`);
@@ -518,12 +521,17 @@ function run() {
   assert(frontendSource.includes('data-field-agent-tab-button="payouts"'), 'Field Agent dashboard should expose an earnings and payout tab');
   assert(frontendSource.includes('id="field-agent-earnings-chart"'), 'Field Agent dashboard should render an earnings graph');
   assert(frontendSource.includes('downloadFieldAgentPayoutSlip'), 'Field Agent dashboard should download payout slips through the protected API');
+  assert(frontendSource.includes('id="field-agent-payment-history"'), 'Field Agent dashboard should show recorded King payment history');
   assert(frontendSource.includes('id="field-agent-training-videos"'), 'Field Agent dashboard should show two training video slots');
   assert(frontendSource.includes('id="field-agent-faq-list"'), 'Field Agent dashboard should include FAQ and support information');
   assert(frontendSource.includes('Preview / read') && frontendSource.includes('Download'), 'Field Agent resources should be previewable and downloadable');
   assert(frontendSource.includes('openAccountSettings()'), 'Field Agent settings should open role-aware account settings instead of falling back to Property Finder');
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
-  assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential FA-0001 style field-agent IDs');
+  assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential production-style field-agent IDs');
+  assert(adminRoutes.includes('FIELD_AGENT_ID_START = 7300') && adminRoutes.includes('isLegacyZeroFieldAgentCode'), 'admin should start generated Field Agent IDs above legacy zero codes');
+  assert(adminRoutes.includes("router.post('/field-agents/:id/documents'"), 'admin API should save field-agent ID documents and signed contracts');
+  assert(adminRoutes.includes("router.post('/field-agents/:id/payment'"), 'admin API should record field-agent payments and receipts');
+  assert(adminRoutes.includes('field_agent_documents_updated') && adminRoutes.includes('field_agent_payment_recorded'), 'field-agent document/payment actions should create logs');
   assert(adminRoutes.includes('Field Agent ID is already assigned'), 'admin should prevent duplicate Field Agent IDs');
   assert(adminRoutes.includes('FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000'), 'admin API should default Field Agent payout to USh 5,000');
   assert(adminRoutes.includes("router.post('/field-agents/broadcast'"), 'admin API should broadcast Field Agent WhatsApp/email/banner messages');
@@ -542,6 +550,7 @@ function run() {
   assert(!adminRoutes.includes('pin, password_hash'), 'admin field-agent provisioning must not store raw PIN values');
   assert(fieldAgentRoutes.includes("router.get('/payout-slip.pdf'"), 'field-agent API should generate protected PDF payout slips');
   assert(fieldAgentRoutes.includes('field_agent_payout_slip_downloaded'), 'field-agent payout slip downloads should be logged');
+  assert(fieldAgentRoutes.includes('field_agent_signed_contract') && fieldAgentRoutes.includes('field_agent_payments'), 'field-agent dashboard API should expose signed contract and recorded payments');
   assert(fieldAgentRoutes.includes('field_agent_training_video_1_url') && fieldAgentRoutes.includes('field_agent_training_video_2_url'), 'field-agent dashboard API should expose King-controlled training videos');
   assert(fieldAgentRoutes.includes('field_agent_support_phone'), 'field-agent dashboard API should expose King-controlled support phone');
   assert(frontendSource.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
@@ -711,7 +720,7 @@ function run() {
   assert(frontendSource.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
-  assert(fieldAgentSetupDoc.includes('FA-0001') && fieldAgentSetupDoc.includes('4-digit PIN'), 'field-agent live setup doc should give starter codes and PIN instructions');
+  assert(fieldAgentSetupDoc.includes('FA-7301') && fieldAgentSetupDoc.includes('4-digit PIN'), 'field-agent live setup doc should give starter codes and PIN instructions');
   assert(frontendSource.includes('/assets/docs/field-agent/makaug-field-agent-training-deck.pptx'), 'field-agent dashboard should expose training deck download');
   assert(frontendSource.includes('/assets/docs/field-agent/makaug-field-agent-contract.docx'), 'field-agent dashboard should expose contract download');
   for (const fieldAgentAsset of [

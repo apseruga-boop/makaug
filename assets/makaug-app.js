@@ -3167,6 +3167,10 @@ function setTextById(id, text) {
   if (el) el.textContent = text;
 }
 
+function setText(id, text) {
+  setTextById(id, text == null ? "" : String(text));
+}
+
 function setPageHeading(pageId, text) {
   const h = document.querySelector(`#${pageId} h1`);
   if (h && text) h.textContent = text;
@@ -5310,7 +5314,7 @@ function updateAuthSignInUi() {
     if (fieldWrap) fieldWrap.classList.add("hidden");
     if (standardWrap) standardWrap.classList.remove("hidden");
     if (identifierLabel) identifierLabel.textContent = "Field Agent ID";
-    if (identifierInput) identifierInput.placeholder = "FA-0001";
+    if (identifierInput) identifierInput.placeholder = "FA-7301";
     if (passwordLabel) passwordLabel.textContent = "4-digit PIN";
   } else {
     if (fieldWrap) fieldWrap.classList.add("hidden");
@@ -6361,7 +6365,7 @@ function getFieldSourceListingsForUser(user) {
     return {
       ...p,
       review_status: status,
-      field_agent_code: code || "FA-0001",
+      field_agent_code: code || "FA-7301",
       sourced_at: new Date(Date.now() - ((idx + 2) * 24 * 60 * 60 * 1000)).toISOString(),
       extra_fields: {
         ...(p.extra_fields || {}),
@@ -6609,7 +6613,7 @@ async function renderFieldDashboard() {
     ];
     resourcesEl.innerHTML = resources.map((item) => {
       const href = String(item.href || "");
-      const safeHref = href.startsWith("/assets/docs/field-agent/") ? href : "";
+      const safeHref = isSafeFieldAgentDocumentHref(href) ? href : "";
       return `
       <div class="rounded-xl border border-gray-200 p-3 bg-white flex flex-col gap-2">
         <strong>${adminEscape(item.title || "Field Agent guide")}</strong><br>
@@ -6618,6 +6622,32 @@ async function renderFieldDashboard() {
       </div>
     `;
     }).join("");
+  }
+  const paymentHistoryEl = document.getElementById("field-agent-payment-history");
+  if (paymentHistoryEl) {
+    const payments = Array.isArray(liveDashboard?.payouts?.payments) ? liveDashboard.payouts.payments : [];
+    if (!payments.length) {
+      paymentHistoryEl.innerHTML = `<div class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-gray-500">No recorded payments yet. King admin payments will appear here after payout is confirmed.</div>`;
+    } else {
+      paymentHistoryEl.innerHTML = payments.slice(0, 8).map((payment) => {
+        const receipt = payment.receipt && typeof payment.receipt === "object" ? payment.receipt : null;
+        const receiptHref = receipt ? String(receipt.data_url || receipt.url || "") : "";
+        const safeReceiptHref = isSafeFieldAgentDocumentHref(receiptHref) ? receiptHref : "";
+        const amount = Number(payment.amount_ugx || 0) || 0;
+        const date = payment.paid_at || payment.created_at || "Payment recorded";
+        const reference = payment.payment_reference || "No reference";
+        const method = String(payment.payment_method || "mobile_money").replace(/_/g, " ");
+        return `<div class="rounded-xl border border-green-100 bg-green-50 p-3">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="font-black text-green-950">${adminEscape(fmtP(amount, ""))}</div>
+              <div class="text-xs text-green-900 mt-1">${adminEscape(date)} • ${adminEscape(method)} • Ref: ${adminEscape(reference)}</div>
+            </div>
+            ${safeReceiptHref ? `<a href="${adminEscape(safeReceiptHref)}" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">View receipt</a>` : ""}
+          </div>
+        </div>`;
+      }).join("");
+    }
   }
   const videosEl = document.getElementById("field-agent-training-videos");
   if (videosEl) {
@@ -9077,6 +9107,8 @@ async function adminProvisionFieldAgent(event) {
     btn.textContent = "Saving...";
   }
   try {
+    const idDocument = await adminFieldAgentFilePayload("admin-fa-id-document-file", "ID document");
+    const signedContract = await adminFieldAgentFilePayload("admin-fa-contract-file", "signed contract");
     const res = await apiRequest("/api/admin/field-agents/provision", {
       method: "POST",
       headers: adminAuthHeaders(),
@@ -9091,7 +9123,9 @@ async function adminProvisionFieldAgent(event) {
         territory,
         payout_rate_ugx: payoutRate || 5000,
         preferred_language: currentLang || "en",
-        notes
+        notes,
+        id_document: idDocument,
+        signed_contract: signedContract
       }
     });
     const data = res?.data || {};
@@ -9100,6 +9134,10 @@ async function adminProvisionFieldAgent(event) {
     }
     const pinInput = document.getElementById("admin-fa-pin");
     if (pinInput) pinInput.value = "";
+    const idDocInput = document.getElementById("admin-fa-id-document-file");
+    if (idDocInput) idDocInput.value = "";
+    const contractInput = document.getElementById("admin-fa-contract-file");
+    if (contractInput) contractInput.value = "";
     const nextCode = document.getElementById("admin-fa-next-code");
     if (nextCode) nextCode.textContent = `Last saved Field Agent ID: ${data.field_agent_code || "auto-generated"}. Next save will auto-generate the next available number.`;
     await trackEvent("admin_field_agent_provisioned", { field_agent_code: data.field_agent_code || "", source_page: currentPage });
@@ -9172,6 +9210,213 @@ async function adminDeleteFieldAgent(userId) {
   await adminSetUserStatus(userId, "deleted");
 }
 
+function adminFindFieldAgent(userId) {
+  const id = String(userId || "");
+  return (adminFieldAgents || []).find((user) => String(user.id || "") === id) || null;
+}
+
+function isSafeFieldAgentDocumentHref(href = "") {
+  const value = String(href || "");
+  return value.startsWith("/assets/docs/field-agent/")
+    || value.startsWith("https://")
+    || value.startsWith("http://")
+    || value.startsWith("data:application/pdf")
+    || value.startsWith("data:image/")
+    || value.startsWith("data:application/msword")
+    || value.startsWith("data:application/vnd.openxmlformats-officedocument");
+}
+
+function adminFieldAgentPublicDocument(profile = {}, key) {
+  const doc = profile[key] && typeof profile[key] === "object" ? profile[key] : null;
+  if (!doc) return null;
+  const href = String(doc.data_url || doc.url || "");
+  if (!href) return null;
+  if (!isSafeFieldAgentDocumentHref(href)) return null;
+  return {
+    ...doc,
+    href,
+    name: doc.name || "Uploaded document"
+  };
+}
+
+function adminFieldAgentFilePayload(inputId, label) {
+  const input = document.getElementById(inputId);
+  const file = input?.files?.[0];
+  if (!file) return Promise.resolve(null);
+  const maxSize = 2 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return Promise.reject(new Error(`${label} must be 2MB or smaller for now. Use a compressed PDF/photo.`));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error(`Could not read ${label}.`));
+    reader.onload = () => resolve({
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      data_url: String(reader.result || "")
+    });
+    reader.readAsDataURL(file);
+  });
+}
+
+function adminFieldAgentDetailPanel(userId) {
+  const user = adminFindFieldAgent(userId);
+  const panel = document.getElementById("admin-field-agent-detail-panel");
+  if (!panel) return;
+  if (!user) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = `<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">Field Agent not found in the current directory. Refresh Field Agents and try again.</div>`;
+    return;
+  }
+  const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+  const code = profile.field_agent_code || profile.employee_number || "-";
+  const territory = profile.field_agent_territory || profile.territory || "Uganda";
+  const payoutRate = Number(profile.payout_rate_ugx || 5000) || 5000;
+  const approvedCount = Number(user.approved_listings_count || 0) || 0;
+  const weekApproved = Number(user.approved_this_week_count || approvedCount || 0) || 0;
+  const weekPay = weekApproved * payoutRate;
+  const signedContract = adminFieldAgentPublicDocument(profile, "field_agent_signed_contract");
+  const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
+  const payments = Array.isArray(profile.field_agent_payments) ? profile.field_agent_payments : [];
+  const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
+  const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com Operations. I am checking your Field Agent account ${code}.`) : "";
+  const today = new Date().toISOString().slice(0, 10);
+  const userIdArg = adminListingIdArg(user.id);
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="rounded-2xl border border-blue-100 bg-white p-4 shadow-sm">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs uppercase tracking-wide font-black text-blue-700">Review agent details</div>
+          <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</h4>
+          <p class="text-xs text-gray-500 mt-1">${adminEscape(code)} • ${adminEscape(territory)} • ${adminEscape(user.status || "active")} • ${adminEscape(user.email || "-")} • ${adminEscape(user.phone || "-")}</p>
+        </div>
+        <button type="button" onclick="document.getElementById('admin-field-agent-detail-panel')?.classList.add('hidden')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs font-bold">Close</button>
+      </div>
+      <div class="grid md:grid-cols-5 gap-2 mt-4 text-xs">
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3"><span class="text-gray-500">Total listings</span><div class="text-lg font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
+        <div class="rounded-xl border border-green-100 bg-green-50 p-3"><span class="text-green-700">Accepted</span><div class="text-lg font-black text-green-900">${adminEscape(approvedCount)}</div></div>
+        <div class="rounded-xl border border-amber-100 bg-amber-50 p-3"><span class="text-amber-700">Pending</span><div class="text-lg font-black text-amber-900">${adminEscape(user.pending_listings_count || 0)}</div></div>
+        <div class="rounded-xl border border-red-100 bg-red-50 p-3"><span class="text-red-700">Rejected</span><div class="text-lg font-black text-red-900">${adminEscape(user.rejected_listings_count || 0)}</div></div>
+        <div class="rounded-xl border border-blue-100 bg-blue-50 p-3"><span class="text-blue-700">Friday pay due</span><div class="text-lg font-black text-blue-900">${adminEscape(fmtP(weekPay, ""))}</div></div>
+      </div>
+      <div class="grid xl:grid-cols-2 gap-4 mt-4">
+        <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <h5 class="font-black text-gray-900">Documents</h5>
+          <p class="text-xs text-gray-500 mt-1">ID document stays King-only. Signed contract appears on the Field Agent dashboard.</p>
+          <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs">
+            <div class="rounded-xl border border-gray-200 bg-white p-3"><strong>ID document</strong><br>${idDocument ? adminEscape(idDocument.name || "Uploaded") : "Not uploaded yet."}</div>
+            <div class="rounded-xl border border-gray-200 bg-white p-3"><strong>Signed contract</strong><br>${signedContract ? `<a href="${adminAttr(signedContract.href)}" target="_blank" rel="noopener noreferrer" class="text-blue-700 underline underline-offset-2">${adminEscape(signedContract.name)}</a>` : "Not uploaded yet."}</div>
+          </div>
+          <div class="mt-3 grid sm:grid-cols-2 gap-2 text-xs">
+            <label class="rounded-xl border border-gray-200 bg-white p-3 font-semibold">Replace ID document<input id="admin-fa-detail-id-doc" type="file" accept="image/*,.pdf,.doc,.docx" class="mt-2 block w-full text-xs"></label>
+            <label class="rounded-xl border border-gray-200 bg-white p-3 font-semibold">Replace signed contract<input id="admin-fa-detail-contract" type="file" accept=".pdf,.doc,.docx,image/*" class="mt-2 block w-full text-xs"></label>
+          </div>
+          <button type="button" onclick="adminSaveFieldAgentDocuments(${userIdArg})" class="mt-3 bg-blue-700 hover:bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Save documents</button>
+        </div>
+        <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+          <h5 class="font-black text-amber-950">Record payment</h5>
+          <p class="text-xs text-amber-900 mt-1">Confirm Mobile Money/bank payment, upload receipt if available, and email the payment record to the agent.</p>
+          <div class="mt-3 grid sm:grid-cols-2 gap-2">
+            <input id="admin-fa-payment-amount" inputmode="numeric" value="${adminAttr(weekPay || payoutRate)}" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Amount paid">
+            <input id="admin-fa-payment-reference" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="Payment reference">
+            <input id="admin-fa-payment-date" type="date" value="${adminAttr(today)}" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white">
+            <select id="admin-fa-payment-method" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white"><option value="mobile_money">Mobile Money</option><option value="bank_transfer">Bank transfer</option><option value="cash">Cash</option><option value="other">Other</option></select>
+            <input id="admin-fa-payment-receipt-url" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" placeholder="Receipt URL or mobile money proof link">
+            <input id="admin-fa-payment-receipt-file" type="file" accept=".pdf,image/*" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2">
+            <textarea id="admin-fa-payment-notes" class="border border-amber-100 rounded-xl px-3 py-2 text-sm bg-white sm:col-span-2" rows="2" placeholder="Payment notes"></textarea>
+          </div>
+          <button type="button" onclick="adminRecordFieldAgentPayment(${userIdArg})" class="mt-3 bg-amber-700 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-xs font-bold">Confirm paid + email receipt</button>
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Contact Agent</a>` : ""}
+        ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("makaug.com Field Agent account")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Email Agent</a>` : ""}
+        ${canUseLiveAdminApi() ? `<button type="button" onclick="adminDeleteFieldAgent(${userIdArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Delete account</button>` : ""}
+      </div>
+      <div class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <h5 class="font-black text-gray-900">Payment history</h5>
+        <div class="mt-2 space-y-2 text-xs">${payments.length ? payments.slice(0, 8).map((payment) => {
+          const receipt = adminFieldAgentPublicDocument({ receipt: payment.receipt || payment.receipt_document }, "receipt");
+          return `<div class="rounded-xl border border-gray-200 bg-white p-3 flex justify-between gap-3 flex-wrap"><span>${adminEscape(payment.paid_at || payment.created_at || "Payment")} • ${adminEscape(fmtP(payment.amount_ugx || 0, ""))} • ${adminEscape(payment.payment_reference || "No reference")}</span>${receipt ? `<a href="${adminAttr(receipt.href)}" target="_blank" rel="noopener noreferrer" class="font-bold text-blue-700 underline underline-offset-2">Receipt</a>` : ""}</div>`;
+        }).join("") : `<div class="rounded-xl border border-gray-200 bg-white p-3 text-gray-500">No recorded payments yet.</div>`}</div>
+      </div>
+    </div>`;
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function adminSaveFieldAgentDocuments(userId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin before saving Field Agent documents.");
+    return;
+  }
+  try {
+    const idDocument = await adminFieldAgentFilePayload("admin-fa-detail-id-doc", "ID document");
+    const signedContract = await adminFieldAgentFilePayload("admin-fa-detail-contract", "signed contract");
+    if (!idDocument && !signedContract) {
+      toast("Choose an ID document or signed contract first.");
+      return;
+    }
+    await apiRequest(`/api/admin/field-agents/${encodeURIComponent(userId)}/documents`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        id_document: idDocument,
+        signed_contract: signedContract
+      }
+    });
+    toast("Field Agent documents saved.");
+    await renderAdminDashboard();
+    adminFieldAgentDetailPanel(userId);
+  } catch (error) {
+    toast(error.message || "Could not save Field Agent documents.");
+  }
+}
+
+async function adminRecordFieldAgentPayment(userId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin before recording Field Agent payments.");
+    return;
+  }
+  const amount = (document.getElementById("admin-fa-payment-amount")?.value || "").trim();
+  const reference = (document.getElementById("admin-fa-payment-reference")?.value || "").trim();
+  const paidAt = (document.getElementById("admin-fa-payment-date")?.value || "").trim();
+  const method = (document.getElementById("admin-fa-payment-method")?.value || "mobile_money").trim();
+  const receiptUrl = (document.getElementById("admin-fa-payment-receipt-url")?.value || "").trim();
+  const notes = (document.getElementById("admin-fa-payment-notes")?.value || "").trim();
+  if (!amount || !reference || !paidAt) {
+    toast("Add amount, payment reference, and payment date.");
+    return;
+  }
+  try {
+    const receipt = await adminFieldAgentFilePayload("admin-fa-payment-receipt-file", "payment receipt");
+    await apiRequest(`/api/admin/field-agents/${encodeURIComponent(userId)}/payment`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        amount_ugx: amount,
+        payment_reference: reference,
+        payment_method: method,
+        paid_at: paidAt,
+        receipt_url: receiptUrl,
+        receipt,
+        notes
+      }
+    });
+    toast("Field Agent payment recorded and notification logged.");
+    await renderAdminDashboard();
+    adminFieldAgentDetailPanel(userId);
+  } catch (error) {
+    toast(error.message || "Could not record Field Agent payment.");
+  }
+}
+
+function adminOpenFieldAgentPayment(userId) {
+  adminFieldAgentDetailPanel(userId);
+  window.setTimeout(() => document.getElementById("admin-fa-payment-reference")?.focus(), 180);
+}
+
 function renderAdminFieldAgentPerformance(users) {
   const rows = Array.isArray(users) ? users : [];
   const countByStatus = (status) => rows.filter((user) => String(user.status || "active").toLowerCase() === status).length;
@@ -9192,7 +9437,8 @@ function renderAdminFieldAgentPerformance(users) {
 function renderAdminFieldAgentRows(users) {
   const wrap = document.getElementById("admin-field-agents-table");
   if (!wrap) return;
-  const rows = Array.isArray(users) ? users.slice(0, 25) : [];
+  adminFieldAgents = Array.isArray(users) ? users : [];
+  const rows = adminFieldAgents.slice(0, 100);
   if (!rows.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No field agents found in the current live dataset.</div>`;
     return;
@@ -9211,6 +9457,9 @@ function renderAdminFieldAgentRows(users) {
     const rejectedCount = Number(user.rejected_listings_count || 0) || 0;
     const weekApproved = Number(user.approved_this_week_count || approvedCount || 0) || 0;
     const weekPay = weekApproved * payoutRate;
+    const signedContract = adminFieldAgentPublicDocument(profile, "field_agent_signed_contract");
+    const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
+    const userIdArg = adminListingIdArg(user.id);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -9218,6 +9467,7 @@ function renderAdminFieldAgentRows(users) {
             <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Last listing: ${adminEscape(formatListingDate(user.last_listing_at) || "No listing yet")}</div>
+            <div class="text-[11px] text-gray-500 mt-1">ID doc: ${idDocument ? "uploaded" : "missing"} • Contract: ${signedContract ? "uploaded" : "missing"}</div>
           </div>
           <span class="text-[11px] font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">Field Agent</span>
         </div>
@@ -9230,10 +9480,12 @@ function renderAdminFieldAgentRows(users) {
           <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Payout/listing</div><div class="font-black text-green-900">${adminEscape(fmtP(payoutRate, ""))}</div></div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Details</button>
+          <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record Payment</button>
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
           ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
-          ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus('${adminEscape(user.id)}', '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
-          ${canUseLiveAdminApi() ? `<button onclick="adminDeleteFieldAgent('${adminEscape(user.id)}')" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Agent</button>` : ""}
+          ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
+          ${canUseLiveAdminApi() ? `<button onclick="adminDeleteFieldAgent(${userIdArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Agent</button>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -13480,8 +13732,8 @@ function validateListStep3() {
     return false;
   }
   if (fieldAgentAssisted && !normalizeFieldAgentCode(fieldAgentId)) {
-    markLpFieldError("lp-field-agent-id", "Use Field Agent ID format FA-0001.");
-    toast("Enter the Field Agent ID in FA-0001 format, or set Field Agent assisted to No.");
+    markLpFieldError("lp-field-agent-id", "Use Field Agent ID format FA-7301.");
+    toast("Enter the Field Agent ID in FA-7301 format, or set Field Agent assisted to No.");
     return false;
   }
   const otpOk = !!lpListingOtpToken && (
@@ -14545,7 +14797,7 @@ async function submitAgentApplication() {
     return;
   }
   if (fieldAgentAssisted && !fieldAgentId) {
-    toast("Please enter Field Agent ID in FA-0001 format or set assisted to No.");
+    toast("Please enter Field Agent ID in FA-7301 format or set assisted to No.");
     return;
   }
 
@@ -16406,7 +16658,7 @@ function updateAccountAccessSignInCopy() {
   const roleBody = document.getElementById("account-access-role-body");
   if (identifierLabel) identifierLabel.textContent = isAdmin ? "Admin email address" : (isFieldAgent ? "Field Agent ID" : accountAccessText("identifier"));
   if (identifierInput) {
-    identifierInput.placeholder = isAdmin ? `admin@${publicBrand()}` : (isFieldAgent ? "FA-0001" : accountAccessText("identifier"));
+    identifierInput.placeholder = isAdmin ? `admin@${publicBrand()}` : (isFieldAgent ? "FA-7301" : accountAccessText("identifier"));
     identifierInput.autocomplete = isFieldAgent ? "off" : "username";
     identifierInput.inputMode = isFieldAgent ? "text" : "email";
     identifierInput.maxLength = isFieldAgent ? 8 : 128;
@@ -16428,7 +16680,7 @@ function updateAccountAccessSignInCopy() {
     identifierHelp.textContent = isAdmin
       ? "Admin access is invite-only and is not available through public signup."
       : (isFieldAgent
-      ? `Use the Field Agent ID from admin, for example FA-0001.`
+      ? `Use the Field Agent ID from admin, for example FA-7301.`
       : "You can use either your email address or WhatsApp phone number.");
   }
   if (roleBody && isFieldAgent && accountAccessDrawerMode === "signin") {
@@ -16973,7 +17225,7 @@ async function submitAccountAccessSignIn() {
   if (accountAccessDrawerAudience === "field_agent") {
     const fieldAgentCode = normalizeFieldAgentCode(identifierRaw);
     if (!fieldAgentCode || !/^\d{4}$/.test(password)) {
-      toast("Enter a valid Field Agent ID, for example FA-0001, and a 4-digit PIN.");
+      toast("Enter a valid Field Agent ID, for example FA-7301, and a 4-digit PIN.");
       return;
     }
     const btn = document.getElementById("account-access-continue-btn");
@@ -20644,11 +20896,11 @@ function scrollAdminControlIntoView(selector) {
   window.setTimeout(() => {
     const el = document.querySelector(selector);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.scrollIntoView({ behavior: "auto", block: "start" });
       el.classList.add("admin-control-focus");
       window.setTimeout(() => el.classList.remove("admin-control-focus"), 1800);
     }
-  }, 120);
+  }, 20);
 }
 
 async function openAdminControl(control, options = {}) {
@@ -20670,14 +20922,16 @@ async function openAdminControl(control, options = {}) {
   if (target.tab) activeAdminWorkflowTab = target.tab;
   showPage("admin-dashboard", { history: false, source: options.source || "admin_control", scroll: options.scroll !== false });
   if (target.tab) setAdminWorkflowTab(target.tab);
-  try {
-    await renderAdminDashboard();
-  } catch (error) {
-    console.warn("Admin control refresh failed", error);
-  }
-  if (target.tab) setAdminWorkflowTab(target.tab);
   scrollAdminControlIntoView(target.selector);
   if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
+  renderAdminDashboard()
+    .then(() => {
+      if (target.tab) setAdminWorkflowTab(target.tab);
+      scrollAdminControlIntoView(target.selector);
+    })
+    .catch((error) => {
+      console.warn("Admin control refresh failed", error);
+    });
   return true;
 }
 

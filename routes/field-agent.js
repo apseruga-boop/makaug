@@ -223,8 +223,13 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
     const approved = listings.filter((item) => item.status === 'approved');
     const rejected = listings.filter((item) => item.status === 'rejected');
     const pending = listings.filter((item) => item.status === 'pending' || item.status === 'draft');
-    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX, 10) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
-    const rank = await calculateRank(code);
+	    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX, 10) || FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+	    const rank = await calculateRank(code);
+	    const signedContract = profile.field_agent_signed_contract && typeof profile.field_agent_signed_contract === 'object'
+	      ? profile.field_agent_signed_contract
+	      : null;
+	    const signedContractHref = signedContract?.data_url || signedContract?.url || '';
+	    const recordedPayments = Array.isArray(profile.field_agent_payments) ? profile.field_agent_payments : [];
 
     await logNotification(db, {
       userId: user.id,
@@ -255,10 +260,12 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           status: user.status,
           payout_rate_ugx: payoutRate,
           payout_frequency: profile.payout_frequency || 'weekly',
-          payout_day: profile.payout_day || FIELD_AGENT_PAYOUT_DAY,
-          notice: profile.field_agent_banner_message || profile.field_agent_notes || '',
-          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587'
-        },
+	          payout_day: profile.payout_day || FIELD_AGENT_PAYOUT_DAY,
+	          notice: profile.field_agent_banner_message || profile.field_agent_notes || '',
+	          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587',
+	          signed_contract_name: signedContract?.name || '',
+	          signed_contract_url: signedContractHref
+	        },
         stats: {
           submitted: listings.length,
           approved: approved.length,
@@ -283,21 +290,28 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
             status: approved.length ? 'pending_payment_review' : 'no_payable_listings',
             slip_url: '/api/field-agent/payout-slip.pdf?period=month'
           },
-          periods: [
-            { label: 'Submitted', amount_ugx: listings.length * Math.round(payoutRate * 0.35) },
-            { label: 'Pending', amount_ugx: pending.length * Math.round(payoutRate * 0.5) },
-            { label: 'Approved', amount_ugx: approved.length * payoutRate },
-            { label: 'Month', amount_ugx: approved.length * payoutRate }
-          ]
-        },
+	          periods: [
+	            { label: 'Submitted', amount_ugx: listings.length * Math.round(payoutRate * 0.35) },
+	            { label: 'Pending', amount_ugx: pending.length * Math.round(payoutRate * 0.5) },
+	            { label: 'Approved', amount_ugx: approved.length * payoutRate },
+	            { label: 'Month', amount_ugx: approved.length * payoutRate }
+	          ],
+	          payments: recordedPayments,
+	          latest_payment: profile.field_agent_latest_payment || recordedPayments[0] || null
+	        },
         listings,
         rejectedListings: rejected,
         trainingVideos: [
           { title: 'How to list online', url: profile.field_agent_training_video_1_url || '' },
           { title: 'How to list via WhatsApp', url: profile.field_agent_training_video_2_url || '' }
         ],
-        resources: [
-          {
+	        resources: [
+	          ...(signedContractHref ? [{
+	            title: 'Your signed contract',
+	            body: 'This is the signed contract uploaded by makaug.com King admin for your own Field Agent account.',
+	            href: signedContractHref
+	          }] : []),
+	          {
             title: 'Field Agent basics',
             body: 'Find real property opportunities, help owners list safely, and submit complete listings with photos, contact details, and location.',
             href: '/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx'
