@@ -525,7 +525,10 @@ function run() {
   assert(frontendSource.includes('ACCOUNT_ACCESS_FINDER_DYNAMIC_BY_GOAL'), 'property finder signup should use dynamic questions after the first preference');
   for (const dynamicKey of ['student_room_type', 'land_need', 'commercial_space_type', 'buyer_property_type']) {
     assert(frontendSource.includes(dynamicKey), `property finder signup should capture dynamic preference: ${dynamicKey}`);
+    assert(authRoutes.includes(`'${dynamicKey}'`), `auth backend should persist dynamic preference: ${dynamicKey}`);
   }
+  assert(authRoutes.includes("'property_type_interest'"), 'auth backend should persist normalized property type interest');
+  assert(authRoutes.includes("'bedrooms'"), 'auth backend should persist bedroom preference from finder signup');
   assert(frontendSource.includes('handleAccountAccessFinderGoalChange'), 'property finder signup should update questions when the selected need changes');
   assert(frontendSource.includes('data-auth-password-toggle="account-access-create-password"'), 'create-account password field should have a show/hide control');
   assert(frontendSource.includes('data-auth-password-toggle="account-access-confirm-password"'), 'confirm password field should have a show/hide control');
@@ -537,7 +540,12 @@ function run() {
   assert(frontendSource.includes('Agree to the Terms & Conditions'), 'final create-account step should require Terms acceptance visibly');
   assert(frontendSource.includes('Confirm you have read the Privacy Policy'), 'final create-account step should require Privacy confirmation visibly');
   assert(frontendSource.includes('Ready. Click Create account to open your dashboard'), 'final create-account step should show the ready-to-open-dashboard state');
-  assert(frontendSource.includes('status.textContent = error.message || "Account creation failed'), 'final create-account step should show backend errors inline instead of appearing to do nothing');
+  assert(frontendSource.includes('Creating your account now'), 'final create-account step should show account creation progress inline');
+  assert(frontendSource.includes('Account ready. Opening your dashboard'), 'final create-account step should show dashboard handoff progress inline');
+  assert(frontendSource.includes('setAccountAccessCreateStatus(error.message || "Account creation failed'), 'final create-account step should show backend errors inline instead of appearing to do nothing');
+  assert(frontendSource.includes('isExistingAccountCreateError'), 'final create-account step should recognize duplicate account handoff errors');
+  assert(frontendSource.includes('signInExistingAccountFromCreate'), 'final create-account step should try to sign in an already-created account instead of leaving users stuck');
+  assert(frontendSource.includes('drawer_existing_signup_handoff'), 'duplicate account handoff should still track as an auth dashboard handoff');
   const emailServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'emailService.js'), 'utf8');
   assert(emailServiceSource.includes('buildWelcomeEmailHtml'), 'welcome email should use a branded account-created template');
   assert(emailServiceSource.includes('What your account opens up'), 'welcome email should explain what the account unlocks');

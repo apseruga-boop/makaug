@@ -15040,6 +15040,10 @@ function accountAccessText(key) {
       privacyRequirement: "Confirm you have read the Privacy Policy.",
       verifiedRequirement: "Verify your email or SMS code first.",
       readyToCreate: "Ready. Click Create account to open your dashboard.",
+      creatingAccount: "Creating your account now...",
+      openingDashboard: "Account ready. Opening your dashboard...",
+      existingAccountTryingSignIn: "This account already exists. Trying to sign you in and open your dashboard...",
+      existingAccountSignInFailed: "This account already exists. Sign in with your password, or use Forgot password.",
       firstName: "First name",
       email: "Email address",
       phone: "Phone / WhatsApp",
@@ -15089,6 +15093,10 @@ function accountAccessText(key) {
       privacyRequirement: "Kakasa nti osomedde Privacy Policy.",
       verifiedRequirement: "Sooka okakase email oba SMS code.",
       readyToCreate: "Kiwedde. Nyiga Create account okuggula dashboard yo.",
+      creatingAccount: "Tukola account yo kati...",
+      openingDashboard: "Account ewedde. Tuggula dashboard yo...",
+      existingAccountTryingSignIn: "Account eno gyeri. Tugezaako okukuyingiza n'okuggula dashboard yo...",
+      existingAccountSignInFailed: "Account eno gyeri. Yingira ne password yo, oba kozesa Forgot password.",
       firstName: "Erinnya erisooka",
       email: "Email",
       phone: "Simu / WhatsApp",
@@ -15138,6 +15146,10 @@ function accountAccessText(key) {
       privacyRequirement: "Thibitisha kuwa umesoma Sera ya Faragha.",
       verifiedRequirement: "Thibitisha barua pepe au msimbo wa SMS kwanza.",
       readyToCreate: "Tayari. Bofya Create account kufungua dashibodi yako.",
+      creatingAccount: "Tunafungua akaunti yako sasa...",
+      openingDashboard: "Akaunti iko tayari. Tunafungua dashibodi yako...",
+      existingAccountTryingSignIn: "Akaunti hii tayari ipo. Tunajaribu kukuingiza na kufungua dashibodi yako...",
+      existingAccountSignInFailed: "Akaunti hii tayari ipo. Ingia kwa nenosiri lako, au tumia Forgot password.",
       firstName: "Jina la kwanza",
       email: "Barua pepe",
       phone: "Simu / WhatsApp",
@@ -15634,6 +15646,19 @@ function getAccountAccessCreatePasswordReadiness() {
   };
 }
 
+function setAccountAccessCreateStatus(message = "", tone = "info") {
+  const status = document.getElementById("account-access-create-status");
+  if (!status) return;
+  status.textContent = message;
+  const toneClasses = {
+    success: "rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs font-bold text-green-800",
+    error: "rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800",
+    pending: "rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-900",
+    warning: "rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900"
+  };
+  status.className = toneClasses[tone] || toneClasses.warning;
+}
+
 function updateAccountAccessCreateFinalState() {
   const btn = document.getElementById("account-access-continue-btn");
   const status = document.getElementById("account-access-create-status");
@@ -15655,10 +15680,7 @@ function updateAccountAccessCreateFinalState() {
     btn.setAttribute("aria-disabled", readiness.ready ? "false" : "true");
   }
   if (status) {
-    status.textContent = readiness.message;
-    status.className = readiness.ready
-      ? "rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs font-bold text-green-800"
-      : "rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900";
+    setAccountAccessCreateStatus(readiness.message, readiness.ready ? "success" : "warning");
   }
 }
 
@@ -16382,6 +16404,31 @@ function hidePolicyPreviewCard() {
   document.getElementById("policy-preview-card")?.classList.add("hidden");
 }
 
+function isExistingAccountCreateError(error) {
+  const message = String(error?.message || error?.response?.error || "").toLowerCase();
+  return error?.status === 409 || message.includes("already exists") || message.includes("already tied");
+}
+
+async function signInExistingAccountFromCreate({ email = "", phone = "", password = "", audience = "finder" } = {}) {
+  const attempts = [];
+  if (email) attempts.push({ email, password, audience });
+  if (phone) attempts.push({ phone, password, audience });
+  let lastError = null;
+  for (const body of attempts) {
+    try {
+      const res = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body
+      });
+      await finalizeAuth(res?.data, "drawer_existing_signup_handoff", audience);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("Existing account sign-in failed.");
+}
+
 async function submitAccountAccessCreate() {
   const details = getAccountAccessContactDetails();
   const firstName = details.firstName;
@@ -16427,11 +16474,13 @@ async function submitAccountAccessCreate() {
       : (accountAccessDrawerAudience === "advertiser" ? "Advertiser" : (accountAccessDrawerAudience === "student" ? "Student" : "Buyer")));
   const btn = document.getElementById("account-access-continue-btn");
   const original = btn?.textContent || "Create account";
+  let keepStatus = false;
   if (btn) {
     btn.dataset.accountSubmitting = "1";
     btn.disabled = true;
     btn.textContent = "Creating...";
   }
+  setAccountAccessCreateStatus(accountAccessText("creatingAccount"), "pending");
   try {
     const register = await apiRequest("/api/auth/register", {
       method: "POST",
@@ -16456,21 +16505,36 @@ async function submitAccountAccessCreate() {
     });
     accountAccessPendingOtp = null;
     accountAccessContactVerificationToken = "";
+    setAccountAccessCreateStatus(accountAccessText("openingDashboard"), "success");
     toast(register?.data?.message || "Your makaug.com account has been set up. Opening your dashboard.");
     await finalizeAuth(register?.data, "drawer_verified_signup", accountAccessDrawerAudience);
   } catch (error) {
-    const status = document.getElementById("account-access-create-status");
-    if (status) {
-      status.textContent = error.message || "Account creation failed. Please check your details and try again.";
-      status.className = "rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-800";
+    if (isExistingAccountCreateError(error)) {
+      setAccountAccessCreateStatus(accountAccessText("existingAccountTryingSignIn"), "pending");
+      try {
+        await signInExistingAccountFromCreate({
+          email,
+          phone,
+          password,
+          audience: accountAccessDrawerAudience
+        });
+        return;
+      } catch (_) {
+        keepStatus = true;
+        setAccountAccessCreateStatus(accountAccessText("existingAccountSignInFailed"), "error");
+        toast(accountAccessText("existingAccountSignInFailed"));
+        return;
+      }
     }
+    keepStatus = true;
+    setAccountAccessCreateStatus(error.message || "Account creation failed. Please check your details and try again.", "error");
     toast(error.message || "Account creation failed.");
   } finally {
     if (btn) {
       delete btn.dataset.accountSubmitting;
       btn.disabled = false;
       btn.textContent = original;
-      updateAccountAccessCreateFinalState();
+      if (!keepStatus) updateAccountAccessCreateFinalState();
     }
   }
 }
