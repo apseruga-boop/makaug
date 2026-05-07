@@ -3253,7 +3253,7 @@
               <div id="account-status" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50 text-gray-600">-</div>
             </div>
           </div>
-          <div class="mt-5 rounded-2xl border border-green-100 bg-green-50 p-4">
+          <div id="account-preferences-panel" class="mt-5 rounded-2xl border border-green-100 bg-green-50 p-4">
             <h3 id="account-finder-pref-title" class="text-base font-bold text-green-950 mb-3">Property Finder Preferences</h3>
             <div class="grid md:grid-cols-2 gap-4">
               <div>
@@ -3790,7 +3790,7 @@
             <div class="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               Payout day: <strong>Friday</strong> (cut-off: previous Thursday 23:59)
             </div>
-            <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Settings</button>
+            <button onclick="openAccountSettings()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Settings</button>
             <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
           </div>
         </div>
@@ -3803,7 +3803,15 @@
           <a id="field-agent-whatsapp-broadcast" href="https://wa.me/256760112587?text=Hi%20MakaUg%20Operations%2C%20I%20need%20field%20agent%20support." target="_blank" rel="noopener noreferrer" class="bg-white text-green-800 hover:bg-green-50 px-4 py-2.5 rounded-xl text-sm font-black">WhatsApp Operations</a>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
+        <div id="field-agent-dashboard-tabs" class="bg-white border border-gray-200 rounded-2xl p-2 flex gap-2 overflow-x-auto">
+          <button type="button" data-field-agent-tab-button="overview" onclick="setFieldAgentDashboardTab('overview')" class="field-agent-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Overview</button>
+          <button type="button" data-field-agent-tab-button="listings" onclick="setFieldAgentDashboardTab('listings')" class="field-agent-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Listings & rejections</button>
+          <button type="button" data-field-agent-tab-button="payouts" onclick="setFieldAgentDashboardTab('payouts')" class="field-agent-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Earnings & slips</button>
+          <button type="button" data-field-agent-tab-button="training" onclick="setFieldAgentDashboardTab('training')" class="field-agent-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Training & contract</button>
+          <button type="button" data-field-agent-tab-button="support" onclick="setFieldAgentDashboardTab('support')" class="field-agent-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">FAQ & support</button>
+        </div>
+
+        <div data-field-agent-tab-panel="overview" class="field-agent-tab-panel grid sm:grid-cols-2 lg:grid-cols-6 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Submitted</div>
             <div id="field-stat-submitted" class="text-3xl font-black text-gray-900 mt-1">0</div>
@@ -3830,10 +3838,15 @@
           </div>
         </div>
 
-        <div class="grid md:grid-cols-3 gap-5">
+        <div data-field-agent-tab-panel="payouts" class="field-agent-tab-panel grid md:grid-cols-3 gap-5">
           <div class="bg-white border border-green-100 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-green-950 mb-2">Balance & payout tracker</h3>
             <p id="field-payout-summary" class="text-sm text-gray-600">No approved payable listings yet.</p>
+            <div id="field-agent-earnings-chart" class="mt-4 grid grid-cols-4 gap-2 items-end min-h-[110px]" aria-label="Field Agent earnings graph"></div>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button id="field-agent-payout-slip-week" type="button" onclick="downloadFieldAgentPayoutSlip('week')" class="border border-green-700 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-black">Download weekly PDF slip</button>
+              <button id="field-agent-payout-slip-month" type="button" onclick="downloadFieldAgentPayoutSlip('month')" class="border border-green-700 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-black">Download monthly PDF slip</button>
+            </div>
           </div>
           <div class="bg-white border border-amber-100 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-amber-900 mb-2">Money collected tracker</h3>
@@ -3845,7 +3858,7 @@
           </div>
         </div>
 
-        <div class="grid md:grid-cols-2 gap-5">
+        <div data-field-agent-tab-panel="listings" class="field-agent-tab-panel grid md:grid-cols-2 gap-5">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h3 class="text-lg font-bold text-gray-800 mb-3">Regional Progress</h3>
             <div id="field-region-progress" class="space-y-2 text-sm text-gray-700"></div>
@@ -3856,12 +3869,12 @@
           </div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-field-agent-tab-panel="listings" class="field-agent-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-gray-800 mb-4">Sourced Listings</h3>
           <div id="field-listings-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div data-field-agent-tab-panel="training" class="field-agent-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-gray-800 mb-3">Contract & Terms</h3>
           <ul class="list-disc pl-5 text-sm text-gray-700 space-y-1">
             <li>Field payout is based on listings successfully approved and published.</li>
@@ -3870,18 +3883,28 @@
             <li>Escalations and compliance events may suspend payout pending review.</li>
           </ul>
         </div>
-        <div class="bg-white border border-green-100 rounded-2xl p-5">
+        <div data-field-agent-tab-panel="training" class="field-agent-tab-panel bg-white border border-green-100 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-gray-800 mb-3">How to work as a makaug.com Field Agent</h3>
+          <div id="field-agent-training-videos" class="grid md:grid-cols-2 gap-3 mb-4 text-sm"></div>
           <div id="field-agent-resource-grid" class="grid md:grid-cols-3 gap-3 text-sm text-gray-700">
             <div class="rounded-xl border border-gray-200 p-3"><strong>Welcome pack</strong><br>Read the role guide, weekly expectations, and safe-listing standards.<br><a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
             <div class="rounded-xl border border-gray-200 p-3"><strong>Training deck</strong><br>Learn how to list online, list via WhatsApp, and fix rejected submissions.<br><a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
             <div class="rounded-xl border border-gray-200 p-3"><strong>Contract</strong><br>Review conduct, payout, and safety rules before field work.<br><a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
           </div>
         </div>
-        <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
+        <div data-field-agent-tab-panel="support" class="field-agent-tab-panel bg-white border border-blue-100 rounded-2xl p-5">
+          <h3 class="text-lg font-bold text-blue-950 mb-3">Field Agent FAQ & support</h3>
+          <div id="field-agent-faq-list" class="grid md:grid-cols-2 gap-3 text-sm text-gray-700">
+            <div class="rounded-xl border border-gray-200 p-3"><strong>How do listings link to me?</strong><br>Owners or brokers enter your Field Agent ID when they list online or through WhatsApp.</div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>When do I get paid?</strong><br>Approved, live listings count toward the weekly Friday payout after admin review.</div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Can I contest a rejection?</strong><br>Yes. Open rejected listings and send a response with the evidence or correction.</div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Need help?</strong><br><span id="field-agent-support-phone">WhatsApp Operations: 0760112587</span></div>
+          </div>
+        </div>
+        <div data-field-agent-tab-panel="support" class="field-agent-tab-panel bg-green-50 border border-green-100 rounded-2xl p-5">
           <h3 class="text-lg font-bold text-green-950 mb-2">Field Agent settings</h3>
-          <p class="text-sm text-green-950">Manage password, contact preferences, language, contract notifications, payment updates, and admin notes.</p>
-          <button onclick="showPage('account')" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open settings</button>
+          <p class="text-sm text-green-950">Manage your Field Agent password, contact preferences, language, contract notifications, payment updates, and admin notes.</p>
+          <button onclick="openAccountSettings()" class="mt-4 border border-green-700 text-green-800 hover:bg-white px-4 py-2 rounded-lg text-sm font-semibold">Open Field Agent settings</button>
         </div>
       </div>
     </div>
@@ -4540,8 +4563,8 @@
               <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="mb-4 rounded-2xl border border-green-100 bg-white p-3 space-y-3">
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <h5 class="text-sm font-black text-green-950">Create Field Agent ID + PIN</h5>
-                    <p class="text-[11px] text-gray-500 mt-0.5">Set up an approved agent, generate or assign their Field Agent ID, and set a private 4-digit PIN. The PIN is hashed and never shown after save.</p>
+                    <h5 class="text-sm font-black text-green-950">King Field Agent Command Centre</h5>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Create Field Agent ID + PIN, control their notice board, support line, training links, territory, and payout rate. Leave Field Agent ID blank to auto-generate the next FA-0001 style number.</p>
                   </div>
                   <span class="text-[11px] font-bold rounded-full bg-green-100 text-green-700 px-2 py-1">Admin only</span>
                 </div>
@@ -4553,7 +4576,12 @@
                   <input id="admin-fa-code" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Field Agent ID, e.g. FA-0001 (optional)">
                   <input id="admin-fa-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
                   <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
+                  <input id="admin-fa-support-phone" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Support phone / WhatsApp">
+                  <input id="admin-fa-broadcast-group" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="WhatsApp broadcast group / cohort">
+                  <input id="admin-fa-video-1" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 1">
+                  <input id="admin-fa-video-2" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Training video URL 2">
                 </div>
+                <textarea id="admin-fa-notes" class="w-full border border-green-100 rounded-xl px-3 py-2 text-sm" rows="3" placeholder="Notice board message shown on the Field Agent dashboard"></textarea>
                 <div class="flex items-center gap-2 flex-wrap">
                   <button id="admin-fa-provision-btn" type="submit" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Create / update agent</button>
                   <p id="admin-fa-provision-result" class="text-xs text-gray-500">Use FA-0001 to FA-0004 internally if you want four starter agent codes.</p>

@@ -119,6 +119,82 @@ function envSet(key) {
   return Boolean(String(process.env[key] || '').trim());
 }
 
+function emailProviderConfigured() {
+  return envSet('SMTP_HOST')
+    || envSet('RESEND_API_KEY')
+    || envSet('MAIL_WEBHOOK_URL')
+    || (envSet('MS_GRAPH_TENANT_ID') && envSet('MS_GRAPH_CLIENT_ID') && envSet('MS_GRAPH_CLIENT_SECRET') && envSet('MS_GRAPH_USER_ID'));
+}
+
+function escapeHtml(value = '') {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function buildFieldAgentProvisionEmail({ firstName, fieldAgentCode, pin, territory, payoutRateUgx, dashboardUrl, supportUrl }) {
+  const safeFirstName = firstName || 'there';
+  const text = [
+    `Hello ${safeFirstName},`,
+    '',
+    'You have been registered as a makaug.com Field Agent.',
+    '',
+    `Field Agent ID: ${fieldAgentCode}`,
+    `4-digit PIN: ${pin}`,
+    `Territory: ${territory || 'Uganda'}`,
+    `Payout per approved listing: USh ${Number(payoutRateUgx || 0).toLocaleString('en-UG')}`,
+    '',
+    'Keep your PIN private. Use your Field Agent ID and PIN to sign in, track approved listings, see rejected listings, contest rejections, download payout slips, and read training resources.',
+    `Open your dashboard: ${dashboardUrl}`,
+    `WhatsApp Operations: ${supportUrl}`,
+    '',
+    'Welcome aboard.'
+  ].join('\n');
+  const html = `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your makaug.com Field Agent access</title></head>
+  <body style="margin:0;background:#eff6ff;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;background:#eff6ff;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:680px;background:#ffffff;border:1px solid #bfdbfe;border-radius:22px;overflow:hidden;">
+          <tr><td style="padding:30px;background:linear-gradient(135deg,#0f3b6d,#2563eb,#22c55e);color:#ffffff;">
+            <div style="font-size:28px;font-weight:900;"><span>makaug</span><span style="color:#f8d767;">.com</span></div>
+            <div style="margin-top:8px;font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#dbeafe;">Field Agent access</div>
+            <h1 style="margin:18px 0 0;font-size:27px;line-height:1.2;">Welcome ${escapeHtml(safeFirstName)}, your Field Agent account is ready.</h1>
+          </td></tr>
+          <tr><td style="padding:28px;">
+            <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:18px;padding:16px;margin-bottom:18px;">
+              <div style="font-size:13px;color:#1e3a8a;font-weight:900;text-transform:uppercase;">Private sign-in details</div>
+              <div style="font-size:24px;font-weight:900;color:#111827;margin-top:8px;">${escapeHtml(fieldAgentCode)}</div>
+              <div style="font-size:16px;color:#111827;margin-top:8px;">PIN: <strong>${escapeHtml(pin)}</strong></div>
+              <div style="font-size:13px;color:#475569;margin-top:8px;">Keep this PIN private. makaug.com admin will never ask you to post it publicly.</div>
+            </div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="width:50%;padding:7px;"><div style="border:1px solid #dcfce7;background:#f0fdf4;border-radius:16px;padding:14px;"><strong>Track listings</strong><br><span style="font-size:13px;color:#4b5563;">See submitted, approved, pending, and rejected listings linked to your Field Agent ID.</span></div></td>
+                <td style="width:50%;padding:7px;"><div style="border:1px solid #dcfce7;background:#f0fdf4;border-radius:16px;padding:14px;"><strong>Payout slips</strong><br><span style="font-size:13px;color:#4b5563;">Download weekly and monthly payment slips from your dashboard.</span></div></td>
+              </tr>
+              <tr>
+                <td style="width:50%;padding:7px;"><div style="border:1px solid #dcfce7;background:#f0fdf4;border-radius:16px;padding:14px;"><strong>Training</strong><br><span style="font-size:13px;color:#4b5563;">Preview and download the welcome pack, training deck, contract, and FAQs.</span></div></td>
+                <td style="width:50%;padding:7px;"><div style="border:1px solid #dcfce7;background:#f0fdf4;border-radius:16px;padding:14px;"><strong>Support</strong><br><span style="font-size:13px;color:#4b5563;">Use WhatsApp Operations for listing, rejection, contract, or payout help.</span></div></td>
+              </tr>
+            </table>
+            <div style="margin-top:22px;">
+              <a href="${escapeHtml(dashboardUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:13px;padding:14px 18px;font-size:14px;font-weight:900;margin-right:8px;">Open Field Agent dashboard</a>
+              <a href="${escapeHtml(supportUrl)}" style="display:inline-block;background:#ecfdf3;color:#166534;text-decoration:none;border:1px solid #bbf7d0;border-radius:13px;padding:13px 16px;font-size:14px;font-weight:900;">WhatsApp Operations</a>
+            </div>
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+  return { text, html };
+}
+
 function anyEnv(keys = []) {
   return keys.some((key) => envSet(key));
 }
@@ -1428,6 +1504,11 @@ router.get('/users', async (req, res, next) => {
         SELECT COUNT(*)::int AS listings_count
         FROM properties p
         WHERE p.lister_phone = u.phone
+           OR (
+             u.role = 'field_agent'
+             AND UPPER(COALESCE(p.extra_fields->>'field_agent_id', p.extra_fields->>'field_agent_code', p.extra_fields->>'field_agent_reference', p.extra_fields->>'agent_field_id', ''))
+               = UPPER(COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', ''))
+           )
       ) p ON true
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS inquiries_count
@@ -2182,6 +2263,9 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
     const broadcastGroup = cleanText(req.body.whatsapp_broadcast_group);
     const notes = cleanText(req.body.notes);
+    const supportPhone = normalizeUgPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
+    const trainingVideo1Url = cleanText(req.body.training_video_1_url).slice(0, 500);
+    const trainingVideo2Url = cleanText(req.body.training_video_2_url).slice(0, 500);
     const actorId = adminActorId(req);
 
     if (!firstName || !email || !phone || !pin) {
@@ -2255,8 +2339,11 @@ router.post('/field-agents/provision', async (req, res, next) => {
       payout_frequency: 'weekly',
       payout_day: 'Friday',
       next_payout_source: 'admin_set',
+      field_agent_support_phone: supportPhone || existingProfile.field_agent_support_phone || '',
       whatsapp_broadcast_group: broadcastGroup || existingProfile.whatsapp_broadcast_group || '',
       field_agent_notes: notes || existingProfile.field_agent_notes || '',
+      field_agent_training_video_1_url: trainingVideo1Url || existingProfile.field_agent_training_video_1_url || '',
+      field_agent_training_video_2_url: trainingVideo2Url || existingProfile.field_agent_training_video_2_url || '',
       field_agent_pin_set: true,
       field_agent_pin_last_set_at: new Date().toISOString(),
       manual_review_required: true,
@@ -2347,6 +2434,94 @@ router.post('/field-agents/provision', async (req, res, next) => {
         field_agent_code: generatedCode,
         employee_number: generatedCode,
         login_identifier_hint: 'Use Field Agent ID and the admin-issued 4-digit PIN'
+      }
+    });
+
+    const siteUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+    const dashboardUrl = `${siteUrl}/field-agent-dashboard`;
+    const supportUrl = buildManualWhatsAppUrl
+      ? buildManualWhatsAppUrl(supportPhone || phone, `Hi makaug.com Operations, this is ${firstName} (${generatedCode}). I need Field Agent support.`)
+      : getSupportWhatsappUrl();
+    const emailPayload = buildFieldAgentProvisionEmail({
+      firstName,
+      fieldAgentCode: generatedCode,
+      pin,
+      territory: profileData.field_agent_territory || 'Uganda',
+      payoutRateUgx,
+      dashboardUrl,
+      supportUrl
+    });
+    let emailDelivery = { sent: false, reason: 'email_provider_missing' };
+    if (emailProviderConfigured()) {
+      emailDelivery = await sendSupportEmail({
+        to: email,
+        subject: `Your makaug.com Field Agent ID ${generatedCode}`,
+        text: emailPayload.text,
+        html: emailPayload.html
+      });
+    }
+    const emailStatus = emailProviderConfigured()
+      ? notificationStatusFromDelivery(emailDelivery)
+      : 'provider_missing';
+    await logEmailEvent(db, {
+      eventType: 'field_agent_registered',
+      recipientUserId: saved.id,
+      recipientEmail: email,
+      recipientRole: 'field_agent',
+      templateKey: 'field_agent_registered',
+      subject: `Your makaug.com Field Agent ID ${generatedCode}`,
+      language: preferredLanguage || 'en',
+      status: emailStatus,
+      provider: emailDelivery.provider || null,
+      providerMessageId: emailDelivery.id || null,
+      failureReason: emailDelivery.error || emailDelivery.reason || null,
+      sentAt: emailDelivery.sent ? new Date() : null
+    });
+    await logNotification(db, {
+      userId: saved.id,
+      recipientEmail: email,
+      channel: 'email',
+      type: 'field_agent_registered_email',
+      status: emailStatus,
+      failureReason: emailDelivery.error || emailDelivery.reason || null,
+      payloadSummary: {
+        field_agent_code: generatedCode,
+        pin_delivered_by_email: Boolean(emailDelivery.sent),
+        provider_configured: emailProviderConfigured()
+      }
+    });
+
+    const whatsappMessage = [
+      `Hello ${firstName}, welcome aboard as a makaug.com Field Agent.`,
+      `Your Field Agent ID is ${generatedCode}.`,
+      'Please check your email for your private 4-digit PIN.',
+      `Open your dashboard: ${dashboardUrl}`,
+      'Use your Field Agent ID on owner listings so approved properties count toward your payout.'
+    ].join('\n');
+    const whatsappDelivery = await sendWhatsAppText({ to: phone, body: whatsappMessage });
+    const whatsappStatus = notificationStatusFromDelivery(whatsappDelivery);
+    await logWhatsAppMessage(db, {
+      userId: saved.id,
+      recipientPhone: phone,
+      templateKey: 'field_agent_registered',
+      messageType: 'field_agent_onboarding',
+      language: preferredLanguage || 'en',
+      status: whatsappStatus,
+      failureReason: whatsappDelivery.error || whatsappDelivery.reason || null,
+      sentAt: whatsappDelivery.sent ? new Date() : null
+    });
+    await logNotification(db, {
+      userId: saved.id,
+      recipientPhone: phone,
+      recipientEmail: email,
+      channel: 'whatsapp',
+      type: 'field_agent_registered_whatsapp',
+      status: whatsappStatus,
+      failureReason: whatsappDelivery.error || whatsappDelivery.reason || null,
+      payloadSummary: {
+        field_agent_code: generatedCode,
+        pin_in_whatsapp: false,
+        delivery_provider: whatsappDelivery.provider || null
       }
     });
 

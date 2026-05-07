@@ -66,6 +66,45 @@ function propertyUrl(id) {
   return `${base}/property/${id}`;
 }
 
+function escapePdfText(value = '') {
+  return String(value ?? '').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+
+function buildSimplePdf(lines = []) {
+  const safeLines = lines.map((line) => String(line ?? '').slice(0, 100));
+  const content = [
+    'BT',
+    '/F1 12 Tf',
+    '14 TL',
+    '50 790 Td',
+    ...safeLines.map((line, index) => `${index ? 'T* ' : ''}(${escapePdfText(line)}) Tj`),
+    'ET'
+  ].join('\n');
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    `5 0 obj\n<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream\nendobj\n`
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const object of objects) {
+    offsets.push(Buffer.byteLength(body));
+    body += object;
+  }
+  const xrefOffset = Buffer.byteLength(body);
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  body += offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(body, 'utf8');
+}
+
+function payoutPeriodLabel(period = 'week') {
+  const normalized = String(period || '').toLowerCase() === 'month' ? 'month' : 'week';
+  return normalized === 'month' ? 'Current month' : 'Current week';
+}
+
 function listingStatus(row = {}) {
   const explicit = String(row.status || row.moderation_stage || row.review_status || '').toLowerCase();
   if (['approved', 'live', 'published'].includes(explicit)) return 'approved';
@@ -215,7 +254,8 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           payout_rate_ugx: payoutRate,
           payout_frequency: profile.payout_frequency || 'weekly',
           payout_day: profile.payout_day || 'Friday',
-          notice: profile.field_agent_notes || ''
+          notice: profile.field_agent_notes || '',
+          support_phone: profile.field_agent_support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587'
         },
         stats: {
           submitted: listings.length,
@@ -226,8 +266,34 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
           payable_ugx: approved.length * payoutRate,
           rank
         },
+        payouts: {
+          week: {
+            label: 'Current week',
+            approved_count: approved.length,
+            amount_ugx: approved.length * payoutRate,
+            status: approved.length ? 'pending_payment_review' : 'no_payable_listings',
+            slip_url: '/api/field-agent/payout-slip.pdf?period=week'
+          },
+          month: {
+            label: 'Current month',
+            approved_count: approved.length,
+            amount_ugx: approved.length * payoutRate,
+            status: approved.length ? 'pending_payment_review' : 'no_payable_listings',
+            slip_url: '/api/field-agent/payout-slip.pdf?period=month'
+          },
+          periods: [
+            { label: 'Submitted', amount_ugx: listings.length * Math.round(payoutRate * 0.35) },
+            { label: 'Pending', amount_ugx: pending.length * Math.round(payoutRate * 0.5) },
+            { label: 'Approved', amount_ugx: approved.length * payoutRate },
+            { label: 'Month', amount_ugx: approved.length * payoutRate }
+          ]
+        },
         listings,
         rejectedListings: rejected,
+        trainingVideos: [
+          { title: 'How to list online', url: profile.field_agent_training_video_1_url || '' },
+          { title: 'How to list via WhatsApp', url: profile.field_agent_training_video_2_url || '' }
+        ],
         resources: [
           {
             title: 'Field Agent basics',
@@ -260,6 +326,71 @@ router.get('/dashboard', requireFieldAgent, async (req, res, next) => {
         ]
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/payout-slip.pdf', requireFieldAgent, async (req, res, next) => {
+  try {
+    const user = req.userAuth;
+    const profile = getProfile(user);
+    const code = fieldAgentCodeForUser(user);
+    if (!code) {
+      return res.status(409).json({ ok: false, error: 'Field Agent ID is missing. Ask admin to re-save this account.' });
+    }
+    const period = String(req.query.period || 'week').toLowerCase() === 'month' ? 'month' : 'week';
+    const payoutRate = parseInt(profile.payout_rate_ugx || user.payout_rate_ugx || '15000', 10) || 15000;
+    const listingRows = await db.query(
+      `SELECT id, title, status, moderation_stage, created_at
+       FROM properties p
+       WHERE ${fieldAgentMatchSql('p', '$1')}
+       ORDER BY created_at DESC
+       LIMIT 500`,
+      [code]
+    );
+    const approved = listingRows.rows.filter((row) => listingStatus(row) === 'approved');
+    const pending = listingRows.rows.filter((row) => ['pending', 'draft'].includes(listingStatus(row)));
+    const rejected = listingRows.rows.filter((row) => listingStatus(row) === 'rejected');
+    const amount = approved.length * payoutRate;
+    const generatedAt = new Date();
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Field Agent';
+    const lines = [
+      'makaug.com Field Agent payment slip',
+      `Generated: ${generatedAt.toISOString()}`,
+      `Period: ${payoutPeriodLabel(period)}`,
+      `Agent: ${fullName}`,
+      `Field Agent ID: ${code}`,
+      `Territory: ${profile.field_agent_territory || profile.territory || 'Uganda'}`,
+      `Approved listings: ${approved.length}`,
+      `Pending review: ${pending.length}`,
+      `Rejected listings: ${rejected.length}`,
+      `Rate per approved listing: USh ${payoutRate.toLocaleString('en-UG')}`,
+      `Estimated payout: USh ${amount.toLocaleString('en-UG')}`,
+      `Status: ${approved.length ? 'Pending admin payment review' : 'No payable listings yet'}`,
+      '',
+      'This slip is generated from live makaug.com listing records linked to your Field Agent ID.',
+      'Final payment approval is controlled by makaug.com King dashboard.'
+    ];
+    await logNotification(db, {
+      userId: user.id,
+      recipientPhone: user.phone,
+      recipientEmail: user.email,
+      channel: 'in_app',
+      type: 'field_agent_payout_slip_downloaded',
+      status: 'logged',
+      payloadSummary: {
+        field_agent_code: code,
+        period,
+        approved_count: approved.length,
+        amount_ugx: amount
+      }
+    });
+    const pdf = buildSimplePdf(lines);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="makaug-field-agent-${period}-payout-slip.pdf"`);
+    res.setHeader('Content-Length', pdf.length);
+    return res.send(pdf);
   } catch (error) {
     return next(error);
   }

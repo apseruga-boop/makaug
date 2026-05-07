@@ -6303,6 +6303,7 @@ function renderAgentDashboard() {
 
 let fieldAgentDashboardDataPromise = null;
 let fieldAgentDashboardDataKey = "";
+let activeFieldAgentDashboardTab = "overview";
 
 function normalizeFieldAgentCode(value = "") {
   const raw = String(value || "").trim().toUpperCase().replace(/\s+/g, "");
@@ -6392,6 +6393,54 @@ function invalidateFieldAgentDashboardData() {
   fieldAgentDashboardDataKey = "";
 }
 
+function setFieldAgentDashboardTab(tab = "overview") {
+  const allowed = ["overview", "listings", "payouts", "training", "support"];
+  activeFieldAgentDashboardTab = allowed.includes(String(tab)) ? String(tab) : "overview";
+  document.querySelectorAll("[data-field-agent-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.fieldAgentTabPanel !== activeFieldAgentDashboardTab);
+  });
+  document.querySelectorAll("[data-field-agent-tab-button]").forEach((button) => {
+    const active = button.dataset.fieldAgentTabButton === activeFieldAgentDashboardTab;
+    button.classList.toggle("bg-blue-700", active);
+    button.classList.toggle("text-white", active);
+    button.classList.toggle("bg-gray-100", !active);
+    button.classList.toggle("text-gray-700", !active);
+  });
+}
+
+async function downloadFieldAgentPayoutSlip(period = "week") {
+  const normalized = String(period || "week").toLowerCase() === "month" ? "month" : "week";
+  if (!authState?.token || derivePortalMode(authState.user, authState.user?.portal_mode) !== "field_agent") {
+    toast("Sign in as a Field Agent before downloading payout slips.");
+    return;
+  }
+  try {
+    const response = await fetch(`/api/field-agent/payout-slip.pdf?period=${encodeURIComponent(normalized)}`, {
+      headers: { Authorization: `Bearer ${authState.token}` }
+    });
+    if (!response.ok) {
+      let message = "Could not download payout slip.";
+      try {
+        const payload = await response.json();
+        message = payload?.error || message;
+      } catch (_) {}
+      throw new Error(message);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `makaug-field-agent-${normalized}-payout-slip.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    toast("Payout slip downloaded.");
+  } catch (error) {
+    toast(error.message || "Could not download payout slip.");
+  }
+}
+
 async function renderFieldDashboard() {
   const gate = document.getElementById("field-auth-gate");
   const body = document.getElementById("field-body");
@@ -6440,6 +6489,27 @@ async function renderFieldDashboard() {
   setText("field-stat-rank", rank === "-" ? "-" : `#${rank}`);
   setText("field-payout-summary", `${approved.length} approved listings x ${fmtP(payoutPerApproved, "")} = ${fmtP(payable, "")}. Next payout is shown after admin review and cut-off.`);
   setText("field-money-summary", `${pending.length} listings pending review. ${rejected.length} rejected listings need correction before they can count toward payout.`);
+  const earningsChart = document.getElementById("field-agent-earnings-chart");
+  if (earningsChart) {
+    const bars = Array.isArray(liveDashboard?.payouts?.periods) && liveDashboard.payouts.periods.length
+      ? liveDashboard.payouts.periods
+      : [
+        { label: "Submitted", amount_ugx: submitted * Math.round(payoutPerApproved * 0.35) },
+        { label: "Pending", amount_ugx: pending.length * Math.round(payoutPerApproved * 0.5) },
+        { label: "Approved", amount_ugx: payable },
+        { label: "Month", amount_ugx: (Number(liveDashboard?.payouts?.month?.amount_ugx) || payable) }
+      ];
+    const maxAmount = Math.max(1, ...bars.map((row) => Number(row.amount_ugx || 0)));
+    earningsChart.innerHTML = bars.slice(0, 4).map((row) => {
+      const amount = Number(row.amount_ugx || 0);
+      const height = Math.max(12, Math.round((amount / maxAmount) * 92));
+      return `<div class="flex flex-col items-center justify-end gap-1 min-h-[110px]">
+        <div class="w-full rounded-t-xl bg-gradient-to-t from-blue-700 to-emerald-400 shadow-sm" style="height:${height}px"></div>
+        <div class="text-[10px] font-black text-gray-700 text-center">${adminEscape(row.label || "Payout")}</div>
+        <div class="text-[10px] text-gray-500 text-center">${adminEscape(fmtP(amount, ""))}</div>
+      </div>`;
+    }).join("");
+  }
   const notice = document.getElementById("field-agent-notice");
   if (notice) {
     notice.textContent = liveAgent.notice || profile.field_agent_notes || "Use the online form, WhatsApp listing option, or the WhatsApp AI bot to submit clean property leads. Approved listings count toward your weekly payout.";
@@ -6449,6 +6519,7 @@ async function renderFieldDashboard() {
     const message = `Hi makaug.com Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
     supportLink.href = `https://wa.me/256760112587?text=${encodeURIComponent(message)}`;
   }
+  setText("field-agent-support-phone", `WhatsApp Operations: ${liveAgent.support_phone || profile.field_agent_support_phone || "0760112587"}`);
 
   const regionProgressEl = document.getElementById("field-region-progress");
   if (regionProgressEl) {
@@ -6543,11 +6614,31 @@ async function renderFieldDashboard() {
       <div class="rounded-xl border border-gray-200 p-3 bg-white flex flex-col gap-2">
         <strong>${adminEscape(item.title || "Field Agent guide")}</strong><br>
         <span>${adminEscape(item.body || "")}</span>
-        ${safeHref ? `<a href="${adminEscape(safeHref)}" target="_blank" rel="noopener noreferrer" class="inline-flex w-fit text-xs font-black text-blue-700 hover:text-blue-900 underline underline-offset-2">Open / download</a>` : ""}
+        ${safeHref ? `<div class="flex flex-wrap gap-2 mt-auto"><a href="${adminEscape(safeHref)}" target="_blank" rel="noopener noreferrer" class="inline-flex w-fit text-xs font-black text-blue-700 hover:text-blue-900 underline underline-offset-2">Preview / read</a><a href="${adminEscape(safeHref)}" download class="inline-flex w-fit text-xs font-black text-green-700 hover:text-green-900 underline underline-offset-2">Download</a></div>` : ""}
       </div>
     `;
     }).join("");
   }
+  const videosEl = document.getElementById("field-agent-training-videos");
+  if (videosEl) {
+    const videos = Array.isArray(liveDashboard?.trainingVideos) && liveDashboard.trainingVideos.length
+      ? liveDashboard.trainingVideos
+      : [
+        { title: "How to list online", url: profile.field_agent_training_video_1_url || "" },
+        { title: "How to list via WhatsApp", url: profile.field_agent_training_video_2_url || "" }
+      ];
+    videosEl.innerHTML = videos.slice(0, 2).map((video, idx) => {
+      const url = String(video.url || "").trim();
+      const safeUrl = /^https?:\/\//i.test(url) ? url : "";
+      return `<div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+        <div class="aspect-video rounded-xl bg-gradient-to-br from-blue-800 via-blue-600 to-emerald-400 text-white grid place-items-center font-black">${safeUrl ? "Training video" : "Video slot"}</div>
+        <div class="mt-3 font-black text-blue-950">${adminEscape(video.title || `Training video ${idx + 1}`)}</div>
+        <p class="text-xs text-blue-900 mt-1">${safeUrl ? "Open the latest King-approved training video." : "King dashboard can add this video URL when ready."}</p>
+        ${safeUrl ? `<a href="${adminEscape(safeUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 text-xs font-black text-blue-700 underline underline-offset-2">Watch / preview</a>` : ""}
+      </div>`;
+    }).join("");
+  }
+  setFieldAgentDashboardTab(activeFieldAgentDashboardTab);
 }
 
 async function submitFieldAgentRejectionResponse(propertyId, title = "listing") {
@@ -8970,6 +9061,11 @@ async function adminProvisionFieldAgent(event) {
   const fieldAgentCode = normalizeFieldAgentCode((document.getElementById("admin-fa-code")?.value || "").trim());
   const territory = (document.getElementById("admin-fa-territory")?.value || "").trim();
   const payoutRate = (document.getElementById("admin-fa-payout-rate")?.value || "").trim();
+  const supportPhone = (document.getElementById("admin-fa-support-phone")?.value || "").trim();
+  const broadcastGroup = (document.getElementById("admin-fa-broadcast-group")?.value || "").trim();
+  const trainingVideo1 = (document.getElementById("admin-fa-video-1")?.value || "").trim();
+  const trainingVideo2 = (document.getElementById("admin-fa-video-2")?.value || "").trim();
+  const notes = (document.getElementById("admin-fa-notes")?.value || "").trim();
   const result = document.getElementById("admin-fa-provision-result");
   if (!firstName || !email || !phone || !/^\d{4}$/.test(pin)) {
     toast("Add first name, email, phone, and a 4-digit PIN.");
@@ -8998,7 +9094,12 @@ async function adminProvisionFieldAgent(event) {
         employee_number: fieldAgentCode,
         territory,
         payout_rate_ugx: payoutRate || 15000,
-        preferred_language: currentLang || "en"
+        preferred_language: currentLang || "en",
+        support_phone: supportPhone,
+        whatsapp_broadcast_group: broadcastGroup,
+        training_video_1_url: trainingVideo1,
+        training_video_2_url: trainingVideo2,
+        notes
       }
     });
     const data = res?.data || {};
@@ -10572,12 +10673,14 @@ function hydrateAccountForm() {
   setVal("account-last-name", user.last_name);
   setVal("account-phone", user.phone);
   setVal("account-email", user.email);
-  setVal("account-role", user.role);
+  const profile = user.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
+  const portalMode = derivePortalMode(user, user.portal_mode);
+  const fieldAgentCode = normalizeFieldAgentCode(user.field_agent_code || profile.field_agent_code || profile.employee_number || "");
+  setVal("account-role", portalMode === "field_agent" ? `Field Agent${fieldAgentCode ? ` • ${fieldAgentCode}` : ""}` : user.role);
 	      const weeklyEl = document.getElementById("account-weekly-tips");
 	      const marketingEl = document.getElementById("account-marketing-opt-in");
 	      const contactEl = document.getElementById("account-contact-channel");
 	      const preferredLanguageEl = document.getElementById("account-preferred-language");
-	      const profile = user.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
 	      applyAccountLanguageUI();
 	      if (weeklyEl) weeklyEl.checked = user.weekly_tips_opt_in !== false;
 	      if (marketingEl) marketingEl.checked = user.marketing_opt_in !== false;
@@ -10587,6 +10690,19 @@ function hydrateAccountForm() {
 	      setSelectOptions("account-pref-area", ACCOUNT_FINDER_PREF_OPTIONS.area, profile.preferred_areas || "Kampala");
 	      setSelectOptions("account-pref-budget", ACCOUNT_FINDER_PREF_OPTIONS.budget, profile.budget_range || "Under USh 500K");
 	      setSelectOptions("account-pref-timeline", ACCOUNT_FINDER_PREF_OPTIONS.timeline, profile.moving_timeline || "Immediately");
+	      const preferencesPanel = document.getElementById("account-preferences-panel");
+	      if (preferencesPanel) {
+	        preferencesPanel.classList.toggle("border-blue-100", portalMode === "field_agent");
+	        preferencesPanel.classList.toggle("bg-blue-50", portalMode === "field_agent");
+	      }
+	      if (portalMode === "field_agent") {
+	        setTextById("account-finder-pref-title", "Field Agent operations preferences");
+	        setTextById("account-pref-goal-label", "Primary territory focus");
+	        setTextById("account-pref-area-label", "Assigned territory");
+	        setTextById("account-pref-budget-label", "Payout preference");
+	        setTextById("account-pref-timeline-label", "Availability");
+	        setTextById("account-finder-pref-help", "These settings keep your Field Agent dashboard, contract notices, training updates, and payout follow-up aligned.");
+	      }
 	      const statusEl = document.getElementById("account-status");
 	      if (statusEl) {
 	        const verified = user.phone_verified ? "Verified phone" : "Phone not verified";
