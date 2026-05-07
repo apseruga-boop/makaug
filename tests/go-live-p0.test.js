@@ -702,6 +702,35 @@ function run() {
   assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
   assert(frontendSource.includes('id="admin-launch-control"'), 'admin launch control should exist');
   assert(frontendSource.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
+  assert(frontendSource.includes('id="admin-control-shortcuts"'), 'admin dashboard should expose direct owner control shortcuts');
+  assert(frontendSource.includes('adminControlForPath'), 'admin deep links should route to the correct dashboard control panel');
+  assert(frontendSource.includes('pendingAdminControlAfterAuth'), 'admin sign-in should preserve the requested admin control route after authentication');
+  for (const adminControlPath of [
+    '/admin/launch-control',
+    '/admin/moderation',
+    '/admin/listings',
+    '/admin/field-agents',
+    '/admin/whatsapp-inbox',
+    '/admin/crm',
+    '/admin/notifications',
+    '/admin/advertising',
+    '/admin/revenue',
+    '/admin/payments',
+    '/admin/fraud',
+    '/admin/data-protection'
+  ]) {
+    assert(frontendSource.includes(`"${adminControlPath}"`) || frontendSource.includes(`href="${adminControlPath}"`), `admin control route should be wired: ${adminControlPath}`);
+  }
+  for (const adminControlId of [
+    'admin-review-queue-control',
+    'admin-listings-control',
+    'admin-field-agent-provision-form',
+    'admin-whatsapp-control',
+    'admin-notifications-control',
+    'admin-advertising-control'
+  ]) {
+    assert(frontendSource.includes(`id="${adminControlId}"`) || frontendSource.includes(`#${adminControlId}`), `admin control target missing: ${adminControlId}`);
+  }
   for (const expected of [
     'Public Route Health',
     'CTA health',

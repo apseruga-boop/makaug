@@ -54,6 +54,12 @@
     html { -webkit-text-size-adjust: 100%; }
     .page { display: none; }
     .page.active { display: block; }
+    .admin-control-focus {
+      outline: 3px solid rgba(22, 163, 74, 0.35);
+      outline-offset: 4px;
+      box-shadow: 0 0 0 6px rgba(187, 247, 208, 0.35);
+      transition: outline-color .2s ease, box-shadow .2s ease;
+    }
     .hero-bg {
       position: relative;
       min-height: 54vh;
@@ -4048,9 +4054,30 @@
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
               <a href="/admin/launch-control" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
+              <a href="/admin/field-agents" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Setup</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
+          </div>
+        </div>
+
+        <div id="admin-control-shortcuts" class="bg-white border border-green-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Admin Control Shortcuts</h3>
+              <p class="text-sm text-gray-500 mt-1">Jump straight to the live control room you need. These links keep you inside the protected admin dashboard and open the matching backend-fed panel.</p>
+            </div>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700">Live admin routes</span>
+          </div>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+            <a href="/admin/moderation" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
+            <a href="/admin/listings" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">All Listings</a>
+            <a href="/admin/field-agents" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Create Field Agent ID + PIN</a>
+            <a href="/admin/whatsapp-inbox" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">WhatsApp AI Inbox</a>
+            <a href="/admin/crm" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">CRM Lead Centre</a>
+            <a href="/admin/notifications" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Notifications & Logs</a>
+            <a href="/admin/advertising" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Advertising & Payments</a>
+            <a href="/admin/setup-status" class="rounded-xl border border-green-200 bg-white hover:bg-green-50 p-3 font-bold text-green-800">Owner Setup Status</a>
           </div>
         </div>
 
@@ -4271,7 +4298,7 @@
           </div>
         </div>
 
-        <div data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-review-queue-control" data-admin-tab-panel="review" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <h3 class="text-xl font-bold text-gray-800">Pending Listing Moderation</h3>
             <div class="text-xs text-gray-500">Review checklist before approval</div>
@@ -4279,7 +4306,7 @@
           <div id="admin-pending-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="actioned" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-actioned-listings-control" data-admin-tab-panel="actioned" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Recently Actioned Listings</h3>
@@ -4289,7 +4316,7 @@
           <div id="admin-actioned-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-live-followup-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Live Listings Follow-up</h3>
@@ -4300,7 +4327,7 @@
           <div id="admin-live-listings-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-featured-properties-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Featured Properties Control</h3>
@@ -4311,7 +4338,7 @@
           <div id="admin-featured-listings-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-featured-agents-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Featured Agents Control</h3>
@@ -4322,7 +4349,7 @@
           <div id="admin-featured-agents-table" class="space-y-3"></div>
         </div>
 
-        <div data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-accounts-control" data-admin-tab-panel="accounts" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Accounts & Weekly Tips</h3>
@@ -4460,7 +4487,7 @@
           </div>
         </div>
 
-        <div data-admin-tab-panel="ads" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-advertising-control" data-admin-tab-panel="ads" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Advertising Inquiries</h3>
@@ -4521,7 +4548,7 @@
           </div>
         </div>
 
-        <div data-admin-tab-panel="whatsapp" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-whatsapp-control" data-admin-tab-panel="whatsapp" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">WhatsApp AI Inbox</h3>
@@ -4579,7 +4606,7 @@
           </div>
         </div>
 
-        <div data-admin-tab-panel="notifications" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-notifications-control" data-admin-tab-panel="notifications" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Lead, Email & Notification Control</h3>
@@ -4638,7 +4665,7 @@
           <div id="admin-review-content"></div>
         </div>
 
-        <div data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-listings-control" data-admin-tab-panel="listings" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Motherboard Listing Control</h3>

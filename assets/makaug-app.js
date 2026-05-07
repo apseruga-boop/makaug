@@ -10767,6 +10767,21 @@ function askOtpCode(channelOverride = "") {
   return (code || "").trim();
 }
 
+function pendingAdminControlAfterAuth() {
+  const currentPath = normalizeRoutePath(window.location.pathname || "/");
+  let path = currentPath;
+  if (currentPath === "/login") {
+    try {
+      const next = new URLSearchParams(window.location.search || "").get("next") || "";
+      if (next) path = normalizeRoutePath(new URL(next, window.location.origin).pathname);
+    } catch (error) {
+      path = currentPath;
+    }
+  }
+  const control = adminControlForPath(path);
+  return control ? { path, control } : null;
+}
+
 async function finalizeAuth(data, source, preferredAudience = "") {
   const token = data?.token;
   const user = data?.user;
@@ -10787,13 +10802,19 @@ async function finalizeAuth(data, source, preferredAudience = "") {
     toast("This account is not marked as admin. Opening property finder dashboard.");
   }
 	      persistAuthState(token, resolvedUser);
-	      hydrateAccountForm();
-	      closeModal("auth-modal");
-	      closeAccountAccessDrawer();
-	      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
-	      openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
-	      trackEvent("auth_success", { source, role: user.role || "" }).catch(() => {});
-	    }
+		      hydrateAccountForm();
+		      closeModal("auth-modal");
+		      closeAccountAccessDrawer();
+		      toast(data?.message || `Welcome, ${user.first_name || "user"}`);
+		      const pendingAdmin = resolvedUser.portal_mode === "admin" ? pendingAdminControlAfterAuth() : null;
+		      if (pendingAdmin) {
+		        try { window.history.replaceState({ page: "admin", source: "auth_admin_return", adminPath: pendingAdmin.path }, "", pendingAdmin.path); } catch (error) {}
+		        await openAdminControl(pendingAdmin.control, { source: "auth_admin_return" });
+		      } else {
+		        openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
+		      }
+		      trackEvent("auth_success", { source, role: user.role || "" }).catch(() => {});
+		    }
 
 function socialProviderSetupMessage(provider) {
   return "Social sign-in is temporarily disabled. Please use phone/email and password.";
@@ -20366,6 +20387,88 @@ function pageForPublicRoute(path) {
   return PUBLIC_ROUTE_PAGE_MAP[normalizeRoutePath(path)] || "";
 }
 
+const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
+  "/admin": { page: "admin-dashboard", tab: "review", selector: "#admin-control-shortcuts", label: "Admin dashboard" },
+  "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#admin-control-shortcuts", label: "Admin dashboard" },
+  "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Launch Control" },
+  "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
+  "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
+  "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
+  "/admin/actioned": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
+  "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },
+  "/admin/featured": { page: "admin-dashboard", tab: "live", selector: "#admin-featured-properties-control", label: "Featured Control" },
+  "/admin/listings": { page: "admin-dashboard", tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
+  "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "CRM Lead Centre" },
+  "/admin/leads": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Lead Centre" },
+  "/admin/notifications": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Notifications" },
+  "/admin/emails": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Email Logs" },
+  "/admin/alerts": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Alerts" },
+  "/admin/whatsapp-inbox": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
+  "/admin/whatsapp": { page: "admin-dashboard", tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp AI Inbox" },
+  "/admin/advertising": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
+  "/admin/revenue": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Revenue" },
+  "/admin/payments": { page: "admin-dashboard", tab: "ads", selector: "#admin-advertising-control", label: "Payments" },
+  "/admin/field-agents": { page: "admin-dashboard", tab: "accounts", selector: "#admin-field-agent-provision-form", label: "Field Agent Setup" },
+  "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
+  "/admin/users": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Users" },
+  "/admin/contracts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-field-agent-provision-form", label: "Contracts and field team setup" },
+  "/admin/fraud": { page: "admin-dashboard", tab: "listings", selector: "#admin-recent-reports", label: "Fraud reports" },
+  "/admin/data-protection": { page: "admin-dashboard", tab: "accounts", selector: "#admin-users-table", label: "Data protection" },
+  "/admin/docs": { page: "admin-docs", label: "Admin Docs" },
+  "/admin/setup-status": { page: "admin-setup-status", label: "Owner Setup Status" }
+});
+
+function adminControlForPath(path = "/admin") {
+  const clean = normalizeRoutePath(path);
+  return ADMIN_ROUTE_CONTROL_MAP[clean] || (clean.startsWith("/admin/") ? ADMIN_ROUTE_CONTROL_MAP["/admin"] : null);
+}
+
+function isSignedInAdminUser() {
+  return !!(authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin");
+}
+
+function scrollAdminControlIntoView(selector) {
+  if (!selector) return;
+  window.setTimeout(() => {
+    const el = document.querySelector(selector);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("admin-control-focus");
+      window.setTimeout(() => el.classList.remove("admin-control-focus"), 1800);
+    }
+  }, 120);
+}
+
+async function openAdminControl(control, options = {}) {
+  const target = typeof control === "string" ? adminControlForPath(control) : control;
+  if (!target) return false;
+  if (!isSignedInAdminUser()) {
+    openAuthSignIn("admin");
+    return true;
+  }
+  if (target.page === "admin-docs") {
+    showPage("admin-docs", { history: false, source: options.source || "admin_control" });
+    return true;
+  }
+  if (target.page === "admin-setup-status") {
+    showPage("admin-setup-status", { history: false, source: options.source || "admin_control" });
+    renderAdminSetupStatus();
+    return true;
+  }
+  if (target.tab) activeAdminWorkflowTab = target.tab;
+  showPage("admin-dashboard", { history: false, source: options.source || "admin_control", scroll: options.scroll !== false });
+  if (target.tab) setAdminWorkflowTab(target.tab);
+  try {
+    await renderAdminDashboard();
+  } catch (error) {
+    console.warn("Admin control refresh failed", error);
+  }
+  if (target.tab) setAdminWorkflowTab(target.tab);
+  scrollAdminControlIntoView(target.selector);
+  if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
+  return true;
+}
+
 function currentPathWithQueryAndHash() {
   return `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
 }
@@ -20539,6 +20642,15 @@ function navigatePublicRoute(target, event, options = {}) {
     if (currentPathWithQueryAndHash() !== nextUrl) {
       try { window.history.pushState({ page: "auth", source: options.source || "spa_login" }, "", nextUrl); } catch (error) {}
     }
+    return false;
+  }
+  const adminControl = adminControlForPath(path);
+  if (adminControl) {
+    const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
+    if (currentPathWithQueryAndHash() !== nextUrl) {
+      try { window.history.pushState({ page: "admin", source: options.source || "spa_admin", adminPath: path }, "", nextUrl); } catch (error) {}
+    }
+    openAdminControl(adminControl, { source: options.source || "spa_admin" });
     return false;
   }
   if (["/signup", "/student-signup", "/broker-signup", "/field-agent-signup", "/advertiser-signup"].includes(path) || url.searchParams.get("auth") === "create") {
@@ -20862,29 +20974,10 @@ async function parseInitialDeepLink() {
     }
   }
 
-  if (path === "/admin/setup-status") {
-    if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-      showPage("admin-setup-status", { history: false, source: "deep_link" });
-      renderAdminSetupStatus();
-    } else {
-      openAuthSignIn("admin");
-    }
-    return true;
-  }
-
-  if (path === "/admin/docs") {
-    if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-      showPage("admin-docs", { history: false, source: "deep_link" });
-    } else {
-      openAuthSignIn("admin");
-    }
-    return true;
-  }
-
-  if (path === "/admin" || path === "/admin-dashboard" || path.startsWith("/admin/")) {
-    if (authState?.user && derivePortalMode(authState.user, authState.user.portal_mode) === "admin") {
-      showPage("admin-dashboard", { history: false, source: "deep_link" });
-      renderAdminDashboard();
+  const adminControl = path === "/admin-dashboard" ? adminControlForPath("/admin") : adminControlForPath(path);
+  if (adminControl) {
+    if (isSignedInAdminUser()) {
+      await openAdminControl(adminControl, { history: false, source: "deep_link", toast: false });
     } else {
       openAuthSignIn("admin");
     }
