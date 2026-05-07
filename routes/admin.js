@@ -76,6 +76,84 @@ const FIELD_AGENT_DEFAULT_PAYOUT_UGX = 5000;
 const FIELD_AGENT_PAYOUT_DAY = 'Friday';
 const FIELD_AGENT_ID_START = 7300;
 const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
+const FIELD_AGENT_DIRECTORY_LIMIT = 10000;
+
+function numberOrZero(value) {
+  const n = Number(value || 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fieldAgentProfile(row = {}) {
+  return row.profile_data && typeof row.profile_data === 'object' ? row.profile_data : {};
+}
+
+function fieldAgentTerritory(row = {}) {
+  const profile = fieldAgentProfile(row);
+  return cleanText(profile.field_agent_territory || profile.territory || row.territory || 'Uganda') || 'Uganda';
+}
+
+function fieldAgentPayoutRate(row = {}) {
+  const profile = fieldAgentProfile(row);
+  const rate = numberOrZero(profile.payout_rate_ugx || row.payout_rate_ugx || FIELD_AGENT_DEFAULT_PAYOUT_UGX);
+  return rate > 0 ? rate : FIELD_AGENT_DEFAULT_PAYOUT_UGX;
+}
+
+function fieldAgentReachScore(row = {}) {
+  return numberOrZero(row.property_views_count)
+    + numberOrZero(row.property_saves_count)
+    + numberOrZero(row.inquiries_count)
+    + numberOrZero(row.route_events_count);
+}
+
+function decorateFieldAgentPerformanceRows(rows = []) {
+  const decorated = rows.map((row) => {
+    const accepted = numberOrZero(row.approved_listings_count);
+    const payoutRate = fieldAgentPayoutRate(row);
+    const reachScore = fieldAgentReachScore(row);
+    return {
+      ...row,
+      field_agent_territory: fieldAgentTerritory(row),
+      field_agent_reach_score: reachScore,
+      field_agent_payout_rate_ugx: payoutRate,
+      field_agent_friday_due_ugx: accepted * payoutRate
+    };
+  });
+
+  const sortPerformance = (a, b) => {
+    const acceptedDelta = numberOrZero(b.approved_listings_count) - numberOrZero(a.approved_listings_count);
+    if (acceptedDelta) return acceptedDelta;
+    const listingDelta = numberOrZero(b.listings_count) - numberOrZero(a.listings_count);
+    if (listingDelta) return listingDelta;
+    const reachDelta = numberOrZero(b.field_agent_reach_score) - numberOrZero(a.field_agent_reach_score);
+    if (reachDelta) return reachDelta;
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  };
+
+  [...decorated].sort(sortPerformance).forEach((row, index) => {
+    row.field_agent_rank = index + 1;
+  });
+
+  const byTerritory = new Map();
+  decorated.forEach((row) => {
+    const territory = row.field_agent_territory || 'Uganda';
+    if (!byTerritory.has(territory)) byTerritory.set(territory, []);
+    byTerritory.get(territory).push(row);
+  });
+
+  byTerritory.forEach((territoryRows, territory) => {
+    const regionAccepted = territoryRows.reduce((total, row) => total + numberOrZero(row.approved_listings_count), 0);
+    const regionReach = territoryRows.reduce((total, row) => total + numberOrZero(row.field_agent_reach_score), 0);
+    territoryRows.sort(sortPerformance).forEach((row, index) => {
+      row.field_agent_region_rank = index + 1;
+      row.field_agent_region_count = territoryRows.length;
+      row.field_agent_region_accepted_count = regionAccepted;
+      row.field_agent_region_reach_score = regionReach;
+      row.field_agent_region = territory;
+    });
+  });
+
+  return decorated;
+}
 
 async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
   try {
@@ -1531,12 +1609,17 @@ router.post('/listing-submit-otp-override', async (req, res, next) => {
 
 router.get('/users', async (req, res, next) => {
   try {
-    const { page, limit, offset } = parsePagination(req.query);
+    let { page, limit, offset } = parsePagination(req.query);
     const search = String(req.query.search || '').trim().toLowerCase();
     const rawStatus = String(req.query.status || '').trim().toLowerCase();
     const status = rawStatus;
     const role = String(req.query.role || '').trim().toLowerCase();
     const weeklyTipsOnly = String(req.query.weekly_tips_only || '').trim().toLowerCase();
+
+    if (role === 'field_agent') {
+      limit = Math.min(Math.max(parseInt(req.query.limit || String(FIELD_AGENT_DIRECTORY_LIMIT), 10), 1), FIELD_AGENT_DIRECTORY_LIMIT);
+      offset = (page - 1) * limit;
+    }
 
     const filters = [];
     const values = [];
@@ -1640,9 +1723,13 @@ router.get('/users', async (req, res, next) => {
       listValues
     );
 
+    const data = role === 'field_agent'
+      ? decorateFieldAgentPerformanceRows(rows.rows)
+      : rows.rows;
+
     return res.json({
       ok: true,
-      data: rows.rows,
+      data,
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {

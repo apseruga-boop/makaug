@@ -7156,7 +7156,7 @@ async function fetchRemoteAdminSnapshot() {
   const whatsappAiMode = (document.getElementById("admin-whatsapp-ai-mode")?.value || "").trim();
   const userParams = new URLSearchParams({ limit: "100" });
   const propertyRequestParams = new URLSearchParams({ limit: "100" });
-  const fieldAgentParams = new URLSearchParams({ limit: "100", role: "field_agent" });
+  const fieldAgentParams = new URLSearchParams({ limit: "10000", role: "field_agent" });
   const whatsappParams = new URLSearchParams({ limit: "50" });
   if (userSearch) userParams.set("search", userSearch);
   if (userRole) userParams.set("role", userRole);
@@ -9239,6 +9239,82 @@ function adminFieldAgentPublicDocument(profile = {}, key) {
   };
 }
 
+function adminFieldAgentProfile(user = {}) {
+  return user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+}
+
+function adminFieldAgentPayoutRate(user = {}) {
+  const profile = adminFieldAgentProfile(user);
+  return Number(profile.payout_rate_ugx || user.field_agent_payout_rate_ugx || 5000) || 5000;
+}
+
+function adminFieldAgentAcceptedCount(user = {}) {
+  return Number(user.approved_listings_count || 0) || 0;
+}
+
+function adminFieldAgentPendingCount(user = {}) {
+  return Number(user.pending_listings_count || 0) || 0;
+}
+
+function adminFieldAgentRejectedCount(user = {}) {
+  return Number(user.rejected_listings_count || 0) || 0;
+}
+
+function adminFieldAgentReachScore(user = {}) {
+  const backendReach = Number(user.field_agent_reach_score || 0) || 0;
+  if (backendReach) return backendReach;
+  return (Number(user.property_views_count || 0) || 0)
+    + (Number(user.property_saves_count || 0) || 0)
+    + (Number(user.inquiries_count || 0) || 0)
+    + (Number(user.route_events_count || 0) || 0);
+}
+
+function adminFieldAgentFridayDue(user = {}) {
+  const backendDue = Number(user.field_agent_friday_due_ugx || 0) || 0;
+  if (backendDue) return backendDue;
+  return adminFieldAgentAcceptedCount(user) * adminFieldAgentPayoutRate(user);
+}
+
+function adminFieldAgentTerritory(user = {}) {
+  const profile = adminFieldAgentProfile(user);
+  return user.field_agent_territory || profile.field_agent_territory || profile.territory || "Uganda";
+}
+
+function enrichAdminFieldAgents(users = []) {
+  const rows = Array.isArray(users) ? users.map((user) => ({ ...user })) : [];
+  const performanceSort = (a, b) => {
+    const acceptedDelta = adminFieldAgentAcceptedCount(b) - adminFieldAgentAcceptedCount(a);
+    if (acceptedDelta) return acceptedDelta;
+    const listingDelta = (Number(b.listings_count || 0) || 0) - (Number(a.listings_count || 0) || 0);
+    if (listingDelta) return listingDelta;
+    const reachDelta = adminFieldAgentReachScore(b) - adminFieldAgentReachScore(a);
+    if (reachDelta) return reachDelta;
+    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+  };
+  [...rows].sort(performanceSort).forEach((row, index) => {
+    if (!row.field_agent_rank) row.field_agent_rank = index + 1;
+    row.field_agent_reach_score = adminFieldAgentReachScore(row);
+    row.field_agent_friday_due_ugx = adminFieldAgentFridayDue(row);
+    row.field_agent_territory = adminFieldAgentTerritory(row);
+  });
+  const byTerritory = new Map();
+  rows.forEach((row) => {
+    const territory = adminFieldAgentTerritory(row);
+    if (!byTerritory.has(territory)) byTerritory.set(territory, []);
+    byTerritory.get(territory).push(row);
+  });
+  byTerritory.forEach((territoryRows, territory) => {
+    territoryRows.sort(performanceSort).forEach((row, index) => {
+      if (!row.field_agent_region_rank) row.field_agent_region_rank = index + 1;
+      row.field_agent_region = row.field_agent_region || territory;
+      row.field_agent_region_count = row.field_agent_region_count || territoryRows.length;
+      row.field_agent_region_accepted_count = row.field_agent_region_accepted_count || territoryRows.reduce((total, item) => total + adminFieldAgentAcceptedCount(item), 0);
+      row.field_agent_region_reach_score = row.field_agent_region_reach_score || territoryRows.reduce((total, item) => total + adminFieldAgentReachScore(item), 0);
+    });
+  });
+  return rows;
+}
+
 function adminFieldAgentFilePayload(inputId, label) {
   const input = document.getElementById(inputId);
   const file = input?.files?.[0];
@@ -9269,13 +9345,16 @@ function adminFieldAgentDetailPanel(userId) {
     panel.innerHTML = `<div class="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">Field Agent not found in the current directory. Refresh Field Agents and try again.</div>`;
     return;
   }
-  const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+  const profile = adminFieldAgentProfile(user);
   const code = profile.field_agent_code || profile.employee_number || "-";
-  const territory = profile.field_agent_territory || profile.territory || "Uganda";
-  const payoutRate = Number(profile.payout_rate_ugx || 5000) || 5000;
-  const approvedCount = Number(user.approved_listings_count || 0) || 0;
-  const weekApproved = Number(user.approved_this_week_count || approvedCount || 0) || 0;
-  const weekPay = weekApproved * payoutRate;
+  const territory = adminFieldAgentTerritory(user);
+  const payoutRate = adminFieldAgentPayoutRate(user);
+  const approvedCount = adminFieldAgentAcceptedCount(user);
+  const weekPay = adminFieldAgentFridayDue(user);
+  const overallRank = user.field_agent_rank || "-";
+  const regionRank = user.field_agent_region_rank || "-";
+  const regionCount = user.field_agent_region_count || "-";
+  const reachScore = adminFieldAgentReachScore(user);
   const signedContract = adminFieldAgentPublicDocument(profile, "field_agent_signed_contract");
   const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
   const payments = Array.isArray(profile.field_agent_payments) ? profile.field_agent_payments : [];
@@ -9294,13 +9373,16 @@ function adminFieldAgentDetailPanel(userId) {
         </div>
         <button type="button" onclick="document.getElementById('admin-field-agent-detail-panel')?.classList.add('hidden')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg px-3 py-1.5 text-xs font-bold">Close</button>
       </div>
-      <div class="grid md:grid-cols-5 gap-2 mt-4 text-xs">
+      <div class="grid md:grid-cols-7 gap-2 mt-4 text-xs">
+        <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3"><span class="text-indigo-700">Overall rank</span><div class="text-lg font-black text-indigo-900">${adminEscape(overallRank === "-" ? "-" : `#${overallRank}`)}</div></div>
+        <div class="rounded-xl border border-blue-100 bg-blue-50 p-3"><span class="text-blue-700">Region rank</span><div class="text-lg font-black text-blue-900">${adminEscape(regionRank === "-" ? "-" : `#${regionRank}/${regionCount}`)}</div></div>
         <div class="rounded-xl border border-gray-200 bg-gray-50 p-3"><span class="text-gray-500">Total listings</span><div class="text-lg font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
         <div class="rounded-xl border border-green-100 bg-green-50 p-3"><span class="text-green-700">Accepted</span><div class="text-lg font-black text-green-900">${adminEscape(approvedCount)}</div></div>
         <div class="rounded-xl border border-amber-100 bg-amber-50 p-3"><span class="text-amber-700">Pending</span><div class="text-lg font-black text-amber-900">${adminEscape(user.pending_listings_count || 0)}</div></div>
         <div class="rounded-xl border border-red-100 bg-red-50 p-3"><span class="text-red-700">Rejected</span><div class="text-lg font-black text-red-900">${adminEscape(user.rejected_listings_count || 0)}</div></div>
-        <div class="rounded-xl border border-blue-100 bg-blue-50 p-3"><span class="text-blue-700">Friday pay due</span><div class="text-lg font-black text-blue-900">${adminEscape(fmtP(weekPay, ""))}</div></div>
+        <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3"><span class="text-emerald-700">Reach</span><div class="text-lg font-black text-emerald-900">${adminEscape(reachScore)}</div></div>
       </div>
+      <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900 font-semibold">Friday pay due: ${adminEscape(approvedCount)} accepted listings × ${adminEscape(fmtP(payoutRate, ""))} = ${adminEscape(fmtP(weekPay, ""))}</div>
       <div class="grid xl:grid-cols-2 gap-4 mt-4">
         <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
           <h5 class="font-black text-gray-900">Documents</h5>
@@ -9418,45 +9500,69 @@ function adminOpenFieldAgentPayment(userId) {
 }
 
 function renderAdminFieldAgentPerformance(users) {
-  const rows = Array.isArray(users) ? users : [];
+  const rows = enrichAdminFieldAgents(users);
   const countByStatus = (status) => rows.filter((user) => String(user.status || "active").toLowerCase() === status).length;
   const sum = (key) => rows.reduce((total, user) => total + (Number(user[key] || 0) || 0), 0);
-  const payoutFor = (user) => {
-    const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
-    return Number(profile.payout_rate_ugx || 5000) || 5000;
-  };
-  const weeklyPay = rows.reduce((total, user) => total + ((Number(user.approved_this_week_count || user.approved_listings_count || 0) || 0) * payoutFor(user)), 0);
+  const weeklyPay = rows.reduce((total, user) => total + adminFieldAgentFridayDue(user), 0);
   setText("admin-field-agent-total", rows.length);
   setText("admin-field-agent-active", countByStatus("active"));
   setText("admin-field-agent-pending", sum("pending_listings_count"));
   setText("admin-field-agent-approved", sum("approved_listings_count"));
   setText("admin-field-agent-rejected", sum("rejected_listings_count"));
   setText("admin-field-agent-weekly-pay", fmtP(weeklyPay, ""));
+  const regionWrap = document.getElementById("admin-field-agent-region-board");
+  if (regionWrap) {
+    const regions = Array.from(rows.reduce((map, user) => {
+      const territory = adminFieldAgentTerritory(user);
+      const item = map.get(territory) || { territory, agents: 0, accepted: 0, pending: 0, rejected: 0, reach: 0, due: 0 };
+      item.agents += 1;
+      item.accepted += adminFieldAgentAcceptedCount(user);
+      item.pending += adminFieldAgentPendingCount(user);
+      item.rejected += adminFieldAgentRejectedCount(user);
+      item.reach += adminFieldAgentReachScore(user);
+      item.due += adminFieldAgentFridayDue(user);
+      map.set(territory, item);
+      return map;
+    }, new Map()).values()).sort((a, b) => b.accepted - a.accepted || b.reach - a.reach).slice(0, 8);
+    regionWrap.innerHTML = regions.length ? regions.map((region, index) => `
+      <div class="rounded-2xl border border-blue-100 bg-white p-3">
+        <div class="text-[11px] font-black uppercase tracking-wide text-blue-700">#${index + 1} ${adminEscape(region.territory)}</div>
+        <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div><span class="text-gray-500">Agents</span><div class="font-black text-gray-900">${adminEscape(region.agents)}</div></div>
+          <div><span class="text-gray-500">Reach</span><div class="font-black text-gray-900">${adminEscape(region.reach)}</div></div>
+          <div><span class="text-green-700">Accepted</span><div class="font-black text-green-900">${adminEscape(region.accepted)}</div></div>
+          <div><span class="text-blue-700">Friday due</span><div class="font-black text-blue-900">${adminEscape(fmtP(region.due, ""))}</div></div>
+        </div>
+      </div>`).join("") : `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No regional Field Agent performance yet.</div>`;
+  }
 }
 
 function renderAdminFieldAgentRows(users) {
   const wrap = document.getElementById("admin-field-agents-table");
   if (!wrap) return;
-  adminFieldAgents = Array.isArray(users) ? users : [];
-  const rows = adminFieldAgents.slice(0, 100);
+  adminFieldAgents = enrichAdminFieldAgents(users);
+  const rows = adminFieldAgents;
   if (!rows.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No field agents found in the current live dataset.</div>`;
     return;
   }
   wrap.innerHTML = rows.map((user) => {
-    const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
+    const profile = adminFieldAgentProfile(user);
     const contact = [user.phone, user.email].filter(Boolean).join(" • ") || "-";
     const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
     const whatsappPhone = profile.field_agent_whatsapp || profile.whatsapp_phone || user.phone;
     const whatsappUrl = whatsappPhone ? buildWhatsAppUrl(whatsappPhone, `Hello ${user.first_name || "there"}, this is makaug.com operations. We are following up on your field activity and account access.`) : "";
     const code = profile.field_agent_code || profile.employee_number || "-";
-    const payoutRate = Number(profile.payout_rate_ugx || 5000) || 5000;
-    const territory = profile.field_agent_territory || profile.territory || "Uganda";
-    const approvedCount = Number(user.approved_listings_count || 0) || 0;
-    const pendingCount = Number(user.pending_listings_count || 0) || 0;
-    const rejectedCount = Number(user.rejected_listings_count || 0) || 0;
-    const weekApproved = Number(user.approved_this_week_count || approvedCount || 0) || 0;
-    const weekPay = weekApproved * payoutRate;
+    const payoutRate = adminFieldAgentPayoutRate(user);
+    const territory = adminFieldAgentTerritory(user);
+    const approvedCount = adminFieldAgentAcceptedCount(user);
+    const pendingCount = adminFieldAgentPendingCount(user);
+    const rejectedCount = adminFieldAgentRejectedCount(user);
+    const weekPay = adminFieldAgentFridayDue(user);
+    const reachScore = adminFieldAgentReachScore(user);
+    const overallRank = user.field_agent_rank || "-";
+    const regionRank = user.field_agent_region_rank || "-";
+    const regionCount = user.field_agent_region_count || "-";
     const signedContract = adminFieldAgentPublicDocument(profile, "field_agent_signed_contract");
     const idDocument = profile.field_agent_id_document && typeof profile.field_agent_id_document === "object" ? profile.field_agent_id_document : null;
     const userIdArg = adminListingIdArg(user.id);
@@ -9466,17 +9572,20 @@ function renderAdminFieldAgentRows(users) {
           <div>
             <div class="font-bold text-gray-900">${adminEscape(`${user.first_name || ""} ${user.last_name || ""}`.trim() || "Field Agent")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(contact)}</div>
-            <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Last listing: ${adminEscape(formatListingDate(user.last_listing_at) || "No listing yet")}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(user.status || "active")} • ${adminEscape(code)} • ${adminEscape(territory)} • Overall ${adminEscape(overallRank === "-" ? "-" : `#${overallRank}`)} • Region ${adminEscape(regionRank === "-" ? "-" : `#${regionRank}/${regionCount}`)} • Last listing: ${adminEscape(formatListingDate(user.last_listing_at) || "No listing yet")}</div>
             <div class="text-[11px] text-gray-500 mt-1">ID doc: ${idDocument ? "uploaded" : "missing"} • Contract: ${signedContract ? "uploaded" : "missing"}</div>
           </div>
           <span class="text-[11px] font-semibold px-2 py-1 rounded bg-blue-100 text-blue-700">Field Agent</span>
         </div>
-        <div class="grid sm:grid-cols-6 gap-2 mt-3 text-xs">
+        <div class="grid sm:grid-cols-4 xl:grid-cols-9 gap-2 mt-3 text-xs">
+          <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-2"><div class="text-indigo-700">Position</div><div class="font-black text-indigo-900">${adminEscape(overallRank === "-" ? "-" : `#${overallRank}`)}</div></div>
+          <div class="rounded-lg bg-blue-50 border border-blue-100 p-2"><div class="text-blue-700">Region rank</div><div class="font-black text-blue-900">${adminEscape(regionRank === "-" ? "-" : `#${regionRank}/${regionCount}`)}</div></div>
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Total listings</div><div class="font-black text-gray-900">${adminEscape(user.listings_count || 0)}</div></div>
           <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Accepted</div><div class="font-black text-green-900">${adminEscape(approvedCount)}</div></div>
           <div class="rounded-lg bg-amber-50 border border-amber-100 p-2"><div class="text-amber-700">Pending</div><div class="font-black text-amber-900">${adminEscape(pendingCount)}</div></div>
           <div class="rounded-lg bg-red-50 border border-red-100 p-2"><div class="text-red-700">Rejected</div><div class="font-black text-red-900">${adminEscape(rejectedCount)}</div></div>
-          <div class="rounded-lg bg-blue-50 border border-blue-100 p-2"><div class="text-blue-700">This Friday</div><div class="font-black text-blue-900">${adminEscape(fmtP(weekPay, ""))}</div></div>
+          <div class="rounded-lg bg-emerald-50 border border-emerald-100 p-2"><div class="text-emerald-700">Reach</div><div class="font-black text-emerald-900">${adminEscape(reachScore)}</div></div>
+          <div class="rounded-lg bg-blue-50 border border-blue-100 p-2"><div class="text-blue-700">This Friday</div><div class="font-black text-blue-900">${adminEscape(fmtP(weekPay, ""))}</div><div class="text-[10px] text-blue-700 mt-0.5">${adminEscape(approvedCount)} × ${adminEscape(fmtP(payoutRate, ""))}</div></div>
           <div class="rounded-lg bg-green-50 border border-green-100 p-2"><div class="text-green-700">Payout/listing</div><div class="font-black text-green-900">${adminEscape(fmtP(payoutRate, ""))}</div></div>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">

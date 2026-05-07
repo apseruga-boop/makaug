@@ -508,6 +508,11 @@ function run() {
   assert(frontendSource.includes('id="admin-fa-id-document-file"') && frontendSource.includes('id="admin-fa-contract-file"'), 'admin field-agent setup should upload ID document and signed contract');
   assert(frontendSource.includes('id="admin-field-agent-detail-panel"'), 'admin field-agent directory should expose a review details panel');
   assert(frontendSource.includes('adminFieldAgentDetailPanel') && frontendSource.includes('adminRecordFieldAgentPayment') && frontendSource.includes('adminSaveFieldAgentDocuments'), 'admin field-agent directory should support review, document updates, and payment recording');
+  assert(frontendSource.includes('limit: "10000", role: "field_agent"'), 'King Field Agent directory should request the full large-scale field-agent backend feed');
+  assert(frontendSource.includes('const rows = adminFieldAgents;'), 'King Field Agent directory should render every returned field agent instead of a two-row or preview slice');
+  assert(frontendSource.includes('adminFieldAgentFridayDue') && frontendSource.includes('adminFieldAgentAcceptedCount(user) * adminFieldAgentPayoutRate(user)'), 'Friday Field Agent payout should calculate accepted listings times payout/listing');
+  assert(frontendSource.includes('admin-field-agent-region-board') && frontendSource.includes('Regional performance'), 'King Field Agent control centre should expose regional performance tracking');
+  assert(frontendSource.includes('Region rank') && frontendSource.includes('Reach'), 'Field Agent rows should show position, reach, and regional ranking');
   assert(frontendSource.includes('openKingShortcut'), 'King shortcuts should use the admin control router instead of dead standalone links');
   for (const fieldAgentShortcutPath of ['/admin/field-agents', '/admin/field-agent-payouts', '/admin/field-agent-training', '/admin/field-agent-notices']) {
     assert(frontendSource.includes(`data-king-shortcut="${fieldAgentShortcutPath}"`), `King shortcuts should include field-agent path: ${fieldAgentShortcutPath}`);
@@ -529,6 +534,8 @@ function run() {
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
   assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential production-style field-agent IDs');
   assert(adminRoutes.includes('FIELD_AGENT_ID_START = 7300') && adminRoutes.includes('isLegacyZeroFieldAgentCode'), 'admin should start generated Field Agent IDs above legacy zero codes');
+  assert(adminRoutes.includes('FIELD_AGENT_DIRECTORY_LIMIT = 10000'), 'admin API should support a 10,000-agent Field Agent directory feed');
+  assert(adminRoutes.includes('decorateFieldAgentPerformanceRows') && adminRoutes.includes('field_agent_friday_due_ugx: accepted * payoutRate'), 'admin API should decorate Field Agents with rank, reach, region, and accepted-count payout due');
   assert(adminRoutes.includes("router.post('/field-agents/:id/documents'"), 'admin API should save field-agent ID documents and signed contracts');
   assert(adminRoutes.includes("router.post('/field-agents/:id/payment'"), 'admin API should record field-agent payments and receipts');
   assert(adminRoutes.includes('field_agent_documents_updated') && adminRoutes.includes('field_agent_payment_recorded'), 'field-agent document/payment actions should create logs');
