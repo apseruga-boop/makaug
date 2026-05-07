@@ -88,6 +88,33 @@ function adminActorId(req) {
   return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
 }
 
+function normalizeFieldAgentCode(value = '') {
+  const raw = cleanText(value).toUpperCase().replace(/\s+/g, '');
+  if (!raw) return '';
+  if (/^FA-\d{4,6}$/.test(raw)) return raw;
+  if (/^FA\d{4,6}$/.test(raw)) return `FA-${raw.slice(2)}`;
+  if (/^\d{1,6}$/.test(raw)) return `FA-${raw.padStart(4, '0')}`;
+  return '';
+}
+
+async function generateNextFieldAgentCode() {
+  const result = await db.query(
+    `SELECT profile_data->>'field_agent_code' AS field_agent_code,
+            profile_data->>'employee_number' AS employee_number
+     FROM users
+     WHERE role = 'field_agent'`
+  );
+  let max = 0;
+  for (const row of result.rows) {
+    for (const value of [row.field_agent_code, row.employee_number]) {
+      const normalized = normalizeFieldAgentCode(value);
+      const number = parseInt(normalized.replace(/\D/g, ''), 10);
+      if (Number.isFinite(number) && number > max) max = number;
+    }
+  }
+  return `FA-${String(max + 1).padStart(4, '0')}`;
+}
+
 function envSet(key) {
   return Boolean(String(process.env[key] || '').trim());
 }
@@ -2149,7 +2176,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const phone = normalizeUgPhone(req.body.phone);
     const pin = cleanText(req.body.pin);
     const territory = cleanText(req.body.territory);
-    const employeeNumber = cleanText(req.body.employee_number);
+    const requestedFieldAgentCode = normalizeFieldAgentCode(req.body.field_agent_code || req.body.employee_number);
     const payoutRateUgx = toNullableInt(req.body.payout_rate_ugx) || 15000;
     const status = cleanText(req.body.status || 'active').toLowerCase();
     const preferredLanguage = cleanText(req.body.preferred_language || 'en').toLowerCase();
@@ -2183,9 +2210,38 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const existingProfile = existing.rows[0]?.profile_data && typeof existing.rows[0].profile_data === 'object'
       ? existing.rows[0].profile_data
       : {};
-    const generatedCode = existingProfile.field_agent_code
-      || employeeNumber
-      || `FA-${String(Date.now()).slice(-6)}`;
+    const existingCode = normalizeFieldAgentCode(existingProfile.field_agent_code || existingProfile.employee_number);
+    const generatedCode = existingCode || requestedFieldAgentCode || await generateNextFieldAgentCode();
+    if ((req.body.field_agent_code || req.body.employee_number) && !requestedFieldAgentCode) {
+      return res.status(400).json({ ok: false, error: 'Field Agent ID must look like FA-0001' });
+    }
+    const conflictQuery = existing.rows.length
+      ? await db.query(
+        `SELECT id
+         FROM users
+         WHERE role = 'field_agent'
+           AND id <> $2
+           AND (
+             UPPER(COALESCE(profile_data->>'field_agent_code', '')) = $1
+             OR UPPER(COALESCE(profile_data->>'employee_number', '')) = $1
+           )
+         LIMIT 1`,
+        [generatedCode, existing.rows[0].id]
+      )
+      : await db.query(
+        `SELECT id
+         FROM users
+         WHERE role = 'field_agent'
+           AND (
+             UPPER(COALESCE(profile_data->>'field_agent_code', '')) = $1
+             OR UPPER(COALESCE(profile_data->>'employee_number', '')) = $1
+           )
+         LIMIT 1`,
+        [generatedCode]
+      );
+    if (conflictQuery.rows.length) {
+      return res.status(409).json({ ok: false, error: 'Field Agent ID is already assigned' });
+    }
     const passwordHash = await bcrypt.hash(pin, 12);
     const profileData = {
       ...existingProfile,
@@ -2193,7 +2249,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
       account_kind: 'field_agent',
       field_agent_application_status: 'approved',
       field_agent_code: generatedCode,
-      employee_number: employeeNumber || generatedCode,
+      employee_number: generatedCode,
       field_agent_territory: territory || existingProfile.field_agent_territory || '',
       payout_rate_ugx: payoutRateUgx,
       payout_frequency: 'weekly',
@@ -2275,7 +2331,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
       email,
       phone_masked: phone.replace(/(\d{4})\d+(\d{3})$/, '$1***$2'),
       field_agent_code: generatedCode,
-      employee_number: employeeNumber || generatedCode,
+      employee_number: generatedCode,
       pin_set: true
     }, actorId);
 
@@ -2289,8 +2345,8 @@ router.post('/field-agents/provision', async (req, res, next) => {
       payloadSummary: {
         message: 'Field Agent account provisioned by MakaUg admin',
         field_agent_code: generatedCode,
-        employee_number: employeeNumber || generatedCode,
-        login_identifier_hint: 'Use your email or phone with the admin-issued PIN'
+        employee_number: generatedCode,
+        login_identifier_hint: 'Use Field Agent ID and the admin-issued 4-digit PIN'
       }
     });
 

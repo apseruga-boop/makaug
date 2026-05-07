@@ -25,6 +25,7 @@ const aiCoreRoutes = require('./routes/ai-core');
 const adminAiAgentsRoutes = require('./routes/admin-agents');
 const propertySeekerRoutes = require('./routes/property-seeker');
 const studentRoutes = require('./routes/student');
+const fieldAgentRoutes = require('./routes/field-agent');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
@@ -93,6 +94,7 @@ app.use('/api/ai-core', aiCoreRoutes);
 app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api/field-agent', fieldAgentRoutes);
 
 // Never expose local/private operator tools on public host.
 app.use('/private-local', (_req, res) => {

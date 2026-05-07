@@ -3079,7 +3079,7 @@
             </div>
             <div id="lp-field-agent-id-wrap" class="hidden">
               <label id="lp-field-agent-id-label" class="block text-sm font-semibold text-gray-700 mb-1.5">Field Agent ID</label>
-              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-1042">
+              <input id="lp-field-agent-id" oninput="renderListReviewSummary()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-0001">
               <p id="lp-field-agent-id-help" class="text-xs text-gray-500 mt-1">Only fill this if a Field Agent assisted you.</p>
             </div>
           </div>
@@ -3865,11 +3865,11 @@
           </ul>
         </div>
         <div class="bg-white border border-green-100 rounded-2xl p-5">
-          <h3 class="text-lg font-bold text-gray-800 mb-3">How to work as a MakaUg Field Agent</h3>
-          <div class="grid md:grid-cols-3 gap-3 text-sm text-gray-700">
-            <div class="rounded-xl border border-gray-200 p-3"><strong>Online listing</strong><br>Use List Property, complete address, photos, OTP, and submit for review.</div>
-            <div class="rounded-xl border border-gray-200 p-3"><strong>WhatsApp listing</strong><br>Use the List via WhatsApp option with property type, location, and owner contact.</div>
-            <div class="rounded-xl border border-gray-200 p-3"><strong>WhatsApp AI bot</strong><br>Ask the bot for listing guidance, fraud checks, and buyer/renter handoff support.</div>
+          <h3 class="text-lg font-bold text-gray-800 mb-3">How to work as a makaug.com Field Agent</h3>
+          <div id="field-agent-resource-grid" class="grid md:grid-cols-3 gap-3 text-sm text-gray-700">
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Welcome pack</strong><br>Read the role guide, weekly expectations, and safe-listing standards.<br><a href="/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Training deck</strong><br>Learn how to list online, list via WhatsApp, and fix rejected submissions.<br><a href="/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
+            <div class="rounded-xl border border-gray-200 p-3"><strong>Contract</strong><br>Review conduct, payout, and safety rules before field work.<br><a href="/assets/docs/field-agent/makaug-field-agent-contract.docx" target="_blank" rel="noopener noreferrer" class="text-xs font-black text-blue-700 underline underline-offset-2">Open / download</a></div>
           </div>
         </div>
         <div class="bg-green-50 border border-green-100 rounded-2xl p-5">
@@ -4436,8 +4436,8 @@
               <form id="admin-field-agent-provision-form" onsubmit="adminProvisionFieldAgent(event)" class="mb-4 rounded-2xl border border-green-100 bg-white p-3 space-y-3">
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <h5 class="text-sm font-black text-green-950">Create Field Agent login</h5>
-                    <p class="text-[11px] text-gray-500 mt-0.5">Set up an approved agent with email/phone and a private 4-digit PIN. The PIN is hashed and never shown after save.</p>
+                    <h5 class="text-sm font-black text-green-950">Create Field Agent ID + PIN</h5>
+                    <p class="text-[11px] text-gray-500 mt-0.5">Set up an approved agent, generate or assign their Field Agent ID, and set a private 4-digit PIN. The PIN is hashed and never shown after save.</p>
                   </div>
                   <span class="text-[11px] font-bold rounded-full bg-green-100 text-green-700 px-2 py-1">Admin only</span>
                 </div>
@@ -4446,7 +4446,7 @@
                   <input id="admin-fa-email" type="email" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Email address" required>
                   <input id="admin-fa-phone" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Phone / WhatsApp" required>
                   <input id="admin-fa-pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="4-digit PIN" required>
-                  <input id="admin-fa-code" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Agent code, e.g. FA-0001">
+                  <input id="admin-fa-code" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Field Agent ID, e.g. FA-0001 (optional)">
                   <input id="admin-fa-territory" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Territory, e.g. Kampala">
                   <input id="admin-fa-payout-rate" inputmode="numeric" class="border border-green-100 rounded-xl px-3 py-2 text-sm" placeholder="Payout per approved listing, e.g. 15000">
                 </div>
@@ -5255,12 +5255,12 @@
 
         <div id="auth-field-login-wrap" class="hidden grid sm:grid-cols-2 gap-3 mb-4">
           <div>
-            <label class="block text-sm font-medium text-gray-800 mb-2">Employee Number</label>
-            <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. EMP001">
+            <label class="block text-sm font-medium text-gray-800 mb-2">Field Agent ID</label>
+            <input id="auth-field-employee-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-0001">
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-800 mb-2">Broker Number</label>
-            <input id="auth-field-agent-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. FA-101">
+            <label class="block text-sm font-medium text-gray-800 mb-2">4-digit PIN</label>
+            <input id="auth-field-agent-number" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Private PIN from admin">
           </div>
         </div>
 
@@ -5284,7 +5284,7 @@
           <button id="auth-signup-audience-finder" title="Create account to save properties and track searches." type="button" onclick="setAuthSignUpAudience('finder')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-green-800 text-white">Property Finder</button>
           <button id="auth-signup-audience-student" title="Create account for student accommodation search, alerts, and viewings." type="button" onclick="setAuthSignUpAudience('student')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Student</button>
           <button id="auth-signup-audience-agent" title="Create account to list properties as a broker." type="button" onclick="setAuthSignUpAudience('agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Broker</button>
-          <button id="auth-signup-audience-field" title="Apply to become a MakaUg Field Agent." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
+          <button id="auth-signup-audience-field" title="Apply to become a makaug.com Field Agent." type="button" onclick="setAuthSignUpAudience('field_agent')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Field Agent</button>
           <button id="auth-signup-audience-advertiser" title="Create advertiser account for campaign requests." type="button" onclick="setAuthSignUpAudience('advertiser')" class="flex-1 py-2.5 rounded-lg text-sm font-semibold text-green-700">Advertiser</button>
         </div>
         <p id="auth-signup-help" class="text-xs text-gray-500 mb-4">
@@ -5337,7 +5337,7 @@
               <input id="auth-profile-field-languages" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Languages spoken">
               <input id="auth-profile-field-availability" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Availability, e.g. weekdays / weekends">
               <input id="auth-profile-field-experience" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Relevant property, sales, or field experience">
-              <input id="auth-profile-field-reason" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Why do you want to become a MakaUg Field Agent?">
+              <input id="auth-profile-field-reason" data-profile-group="field_agent" class="hidden border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-white sm:col-span-2" placeholder="Why do you want to become a makaug.com Field Agent?">
             </div>
           </div>
 
@@ -5582,7 +5582,7 @@
           </select>
           <p class="text-xs text-gray-500 mt-1">If a Field Agent helped with this registration, choose Yes and enter their ID.</p>
           <div id="agent-field-id-wrap" class="hidden mt-2">
-            <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-1042)">
+            <input id="agent-field-id" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" placeholder="Field Agent ID (e.g. FA-0001)">
           </div>
         </div>
 

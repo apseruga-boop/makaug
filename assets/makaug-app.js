@@ -5306,12 +5306,12 @@ function updateAuthSignInUi() {
   const passwordLabel = document.getElementById("auth-signin-password-label");
 
   if (authSignInAudience === "field_agent") {
-    if (audienceHelp) audienceHelp.textContent = "Field Agent: use your MakaUg Operations phone/email and admin-issued 4-digit PIN to track listings, approvals, rejections, ranking, balance, and payouts.";
+    if (audienceHelp) audienceHelp.textContent = "Field Agent: use your makaug.com Operations Field Agent ID and admin-issued 4-digit PIN to track listings, approvals, rejections, ranking, balance, and payouts.";
     if (fieldWrap) fieldWrap.classList.add("hidden");
     if (standardWrap) standardWrap.classList.remove("hidden");
-    if (identifierLabel) identifierLabel.textContent = "Field Agent Phone or Email";
-    if (identifierInput) identifierInput.placeholder = "+256 7XX XXX XXX or field@email.com";
-    if (passwordLabel) passwordLabel.textContent = "Password or 4-digit PIN";
+    if (identifierLabel) identifierLabel.textContent = "Field Agent ID";
+    if (identifierInput) identifierInput.placeholder = "FA-0001";
+    if (passwordLabel) passwordLabel.textContent = "4-digit PIN";
   } else {
     if (fieldWrap) fieldWrap.classList.add("hidden");
     if (standardWrap) standardWrap.classList.remove("hidden");
@@ -6301,11 +6301,23 @@ function renderAgentDashboard() {
   }
 }
 
+let fieldAgentDashboardDataPromise = null;
+let fieldAgentDashboardDataKey = "";
+
+function normalizeFieldAgentCode(value = "") {
+  const raw = String(value || "").trim().toUpperCase().replace(/\s+/g, "");
+  if (!raw) return "";
+  if (/^FA-\d{4,6}$/.test(raw)) return raw;
+  if (/^FA\d{4,6}$/.test(raw)) return `FA-${raw.slice(2)}`;
+  if (/^\d{1,6}$/.test(raw)) return `FA-${raw.padStart(4, "0")}`;
+  return "";
+}
+
 function extractFieldAgentCodeFromText(text) {
   const raw = String(text || "").trim();
   if (!raw) return "";
-  const match = raw.match(/(?:^|[^0-9])([0-9]{6})(?:[^0-9]|$)/);
-  return match ? match[1] : "";
+  const match = raw.toUpperCase().match(/\bFA[-\s]?\d{4,6}\b|\b\d{4,6}\b/);
+  return match ? normalizeFieldAgentCode(match[0]) : "";
 }
 
 function inferFieldListingStatus(property) {
@@ -6331,11 +6343,12 @@ function getFieldPayoutCutoff() {
 
 function getFieldSourceListingsForUser(user) {
   const profile = user?.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
-  const code = String(user?.field_agent_code || profile.field_agent_code || profile.employee_number || "").trim();
+  const code = normalizeFieldAgentCode(user?.field_agent_code || profile.field_agent_code || profile.employee_number || "");
   const real = PROPERTIES
     .filter((p) => {
       const textCode = extractFieldAgentCodeFromText(p?.desc || p?.description || "");
-      return textCode === code || String(p?.field_agent_id || p?.field_agent_code || p?.extra_fields?.field_agent_id || "").trim() === code;
+      const listingCode = normalizeFieldAgentCode(p?.field_agent_id || p?.field_agent_code || p?.extra_fields?.field_agent_id || p?.extra_fields?.field_agent_code || p?.extra_fields?.field_agent_reference || "");
+      return textCode === code || listingCode === code;
     })
     .map((p) => ({ ...p, review_status: inferFieldListingStatus(p) }));
   if (real.length) return real;
@@ -6347,7 +6360,7 @@ function getFieldSourceListingsForUser(user) {
     return {
       ...p,
       review_status: status,
-      field_agent_code: code || "123456",
+      field_agent_code: code || "FA-0001",
       sourced_at: new Date(Date.now() - ((idx + 2) * 24 * 60 * 60 * 1000)).toISOString(),
       extra_fields: {
         ...(p.extra_fields || {}),
@@ -6358,7 +6371,28 @@ function getFieldSourceListingsForUser(user) {
   return samples;
 }
 
-function renderFieldDashboard() {
+async function loadFieldAgentDashboardData() {
+  if (!authState?.token || !authState?.user) return null;
+  const key = `${authState.user.id || ""}:${authState.token.slice(0, 16)}`;
+  if (fieldAgentDashboardDataPromise && fieldAgentDashboardDataKey === key) {
+    return fieldAgentDashboardDataPromise;
+  }
+  fieldAgentDashboardDataKey = key;
+  fieldAgentDashboardDataPromise = apiRequest("/api/field-agent/dashboard")
+    .then((res) => res?.data || null)
+    .catch((error) => {
+      console.warn("Field Agent dashboard API unavailable", error?.message || error);
+      return null;
+    });
+  return fieldAgentDashboardDataPromise;
+}
+
+function invalidateFieldAgentDashboardData() {
+  fieldAgentDashboardDataPromise = null;
+  fieldAgentDashboardDataKey = "";
+}
+
+async function renderFieldDashboard() {
   const gate = document.getElementById("field-auth-gate");
   const body = document.getElementById("field-body");
   if (!gate || !body) return;
@@ -6374,24 +6408,30 @@ function renderFieldDashboard() {
 
   const user = authState.user;
   const profile = user.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
-  const sourcedListings = getFieldSourceListingsForUser(user);
-  const approved = sourcedListings.filter((p) => p.review_status === "approved");
-  const rejected = sourcedListings.filter((p) => p.review_status === "rejected");
-  const pending = sourcedListings.filter((p) => p.review_status === "pending");
-  const submitted = sourcedListings.length;
-  const conv = submitted ? Math.round((approved.length / submitted) * 100) : 0;
-  const payoutPerApproved = Number(profile.payout_rate_ugx || user.payout_rate_ugx || 15000) || 15000;
-  const payable = approved.length * payoutPerApproved;
-  const rank = submitted ? Math.max(1, Math.min(99, 20 - approved.length)) : "-";
+  const liveDashboard = await loadFieldAgentDashboardData();
+  const liveAgent = liveDashboard?.agent || {};
+  const liveStats = liveDashboard?.stats || {};
+  const sourcedListings = Array.isArray(liveDashboard?.listings)
+    ? liveDashboard.listings.map((item) => ({ ...item, review_status: item.status || inferFieldListingStatus(item) }))
+    : getFieldSourceListingsForUser(user);
+  const approved = sourcedListings.filter((p) => p.review_status === "approved" || p.status === "approved");
+  const rejected = sourcedListings.filter((p) => p.review_status === "rejected" || p.status === "rejected");
+  const pending = sourcedListings.filter((p) => ["pending", "draft", "submitted"].includes(String(p.review_status || p.status || "").toLowerCase()));
+  const submitted = Number.isFinite(Number(liveStats.submitted)) ? Number(liveStats.submitted) : sourcedListings.length;
+  const conv = Number.isFinite(Number(liveStats.conversion_rate)) ? Number(liveStats.conversion_rate) : (submitted ? Math.round((approved.length / submitted) * 100) : 0);
+  const payoutPerApproved = Number(liveAgent.payout_rate_ugx || profile.payout_rate_ugx || user.payout_rate_ugx || 15000) || 15000;
+  const payable = Number.isFinite(Number(liveStats.payable_ugx)) ? Number(liveStats.payable_ugx) : (approved.length * payoutPerApproved);
+  const rank = liveStats.rank || (submitted ? Math.max(1, Math.min(99, 20 - approved.length)) : "-");
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
   };
-  const fieldCode = user.field_agent_code || profile.field_agent_code || profile.employee_number || "-";
-  const employeeNumber = user.employee_number || profile.employee_number || fieldCode;
-  setText("field-dashboard-name", `${user.first_name || "Field"} ${user.last_name || "Agent"} • ${employeeNumber || "EMP"}`);
-  setText("field-dashboard-status", `Code: ${fieldCode} • Territory: ${profile.field_agent_territory || "Uganda"} • Submitted: ${submitted} • Pending: ${pending.length}`);
+  const fieldCode = normalizeFieldAgentCode(liveAgent.field_agent_code || user.field_agent_code || profile.field_agent_code || profile.employee_number || "") || "-";
+  const employeeNumber = normalizeFieldAgentCode(liveAgent.employee_number || user.employee_number || profile.employee_number || fieldCode) || fieldCode;
+  const territory = liveAgent.territory || profile.field_agent_territory || "Uganda";
+  setText("field-dashboard-name", `${liveAgent.first_name || user.first_name || "Field"} ${liveAgent.last_name || user.last_name || "Agent"} • ${employeeNumber || "EMP"}`);
+  setText("field-dashboard-status", `Field Agent ID: ${fieldCode} • Territory: ${territory} • Submitted: ${submitted} • Pending: ${pending.length}`);
   setText("field-stat-submitted", submitted);
   setText("field-stat-approved", approved.length);
   setText("field-stat-rejected", rejected.length);
@@ -6402,11 +6442,11 @@ function renderFieldDashboard() {
   setText("field-money-summary", `${pending.length} listings pending review. ${rejected.length} rejected listings need correction before they can count toward payout.`);
   const notice = document.getElementById("field-agent-notice");
   if (notice) {
-    notice.textContent = profile.field_agent_notes || "Use the online form, WhatsApp listing option, or the WhatsApp AI bot to submit clean property leads. Approved listings count toward your weekly payout.";
+    notice.textContent = liveAgent.notice || profile.field_agent_notes || "Use the online form, WhatsApp listing option, or the WhatsApp AI bot to submit clean property leads. Approved listings count toward your weekly payout.";
   }
   const supportLink = document.getElementById("field-agent-whatsapp-broadcast");
   if (supportLink) {
-    const message = `Hi MakaUg Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
+    const message = `Hi makaug.com Operations, this is ${user.first_name || "a Field Agent"} (${fieldCode}). I need support with field listings, payouts, or approvals.`;
     supportLink.href = `https://wa.me/256760112587?text=${encodeURIComponent(message)}`;
   }
 
@@ -6439,11 +6479,14 @@ function renderFieldDashboard() {
       rejectionEl.innerHTML = `<div class="text-sm text-gray-500">No rejected listings in the current cycle.</div>`;
     } else {
       rejectionEl.innerHTML = rejected.map((p) => {
-        const reason = p?.extra_fields?.rejection_reason || "Failed compliance checks";
+        const reason = p?.moderation_reason || p?.extra_fields?.rejection_reason || "Failed compliance checks";
+        const responseStatus = p.field_agent_response_status || p?.extra_fields?.field_agent_rejection_response_status || "";
         return `<div class="border border-red-100 bg-red-50 rounded-xl p-3">
           <div class="font-semibold text-red-800">${p.title}</div>
           <div class="text-xs text-red-700 mt-1">${p.area || "-"}, ${p.district || "-"}</div>
           <div class="text-xs text-red-700 mt-1"><strong>Reason:</strong> ${reason}</div>
+          ${responseStatus ? `<div class="text-[11px] font-bold text-red-700 mt-2">Response status: ${adminEscape(responseStatus)}</div>` : ""}
+          <button type="button" onclick="submitFieldAgentRejectionResponse(${propertyIdArg(p.id)}, ${propertyIdArg(p.title || "listing")})" class="mt-3 border border-red-200 bg-white text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Respond / contest</button>
         </div>`;
       }).join("");
     }
@@ -6480,7 +6523,49 @@ function renderFieldDashboard() {
   const statusEl = document.getElementById("field-dashboard-status");
   if (statusEl) {
     const fmt = (d) => d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
-    statusEl.textContent = `Code: ${fieldCode} • Next payout: ${fmt(nextFriday)} • Cut-off: ${fmt(cutoff)}`;
+    statusEl.textContent = `Field Agent ID: ${fieldCode} • Next payout: ${fmt(nextFriday)} • Cut-off: ${fmt(cutoff)}`;
+  }
+
+  const resourcesEl = document.getElementById("field-agent-resource-grid");
+  if (resourcesEl) {
+    const resources = Array.isArray(liveDashboard?.resources) ? liveDashboard.resources : [
+      { title: "Field Agent basics", body: "Find real properties, support owners, and submit complete listings with photos, location, and contact proof.", href: "/assets/docs/field-agent/makaug-field-agent-welcome-pack.pptx" },
+      { title: "Targets and payout", body: "Aim for 10 quality listings per week. Approved live listings count toward Friday payout after admin review.", href: "/assets/docs/field-agent/makaug-field-agent-job-description.docx" },
+      { title: "Online listing checklist", body: "Use List Property, complete address, photos, OTP, and submit for moderation." },
+      { title: "WhatsApp listing checklist", body: "Use List via WhatsApp with property type, location, price, photos, owner contact, and your Field Agent ID." },
+      { title: "Rejection fixes", body: "Fix unclear photos, weak ownership proof, duplicate listings, missing contact details, or location issues.", href: "/assets/docs/field-agent/makaug-field-agent-training-deck.pptx" },
+      { title: "Safety and contract rules", body: "Fraudulent or unverifiable listings can suspend access and payouts.", href: "/assets/docs/field-agent/makaug-field-agent-contract.docx" }
+    ];
+    resourcesEl.innerHTML = resources.map((item) => {
+      const href = String(item.href || "");
+      const safeHref = href.startsWith("/assets/docs/field-agent/") ? href : "";
+      return `
+      <div class="rounded-xl border border-gray-200 p-3 bg-white flex flex-col gap-2">
+        <strong>${adminEscape(item.title || "Field Agent guide")}</strong><br>
+        <span>${adminEscape(item.body || "")}</span>
+        ${safeHref ? `<a href="${adminEscape(safeHref)}" target="_blank" rel="noopener noreferrer" class="inline-flex w-fit text-xs font-black text-blue-700 hover:text-blue-900 underline underline-offset-2">Open / download</a>` : ""}
+      </div>
+    `;
+    }).join("");
+  }
+}
+
+async function submitFieldAgentRejectionResponse(propertyId, title = "listing") {
+  const note = window.prompt(`Tell makaug.com Operations why this rejected ${title} should be reviewed again, or what you have fixed.`);
+  if (!note || note.trim().length < 8) {
+    toast("Add a short response before submitting.");
+    return;
+  }
+  try {
+    await apiRequest(`/api/field-agent/listings/${encodeURIComponent(propertyId)}/rejection-response`, {
+      method: "POST",
+      body: { notes: note.trim() }
+    });
+    invalidateFieldAgentDashboardData();
+    toast("Response sent to makaug.com Operations.");
+    await renderFieldDashboard();
+  } catch (error) {
+    toast(error.message || "Could not send the response.");
   }
 }
 
@@ -8882,12 +8967,16 @@ async function adminProvisionFieldAgent(event) {
   const email = (document.getElementById("admin-fa-email")?.value || "").trim();
   const phone = (document.getElementById("admin-fa-phone")?.value || "").trim();
   const pin = (document.getElementById("admin-fa-pin")?.value || "").trim();
-  const employeeNumber = (document.getElementById("admin-fa-code")?.value || "").trim();
+  const fieldAgentCode = normalizeFieldAgentCode((document.getElementById("admin-fa-code")?.value || "").trim());
   const territory = (document.getElementById("admin-fa-territory")?.value || "").trim();
   const payoutRate = (document.getElementById("admin-fa-payout-rate")?.value || "").trim();
   const result = document.getElementById("admin-fa-provision-result");
   if (!firstName || !email || !phone || !/^\d{4}$/.test(pin)) {
     toast("Add first name, email, phone, and a 4-digit PIN.");
+    return;
+  }
+  if ((document.getElementById("admin-fa-code")?.value || "").trim() && !fieldAgentCode) {
+    toast("Field Agent ID must look like FA-0001.");
     return;
   }
   const btn = document.getElementById("admin-fa-provision-btn");
@@ -8905,7 +8994,8 @@ async function adminProvisionFieldAgent(event) {
         email,
         phone,
         pin,
-        employee_number: employeeNumber,
+        field_agent_code: fieldAgentCode,
+        employee_number: fieldAgentCode,
         territory,
         payout_rate_ugx: payoutRate || 15000,
         preferred_language: currentLang || "en"
@@ -8913,12 +9003,12 @@ async function adminProvisionFieldAgent(event) {
     });
     const data = res?.data || {};
     if (result) {
-      result.textContent = `Created ${data.field_agent_code || "Field Agent"} for ${data.phone || phone}. Give the agent their phone/email and PIN privately.`;
+      result.textContent = `Created ${data.field_agent_code || "Field Agent"} for ${data.first_name || firstName}. Give the agent their Field Agent ID and 4-digit PIN privately.`;
     }
     const pinInput = document.getElementById("admin-fa-pin");
     if (pinInput) pinInput.value = "";
     await trackEvent("admin_field_agent_provisioned", { field_agent_code: data.field_agent_code || "", source_page: currentPage });
-    toast("Field Agent login created.");
+    toast("Field Agent ID and PIN created.");
     await renderAdminDashboard();
   } catch (error) {
     if (result) result.textContent = error.message || "Could not create Field Agent account.";
@@ -10754,18 +10844,34 @@ async function submitAuthSignIn() {
   const password = (document.getElementById("auth-signin-password")?.value || "").trim();
   const audience = authSignInAudience;
   if (!password) {
-    toast("Enter your password.");
+    toast(audience === "field_agent" ? "Enter your 4-digit PIN." : "Enter your password.");
+    return;
+  }
+
+  if (audience === "field_agent") {
+    const fieldAgentCode = normalizeFieldAgentCode(identifierRaw);
+    if (!fieldAgentCode || !/^\d{4}$/.test(password)) {
+      toast("Enter a valid Field Agent ID and 4-digit PIN.");
+      return;
+    }
+    setButtonLoading("auth-signin-btn", true);
+    try {
+      const res = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: { field_agent_code: fieldAgentCode, password, audience }
+      });
+      invalidateFieldAgentDashboardData();
+      await finalizeAuth(res?.data, "field_agent_id_pin", audience);
+    } catch (error) {
+      toast(error.message || "Field Agent sign in failed.");
+    } finally {
+      setButtonLoading("auth-signin-btn", false, "Sign In");
+    }
     return;
   }
 
   let authIdentifier = identifierRaw;
-  if (audience === "field_agent" && !identifierRaw) {
-    if (!employeeNumber || !agentNumber) {
-      toast("Enter phone/email and password.");
-      return;
-    }
-    authIdentifier = `${employeeNumber}|${agentNumber}`;
-  } else if (!identifierRaw) {
+  if (!identifierRaw) {
     toast("Enter phone/email and password.");
     return;
   }
@@ -13114,6 +13220,8 @@ function validateListStep3() {
   const fraud = document.getElementById("lp-verify-fraud")?.checked;
   const consent = document.getElementById("lp-verify-consent")?.checked;
   const ninMatch = document.getElementById("lp-verify-nin-match")?.checked;
+  const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
+  const fieldAgentId = lpVal("lp-field-agent-id");
   if (!name || !email || !phone || !nin) {
     if (!name) markLpFieldError("lp-verify-name", "Full name is required.");
     if (!email) markLpFieldError("lp-verify-email", "Email is required.");
@@ -13157,6 +13265,11 @@ function validateListStep3() {
     if (!fraud) markLpFieldError("lp-verify-fraud", "Confirm anti-fraud declaration.");
     if (!consent) markLpFieldError("lp-verify-consent", "Consent is required.");
     toast("Please accept the verification declarations.");
+    return false;
+  }
+  if (fieldAgentAssisted && !normalizeFieldAgentCode(fieldAgentId)) {
+    markLpFieldError("lp-field-agent-id", "Use Field Agent ID format FA-0001.");
+    toast("Enter the Field Agent ID in FA-0001 format, or set Field Agent assisted to No.");
     return false;
   }
   const otpOk = !!lpListingOtpToken && (
@@ -13270,7 +13383,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   const areaHighlights = lpVal("lp-area-highlights-edit") || autoAreaHighlights;
   const studentsWelcome = type === "student" || extra.students_welcome === "yes";
   const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
-  const fieldAgentId = lpVal("lp-field-agent-id") || null;
+  const fieldAgentId = fieldAgentAssisted ? (normalizeFieldAgentCode(lpVal("lp-field-agent-id")) || lpVal("lp-field-agent-id") || null) : null;
   const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
 	      const videoUrl = lpVal("lp-video-url");
 	      const contactPref = lpVal("lp-contact-pref") || "both";
@@ -14186,7 +14299,7 @@ async function submitAgentApplication() {
   const nin = normalizeNinInput((document.getElementById("agent-nin")?.value || "").trim());
   const registrationStatus = "not_registered";
   const fieldAgentAssisted = (document.getElementById("agent-field-assisted")?.value || "no") === "yes";
-  const fieldAgentId = (document.getElementById("agent-field-id")?.value || "").trim();
+  const fieldAgentId = normalizeFieldAgentCode(document.getElementById("agent-field-id")?.value || "");
   const otpChannel = agentOtpChannel === "email" ? "email" : "phone";
   const resolvedLicenceNumber = licenceNumber || `PENDING-${Date.now()}`;
 
@@ -14220,7 +14333,7 @@ async function submitAgentApplication() {
     return;
   }
   if (fieldAgentAssisted && !fieldAgentId) {
-    toast("Please enter Field Agent ID or set assisted to No.");
+    toast("Please enter Field Agent ID in FA-0001 format or set assisted to No.");
     return;
   }
 
@@ -14724,11 +14837,20 @@ const ACCOUNT_ACCESS_ROLE_THEME = {
     border: "#fdba74",
     text: "#7c2d12",
     header: "linear-gradient(135deg, #064e3b 0%, #b45309 55%, #fb923c 100%)"
+  },
+  admin: {
+    name: "admin",
+    primary: "#14532d",
+    secondary: "#052e16",
+    soft: "#f0fdf4",
+    border: "#86efac",
+    text: "#14532d",
+    header: "linear-gradient(135deg, #052e16 0%, #14532d 54%, #16a34a 100%)"
   }
 };
 
 function accountAccessRoleTheme(role = "finder") {
-  return ACCOUNT_ACCESS_ROLE_THEME[normalizeAuthAudience(role)] || ACCOUNT_ACCESS_ROLE_THEME.finder;
+  return ACCOUNT_ACCESS_ROLE_THEME[normalizeAuthAudience(role, true)] || ACCOUNT_ACCESS_ROLE_THEME.finder;
 }
 
 const ACCOUNT_ACCESS_SCREENING = {
@@ -14844,11 +14966,32 @@ function handleAccountAccessFinderGoalChange() {
 
 function normalizeAuthAudience(audience = "finder", allowAdmin = false) {
   const normalized = String(audience || "").toLowerCase();
-  if (allowAdmin && normalized === "admin") return "admin";
+  if (normalized === "admin" || normalized === "super_admin") return allowAdmin ? "admin" : "finder";
   if (normalized === "agent" || normalized === "broker") return "agent";
   if (normalized === "student") return "student";
   if (normalized === "advertiser") return "advertiser";
   if (normalized === "field_agent" || normalized === "field") return "field_agent";
+  return "finder";
+}
+
+function authAudienceFromLoginParams(params = new URLSearchParams()) {
+  const explicit = params.get("role") || params.get("audience");
+  if (explicit) return explicit;
+  const rawNext = String(params.get("next") || "");
+  let nextPath = rawNext;
+  try {
+    nextPath = new URL(rawNext, window.location.origin).pathname;
+  } catch (error) {
+    try {
+      nextPath = decodeURIComponent(rawNext).split("?")[0].split("#")[0];
+    } catch (_) {}
+  }
+  const normalizedNext = String(nextPath || "").toLowerCase();
+  if (normalizedNext === "/admin" || normalizedNext === "/admin-dashboard" || normalizedNext.startsWith("/admin/")) return "admin";
+  if (normalizedNext === "/student-dashboard") return "student";
+  if (normalizedNext === "/broker-dashboard") return "agent";
+  if (normalizedNext === "/field-agent-dashboard") return "field_agent";
+  if (normalizedNext === "/advertiser-dashboard") return "advertiser";
   return "finder";
 }
 
@@ -14866,6 +15009,9 @@ function signupRouteForAudience(audience = "finder") {
 function accountAccessRouteBenefit() {
   const path = String(window.location.pathname || "/").toLowerCase();
   const lang = currentLang || "en";
+  if (accountAccessDrawerAudience === "admin") {
+    return `Admin access is protected. Sign in with your ${publicBrand()} admin or super_admin account to open the owner dashboard.`;
+  }
   const copy = {
     en: {
       rent: "Renting? Save rentals, create alerts, book viewings, and track callbacks.",
@@ -14917,49 +15063,56 @@ function accountAccessRoleCopy(role = "finder") {
       student: ["Student", "Campus rooms and alerts."],
       agent: ["Broker", "Listings, leads, viewings."],
       field_agent: ["Field Agent", "PIN sign-in and payouts."],
-      advertiser: ["Advertiser", "Campaigns, payments, leads."]
+      advertiser: ["Advertiser", "Campaigns, payments, leads."],
+      admin: ["Admin", "Platform control access."]
     },
     lg: {
       finder: ["Anoonya Property", "Noonya, tereka, funa alerts."],
       student: ["Omuyizi", "Bisulo okumpi ne campus."],
       agent: ["Omusuubuzi w'ebyamaka", "Listings, leads, ne viewings."],
       field_agent: ["Omukozi wa field", "PIN, listings, ne payouts."],
-      advertiser: ["Omulanga", "Campaigns, payments, ne leads."]
+      advertiser: ["Omulanga", "Campaigns, payments, ne leads."],
+      admin: ["Admin", "Platform control access."]
     },
     sw: {
       finder: ["Mtafutaji", "Tafuta, hifadhi, arifa."],
       student: ["Mwanafunzi", "Vyumba karibu na campus."],
       agent: ["Dalali", "Listings, leads, viewings."],
       field_agent: ["Wakala wa field", "PIN, listings, na malipo."],
-      advertiser: ["Mtangazaji", "Kampeni, malipo, leads."]
+      advertiser: ["Mtangazaji", "Kampeni, malipo, leads."],
+      admin: ["Admin", "Platform control access."]
     },
     ac: {
       finder: ["Lanwo property", "Yeny, gwok, alert."],
       student: ["Lanyut", "Rooms macok ki campus."],
       agent: ["Lacat property", "Listings, leads, viewings."],
       field_agent: ["Latich field", "PIN, listings, payouts."],
-      advertiser: ["Lami kwena", "Campaigns, payments, leads."]
+      advertiser: ["Lami kwena", "Campaigns, payments, leads."],
+      admin: ["Admin", "Platform control access."]
     },
     ny: {
       finder: ["Omunooni wa property", "Noonya, bika, alert."],
       student: ["Omwegi", "Ebisenge bya campus."],
       agent: ["Omushuubuzi wa property", "Listings, leads, viewings."],
       field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
-      advertiser: ["Omurangirizi", "Campaigns, payments, leads."]
+      advertiser: ["Omurangirizi", "Campaigns, payments, leads."],
+      admin: ["Admin", "Platform control access."]
     },
     rn: {
       finder: ["Omunooni wa property", "Noonya, bika, alert."],
       student: ["Omwegi", "Ebisenge bya campus."],
       agent: ["Omushuubuzi wa property", "Listings, leads, viewings."],
       field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
-      advertiser: ["Omurangirizi", "Campaigns, payments, leads."]
+      advertiser: ["Omurangirizi", "Campaigns, payments, leads."],
+      admin: ["Admin", "Platform control access."]
     },
     sm: {
       finder: ["Anoonya property", "Noonya, tereka, alert."],
       student: ["Omuyizi", "Ebisulo bya campus."],
       agent: ["Omusuubuzi w'ebyamaka", "Listings, leads, viewings."],
       field_agent: ["Omukozi wa field", "PIN, listings, payouts."],
-      advertiser: ["Omulanga", "Campaigns, payments, leads."]
+      advertiser: ["Omulanga", "Campaigns, payments, leads."],
+      admin: ["Admin", "Platform control access."]
     }
   }[lang] || null;
   const copy = local || {
@@ -14967,7 +15120,8 @@ function accountAccessRoleCopy(role = "finder") {
     student: ["Student", "Campus rooms and alerts."],
     agent: ["Broker", "Listings, leads, viewings."],
     field_agent: ["Field Agent", "PIN sign-in and payouts."],
-    advertiser: ["Advertiser", "Campaigns, payments, leads."]
+    advertiser: ["Advertiser", "Campaigns, payments, leads."],
+    admin: ["Admin", "Platform control access."]
   };
   return {
     finder: {
@@ -14994,8 +15148,13 @@ function accountAccessRoleCopy(role = "finder") {
       label: copy.advertiser[0],
       icon: "fa-bullhorn",
       body: copy.advertiser[1]
+    },
+    admin: {
+      label: copy.admin[0],
+      icon: "fa-shield-halved",
+      body: copy.admin[1]
     }
-  }[normalizeAuthAudience(role)] || {
+  }[normalizeAuthAudience(role, true)] || {
     label: copy.finder[0],
     icon: "fa-house-chimney",
     body: copy.finder[1]
@@ -15569,19 +15728,20 @@ function updateAccountAccessRoleFocus() {
   const selectedWrap = document.getElementById("account-access-selected-role-card");
   const secondary = document.getElementById("account-access-secondary-actions");
   const isFocusedFlow = accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
-  if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow);
+  const isAdmin = accountAccessDrawerAudience === "admin";
+  if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow || isAdmin);
   if (selectedWrap) {
     const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
     const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
-    selectedWrap.classList.toggle("hidden", !isFocusedFlow);
+    selectedWrap.classList.toggle("hidden", !(isFocusedFlow || isAdmin));
     selectedWrap.style.borderColor = theme.border;
     selectedWrap.style.background = theme.soft;
-    selectedWrap.innerHTML = isFocusedFlow ? `<div class="flex items-center justify-between gap-3">
+    selectedWrap.innerHTML = (isFocusedFlow || isAdmin) ? `<div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
         <span class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center" style="color:${theme.primary};"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
         <span><span class="block text-sm font-black text-gray-900">${adminEscape(copy.label)}</span><span class="block text-xs text-gray-600">${adminEscape(copy.body)}</span></span>
       </div>
-      ${accountAccessDrawerMode === "create" && accountAccessCreateStep === "details" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold" style="color:${theme.primary};">Back to account type</button>` : ""}
+      ${!isAdmin && accountAccessDrawerMode === "create" && accountAccessCreateStep === "details" ? `<button type="button" onclick="showAccountAccessRolePicker()" class="text-xs font-bold" style="color:${theme.primary};">Back to account type</button>` : ""}
     </div>` : "";
   }
   if (secondary) secondary.classList.toggle("hidden", accountAccessDrawerMode === "verify" || accountAccessDrawerMode === "forgot");
@@ -15591,7 +15751,7 @@ function applyAccountAccessTheme() {
   const drawer = document.getElementById("account-access-drawer");
   if (!drawer) return;
   const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
-  drawer.setAttribute("data-auth-role-theme", normalizeAuthAudience(accountAccessDrawerAudience));
+  drawer.setAttribute("data-auth-role-theme", normalizeAuthAudience(accountAccessDrawerAudience, true));
   drawer.style.setProperty("--auth-role-primary", theme.primary);
   drawer.style.setProperty("--auth-role-secondary", theme.secondary);
   drawer.style.setProperty("--auth-role-soft", theme.soft);
@@ -15827,7 +15987,7 @@ function ensureAccountAccessDrawer() {
           </div>
           <p id="account-access-role-body" class="text-sm text-gray-600 mt-2"></p>
           <div id="account-access-signin-wrap">
-            <label class="block text-xs font-bold text-gray-600 mt-4 mb-1" data-auth-text="identifier">Email address or phone number</label>
+            <label id="account-access-identifier-label" class="block text-xs font-bold text-gray-600 mt-4 mb-1" data-auth-text="identifier">Email address or phone number</label>
             <input id="account-access-identifier" autocomplete="username" class="w-full min-h-[48px] border border-green-100 rounded-xl px-4 py-3 text-base sm:text-sm" placeholder="Email address or phone number">
             <p id="account-access-identifier-help" class="text-xs text-gray-500 mt-1">You can use either your email address or WhatsApp phone number.</p>
           </div>
@@ -16001,7 +16161,7 @@ function handleAccountAccessKeydown(event) {
 }
 
 function setAccountAccessRole(role = "finder") {
-  accountAccessDrawerAudience = normalizeAuthAudience(role);
+  accountAccessDrawerAudience = normalizeAuthAudience(role, true);
   const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
   const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
   setTextById("account-access-role-label", copy.label);
@@ -16023,30 +16183,51 @@ function setAccountAccessRole(role = "finder") {
 
 function updateAccountAccessSignInCopy() {
   const isFieldAgent = accountAccessDrawerAudience === "field_agent";
+  const isAdmin = accountAccessDrawerAudience === "admin";
+  const drawer = document.getElementById("account-access-drawer");
   const label = document.getElementById("account-access-password-label");
   const input = document.getElementById("account-access-password");
   const help = document.getElementById("account-access-password-help");
+  const identifierLabel = document.getElementById("account-access-identifier-label");
+  const identifierInput = document.getElementById("account-access-identifier");
   const identifierHelp = document.getElementById("account-access-identifier-help");
   const roleBody = document.getElementById("account-access-role-body");
-  if (label) label.textContent = isFieldAgent ? "Password or 4-digit PIN" : accountAccessText("password");
+  if (identifierLabel) identifierLabel.textContent = isAdmin ? "Admin email address" : (isFieldAgent ? "Field Agent ID" : accountAccessText("identifier"));
+  if (identifierInput) {
+    identifierInput.placeholder = isAdmin ? `admin@${publicBrand()}` : (isFieldAgent ? "FA-0001" : accountAccessText("identifier"));
+    identifierInput.autocomplete = isFieldAgent ? "off" : "username";
+    identifierInput.inputMode = isFieldAgent ? "text" : "email";
+    identifierInput.maxLength = isFieldAgent ? 8 : 128;
+  }
+  if (label) label.textContent = isFieldAgent ? "4-digit PIN" : accountAccessText("password");
   if (input) {
-    input.placeholder = isFieldAgent ? "Password or 4-digit PIN" : accountAccessText("password");
+    input.placeholder = isFieldAgent ? "4-digit PIN" : accountAccessText("password");
     input.inputMode = isFieldAgent ? "numeric" : "text";
-    input.maxLength = isFieldAgent ? 64 : 128;
+    input.maxLength = isFieldAgent ? 4 : 128;
   }
   if (help) {
-    help.textContent = isFieldAgent
-      ? `Field agents can sign in with the email/phone and 4-digit PIN issued by ${publicBrand()} admin.`
-      : `Use the password you created for your ${publicBrand()} account.`;
+    help.textContent = isAdmin
+      ? `Use the admin password for your ${publicBrand()} owner account.`
+      : (isFieldAgent
+      ? `Field agents sign in with the Field Agent ID and 4-digit PIN issued by ${publicBrand()} Operations.`
+      : `Use the password you created for your ${publicBrand()} account.`);
   }
   if (identifierHelp) {
-    identifierHelp.textContent = isFieldAgent
-      ? `Use the phone/WhatsApp number or email that ${publicBrand()} Operations gave you.`
-      : "You can use either your email address or WhatsApp phone number.";
+    identifierHelp.textContent = isAdmin
+      ? "Admin access is invite-only and is not available through public signup."
+      : (isFieldAgent
+      ? `Use the Field Agent ID from admin, for example FA-0001.`
+      : "You can use either your email address or WhatsApp phone number.");
   }
   if (roleBody && isFieldAgent && accountAccessDrawerMode === "signin") {
-    roleBody.textContent = "Sign in with your admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates.";
+    roleBody.textContent = "Sign in with your admin-issued Field Agent ID and PIN to track listings, approvals, rejections, ranking, balance, and payout updates.";
   }
+  if (roleBody && isAdmin && accountAccessDrawerMode === "signin") {
+    roleBody.textContent = "Sign in with your admin or super_admin account to open Launch Control, Setup Status, CRM, listings, payments, and owner tools.";
+  }
+  drawer?.querySelectorAll('[data-auth-text="createAccount"]').forEach((btn) => {
+    btn.classList.toggle("hidden", isAdmin);
+  });
 }
 
 function openAccountAccessDrawer(mode = "signin", audience = "finder") {
@@ -16128,7 +16309,7 @@ function showAccountAccessCreate() {
   const continueBtn = document.getElementById("account-access-continue-btn");
   if (continueBtn) continueBtn.textContent = accountAccessText("sendCode");
   setTextById("account-access-create-flow-note", accountAccessDrawerAudience === "field_agent"
-    ? `Field Agents can apply here, but ${publicBrand()} Operations can also create approved agent accounts with a phone/email and 4-digit PIN from admin.`
+    ? `Field Agents can apply here, but ${publicBrand()} Operations creates approved agent access with a Field Agent ID and 4-digit PIN from admin.`
     : accountAccessText("contactStepNote"));
   renderAccountAccessScreening();
   setAccountAccessCreateStep("details");
@@ -16574,7 +16755,36 @@ async function submitAccountAccessSignIn() {
   const identifierRaw = (document.getElementById("account-access-identifier")?.value || "").trim();
   const password = (document.getElementById("account-access-password")?.value || "").trim();
   if (!identifierRaw || !password) {
-    toast(accountAccessDrawerAudience === "field_agent" ? "Enter your email/phone and 4-digit PIN." : "Enter your email/phone and password.");
+    toast(accountAccessDrawerAudience === "field_agent" ? "Enter your Field Agent ID and 4-digit PIN." : "Enter your email/phone and password.");
+    return;
+  }
+  if (accountAccessDrawerAudience === "field_agent") {
+    const fieldAgentCode = normalizeFieldAgentCode(identifierRaw);
+    if (!fieldAgentCode || !/^\d{4}$/.test(password)) {
+      toast("Enter a valid Field Agent ID, for example FA-0001, and a 4-digit PIN.");
+      return;
+    }
+    const btn = document.getElementById("account-access-continue-btn");
+    const original = btn?.textContent || "Sign in";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Signing in...";
+    }
+    try {
+      const res = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: { field_agent_code: fieldAgentCode, password, audience: "field_agent" }
+      });
+      invalidateFieldAgentDashboardData();
+      await finalizeAuth(res?.data, "field_agent_id_pin", "field_agent");
+    } catch (error) {
+      toast(error.message || "Field Agent sign in failed.");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    }
     return;
   }
   const isEmailLogin = identifierRaw.includes("@");
@@ -20324,7 +20534,7 @@ function navigatePublicRoute(target, event, options = {}) {
   if (url.origin !== window.location.origin) return true;
   const path = normalizeRoutePath(url.pathname);
   if (path === "/login") {
-    openAuthSignIn(url.searchParams.get("role") || url.searchParams.get("audience") || "finder");
+    openAuthSignIn(authAudienceFromLoginParams(url.searchParams));
     const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
     if (currentPathWithQueryAndHash() !== nextUrl) {
       try { window.history.pushState({ page: "auth", source: options.source || "spa_login" }, "", nextUrl); } catch (error) {}
@@ -20580,8 +20790,7 @@ async function parseInitialDeepLink() {
 
   const authIntent = String(qs.get("auth") || "").toLowerCase();
   if (path === "/login" || authIntent === "signin") {
-    const role = qs.get("role") || qs.get("audience") || "finder";
-    openAuthSignIn(role);
+    openAuthSignIn(authAudienceFromLoginParams(qs));
     return true;
   }
   if (path === "/signup" || path === "/student-signup" || path === "/broker-signup" || path === "/field-agent-signup" || path === "/advertiser-signup" || authIntent === "create") {

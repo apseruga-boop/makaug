@@ -53,8 +53,8 @@ const T = {
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
-    askFieldAgent: '🤝 Has a MakaUg field agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
-    askFieldAgentDetails: 'Please send the field agent name or phone number so we can credit the right person.',
+    askFieldAgent: '🤝 Has a makaug.com Field Agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
+    askFieldAgentDetails: 'Please send the Field Agent ID, for example FA-0001, so we can credit the right person.',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? (e.g. Kampala, Wakiso, Mukono, Jinja...)',
     askArea: '🗺️ What area or neighbourhood? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -135,8 +135,8 @@ const T = {
     chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
     askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
-    askFieldAgent: '🤝 Waliwo field agent wa MakaUg eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
-    askFieldAgentDetails: 'Mpandiikira erinnya oba ennamba ya field agent tumumanye bulungi.',
+    askFieldAgent: '🤝 Waliwo Field Agent wa makaug.com eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
+    askFieldAgentDetails: 'Mpandiikira Field Agent ID, okugeza FA-0001, tumuwe credit entuufu.',
     askTitle: '✏️ Nyumba yoyo ejjiire etya? (e.g. "Enyumba esatu Ntinda Kampala"):',
     askDistrict: '📍 Ensi eno eri mu kitundu ki? (e.g. Kampala, Wakiso, Mukono...)',
     askArea: '🗺️ Ekitundu ekitonotono ki? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -291,8 +291,8 @@ Object.assign(T.sw, {
   languageUpdated: '✅ Lugha imesasishwa.',
   restarted: '🔄 Mazungumzo yameanza upya.',
   askOwnership: '✅ Wewe ndiye mmiliki wa mali hii, au ni wakala?\n1️⃣ Mimi ni mmiliki\n2️⃣ Mimi ni wakala',
-  askFieldAgent: '🤝 Je, field agent wa MakaUg amekusaidia na tangazo hili?\n1️⃣ Ndiyo\n2️⃣ Hapana',
-  askFieldAgentDetails: 'Tuma jina au namba ya field agent ili tumtambue vizuri.',
+  askFieldAgent: '🤝 Je, Field Agent wa makaug.com amekusaidia na tangazo hili?\n1️⃣ Ndiyo\n2️⃣ Hapana',
+  askFieldAgentDetails: 'Tuma Field Agent ID, mfano FA-0001, ili tumpe credit sahihi.',
   askBedrooms: '🛏 Mali ina vyumba vingapi vya kulala? (Andika nambari, au 0 kama haihusiki)',
   askDescription: '📝 Eleza mali yako kwa sentensi chache (eneo, vipengele, hali...)',
   askPublicName: '👤 Jina gani lionekane kwenye tangazo? (mfano Amina, Amina Properties, au Private Owner)',
@@ -315,8 +315,8 @@ Object.assign(T.sw, {
 Object.assign(T.ac, {
   askListingType: '🏠 Itye keto ngo?\n1️⃣ Ot/property me acata\n2️⃣ Ot/property me rent\n3️⃣ Ngom/plot\n4️⃣ Kabedo me students\n5️⃣ Property me business',
   askOwnership: '✅ In aye won property man, onyo agent?\n1️⃣ An won-ne\n2️⃣ An agent',
-  askFieldAgent: '🤝 Field agent pa MakaUg okonyi ki listing man?\n1️⃣ Eyo\n2️⃣ Pe',
-  askFieldAgentDetails: 'Coo nying onyo namba pa field agent wek wangeye maber.',
+  askFieldAgent: '🤝 Field Agent pa makaug.com okonyi ki listing man?\n1️⃣ Eyo\n2️⃣ Pe',
+  askFieldAgentDetails: 'Coo Field Agent ID, labol FA-0001, wek wami credit bot dano matye atir.',
   askTitle: '✏️ Coo nying property macek:',
   askDistrict: '📍 Property man tye i district mene?',
   askArea: '🗺️ Kabedo/neighbourhood mene?',
@@ -374,8 +374,8 @@ Object.assign(T.ac, {
 Object.assign(T.ny, {
   askListingType: '🏠 Niki eki orikuteeka?\n1️⃣ Enju/property kugurisha\n2️⃣ Enju/property kukodisa\n3️⃣ Itaka/plot\n4️⃣ Ebyokutuuramu byaba students\n5️⃣ Commercial property',
   askOwnership: '✅ Niwe nyini property egi, nari ori agent?\n1️⃣ Ndi nyini\n2️⃣ Ndi agent',
-  askFieldAgent: '🤝 Hari field agent wa MakaUg owakuhwereire ahari listing egi?\n1️⃣ Eego\n2️⃣ Ngaaha',
-  askFieldAgentDetails: 'Handiika eizina nari namba ya field agent kugira tumumanye gye.',
+  askFieldAgent: '🤝 Hari Field Agent wa makaug.com owakuhwereire ahari listing egi?\n1️⃣ Eego\n2️⃣ Ngaaha',
+  askFieldAgentDetails: 'Handiika Field Agent ID, nka FA-0001, kugira tumuhe credit eyaahikire.',
   askTitle: '✏️ Ha property yaawe omutwe mugufi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -410,8 +410,8 @@ Object.assign(T.ny, {
 Object.assign(T.rn, {
   askListingType: '🏠 Uriko ushira ikiho?\n1️⃣ Inzu/property yo kugurisha\n2️⃣ Inzu/property yo gukodesha\n3️⃣ Ubutaka/plot\n4️⃣ Aho abanyeshuri baba\n5️⃣ Commercial property',
   askOwnership: '✅ Ni wewe nyiri property, canke uri agent?\n1️⃣ Ndi nyiri\n2️⃣ Ndi agent',
-  askFieldAgent: '🤝 Hari field agent wa MakaUg yabafashije kuri iyi listing?\n1️⃣ Ego\n2️⃣ Oya',
-  askFieldAgentDetails: 'Andika izina canke namba ya field agent kugira tumumenye neza.',
+  askFieldAgent: '🤝 Hari Field Agent wa makaug.com yabafashije kuri iyi listing?\n1️⃣ Ego\n2️⃣ Oya',
+  askFieldAgentDetails: 'Andika Field Agent ID, nka FA-0001. Niba utayizi, andika NO.',
   askTitle: '✏️ Andika umutwe mugufi wa property:',
   askDistrict: '📍 Property iri muri district iyihe?',
   askArea: '🗺️ Area/neighbourhood iyihe?',
@@ -446,8 +446,8 @@ Object.assign(T.rn, {
 Object.assign(T.sm, {
   askListingType: "🏠 Oteeka ki?\n1️⃣ Ennyumba/property okutunda\n2️⃣ Ennyumba/property okukodisa\n3️⃣ Ettaka/plot\n4️⃣ Obutuuze bw'abayizi\n5️⃣ Commercial property",
   askOwnership: '✅ Ggwe nyini property eno, oba agent?\n1️⃣ Nze nyini\n2️⃣ Nze agent',
-  askFieldAgent: '🤝 Waliwo field agent wa MakaUg eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
-  askFieldAgentDetails: 'Mpandiikira erinnya oba ennamba ya field agent tumumanye bulungi.',
+  askFieldAgent: '🤝 Waliwo Field Agent wa makaug.com eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
+  askFieldAgentDetails: 'Mpandiikira Field Agent ID, okugeza FA-0001, tumuwe credit entuufu.',
   askTitle: '✏️ Wa property yo omutwe omumpi:',
   askDistrict: '📍 Property eri mu district ki?',
   askArea: '🗺️ Area/neighbourhood ki?',
@@ -564,6 +564,15 @@ function cleanDisplayName(value) {
   if (/\bcodex\b/i.test(withoutBusinessSuffix)) return '';
   if (/^https?:\/\//i.test(withoutBusinessSuffix)) return '';
   return withoutBusinessSuffix.replace(/[^\p{L}\p{N}\s'.-]/gu, '').replace(/\s+/g, ' ').trim().slice(0, 40);
+}
+
+function normalizeFieldAgentCode(value = '') {
+  const raw = normalizeInput(value).toUpperCase().replace(/\s+/g, '');
+  if (!raw) return '';
+  if (/^FA-\d{4,6}$/.test(raw)) return raw;
+  if (/^FA\d{4,6}$/.test(raw)) return `FA-${raw.slice(2)}`;
+  if (/^\d{1,6}$/.test(raw)) return `FA-${raw.padStart(4, '0')}`;
+  return '';
 }
 
 function firstNameFromSessionData(sessionData = {}) {
@@ -4487,10 +4496,13 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   if (step === 'ask_field_agent_details') {
-    if (cleanBody.length < 2) return respond(t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
+    const fieldAgentReference = normalizeFieldAgentCode(cleanBody);
+    if (!fieldAgentReference) {
+      return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgentDetails'), 'ask_field_agent_details');
+    }
     await patchDraft(phone, {
       assisted_by_field_agent: true,
-      field_agent_reference: cleanBody
+      field_agent_reference: fieldAgentReference
     });
     return respond(t(lang, 'askTitle'), 'title');
   }
@@ -4782,7 +4794,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
             whatsapp_listing_flow: true,
             verification_channel: d.otp_channel || 'phone',
             assisted_by_field_agent: d.assisted_by_field_agent === true,
-            field_agent_reference: d.field_agent_reference || null
+            field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null
           },
           expiresAt
         ]

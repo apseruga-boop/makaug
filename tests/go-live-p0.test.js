@@ -167,8 +167,10 @@ function run() {
   const frontendSource = `${sourceHtml}\n${appSource}`;
   const propertySeekerRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'property-seeker.js'), 'utf8');
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
+  const fieldAgentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'field-agent.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
   const authRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
+  const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const authFlowServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'authFlowService.js'), 'utf8');
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
@@ -471,21 +473,34 @@ function run() {
   assert(frontendSource.includes('id="account-access-brand-kicker"'), 'auth drawer should expose a brand kicker that can be verified');
   assert(frontendSource.includes('tracking-normal text-white/85 font-bold">makaug.com account'), 'auth drawer brand kicker should display lowercase makaug.com, not uppercase');
   assert(frontendSource.includes('ACCOUNT_ACCESS_ROLE_THEME'), 'auth drawer should define role-specific accent themes');
-  for (const roleTheme of ['name: "property finder"', 'name: "student"', 'name: "broker"', 'name: "field agent"', 'name: "advertiser"']) {
+  for (const roleTheme of ['name: "property finder"', 'name: "student"', 'name: "broker"', 'name: "field agent"', 'name: "advertiser"', 'name: "admin"']) {
     assert(frontendSource.includes(roleTheme), `auth drawer should expose role accent: ${roleTheme}`);
   }
   assert(frontendSource.includes('data-auth-role-theme'), 'auth drawer should apply selected role theme to the panel');
+  assert(frontendSource.includes('authAudienceFromLoginParams'), '/login should derive the correct drawer audience from next= routes');
+  assert(frontendSource.includes('normalizedNext === "/admin"') && frontendSource.includes('normalizedNext.startsWith("/admin/")'), '/login?next=/admin should open the admin drawer, not Property Finder');
+  assert(frontendSource.includes('Admin email address'), 'admin drawer should ask for an admin email address');
+  assert(frontendSource.includes('Admin access is invite-only and is not available through public signup.'), 'admin drawer should hide public signup ambiguity');
+  assert(frontendSource.includes('Sign in with your admin or super_admin account to open Launch Control'), 'admin drawer should explain protected owner dashboard access');
   assert(frontendSource.includes('accountAccessScreeningText'), 'auth drawer screening questions should be language-aware');
   for (const langKey of ['ac: {', 'ny: {', 'rn: {', 'sm: {']) {
     assert(frontendSource.includes(langKey), `auth drawer should have safe language text for ${langKey}`);
   }
-  assert(frontendSource.includes('Password or 4-digit PIN'), 'field-agent sign-in should visibly support the admin-issued 4-digit PIN');
-  assert(frontendSource.includes('admin-issued PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
+  assert(frontendSource.includes('Field Agent ID') && frontendSource.includes('4-digit PIN'), 'field-agent sign-in should visibly require the admin-issued Field Agent ID and 4-digit PIN');
+  assert(frontendSource.includes('admin-issued Field Agent ID and PIN to track listings, approvals, rejections, ranking, balance, and payout updates'), 'field-agent drawer copy should explain the operational dashboard');
+  assert(frontendSource.includes('body: { field_agent_code: fieldAgentCode, password, audience: "field_agent" }'), 'field-agent drawer should send Field Agent ID to auth login');
   assert(frontendSource.includes('id="admin-field-agent-provision-form"'), 'admin should have a field-agent provisioning form');
   assert(frontendSource.includes('id="admin-fa-code"'), 'admin field-agent setup should let owner assign FA-0001 style agent codes');
   assert(frontendSource.includes('adminProvisionFieldAgent'), 'admin field-agent provisioning form should be wired');
-  assert(frontendSource.includes('Create Field Agent login'), 'admin UI should expose the field-agent login setup path');
+  assert(frontendSource.includes('Create Field Agent ID + PIN'), 'admin UI should expose the field-agent ID + PIN setup path');
   assert(adminRoutes.includes("router.post('/field-agents/provision'"), 'admin API should provision field-agent accounts');
+  assert(adminRoutes.includes('generateNextFieldAgentCode') && adminRoutes.includes("FA-${String(max + 1).padStart(4, '0')}"), 'admin should generate sequential FA-0001 style field-agent IDs');
+  assert(adminRoutes.includes('Field Agent ID is already assigned'), 'admin should prevent duplicate Field Agent IDs');
+  assert(authRoutes.includes('profile_data->>\'field_agent_code\'') && authRoutes.includes('Invalid Field Agent ID or PIN'), 'auth login should support Field Agent ID + PIN');
+  assert(serverSource.includes("app.use('/api/field-agent', fieldAgentRoutes)"), 'server should mount field-agent dashboard APIs');
+  assert(fieldAgentRoutes.includes("router.get('/dashboard'") && fieldAgentRoutes.includes('requireFieldAgent'), 'field-agent API should expose a protected dashboard');
+  assert(fieldAgentRoutes.includes("router.post('/listings/:id/rejection-response'"), 'field-agent API should allow rejected listing responses');
+  assert(fieldAgentRoutes.includes('property_moderation_events') && fieldAgentRoutes.includes('field_agent_rejection_response_submitted'), 'field-agent rejection response should be logged for admin follow-up');
   assert(adminRoutes.includes('bcrypt.hash(pin, 12)'), 'field-agent PIN should be hashed before storage');
   assert(adminRoutes.includes('field_agent_account_provisioned'), 'field-agent provisioning should create a safe notification log');
   assert(adminRoutes.includes('field_agent_provisioned'), 'field-agent provisioning should create an admin audit event');
@@ -581,7 +596,7 @@ function run() {
     'Field Agent notice board',
     'Balance & payout tracker',
     'Money collected tracker',
-    'How to work as a MakaUg Field Agent',
+    'How to work as a makaug.com Field Agent',
     'Advertiser settings',
     'Advertiser Dashboard',
     'Create Campaign',
@@ -658,6 +673,17 @@ function run() {
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-readiness-report.md')), 'backend readiness report doc should exist');
   assert(fieldAgentSetupDoc.includes('FA-0001') && fieldAgentSetupDoc.includes('4-digit PIN'), 'field-agent live setup doc should give starter codes and PIN instructions');
+  assert(frontendSource.includes('/assets/docs/field-agent/makaug-field-agent-training-deck.pptx'), 'field-agent dashboard should expose training deck download');
+  assert(frontendSource.includes('/assets/docs/field-agent/makaug-field-agent-contract.docx'), 'field-agent dashboard should expose contract download');
+  for (const fieldAgentAsset of [
+    'makaug-field-agent-job-ad.pdf',
+    'makaug-field-agent-job-description.docx',
+    'makaug-field-agent-welcome-pack.pptx',
+    'makaug-field-agent-contract.docx',
+    'makaug-field-agent-training-deck.pptx'
+  ]) {
+    assert(fs.existsSync(path.join(__dirname, '..', 'assets', 'docs', 'field-agent', fieldAgentAsset)), `field-agent downloadable resource should exist: ${fieldAgentAsset}`);
+  }
   assert(backendReadinessReport.includes('Task 15 Backend Gate Addendum'), 'backend readiness report should include the Task 15 live audit addendum');
   assert(backendReadinessReport.includes('super_admin support exists, but live super_admin was not created because required env vars were not provided.'), 'backend readiness report should state exact super_admin live-creation blocker');
   assert(backendReadinessReport.includes('GET https://makaug.com/api/health'), 'backend readiness report should include live health proof');

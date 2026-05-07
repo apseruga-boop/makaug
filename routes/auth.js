@@ -77,6 +77,15 @@ function publicUser(row) {
   };
 }
 
+function normalizeFieldAgentCode(value = '') {
+  const raw = cleanText(value).toUpperCase().replace(/\s+/g, '');
+  if (!raw) return '';
+  if (/^FA-\d{4,6}$/.test(raw)) return raw;
+  if (/^FA\d{4,6}$/.test(raw)) return `FA-${raw.slice(2)}`;
+  if (/^\d{1,6}$/.test(raw)) return `FA-${raw.padStart(4, '0')}`;
+  return '';
+}
+
 function sanitizeProfileData(input = {}) {
   const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const allowed = [
@@ -1057,10 +1066,18 @@ router.post('/login', async (req, res, next) => {
   try {
     const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
+    const fieldAgentCode = normalizeFieldAgentCode(req.body.field_agent_code || req.body.employee_number || req.body.agent_id);
     const password = cleanText(req.body.password);
     const preferredAudience = normalizeSignupAudience(req.body.audience || req.body.preferred_audience || '');
 
-    if ((!phone && !email) || !password) {
+    if (preferredAudience === 'field_agent' && fieldAgentCode) {
+      if (!password) {
+        return res.status(400).json({ ok: false, error: 'Field Agent ID and 4-digit PIN are required' });
+      }
+      if (!/^\d{4}$/.test(password)) {
+        return res.status(401).json({ ok: false, error: 'Invalid Field Agent ID or PIN' });
+      }
+    } else if ((!phone && !email) || !password) {
       return res.status(400).json({ ok: false, error: 'phone/email and password are required' });
     }
 
@@ -1068,18 +1085,31 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'email is invalid' });
     }
 
-    const result = phone
-      ? await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active'])
-      : await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']);
+    const result = preferredAudience === 'field_agent' && fieldAgentCode
+      ? await db.query(
+        `SELECT *
+         FROM users
+         WHERE role = 'field_agent'
+           AND status = $2
+           AND (
+             UPPER(COALESCE(profile_data->>'field_agent_code', '')) = $1
+             OR UPPER(COALESCE(profile_data->>'employee_number', '')) = $1
+           )
+         LIMIT 1`,
+        [fieldAgentCode, 'active']
+      )
+      : (phone
+        ? await db.query('SELECT * FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active'])
+        : await db.query('SELECT * FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active']));
 
     if (!result.rows.length) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+      return res.status(401).json({ ok: false, error: preferredAudience === 'field_agent' ? 'Invalid Field Agent ID or PIN' : 'Invalid credentials' });
     }
 
     const user = result.rows[0];
     const ok = await bcrypt.compare(password, user.password_hash);
     if (!ok) {
-      return res.status(401).json({ ok: false, error: 'Invalid credentials' });
+      return res.status(401).json({ ok: false, error: preferredAudience === 'field_agent' ? 'Invalid Field Agent ID or PIN' : 'Invalid credentials' });
     }
 
     if (!user.phone_verified) {
