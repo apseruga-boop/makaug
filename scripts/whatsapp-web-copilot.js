@@ -28,8 +28,26 @@ const PROFILE_DIR = path.resolve(
 const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
+const RECENT_CHAT_SWEEP_MS = Math.max(3000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 6500));
+const RECENT_CHAT_SWEEP_LIMIT = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 5)));
+const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
+const OUTBOX_SENDS_PER_LOOP = Math.min(10, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 4)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
+let activeInboundRecipientHint = '';
+const COMPOSER_SELECTORS = [
+  'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
+  'footer div[role="textbox"][contenteditable="true"]',
+  'footer div[aria-label^="Type a message"][contenteditable="true"]',
+  'footer div[contenteditable="true"][data-tab]',
+  'footer div[contenteditable="true"]'
+];
+const SEND_BUTTON_SELECTORS = [
+  '[data-testid="compose-btn-send"]',
+  'footer button[aria-label*="Send"]',
+  'footer span[data-icon="send"]',
+  'span[data-icon="send"]'
+];
 
 if (!BRIDGE_TOKEN) {
   console.error('Missing WHATSAPP_WEB_BRIDGE_TOKEN in environment.');
@@ -98,6 +116,10 @@ function isTimestampOnly(value) {
   return /^\s*\d{1,2}:\d{2}\s*(?:AM|PM)?\s*$/i.test(String(value || '').trim());
 }
 
+function normalizeReplyText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
 async function apiRequest(endpoint, { method = 'GET', body } = {}) {
   const response = await fetch(`${BASE_URL}${endpoint}`, {
     method,
@@ -157,8 +179,10 @@ async function detectWhatsappReady(page) {
   });
 }
 
-async function scanUnreadChats(page) {
-  return page.evaluate(() => {
+async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
+  return page.evaluate((options) => {
+    const unreadOnlyRows = options?.unreadOnly !== false;
+    const maxRows = Math.max(1, Math.min(50, Number(options?.limit || 20)));
     const selectorGroups = [
       '[data-testid="cell-frame-container"]',
       'div[role="listitem"]'
@@ -184,8 +208,12 @@ async function scanUnreadChats(page) {
         preview,
         unread
       };
-    }).filter((row) => row.unread && row.title);
-  });
+    }).filter((row) => row.title && (!unreadOnlyRows || row.unread)).slice(0, maxRows);
+  }, { unreadOnly, limit });
+}
+
+async function scanUnreadChats(page) {
+  return scanChatRows(page, { unreadOnly: true, limit: 25 });
 }
 
 async function openChatByIndex(page, index) {
@@ -705,6 +733,9 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };
+  if (chatKey.replace(/\D/g, '').length >= 9) {
+    activeInboundRecipientHint = chatKey;
+  }
   if (source === 'active_chat' && mediaType !== 'text' && !snapshot.messageId && !snapshot.mediaFingerprint) {
     return { processed: 0, skipped: 'unstable_active_media_without_message_id' };
   }
@@ -783,6 +814,39 @@ async function ingestUnreadChats(page) {
   };
 }
 
+async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
+  const rows = await scanChatRows(page, { unreadOnly: false, limit });
+  let processed = 0;
+
+  for (const row of rows) {
+    const opened = await openChatByIndex(page, row.index);
+    if (!opened) continue;
+
+    const snapshots = await getRecentIncomingSnapshots(page, 6);
+    for (const snapshot of snapshots) {
+      const browserMessageKey = browserMessageKeyFor(snapshot, row);
+      if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
+      rememberBrowserMessageKey(browserMessageKey);
+      const hydrated = await hydrateVoiceSnapshot(page, {
+        ...snapshot,
+        browserMessageKey,
+        browserMessageSeen: true
+      });
+      const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
+      processed += result.processed || 0;
+    }
+  }
+
+  if (processed) {
+    log(`recent chat sweep processed ${processed} inbound message${processed === 1 ? '' : 's'}`);
+  }
+
+  return {
+    scanned: rows.length,
+    processed
+  };
+}
+
 async function ingestActiveChat(page) {
   const snapshots = await getRecentIncomingSnapshots(page);
   let processed = 0;
@@ -806,20 +870,142 @@ async function ingestActiveChat(page) {
   return processed;
 }
 
+async function findReplyComposer(page, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    for (const selector of COMPOSER_SELECTORS) {
+      const locator = page.locator(selector).last();
+      if (await locator.count()) {
+        const visible = await locator.isVisible().catch(() => true);
+        if (visible) return locator;
+      }
+    }
+    await page.waitForTimeout(120);
+  }
+  return null;
+}
+
+async function hasInvalidWhatsappPhoneNotice(page) {
+  return page.evaluate(() => /phone number shared via url is invalid|invalid phone number/i
+    .test(document.body?.innerText || ''));
+}
+
+async function waitForReplyComposer(page, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await hasInvalidWhatsappPhoneNotice(page).catch(() => false)) {
+      throw new Error('WhatsApp says this recipient phone number is invalid');
+    }
+    const composer = await findReplyComposer(page, 300);
+    if (composer) return composer;
+  }
+  return null;
+}
+
+async function getOutgoingMessageState(page) {
+  return page.evaluate(() => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    const nodes = Array.from(document.querySelectorAll('.message-out'));
+    const texts = nodes
+      .map((node) => normalize(node.innerText || node.textContent || ''))
+      .filter(Boolean);
+    return {
+      count: nodes.length,
+      lastText: texts[texts.length - 1] || '',
+      recentTexts: texts.slice(-10)
+    };
+  });
+}
+
+async function getReplyComposerText(page) {
+  return page.evaluate((selectors) => {
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    for (const selector of selectors) {
+      const matches = Array.from(document.querySelectorAll(selector));
+      const match = matches[matches.length - 1];
+      if (!match) continue;
+      return {
+        found: true,
+        text: normalize(match.innerText || match.textContent || '')
+      };
+    }
+    return { found: false, text: '' };
+  }, COMPOSER_SELECTORS);
+}
+
+async function clickWhatsAppSend(page) {
+  const clicked = await page.evaluate((selectors) => {
+    for (const selector of selectors) {
+      const matches = Array.from(document.querySelectorAll(selector));
+      const match = matches[matches.length - 1];
+      if (!match) continue;
+      const target = match.closest('button,[role="button"]') || match;
+      if (target && !target.disabled) {
+        target.click();
+        return true;
+      }
+    }
+    return false;
+  }, SEND_BUTTON_SELECTORS).catch(() => false);
+
+  if (clicked) return true;
+
+  await page.keyboard.press('Enter');
+  return true;
+}
+
+async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState = {}, timeoutMs = 3500) {
+  const expected = normalizeReplyText(expectedText);
+  const expectedPrefix = expected.slice(0, 120);
+  const beforeCount = Number(beforeState.count || 0);
+  const startedAt = Date.now();
+  const deadline = startedAt + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const state = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
+    const recentTexts = Array.isArray(state.recentTexts) ? state.recentTexts : [];
+    const matchedText = expectedPrefix
+      ? recentTexts.some((text) => normalizeReplyText(text).includes(expectedPrefix))
+      : false;
+    if (state.count > beforeCount && (!expectedPrefix || matchedText || state.lastText)) {
+      return true;
+    }
+    if (matchedText) return true;
+
+    const composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+    const composerText = normalizeReplyText(composerState.text || '');
+    if (composerState.found && !composerText && Date.now() - startedAt >= 450) {
+      return true;
+    }
+
+    await page.waitForTimeout(120);
+  }
+
+  return false;
+}
+
 async function openChatForReply(page, recipient) {
   const chatKey = String(recipient || '').trim();
   const phoneDigits = chatKey.replace(/\D/g, '');
+  const normalizedRecipient = normalizeChatKey(phoneDigits || chatKey);
+  if (activeInboundRecipientHint && activeInboundRecipientHint === normalizedRecipient) {
+    const composer = await waitForReplyComposer(page, 1500);
+    if (composer) return true;
+  }
   const activeSnapshot = await getActiveChatSnapshot(page).catch(() => null);
   const activeKey = normalizeChatKey(activeSnapshot?.chatKey || '');
-  if (activeKey && activeKey === normalizeChatKey(chatKey)) return true;
-  if (phoneDigits.length >= 9 && activeKey === normalizeChatKey(phoneDigits)) return true;
+  if (activeKey && activeKey === normalizedRecipient) {
+    return !!await waitForReplyComposer(page, 5000);
+  }
+  if (phoneDigits.length >= 9 && activeKey === normalizedRecipient) {
+    return !!await waitForReplyComposer(page, 5000);
+  }
 
   if (phoneDigits.length >= 9) {
     await page.goto(`https://web.whatsapp.com/send?phone=${encodeURIComponent(phoneDigits)}`, {
       waitUntil: 'domcontentloaded'
     });
-    await page.waitForTimeout(700);
-    return true;
+    return !!await waitForReplyComposer(page, 8000);
   }
 
   const searchSelectors = [
@@ -842,15 +1028,13 @@ async function openChatForReply(page, recipient) {
         const exactTitle = page.locator(`span[title="${chatKey.replace(/"/g, '\\"')}"]`).first();
         if (await exactTitle.count()) {
           await exactTitle.click();
-          await page.waitForTimeout(350);
-          return true;
+          return !!await waitForReplyComposer(page, 7000);
         }
 
         const row = page.locator('[data-testid="cell-frame-container"], div[role="listitem"]').first();
         if (await row.count()) {
           await row.click();
-          await page.waitForTimeout(350);
-          return true;
+          return !!await waitForReplyComposer(page, 7000);
         }
       } catch (_error) {
         // continue to next selector
@@ -862,27 +1046,8 @@ async function openChatForReply(page, recipient) {
 }
 
 async function typeAndSendReply(page, text) {
-  const composerSelectors = [
-    'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
-    'footer div[aria-label^="Type a message"][contenteditable="true"]',
-    'footer div[contenteditable="true"][data-tab]',
-    'footer div[contenteditable="true"]',
-    'div[contenteditable="true"][data-tab="10"]'
-  ];
-
-  let composer = null;
-  const deadline = Date.now() + 15000;
-  while (!composer && Date.now() < deadline) {
-    for (const selector of composerSelectors) {
-      const locator = page.locator(selector).last();
-      if (await locator.count()) {
-        composer = locator;
-        break;
-      }
-    }
-    if (!composer) await page.waitForTimeout(250);
-  }
-
+  const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
+  const composer = await waitForReplyComposer(page, 15000);
   if (!composer) {
     throw new Error('Could not find the WhatsApp reply box');
   }
@@ -893,33 +1058,36 @@ async function typeAndSendReply(page, text) {
   await page.keyboard.insertText(String(text || ''));
   await page.waitForTimeout(120);
 
-  const sendSelectors = [
-    '[data-testid="compose-btn-send"]',
-    'span[data-icon="send"]',
-    'button span[data-icon="send"]',
-    'button[aria-label*="Send"]'
-  ];
+  await clickWhatsAppSend(page);
+  const confirmed = await waitForOutgoingReplyConfirmation(page, text, beforeState);
+  if (confirmed) return true;
 
-  for (const selector of sendSelectors) {
-    const button = page.locator(selector).last();
-    if (await button.count()) {
-      await button.click();
-      await page.waitForTimeout(250);
-      return true;
-    }
+  const composerAfterMiss = await findReplyComposer(page, 700);
+  if (composerAfterMiss) {
+    await composerAfterMiss.click();
+    await clickWhatsAppSend(page);
+    const confirmedAfterRetry = await waitForOutgoingReplyConfirmation(page, text, beforeState, 2500);
+    if (confirmedAfterRetry) return true;
   }
 
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(250);
-  return true;
+  throw new Error('WhatsApp send was not confirmed in the chat');
 }
 
 async function processOutbox(page) {
-  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=5`);
+  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=${encodeURIComponent(OUTBOX_CLAIM_LIMIT)}`);
   const items = Array.isArray(response.data) ? response.data : [];
+  const activeRecipient = normalizeChatKey(activeInboundRecipientHint || '');
+  const orderedItems = items.sort((a, b) => {
+    if (!activeRecipient) return 0;
+    const aKey = normalizeChatKey(a.recipient || '');
+    const bKey = normalizeChatKey(b.recipient || '');
+    if (aKey === activeRecipient && bKey !== activeRecipient) return -1;
+    if (bKey === activeRecipient && aKey !== activeRecipient) return 1;
+    return 0;
+  }).slice(0, OUTBOX_SENDS_PER_LOOP);
 
   let sent = 0;
-  for (const item of items) {
+  for (const item of orderedItems) {
     try {
       const opened = await openChatForReply(page, item.recipient);
       if (!opened) {
@@ -960,6 +1128,37 @@ async function ensureWhatsappTab(page) {
   }
 }
 
+async function getUsableWhatsappPage(context) {
+  const pages = context.pages().filter((candidate) => !candidate.isClosed());
+  const whatsappPage = pages.find((candidate) => {
+    try {
+      return candidate.url().includes('web.whatsapp.com');
+    } catch (_error) {
+      return false;
+    }
+  });
+  const page = whatsappPage || pages[0] || await context.newPage();
+  await ensureWhatsappTab(page);
+  return page;
+}
+
+async function recoverWhatsappPage(context, previousPage) {
+  try {
+    if (previousPage && !previousPage.isClosed()) {
+      await ensureWhatsappTab(previousPage);
+      await previousPage.waitForTimeout(250);
+      await detectWhatsappReady(previousPage);
+      return previousPage;
+    }
+  } catch (_error) {
+    // The old page is not usable. Fall through and locate/open a fresh WhatsApp tab.
+  }
+
+  const page = await getUsableWhatsappPage(context);
+  await page.waitForTimeout(500);
+  return page;
+}
+
 async function main() {
   let browser = null;
   let context = null;
@@ -980,8 +1179,7 @@ async function main() {
     });
   }
 
-  const page = context.pages()[0] || await context.newPage();
-  await ensureWhatsappTab(page);
+  let page = await getUsableWhatsappPage(context);
 
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
@@ -995,6 +1193,7 @@ async function main() {
 
   let lastHeartbeat = 0;
   let lastBridgeState = '';
+  let lastRecentSweep = 0;
   let consecutiveLoopErrors = 0;
 
   while (true) {
@@ -1032,6 +1231,11 @@ async function main() {
 
       const unreadResult = await ingestUnreadChats(page);
       const activeProcessed = await ingestActiveChat(page);
+      let recentSweepResult = { scanned: 0, processed: 0 };
+      if (now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
+        recentSweepResult = await ingestRecentChatsSweep(page);
+        lastRecentSweep = Date.now();
+      }
       const sentCount = await processOutbox(page);
       const activeSnapshot = await getActiveChatSnapshot(page);
 
@@ -1044,6 +1248,8 @@ async function main() {
           stats: {
             processed_unread: unreadResult.processed || 0,
             processed_active: activeProcessed || 0,
+            processed_recent_sweep: recentSweepResult.processed || 0,
+            scanned_recent_sweep: recentSweepResult.scanned || 0,
             sent_outbound: sentCount || 0
           }
         });
@@ -1062,7 +1268,19 @@ async function main() {
           consecutive_loop_errors: consecutiveLoopErrors
         }
       });
-      if (isClosedBrowserError(error) || consecutiveLoopErrors >= MAX_CONSECUTIVE_LOOP_ERRORS) {
+      if (isClosedBrowserError(error) && consecutiveLoopErrors < MAX_CONSECUTIVE_LOOP_ERRORS) {
+        try {
+          page = await recoverWhatsappPage(context, page);
+          log(`recovered WhatsApp tab after closed-page error (${page.url() || 'no_url'})`);
+          consecutiveLoopErrors = 0;
+          lastBridgeState = '';
+          await sleep(600);
+          continue;
+        } catch (recoveryError) {
+          log('WhatsApp tab recovery failed:', recoveryError.message || recoveryError);
+        }
+      }
+      if (consecutiveLoopErrors >= MAX_CONSECUTIVE_LOOP_ERRORS || isClosedBrowserError(error)) {
         log(`bridge loop is not recoverable in-process; exiting so whatsapp-web-agent can restart it (${consecutiveLoopErrors} consecutive error${consecutiveLoopErrors === 1 ? '' : 's'}).`);
         process.exit(1);
       }
