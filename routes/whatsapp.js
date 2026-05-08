@@ -5440,7 +5440,8 @@ router.get('/web-bridge/outbox', async (req, res) => {
   const clientId = normalizeInput(req.query.client_id || req.headers['x-whatsapp-web-bridge-client'] || 'web_bridge');
   const messages = await claimWhatsappWebBridgeMessages({
     clientId,
-    limit: req.query.limit || 10
+    limit: req.query.limit || 10,
+    recipient: req.query.recipient || ''
   });
 
   return res.json({

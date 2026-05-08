@@ -163,10 +163,11 @@ async function queueWhatsappWebBridgeMessage({
   return result.rows[0] || null;
 }
 
-async function claimWhatsappWebBridgeMessages({ clientId, limit = 10 } = {}) {
+async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '' } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
-  const claimWindow = Math.min(300, Math.max(15, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 45)));
+  const claimWindow = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 10)));
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
+  const recipientDigits = String(recipient || '').replace(/\D/g, '');
 
   const result = await db.query(
     `WITH claimable AS (
@@ -176,6 +177,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10 } = {}) {
         AND q.status IN ('pending', 'retry')
         AND q.next_attempt_at <= NOW()
         AND COALESCE(q.metadata->>'delivery_mode', '') = 'web_bridge'
+        AND ($4::text = '' OR regexp_replace(COALESCE(q.user_phone, ''), '\\D', '', 'g') = $4::text)
       ORDER BY q.next_attempt_at ASC, q.created_at ASC
       LIMIT $1
       FOR UPDATE SKIP LOCKED
@@ -193,7 +195,7 @@ async function claimWhatsappWebBridgeMessages({ clientId, limit = 10 } = {}) {
     FROM claimable
     WHERE q.id = claimable.id
     RETURNING q.*`,
-    [safeLimit, normalizedClientId, String(claimWindow)]
+    [safeLimit, normalizedClientId, String(claimWindow), recipientDigits]
   );
 
   return result.rows;
@@ -217,7 +219,7 @@ async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
 }
 
 async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}) {
-  const retryDelay = Math.min(300, Math.max(15, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 30)));
+  const retryDelay = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 8)));
   const metadata = patch && typeof patch === 'object' ? patch : {};
   const result = await db.query(
     `UPDATE outbound_message_queue

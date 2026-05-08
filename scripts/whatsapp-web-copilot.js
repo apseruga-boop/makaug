@@ -25,13 +25,13 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 700));
+const POLL_MS = Math.max(200, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 250));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const RECENT_CHAT_SWEEP_MS = Math.max(3000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 6500));
-const RECENT_CHAT_SWEEP_LIMIT = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 5)));
+const RECENT_CHAT_SWEEP_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 30000));
+const RECENT_CHAT_SWEEP_LIMIT = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 3)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
-const OUTBOX_SENDS_PER_LOOP = Math.min(10, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 4)));
+const OUTBOX_SENDS_PER_LOOP = Math.min(10, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 8)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 let activeInboundRecipientHint = '';
@@ -222,7 +222,7 @@ async function openChatByIndex(page, index) {
     const locator = page.locator(selector).nth(index);
     if (await locator.count()) {
       await locator.click();
-      await page.waitForTimeout(350);
+      await page.waitForTimeout(120);
       return true;
     }
   }
@@ -778,7 +778,12 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
     if (!result.duplicate) {
       log(`ingested ${source} ${mediaType} message from ${chatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
     }
-    return { processed: result.duplicate ? 0 : 1, duplicate: !!result.duplicate };
+    return {
+      processed: result.duplicate ? 0 : 1,
+      duplicate: !!result.duplicate,
+      queuedReply: !!result.data?.queued_reply,
+      chatKey
+    };
   } catch (error) {
     log('failed to ingest chat:', chatKey, error.message || error);
     return { processed: 0, error };
@@ -805,6 +810,9 @@ async function ingestUnreadChats(page) {
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
+      if (result.queuedReply) {
+        await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+      }
     }
   }
 
@@ -834,6 +842,9 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
       processed += result.processed || 0;
+      if (result.queuedReply) {
+        await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+      }
     }
   }
 
@@ -866,6 +877,9 @@ async function ingestActiveChat(page) {
       source: 'active_chat'
     });
     processed += result.processed || 0;
+    if (result.queuedReply) {
+      await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+    }
   }
   return processed;
 }
@@ -880,7 +894,7 @@ async function findReplyComposer(page, timeoutMs = 15000) {
         if (visible) return locator;
       }
     }
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(50);
   }
   return null;
 }
@@ -954,7 +968,7 @@ async function clickWhatsAppSend(page) {
   return true;
 }
 
-async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState = {}, timeoutMs = 3500) {
+async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState = {}, timeoutMs = 1200) {
   const expected = normalizeReplyText(expectedText);
   const expectedPrefix = expected.slice(0, 120);
   const beforeCount = Number(beforeState.count || 0);
@@ -971,7 +985,7 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
     }
     if (matchedText) return true;
 
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(50);
   }
 
   return false;
@@ -982,16 +996,16 @@ async function openChatForReply(page, recipient) {
   const phoneDigits = chatKey.replace(/\D/g, '');
   const normalizedRecipient = normalizeChatKey(phoneDigits || chatKey);
   if (activeInboundRecipientHint && activeInboundRecipientHint === normalizedRecipient) {
-    const composer = await waitForReplyComposer(page, 1500);
+    const composer = await waitForReplyComposer(page, 450);
     if (composer) return true;
   }
   const activeSnapshot = await getActiveChatSnapshot(page).catch(() => null);
   const activeKey = normalizeChatKey(activeSnapshot?.chatKey || '');
   if (activeKey && activeKey === normalizedRecipient) {
-    return !!await waitForReplyComposer(page, 5000);
+    return !!await waitForReplyComposer(page, 900);
   }
   if (phoneDigits.length >= 9 && activeKey === normalizedRecipient) {
-    return !!await waitForReplyComposer(page, 5000);
+    return !!await waitForReplyComposer(page, 900);
   }
 
   if (phoneDigits.length >= 9) {
@@ -1049,7 +1063,7 @@ async function typeAndSendReply(page, text) {
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
   await page.keyboard.press('Backspace');
   await page.keyboard.insertText(String(text || ''));
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(30);
 
   await clickWhatsAppSend(page);
   const confirmed = await waitForOutgoingReplyConfirmation(page, text, beforeState);
@@ -1061,10 +1075,10 @@ async function typeAndSendReply(page, text) {
     const composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
     if (!normalizeReplyText(composerState.text || '')) {
       await page.keyboard.insertText(String(text || ''));
-      await page.waitForTimeout(80);
+      await page.waitForTimeout(30);
     }
     await page.keyboard.press('Enter');
-    const confirmedAfterEnter = await waitForOutgoingReplyConfirmation(page, text, beforeState, 3000);
+    const confirmedAfterEnter = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1200);
     if (confirmedAfterEnter) return true;
   }
 
@@ -1072,17 +1086,24 @@ async function typeAndSendReply(page, text) {
   if (composerAfterMiss) {
     await composerAfterMiss.click();
     await clickWhatsAppSend(page);
-    const confirmedAfterRetry = await waitForOutgoingReplyConfirmation(page, text, beforeState, 2500);
+    const confirmedAfterRetry = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1000);
     if (confirmedAfterRetry) return true;
   }
 
   throw new Error('WhatsApp send was not confirmed in the chat');
 }
 
-async function processOutbox(page) {
-  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=${encodeURIComponent(OUTBOX_CLAIM_LIMIT)}`);
+async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER_LOOP } = {}) {
+  const sendLimit = Math.min(
+    OUTBOX_CLAIM_LIMIT,
+    Math.max(1, Number(maxSends || OUTBOX_SENDS_PER_LOOP))
+  );
+  const recipientQuery = recipient
+    ? `&recipient=${encodeURIComponent(normalizeChatKey(recipient))}`
+    : '';
+  const response = await apiRequest(`/api/whatsapp/web-bridge/outbox?client_id=${encodeURIComponent(CLIENT_ID)}&limit=${encodeURIComponent(sendLimit)}${recipientQuery}`);
   const items = Array.isArray(response.data) ? response.data : [];
-  const activeRecipient = normalizeChatKey(activeInboundRecipientHint || '');
+  const activeRecipient = normalizeChatKey(recipient || activeInboundRecipientHint || '');
   const orderedItems = items.sort((a, b) => {
     if (!activeRecipient) return 0;
     const aKey = normalizeChatKey(a.recipient || '');
@@ -1090,7 +1111,7 @@ async function processOutbox(page) {
     if (aKey === activeRecipient && bKey !== activeRecipient) return -1;
     if (bKey === activeRecipient && aKey !== activeRecipient) return 1;
     return 0;
-  }).slice(0, OUTBOX_SENDS_PER_LOOP);
+  }).slice(0, sendLimit);
 
   let sent = 0;
   for (const item of orderedItems) {
@@ -1235,19 +1256,24 @@ async function main() {
         continue;
       }
 
-      const unreadResult = await ingestUnreadChats(page);
+      const sentAtLoopStart = await processOutbox(page);
       const activeProcessed = await ingestActiveChat(page);
-      const sentBeforeSweep = await processOutbox(page);
+      const sentAfterActive = activeProcessed ? await processOutbox(page, { maxSends: 2 }) : 0;
+      const unreadResult = activeProcessed
+        ? { unreadCount: 0, processed: 0 }
+        : await ingestUnreadChats(page);
+      const sentAfterUnread = unreadResult.processed ? await processOutbox(page, { maxSends: 2 }) : 0;
       let recentSweepResult = { scanned: 0, processed: 0 };
       let sentAfterSweep = 0;
-      if (now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
+      const hadLiveActivity = !!(sentAtLoopStart || activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
+      if (!hadLiveActivity && now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
         recentSweepResult = await ingestRecentChatsSweep(page);
         lastRecentSweep = Date.now();
         if (recentSweepResult.processed) {
-          sentAfterSweep = await processOutbox(page);
+          sentAfterSweep = await processOutbox(page, { maxSends: 2 });
         }
       }
-      const sentCount = sentBeforeSweep + sentAfterSweep;
+      const sentCount = sentAtLoopStart + sentAfterActive + sentAfterUnread + sentAfterSweep;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {
