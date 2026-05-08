@@ -25,7 +25,7 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
+const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 700));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const RECENT_CHAT_SWEEP_MS = Math.max(3000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 6500));
@@ -958,8 +958,7 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
   const expected = normalizeReplyText(expectedText);
   const expectedPrefix = expected.slice(0, 120);
   const beforeCount = Number(beforeState.count || 0);
-  const startedAt = Date.now();
-  const deadline = startedAt + timeoutMs;
+  const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     const state = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
@@ -971,12 +970,6 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
       return true;
     }
     if (matchedText) return true;
-
-    const composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
-    const composerText = normalizeReplyText(composerState.text || '');
-    if (composerState.found && !composerText && Date.now() - startedAt >= 450) {
-      return true;
-    }
 
     await page.waitForTimeout(120);
   }
@@ -1061,6 +1054,19 @@ async function typeAndSendReply(page, text) {
   await clickWhatsAppSend(page);
   const confirmed = await waitForOutgoingReplyConfirmation(page, text, beforeState);
   if (confirmed) return true;
+
+  const composerForEnterSend = await findReplyComposer(page, 700);
+  if (composerForEnterSend) {
+    await composerForEnterSend.click();
+    const composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+    if (!normalizeReplyText(composerState.text || '')) {
+      await page.keyboard.insertText(String(text || ''));
+      await page.waitForTimeout(80);
+    }
+    await page.keyboard.press('Enter');
+    const confirmedAfterEnter = await waitForOutgoingReplyConfirmation(page, text, beforeState, 3000);
+    if (confirmedAfterEnter) return true;
+  }
 
   const composerAfterMiss = await findReplyComposer(page, 700);
   if (composerAfterMiss) {
@@ -1231,12 +1237,17 @@ async function main() {
 
       const unreadResult = await ingestUnreadChats(page);
       const activeProcessed = await ingestActiveChat(page);
+      const sentBeforeSweep = await processOutbox(page);
       let recentSweepResult = { scanned: 0, processed: 0 };
+      let sentAfterSweep = 0;
       if (now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
         recentSweepResult = await ingestRecentChatsSweep(page);
         lastRecentSweep = Date.now();
+        if (recentSweepResult.processed) {
+          sentAfterSweep = await processOutbox(page);
+        }
       }
-      const sentCount = await processOutbox(page);
+      const sentCount = sentBeforeSweep + sentAfterSweep;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {
