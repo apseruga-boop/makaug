@@ -617,6 +617,26 @@ function detectLanguageFromText(text) {
   return { code: '', confidence: 0 };
 }
 
+function detectGreetingLanguage(text) {
+  const clean = normalizeInput(text).toLowerCase().replace(/[!?.]+$/g, '').trim();
+  if (!clean) return { code: '', confidence: 0 };
+  const compact = clean.replace(/\s+/g, ' ');
+  if (compact.length > 80) return { code: '', confidence: 0 };
+
+  const greetingRules = [
+    { code: 'en', re: /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)$/ },
+    { code: 'sw', re: /^(habari|mambo|niaje|jambo|sasa|salama)$/ },
+    { code: 'lg', re: /^(oli otya|wasuze otya|osiibye otya|gyebale|mulembe)$/ },
+    { code: 'sm', re: /^(mirembe|wasuze otya|osiibye otya)$/ },
+    { code: 'ac', re: /^(itye nining|itye|apwoyo|kopango)$/ },
+    { code: 'ny', re: /^(oraire ota|oraire|osiibire ota|osiibire|agandi|webare)$/ },
+    { code: 'rn', re: /^(mwaramutse|mwiriwe|amakuru|muraho)$/ }
+  ];
+
+  const match = greetingRules.find((rule) => rule.re.test(compact));
+  return match ? { code: match.code, confidence: 0.97, source: 'greeting_heuristic' } : { code: '', confidence: 0 };
+}
+
 function resolveDetectedLanguage({ text, sessionLang = 'en', intentResult = null }) {
   const entityLang = resolveLangCode(intentResult?.entities?.language || '');
   if (intentResult?.entities?.language && entityLang) {
@@ -665,18 +685,7 @@ function appendSiteNudge(lang, message, url = HOME_URL) {
 }
 
 function isGreetingText(text) {
-  const clean = normalizeInput(text).toLowerCase().replace(/[!?.]+$/g, '').trim();
-  if (!clean) return false;
-  const compact = clean.replace(/\s+/g, ' ');
-  if (compact.length > 80) return false;
-  return [
-    /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening)$/,
-    /^(habari|mambo|niaje|jambo|sasa|salama)$/,
-    /^(oli otya|wasuze otya|osiibye otya|gyebale|mulembe|mirembe)$/,
-    /^(itye nining|apwoyo|kopango)$/,
-    /^(oraire ota|osiibire ota|agandi|webare)$/,
-    /^(mwaramutse|mwiriwe|amakuru|muraho)$/
-  ].some((rule) => rule.test(compact));
+  return !!detectGreetingLanguage(text).code;
 }
 
 function fastWhatsappRuntimeHints({
@@ -715,10 +724,15 @@ function fastWhatsappRuntimeHints({
       language.confidence = 0.99;
     } else if (isGreetingText(clean)) {
       intent = 'greeting';
-      if (detectedTextLanguage.code && detectedTextLanguage.confidence >= 0.84) {
+      const greetingLanguage = detectGreetingLanguage(clean);
+      if (greetingLanguage.code) {
+        language.code = greetingLanguage.code;
+        language.source = greetingLanguage.source;
+        language.confidence = greetingLanguage.confidence;
+      } else if (detectedTextLanguage.code && detectedTextLanguage.confidence >= 0.84) {
         language.code = detectedTextLanguage.code;
         language.source = 'heuristic';
-        language.confidence = detectedTextLanguage.confidence;
+        language.confidence = Math.max(0.95, detectedTextLanguage.confidence);
       }
     }
   }
@@ -1056,8 +1070,11 @@ function humanHandoffAck(lang) {
 }
 
 function isWhatsappWebBridgeAuthorized(req) {
+  const authHeader = String(req.headers.authorization || '').trim();
+  const bearer = authHeader.match(/^Bearer\s+(.+)$/i)?.[1] || '';
   const token = String(
     req.headers['x-whatsapp-web-bridge-token']
+      || bearer
       || req.query?.token
       || req.body?.token
       || ''
