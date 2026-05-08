@@ -991,6 +991,16 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
   return false;
 }
 
+async function waitForReplyComposerCleared(page, timeoutMs = 700) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+    if (state.found && !normalizeReplyText(state.text || '')) return true;
+    await page.waitForTimeout(50);
+  }
+  return false;
+}
+
 async function openChatForReply(page, recipient) {
   const chatKey = String(recipient || '').trim();
   const phoneDigits = chatKey.replace(/\D/g, '');
@@ -1068,6 +1078,7 @@ async function typeAndSendReply(page, text) {
   await clickWhatsAppSend(page);
   const confirmed = await waitForOutgoingReplyConfirmation(page, text, beforeState);
   if (confirmed) return true;
+  if (await waitForReplyComposerCleared(page)) return true;
 
   const composerForEnterSend = await findReplyComposer(page, 700);
   if (composerForEnterSend) {
@@ -1080,6 +1091,7 @@ async function typeAndSendReply(page, text) {
     await page.keyboard.press('Enter');
     const confirmedAfterEnter = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1200);
     if (confirmedAfterEnter) return true;
+    if (await waitForReplyComposerCleared(page)) return true;
   }
 
   const composerAfterMiss = await findReplyComposer(page, 700);
@@ -1088,6 +1100,7 @@ async function typeAndSendReply(page, text) {
     await clickWhatsAppSend(page);
     const confirmedAfterRetry = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1000);
     if (confirmedAfterRetry) return true;
+    if (await waitForReplyComposerCleared(page)) return true;
   }
 
   throw new Error('WhatsApp send was not confirmed in the chat');
