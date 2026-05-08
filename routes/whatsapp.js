@@ -679,6 +679,46 @@ function isGreetingText(text) {
   ].some((rule) => rule.test(compact));
 }
 
+function fastWhatsappRuntimeHints({
+  text,
+  sessionLang = 'en',
+  mediaUrl = null,
+  sharedLocation = null
+}) {
+  if (mediaUrl || sharedLocation) return null;
+
+  const clean = normalizeInput(text);
+  if (!clean || clean.length > 90) return null;
+
+  const compact = normalizeOptKeyword(clean);
+  const language = {
+    code: resolveLangCode(sessionLang || 'en'),
+    confidence: 0.99,
+    source: 'template_fast_path'
+  };
+
+  let intent = '';
+  if (compact === 'MENU' || compact === 'HOME') intent = 'menu';
+  else if (compact === 'CONTINUE') intent = 'continue';
+  else if (['STOP', 'UNSUBSCRIBE', 'OPTOUT', 'OPT-OUT'].includes(compact)) intent = 'marketing_opt_out';
+  else if (['START', 'OPTIN', 'SUBSCRIBE'].includes(compact)) intent = 'marketing_opt_in';
+  else if (/^[1-9]$/.test(clean)) intent = 'menu_option';
+  else if (parseLanguageChange(clean)) intent = 'language_change';
+  else if (isGreetingText(clean)) intent = 'greeting';
+
+  if (!intent) return null;
+
+  return {
+    language,
+    intent: {
+      intent,
+      confidence: 0.99,
+      entities: {},
+      model: 'template_fast_path'
+    }
+  };
+}
+
 function parseLanguageChange(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
@@ -4991,36 +5031,47 @@ async function processInboundRuntime({
     };
   }
 
-  const preliminaryLanguage = transcriptRecord?.text
+  const fastHints = transcriptRecord?.text
+    ? null
+    : fastWhatsappRuntimeHints({
+      text: effectiveBody,
+      sessionLang,
+      mediaUrl,
+      sharedLocation
+    });
+
+  const preliminaryLanguage = fastHints?.language || (transcriptRecord?.text
     ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
     : resolveDetectedLanguage({
       text: effectiveBody,
       sessionLang,
       intentResult: null
-    });
+    }));
   const aiLanguage = transcriptRecord?.text
     ? null
-    : await detectWhatsappLanguage({
+    : (fastHints
+      ? null
+      : await detectWhatsappLanguage({
       text: effectiveBody,
       sessionLanguage: preliminaryLanguage.code || sessionLang,
       step: sessionStep
-    });
+      }));
   const classifierLanguageResult = mergeAiLanguageDetection(preliminaryLanguage, aiLanguage);
   const classifierLanguage = classifierLanguageResult.code || preliminaryLanguage.code || sessionLang;
 
-  const intentResult = await classifyWhatsappIntent({
+  const intentResult = fastHints?.intent || await classifyWhatsappIntent({
     text: effectiveBody,
     language: classifierLanguage,
     step: sessionStep,
     sessionData: session.session_data || {}
   });
-  const baseDetectedLanguage = transcriptRecord?.text
+  const baseDetectedLanguage = fastHints?.language || (transcriptRecord?.text
     ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
     : resolveDetectedLanguage({
       text: effectiveBody,
       sessionLang,
       intentResult
-    });
+    }));
   const detectedLanguage = transcriptRecord?.text
     ? baseDetectedLanguage
     : mergeAiLanguageDetection(baseDetectedLanguage, aiLanguage);
@@ -5382,7 +5433,18 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     metadata: runtimeMetadata
   });
 
-  await captureLearningEvent({
+  let queuedReply = null;
+  if (message && !dryRun) {
+    queuedReply = await queueWhatsappWebBridgeAutoReply({
+      phone,
+      message,
+      nextStep,
+      source: 'whatsapp_runtime',
+      actorId: 'system'
+    });
+  }
+
+  captureLearningEvent({
     eventName: 'whatsapp_conversation_turn',
     source: 'whatsapp',
     channel: 'whatsapp',
@@ -5406,18 +5468,9 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     },
     outcome: message ? 'responded' : 'received',
     dedupeKey: `whatsapp:${runtimeInboundMessageId}`
+  }).catch((error) => {
+    logger.warn('WhatsApp learning capture failed after reply queue:', error.message || String(error));
   });
-
-  let queuedReply = null;
-  if (message && !dryRun) {
-    queuedReply = await queueWhatsappWebBridgeAutoReply({
-      phone,
-      message,
-      nextStep,
-      source: 'whatsapp_runtime',
-      actorId: 'system'
-    });
-  }
 
   return res.json({
     ok: true,
