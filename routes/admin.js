@@ -155,6 +155,106 @@ function decorateFieldAgentPerformanceRows(rows = []) {
   return decorated;
 }
 
+function startOfUtcDay(date = new Date()) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addUtcDays(date, days) {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function startOfUtcWeekMonday(date = new Date()) {
+  const start = startOfUtcDay(date);
+  const dayOffset = (start.getUTCDay() + 6) % 7;
+  return addUtcDays(start, -dayOffset);
+}
+
+function normalizeFieldAgentPayoutPeriod(value = '') {
+  const raw = cleanText(value).toLowerCase().replace(/\s+/g, '_');
+  if (['this_friday', 'current_friday', 'friday', 'current_week_pay'].includes(raw)) return 'this_friday';
+  if (['previous_friday', 'last_friday', 'previous_week', 'last_week'].includes(raw)) return 'previous_friday';
+  if (['this_week', 'week_to_date'].includes(raw)) return 'this_week';
+  if (['last_7_days', 'rolling_7_days'].includes(raw)) return 'last_7_days';
+  if (['all', 'all_time'].includes(raw)) return 'all';
+  return 'current_due';
+}
+
+function fieldAgentPayoutWindow(period = 'current_due') {
+  const key = normalizeFieldAgentPayoutPeriod(period);
+  const now = new Date();
+  const thisWeekStart = startOfUtcWeekMonday(now);
+  const thisWeekEnd = addUtcDays(thisWeekStart, 7);
+  const currentFriday = addUtcDays(thisWeekStart, 4);
+  const previousWeekStart = addUtcDays(thisWeekStart, -7);
+  const previousWeekEnd = thisWeekStart;
+  const weekBeforePreviousStart = addUtcDays(thisWeekStart, -14);
+  const weekBeforePreviousEnd = previousWeekStart;
+
+  const windows = {
+    current_due: {
+      period_key: 'current_due',
+      period_label: 'Current due ledger',
+      period_description: 'All accepted Field Agent-linked listings currently counted as payable. Use the weekly filters to audit the Friday pay window.',
+      pay_by_date: currentFriday.toISOString(),
+      period_start: null,
+      period_end: null,
+      has_range: false
+    },
+    this_friday: {
+      period_key: 'this_friday',
+      period_label: 'This Friday payout',
+      period_description: 'Accepted listings from the previous completed week, paid on this Friday.',
+      pay_by_date: currentFriday.toISOString(),
+      period_start: previousWeekStart.toISOString(),
+      period_end: previousWeekEnd.toISOString(),
+      has_range: true
+    },
+    previous_friday: {
+      period_key: 'previous_friday',
+      period_label: 'Previous Friday payout',
+      period_description: 'Accepted listings from the week before the current Friday payout window.',
+      pay_by_date: addUtcDays(previousWeekStart, 4).toISOString(),
+      period_start: weekBeforePreviousStart.toISOString(),
+      period_end: weekBeforePreviousEnd.toISOString(),
+      has_range: true
+    },
+    this_week: {
+      period_key: 'this_week',
+      period_label: 'This week so far',
+      period_description: 'Accepted listings from the current week. This is a projection until the week closes.',
+      pay_by_date: addUtcDays(thisWeekEnd, 4).toISOString(),
+      period_start: thisWeekStart.toISOString(),
+      period_end: thisWeekEnd.toISOString(),
+      has_range: true
+    },
+    last_7_days: {
+      period_key: 'last_7_days',
+      period_label: 'Last 7 days',
+      period_description: 'Rolling seven-day audit of accepted listings linked to Field Agents.',
+      pay_by_date: currentFriday.toISOString(),
+      period_start: addUtcDays(now, -7).toISOString(),
+      period_end: now.toISOString(),
+      has_range: true
+    },
+    all: {
+      period_key: 'all',
+      period_label: 'All accepted listings',
+      period_description: 'Every accepted Field Agent-linked listing in the backend feed.',
+      pay_by_date: currentFriday.toISOString(),
+      period_start: null,
+      period_end: null,
+      has_range: false
+    }
+  };
+
+  return {
+    payout_day: FIELD_AGENT_PAYOUT_DAY,
+    ...(windows[key] || windows.current_due)
+  };
+}
+
 async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
   try {
     await db.query(
@@ -1849,6 +1949,7 @@ router.get('/field-agents/listings', async (req, res, next) => {
   try {
     const requestedStatus = normalizeAdminPropertyStatus(req.query.status || 'all');
     const limit = Math.min(Math.max(parseInt(req.query.limit || '1000', 10) || 1000, 1), 5000);
+    const payoutWindow = fieldAgentPayoutWindow(req.query.period || 'all');
     const statusExpr = "LOWER(COALESCE(p.status, p.moderation_stage, ''))";
     let statusClause = '';
     if (requestedStatus === 'approved') {
@@ -1859,6 +1960,13 @@ router.get('/field-agents/listings', async (req, res, next) => {
       statusClause = `AND ${statusExpr} IN ('rejected', 'declined', 'fraud')`;
     } else if (requestedStatus === 'hidden') {
       statusClause = `AND ${statusExpr} IN ('hidden', 'off_market', 'paused', 'archived')`;
+    }
+    const values = [limit];
+    let payoutWindowClause = '';
+    if (requestedStatus === 'approved' && payoutWindow.has_range) {
+      values.push(payoutWindow.period_start, payoutWindow.period_end);
+      payoutWindowClause = `AND COALESCE(p.updated_at, p.created_at) >= $2::timestamptz
+                            AND COALESCE(p.updated_at, p.created_at) < $3::timestamptz`;
     }
 
     const rows = await db.query(
@@ -1897,12 +2005,13 @@ router.get('/field-agents/listings', async (req, res, next) => {
             AND UPPER(COALESCE(p.extra_fields->>'field_agent_id', p.extra_fields->>'field_agent_code', p.extra_fields->>'field_agent_reference', p.extra_fields->>'agent_field_id', ''))
               = UPPER(COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', ''))
           )
-        )
+       )
        WHERE 1=1
        ${statusClause}
+       ${payoutWindowClause}
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
        LIMIT $1`,
-      [limit]
+      values
     );
 
     const data = rows.rows.map((row) => {
@@ -1938,8 +2047,116 @@ router.get('/field-agents/listings', async (req, res, next) => {
       data,
       meta: {
         status: requestedStatus,
+        payout_window: requestedStatus === 'approved' ? payoutWindow : undefined,
         limit,
         count: data.length
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/field-agents/payouts', async (req, res, next) => {
+  try {
+    const payoutWindow = fieldAgentPayoutWindow(req.query.period || 'current_due');
+    const limit = Math.min(Math.max(parseInt(req.query.limit || String(FIELD_AGENT_DIRECTORY_LIMIT), 10) || FIELD_AGENT_DIRECTORY_LIMIT, 1), FIELD_AGENT_DIRECTORY_LIMIT);
+    const values = [];
+    let payoutWindowClause = '';
+    if (payoutWindow.has_range) {
+      values.push(payoutWindow.period_start, payoutWindow.period_end);
+      payoutWindowClause = `AND COALESCE(p.updated_at, p.created_at) >= $1::timestamptz
+                            AND COALESCE(p.updated_at, p.created_at) < $2::timestamptz`;
+    }
+    values.push(limit);
+    const limitParam = values.length;
+
+    const rows = await db.query(
+      `SELECT
+         u.id,
+         u.first_name,
+         u.last_name,
+         u.phone,
+         u.email,
+         u.status,
+         u.profile_data,
+         COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', '') AS field_agent_code,
+         COALESCE(u.profile_data->>'field_agent_territory', u.profile_data->>'territory', 'Uganda') AS field_agent_territory,
+         COALESCE(pay.accepted_count, 0)::int AS accepted_count,
+         COALESCE(pay.listings, '[]'::jsonb) AS listings
+       FROM users u
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)::int AS accepted_count,
+           COALESCE(
+             jsonb_agg(
+               jsonb_build_object(
+                 'id', p.id,
+                 'title', p.title,
+                 'listing_type', p.listing_type,
+                 'property_type', p.property_type,
+                 'district', p.district,
+                 'area', p.area,
+                 'price', p.price,
+                 'status', p.status,
+                 'moderation_stage', p.moderation_stage,
+                 'created_at', p.created_at,
+                 'updated_at', p.updated_at
+               )
+               ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+             ) FILTER (WHERE p.id IS NOT NULL),
+             '[]'::jsonb
+           ) AS listings
+         FROM properties p
+         WHERE (
+           p.lister_phone = u.phone
+           OR (
+             COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', '') <> ''
+             AND UPPER(COALESCE(p.extra_fields->>'field_agent_id', p.extra_fields->>'field_agent_code', p.extra_fields->>'field_agent_reference', p.extra_fields->>'agent_field_id', ''))
+               = UPPER(COALESCE(u.profile_data->>'field_agent_code', u.profile_data->>'employee_number', ''))
+           )
+         )
+           AND LOWER(COALESCE(p.status, p.moderation_stage, '')) IN ('approved', 'live', 'published')
+           ${payoutWindowClause}
+       ) pay ON true
+       WHERE u.role = 'field_agent'
+       ORDER BY COALESCE(pay.accepted_count, 0) DESC, u.created_at DESC
+       LIMIT $${limitParam}`,
+      values
+    );
+
+    const data = rows.rows.map((row) => {
+      const payoutRate = fieldAgentPayoutRate(row);
+      const acceptedCount = numberOrZero(row.accepted_count);
+      return {
+        id: row.id,
+        first_name: row.first_name,
+        last_name: row.last_name,
+        phone: row.phone,
+        email: row.email,
+        status: row.status,
+        field_agent_code: row.field_agent_code,
+        field_agent_territory: row.field_agent_territory,
+        payout_rate_ugx: payoutRate,
+        accepted_count: acceptedCount,
+        payout_due_ugx: acceptedCount * payoutRate,
+        pay_by_date: payoutWindow.pay_by_date,
+        listings: Array.isArray(row.listings) ? row.listings : []
+      };
+    });
+
+    const totalDue = data.reduce((total, row) => total + numberOrZero(row.payout_due_ugx), 0);
+    const dueCount = data.filter((row) => numberOrZero(row.payout_due_ugx) > 0).length;
+
+    return res.json({
+      ok: true,
+      data,
+      meta: {
+        ...payoutWindow,
+        count: data.length,
+        due_count: dueCount,
+        total_due_ugx: totalDue,
+        limit
       }
     });
   } catch (error) {

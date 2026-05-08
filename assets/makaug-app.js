@@ -440,6 +440,7 @@ let adminRemoteAgents = [];
 let adminPropertyRequests = [];
 let adminFieldAgents = [];
 let adminActiveFieldAgentKpi = "";
+let adminFieldAgentPayoutPeriod = "current_due";
 let adminCurrentCampaigns = [];
 let adminAdvertisingPackages = [];
 let adminAdvertisingSummary = {};
@@ -9396,7 +9397,7 @@ function adminFieldAgentKpiDescription(kind = "agents") {
     pending: "Pending Field Agent-linked property records. Open each property record or jump into the agent review panel.",
     approved: "Accepted/live Field Agent-linked property records. These create the Friday payout calculation.",
     rejected: "Rejected Field Agent-linked property records. Open records to see rejection reasons and follow-up actions.",
-    payouts: "Friday payout is calculated as accepted listings multiplied by each agent's payout/listing rate."
+    payouts: "Friday payout is calculated as accepted listings multiplied by each agent's payout/listing rate: accepted listings x payout/listing."
   };
   return descriptions[kind] || descriptions.agents;
 }
@@ -9408,6 +9409,88 @@ function adminFieldAgentKpiEmpty(kind = "agents") {
   if (kind === "rejected") return "No rejected Field Agent-linked listings found.";
   if (kind === "payouts") return "No Field Agent payout rows found.";
   return "No Field Agents found in the current backend feed.";
+}
+
+function adminFieldAgentPayoutPeriodOptions() {
+  return [
+    ["current_due", "Current due ledger"],
+    ["this_friday", "This Friday"],
+    ["previous_friday", "Previous Friday"],
+    ["this_week", "This week so far"],
+    ["last_7_days", "Last 7 days"],
+    ["all", "All accepted"]
+  ];
+}
+
+function adminNormalizeFieldAgentPayoutPeriod(value = "") {
+  const allowed = new Set(adminFieldAgentPayoutPeriodOptions().map(([key]) => key));
+  const normalized = String(value || "").trim().toLowerCase().replace(/\s+/g, "_");
+  return allowed.has(normalized) ? normalized : "current_due";
+}
+
+function adminFormatDateOnly(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function adminFieldAgentPayoutFallbackPayload(periodKey = adminFieldAgentPayoutPeriod) {
+  const rows = enrichAdminFieldAgents(adminFieldAgents)
+    .slice()
+    .sort((a, b) => adminFieldAgentFridayDue(b) - adminFieldAgentFridayDue(a) || adminFieldAgentAcceptedCount(b) - adminFieldAgentAcceptedCount(a))
+    .map((user) => {
+      const accepted = adminFieldAgentAcceptedCount(user);
+      const payoutRate = adminFieldAgentPayoutRate(user);
+      return {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        phone: user.phone,
+        email: user.email,
+        status: user.status || "active",
+        field_agent_code: adminFieldAgentCode(user),
+        field_agent_territory: adminFieldAgentTerritory(user),
+        accepted_count: accepted,
+        payout_rate_ugx: payoutRate,
+        payout_due_ugx: accepted * payoutRate,
+        pay_by_date: "",
+        listings: []
+      };
+    });
+  const totalDue = rows.reduce((total, row) => total + (Number(row.payout_due_ugx || 0) || 0), 0);
+  return {
+    data: rows,
+    meta: {
+      period_key: adminNormalizeFieldAgentPayoutPeriod(periodKey),
+      period_label: "Current due ledger",
+      period_description: "Local directory snapshot. Sign in as King/admin to load exact weekly payout windows and accepted listing records from the backend.",
+      payout_day: "Friday",
+      pay_by_date: "",
+      period_start: null,
+      period_end: null,
+      has_range: false,
+      count: rows.length,
+      due_count: rows.filter((row) => (Number(row.payout_due_ugx || 0) || 0) > 0).length,
+      total_due_ugx: totalDue,
+      provider: canUseLiveAdminApi() ? "fallback" : "missing_auth"
+    }
+  };
+}
+
+async function adminLoadFieldAgentPayouts(periodKey = adminFieldAgentPayoutPeriod) {
+  const period = adminNormalizeFieldAgentPayoutPeriod(periodKey);
+  if (!canUseLiveAdminApi()) return adminFieldAgentPayoutFallbackPayload(period);
+  const res = await apiRequest(`/api/admin/field-agents/payouts?period=${encodeURIComponent(period)}&limit=10000`, { headers: adminAuthHeaders() });
+  return {
+    data: Array.isArray(res?.data) ? res.data : [],
+    meta: { ...(res?.meta || {}), provider: "live" }
+  };
+}
+
+function adminSetFieldAgentPayoutPeriod(periodKey = "current_due") {
+  adminFieldAgentPayoutPeriod = adminNormalizeFieldAgentPayoutPeriod(periodKey);
+  adminRenderFieldAgentKpiPanel("payouts");
 }
 
 function adminFieldAgentKpiShell(kind, bodyHtml, extraHtml = "") {
@@ -9533,37 +9616,96 @@ function adminRenderFieldAgentListingRows(kind, listings = []) {
   }).join("")}</div>`;
 }
 
-function adminRenderFieldAgentPayoutRows() {
-  const rows = enrichAdminFieldAgents(adminFieldAgents)
+function adminRenderFieldAgentPayoutRows(payload = {}) {
+  const meta = payload?.meta || {};
+  const rows = (Array.isArray(payload?.data) ? payload.data : [])
     .slice()
-    .sort((a, b) => adminFieldAgentFridayDue(b) - adminFieldAgentFridayDue(a) || adminFieldAgentAcceptedCount(b) - adminFieldAgentAcceptedCount(a));
-  if (!rows.length) {
-    return `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">${adminEscape(adminFieldAgentKpiEmpty("payouts"))}</div>`;
-  }
-  const totalDue = rows.reduce((total, user) => total + adminFieldAgentFridayDue(user), 0);
-  const extra = `
-    <div class="rounded-xl border border-indigo-100 bg-indigo-50 p-3 mb-3 text-sm text-indigo-950">
-      <strong>${adminEscape(fmtP(totalDue, ""))}</strong> due this Friday across ${adminEscape(rows.length)} Field Agent account${rows.length === 1 ? "" : "s"}. Calculation: accepted listings x payout/listing.
-    </div>`;
-  const body = `<div class="space-y-3">${rows.map((user) => {
-    const accepted = adminFieldAgentAcceptedCount(user);
-    const payoutRate = adminFieldAgentPayoutRate(user);
-    const due = adminFieldAgentFridayDue(user);
-    const userIdArg = adminListingIdArg(user.id);
-    return `
-      <div class="rounded-xl border border-indigo-100 bg-white p-4 flex items-start justify-between gap-3 flex-wrap">
+    .sort((a, b) => (Number(b.payout_due_ugx || 0) || 0) - (Number(a.payout_due_ugx || 0) || 0) || (Number(b.accepted_count || 0) || 0) - (Number(a.accepted_count || 0) || 0));
+  const dueRows = rows.filter((row) => (Number(row.payout_due_ugx || 0) || 0) > 0);
+  const activePeriod = adminNormalizeFieldAgentPayoutPeriod(meta.period_key || adminFieldAgentPayoutPeriod);
+  const optionsHtml = adminFieldAgentPayoutPeriodOptions().map(([key, label]) => `
+    <option value="${adminAttr(key)}" ${key === activePeriod ? "selected" : ""}>${adminEscape(label)}</option>
+  `).join("");
+  const periodStart = adminFormatDateOnly(meta.period_start);
+  const periodEnd = adminFormatDateOnly(meta.period_end);
+  const payBy = adminFormatDateOnly(meta.pay_by_date);
+  const periodRange = periodStart && periodEnd
+    ? `${periodStart} to ${periodEnd}`
+    : "All accepted listings currently counted as payable";
+  const totalDue = Number(meta.total_due_ugx || dueRows.reduce((total, row) => total + (Number(row.payout_due_ugx || 0) || 0), 0)) || 0;
+  const dueCount = Number(meta.due_count || dueRows.length) || 0;
+  const liveBadge = meta.provider === "live"
+    ? "Backend payout ledger"
+    : "Local snapshot until King/admin API auth is available";
+  const header = `
+    <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 mb-3">
+      <div class="grid lg:grid-cols-[1fr,260px] gap-3 items-end">
         <div>
-          <div class="font-black text-gray-900">${adminEscape(adminFieldAgentName(user))}</div>
-          <div class="text-xs text-gray-500 mt-1">${adminEscape(adminFieldAgentCode(user))} • ${adminEscape(adminFieldAgentTerritory(user))} • ${adminEscape(user.email || user.phone || "-")}</div>
-          <div class="text-sm text-indigo-900 font-black mt-2">${adminEscape(accepted)} accepted listings x ${adminEscape(fmtP(payoutRate, ""))} = ${adminEscape(fmtP(due, ""))}</div>
+          <div class="text-[11px] font-black uppercase tracking-wide text-indigo-700">${adminEscape(liveBadge)}</div>
+          <div class="text-lg font-black text-indigo-950 mt-1">${adminEscape(meta.period_label || "Friday payday breakdown")}</div>
+          <p class="text-xs text-indigo-900 mt-1">${adminEscape(meta.period_description || "Accepted listings multiplied by each agent's payout/listing rate.")}</p>
+          <div class="flex flex-wrap gap-2 mt-3 text-xs">
+            <span class="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-900"><strong>${adminEscape(fmtP(totalDue, ""))}</strong> due</span>
+            <span class="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-900">${adminEscape(dueCount)} payable agent${dueCount === 1 ? "" : "s"}</span>
+            <span class="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-900">Window: ${adminEscape(periodRange)}</span>
+            ${payBy ? `<span class="rounded-full border border-indigo-200 bg-white px-3 py-1 text-indigo-900">Pay by: ${adminEscape(payBy)}</span>` : ""}
+          </div>
         </div>
-        <div class="flex gap-2 flex-wrap">
-          <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'approved')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">View accepted</button>
-          <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Record payment</button>
+        <label class="block">
+          <span class="text-xs font-bold text-indigo-900">Choose payout week / ledger</span>
+          <select onchange="adminSetFieldAgentPayoutPeriod(this.value)" class="mt-1 w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-950">
+            ${optionsHtml}
+          </select>
+        </label>
+      </div>
+    </div>`;
+  if (!dueRows.length) {
+    return `${header}<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">${adminEscape(adminFieldAgentKpiEmpty("payouts"))}</div>`;
+  }
+  const body = `<div class="space-y-3">${dueRows.map((row) => {
+    const accepted = Number(row.accepted_count || 0) || 0;
+    const payoutRate = Number(row.payout_rate_ugx || 5000) || 5000;
+    const due = Number(row.payout_due_ugx || accepted * payoutRate) || 0;
+    const userIdArg = adminListingIdArg(row.id);
+    const name = adminFieldAgentName(row);
+    const code = row.field_agent_code || adminFieldAgentCode(row);
+    const territory = row.field_agent_territory || adminFieldAgentTerritory(row);
+    const listings = Array.isArray(row.listings) ? row.listings : [];
+    const listingPreview = listings.length ? `
+      <div class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
+        <div class="text-[11px] font-black uppercase tracking-wide text-indigo-700 mb-2">Accepted listings in this view</div>
+        <div class="space-y-2">${listings.slice(0, 4).map((listing) => {
+          const listingIdArg = adminListingIdArg(listing.id);
+          const location = [listing.area, listing.district].filter(Boolean).join(", ") || "Location not set";
+          return `
+            <div class="flex items-start justify-between gap-2 flex-wrap rounded-lg bg-white border border-indigo-100 px-3 py-2">
+              <div class="min-w-0">
+                <div class="text-xs font-black text-gray-900 truncate">${adminEscape(listing.title || "Untitled property")}</div>
+                <div class="text-[11px] text-gray-500">${adminEscape(location)} • ${adminEscape(formatListingDate(listing.updated_at || listing.created_at) || "-")}</div>
+              </div>
+              ${listing.id ? `<button type="button" onclick="openAdminListingReview(${listingIdArg})" class="border border-gray-300 text-gray-700 hover:bg-white px-2 py-1 rounded-lg text-[11px] font-bold">Open</button>` : ""}
+            </div>`;
+        }).join("")}</div>
+        ${listings.length > 4 ? `<div class="text-[11px] text-indigo-800 font-semibold mt-2">Showing 4 of ${adminEscape(listings.length)} accepted records. Open the agent to view all.</div>` : ""}
+      </div>` : "";
+    return `
+      <div class="rounded-xl border border-indigo-100 bg-white p-4">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div class="font-black text-gray-900">${adminEscape(name)}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(code || "-")} • ${adminEscape(territory || "Uganda")} • ${adminEscape(row.email || row.phone || "-")}</div>
+            <div class="text-sm text-indigo-900 font-black mt-2">${adminEscape(accepted)} accepted listing${accepted === 1 ? "" : "s"} x ${adminEscape(fmtP(payoutRate, ""))} = ${adminEscape(fmtP(due, ""))}</div>
+            ${payBy ? `<div class="text-xs text-indigo-700 font-semibold mt-1">Payment due by ${adminEscape(payBy)}.</div>` : ""}
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'approved')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">View accepted</button>
+            <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold">Record payment</button>
+          </div>
         </div>
+        ${listingPreview}
       </div>`;
   }).join("")}</div>`;
-  return extra + body;
+  return header + body;
 }
 
 async function adminRenderFieldAgentKpiPanel(kind = adminActiveFieldAgentKpi) {
@@ -9574,7 +9716,14 @@ async function adminRenderFieldAgentKpiPanel(kind = adminActiveFieldAgentKpi) {
     return;
   }
   if (kind === "payouts") {
-    adminFieldAgentKpiShell(kind, adminRenderFieldAgentPayoutRows());
+    adminFieldAgentKpiShell(kind, `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">Loading Friday payout ledger...</div>`);
+    try {
+      const payload = await adminLoadFieldAgentPayouts(adminFieldAgentPayoutPeriod);
+      if (adminActiveFieldAgentKpi && adminActiveFieldAgentKpi !== "payouts") return;
+      adminFieldAgentKpiShell(kind, adminRenderFieldAgentPayoutRows(payload));
+    } catch (error) {
+      adminFieldAgentKpiShell(kind, `<div class="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">Could not load payout ledger: ${adminEscape(error.message || "request failed")}</div>`);
+    }
     return;
   }
   adminFieldAgentKpiShell(kind, `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">Loading ${adminEscape(adminFieldAgentKpiTitle(kind).toLowerCase())}...</div>`);
@@ -21327,7 +21476,12 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/field-agents": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-control": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
   "/admin/field-agent-performance": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-performance-board", label: "Field Agent Performance" },
-  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-payout-control", label: "Field Agent Payouts" },
+  "/admin/field-agent-all": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "All Field Agents", fieldAgentKpi: "agents" },
+  "/admin/field-agent-active": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Active Field Agents", fieldAgentKpi: "active" },
+  "/admin/field-agent-pending": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Pending Field Agent Listings", fieldAgentKpi: "pending" },
+  "/admin/field-agent-accepted": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Accepted Field Agent Listings", fieldAgentKpi: "approved" },
+  "/admin/field-agent-rejected": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Rejected Field Agent Listings", fieldAgentKpi: "rejected" },
+  "/admin/field-agent-payouts": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-kpi-panel", label: "Field Agent Payouts", fieldAgentKpi: "payouts" },
   "/admin/field-agent-training": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-training-control", label: "Field Agent Training" },
   "/admin/field-agent-notices": { page: "admin-dashboard", tab: "field-agents", selector: "#admin-field-agent-notice-control", label: "Field Agent Notice Board" },
   "/admin/accounts": { page: "admin-dashboard", tab: "accounts", selector: "#admin-accounts-control", label: "Accounts" },
@@ -21384,11 +21538,13 @@ async function openAdminControl(control, options = {}) {
   if (target.tab) activeAdminWorkflowTab = target.tab;
   showPage("admin-dashboard", { history: false, source: options.source || "admin_control", scroll: options.scroll !== false });
   if (target.tab) setAdminWorkflowTab(target.tab);
+  if (target.fieldAgentKpi) adminOpenFieldAgentKpi(target.fieldAgentKpi);
   scrollAdminControlIntoView(target.selector);
   if (target.label && options.toast !== false) toast(`Opened ${target.label}.`);
   renderAdminDashboard()
     .then(() => {
       if (target.tab) setAdminWorkflowTab(target.tab);
+      if (target.fieldAgentKpi) adminOpenFieldAgentKpi(target.fieldAgentKpi);
       scrollAdminControlIntoView(target.selector);
     })
     .catch((error) => {

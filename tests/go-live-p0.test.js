@@ -518,7 +518,15 @@ function run() {
     assert(frontendSource.includes(`adminOpenFieldAgentKpi('${kpiTarget}')`), `Field Agent KPI card should drill into ${kpiTarget}`);
   }
   assert(frontendSource.includes('Open all agents') && frontendSource.includes('Open payday'), 'Field Agent KPI cards should make their drill-down action visible');
+  for (const fieldAgentKpiRoute of ['/admin/field-agent-active', '/admin/field-agent-pending', '/admin/field-agent-accepted', '/admin/field-agent-rejected', '/admin/field-agent-payouts']) {
+    assert(frontendSource.includes(`data-king-shortcut="${fieldAgentKpiRoute}"`), `King shortcuts should open Field Agent KPI route: ${fieldAgentKpiRoute}`);
+  }
+  for (const fieldAgentKpiKind of ['fieldAgentKpi: "active"', 'fieldAgentKpi: "pending"', 'fieldAgentKpi: "approved"', 'fieldAgentKpi: "rejected"', 'fieldAgentKpi: "payouts"']) {
+    assert(frontendSource.includes(fieldAgentKpiKind), `admin route map should deep-link Field Agent drill-down: ${fieldAgentKpiKind}`);
+  }
   assert(frontendSource.includes('adminLoadFieldAgentKpiListings') && frontendSource.includes('/api/admin/field-agents/listings?status='), 'Field Agent listing KPIs should load exact linked listings from the backend');
+  assert(frontendSource.includes('adminLoadFieldAgentPayouts') && frontendSource.includes('/api/admin/field-agents/payouts?period='), 'Friday payday drill-down should load a backend payout ledger with selectable periods');
+  assert(frontendSource.includes('adminSetFieldAgentPayoutPeriod') && frontendSource.includes('Current due ledger') && frontendSource.includes('Previous Friday'), 'Friday payday drill-down should allow current and historical payout windows');
   assert(frontendSource.includes('Friday payout is calculated as accepted listings multiplied by each agent') && frontendSource.includes('accepted listings x payout/listing'), 'Friday payday drill-down should explain the accepted-listing payout calculation');
   assert(frontendSource.includes('id="admin-field-agent-directory-summary"') && frontendSource.includes('The status totals above are linked property listings'), 'Field Agent directory should explain where accepted/pending/rejected totals can be viewed');
   assert(frontendSource.includes('id="${adminAttr(adminFieldAgentRowElementId(user.id))}"'), 'Field Agent directory rows should have stable row IDs for post-save highlighting');
@@ -555,6 +563,13 @@ function run() {
   assert(adminRoutes.includes('normalizeAdminPropertyStatus') && adminRoutes.includes('payout_due_ugx'), 'Field Agent listing drill-down API should normalize statuses and expose payout due');
   assert(adminRoutes.includes('field_agent_user_id') && adminRoutes.includes('field_agent_territory'), 'Field Agent listing drill-down API should show which agent and territory owns each listing');
   assert(adminRoutes.includes("status: requestedStatus") && adminRoutes.includes('count: data.length'), 'Field Agent listing drill-down API should return status/count metadata for the King dashboard');
+  assert(adminRoutes.includes("router.get('/field-agents/payouts'"), 'admin API should expose a Field Agent payout ledger endpoint');
+  assert(adminRoutes.includes('fieldAgentPayoutWindow') && adminRoutes.includes('normalizeFieldAgentPayoutPeriod'), 'admin API should normalize payout periods for current and historical Friday drill-downs');
+  for (const payoutPeriod of ['current_due', 'this_friday', 'previous_friday', 'last_7_days']) {
+    assert(adminRoutes.includes(payoutPeriod), `admin payout ledger should support period: ${payoutPeriod}`);
+  }
+  assert(adminRoutes.includes('period_start') && adminRoutes.includes('period_end') && adminRoutes.includes('pay_by_date'), 'admin payout ledger should explain the week/window and pay-by date');
+  assert(adminRoutes.includes('total_due_ugx') && adminRoutes.includes('due_count'), 'admin payout ledger should return due totals for King drill-down cards');
   assert(adminRoutes.includes("router.post('/field-agents/:id/documents'"), 'admin API should save field-agent ID documents and signed contracts');
   assert(adminRoutes.includes("router.post('/field-agents/:id/payment'"), 'admin API should record field-agent payments and receipts');
   assert(adminRoutes.includes('field_agent_documents_updated') && adminRoutes.includes('field_agent_payment_recorded'), 'field-agent document/payment actions should create logs');
