@@ -28,10 +28,10 @@ const PROFILE_DIR = path.resolve(
 const POLL_MS = Math.max(200, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 250));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const RECENT_CHAT_SWEEP_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 30000));
-const RECENT_CHAT_SWEEP_LIMIT = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 3)));
+const RECENT_CHAT_SWEEP_MS = Math.max(3000, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 5000));
+const RECENT_CHAT_SWEEP_LIMIT = Math.min(10, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 6)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
-const OUTBOX_SENDS_PER_LOOP = Math.min(10, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 8)));
+const OUTBOX_SENDS_PER_LOOP = Math.min(6, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 3)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 let activeInboundRecipientHint = '';
@@ -1001,6 +1001,31 @@ async function waitForReplyComposerCleared(page, timeoutMs = 700) {
   return false;
 }
 
+async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 2200) {
+  if (await waitForOutgoingReplyConfirmation(page, text, beforeState, timeoutMs)) {
+    return true;
+  }
+
+  const composerCleared = await waitForReplyComposerCleared(page, 500);
+  if (!composerCleared) return false;
+
+  // Composer-cleared alone is not enough: WhatsApp Web can clear the input
+  // before the outgoing bubble appears. Wait briefly for the real message.
+  return waitForOutgoingReplyConfirmation(page, text, beforeState, 1400);
+}
+
+async function replaceComposerText(page, text, timeoutMs = 1200) {
+  const composer = await findReplyComposer(page, timeoutMs);
+  if (!composer) return false;
+
+  await composer.click();
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.insertText(String(text || ''));
+  await page.waitForTimeout(30);
+  return true;
+}
+
 async function openChatForReply(page, recipient) {
   const chatKey = String(recipient || '').trim();
   const phoneDigits = chatKey.replace(/\D/g, '');
@@ -1064,43 +1089,24 @@ async function openChatForReply(page, recipient) {
 
 async function typeAndSendReply(page, text) {
   const beforeState = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
-  const composer = await waitForReplyComposer(page, 15000);
-  if (!composer) {
+  if (!await replaceComposerText(page, text, 15000)) {
     throw new Error('Could not find the WhatsApp reply box');
   }
 
-  await composer.click();
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.insertText(String(text || ''));
-  await page.waitForTimeout(30);
-
   await clickWhatsAppSend(page);
-  const confirmed = await waitForOutgoingReplyConfirmation(page, text, beforeState);
+  const confirmed = await waitForPostSendConfirmation(page, text, beforeState);
   if (confirmed) return true;
-  if (await waitForReplyComposerCleared(page)) return true;
 
-  const composerForEnterSend = await findReplyComposer(page, 700);
-  if (composerForEnterSend) {
-    await composerForEnterSend.click();
-    const composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
-    if (!normalizeReplyText(composerState.text || '')) {
-      await page.keyboard.insertText(String(text || ''));
-      await page.waitForTimeout(30);
-    }
+  if (await replaceComposerText(page, text, 900)) {
     await page.keyboard.press('Enter');
-    const confirmedAfterEnter = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1200);
+    const confirmedAfterEnter = await waitForPostSendConfirmation(page, text, beforeState, 2200);
     if (confirmedAfterEnter) return true;
-    if (await waitForReplyComposerCleared(page)) return true;
   }
 
-  const composerAfterMiss = await findReplyComposer(page, 700);
-  if (composerAfterMiss) {
-    await composerAfterMiss.click();
+  if (await replaceComposerText(page, text, 900)) {
     await clickWhatsAppSend(page);
-    const confirmedAfterRetry = await waitForOutgoingReplyConfirmation(page, text, beforeState, 1000);
+    const confirmedAfterRetry = await waitForPostSendConfirmation(page, text, beforeState, 2200);
     if (confirmedAfterRetry) return true;
-    if (await waitForReplyComposerCleared(page)) return true;
   }
 
   throw new Error('WhatsApp send was not confirmed in the chat');
@@ -1269,7 +1275,6 @@ async function main() {
         continue;
       }
 
-      const sentAtLoopStart = await processOutbox(page);
       const activeProcessed = await ingestActiveChat(page);
       const sentAfterActive = activeProcessed ? await processOutbox(page, { maxSends: 2 }) : 0;
       const unreadResult = activeProcessed
@@ -1278,7 +1283,7 @@ async function main() {
       const sentAfterUnread = unreadResult.processed ? await processOutbox(page, { maxSends: 2 }) : 0;
       let recentSweepResult = { scanned: 0, processed: 0 };
       let sentAfterSweep = 0;
-      const hadLiveActivity = !!(sentAtLoopStart || activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
+      const hadLiveActivity = !!(activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
       if (!hadLiveActivity && now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
         recentSweepResult = await ingestRecentChatsSweep(page);
         lastRecentSweep = Date.now();
@@ -1286,7 +1291,8 @@ async function main() {
           sentAfterSweep = await processOutbox(page, { maxSends: 2 });
         }
       }
-      const sentCount = sentAtLoopStart + sentAfterActive + sentAfterUnread + sentAfterSweep;
+      const sentAtLoopEnd = await processOutbox(page, { maxSends: 2 });
+      const sentCount = sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {

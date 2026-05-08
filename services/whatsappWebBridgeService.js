@@ -165,7 +165,7 @@ async function queueWhatsappWebBridgeMessage({
 
 async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '' } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
-  const claimWindow = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 10)));
+  const claimWindow = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 4)));
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
 
@@ -219,7 +219,7 @@ async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
 }
 
 async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}) {
-  const retryDelay = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 8)));
+  const retryDelay = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 3)));
   const metadata = patch && typeof patch === 'object' ? patch : {};
   const result = await db.query(
     `UPDATE outbound_message_queue

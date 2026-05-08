@@ -3,8 +3,8 @@ require('dotenv').config();
 
 const { spawn } = require('child_process');
 
-const RESTART_DELAY_MS = Math.max(3000, Number(process.env.WHATSAPP_AGENT_RESTART_DELAY_MS || 8000));
-const MAX_RESTARTS_PER_HOUR = Math.max(3, Number(process.env.WHATSAPP_AGENT_MAX_RESTARTS_PER_HOUR || 20));
+const RESTART_DELAY_MS = Math.max(1000, Number(process.env.WHATSAPP_AGENT_RESTART_DELAY_MS || 2000));
+const MAX_RESTARTS_PER_HOUR = Math.max(3, Number(process.env.WHATSAPP_AGENT_MAX_RESTARTS_PER_HOUR || 120));
 
 let child = null;
 let stopping = false;

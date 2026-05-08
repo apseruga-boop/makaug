@@ -696,15 +696,32 @@ function fastWhatsappRuntimeHints({
     confidence: 0.99,
     source: 'template_fast_path'
   };
+  const detectedTextLanguage = detectLanguageFromText(clean);
 
   let intent = '';
+  const intentEntities = {};
   if (compact === 'MENU' || compact === 'HOME') intent = 'menu';
   else if (compact === 'CONTINUE') intent = 'continue';
   else if (['STOP', 'UNSUBSCRIBE', 'OPTOUT', 'OPT-OUT'].includes(compact)) intent = 'marketing_opt_out';
   else if (['START', 'OPTIN', 'SUBSCRIBE'].includes(compact)) intent = 'marketing_opt_in';
   else if (/^[1-9]$/.test(clean)) intent = 'menu_option';
-  else if (parseLanguageChange(clean)) intent = 'language_change';
-  else if (isGreetingText(clean)) intent = 'greeting';
+  else {
+    const explicitLanguage = parseLanguageChange(clean);
+    if (explicitLanguage) {
+      intent = 'language_change';
+      intentEntities.language = explicitLanguage;
+      language.code = explicitLanguage;
+      language.source = 'intent_entity';
+      language.confidence = 0.99;
+    } else if (isGreetingText(clean)) {
+      intent = 'greeting';
+      if (detectedTextLanguage.code && detectedTextLanguage.confidence >= 0.84) {
+        language.code = detectedTextLanguage.code;
+        language.source = 'heuristic';
+        language.confidence = detectedTextLanguage.confidence;
+      }
+    }
+  }
 
   if (!intent) return null;
 
@@ -713,7 +730,7 @@ function fastWhatsappRuntimeHints({
     intent: {
       intent,
       confidence: 0.99,
-      entities: {},
+      entities: intentEntities,
       model: 'template_fast_path'
     }
   };
