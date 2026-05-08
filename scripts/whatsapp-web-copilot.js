@@ -9,8 +9,8 @@ const { chromium } = require('playwright-core');
 
 const BASE_URL = String(
   process.env.WHATSAPP_WEB_COPILOT_BASE_URL
-    || process.env.APP_BASE_URL
     || process.env.PUBLIC_BASE_URL
+    || process.env.APP_BASE_URL
     || 'http://localhost:8080'
 ).replace(/\/+$/, '');
 const BRIDGE_TOKEN = String(process.env.WHATSAPP_WEB_BRIDGE_TOKEN || '').trim();

@@ -36,7 +36,8 @@ Add these to the machine running the bridge:
 - `WHATSAPP_WEB_BRIDGE_ENABLED=true`
 - `WHATSAPP_DELIVERY_MODE=web_bridge`
 - `WHATSAPP_WEB_BRIDGE_TOKEN=...`
-- `WHATSAPP_WEB_COPILOT_BASE_URL=http://localhost:8080`
+- `WHATSAPP_WEB_COPILOT_BASE_URL=https://makaug.com`
+- `PUBLIC_BASE_URL=https://makaug.com`
 - `WHATSAPP_WEB_COPILOT_CLIENT_ID=makaug-whatsapp-web`
 - `WHATSAPP_WEB_COPILOT_OPERATOR_NAME=Arthur`
 - `WHATSAPP_WEB_COPILOT_CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
@@ -46,6 +47,15 @@ Add these to the machine running the bridge:
 The backend and the bridge must share the same:
 
 - `WHATSAPP_WEB_BRIDGE_TOKEN`
+
+For the live `makaug.com` setup, keep both the deployed backend and the
+machine running WhatsApp Web pointed at the same production URL:
+
+- `PUBLIC_BASE_URL=https://makaug.com`
+- `WHATSAPP_WEB_COPILOT_BASE_URL=https://makaug.com`
+
+Do not point the always-on WhatsApp Web bridge at `localhost` unless you are
+intentionally testing a local backend.
 
 ## Start sequence
 
