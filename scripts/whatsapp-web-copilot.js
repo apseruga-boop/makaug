@@ -27,6 +27,7 @@ const PROFILE_DIR = path.resolve(
 );
 const POLL_MS = Math.max(700, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 900));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
+const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 
@@ -47,6 +48,11 @@ function sleep(ms) {
 function log(...args) {
   // eslint-disable-next-line no-console
   console.log(new Date().toISOString(), '[whatsapp-web-copilot]', ...args);
+}
+
+function isClosedBrowserError(error) {
+  return /target page, context or browser has been closed|browser has been closed|context has been closed|page has been closed|session closed|target closed/i
+    .test(String(error?.message || error || ''));
 }
 
 function normalizeChatKey(value) {
@@ -989,6 +995,7 @@ async function main() {
 
   let lastHeartbeat = 0;
   let lastBridgeState = '';
+  let consecutiveLoopErrors = 0;
 
   while (true) {
     try {
@@ -1042,16 +1049,23 @@ async function main() {
         });
         lastHeartbeat = now;
       }
+      consecutiveLoopErrors = 0;
     } catch (error) {
+      consecutiveLoopErrors += 1;
       log('bridge loop error:', error.message || error);
       await sendHeartbeat({
         status: 'degraded',
         current_url: '',
         last_error: error.message || String(error),
         metadata: {
-          phase: 'main_loop'
+          phase: 'main_loop',
+          consecutive_loop_errors: consecutiveLoopErrors
         }
       });
+      if (isClosedBrowserError(error) || consecutiveLoopErrors >= MAX_CONSECUTIVE_LOOP_ERRORS) {
+        log(`bridge loop is not recoverable in-process; exiting so whatsapp-web-agent can restart it (${consecutiveLoopErrors} consecutive error${consecutiveLoopErrors === 1 ? '' : 's'}).`);
+        process.exit(1);
+      }
     }
 
     await sleep(POLL_MS);
