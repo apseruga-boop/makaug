@@ -10,11 +10,12 @@ Purpose: full-site operational sweep across public routes, click actions, route 
 - Browser public route probe passed 23/23 routes locally after the router fix.
 - Click-action probe passed 39/39 actions locally after updating the About marker expectation.
 - Live backend connection probe passed 139/139 checks.
+- Post-deploy live route-transition probe passed 23/23 route transitions.
 - Protected admin and role APIs returned `401`/`403` for anonymous access.
 - Performance probe passed locally after the router fix; every route was under the 1500ms visible threshold and had 0 console errors.
 - Google Maps did not load on non-map public pages during the performance probe.
 
-## Critical Issue Found And Fixed Locally
+## Critical Issue Found And Fixed
 
 ### Route Fragment Race
 
@@ -31,20 +32,24 @@ Local proof after fix:
 - Route transition probe passed 23/23 transitions on `http://127.0.0.1:5058`.
 - The fix adds a monotonic public-route load token so stale fragments cannot replace the active page.
 
+Live proof after deployment:
+
+- Route transition probe passed 23/23 transitions on `https://makaug.com`.
+
 ## Remaining Issues To Work Through
 
-1. Production route-transition fix needs deployment.
-2. Public brand copy still contains legacy `MakaUg` in some public strings and docs/tests. The requested public rule is `makaug.com`.
-3. Language switching is still partial in some public body/search labels. The router fix did not attempt a full translation rewrite.
-4. Provider credentials are not fully verified live:
+1. Public brand copy still contains legacy `MakaUg` in some public strings and docs/tests. The requested public rule is `makaug.com`.
+2. Language switching is still partial in some public body/search labels. The router fix did not attempt a full translation rewrite.
+3. Provider credentials are not fully verified live:
    - Email provider envs missing.
    - SMS/Africa's Talking envs missing from the backend probe.
    - Payment provider envs missing.
    - Google Maps/Places envs missing from the backend probe.
    - OpenAI/LLM provider envs missing from the backend probe.
-5. Super admin bootstrap envs are incomplete in the backend probe: `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_INITIAL_PASSWORD` are missing.
-6. Authenticated King dashboard shortcut actions need a logged-in admin browser audit after deployment. Anonymous API protection is proven.
-7. WhatsApp live delivery still needs a phone-level response proof. The backend bridge variables are present, but formal provider variables are not.
+4. Super admin bootstrap envs are incomplete in the backend probe: `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_INITIAL_PASSWORD` are missing.
+5. Authenticated King dashboard shortcut actions need a logged-in admin browser audit after deployment. Anonymous API protection is proven.
+6. WhatsApp live delivery still needs a phone-level response proof. The backend bridge variables are present, but formal provider variables are not.
+7. The final post-deploy live browser click and browser-route reruns hung without output and were stopped. The same browser probes passed locally after the fix, and live HTML/backend/performance/route-transition probes passed.
 
 ## Tests And Probes
 
@@ -54,6 +59,9 @@ Live:
 - `BASE_URL=https://makaug.com npm run probe:backend-connections` - pass, 139 checks.
 - `BASE_URL=https://makaug.com npm run probe:performance` - pass before this patch.
 - `BASE_URL=https://makaug.com npm run probe:route-transitions` - failed before deploy, confirming the route race.
+- `BASE_URL=https://makaug.com npm run probe:route-transitions` - pass after deploy, 23/23 transitions.
+- `BASE_URL=https://makaug.com npm run probe:click-actions` - post-deploy rerun hung without output and was stopped.
+- `BASE_URL=https://makaug.com npm run probe:public-routes:browser` - post-deploy rerun hung without output and was stopped.
 
 Local after fix:
 
