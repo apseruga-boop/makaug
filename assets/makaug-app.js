@@ -21582,6 +21582,23 @@ function updateRouteHistoryForPage(page, source = "show_page") {
   } catch (error) {}
 }
 
+let publicRouteLoadSeq = 0;
+let publicRouteTargetPage = "";
+
+function beginPublicRouteIntent(page) {
+  const targetPage = normalizePageKey(page);
+  if (!targetPage || !routeForPage(targetPage)) return publicRouteLoadSeq;
+  publicRouteLoadSeq += 1;
+  publicRouteTargetPage = targetPage;
+  return publicRouteLoadSeq;
+}
+
+function isCurrentPublicRouteLoad(loadToken, page) {
+  return Boolean(loadToken)
+    && loadToken === publicRouteLoadSeq
+    && publicRouteTargetPage === normalizePageKey(page);
+}
+
 function closeRouteTransientModals(nextPage, previousPage) {
   if (!previousPage || nextPage === previousPage) return;
   const modalIds = [];
@@ -21597,6 +21614,7 @@ function closeRouteTransientModals(nextPage, previousPage) {
 
 function showPage(page, options = {}) {
   const targetPage = normalizePageKey(page);
+  beginPublicRouteIntent(targetPage);
   const previousPage = currentPage;
   const el = document.getElementById("page-" + targetPage);
   if (el) {
@@ -21751,6 +21769,7 @@ function mountPublicRouteFragment(doc, page) {
 
 async function loadPublicRouteFragment(nextUrl, page, options = {}) {
   const source = options.source || "spa_fragment";
+  const loadToken = options.loadToken || beginPublicRouteIntent(page);
   document.documentElement.classList.add("route-loading");
   try {
     const response = await fetch(nextUrl, {
@@ -21761,6 +21780,7 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
     if (!response.ok) throw new Error(`Route fetch failed (${response.status})`);
     const html = await response.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
+    if (!isCurrentPublicRouteLoad(loadToken, page)) return false;
     if (!mountPublicRouteFragment(doc, page)) throw new Error(`Route fragment missing page-${page}`);
     const url = new URL(nextUrl, window.location.origin);
     const nextPath = `${normalizeRoutePath(url.pathname)}${url.search || ""}${url.hash || ""}`;
@@ -21779,6 +21799,7 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
     applyHeroSearchHandoff(page);
     return true;
   } catch (error) {
+    if (!isCurrentPublicRouteLoad(loadToken, page)) return false;
     console.warn("Falling back to full route navigation", error);
     window.location.href = nextUrl;
     return false;
@@ -21831,13 +21852,14 @@ function navigatePublicRoute(target, event, options = {}) {
   }
   const page = pageForPublicRoute(path);
   if (!page) return true;
+  const loadToken = beginPublicRouteIntent(page);
   const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
   if (!document.getElementById(`page-${page}`)) {
     mountPublicRouteSkeleton(page);
     if (currentPathWithQueryAndHash() !== nextUrl) {
       try { window.history.pushState({ page, source: options.source || "spa_link_loading" }, "", nextUrl); } catch (error) {}
     }
-    loadPublicRouteFragment(nextUrl, page, options);
+    loadPublicRouteFragment(nextUrl, page, { ...options, loadToken });
     return false;
   }
   if (currentPathWithQueryAndHash() !== nextUrl) {
