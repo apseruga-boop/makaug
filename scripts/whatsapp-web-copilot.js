@@ -30,12 +30,12 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 250);
-const POLL_MS = Math.min(1000, Math.max(200, Number.isFinite(configuredPollMs) ? configuredPollMs : 250));
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 125);
+const POLL_MS = Math.min(500, Math.max(100, Number.isFinite(configuredPollMs) ? configuredPollMs : 125));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 800);
-const RECENT_CHAT_SWEEP_MS = Math.min(1000, Math.max(400, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 800));
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 400);
+const RECENT_CHAT_SWEEP_MS = Math.min(800, Math.max(200, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 400));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
@@ -833,7 +833,7 @@ async function ingestUnreadChats(page) {
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
 
-    const snapshots = await getRecentIncomingSnapshots(page);
+    const snapshots = await getRecentIncomingSnapshots(page, 1);
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
@@ -865,7 +865,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
 
-    const snapshots = await getRecentIncomingSnapshots(page, 6);
+    const snapshots = await getRecentIncomingSnapshots(page, 1);
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
@@ -894,7 +894,7 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
 }
 
 async function ingestActiveChat(page) {
-  const snapshots = await getRecentIncomingSnapshots(page);
+  const snapshots = await getRecentIncomingSnapshots(page, 1);
   let processed = 0;
   for (const snapshot of snapshots) {
     const row = { title: snapshot.chatKey, preview: '' };

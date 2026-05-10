@@ -211,6 +211,21 @@ const scenarios = [
     ]
   },
   {
+    name: 'Listing flow recovers when a delayed listing-type answer arrives at ownership step',
+    messages: [
+      '1',
+      '1',
+      '4',
+      '1'
+    ],
+    expect: [
+      { step: 'listing_type', includes: ['What are you listing?'] },
+      { step: 'ownership', includesAny: ['owner', 'agent'] },
+      { step: 'ownership', includesAny: ['owner', 'agent'], excludes: ['Sorry, I didn'] },
+      { step: 'ask_field_agent', includesAny: ['Field Agent', 'helped you'] }
+    ]
+  },
+  {
     name: 'English language search path works',
     messages: ['Hello', '2', 'Kampala'],
     expect: [

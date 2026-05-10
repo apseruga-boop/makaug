@@ -4554,7 +4554,19 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   // OWNERSHIP
   if (step === 'ownership') {
     const ownerMap = { '1': 'owner', '2': 'agent', owner: 'owner', agent: 'agent' };
-    const chosen = ownerMap[cleanBody.toLowerCase()];
+    const listingTypeReply = mapListingTypeInput(cleanBody);
+    const ownershipReply = ownerMap[cleanBody.toLowerCase()];
+
+    // WhatsApp Web can occasionally deliver a small backlog after reconnecting.
+    // If a user is answering the previous "What are you listing?" prompt, keep
+    // the flow in order instead of treating valid listing choices like 3/4/5 as
+    // an invalid owner/agent answer.
+    if (listingTypeReply && (!ownershipReply || !draft.listing_type)) {
+      await patchDraft(phone, { listing_type: listingTypeReply });
+      return respond(t(lang, 'askOwnership'), 'ownership');
+    }
+
+    const chosen = ownershipReply;
     if (!chosen) return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askOwnership'), 'ownership');
     await patchDraft(phone, { lister_type: chosen });
     return respond(t(lang, 'askFieldAgent'), 'ask_field_agent');
