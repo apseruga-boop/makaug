@@ -31,7 +31,7 @@ const PROFILE_DIR = path.resolve(
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
 const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 125);
-const POLL_MS = Math.min(500, Math.max(100, Number.isFinite(configuredPollMs) ? configuredPollMs : 125));
+const POLL_MS = Math.min(250, Math.max(100, Number.isFinite(configuredPollMs) ? configuredPollMs : 125));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 400);
