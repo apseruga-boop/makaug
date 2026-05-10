@@ -5,7 +5,12 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const dns = require('dns');
 const { chromium } = require('playwright-core');
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const BASE_URL = String(
   process.env.WHATSAPP_WEB_COPILOT_BASE_URL
@@ -25,13 +30,16 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const POLL_MS = Math.max(200, Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 250));
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 250);
+const POLL_MS = Math.min(1000, Math.max(200, Number.isFinite(configuredPollMs) ? configuredPollMs : 250));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const RECENT_CHAT_SWEEP_MS = Math.max(800, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 1000));
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 800);
+const RECENT_CHAT_SWEEP_MS = Math.min(1000, Math.max(400, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 800));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
+const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 let activeInboundRecipientHint = '';
@@ -121,14 +129,41 @@ function normalizeReplyText(value) {
 }
 
 async function apiRequest(endpoint, { method = 'GET', body } = {}) {
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-whatsapp-web-bridge-token': BRIDGE_TOKEN
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+  let response = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= API_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      response = await fetch(`${BASE_URL}${endpoint}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-whatsapp-web-bridge-token': BRIDGE_TOKEN
+        },
+        body: body ? JSON.stringify(body) : undefined
+      });
+
+      if (![408, 425, 429, 500, 502, 503, 504].includes(response.status) || attempt === API_RETRY_ATTEMPTS) {
+        break;
+      }
+
+      const retryAfter = Number(response.headers.get('retry-after') || 0);
+      const backoffMs = retryAfter > 0
+        ? Math.min(10_000, retryAfter * 1000)
+        : Math.min(3000, 150 * attempt + Math.floor(Math.random() * 150));
+      log(`API ${method} ${endpoint} returned HTTP ${response.status}; retrying in ${backoffMs}ms (${attempt}/${API_RETRY_ATTEMPTS})`);
+      await sleep(backoffMs);
+    } catch (error) {
+      lastError = error;
+      if (attempt === API_RETRY_ATTEMPTS) throw error;
+      const backoffMs = Math.min(3000, 150 * attempt + Math.floor(Math.random() * 150));
+      log(`API ${method} ${endpoint} failed: ${error.message || error}; retrying in ${backoffMs}ms (${attempt}/${API_RETRY_ATTEMPTS})`);
+      await sleep(backoffMs);
+    }
+  }
+
+  if (!response) {
+    throw lastError || new Error(`No response from ${endpoint}`);
+  }
 
   let payload = null;
   try {
@@ -1230,6 +1265,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
+  log(`Poll interval: ${POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (CDP_URL) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {

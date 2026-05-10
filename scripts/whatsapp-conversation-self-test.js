@@ -1,10 +1,15 @@
 require('dotenv').config();
 
 const crypto = require('crypto');
+const dns = require('dns');
 const db = require('../config/database');
 const whatsappRouter = require('../routes/whatsapp');
 
 const { processInboundRuntime } = whatsappRouter.__test;
+
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 const RUN_ID = `selftest-${Date.now().toString(36)}`;
 const PHONE_PREFIX = `sim-${RUN_ID}`;
@@ -16,6 +21,7 @@ const REQUEST_DELAY_MS = Math.max(
   LIVE_BASE_URL && SOAK_MINUTES ? 1000 : 0,
   Number(process.env.WHATSAPP_SELF_TEST_DELAY_MS || 0)
 );
+const LIVE_DRY_RUN_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_SELF_TEST_ATTEMPTS || 6)));
 
 const scenarios = [
   {
@@ -672,7 +678,7 @@ async function sendLiveDryRun({ phone, item, index }) {
     metadata: { run_id: RUN_ID, scenario_index: index, ...(payload.metadata || {}) }
   });
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+  for (let attempt = 1; attempt <= LIVE_DRY_RUN_ATTEMPTS; attempt += 1) {
     try {
       response = await fetch(`${LIVE_BASE_URL}/api/whatsapp/web-bridge/inbound`, {
         method: 'POST',
@@ -682,7 +688,7 @@ async function sendLiveDryRun({ phone, item, index }) {
         },
         body
       });
-      if (response.status === 429 && attempt < 3) {
+      if ([408, 425, 429, 500, 502, 503, 504].includes(response.status) && attempt < LIVE_DRY_RUN_ATTEMPTS) {
         const retryAfter = Math.max(5, Number(response.headers.get('retry-after') || 20));
         await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
         continue;
@@ -690,8 +696,8 @@ async function sendLiveDryRun({ phone, item, index }) {
       break;
     } catch (error) {
       lastError = error;
-      if (attempt === 3) throw error;
-      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+      if (attempt === LIVE_DRY_RUN_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
     }
   }
 

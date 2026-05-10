@@ -43,6 +43,8 @@ Add these to the machine running the bridge:
 - `WHATSAPP_WEB_COPILOT_CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - `WHATSAPP_WEB_COPILOT_PROFILE_DIR=.whatsapp-web-copilot-profile`
 - `WHATSAPP_WEB_COPILOT_CDP_URL=http://127.0.0.1:9222` (optional, for attaching to an already-running Chrome)
+- `WHATSAPP_WEB_COPILOT_POLL_MS=500` (optional; the bridge caps this at 1000ms so live replies do not feel stuck)
+- `WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS=800` (optional; controls how often recent chats are checked when WhatsApp does not mark a chat unread)
 
 The backend and the bridge must share the same:
 
@@ -56,6 +58,10 @@ machine running WhatsApp Web pointed at the same production URL:
 
 Do not point the always-on WhatsApp Web bridge at `localhost` unless you are
 intentionally testing a local backend.
+
+For production use, avoid slow polling values such as `5000`. The bridge is
+designed to keep replies close to real time and will cap slow values, but the
+environment should still be set to `500` or left unset.
 
 ## Start sequence
 
