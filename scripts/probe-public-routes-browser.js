@@ -130,6 +130,7 @@ async function probeRoute(page, route) {
     const expected = document.getElementById(expectedPageId);
     const expectedStyle = expected ? window.getComputedStyle(expected) : null;
     const expectedRect = expected ? expected.getBoundingClientRect() : null;
+    const activeSkeletons = Array.from(document.querySelectorAll('.page.active[data-public-route-skeleton], .page.active.route-fragment-loading')).map((el) => el.id || '(no id)');
     const activePages = Array.from(document.querySelectorAll('.page.active')).map((el) => {
       const style = window.getComputedStyle(el);
       const rect = el.getBoundingClientRect();
@@ -147,6 +148,7 @@ async function probeRoute(page, route) {
       text,
       textLength: text.length,
       activePages,
+      activeSkeletons,
       expected: expected ? {
         id: expected.id,
         active: expected.classList.contains('active'),
@@ -154,6 +156,7 @@ async function probeRoute(page, route) {
         visibility: expectedStyle.visibility,
         height: Math.round(expectedRect.height),
         width: Math.round(expectedRect.width),
+        skeleton: expected.matches('[data-public-route-skeleton], .route-fragment-loading') || /Loading the latest makaug\.com page\./i.test(expected.innerText || ''),
         text: expected.innerText.replace(/\s+/g, ' ').trim().slice(0, 500)
       } : null,
       forbiddenFound: forbidden.filter((item) => text.includes(item))
@@ -170,6 +173,9 @@ async function probeRoute(page, route) {
     failures.push(`${expectedPageId} is hidden (${data.expected.display}/${data.expected.visibility})`);
   }
   if (data.expected && data.expected.height < 140) failures.push(`${expectedPageId} appears footer-only/too short (${data.expected.height}px)`);
+  if (data.expected?.skeleton) failures.push(`${expectedPageId} is still showing the temporary route skeleton`);
+  if (data.activeSkeletons.length) failures.push(`active temporary route skeleton(s): ${data.activeSkeletons.join(', ')}`);
+  if (data.text.includes('Loading the latest makaug.com page.')) failures.push('public route skeleton fallback still visible');
   if (!marker) failures.push(`missing visible route marker (${(MARKERS[route] || []).join(' | ')})`);
   for (const forbidden of data.forbiddenFound) failures.push(`forbidden visible text: ${forbidden}`);
   if (data.text.includes('This area only This area only')) failures.push('duplicate location scope label');

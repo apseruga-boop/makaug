@@ -1993,22 +1993,284 @@ const HOME_ASSISTANT_I18N = {
     pill: "AI Listing Assistant",
     titleHtml: "Our AI chatbot helps you list, search, and verify property faster",
     sub: "Ask questions in your language, learn how listing works, understand the checks, and get guided help before you post a property or contact a lister.",
-    detail: "It is designed to help buyers, renters, brokers, and sellers move through MakaUg with less confusion and faster answers.",
+    detail: `It is designed to help buyers, renters, brokers, and sellers move through ${publicBrand()} with less confusion and faster answers.`,
     discoverCta: "Discover AI Chatbot"
   },
   lg: {
     pill: "Omuyambi wa AI mu Listing",
     titleHtml: "AI chatbot yaffe ekuyamba okuteka, okunoonya, n'okukakasa property mu bwangu",
     sub: "Buuza mu lulimi lwo, tegeera engeri listing gy'ekola, omanye ensengeka z'okwekebejja, era ofune obuyambi nga tonnatereka property oba okubuuza ku lister.",
-    detail: "Etegekeddwa okuyamba abagula, abapangisa, brokers, n'abatunda okuyita mu MakaUg mu ngeri etateeka muntu mu buzibu era efuna eby'okuddamu amangu.",
+    detail: `Etegekeddwa okuyamba abagula, abapangisa, brokers, n'abatunda okuyita ku ${publicBrand()} mu ngeri etateeka muntu mu buzibu era efuna eby'okuddamu amangu.`,
     discoverCta: "Noonya ku AI Chatbot"
   },
   sw: {
     pill: "Msaidizi wa AI wa Uorodheshaji",
     titleHtml: "AI chatbot yetu hukusaidia kuorodhesha, kutafuta, na kuthibitisha mali kwa haraka zaidi",
     sub: "Uliza maswali kwa lugha yako, elewa jinsi uorodheshaji unavyofanya kazi, fahamu ukaguzi unaohitajika, na upate mwongozo kabla hujatuma tangazo au kuwasiliana na muuzaji.",
-    detail: "Imeundwa kuwasaidia wanunuzi, wapangaji, mawakala, na wauzaji kutumia MakaUg bila mkanganyiko na kwa majibu ya haraka zaidi.",
+    detail: `Imeundwa kuwasaidia wanunuzi, wapangaji, mawakala, na wauzaji kutumia ${publicBrand()} bila mkanganyiko na kwa majibu ya haraka zaidi.`,
     discoverCta: "Gundua AI Chatbot"
+  },
+  ac: {
+    pill: "Lakony AI pi Listing",
+    titleHtml: "AI chatbot wa ma konyi me keto, yeny, ki moko property oyot",
+    sub: "Peny lapeny i leb meri, niang kit listing timo kwede tic, ngiyo jami ma myero imok, ki nongo kony mapwod pe iketo property onyo ikubbe ki lister.",
+    detail: `${publicBrand()} okonyo jo ma mito wilo, opang, brokers, ki jo ma cato property me wot anyim labongo rubanga madwong ki lagam ma oyot.`,
+    discoverCta: "Nong AI Chatbot"
+  },
+  ny: {
+    pill: "Omuhwezi wa AI wa Listing",
+    titleHtml: "AI chatbot yaitu erikukuhwera kuta, kusherura, n'okuhamya property juba",
+    sub: "Buuza mu rurimi rwawe, manya oku listing ekora, yetegereze ebirikwetengyesa kuhamya, kandi otunge obuhwezi otakashohoye property ninga kubuuza lister.",
+    detail: `${publicBrand()} nehweera abagura, abapangisa, brokers, n'abatunda kugyenda omu nzira yorobi kandi etariimu okushoberwa.`,
+    discoverCta: "Zuura AI Chatbot"
+  },
+  rn: {
+    pill: "Omuhwezi wa AI wa Listing",
+    titleHtml: "AI chatbot yaitu ekukwasa kuta, kusherura, n'okuhamya property juba",
+    sub: "Buuza omu Rukiga, manya oku listing ekora, reeba ebirikwetengyesa kuhamya, kandi otunge obuhwezi otakashohoye property ninga kubuuza lister.",
+    detail: `${publicBrand()} neyamba abagura, abapangisa, brokers, n'abatunda kutambura gye batashoberwa kandi bakabona eby'okugarukamu juba.`,
+    discoverCta: "Reeba AI Chatbot"
+  },
+  sm: {
+    pill: "Omuyambi wa AI mu Listing",
+    titleHtml: "AI chatbot yaiffe ekuyamba okuteeka, okunoonya, n'okukakasa property amangu",
+    sub: "Buuza mu lulimi lwo, tegeera listing bw'ekola, manya ebikeberebwa, era ofune obuyambi nga tonnatereka property oba okukubiriza lister.",
+    detail: `${publicBrand()} eyamba abagula, abapangisa, brokers, n'abatunda okutambula nga tebasobeddwa era bafune eby'okuddamu amangu.`,
+    discoverCta: "Zuula AI Chatbot"
+  }
+};
+
+const FOOTER_I18N = {
+  en: {
+    brandCopy: `Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Chat on WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Properties",
+    sale: "Houses for Sale",
+    rent: "Houses for Rent",
+    students: "Student Housing",
+    commercial: "Commercial",
+    land: "Land for Sale",
+    mortgage: "Mortgage Finder",
+    list: "List Property",
+    looking: "Looking For...",
+    company: "Company",
+    about: "About Us",
+    how: "How It Works",
+    broker: "Find a Broker",
+    registerBroker: "Register as Broker",
+    advertise: "Advertise with Us",
+    careers: "Careers",
+    legal: "Legal & Support",
+    terms: "Terms & Conditions",
+    privacy: "Privacy Policy",
+    cookies: "Cookie Policy",
+    antiFraud: "Anti-Fraud Policy",
+    help: "Help Centre",
+    report: "Report a Listing",
+    safety: "Safety Tips",
+    growth: "In-house sponsored placements and SEO indexing enabled for growth campaigns.",
+    copyright: `© 2026 ${publicBrand()}. All rights reserved.`
+  },
+  lg: {
+    brandCopy: `Pulatifoomu ya property ey'obwereere ddala mu Uganda. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Nyumya ku WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Ebika bya property",
+    sale: "Ennyumba ezitundibwa",
+    rent: "Ennyumba ezipangisibwa",
+    students: "Obutuuze bw'abayizi",
+    commercial: "By'obusuubuzi",
+    land: "Ettaka eritundibwa",
+    mortgage: "Noonya mortgage",
+    list: "Teka property",
+    looking: "Onoonya ki...",
+    company: "Kkampuni",
+    about: "Ebikwata ku ffe",
+    how: "Engeri gye kikola",
+    broker: "Noonya broker",
+    registerBroker: "Wewandiise nga broker",
+    advertise: "Tangaza naffe",
+    careers: "Emirimu",
+    legal: "Amateeka n'obuyambi",
+    terms: "Amateeka n'obukwakkulizo",
+    privacy: "Enkola y'obukuumi bw'ebikwata ku muntu",
+    cookies: "Enkola ya cookies",
+    antiFraud: "Enkola y'okulwanyisa obufere",
+    help: "Aw'okufuna obuyambi",
+    report: "Loopa listing",
+    safety: "Amagezi g'obukuumi",
+    growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
+    copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
+  },
+  sw: {
+    brandCopy: `Jukwaa la kwanza la mali lisilo na malipo kabisa nchini Uganda. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.`,
+    whatsapp: "WhatsApp",
+    email: "Barua pepe",
+    chatWhatsapp: "Piga gumzo WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Mali",
+    sale: "Nyumba za kuuza",
+    rent: "Nyumba za kupangisha",
+    students: "Makazi ya wanafunzi",
+    commercial: "Biashara",
+    land: "Ardhi ya kuuza",
+    mortgage: "Kitafuta mortgage",
+    list: "Tangaza mali",
+    looking: "Unatafuta...",
+    company: "Kampuni",
+    about: "Kuhusu sisi",
+    how: "Jinsi inavyofanya kazi",
+    broker: "Tafuta broker",
+    registerBroker: "Jisajili kama broker",
+    advertise: "Tangaza nasi",
+    careers: "Kazi",
+    legal: "Sheria na msaada",
+    terms: "Sheria na masharti",
+    privacy: "Sera ya faragha",
+    cookies: "Sera ya cookies",
+    antiFraud: "Sera ya kupinga udanganyifu",
+    help: "Kituo cha msaada",
+    report: "Ripoti tangazo",
+    safety: "Vidokezo vya usalama",
+    growth: "Nafasi za matangazo ya ndani na SEO za makaug.com zimewashwa kwa kampeni za ukuaji.",
+    copyright: `© 2026 ${publicBrand()}. Haki zote zimehifadhiwa.`
+  },
+  ac: {
+    brandCopy: `Kabedo me property ma nono i Uganda. Ket listing, yeny, ki kube ki website onyo WhatsApp. Otyeko district 146 ducu.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Lok i WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Property",
+    sale: "Ot me cato",
+    rent: "Ot me pang",
+    students: "Kabedo pa lutino kwan",
+    commercial: "Property me business",
+    land: "Lobo me cato",
+    mortgage: "Yeny mortgage",
+    list: "Ket property",
+    looking: "Itye ka yeny...",
+    company: "Kampuni",
+    about: "Lok ikom wa",
+    how: "Kit ma timo kwede",
+    broker: "Yeny broker",
+    registerBroker: "Coye calo broker",
+    advertise: "Mi jami pire botwa",
+    careers: "Tic",
+    legal: "Cik ki kony",
+    terms: "Cik ki jami ma iyeyo",
+    privacy: "Cik me privacy",
+    cookies: "Cik me cookies",
+    antiFraud: "Cik me gengo bwola",
+    help: "Kabedo me kony",
+    report: "Mii ngec ikom listing",
+    safety: "Tam me gwokke",
+    growth: "Kabedo me sponsor ki SEO pa makaug.com tye ka tic pi dong.",
+    copyright: `© 2026 ${publicBrand()}. Twero ducu kigwoko.`
+  },
+  ny: {
+    brandCopy: `Platform ya property ey'obusa obutashashurwa omuri Uganda. Ta listing, sherura, kandi oganire kurabira aha website ninga WhatsApp. Ekwata district 146 zoona.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Gamba kuri WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Property",
+    sale: "Amaka ag'okugura",
+    rent: "Amaka ag'okupangisa",
+    students: "Obutura bw'abanyeshomero",
+    commercial: "Eby'obushuubuzi",
+    land: "Eitaka eririkugurishwa",
+    mortgage: "Sherura mortgage",
+    list: "Ta property",
+    looking: "Noshaka ki...",
+    company: "Company",
+    about: "Ebirikukwata ahariitwe",
+    how: "Oku kikora",
+    broker: "Sherura broker",
+    registerBroker: "Yeyandikise nka broker",
+    advertise: "Ranga naitwe",
+    careers: "Emirimo",
+    legal: "Amateeka n'obuhwezi",
+    terms: "Amateeka n'ebiragiro",
+    privacy: "Enkora y'okurinda eby'obwegyengye",
+    cookies: "Enkora ya cookies",
+    antiFraud: "Enkora y'okurwanisa obufere",
+    help: "Ah'okufuna obuhwezi",
+    report: "Gamba aha listing",
+    safety: "Amagezi g'obwerinzi",
+    growth: "Ebifo by'okuranga na SEO bya makaug.com bitebekanisiibwe kukuzya.",
+    copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
+  },
+  rn: {
+    brandCopy: `Platform ya property ey'obusa etashashurwa omuri Uganda. Ta listing, sherura, kandi oganire kurabira aha website ninga WhatsApp. Ekwata district 146 zoona.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Ganira kuri WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Property",
+    sale: "Enju ezigurishwa",
+    rent: "Enju ezipangisibwa",
+    students: "Obutura bw'abanyeshomero",
+    commercial: "Eby'obushuubuzi",
+    land: "Eitaka erigurishwa",
+    mortgage: "Sherura mortgage",
+    list: "Ta property",
+    looking: "Noonya ki...",
+    company: "Company",
+    about: "Ebikwatireine naitwe",
+    how: "Oku kikora",
+    broker: "Sherura broker",
+    registerBroker: "Yeyandikise nka broker",
+    advertise: "Ranga naitwe",
+    careers: "Emirimo",
+    legal: "Amateeka n'obuhwezi",
+    terms: "Amateeka n'ebiragiro",
+    privacy: "Enkora y'obukuumi bw'ebyawe",
+    cookies: "Enkora ya cookies",
+    antiFraud: "Enkora y'okurwanisa obufere",
+    help: "Ah'okufuna obuhwezi",
+    report: "Gamba aha listing",
+    safety: "Amagezi g'obwerinzi",
+    growth: "Ebifo by'okuranga na SEO bya makaug.com bitebekanisiibwe kukuzya.",
+    copyright: `© 2026 ${publicBrand()}. Obugabe bwona burindirwe.`
+  },
+  sm: {
+    brandCopy: `Platform ya property ey'obwereere mu Uganda. Teeka listing, noonya, era kwatagana okuyita ku website oba WhatsApp. Ekwata ku disitulikiti zonna 146.`,
+    whatsapp: "WhatsApp",
+    email: "Email",
+    chatWhatsapp: "Yogera ku WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "Ebika bya property",
+    sale: "Ennyumba ezitundibwa",
+    rent: "Ennyumba ezipangisibwa",
+    students: "Obutuuze bw'abayizi",
+    commercial: "By'obusuubuzi",
+    land: "Ettaka eritundibwa",
+    mortgage: "Noonya mortgage",
+    list: "Teeka property",
+    looking: "Onoonya ki...",
+    company: "Kkampuni",
+    about: "Ebikwata ku ffe",
+    how: "Engeri gye kikola",
+    broker: "Noonya broker",
+    registerBroker: "Wewandiise nga broker",
+    advertise: "Tangaza naffe",
+    careers: "Emirimu",
+    legal: "Amateeka n'obuyambi",
+    terms: "Amateeka n'obukwakkulizo",
+    privacy: "Enkola y'obukuumi bw'ebikwata ku muntu",
+    cookies: "Enkola ya cookies",
+    antiFraud: "Enkola y'okulwanyisa obufere",
+    help: "Aw'okufuna obuyambi",
+    report: "Loopa listing",
+    safety: "Amagezi g'obukuumi",
+    growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
+    copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
   }
 };
 
@@ -2030,6 +2292,50 @@ function applyHomeAssistantLanguageUI() {
   setTextById("home-assistant-detail", homeAssistantTr("detail"));
   const discoverBtn = document.getElementById("home-assistant-discover-btn");
   if (discoverBtn) discoverBtn.innerHTML = `<i class="fas fa-circle-info"></i> ${homeAssistantTr("discoverCta")}`;
+}
+
+function footerTr(key) {
+  const lang = currentLang || "en";
+  const fallback = LANG_FALLBACK[lang] || "en";
+  return FOOTER_I18N[lang]?.[key]
+    || FOOTER_I18N[fallback]?.[key]
+    || FOOTER_I18N.en?.[key]
+    || "";
+}
+
+function applyFooterLanguageUI() {
+  setTextById("footer-brand-title", publicBrand());
+  setTextById("footer-brand-copy", footerTr("brandCopy"));
+  setTextById("footer-whatsapp-label", `📲 ${footerTr("whatsapp")}: 0760112587`);
+  setTextById("footer-email-label", `📧 ${footerTr("email")}: info@makaug.com`);
+  setTextById("footer-chat-whatsapp", `💬 ${footerTr("chatWhatsapp")}`);
+  setTextById("footer-location-label", `📍 ${footerTr("location")}`);
+  setTextById("footer-col-properties", footerTr("properties"));
+  setTextById("footer-link-sale", footerTr("sale"));
+  setTextById("footer-link-rent", footerTr("rent"));
+  setTextById("footer-link-students", footerTr("students"));
+  setTextById("footer-link-commercial", footerTr("commercial"));
+  setTextById("footer-link-land", footerTr("land"));
+  setTextById("footer-link-mortgage", footerTr("mortgage"));
+  setTextById("footer-link-list-free", footerTr("list"));
+  setTextById("footer-link-looking", footerTr("looking"));
+  setTextById("footer-col-company", footerTr("company"));
+  setTextById("footer-link-about", footerTr("about"));
+  setTextById("footer-link-how", footerTr("how"));
+  setTextById("footer-link-broker", footerTr("broker"));
+  setTextById("footer-link-register-broker", footerTr("registerBroker"));
+  setTextById("footer-link-advertise", footerTr("advertise"));
+  setTextById("footer-link-careers", footerTr("careers"));
+  setTextById("footer-col-legal", footerTr("legal"));
+  setTextById("footer-link-terms", footerTr("terms"));
+  setTextById("footer-link-privacy", footerTr("privacy"));
+  setTextById("footer-link-cookies", footerTr("cookies"));
+  setTextById("footer-link-anti-fraud", footerTr("antiFraud"));
+  setTextById("footer-link-help", footerTr("help"));
+  setTextById("footer-link-report", footerTr("report"));
+  setTextById("footer-link-safety", footerTr("safety"));
+  setTextById("footer-growth-note", footerTr("growth"));
+  setTextById("footer-copyright", footerTr("copyright"));
 }
 
 const MORTGAGE_I18N = {
@@ -3680,7 +3986,6 @@ function applyLanguageUI() {
   setTextById("mnav-about", translateListingLabel("About Us"));
   setTextById("nav-list-btn", tr("advertiseProperty"));
   setTextById("mnav-advertise", tr("advertiseProperty"));
-  setTextById("footer-growth-note", tr("footerGrowth"));
   applyAccountLanguageUI();
   applyFinderDashboardLanguageUI();
 
@@ -3711,35 +4016,7 @@ function applyLanguageUI() {
   setTextById("home-brokers-title", tr("homeBrokers"));
   setTextById("home-brokers-link", translateListingLabel("All Agents"));
   setTextById("detail-back-results-btn", translateListingLabel("Back to results"));
-  setTextById("footer-brand-title", publicBrand());
-  setTextById("footer-brand-copy", translateListingLabel("Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts."));
-  setTextById("footer-chat-whatsapp", `💬 ${translateListingLabel("Chat on WhatsApp")}`);
-  setTextById("footer-location-label", translateListingLabel("📍 Kampala, Uganda"));
-  setTextById("footer-col-properties", translateListingLabel("Properties"));
-  setTextById("footer-link-sale", translateListingLabel("Houses for Sale"));
-  setTextById("footer-link-rent", translateListingLabel("Houses for Rent"));
-  setTextById("footer-link-students", translateListingLabel("Student Housing"));
-  setTextById("footer-link-commercial", translateListingLabel("Commercial"));
-  setTextById("footer-link-land", translateListingLabel("Land for Sale"));
-  setTextById("footer-link-mortgage", translateListingLabel("Mortgage Finder"));
-  setTextById("footer-link-list-free", translateListingLabel("List Property"));
-  setTextById("footer-link-looking", translateListingLabel("Looking For..."));
-  setTextById("footer-col-company", translateListingLabel("Company"));
-  setTextById("footer-link-about", translateListingLabel("About Us"));
-  setTextById("footer-link-how", translateListingLabel("How It Works"));
-  setTextById("footer-link-broker", translateListingLabel("Find a Broker"));
-  setTextById("footer-link-register-broker", translateListingLabel("Register as Broker"));
-  setTextById("footer-link-advertise", translateListingLabel("Advertise with Us"));
-  setTextById("footer-link-careers", translateListingLabel("Careers"));
-  setTextById("footer-col-legal", translateListingLabel("Legal & Support"));
-  setTextById("footer-link-terms", translateListingLabel("Terms & Conditions"));
-  setTextById("footer-link-privacy", translateListingLabel("Privacy Policy"));
-  setTextById("footer-link-cookies", translateListingLabel("Cookie Policy"));
-  setTextById("footer-link-anti-fraud", translateListingLabel("Anti-Fraud Policy"));
-  setTextById("footer-link-help", translateListingLabel("Help Centre"));
-  setTextById("footer-link-report", translateListingLabel("Report a Listing"));
-  setTextById("footer-link-safety", translateListingLabel("Safety Tips"));
-  setTextById("footer-copyright", translateListingLabel(`© 2026 ${publicBrand()}. All rights reserved.`));
+  applyFooterLanguageUI();
   applyHomeAssistantLanguageUI();
 
   setPageHeading("page-sale", tr("pageSale"));
@@ -3881,6 +4158,7 @@ function setLang(lang, silent = false, rerender = true) {
   renderLpPhotoFeedback();
   renderListReviewSummary();
   renderMortgageFinder();
+  applyLanguageUI();
   if (!silent) toast(`${tr("languageSet")}: ${currentLang.toUpperCase()}`);
 }
 
@@ -21617,6 +21895,14 @@ function showPage(page, options = {}) {
   beginPublicRouteIntent(targetPage);
   const previousPage = currentPage;
   const el = document.getElementById("page-" + targetPage);
+  if (el && isPublicRouteSkeletonElement(el) && routeForPage(targetPage)) {
+    loadPublicRouteFragment(currentUrlForPublicRoutePage(targetPage), targetPage, {
+      source: options.source || "show_page_skeleton_recovery",
+      scroll: options.scroll !== false,
+      loadToken: publicRouteLoadSeq
+    });
+    return;
+  }
   if (el) {
     if (!el.classList.contains("active")) {
       document.querySelectorAll(".page.active").forEach((p) => {
@@ -21707,6 +21993,33 @@ const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
   saved: "Saved"
 });
 
+function isPublicRouteSkeletonElement(el) {
+  if (!el) return false;
+  const skeletonRoute = el.dataset?.publicRouteSkeleton || "";
+  const text = String(el.textContent || "");
+  return Boolean(skeletonRoute)
+    || el.classList?.contains("route-fragment-loading")
+    || text.includes("Loading the latest makaug.com page.");
+}
+
+function getPublicRoutePageCandidates(doc, page) {
+  if (!doc || !page) return [];
+  const targetPage = normalizePageKey(page);
+  if (!targetPage) return [];
+  return Array.from(doc.querySelectorAll(`[id="page-${targetPage}"]`));
+}
+
+function getHydratedPublicRoutePage(doc, page) {
+  return getPublicRoutePageCandidates(doc, page).find((candidate) => !isPublicRouteSkeletonElement(candidate)) || null;
+}
+
+function currentUrlForPublicRoutePage(page) {
+  const targetPage = normalizePageKey(page);
+  const currentPath = normalizeRoutePath(window.location.pathname || "/");
+  if (pageForPublicRoute(currentPath) === targetPage) return currentPathWithQueryAndHash();
+  return routeForPage(targetPage) || "/";
+}
+
 function mountPublicRouteSkeleton(page) {
   const targetPage = normalizePageKey(page);
   if (!targetPage || document.getElementById(`page-${targetPage}`)) return false;
@@ -21745,9 +22058,11 @@ function mountPublicRouteSkeleton(page) {
 }
 
 function mountPublicRouteFragment(doc, page) {
-  const incoming = doc.getElementById(`page-${page}`);
+  const incoming = getHydratedPublicRoutePage(doc, page);
   if (!incoming) return false;
   const imported = document.importNode(incoming, true);
+  imported.classList.remove("route-fragment-loading");
+  imported.removeAttribute("data-public-route-skeleton");
   imported.classList.add("active");
   document.querySelectorAll(".page").forEach((el) => {
     if (el.id !== imported.id) el.remove();
@@ -21854,7 +22169,8 @@ function navigatePublicRoute(target, event, options = {}) {
   if (!page) return true;
   const loadToken = beginPublicRouteIntent(page);
   const nextUrl = `${path}${url.search || ""}${url.hash || ""}`;
-  if (!document.getElementById(`page-${page}`)) {
+  const existingPublicRoutePage = document.getElementById(`page-${page}`);
+  if (!existingPublicRoutePage || isPublicRouteSkeletonElement(existingPublicRoutePage)) {
     mountPublicRouteSkeleton(page);
     if (currentPathWithQueryAndHash() !== nextUrl) {
       try { window.history.pushState({ page, source: options.source || "spa_link_loading" }, "", nextUrl); } catch (error) {}
@@ -22223,7 +22539,8 @@ async function parseInitialDeepLink() {
 
   const publicRoutePage = pageForPublicRoute(path);
   if (publicRoutePage) {
-    if (!document.getElementById(`page-${publicRoutePage}`)) {
+    const existingPublicRoutePage = document.getElementById(`page-${publicRoutePage}`);
+    if (!existingPublicRoutePage || isPublicRouteSkeletonElement(existingPublicRoutePage)) {
       await loadPublicRouteFragment(`${path}${window.location.search || ""}${window.location.hash || ""}`, publicRoutePage, {
         source: "popstate_missing_fragment",
         scroll: false
