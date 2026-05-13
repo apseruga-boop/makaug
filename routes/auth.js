@@ -496,6 +496,14 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
       });
     } catch (error) {
       logger.error('Failed to send OTP email', error.message);
+      await logNotification(db, {
+        recipientEmail: identifier,
+        channel: 'email',
+        type: 'otp_sent',
+        status: 'failed',
+        payloadSummary: { purpose, expires_minutes: expiresMinutes },
+        failureReason: error.message || 'email_otp_send_failed'
+      });
       if (overrideAllowed) {
         logger.warn('OTP email send failed, using ADMIN_OTP_OVERRIDE_CODE fallback');
         return { otp, channel: resolvedChannel, identifier, expiresMinutes };
@@ -511,6 +519,14 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
         return { otp, channel: resolvedChannel, identifier, expiresMinutes };
       }
       const reason = String(delivery?.error || delivery?.reason || '').toLowerCase();
+      await logNotification(db, {
+        recipientEmail: identifier,
+        channel: 'email',
+        type: 'otp_sent',
+        status: 'failed',
+        payloadSummary: { purpose, expires_minutes: expiresMinutes },
+        failureReason: delivery?.error || delivery?.reason || 'email_otp_delivery_unavailable'
+      });
       const configError = new Error(
         (reason.includes('smtpclientauthentication') || reason.includes('5.7.139'))
           ? 'Email OTP is blocked by Microsoft 365 tenant policy. Enable Authenticated SMTP or configure Microsoft Graph mail delivery.'
@@ -710,13 +726,25 @@ router.post('/request-signup-otp', async (req, res, next) => {
   try {
     const channelInput = cleanText(req.body.channel).toLowerCase();
     const channel = channelInput === 'phone' ? 'phone' : 'email';
+    const firstName = cleanText(req.body.first_name);
+    const lastName = cleanText(req.body.last_name || req.body.second_name || req.body.surname);
     const phone = normalizeUgPhone(req.body.phone);
     const email = normalizeEmail(req.body.email);
+    const audience = normalizeSignupAudience(req.body.audience || req.body.account_kind || req.body.role || '');
     const preferredLanguageInput = cleanText(req.body.preferred_language).toLowerCase();
     const preferredLanguage = ['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm'].includes(preferredLanguageInput)
       ? preferredLanguageInput
       : 'en';
 
+    if (!firstName) {
+      return res.status(400).json({ ok: false, error: 'First name is required' });
+    }
+    if (!lastName) {
+      return res.status(400).json({ ok: false, error: 'Second name / surname is required' });
+    }
+    if (!phone || !isValidPhone(phone) || !isValidUgPhone(phone)) {
+      return res.status(400).json({ ok: false, error: 'Valid Uganda phone number is required' });
+    }
     if (channel === 'email' && (!email || !isValidEmail(email))) {
       return res.status(400).json({ ok: false, error: 'Valid email is required' });
     }
@@ -724,26 +752,105 @@ router.post('/request-signup-otp', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Valid Uganda phone number is required for SMS verification' });
     }
 
-    const existing = channel === 'email'
-      ? await db.query('SELECT id, phone_verified FROM users WHERE LOWER(email) = $1 AND status = $2 LIMIT 1', [email, 'active'])
-      : await db.query('SELECT id, phone_verified FROM users WHERE phone = $1 AND status = $2 LIMIT 1', [phone, 'active']);
+    const existing = await db.query(
+      `SELECT id, phone_verified
+       FROM users
+       WHERE status = $3
+         AND (
+           ($1::text IS NOT NULL AND LOWER(email) = LOWER($1))
+           OR phone = $2
+         )
+       LIMIT 2`,
+      [email, phone, 'active']
+    );
     if (existing.rows.some((row) => row.phone_verified === true)) {
       return res.status(409).json({ ok: false, error: 'An active account already exists. Please sign in or reset your password.' });
     }
 
-    const otpIssue = await issueOtp({
+    const otpPayloadSummary = {
       purpose: 'signup',
-      channel,
-      phone,
-      email,
-      preferredLanguage
-    });
+      audience,
+      first_name: firstName,
+      last_name: lastName,
+      requested_channel: channel
+    };
+
+    let otpIssue = null;
+    let resolvedChannel = channel;
+    let emailFallbackToSms = false;
+    try {
+      otpIssue = await issueOtp({
+        purpose: 'signup',
+        channel,
+        phone,
+        email,
+        preferredLanguage
+      });
+    } catch (error) {
+      const message = String(error.message || '').toLowerCase();
+      const canFallbackToSms = channel === 'email'
+        && phone
+        && isValidPhone(phone)
+        && isValidUgPhone(phone)
+        && (message.includes('email otp') || message.includes('otp email') || message.includes('email delivery') || message.includes('email is blocked'));
+      if (!canFallbackToSms) {
+        await logNotification(db, {
+          recipientPhone: phone,
+          recipientEmail: email,
+          channel: channel === 'email' ? 'email' : 'sms',
+          type: 'signup_otp_request_failed',
+          status: 'failed',
+          payloadSummary: otpPayloadSummary,
+          failureReason: error.message || 'signup_otp_request_failed'
+        });
+        throw error;
+      }
+
+      logger.warn('Email signup OTP failed; falling back to SMS', {
+        email,
+        phone,
+        audience,
+        error: error.message
+      });
+      await logNotification(db, {
+        recipientPhone: phone,
+        recipientEmail: email,
+        channel: 'sms',
+        type: 'signup_otp_email_fallback_to_sms',
+        status: 'logged',
+        payloadSummary: {
+          ...otpPayloadSummary,
+          fallback_channel: 'phone'
+        },
+        failureReason: error.message || null
+      });
+      await db.query(
+        `UPDATE otps
+         SET used = TRUE
+         WHERE phone = $1
+           AND purpose = 'signup'
+           AND used = FALSE`,
+        [email]
+      );
+      otpIssue = await issueOtp({
+        purpose: 'signup',
+        channel: 'phone',
+        phone,
+        email,
+        preferredLanguage
+      });
+      resolvedChannel = 'phone';
+      emailFallbackToSms = true;
+    }
 
     return res.json({
       ok: true,
       data: {
-        channel,
-        message: channel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS',
+        channel: resolvedChannel,
+        email_fallback_to_sms: emailFallbackToSms,
+        message: emailFallbackToSms
+          ? 'Email delivery is temporarily unavailable, so your verification OTP was sent by SMS'
+          : (resolvedChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS'),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });
@@ -852,6 +959,7 @@ router.post('/register', async (req, res, next) => {
 
     const errors = [];
     if (!firstName) errors.push('first_name is required');
+    if (!lastName) errors.push('last_name is required');
     if (!email) errors.push('email is required');
     if (!phone) errors.push('phone is required');
     if (!password || password.length < 8) errors.push('password must be at least 8 characters');
@@ -957,6 +1065,8 @@ router.post('/register', async (req, res, next) => {
     }
 
     let otpIssue = null;
+    let resolvedOtpChannel = otpChannel === 'email' && email ? 'email' : 'phone';
+    let emailFallbackToSms = false;
     if (contactVerification.ok) {
       const verifiedPatch = {
         contact_verified_before_account_creation: true,
@@ -975,14 +1085,62 @@ router.post('/register', async (req, res, next) => {
       );
       user = verifiedUpdate.rows[0];
     } else {
-      otpIssue = await issueOtp({
-        purpose: 'signup',
-        channel: otpChannel === 'email' && email ? 'email' : 'phone',
-        phone,
-        email,
-        preferredLanguage,
-        queryRunner: client
-      });
+      try {
+        otpIssue = await issueOtp({
+          purpose: 'signup',
+          channel: resolvedOtpChannel,
+          phone,
+          email,
+          preferredLanguage,
+          queryRunner: client
+        });
+      } catch (error) {
+        const message = String(error.message || '').toLowerCase();
+        const canFallbackToSms = resolvedOtpChannel === 'email'
+          && phone
+          && isValidPhone(phone)
+          && isValidUgPhone(phone)
+          && (message.includes('email otp') || message.includes('otp email') || message.includes('email delivery') || message.includes('email is blocked'));
+        if (!canFallbackToSms) throw error;
+        logger.warn('Register email OTP failed; falling back to SMS', {
+          email,
+          phone,
+          audience,
+          error: error.message
+        });
+        await logNotification(db, {
+          userId: user.id,
+          recipientPhone: phone,
+          recipientEmail: email,
+          channel: 'sms',
+          type: 'signup_otp_email_fallback_to_sms',
+          status: 'logged',
+          payloadSummary: {
+            purpose: 'signup',
+            audience,
+            fallback_channel: 'phone'
+          },
+          failureReason: error.message || null
+        });
+        await client.query(
+          `UPDATE otps
+           SET used = TRUE
+           WHERE phone = $1
+             AND purpose = 'signup'
+             AND used = FALSE`,
+          [email]
+        );
+        otpIssue = await issueOtp({
+          purpose: 'signup',
+          channel: 'phone',
+          phone,
+          email,
+          preferredLanguage,
+          queryRunner: client
+        });
+        resolvedOtpChannel = 'phone';
+        emailFallbackToSms = true;
+      }
       await client.query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [user.id]);
     }
     await client.query('COMMIT');
@@ -1051,7 +1209,11 @@ router.post('/register', async (req, res, next) => {
       data: {
         user: publicUser(user),
         requires_otp: true,
-        message: otpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS',
+        channel: resolvedOtpChannel,
+        email_fallback_to_sms: emailFallbackToSms,
+        message: emailFallbackToSms
+          ? 'Email delivery is temporarily unavailable, so your verification OTP was sent by SMS'
+          : (resolvedOtpChannel === 'email' ? 'Verification OTP sent to email' : 'Verification OTP sent by SMS'),
         ...(process.env.NODE_ENV === 'production' ? {} : { dev_otp: otpIssue.otp })
       }
     });

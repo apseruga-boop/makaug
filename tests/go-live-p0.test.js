@@ -600,6 +600,9 @@ function run() {
   assert(fieldAgentRoutes.includes('field_agent_training_video_1_url') && fieldAgentRoutes.includes('field_agent_training_video_2_url'), 'field-agent dashboard API should expose King-controlled training videos');
   assert(fieldAgentRoutes.includes('field_agent_support_phone'), 'field-agent dashboard API should expose King-controlled support phone');
   assert(frontendSource.includes('id="account-access-otp-code"'), 'create account journey should verify OTP inside the drawer');
+  assert(frontendSource.includes('id="account-access-last-name"') && frontendSource.includes('data-auth-text="lastName"'), 'broker create-account drawer should capture second name / surname beside first name');
+  assert(frontendSource.includes('lastName: (document.getElementById("account-access-last-name")') && frontendSource.includes('last_name: lastName'), 'broker create-account drawer should send surname through to the backend register API');
+  assert(frontendSource.includes('email_fallback_to_sms') && frontendSource.includes('Email is temporarily unavailable, so we sent the code by SMS/Text instead.'), 'signup OTP journey should fall back visibly to SMS when email delivery is unavailable');
   assert(frontendSource.includes('accountAccessDrawerMode === "verify"'), 'auth drawer should handle verification as an inline step');
   assert(frontendSource.includes('overflow-x-hidden'), 'mobile auth drawer should prevent horizontal overflow');
   assert(!frontendSource.includes('data-auth-progress-step="account"'), 'auth drawer should not show old Account/Details/Preferences/Verify pills on the first screen');
@@ -610,6 +613,9 @@ function run() {
   assert(frontendSource.includes('We sent a verification code by SMS to:'), 'auth drawer should show explicit SMS OTP delivery copy');
   assert(authRoutes.includes("router.post('/request-signup-otp'"), 'auth route should support pre-account signup OTP delivery');
   assert(authRoutes.includes("router.post('/verify-signup-otp'"), 'auth route should verify signup contact before account creation');
+  assert(authRoutes.includes("const lastName = cleanText(req.body.last_name || req.body.second_name || req.body.surname)") && authRoutes.includes("Second name / surname is required"), 'signup OTP backend should require and accept broker second-name/surname fields');
+  assert(authRoutes.includes("signup_otp_email_fallback_to_sms") && authRoutes.includes("Email signup OTP failed; falling back to SMS"), 'signup OTP backend should fall back to SMS and log when email delivery fails');
+  assert(authRoutes.includes("last_name is required"), 'auth register route should require surname before creating an account');
   assert(authRoutes.includes("const preferredAudience = normalizeSignupAudience(req.body.audience"), 'password login should accept selected account audience for dashboard redirect');
   assert(authRoutes.includes("message: 'Signed in. Opening your makaug.com dashboard.'"), 'password login should return a dashboard handoff message');
   assert(authRoutes.includes('data: successPayload'), 'password login should return redirectUrl/session handoff payload');

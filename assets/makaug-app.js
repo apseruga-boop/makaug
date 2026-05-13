@@ -12347,8 +12347,8 @@ async function submitAuthSignUp() {
   const privacyAccepted = document.getElementById("auth-signup-privacy")?.checked === true;
   const profileData = collectAuthProfileData();
 
-  if (!firstName || !phone || !email || !password) {
-    toast("Please complete first name, email, phone/WhatsApp, and password.");
+  if (!firstName || !lastName || !phone || !email || !password) {
+    toast("Please complete first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
   if (password !== confirmPassword) {
@@ -16715,6 +16715,7 @@ function accountAccessText(key) {
       existingAccountTryingSignIn: "This account already exists. Trying to sign you in and open your dashboard...",
       existingAccountSignInFailed: "This account already exists. Sign in with your password, or use Forgot password.",
       firstName: "First name",
+      lastName: "Second name / surname",
       email: "Email address",
       phone: "Phone / WhatsApp",
       quickPreferences: "Quick preferences",
@@ -16728,7 +16729,7 @@ function accountAccessText(key) {
       sendCode: "Send verification code",
       verifyCode: "Verify code",
       createFinal: "Create account",
-      contactStepNote: "Add your name, email, and mobile number. We will send a code before you choose preferences.",
+      contactStepNote: "Add your first name, second name, email, and mobile number. We will send a code before you choose preferences.",
       preferencesStepNote: "Tell us what you are looking for so your dashboard starts useful.",
       passwordStepNote: "Create a password, confirm it, and accept the terms before opening your dashboard.",
       forgotTitle: "Reset password",
@@ -16768,6 +16769,7 @@ function accountAccessText(key) {
       existingAccountTryingSignIn: "Account eno gyeri. Tugezaako okukuyingiza n'okuggula dashboard yo...",
       existingAccountSignInFailed: "Account eno gyeri. Yingira ne password yo, oba kozesa Forgot password.",
       firstName: "Erinnya erisooka",
+      lastName: "Erinnya ery'okubiri / surname",
       email: "Email",
       phone: "Simu / WhatsApp",
       quickPreferences: "By'oyagala mu bwangu",
@@ -16781,7 +16783,7 @@ function accountAccessText(key) {
       sendCode: "Sindika code",
       verifyCode: "Kakasa code",
       createFinal: "Kola account",
-      contactStepNote: "Teekamu erinnya, email, n'essimu. Tujja kusindika code nga tonnalonda by'oyagala.",
+      contactStepNote: "Teekamu erinnya erisooka, ery'okubiri, email, n'essimu. Tujja kusindika code nga tonnalonda by'oyagala.",
       preferencesStepNote: "Tubuulire ky'onoonya dashboard yo etandike nga ekuyamba.",
       passwordStepNote: "Kola password, gikakase, era okkirize amateeka nga tonnayigira dashboard.",
       forgotTitle: "Kyuusa password",
@@ -16821,6 +16823,7 @@ function accountAccessText(key) {
       existingAccountTryingSignIn: "Akaunti hii tayari ipo. Tunajaribu kukuingiza na kufungua dashibodi yako...",
       existingAccountSignInFailed: "Akaunti hii tayari ipo. Ingia kwa nenosiri lako, au tumia Forgot password.",
       firstName: "Jina la kwanza",
+      lastName: "Jina la pili / ukoo",
       email: "Barua pepe",
       phone: "Simu / WhatsApp",
       quickPreferences: "Mapendeleo ya haraka",
@@ -16834,7 +16837,7 @@ function accountAccessText(key) {
       sendCode: "Tuma msimbo",
       verifyCode: "Thibitisha msimbo",
       createFinal: "Fungua akaunti",
-      contactStepNote: "Weka jina, barua pepe, na nambari ya simu. Tutatuma msimbo kabla ya mapendeleo.",
+      contactStepNote: "Weka jina la kwanza, jina la pili, barua pepe, na nambari ya simu. Tutatuma msimbo kabla ya mapendeleo.",
       preferencesStepNote: "Tuambie unachotafuta ili dashibodi yako ianze vizuri.",
       passwordStepNote: "Unda nenosiri, lithibitishe, na ukubali masharti kabla ya dashibodi.",
       forgotTitle: "Weka upya nenosiri",
@@ -16861,6 +16864,7 @@ function accountAccessText(key) {
       identifier: "Email onyo namba me cim",
       password: "Password",
       firstName: "Nying mukwongo",
+      lastName: "Nying me aryo / surname",
       email: "Email",
       phone: "Cim / WhatsApp",
       quickPreferences: "Gin ma imito oyot",
@@ -16885,6 +16889,7 @@ function accountAccessText(key) {
       identifier: "Email nari namba ya telefone",
       password: "Password",
       firstName: "Eiziina ry'okubanza",
+      lastName: "Eiziina rya kabiri / surname",
       email: "Email",
       phone: "Telefone / WhatsApp",
       quickPreferences: "Eby'okukunda byangu",
@@ -16909,6 +16914,7 @@ function accountAccessText(key) {
       identifier: "Email nari namba ya telefone",
       password: "Password",
       firstName: "Eiziina ry'okubanza",
+      lastName: "Eiziina rya kabiri / surname",
       email: "Email",
       phone: "Telefone / WhatsApp",
       quickPreferences: "Eby'okukunda byangu",
@@ -16933,6 +16939,7 @@ function accountAccessText(key) {
       identifier: "Email oba ennamba ya simu",
       password: "Password",
       firstName: "Erinnya erisooka",
+      lastName: "Erinnya ery'okubiri / surname",
       email: "Email",
       phone: "Simu / WhatsApp",
       quickPreferences: "By'oyagala mu bwangu",
@@ -17330,6 +17337,20 @@ function setAccountAccessCreateStatus(message = "", tone = "info") {
   status.className = toneClasses[tone] || toneClasses.warning;
 }
 
+function setAccountAccessFlowNote(message = "", tone = "info") {
+  const note = document.getElementById("account-access-create-flow-note");
+  if (!note) return;
+  note.textContent = message || accountAccessText("contactStepNote");
+  const toneClasses = {
+    info: "rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900",
+    success: "rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900 font-semibold",
+    pending: "rounded-2xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900 font-semibold",
+    error: "rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-900 font-semibold",
+    warning: "rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 font-semibold"
+  };
+  note.className = toneClasses[tone] || toneClasses.info;
+}
+
 function updateAccountAccessCreateFinalState() {
   const btn = document.getElementById("account-access-continue-btn");
   const status = document.getElementById("account-access-create-status");
@@ -17376,7 +17397,7 @@ function setAccountAccessCreateStep(step = "details") {
     const noteKey = accountAccessCreateStep === "preferences"
       ? "preferencesStepNote"
       : (accountAccessCreateStep === "password" ? "passwordStepNote" : "contactStepNote");
-    note.textContent = accountAccessText(noteKey);
+    setAccountAccessFlowNote(accountAccessText(noteKey), "info");
   }
   const titles = {
     details: accountAccessText("detailsTitle"),
@@ -17512,7 +17533,7 @@ function ensureAccountAccessDrawer() {
           </div>
           <div id="account-access-create-wrap" class="hidden mt-4 space-y-3">
             <div id="account-access-create-flow-note" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900">
-              Add your name, email, and mobile number. We will send a code before you choose preferences.
+              Add your first name, second name, email, and mobile number. We will send a code before you choose preferences.
             </div>
             <div id="account-access-create-details-step" data-auth-create-step="details" class="space-y-3">
               <div class="grid sm:grid-cols-2 gap-3">
@@ -17521,10 +17542,14 @@ function ensureAccountAccessDrawer() {
                   <input id="account-access-first-name" autocomplete="given-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="First name">
                 </label>
                 <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="lastName">Second name / surname</span>
+                  <input id="account-access-last-name" autocomplete="family-name" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="Second name / surname">
+                </label>
+                <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="email">Email</span>
                   <input id="account-access-email" type="email" autocomplete="email" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="you@email.com">
                 </label>
-                <label class="block sm:col-span-2">
+                <label class="block">
                   <span class="block text-xs font-bold text-gray-600 mb-1" data-auth-text="phone">Phone / WhatsApp</span>
                   <input id="account-access-phone" autocomplete="tel" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base" placeholder="+256 7XX XXX XXX">
                 </label>
@@ -17819,9 +17844,9 @@ function showAccountAccessCreate() {
   if (forgotWrap) forgotWrap.classList.add("hidden");
   const continueBtn = document.getElementById("account-access-continue-btn");
   if (continueBtn) continueBtn.textContent = accountAccessText("sendCode");
-  setTextById("account-access-create-flow-note", accountAccessDrawerAudience === "field_agent"
+  setAccountAccessFlowNote(accountAccessDrawerAudience === "field_agent"
     ? `Field Agents can apply here, but ${publicBrand()} Operations creates approved agent access with a Field Agent ID and 4-digit PIN from admin.`
-    : accountAccessText("contactStepNote"));
+    : accountAccessText("contactStepNote"), "info");
   renderAccountAccessScreening();
   setAccountAccessCreateStep("details");
   updateAccountAccessRoleFocus();
@@ -17928,6 +17953,7 @@ function accountAccessOtpChannelCopy(channel = "email", destination = "") {
 function getAccountAccessContactDetails() {
   return {
     firstName: (document.getElementById("account-access-first-name")?.value || "").trim(),
+    lastName: (document.getElementById("account-access-last-name")?.value || "").trim(),
     email: (document.getElementById("account-access-email")?.value || "").trim().toLowerCase(),
     phone: normalizePhoneInput(document.getElementById("account-access-phone")?.value || ""),
     preferredLanguage: (document.getElementById("auth-drawer-language")?.value || currentLang || "en").trim(),
@@ -17935,10 +17961,10 @@ function getAccountAccessContactDetails() {
   };
 }
 
-function validateAccountAccessContactDetails({ firstName, email, phone, otpChannel } = {}) {
+function validateAccountAccessContactDetails({ firstName, lastName, email, phone, otpChannel } = {}) {
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email || "");
-  if (!firstName || !email || !phone) {
-    toast("Add your first name, email address, and mobile number.");
+  if (!firstName || !lastName || !email || !phone) {
+    toast("Add your first name, second name/surname, email address, and mobile number.");
     return false;
   }
   if (!emailLooksValid) {
@@ -17961,30 +17987,44 @@ async function submitAccountAccessContactOtp() {
     btn.disabled = true;
     btn.textContent = "Sending...";
   }
+  setAccountAccessFlowNote("Sending your verification code now...", "pending");
   try {
-    await apiRequest("/api/auth/request-signup-otp", {
+    const otpResponse = await apiRequest("/api/auth/request-signup-otp", {
       method: "POST",
       body: {
+        first_name: details.firstName,
+        last_name: details.lastName,
         email: details.email,
         phone: details.phone,
         channel: details.otpChannel,
-        preferred_language: details.preferredLanguage
+        preferred_language: details.preferredLanguage,
+        audience: accountAccessDrawerAudience
       }
     });
-    const destination = details.otpChannel === "phone" ? details.phone : details.email;
+    const resolvedChannel = otpResponse?.data?.channel === "phone" ? "phone" : (otpResponse?.data?.channel === "email" ? "email" : details.otpChannel);
+    const destination = resolvedChannel === "phone" ? details.phone : details.email;
+    const radio = document.querySelector(`input[name="account-access-otp-method"][value="${resolvedChannel}"]`);
+    if (radio) radio.checked = true;
     accountAccessPendingOtp = {
+      firstName: details.firstName,
+      lastName: details.lastName,
       email: details.email,
       phone: details.phone,
-      channel: details.otpChannel,
+      channel: resolvedChannel,
       destination,
       audience: accountAccessDrawerAudience
     };
     accountAccessDrawerMode = "verify";
-    setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(details.otpChannel, destination));
+    setTextById("account-access-otp-copy", accountAccessOtpChannelCopy(resolvedChannel, destination));
     setAccountAccessCreateStep("verify");
-    toast(details.otpChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code.");
+    const message = otpResponse?.data?.email_fallback_to_sms
+      ? "Email is temporarily unavailable, so we sent the code by SMS/Text instead."
+      : (resolvedChannel === "phone" ? "Check your SMS messages for the verification code." : "Check your email for the verification code.");
+    setAccountAccessFlowNote(message, "success");
+    toast(message);
     setTimeout(() => document.getElementById("account-access-otp-code")?.focus(), 30);
   } catch (error) {
+    setAccountAccessFlowNote(`${error.message || "Could not send verification code."} If email does not arrive, choose SMS/Text and try again.`, "error");
     toast(error.message || "Could not send verification code.");
   } finally {
     if (btn) {
@@ -18124,6 +18164,7 @@ async function signInExistingAccountFromCreate({ email = "", phone = "", passwor
 async function submitAccountAccessCreate() {
   const details = getAccountAccessContactDetails();
   const firstName = details.firstName;
+  const lastName = details.lastName;
   const email = details.email;
   const phone = details.phone;
   const password = (document.getElementById("account-access-create-password")?.value || "").trim();
@@ -18133,8 +18174,8 @@ async function submitAccountAccessCreate() {
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const otpChannel = details.otpChannel;
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if (!firstName || !email || !phone || !password) {
-    toast("Add your first name, email, phone/WhatsApp, and password.");
+  if (!firstName || !lastName || !email || !phone || !password) {
+    toast("Add your first name, second name/surname, email, phone/WhatsApp, and password.");
     return;
   }
   if (!emailLooksValid) {
@@ -18178,7 +18219,7 @@ async function submitAccountAccessCreate() {
       method: "POST",
       body: {
         first_name: firstName,
-        last_name: "",
+        last_name: lastName,
         phone,
         email,
         role: roleLabel,
