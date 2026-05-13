@@ -1181,6 +1181,8 @@ function run() {
   assert(whatsappWebCopilotScript.includes('/api/whatsapp/web-bridge/call'), 'WhatsApp Web copilot must send call events to the backend');
   assert(whatsappWebCopilotScript.includes('hasCallLog'), 'WhatsApp Web copilot must detect WhatsApp no-answer call cards');
   assert(whatsappWebCopilotScript.includes("detected_from: 'whatsapp_call_log_card'"), 'WhatsApp Web copilot must tag call-card missed-call events');
+  assert(whatsappWebCopilotScript.includes('recent_chat_call_preview'), 'WhatsApp Web copilot must detect missed calls from chat-list previews');
+  assert(whatsappWebCopilotScript.includes('chat-list-call-preview'), 'WhatsApp Web copilot must dedupe missed-call previews without a message id');
   assert(whatsappRoutes.includes("router.post('/web-bridge/call'"), 'WhatsApp backend must expose a bridge call event endpoint');
   assert(whatsappRoutes.includes('web_bridge_inbound_fallback'), 'WhatsApp backend must handle call cards that arrive through the inbound bridge route');
   assert(whatsappRoutes.includes('call_log_card: true'), 'WhatsApp backend must mark inbound call-card handling in the bridge response');

@@ -321,6 +321,13 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
   return page.evaluate((options) => {
     const unreadOnlyRows = options?.unreadOnly !== false;
     const maxRows = Math.max(1, Math.min(50, Number(options?.limit || 20)));
+    const hasCallLogText = (value = '') => {
+      const combined = String(value || '').replace(/\s+/g, ' ').trim();
+      return (
+        /\b(?:voice|video)\s+call\b/i.test(combined)
+        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
+      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+    };
     const selectorGroups = [
       '[data-testid="cell-frame-container"]',
       'div[role="listitem"]'
@@ -332,19 +339,28 @@ async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
     }
 
     return rows.map((row, index) => {
+      const rowText = row.innerText || '';
+      const rowLines = rowText
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
       const title = row.querySelector('span[title]')?.getAttribute('title')
         || Array.from(row.querySelectorAll('[dir="auto"]')).map((el) => (el.textContent || '').trim()).find(Boolean)
-        || (row.innerText || '').split('\n')[0]
+        || rowLines[0]
         || '';
       const ariaLabel = row.getAttribute('aria-label') || '';
       const unread = !!row.querySelector('[aria-label*="unread"], [data-testid*="unread"], [data-icon*="unread"]')
         || /unread/i.test(ariaLabel);
-      const preview = (row.innerText || '').split('\n').slice(1, 4).join(' ').trim();
+      const preview = rowLines.slice(1, 5).join(' ').trim();
+      const timestampLabel = rowLines.find((line) => /^\d{1,2}:\d{2}\s*(?:AM|PM)?$/i.test(line)) || '';
+      const callLog = hasCallLogText(`${preview} ${ariaLabel}`);
       return {
         index,
         title,
         preview,
-        unread
+        unread,
+        timestampLabel,
+        callLog
       };
     }).filter((row) => row.title && (!unreadOnlyRows || row.unread)).slice(0, maxRows);
   }, { unreadOnly, limit });
@@ -437,14 +453,33 @@ async function getActiveChatSnapshot(page) {
         && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
       ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
     };
+    const callLogContainerFor = (node) => {
+      let current = node;
+      let best = null;
+      for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
+        const text = current.innerText || current.textContent || '';
+        if (hasCallLog(current, text)) best = current;
+        if (best && current.matches?.('.message-in, .message-out, [data-id], [role="row"]')) return current;
+        current = current.parentElement;
+      }
+      return best;
+    };
+    const chatRoot = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]')
+      || document.body;
 
-    const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
-    const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
+    const copyNodes = Array.from(chatRoot.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
       return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
-    const nodes = [...copyNodes, ...mediaOnlyNodes]
+    const callLogNodes = Array.from(chatRoot.querySelectorAll('div, span, [role="button"], [aria-label], [title], [data-icon], [data-testid]'))
+      .map(callLogContainerFor)
+      .filter(Boolean)
+      .filter((el, idx, arr) => arr.indexOf(el) === idx)
+      .filter((el) => hasCallLog(el, el.innerText || el.textContent || ''));
+    const nodes = [...copyNodes, ...mediaOnlyNodes, ...callLogNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     const last = nodes[nodes.length - 1];
@@ -619,14 +654,33 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
       ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
     };
+    const callLogContainerFor = (node) => {
+      let current = node;
+      let best = null;
+      for (let depth = 0; current && current !== document.body && depth < 10; depth += 1) {
+        const text = current.innerText || current.textContent || '';
+        if (hasCallLog(current, text)) best = current;
+        if (best && current.matches?.('.message-in, .message-out, [data-id], [role="row"]')) return current;
+        current = current.parentElement;
+      }
+      return best;
+    };
+    const chatRoot = document.querySelector('#main')
+      || document.querySelector('[data-testid="conversation-panel-wrapper"]')
+      || document.body;
 
-    const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
-    const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
+    const copyNodes = Array.from(chatRoot.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
+    const mediaOnlyNodes = Array.from(chatRoot.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
       const text = el.innerText || el.textContent || '';
       return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
-    const nodes = [...copyNodes, ...mediaOnlyNodes]
+    const callLogNodes = Array.from(chatRoot.querySelectorAll('div, span, [role="button"], [aria-label], [title], [data-icon], [data-testid]'))
+      .map(callLogContainerFor)
+      .filter(Boolean)
+      .filter((el, idx, arr) => arr.indexOf(el) === idx)
+      .filter((el) => hasCallLog(el, el.innerText || el.textContent || ''));
+    const nodes = [...copyNodes, ...mediaOnlyNodes, ...callLogNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
       .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
     const snapshots = [];
@@ -966,6 +1020,29 @@ async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', ch
   }
 }
 
+async function ingestCallPreviewRow({ row = {}, source = 'chat_list_call_preview' } = {}) {
+  if (!row?.callLog) return { processed: 0, skipped: 'row_not_call_log' };
+  const preview = String(row.preview || 'Missed WhatsApp call').trim();
+  const snapshot = {
+    chatKey: row.title,
+    contactName: row.title,
+    text: preview || '[missed call]',
+    timestampLabel: row.timestampLabel || '',
+    messageId: '',
+    direction: 'unknown',
+    mediaType: 'call',
+    mediaUrl: '',
+    mediaFingerprint: [
+      'chat-list-call-preview',
+      row.index,
+      row.title,
+      preview,
+      row.timestampLabel || ''
+    ].join('|').slice(0, 500)
+  };
+  return ingestCallSnapshot({ snapshot, row, source, chatKey: row.title, text: snapshot.text });
+}
+
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
   const mediaType = snapshot.mediaType || 'text';
@@ -1041,6 +1118,15 @@ async function ingestUnreadChats(page) {
   let processed = 0;
 
   for (const row of unreadRows) {
+    if (row.callLog) {
+      const result = await ingestCallPreviewRow({ row, source: 'unread_chat_call_preview' });
+      processed += result.processed || 0;
+      if (result.queuedReply) {
+        await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+      }
+      if (result.processed || result.duplicate) continue;
+    }
+
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
 
@@ -1071,6 +1157,15 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
   let processed = 0;
 
   for (const row of rows) {
+    if (row.callLog) {
+      const result = await ingestCallPreviewRow({ row, source: 'recent_chat_call_preview' });
+      processed += result.processed || 0;
+      if (result.queuedReply) {
+        await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
+      }
+      if (result.processed || result.duplicate) continue;
+    }
+
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
 
