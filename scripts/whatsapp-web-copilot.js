@@ -42,6 +42,7 @@ const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAP
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
+const recentlySentReplyKeys = new Map();
 let activeInboundRecipientHint = '';
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
@@ -118,6 +119,29 @@ function rememberBrowserMessageKey(browserMessageKey) {
     const first = seenBrowserMessageIds.values().next().value;
     if (first) seenBrowserMessageIds.delete(first);
   }
+}
+
+function outboxReplyDedupeKey(item = {}) {
+  const recipient = normalizeChatKey(item.recipient || '');
+  const text = normalizeReplyText(item.text || '').slice(0, 1000).toLowerCase();
+  const key = item.metadata?.reply_dedupe_key || '';
+  return `${recipient}:${key || text}`;
+}
+
+function hasRecentlySentReply(item = {}, ttlMs = 2 * 60 * 1000) {
+  const key = outboxReplyDedupeKey(item);
+  if (!key.trim()) return false;
+  const now = Date.now();
+  for (const [storedKey, sentAt] of recentlySentReplyKeys.entries()) {
+    if (now - sentAt > ttlMs) recentlySentReplyKeys.delete(storedKey);
+  }
+  const lastSentAt = recentlySentReplyKeys.get(key);
+  return !!lastSentAt && now - lastSentAt <= ttlMs;
+}
+
+function rememberRecentlySentReply(item = {}) {
+  const key = outboxReplyDedupeKey(item);
+  if (key.trim()) recentlySentReplyKeys.set(key, Date.now());
 }
 
 function isTimestampOnly(value) {
@@ -776,7 +800,7 @@ async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   }
 
   const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
-  if (browserMessageKey && !snapshot.browserMessageSeen && seenBrowserMessageIds.has(browserMessageKey)) {
+  if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
     return { processed: 0, duplicate: true };
   }
   rememberBrowserMessageKey(browserMessageKey);
@@ -837,11 +861,9 @@ async function ingestUnreadChats(page) {
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-      rememberBrowserMessageKey(browserMessageKey);
       const hydrated = await hydrateVoiceSnapshot(page, {
         ...snapshot,
-        browserMessageKey,
-        browserMessageSeen: true
+        browserMessageKey
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'unread_scan' });
       processed += result.processed || 0;
@@ -869,11 +891,9 @@ async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
       if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-      rememberBrowserMessageKey(browserMessageKey);
       const hydrated = await hydrateVoiceSnapshot(page, {
         ...snapshot,
-        browserMessageKey,
-        browserMessageSeen: true
+        browserMessageKey
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
       processed += result.processed || 0;
@@ -900,11 +920,9 @@ async function ingestActiveChat(page) {
     const row = { title: snapshot.chatKey, preview: '' };
     const browserMessageKey = browserMessageKeyFor(snapshot, row);
     if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
-    rememberBrowserMessageKey(browserMessageKey);
     const hydrated = await hydrateVoiceSnapshot(page, {
       ...snapshot,
-      browserMessageKey,
-      browserMessageSeen: true
+      browserMessageKey
     });
     const result = await ingestSnapshot({
       snapshot: hydrated,
@@ -1129,18 +1147,32 @@ async function typeAndSendReply(page, text) {
   }
 
   await clickWhatsAppSend(page);
-  const confirmed = await waitForPostSendConfirmation(page, text, beforeState);
+  const confirmed = await waitForPostSendConfirmation(page, text, beforeState, 5000);
   if (confirmed) return true;
 
-  if (await replaceComposerText(page, text, 900)) {
+  let composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+  const composerText = normalizeReplyText(composerState.text || '');
+  if (composerState.found && !composerText) {
+    log('send bubble was not observed, but composer cleared; treating reply as sent to avoid duplicate retry');
+    return true;
+  }
+
+  const expectedPrefix = normalizeReplyText(text).slice(0, 120);
+  if (composerText && normalizeReplyText(composerText).includes(expectedPrefix)) {
     await page.keyboard.press('Enter');
-    const confirmedAfterEnter = await waitForPostSendConfirmation(page, text, beforeState, 2200);
+    const confirmedAfterEnter = await waitForPostSendConfirmation(page, text, beforeState, 4500);
     if (confirmedAfterEnter) return true;
   }
 
-  if (await replaceComposerText(page, text, 900)) {
+  composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
+  if (composerState.found && !normalizeReplyText(composerState.text || '')) {
+    log('send bubble was not observed after Enter, but composer cleared; treating reply as sent to avoid duplicate retry');
+    return true;
+  }
+
+  if (normalizeReplyText(composerState.text || '').includes(expectedPrefix)) {
     await clickWhatsAppSend(page);
-    const confirmedAfterRetry = await waitForPostSendConfirmation(page, text, beforeState, 2200);
+    const confirmedAfterRetry = await waitForPostSendConfirmation(page, text, beforeState, 4500);
     if (confirmedAfterRetry) return true;
   }
 
@@ -1170,12 +1202,26 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
   let sent = 0;
   for (const item of orderedItems) {
     try {
+      if (hasRecentlySentReply(item)) {
+        log(`suppressed duplicate queued reply to ${item.recipient}`);
+        await apiRequest(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(item.id)}/sent`, {
+          method: 'POST',
+          body: {
+            client_id: CLIENT_ID,
+            bridge_message_id: `webbridge-duplicate-suppressed:${Date.now()}:${item.id}`,
+            duplicate_suppressed: true
+          }
+        });
+        continue;
+      }
+
       const opened = await openChatForReply(page, item.recipient);
       if (!opened) {
         throw new Error(`Could not open chat for ${item.recipient}`);
       }
 
       await typeAndSendReply(page, item.text);
+      rememberRecentlySentReply(item);
       log(`sent queued reply to ${item.recipient}`);
 
       await apiRequest(`/api/whatsapp/web-bridge/outbox/${encodeURIComponent(item.id)}/sent`, {

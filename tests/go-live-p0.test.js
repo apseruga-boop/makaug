@@ -177,6 +177,8 @@ function run() {
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const whatsappRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
   const aiServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'aiService.js'), 'utf8');
+  const whatsappWebBridgeServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'whatsappWebBridgeService.js'), 'utf8');
+  const whatsappWebCopilotScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'whatsapp-web-copilot.js'), 'utf8');
   const languageRegistrySource = fs.readFileSync(path.join(__dirname, '..', 'config', 'languageRegistry.js'), 'utf8');
   const smsServiceSource = fs.readFileSync(path.join(__dirname, '..', 'models', 'smsService.js'), 'utf8');
   const leadService = fs.readFileSync(path.join(__dirname, '..', 'services', 'leadService.js'), 'utf8');
@@ -1158,6 +1160,13 @@ function run() {
   assert.strictEqual(notificationStatusFromDelivery({ status: 'queued' }), 'queued', 'queued SMS OTP should log queued status');
   assert(!phoneOtpDeliveryServiceSource.includes('sendWhatsAppText'), 'phone OTP must not use WhatsApp delivery');
   assert(!phoneOtpDeliveryServiceSource.includes('queueWhatsappWebBridgeMessage'), 'phone OTP must not queue WhatsApp bridge fallback');
+  assert(whatsappRoutes.includes('recent_bridge_message_fingerprint'), 'WhatsApp web bridge must suppress repeated inbound browser fingerprints');
+  assert(whatsappWebBridgeServiceSource.includes('reply_dedupe_key'), 'WhatsApp web bridge queue must dedupe repeated auto replies');
+  assert(whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 45'), 'WhatsApp web bridge claims need a long enough lease to avoid double sends');
+  assert(whatsappWebCopilotScript.includes('suppressed duplicate queued reply'), 'WhatsApp Web copilot must suppress recently sent duplicate queue rows');
+  assert(whatsappWebCopilotScript.includes('treating reply as sent to avoid duplicate retry'), 'WhatsApp Web copilot must not retype messages after the composer clears');
+  assert(whatsappRoutes.includes('🟩🟨 *makaug.com*'), 'WhatsApp runtime replies should use the makaug.com branded card header');
+  assert(aiServiceSource.includes('Do not repeat the same instruction, menu, greeting, or link twice'), 'LLM prompt must explicitly avoid duplicated WhatsApp copy');
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');
   assert(smsServiceSource.includes("startsWith('whatsapp:')"), 'SMS delivery must not use WhatsApp sender IDs for text OTP');
   assert(smsServiceSource.includes('retrying without sender ID'), 'Africa\'s Talking SMS should retry without unapproved sender ID');

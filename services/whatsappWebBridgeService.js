@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const { normalizeUgPhoneForWhatsApp } = require('./whatsappNotificationService');
+const crypto = require('crypto');
 
 function isTruthy(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -25,6 +26,31 @@ function normalizeBridgeRecipient(value) {
   const normalizedPhone = normalizeUgPhoneForWhatsApp(raw);
   if (normalizedPhone) return normalizedPhone;
   return raw.replace(/\s+/g, ' ').slice(0, 160).trim();
+}
+
+function normalizeReplyBodyForDedupe(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+    .slice(0, 1000);
+}
+
+function createBridgeReplyDedupeKey({ userPhone, body, source, metadata = {} }) {
+  const seed = JSON.stringify({
+    recipient: normalizeBridgeRecipient(userPhone),
+    source: String(source || 'system').trim().toLowerCase(),
+    next_step: String(metadata.next_step || '').trim(),
+    body: normalizeReplyBodyForDedupe(body)
+  });
+  return `webbridge-reply:${crypto.createHash('sha1').update(seed).digest('hex')}`;
+}
+
+function getReplyDedupeWindowSeconds() {
+  return Math.min(
+    900,
+    Math.max(30, Number(process.env.WHATSAPP_WEB_BRIDGE_REPLY_DEDUPE_SECONDS || 180))
+  );
 }
 
 async function upsertWhatsappWebBridgeClient({
@@ -128,6 +154,33 @@ async function queueWhatsappWebBridgeMessage({
     actor_id: actorId || 'system',
     ...(metadata && typeof metadata === 'object' ? metadata : {})
   };
+  meta.reply_dedupe_key = String(meta.reply_dedupe_key || createBridgeReplyDedupeKey({
+    userPhone,
+    body,
+    source: meta.source,
+    metadata: meta
+  })).trim();
+  meta.reply_dedupe_window_seconds = getReplyDedupeWindowSeconds();
+
+  const existing = await db.query(
+    `SELECT *
+       FROM outbound_message_queue
+      WHERE user_phone = $1
+        AND channel = 'whatsapp'
+        AND status IN ('pending', 'retry', 'sent')
+        AND COALESCE(metadata->>'delivery_mode', '') = 'web_bridge'
+        AND COALESCE(metadata->>'reply_dedupe_key', '') = $2
+        AND created_at >= NOW() - ($3 || ' seconds')::interval
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [userPhone, meta.reply_dedupe_key, String(meta.reply_dedupe_window_seconds)]
+  );
+  if (existing.rows[0]) {
+    return {
+      ...existing.rows[0],
+      duplicate_suppressed: true
+    };
+  }
 
   const result = await db.query(
     `INSERT INTO outbound_message_queue (
@@ -165,7 +218,7 @@ async function queueWhatsappWebBridgeMessage({
 
 async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '' } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
-  const claimWindow = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 4)));
+  const claimWindow = Math.min(300, Math.max(30, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 45)));
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
 

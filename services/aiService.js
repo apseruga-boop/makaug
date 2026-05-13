@@ -265,43 +265,50 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
   const displayName = languageDisplayName(code);
   const copy = {
     en: [
-      'I can help with property search, listing, agent support, mortgage guidance, and account help.',
-      `Open: ${link}`,
-      'If you need human support, call 0760112587 or email info@makaug.com.'
+      '🟩🟨 *makaug.com* | *Property help*',
+      'I can help with search, listing, agents, mortgage guidance, and account help.',
+      `🔗 ${link}`,
+      'Human support: 0760112587 or info@makaug.com.'
     ],
     lg: [
+      '🟩🟨 *makaug.com* | *Property help*',
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
-      `Ggulawo: ${link}`,
-      'Bwoba weetaaga omuntu akuyambe, kuba 0760112587 oba email info@makaug.com.'
+      `🔗 ${link}`,
+      'Support: 0760112587 oba info@makaug.com.'
     ],
     sw: [
+      '🟩🟨 *makaug.com* | *Property help*',
       'Naweza kusaidia kutafuta mali, kuorodhesha mali, kupata agent, mortgage, na akaunti.',
-      `Fungua: ${link}`,
-      'Ukitaka msaada wa mtu, piga 0760112587 au tuma email info@makaug.com.'
+      `🔗 ${link}`,
+      'Support: 0760112587 au info@makaug.com.'
     ],
     ac: [
+      '🟩🟨 *makaug.com* | *Property help*',
       'Aromo konyi me yeny property, keto property, nongo agent, mortgage, ki account.',
-      `Yab: ${link}`,
-      'Ka imito kony pa dano, lwong 0760112587 onyo email info@makaug.com.'
+      `🔗 ${link}`,
+      'Support: 0760112587 onyo info@makaug.com.'
     ],
     ny: [
+      '🟩🟨 *makaug.com* | *Property help*',
       'Nimbaasa kukuyamba kushaka property, kuhandiika property, kushaka agent, mortgage, na account.',
-      `Guraho: ${link}`,
-      'Ku oraabe nooyenda omuntu akuyambe, teera 0760112587 nari email info@makaug.com.'
+      `🔗 ${link}`,
+      'Support: 0760112587 nari info@makaug.com.'
     ],
     rn: [
+      '🟩🟨 *makaug.com* | *Property help*',
       `${displayName} translation is not fully available yet, so I will use English rather than guessing another language.`,
       'I can help with property search, listing, agent support, mortgage guidance, and account help.',
-      `Open: ${link}`,
-      'If you need human support, call 0760112587 or email info@makaug.com.'
+      `🔗 ${link}`,
+      'Human support: 0760112587 or info@makaug.com.'
     ],
     sm: [
+      '🟩🟨 *makaug.com* | *Property help*',
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
-      `Ggulawo: ${link}`,
-      'Bwoba weetaaga omuntu akuyambe, kuba 0760112587 oba email info@makaug.com.'
+      `🔗 ${link}`,
+      'Support: 0760112587 oba info@makaug.com.'
     ]
   };
-  return (copy[code] || copy.en).join(' ');
+  return (copy[code] || copy.en).join('\n');
 }
 
 function looksLikeWrongNearbyLanguage(languageCode, text) {
@@ -1439,9 +1446,13 @@ Current search model:
 - If a location is outside Uganda, tell the user to choose a Ugandan area or search all Uganda.
 - Never invent or hallucinate listings. If no real listing data is present, offer save search, create alert, WhatsApp help, or real nearby alternatives only when context includes them.
 Requirements:
-- Keep under 550 characters.
+- Keep under 420 characters.
 - Be practical and action-oriented.
 - Include exactly one relevant makaug.com link.
+- Use MakaUg WhatsApp card style when it helps: start with "🟩🟨 *makaug.com* | *Short title*", then 2-4 compact lines with useful emoji labels and bold commands.
+- Use the green/yellow brand cue through emoji only; WhatsApp cannot apply custom bubble colors.
+- Do not repeat the same instruction, menu, greeting, or link twice.
+- Avoid long paragraphs. Make every sentence earn its place.
 - Do not include markdown tables.
 Return strict JSON: {"text":"..."}`
         },

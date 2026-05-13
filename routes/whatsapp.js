@@ -510,6 +510,11 @@ function tt(lang, key, vars = {}) {
   return msg;
 }
 
+function whatsappBrandHeader(title = '') {
+  const safeTitle = normalizeInput(title);
+  return safeTitle ? `🟩🟨 *makaug.com* | *${safeTitle}*` : '🟩🟨 *makaug.com*';
+}
+
 function getUgandaDayPart(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Africa/Kampala',
@@ -593,7 +598,17 @@ function timeGreetingWithName(lang, sessionData = {}) {
 
 function welcomeMessage(lang, sessionData = {}) {
   const code = resolveLangCode(lang);
-  return `${timeGreetingWithName(code, sessionData)} 👋 ${assistantIntro(code)}\n\n${t(code, 'welcome')}\n\nBrowse MakaUg anytime: ${HOME_URL}`;
+  const lead = timeGreetingWithName(code, sessionData);
+  const menus = {
+    en: `Choose what you need:\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala".`,
+    lg: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda".`,
+    sw: `Chagua unachohitaji:\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala".`,
+    ac: `Yer gin ma imito:\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot, calo "ot me rent i Gulu".`,
+    ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
+    rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe.`,
+    sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`
+  };
+  return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse MakaUg anytime: ${HOME_URL}`;
 }
 
 function detectLanguageFromText(text) {
@@ -892,13 +907,13 @@ function friendlyGreetingReply(lang, sessionData = {}) {
   const lead = timeGreetingWithName(code, sessionData);
   const languageLine = languageComfortLine(code);
   const messages = {
-    en: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nHow can I help today?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nYou can also type naturally, like "2 bedroom house in Kampala", "student room near me", or share your location.`,
-    lg: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda", "abayizi okumpi nange", oba okusindika location yo.`,
-    sw: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinaweza kukusaidiaje leo?\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nUnaweza pia kuandika kawaida, kama "nyumba ya vyumba 2 Kampala", "student room karibu nami", au kushare location yako.`,
-    ac: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nAromo konyi nining tin?\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
-    ny: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinkuyamba nta eriizooba?\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
-    rn: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNinkuyamba nteeri hati?\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNimushobora kwandika bisanzwe cyangwa mugasangiza location.`,
-    sm: `${lead} 👋 ${assistantIntro(code)}\n${languageLine}\n\nNnyinza kukuyamba ntya leero?\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Ntinda", "abayizi okumpi nange", oba okusindika location yo.`
+    en: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Choose what you need*\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nType naturally too: "2 bedroom house in Kampala", "student room near me", or share your location.`,
+    lg: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Londa ky'oyagala*\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nWandika nga: "ennyumba e Ntinda", "abayizi okumpi nange", oba weereza location yo.`,
+    sw: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Chagua unachohitaji*\n1️⃣ Orodhesha mali yangu\n2️⃣ Tafuta nyumba/mali\n3️⃣ Tafuta agent\n\nAndika kawaida: "nyumba ya vyumba 2 Kampala", "student room karibu nami", au share location.`,
+    ac: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Yer gin ma imito*\n1️⃣ Ket property mamegi\n2️⃣ Yeny property\n3️⃣ Nong agent\n\nI romo coc ki leb ma yot onyo share location mamegi.`,
+    ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Toorana eki orikwenda*\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
+    rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Hitamo ico ukeneye*\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe cyangwa mugasangiza location.`,
+    sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Londa ky'oyagala*\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nWandika nga: "ennyumba e Jinja", "abayizi okumpi nange", oba weereza location yo.`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
 }
@@ -906,18 +921,18 @@ function friendlyGreetingReply(lang, sessionData = {}) {
 function languageComfortLine(lang) {
   const code = resolveLangCode(lang);
   const messages = {
-    en: 'You can speak to me in English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, or Lusoga. I will keep replying in the language you use.',
-    lg: 'Osobola okunjogerera mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwokozesa.',
-    sw: 'Unaweza kuzungumza nami kwa English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga au Lusoga. Nitajibu kwa lugha unayotumia.',
-    ac: 'I romo loko kweda i English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga onyo Lusoga. Abino dwoko i leb ma itiyo kwede.',
-    ny: 'Noobaasa kugamba nanje omu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga nari Lusoga. Ninyija kugarukamu omu rurimi orikukozesa.',
-    rn: 'Mushobora kuvugana nanje mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga canke Lusoga. Nzasubiza mu rurimi mukoresha.',
-    sm: 'Osobola okunjogerera mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwokozesa.'
+    en: 'Speak English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga or Lusoga. I will reply in your language.',
+    lg: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwo.',
+    sw: 'Tumia English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga au Lusoga. Nitajibu kwa lugha yako.',
+    ac: 'Lok ki English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga onyo Lusoga. Abino dwoko i leb mamegi.',
+    ny: 'Gamba omu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga nari Lusoga. Ninyija kugarukamu omu rurimi rwawe.',
+    rn: 'Vuga mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga canke Lusoga. Nzasubiza mu rurimi rwanyu.',
+    sm: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga oba Lusoga. Nja kuddamu mu lulimi lwo.'
   };
   return messages[code] || messages.en;
 }
 
-function stepReminderMessage(lang, step) {
+function stepPromptFor(lang, step) {
   const code = resolveLangCode(lang);
   const prompts = {
     choose_language: t(code, 'chooseLanguage'),
@@ -947,7 +962,19 @@ function stepReminderMessage(lang, step) {
     agent_area: t(code, 'askAgentArea'),
     verify_otp: t(code, 'verifyOTP')
   };
-  const prompt = prompts[step] || t(code, 'menuHint');
+  return prompts[step] || t(code, 'menuHint');
+}
+
+function stepReminderBrief(lang, step) {
+  const prompt = stepPromptFor(lang, step)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return prompt.length > 180 ? `${prompt.slice(0, 177)}...` : prompt;
+}
+
+function stepReminderMessage(lang, step) {
+  const code = resolveLangCode(lang);
+  const prompt = stepPromptFor(code, step);
   const lead = {
     en: 'I am here with you. We were at this step:',
     lg: 'Ndi wano naawe. Tubadde ku mutendera guno:',
@@ -1153,6 +1180,43 @@ function createBridgeMessageId({ phone, body, createdAt, providerMessageId, medi
     }))
     .digest('hex');
   return `webbridge:${hash}`;
+}
+
+function getBridgeInboundDedupeSeconds() {
+  return Math.min(
+    120,
+    Math.max(10, Number(process.env.WHATSAPP_WEB_BRIDGE_INBOUND_DEDUPE_SECONDS || 25))
+  );
+}
+
+async function findRecentBridgeInboundDuplicate({
+  phone,
+  body,
+  messageType,
+  mediaType
+}) {
+  const dedupeSeconds = getBridgeInboundDedupeSeconds();
+  const result = await db.query(
+    `SELECT wa_message_id
+       FROM whatsapp_messages
+      WHERE user_phone = $1
+        AND direction = 'inbound'
+        AND message_type = $2
+        AND created_at >= NOW() - ($3 || ' seconds')::interval
+        AND COALESCE(payload->>'provider', '') = 'web_bridge'
+        AND COALESCE(payload->>'body', '') = $4
+        AND COALESCE(payload->>'mediaType', '') = $5
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [
+      phone,
+      messageType,
+      String(dedupeSeconds),
+      body,
+      String(mediaType || '').toLowerCase()
+    ]
+  );
+  return result.rows[0]?.wa_message_id || '';
 }
 
 function normalizeInput(value) {
@@ -2183,37 +2247,46 @@ function describeNaturalFilters(filters = {}, lang = 'en') {
   return chips.join(' • ');
 }
 
+function naturalFilterLabel(lang = 'en') {
+  const code = resolveLangCode(lang);
+  return {
+    en: 'Filters',
+    lg: 'Ebikozeseddwa',
+    sw: 'Vichujio',
+    ac: 'Filters',
+    ny: 'Ebikozesibwa',
+    rn: 'Filters',
+    sm: 'Ebikozeseddwa'
+  }[code] || 'Filters';
+}
+
+function naturalFilterLine(filters = {}, lang = 'en') {
+  const chips = describeNaturalFilters(filters, lang);
+  return chips ? `🎯 ${naturalFilterLabel(lang)}: ${chips}\n` : '';
+}
+
 function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
   const code = resolveLangCode(lang);
-  const chips = describeNaturalFilters(filters, code);
-  const filterLine = chips ? {
-    en: `Filters: ${chips}\n`,
-    lg: `Filters: ${chips}\n`,
-    sw: `Vichujio: ${chips}\n`,
-    ac: `Filters: ${chips}\n`,
-    ny: `Filters: ${chips}\n`,
-    rn: `Filters: ${chips}\n`,
-    sm: `Filters: ${chips}\n`
-  }[code] || `Filters: ${chips}\n` : '';
+  const filterLine = naturalFilterLine(filters, code);
 
   const copy = {
     area: {
-      en: `🔎 I can search that for you.\n${filterLine}Please share the area or district.`,
-      lg: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`,
-      sw: `🔎 Naweza kukutafutia hiyo.\n${filterLine}Tafadhali taja eneo au wilaya.`,
-      ac: `🔎 Aromo yenyoni pi in.\n${filterLine}Tim ber icwal area onyo district.`,
-      ny: `🔎 Nimbaasa kukishakira.\n${filterLine}Ngambira ekicweka nari district.`,
-      rn: `🔎 Nshobora kubishakira.\n${filterLine}Mumbwire area canke district.`,
-      sm: `🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
+      en: `${whatsappBrandHeader('Property search')}\n🔎 I can search that for you.\n${filterLine}Send the area or district.`,
+      lg: `${whatsappBrandHeader('Noonya property')}\n🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`,
+      sw: `${whatsappBrandHeader('Tafuta mali')}\n🔎 Naweza kukutafutia hiyo.\n${filterLine}Taja eneo au wilaya.`,
+      ac: `${whatsappBrandHeader('Yeny property')}\n🔎 Aromo yenyoni pi in.\n${filterLine}Tim ber icwal area onyo district.`,
+      ny: `${whatsappBrandHeader('Shaka property')}\n🔎 Nimbaasa kukishakira.\n${filterLine}Ngambira ekicweka nari district.`,
+      rn: `${whatsappBrandHeader('Shaka property')}\n🔎 Nshobora kubishakira.\n${filterLine}Mumbwire area canke district.`,
+      sm: `${whatsappBrandHeader('Noonya property')}\n🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
     },
     location: {
-      en: `📍 I can search around you.\n${filterLine}Please share your WhatsApp location now. I will start within 10 miles, then you can reply WIDEN if you want more options.`,
-      lg: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 10, olwo oddemu WIDEN bwoyagala ebisingawo.`,
-      sw: `📍 Naweza kutafuta karibu na wewe.\n${filterLine}Tafadhali share location yako ya WhatsApp sasa. Nitaanza ndani ya maili 10, kisha ujibu WIDEN ukitaka chaguo zaidi.`,
-      ac: `📍 Aromo yeny ka cok kwedi.\n${filterLine}Tim ber icwal location mamegi i WhatsApp. Abicako i miles 10, dok iromo dwoko WIDEN pi me yaro.`,
-      ny: `📍 Nimbaasa kushaka haihi naiwe.\n${filterLine}Tuma location yaawe eya WhatsApp hati. Ninyija kutandika omu miles 10, kandi wangarukamu WIDEN waba noyenda ebindi.`,
-      rn: `📍 I can search near you. Rukiga translation is not fully available yet, so makaug.com will use English fallback rather than guessing another language. Please share your WhatsApp location now. I will start within 10 miles.`,
-      sm: `📍 Nsobola okunoonya okumpi naawe.\n${filterLine}Weereza location yo eya WhatsApp kati. Nja kusooka mu miles 10, olwo oddemu WIDEN bwoyagala ebisingawo.`
+      en: `${whatsappBrandHeader('Search near you')}\n📍 Share your WhatsApp location now.\n${filterLine}I will search within *10 miles* first. Reply *WIDEN* later for more options.`,
+      lg: `${whatsappBrandHeader('Noonya okumpi')}\n📍 Weereza location yo eya WhatsApp kati.\n${filterLine}Nja kusooka mu *miles 10*. Bwoyagala ebirala, ddamu *WIDEN*.`,
+      sw: `${whatsappBrandHeader('Tafuta karibu')}\n📍 Share location yako ya WhatsApp sasa.\n${filterLine}Nitaanza ndani ya *maili 10*. Jibu *WIDEN* ukitaka chaguo zaidi.`,
+      ac: `${whatsappBrandHeader('Yeny ka cok')}\n📍 Tim ber icwal location mamegi i WhatsApp.\n${filterLine}Abicako i *miles 10*. Dwok *WIDEN* pi yaro.`,
+      ny: `${whatsappBrandHeader('Shaka haihi')}\n📍 Tuma location yaawe eya WhatsApp hati.\n${filterLine}Ninyija kutandika omu *miles 10*. Garukamu *WIDEN* waba noyenda ebindi.`,
+      rn: `${whatsappBrandHeader('Search near you')}\n📍 Share your WhatsApp location now.\n${filterLine}I will search within *10 miles* first. Reply *WIDEN* later for more options.`,
+      sm: `${whatsappBrandHeader('Noonya okumpi')}\n📍 Weereza location yo eya WhatsApp kati.\n${filterLine}Nja kusooka mu *miles 10*. Bwoyagala ebirala, ddamu *WIDEN*.`
     }
   };
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
@@ -2528,6 +2601,7 @@ async function queueWhatsappWebBridgeAutoReply({
   phone,
   message,
   nextStep = null,
+  inboundMessageId = null,
   source = 'whatsapp_runtime',
   actorId = 'system'
 }) {
@@ -2540,6 +2614,7 @@ async function queueWhatsappWebBridgeAutoReply({
     source,
     actorId,
     metadata: {
+      inbound_message_id: inboundMessageId || null,
       next_step: nextStep || null,
       queued_by: source,
       queued_at: new Date().toISOString()
@@ -3420,7 +3495,7 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
   };
   const copy = cardCopy[code] || cardCopy.en;
   const lines = [];
-  lines.push('🟩🟨 *MakaUg Matchboard* 🟨🟩');
+  lines.push('🟩🟨 *MakaUg Matchboard* | makaug.com 🟨🟩');
   lines.push('━━━━━━━━━━━━━━━━');
   lines.push(`🔎 *${t(lang, 'searchHeader')}*`);
   lines.push(`🎯 ${copy.filter}: ${typeLabel(searchType, lang)} • ${location}`);
@@ -3540,10 +3615,11 @@ function isIdleResumeDue(session = {}) {
 
 function idleResumePrompt(lang, step) {
   const code = resolveLangCode(lang);
+  const reminder = stepReminderBrief(code, step);
   const messages = {
-    en: `Welcome back. Do you want to carry on where we left off, or is this a new request?\n\nReply *CONTINUE* to carry on: ${stepReminderMessage(code, step)}\n\nReply *MENU* to start again, or type your new request in one sentence.`,
-    lg: `Tukwanirizza nate. Oyagala tugende mu maaso gye twakoma, oba kino kipya?\n\nReply *CONTINUE* okugenda mu maaso: ${stepReminderMessage(code, step)}\n\nReply *MENU* okutandika nate, oba wandika ky'oyagala mu sentence emu.`,
-    sw: `Karibu tena. Unataka tuendelee tulipoishia, au hili ni ombi jipya?\n\nJibu *CONTINUE* kuendelea: ${stepReminderMessage(code, step)}\n\nJibu *MENU* kuanza upya, au andika ombi jipya kwa sentensi moja.`
+    en: `${whatsappBrandHeader('Welcome back')}\nDo you want to carry on where we left off, or is this a new request?\n\n*CONTINUE* - carry on\n${reminder}\n\n*MENU* - start again\nOr type your new request in one sentence.`,
+    lg: `${whatsappBrandHeader('Tukwanirizza nate')}\nOyagala tugende mu maaso gye twakoma, oba kino kipya?\n\n*CONTINUE* - tugende mu maaso\n${reminder}\n\n*MENU* - tandika nate\nOba wandika ky'oyagala mu sentence emu.`,
+    sw: `${whatsappBrandHeader('Karibu tena')}\nUnataka tuendelee tulipoishia, au hili ni ombi jipya?\n\n*CONTINUE* - tuendelee\n${reminder}\n\n*MENU* - anza upya\nAu andika ombi jipya kwa sentensi moja.`
   };
   return messages[code] || messages.en;
 }
@@ -4406,7 +4482,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
         ? `\n${t(lang, 'searchNoNearbyResults')}\n${t(lang, 'widenNearbySearch')}\n`
         : `\n${t(lang, 'widenNearbySearch')}\n`;
       return respond(
-        `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${describeNaturalFilters(pendingFilters, lang) ? `Filters: ${describeNaturalFilters(pendingFilters, lang)}\n` : ''}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
+        `${t(lang, 'locationSharedReceived')}${extra}${pendingFilters ? `\n${naturalFilterLine(pendingFilters, lang)}` : ''}\n${formatPropertySearchMessage(lang, near.rows, locationText, pendingFilters?.searchType || searchType)}`,
         'main_menu'
       );
     }
@@ -5416,6 +5492,15 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   if (!mediaUrl && bridgeHasMedia) {
     mediaUrl = `whatsapp-web://${inboundMessageId}`;
   }
+  const bridgeMessageType = sharedLocation
+    ? 'location'
+    : (mediaUrl && (
+      mediaType.startsWith('audio/')
+      || mediaType === 'voice'
+      || mediaType === 'audio'
+      || mediaType.includes('opus')
+      || mediaType.includes('ogg')
+    ) ? 'voice' : (mediaUrl ? 'media' : 'text'));
 
   if (!phone) {
     return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
@@ -5438,6 +5523,24 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
   );
   if (alreadySeen.rows.length) {
     return res.json({ ok: true, duplicate: true, inbound_message_id: runtimeInboundMessageId });
+  }
+
+  if (!dryRun) {
+    const recentDuplicateId = await findRecentBridgeInboundDuplicate({
+      phone,
+      body,
+      messageType: bridgeMessageType,
+      mediaType,
+      sharedLocation
+    });
+    if (recentDuplicateId) {
+      return res.json({
+        ok: true,
+        duplicate: true,
+        duplicate_reason: 'recent_bridge_message_fingerprint',
+        inbound_message_id: recentDuplicateId
+      });
+    }
   }
 
   if (req.body.client_id && !dryRun) {
@@ -5485,6 +5588,7 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
       phone,
       message,
       nextStep,
+      inboundMessageId: runtimeInboundMessageId,
       source: 'whatsapp_runtime',
       actorId: 'system'
     });
@@ -5562,14 +5666,20 @@ router.get('/web-bridge/outbox', async (req, res) => {
 router.post('/web-bridge/outbox/:id/sent', async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
+  const duplicateSuppressed = ['1', 'true', 'yes'].includes(String(req.body.duplicate_suppressed || '').trim().toLowerCase());
   const updated = await markWhatsappWebBridgeMessageSent(req.params.id, {
     bridge_client_id: req.body.client_id || null,
     bridge_sent_at: new Date().toISOString(),
-    bridge_message_id: req.body.bridge_message_id || null
+    bridge_message_id: req.body.bridge_message_id || null,
+    duplicate_suppressed: duplicateSuppressed
   });
 
   if (!updated) {
     return res.status(404).json({ ok: false, error: 'Queued message not found' });
+  }
+
+  if (duplicateSuppressed) {
+    return res.json({ ok: true, duplicate_suppressed: true, data: updated });
   }
 
   const replyText = String(updated.payload?.text || '').trim();
