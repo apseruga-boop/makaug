@@ -1085,9 +1085,11 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
   if (!composer) return false;
 
   await composer.click();
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.insertText(String(text || ''));
+  await composer.fill(String(text || '')).catch(async () => {
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.type(String(text || ''), { delay: 1 });
+  });
   await page.waitForTimeout(30);
   return true;
 }
