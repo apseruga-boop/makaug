@@ -6391,6 +6391,87 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     }
   }
 
+  const isBridgeCallLog = (
+    mediaType === 'call'
+    || mediaType === 'call_log'
+    || (
+      /\b(?:voice|video)\s+call\b/i.test(body)
+      && /\b(?:no answer|missed|unanswered|declined|rejected|not answered)\b/i.test(body)
+    )
+  );
+  if (isBridgeCallLog) {
+    const callType = mediaType.includes('video') || /\bvideo\s+call\b/i.test(body) ? 'video' : 'voice';
+    const { message, nextStep, duplicate, lead } = await handleWhatsappCallEvent({
+      phone: runtimePhone,
+      provider: 'web_bridge',
+      callId: runtimeInboundMessageId,
+      status: /\b(?:answered|accepted)\b/i.test(body) ? 'answered' : 'missed',
+      callType,
+      contactName,
+      metadata: {
+        ...runtimeMetadata,
+        raw_text: body,
+        source: runtimeMetadata.source || 'whatsapp_call_log_card',
+        detected_from: runtimeMetadata.detected_from || 'web_bridge_inbound_fallback'
+      }
+    });
+
+    let queuedReply = null;
+    if (message && !dryRun && !duplicate) {
+      queuedReply = await queueWhatsappWebBridgeAutoReply({
+        phone,
+        message,
+        nextStep,
+        inboundMessageId: runtimeInboundMessageId,
+        source: 'whatsapp_missed_call',
+        actorId: 'system'
+      });
+    }
+
+    captureLearningEvent({
+      eventName: 'whatsapp_missed_call_detected',
+      source: 'whatsapp',
+      channel: 'whatsapp',
+      sessionId: runtimePhone,
+      externalUserId: phone,
+      language: runtimeMetadata.language || runtimeMetadata.detected_language || 'auto',
+      inputText: body || '[missed call]',
+      responseText: message || '',
+      entities: {
+        phone,
+        call_type: callType,
+        next_step: nextStep || null,
+        lead_id: lead?.id || null
+      },
+      payload: {
+        provider: 'web_bridge',
+        dry_run: dryRun,
+        duplicate: !!duplicate,
+        metadata: runtimeMetadata
+      },
+      outcome: message ? 'responded' : 'received',
+      dedupeKey: `whatsapp:missed-call:${runtimeInboundMessageId}`
+    }).catch((error) => {
+      logger.warn('WhatsApp missed-call learning capture failed:', error.message || String(error));
+    });
+
+    return res.json({
+      ok: true,
+      duplicate: !!duplicate,
+      data: {
+        inbound_message_id: runtimeInboundMessageId,
+        next_step: nextStep,
+        message,
+        dry_run: dryRun,
+        ...(dryRun ? { dry_run_session: runtimePhone } : {}),
+        lead_id: lead?.id || null,
+        queued_reply: !!queuedReply,
+        queue_id: queuedReply?.id || null,
+        call_log_card: true
+      }
+    });
+  }
+
   const { message, nextStep } = await processInboundRuntime({
     phone: runtimePhone,
     inboundMessageId: runtimeInboundMessageId,

@@ -421,11 +421,28 @@ async function getActiveChatSnapshot(page) {
       if (voiceControl) return true;
       return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
     };
+    const hasCallLog = (root, text = '') => {
+      if (!root) return false;
+      const labels = Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
+        .map((el) => [
+          el.getAttribute('aria-label'),
+          el.getAttribute('data-icon'),
+          el.getAttribute('data-testid'),
+          el.getAttribute('title')
+        ].filter(Boolean).join(' '))
+        .join(' ');
+      const combined = `${text || ''} ${labels}`.replace(/\s+/g, ' ').trim();
+      return (
+        /\b(?:voice|video)\s+call\b/i.test(combined)
+        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
+      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+    };
 
     const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
-      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, el.innerText || el.textContent || '');
+      const text = el.innerText || el.textContent || '';
+      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
     const nodes = [...copyNodes, ...mediaOnlyNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
@@ -501,10 +518,13 @@ async function getActiveChatSnapshot(page) {
     const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
     const sharedLocation = extractSharedLocation(last);
     const voiceNote = hasVoiceNote(last, text);
+    const callLog = hasCallLog(last, text);
     const mediaType = sharedLocation
       ? 'location'
       : hasNonEmojiImage && isTimestampOnlyText(text) && !!sharedLocation
         ? 'location_preview'
+      : callLog
+        ? 'call'
       : voiceNote
         ? 'voice'
       : last.querySelector('img')
@@ -516,12 +536,12 @@ async function getActiveChatSnapshot(page) {
     return {
       chatKey: resolvedChatKey,
       contactName,
-      text: text || (mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
+      text: text || (mediaType === 'call' ? '[missed call]' : mediaType === 'image' ? '[image]' : mediaType === 'voice' ? '[voice note]' : mediaType === 'media' ? '[media]' : ''),
       timestampLabel,
       messageId,
       direction,
       mediaType,
-      mediaUrl: mediaType === 'text' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
+      mediaUrl: mediaType === 'text' || mediaType === 'call' ? '' : `whatsapp-web://${messageId || crypto.randomUUID()}`,
       sharedLocation,
       mediaCount,
       mediaFingerprint
@@ -583,11 +603,28 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
       if (voiceControl) return true;
       return /\b0:\d{2}\b/.test(String(text || '')) && !!root.querySelector('canvas, svg, button');
     };
+    const hasCallLog = (root, text = '') => {
+      if (!root) return false;
+      const labels = Array.from(root.querySelectorAll('[aria-label], [data-icon], [data-testid], [title]'))
+        .map((el) => [
+          el.getAttribute('aria-label'),
+          el.getAttribute('data-icon'),
+          el.getAttribute('data-testid'),
+          el.getAttribute('title')
+        ].filter(Boolean).join(' '))
+        .join(' ');
+      const combined = `${text || ''} ${labels}`.replace(/\s+/g, ' ').trim();
+      return (
+        /\b(?:voice|video)\s+call\b/i.test(combined)
+        && /\b(?:no answer|missed|unanswered|declined|rejected|not answered|call back)\b/i.test(combined)
+      ) || /\bmissed\s+(?:voice|video)\s+call\b/i.test(combined);
+    };
 
     const copyNodes = Array.from(document.querySelectorAll('div.copyable-text[data-pre-plain-text]'));
     const mediaOnlyNodes = Array.from(document.querySelectorAll('[data-id]')).filter((el) => {
       if (el.querySelector('div.copyable-text[data-pre-plain-text]')) return false;
-      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, el.innerText || el.textContent || '');
+      const text = el.innerText || el.textContent || '';
+      return !!el.querySelector('img, video, audio') || hasVoiceNote(el, text) || hasCallLog(el, text);
     });
     const nodes = [...copyNodes, ...mediaOnlyNodes]
       .filter((el, idx, arr) => arr.indexOf(el) === idx)
@@ -634,10 +671,13 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
         const mediaCount = hasNonEmojiImage ? Math.max(1, extraImageMatch ? Number(extraImageMatch[1]) + 1 : 1) : 0;
         const sharedLocation = extractSharedLocation(node);
         const voiceNote = hasVoiceNote(node, rawText);
+        const callLog = hasCallLog(node, rawText);
         const mediaType = sharedLocation
           ? 'location'
           : hasNonEmojiImage && isTimestampOnlyText(rawText) && !!sharedLocation
             ? 'location_preview'
+          : callLog
+          ? 'call'
           : voiceNote
           ? 'voice'
           : node.querySelector('video')
@@ -647,6 +687,8 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
               : 'text';
         const text = rawText || (mediaType === 'image'
           ? '[image]'
+          : mediaType === 'call'
+            ? '[missed call]'
           : mediaType === 'voice'
             ? '[voice note]'
             : mediaType === 'media'
@@ -680,7 +722,9 @@ async function getRecentIncomingSnapshots(page, limit = 20) {
     return snapshots
       .slice(-Math.max(1, maxItems))
       .filter((item) => item.chatKey && item.text && (
-        item.direction === 'in'
+        item.mediaType === 'call'
+        || item.mediaType === 'call_log'
+        || item.direction === 'in'
         || (item.direction === 'unknown' && item.mediaType && item.mediaType !== 'text')
       ));
   }, limit);
@@ -862,12 +906,76 @@ async function captureVoiceAudioFromNetwork(page, messageId) {
   };
 }
 
+async function ingestCallSnapshot({ snapshot, row = {}, source = 'call_card', chatKey, text }) {
+  const normalizedChatKey = normalizeChatKey(chatKey || snapshot.chatKey || row.title);
+  const normalizedText = String(text || snapshot.text || row.preview || '[missed call]').trim() || '[missed call]';
+  if (!normalizedChatKey) return { processed: 0, skipped: 'missing_chat_for_call' };
+
+  const browserMessageKey = snapshot.browserMessageKey || browserMessageKeyFor(snapshot, row);
+  if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
+    return { processed: 0, duplicate: true };
+  }
+  rememberBrowserMessageKey(browserMessageKey);
+
+  const callId = createMessageId(
+    normalizedChatKey,
+    normalizedText,
+    snapshot.timestampLabel,
+    'call',
+    snapshot.messageId || snapshot.mediaFingerprint || ''
+  );
+  const isVideoCall = /\bvideo\s+call\b/i.test(normalizedText);
+  const status = /\b(?:no answer|missed|unanswered|declined|rejected|not answered)\b/i.test(normalizedText)
+    ? 'missed'
+    : 'call_log';
+
+  try {
+    const result = await apiRequest('/api/whatsapp/web-bridge/call', {
+      method: 'POST',
+      body: {
+        client_id: CLIENT_ID,
+        operator_name: OPERATOR_NAME || null,
+        phone: normalizedChatKey,
+        contact_name: snapshot.contactName || row.title || '',
+        call_id: callId,
+        call_type: isVideoCall ? 'video' : 'voice',
+        status,
+        declined: false,
+        metadata: {
+          chat_title: snapshot.chatKey || row.title || '',
+          raw_text: normalizedText,
+          source,
+          detected_from: 'whatsapp_call_log_card',
+          media_fingerprint: snapshot.mediaFingerprint || '',
+          message_id: snapshot.messageId || ''
+        }
+      }
+    });
+    if (!result.duplicate) {
+      log(`ingested missed call card from ${normalizedChatKey}; queued_reply=${result.data?.queued_reply ? 'yes' : 'no'}`);
+    }
+    return {
+      processed: result.duplicate ? 0 : 1,
+      duplicate: !!result.duplicate,
+      queuedReply: !!result.data?.queued_reply,
+      chatKey: normalizedChatKey
+    };
+  } catch (error) {
+    log('failed to ingest call card:', normalizedChatKey, error.message || error);
+    return { processed: 0, error };
+  }
+}
+
 async function ingestSnapshot({ snapshot, row = {}, source = 'unread_scan' }) {
   const chatKey = normalizeChatKey(snapshot.chatKey || row.title);
   const mediaType = snapshot.mediaType || 'text';
   const text = isTimestampOnly(snapshot.text) && String(mediaType).includes('location')
     ? '[shared location]'
     : String(snapshot.text || row.preview || '').trim();
+
+  if (mediaType === 'call' || mediaType === 'call_log') {
+    return ingestCallSnapshot({ snapshot, row, source, chatKey, text });
+  }
 
   if (!chatKey || (!text && !snapshot.mediaUrl)) return { processed: 0, skipped: 'missing_chat_or_content' };
   if (snapshot.direction === 'out') return { processed: 0, skipped: 'outgoing_message' };

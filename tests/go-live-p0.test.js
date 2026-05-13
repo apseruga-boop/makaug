@@ -1179,7 +1179,11 @@ function run() {
   assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');
   assert(whatsappWebCopilotScript.includes('detectAndDeclineIncomingCall'), 'WhatsApp Web copilot must detect and decline incoming calls');
   assert(whatsappWebCopilotScript.includes('/api/whatsapp/web-bridge/call'), 'WhatsApp Web copilot must send call events to the backend');
+  assert(whatsappWebCopilotScript.includes('hasCallLog'), 'WhatsApp Web copilot must detect WhatsApp no-answer call cards');
+  assert(whatsappWebCopilotScript.includes("detected_from: 'whatsapp_call_log_card'"), 'WhatsApp Web copilot must tag call-card missed-call events');
   assert(whatsappRoutes.includes("router.post('/web-bridge/call'"), 'WhatsApp backend must expose a bridge call event endpoint');
+  assert(whatsappRoutes.includes('web_bridge_inbound_fallback'), 'WhatsApp backend must handle call cards that arrive through the inbound bridge route');
+  assert(whatsappRoutes.includes('call_log_card: true'), 'WhatsApp backend must mark inbound call-card handling in the bridge response');
   assert(whatsappRoutes.includes('parseMetaCallEvents'), 'WhatsApp backend must parse Meta call webhook events');
   assert(whatsappRoutes.includes('whatsapp_missed_call'), 'WhatsApp missed calls must create CRM leads with a dedicated source');
   assert(whatsappRoutes.includes('missed_call_resolved'), 'WhatsApp missed-call flow must ask whether the issue was resolved');
