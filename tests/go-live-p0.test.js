@@ -1164,7 +1164,8 @@ function run() {
   assert(whatsappWebBridgeServiceSource.includes('reply_dedupe_key'), 'WhatsApp web bridge queue must dedupe repeated auto replies');
   assert(whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 45'), 'WhatsApp web bridge claims need a long enough lease to avoid double sends');
   assert(whatsappWebCopilotScript.includes('suppressed duplicate queued reply'), 'WhatsApp Web copilot must suppress recently sent duplicate queue rows');
-  assert(whatsappWebCopilotScript.includes('treating reply as sent to avoid duplicate retry'), 'WhatsApp Web copilot must not retype messages after the composer clears');
+  assert(whatsappWebCopilotScript.includes('refusing to mark reply as sent'), 'WhatsApp Web copilot must not mark unconfirmed sends as sent');
+  assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');
   assert(whatsappRoutes.includes('🟩🟨 *makaug.com*'), 'WhatsApp runtime replies should use the makaug.com branded card header');
   assert(aiServiceSource.includes('Do not repeat the same instruction, menu, greeting, or link twice'), 'LLM prompt must explicitly avoid duplicated WhatsApp copy');
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');

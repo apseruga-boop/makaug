@@ -30,12 +30,12 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 125);
-const POLL_MS = Math.min(250, Math.max(100, Number.isFinite(configuredPollMs) ? configuredPollMs : 125));
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 100);
+const POLL_MS = Math.min(150, Math.max(75, Number.isFinite(configuredPollMs) ? configuredPollMs : 100));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 400);
-const RECENT_CHAT_SWEEP_MS = Math.min(800, Math.max(200, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 400));
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 200);
+const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(100, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 200));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
@@ -972,12 +972,25 @@ async function waitForReplyComposer(page, timeoutMs = 15000) {
 async function getOutgoingMessageState(page) {
   return page.evaluate(() => {
     const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
-    const nodes = Array.from(document.querySelectorAll('.message-out'));
-    const texts = nodes
-      .map((node) => normalize(node.innerText || node.textContent || ''))
+    const nodes = Array.from(document.querySelectorAll([
+      '.message-out',
+      '[data-id^="true_"]',
+      '[data-testid="msg-container"]',
+      '[role="row"]'
+    ].join(','))).filter((node) => {
+      const messageNode = node.closest?.('[data-id]') || node;
+      const dataId = String(messageNode.getAttribute?.('data-id') || node.getAttribute?.('data-id') || '');
+      if (dataId.startsWith('true_')) return true;
+      if (node.classList?.contains('message-out') || node.closest?.('.message-out')) return true;
+      const aria = String(node.getAttribute?.('aria-label') || '');
+      return /^you[:\s]/i.test(aria);
+    });
+    const uniqueNodes = Array.from(new Set(nodes.map((node) => node.closest?.('[data-id]') || node)));
+    const texts = uniqueNodes
+      .map((node) => normalize(node.innerText || node.textContent || node.getAttribute?.('aria-label') || ''))
       .filter(Boolean);
     return {
-      count: nodes.length,
+      count: uniqueNodes.length,
       lastText: texts[texts.length - 1] || '',
       recentTexts: texts.slice(-10)
     };
@@ -1063,8 +1076,8 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
   if (!composerCleared) return false;
 
   // Composer-cleared alone is not enough: WhatsApp Web can clear the input
-  // before the outgoing bubble appears. Wait briefly for the real message.
-  return waitForOutgoingReplyConfirmation(page, text, beforeState, 1400);
+  // before the outgoing bubble appears. Wait for the real outgoing message.
+  return waitForOutgoingReplyConfirmation(page, text, beforeState, 6000);
 }
 
 async function replaceComposerText(page, text, timeoutMs = 1200) {
@@ -1147,14 +1160,14 @@ async function typeAndSendReply(page, text) {
   }
 
   await clickWhatsAppSend(page);
-  const confirmed = await waitForPostSendConfirmation(page, text, beforeState, 5000);
+  const confirmed = await waitForPostSendConfirmation(page, text, beforeState, 6500);
   if (confirmed) return true;
 
   let composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
   const composerText = normalizeReplyText(composerState.text || '');
   if (composerState.found && !composerText) {
-    log('send bubble was not observed, but composer cleared; treating reply as sent to avoid duplicate retry');
-    return true;
+    log('send bubble was not observed after composer cleared; refusing to mark reply as sent');
+    throw new Error('WhatsApp send was not confirmed after composer cleared');
   }
 
   const expectedPrefix = normalizeReplyText(text).slice(0, 120);
@@ -1166,8 +1179,8 @@ async function typeAndSendReply(page, text) {
 
   composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
   if (composerState.found && !normalizeReplyText(composerState.text || '')) {
-    log('send bubble was not observed after Enter, but composer cleared; treating reply as sent to avoid duplicate retry');
-    return true;
+    log('send bubble was not observed after Enter; refusing to mark reply as sent');
+    throw new Error('WhatsApp send was not confirmed after Enter');
   }
 
   if (normalizeReplyText(composerState.text || '').includes(expectedPrefix)) {
