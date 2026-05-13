@@ -13,6 +13,7 @@ const {
   extractNaturalPropertyQuery
 } = require('../services/aiService');
 const {
+  languageDisplayName,
   toLegacyLanguageCode,
   shouldUseEnglishFallback
 } = require('../config/languageRegistry');
@@ -672,7 +673,7 @@ function resolveDetectedLanguage({ text, sessionLang = 'en', intentResult = null
 function shouldAdoptDetectedLanguage({ sessionLang = 'en', sessionStep = 'greeting', detectedLanguage = {} }) {
   const nextLang = resolveLangCode(detectedLanguage.code || '');
   const currentLang = resolveLangCode(sessionLang || 'en');
-  const openLanguageSteps = ['greeting', 'main_menu', 'choose_language', 'submitted'];
+  const openLanguageSteps = ['greeting', 'main_menu', 'choose_language', 'missed_call_need', 'missed_call_resolved', 'submitted'];
   const canFreelyAdoptLanguage = openLanguageSteps.includes(sessionStep || 'greeting');
   if (!nextLang || nextLang === currentLang) return false;
   if (nextLang === 'en' && currentLang !== 'en' && detectedLanguage.source !== 'ai_explicit_language') return false;
@@ -2798,9 +2799,12 @@ function getLeadNotificationEmail() {
 
 function missedCallIntroMessage(lang = 'en') {
   const messages = {
-    en: `${whatsappBrandHeader('Missed call')}\nThanks for calling makaug.com. This WhatsApp line is managed by our assistant, so we do not pick up calls here.\n\nPlease type what you need in one message. Someone from MakaUg will be in touch if the assistant cannot resolve it.`,
-    lg: `${whatsappBrandHeader('Essimu efubiddwa')}\nWebale okukuba essimu ku makaug.com. Line eno ya WhatsApp ekola n'omuyambi waffe, tetugikwata nga call.\n\nWandiika ky'oyagala mu message emu. Omuntu wa MakaUg ajja kukuyamba singa assistant tasobodde kukimaliriza.`,
-    sw: `${whatsappBrandHeader('Simu iliyokosa')}\nAsante kwa kupiga makaug.com. Namba hii ya WhatsApp inaendeshwa na assistant wetu, kwa hiyo hatupokei simu hapa.\n\nAndika unachohitaji kwa ujumbe mmoja. Mtu wa MakaUg atawasiliana nawe kama assistant hawezi kumaliza hilo.`
+    en: `${whatsappBrandHeader('Missed call')}\nThanks for calling makaug.com. Sorry we missed your call.\n\nSomeone from the MakaUg team will call you back. In the meantime, tell us what you need in one message and we will try to resolve it here first.\n\nIf we cannot sort it here, I will pass it to the team for follow-up.`,
+    lg: `${whatsappBrandHeader('Essimu efubiddwa')}\nWebale okukuba essimu ku makaug.com. Tusonyiwe, tetwasobodde kugikwata.\n\nOmuntu wa MakaUg ajja kukukubira. Mu kaseera kano, tubuulire ky'oyagala mu message emu, tugende tukuyambe wano okusooka.\n\nBwe kitasoboka wano, nja kukiweereza team ya MakaUg bakikugoberere.`,
+    sw: `${whatsappBrandHeader('Simu iliyokosa')}\nAsante kwa kupiga makaug.com. Samahani, hatukupokea simu yako.\n\nMtu kutoka timu ya MakaUg atakupigia. Kwa sasa, tuambie unachohitaji kwa ujumbe mmoja na tutajaribu kukitatua hapa kwanza.\n\nTusipoweza kukimaliza hapa, nitakipeleka kwa timu kwa follow-up.`,
+    ac: `${whatsappBrandHeader('Missed call')}\nApwoyo pi lwongo makaug.com. Tim wa kica, pe watwero mako lwongo ni.\n\nNgat ma i MakaUg bidwogo lwongo. Kombedi, coyo gin ma imito i message acel, ci watemo konyi kany mukwongo.\n\nKa pe watwero tyeko kany, abicwalo bot team me MakaUg wek gulub kore.`,
+    ny: `${whatsappBrandHeader('Missed call')}\nWebare okukubira makaug.com. Tusasire, titwashemereire kwikiriza call yaawe.\n\nOmuntu wa MakaUg naija kukugarukiramu. Kwonka hati, tugambire eki orikwenda omu message emwe, tubanze tugerageze kukikukorera aha WhatsApp.\n\nKu kiraabe kitarikukunda aha, ninyija kukihereza team ya MakaUg bakikuratire.`,
+    sm: `${whatsappBrandHeader('Essimu efubiddwa')}\nWebale okukubira makaug.com. Tusonyiwe, tetwasobodde kugikwata.\n\nOmuntu wa MakaUg ajja kukukubira. Kati, tubuulire ky'oyagala mu message emu, tugende tukuyambe wano okusooka.\n\nBwe kitasoboka wano, nja kukiweereza team ya MakaUg bakikugoberere.`
   };
   return messages[lang] || messages.en;
 }
@@ -2816,9 +2820,12 @@ function missedCallNeedPrompt(lang = 'en') {
 
 function missedCallNeedReceivedMessage(lang = 'en') {
   const messages = {
-    en: `${whatsappBrandHeader('Request received')}\nGot it. I have saved this for the MakaUg team and I will try to help here first.\n\nIs this resolved?\nReply *YES* if yes, or *NO* if you need a person to call you.`,
-    lg: `${whatsappBrandHeader('Ekisabiddwa kifuniddwa')}\nKitegedde. Nkitadde mu system ya MakaUg era nja kusooka okugezaako okukuyamba wano.\n\nKiwedde?\nDdamu *YES* oba *NO* bwoyagala omuntu akukubire.`,
-    sw: `${whatsappBrandHeader('Ombi limepokelewa')}\nNimekupata. Nimehifadhi hili kwa timu ya MakaUg na nitajaribu kukusaidia hapa kwanza.\n\nLimesuluhishwa?\nJibu *YES* kama ndiyo, au *NO* kama unahitaji mtu akupigie.`
+    en: `${whatsappBrandHeader('Request received')}\nGot it, thanks. I have saved your request for the MakaUg team and will try to help here first.\n\nHas this been resolved now?\nReply *YES* if yes, or *NO* if you still need someone from the team to call you.`,
+    lg: `${whatsappBrandHeader('Ekisabiddwa kifuniddwa')}\nKitegedde, webale. Nkitadde mu system ya MakaUg era nja kusooka okugezaako okukuyamba wano.\n\nKiwedde kati?\nDdamu *YES* oba *NO* bwoba okyetaaga omuntu wa team akukubire.`,
+    sw: `${whatsappBrandHeader('Ombi limepokelewa')}\nNimekupata, asante. Nimehifadhi ombi lako kwa timu ya MakaUg na nitajaribu kukusaidia hapa kwanza.\n\nJe, limesuluhishwa sasa?\nJibu *YES* kama ndiyo, au *NO* kama bado unahitaji mtu wa timu akupigie.`,
+    ac: `${whatsappBrandHeader('Request received')}\nAniang, apwoyo. Akano kwac ni pi team me MakaUg, dok atemo konyi kany mukwongo.\n\nDong otyeko kombedi?\nDwok *YES* ka otyeko, onyo *NO* ka imito ngat me team odwog lwongi.`,
+    ny: `${whatsappBrandHeader('Request received')}\nNinyetegyereza, webare. Nabitereka omu system ya MakaUg kandi ninyija kubanza kugezaho kukuyamba aha.\n\nKikozirwe hati?\nGarukamu *YES* yaba nikwo, ninga *NO* ku oraabe okyenda omuntu wa team akukubire.`,
+    sm: `${whatsappBrandHeader('Ekisabiddwa kifuniddwa')}\nKitegedde, webale. Nkitadde mu system ya MakaUg era nja kusooka okugezaako okukuyamba wano.\n\nKiwedde kati?\nDdamu *YES* oba *NO* bwoba okyetaaga omuntu wa team akukubire.`
   };
   return messages[lang] || messages.en;
 }
@@ -2834,9 +2841,12 @@ function missedCallResolvedMessage(lang = 'en') {
 
 function missedCallEscalatedMessage(lang = 'en') {
   const messages = {
-    en: `${whatsappBrandHeader('Agent notified')}\nNo problem. A MakaUg agent has been notified and will give you a call at the earliest opportunity.\n\nYou can keep adding details here while you wait.`,
-    lg: `${whatsappBrandHeader('Agent ategeezeddwa')}\nTewali buzibu. Agent wa MakaUg ategeezeddwa era ajja kukukubira amangu ddala.\n\nOsobola okwongera ebisingawo wano nga olinze.`,
-    sw: `${whatsappBrandHeader('Agent amejulishwa')}\nSawa. Agent wa MakaUg amejulishwa na atakupigia haraka iwezekanavyo.\n\nUnaweza kuongeza maelezo hapa ukiwa unasubiri.`
+    en: `${whatsappBrandHeader('Team notified')}\nNo problem. I have passed this to the MakaUg team as a callback request, and someone will contact you as soon as possible.\n\nYou can keep adding details here while you wait.`,
+    lg: `${whatsappBrandHeader('Team etegezeddwa')}\nTewali buzibu. Nkiweerezza team ya MakaUg nga callback request, era omuntu ajja kukukubira amangu nga kisoboka.\n\nOsobola okwongera ebisingawo wano nga olinze.`,
+    sw: `${whatsappBrandHeader('Timu imejulishwa')}\nSawa. Nimepeleka hili kwa timu ya MakaUg kama ombi la kupigiwa, na mtu atawasiliana nawe haraka iwezekanavyo.\n\nUnaweza kuongeza maelezo hapa ukiwa unasubiri.`,
+    ac: `${whatsappBrandHeader('Team notified')}\nPe peko. Acwalo man bot team me MakaUg calo kwac me dwogo lwongo, ci ngat acel bilwongi oyot ma twere.\n\nI twero medo lok kany kun itye ka ikuro.`,
+    ny: `${whatsappBrandHeader('Team notified')}\nTihariho kizibu. Nabihereza team ya MakaUg nka callback request, kandi omuntu naija kukuhikaho juba nk'oku kirikubaasika.\n\nNoobaasa kugumizamu nooyongeraho ebirikukwataho aha.`,
+    sm: `${whatsappBrandHeader('Team etegezeddwa')}\nTewali buzibu. Nkiweerezza team ya MakaUg nga callback request, era omuntu ajja kukukubira amangu nga kisoboka.\n\nOsobola okwongera ebisingawo wano nga olinze.`
   };
   return messages[lang] || messages.en;
 }
@@ -2919,6 +2929,7 @@ async function createMissedCallLead({
     lifecycleStage: needText ? 'contacted' : 'awaiting_customer',
     leadStatus: 'open',
     priority: needText ? 'high' : 'normal',
+    nextFollowUpAt: new Date(Date.now() + (needText ? 15 : 60) * 60 * 1000).toISOString(),
     slaStatus: 'open',
     activityType: needText ? 'missed_call_need_received' : 'missed_call_received',
     activityMessage: message,
@@ -2942,6 +2953,11 @@ async function createMissedCallLead({
     }
   });
   if (lead) {
+    await createLeadFollowUpTask({
+      leadId: lead.id,
+      title: `Review WhatsApp missed-call lead ${cleanPhone}`,
+      dueMinutes: needText ? 15 : 60
+    });
     await logWhatsappCallEvent({
       phone: cleanPhone,
       provider,
@@ -3035,7 +3051,8 @@ async function notifyMissedCallLead({
   needText = '',
   stage = 'received',
   provider = 'whatsapp',
-  callId = null
+  callId = null,
+  language = 'en'
 } = {}) {
   const recipientEmail = getLeadNotificationEmail();
   const subject = stage === 'escalated'
@@ -3049,6 +3066,7 @@ async function notifyMissedCallLead({
     `Lead ID: ${lead?.id || '-'}`,
     `Caller: ${contactName || 'Unknown WhatsApp caller'}`,
     `Phone/WhatsApp: ${phone || '-'}`,
+    `Language: ${languageDisplayName(language || 'en')}`,
     `Provider: ${provider || 'whatsapp'}`,
     `Call ID: ${callId || '-'}`,
     `Stage: ${stage}`,
@@ -3076,6 +3094,7 @@ async function notifyMissedCallLead({
     payloadSummary: {
       phone,
       stage,
+      language,
       provider,
       call_id: callId || null,
       lead_id: lead?.id || null
@@ -3117,7 +3136,7 @@ async function markMissedCallLeadResolved({ leadId, phone, resolved = true, note
            lead_status = $3,
            priority = $4,
            outcome = $5,
-           next_follow_up_at = CASE WHEN $6::boolean THEN next_follow_up_at ELSE NOW() END,
+           next_follow_up_at = CASE WHEN $6::boolean THEN NULL ELSE NOW() END,
            metadata = COALESCE(metadata, '{}'::jsonb) || $7::jsonb,
            updated_at = NOW()
        WHERE id = $1
@@ -3145,6 +3164,20 @@ async function markMissedCallLeadResolved({ leadId, phone, resolved = true, note
         message: note || (resolved ? 'Customer confirmed the missed-call request was resolved.' : 'Customer said the missed-call request is not resolved. Human callback required.'),
         metadata: { phone }
       });
+      if (resolved) {
+        await db.query(
+          `UPDATE lead_tasks
+           SET status = 'completed', updated_at = NOW()
+           WHERE lead_id = $1
+             AND status = 'open'
+             AND title ILIKE '%WhatsApp missed-call%'`,
+          [lead.id]
+        ).catch((error) => {
+          if (!['42P01', '42703'].includes(error.code)) {
+            logger.warn('Missed call task close failed', { leadId: lead.id, error: error.message });
+          }
+        });
+      }
     }
     return lead;
   } catch (error) {
@@ -3171,7 +3204,18 @@ async function handleWhatsappCallEvent({
     throw error;
   }
 
-  await getSession(cleanPhone);
+  const session = await getSession(cleanPhone);
+  const metadataLanguage = normalizeInput(
+    metadata.language
+    || metadata.detected_language
+    || metadata.preferred_language
+    || metadata.preferredLanguage
+  ).toLowerCase();
+  const activeLang = resolveLangCode(
+    metadataLanguage && metadataLanguage !== 'auto'
+      ? metadataLanguage
+      : (session.language || 'en')
+  );
   const firstLog = await logWhatsappCallEvent({
     phone: cleanPhone,
     provider,
@@ -3198,6 +3242,7 @@ async function handleWhatsappCallEvent({
     callId,
     callType,
     status,
+    language: activeLang,
     metadata
   });
   await patchSessionData(cleanPhone, {
@@ -3209,10 +3254,11 @@ async function handleWhatsappCallEvent({
       provider,
       call_id: callId || null,
       call_type: callType || 'voice',
+      language: activeLang,
       started_at: new Date().toISOString()
     }
   });
-  await updateSession(cleanPhone, { current_step: 'missed_call_need', current_intent: 'support' });
+  await updateSession(cleanPhone, { language: activeLang, current_step: 'missed_call_need', current_intent: 'support' });
   await logWhatsappMessage({
     userPhone: cleanPhone,
     waMessageId: callId ? `call:${provider}:${callId}` : null,
@@ -3231,7 +3277,7 @@ async function handleWhatsappCallEvent({
     phone: cleanPhone,
     direction: 'inbound',
     intent: 'support',
-    preferredLanguage: 'en',
+    preferredLanguage: activeLang,
     currentStep: 'missed_call_need',
     provider,
     messageType: 'call',
@@ -3239,7 +3285,8 @@ async function handleWhatsappCallEvent({
       missed_call_flow: true,
       call_id: callId || null,
       call_status: status || 'received',
-      lead_id: lead?.id || null
+      lead_id: lead?.id || null,
+      language: activeLang
     }
   });
   await safeConversationControl(cleanPhone, {
@@ -3249,7 +3296,8 @@ async function handleWhatsappCallEvent({
     metadata: {
       missed_call_flow: true,
       call_id: callId || null,
-      lead_id: lead?.id || null
+      lead_id: lead?.id || null,
+      language: activeLang
     }
   }, 'whatsapp_missed_call');
 
@@ -3259,12 +3307,13 @@ async function handleWhatsappCallEvent({
     contactName,
     stage: 'received',
     provider,
-    callId
+    callId,
+    language: activeLang
   });
 
   return {
     duplicate: false,
-    message: missedCallIntroMessage('en'),
+    message: missedCallIntroMessage(activeLang),
     nextStep: 'missed_call_need',
     lead
   };
@@ -3317,7 +3366,8 @@ async function handleMissedCallNeedReply({ phone, lang, cleanBody, sessionData =
     needText: cleanBody,
     stage: 'need_received',
     provider: flow.provider || 'whatsapp',
-    callId: flow.call_id || null
+    callId: flow.call_id || null,
+    language: lang
   });
 
   return { message: missedCallNeedReceivedMessage(lang), nextStep: 'missed_call_resolved' };
@@ -3401,7 +3451,8 @@ async function handleMissedCallResolutionReply({ phone, lang, cleanBody, session
       needText: flow.need_text || '',
       stage: 'escalated',
       provider: flow.provider || 'whatsapp',
-      callId: flow.call_id || null
+      callId: flow.call_id || null,
+      language: lang
     });
     return { message: missedCallEscalatedMessage(lang), nextStep: 'main_menu' };
   }

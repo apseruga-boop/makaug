@@ -1189,6 +1189,10 @@ function run() {
   assert(whatsappRoutes.includes('parseMetaCallEvents'), 'WhatsApp backend must parse Meta call webhook events');
   assert(whatsappRoutes.includes('whatsapp_missed_call'), 'WhatsApp missed calls must create CRM leads with a dedicated source');
   assert(whatsappRoutes.includes('missed_call_resolved'), 'WhatsApp missed-call flow must ask whether the issue was resolved');
+  assert(whatsappRoutes.includes('Sorry we missed your call'), 'WhatsApp missed-call reply should use warmer customer language');
+  assert(whatsappRoutes.includes("metadataLanguage && metadataLanguage !== 'auto'"), 'WhatsApp missed-call flow should preserve an existing conversation language');
+  assert(whatsappRoutes.includes('missed_call_need') && whatsappRoutes.includes('openLanguageSteps'), 'WhatsApp missed-call replies should allow language adoption during follow-up');
+  assert(whatsappRoutes.includes('nextFollowUpAt'), 'WhatsApp missed-call leads should be visible in lead-gen follow-up timing');
   assert(whatsappRoutes.includes('LEAD_NOTIFICATION_EMAIL'), 'WhatsApp missed-call escalation must support a lead notification email recipient');
   assert(/CREATE TABLE IF NOT EXISTS\s+whatsapp_call_events/i.test(missedCallMigration), 'missed-call migration must create whatsapp_call_events');
   assert(missedCallMigration.includes('related_lead_id UUID REFERENCES leads'), 'missed-call events must link to CRM leads');
