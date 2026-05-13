@@ -44,7 +44,13 @@ const {
   isWhatsappWebBridgeEnabled,
   queueWhatsappWebBridgeMessage
 } = require('../services/whatsappWebBridgeService');
-const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('../services/emailService');
+const {
+  emailProviderConfigured: emailProviderConfiguredByService,
+  getSupportEmail,
+  getSupportWhatsappUrl,
+  sendBrokerApprovalEmail,
+  sendSupportEmail
+} = require('../services/emailService');
 const {
   estimateAdvertisingQuote,
   findAdvertisingPackage,
@@ -357,10 +363,208 @@ function envSet(key) {
 }
 
 function emailProviderConfigured() {
-  return envSet('SMTP_HOST')
-    || envSet('RESEND_API_KEY')
-    || envSet('MAIL_WEBHOOK_URL')
-    || (envSet('MS_GRAPH_TENANT_ID') && envSet('MS_GRAPH_CLIENT_ID') && envSet('MS_GRAPH_CLIENT_SECRET') && envSet('MS_GRAPH_USER_ID'));
+  return emailProviderConfiguredByService();
+}
+
+function splitBrokerName(fullName = '') {
+  const parts = cleanText(fullName).split(/\s+/).filter(Boolean);
+  if (!parts.length) return { firstName: 'Broker', lastName: 'Account' };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(' ') || 'Broker'
+  };
+}
+
+function generateBrokerTemporaryPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let output = 'Mk';
+  for (let i = 0; i < 10; i += 1) {
+    output += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return `${output}!`;
+}
+
+async function provisionApprovedBrokerAccount(agent = {}, req = null) {
+  const email = normalizeEmail(agent.email);
+  const phone = normalizeUgPhone(agent.phone) || cleanText(agent.phone);
+  if (!email) {
+    return { status: 'skipped', reason: 'broker_email_missing' };
+  }
+  if (!phone) {
+    return { status: 'skipped', reason: 'broker_phone_missing' };
+  }
+
+  const existing = await db.query(
+    `SELECT *
+     FROM users
+     WHERE LOWER(email) = LOWER($1)
+        OR phone = $2
+     ORDER BY created_at ASC
+     LIMIT 1`,
+    [email, phone]
+  );
+  const existingUser = existing.rows[0] || null;
+  const existingProfile = existingUser?.profile_data && typeof existingUser.profile_data === 'object'
+    ? existingUser.profile_data
+    : {};
+  const alreadyProvisioned = Boolean(existingProfile.broker_account_provisioned_at);
+  const temporaryPassword = alreadyProvisioned ? '' : generateBrokerTemporaryPassword();
+  const passwordHash = temporaryPassword ? await bcrypt.hash(temporaryPassword, 12) : null;
+  const { firstName, lastName } = splitBrokerName(agent.full_name);
+  const nowIso = new Date().toISOString();
+  const profilePatch = {
+    ...existingProfile,
+    audience: 'agent',
+    account_kind: 'agent',
+    broker_review_status: 'approved',
+    broker_account_status: 'approved',
+    broker_agent_id: agent.id,
+    broker_company: agent.company_name || '',
+    agent_company: agent.company_name || '',
+    agent_districts: Array.isArray(agent.districts_covered) ? agent.districts_covered.join(', ') : '',
+    agent_specialities: Array.isArray(agent.specializations) ? agent.specializations.join(', ') : '',
+    national_id_number: agent.nin || existingProfile.national_id_number || '',
+    broker_identity_document_uploaded: Boolean(agent.identity_document_url),
+    broker_identity_document_name: agent.identity_document_name || '',
+    broker_identity_document_uploaded_at: agent.identity_document_uploaded_at || '',
+    broker_privacy_consent_accepted: agent.privacy_consent_accepted === true,
+    broker_data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
+    broker_verification_reason: agent.verification_reason || '',
+    approved_by_admin: true,
+    broker_approved_at: nowIso,
+    broker_account_provisioned_at: existingProfile.broker_account_provisioned_at || nowIso,
+    force_password_change: Boolean(temporaryPassword) || existingProfile.force_password_change === true
+  };
+
+  let saved;
+  if (existingUser) {
+    const updated = await db.query(
+      `UPDATE users
+       SET first_name = $2,
+           last_name = $3,
+           phone = $4,
+           email = $5,
+           role = 'agent_broker',
+           password_hash = CASE WHEN $6::text IS NULL THEN password_hash ELSE $6 END,
+           phone_verified = TRUE,
+           status = 'active',
+           preferred_contact_channel = 'whatsapp',
+           profile_data = COALESCE(profile_data, '{}'::jsonb) || $7::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_language, profile_data, created_at, updated_at`,
+      [
+        existingUser.id,
+        firstName,
+        lastName,
+        phone,
+        email,
+        passwordHash,
+        JSON.stringify(profilePatch)
+      ]
+    );
+    saved = updated.rows[0];
+  } else {
+    const inserted = await db.query(
+      `INSERT INTO users (
+        first_name,
+        last_name,
+        phone,
+        email,
+        role,
+        password_hash,
+        phone_verified,
+        status,
+        marketing_opt_in,
+        weekly_tips_opt_in,
+        preferred_contact_channel,
+        preferred_language,
+        profile_data
+      ) VALUES ($1,$2,$3,$4,'agent_broker',$5,TRUE,'active',TRUE,TRUE,'whatsapp','en',$6::jsonb)
+      RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_language, profile_data, created_at, updated_at`,
+      [
+        firstName,
+        lastName,
+        phone,
+        email,
+        passwordHash,
+        JSON.stringify(profilePatch)
+      ]
+    );
+    saved = inserted.rows[0];
+  }
+
+  await db.query(
+    `UPDATE agents
+     SET user_id = $2,
+         approved_user_id = $2,
+         approved_at = COALESCE(approved_at, NOW()),
+         updated_at = NOW()
+     WHERE id = $1`,
+    [agent.id, saved.id]
+  );
+
+  const siteUrl = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/$/, '');
+  const dashboardUrl = `${siteUrl}/broker-dashboard`;
+  const supportUrl = getSupportWhatsappUrl();
+  let emailDelivery = { sent: false, reason: 'email_provider_missing' };
+  if (emailProviderConfigured()) {
+    emailDelivery = await sendBrokerApprovalEmail({
+      to: email,
+      firstName,
+      agent,
+      temporaryPassword,
+      dashboardUrl,
+      supportUrl
+    });
+  }
+  const emailStatus = emailProviderConfigured()
+    ? notificationStatusFromDelivery(emailDelivery)
+    : 'provider_missing';
+
+  await logEmailEvent(db, {
+    eventType: 'broker_account_approved',
+    recipientUserId: saved.id,
+    recipientEmail: email,
+    recipientRole: 'agent_broker',
+    templateKey: temporaryPassword ? 'broker_account_approved_temp_password' : 'broker_account_approved_existing_login',
+    subject: temporaryPassword ? 'Your makaug.com broker account is ready' : 'Your makaug.com broker account has been approved',
+    language: saved.preferred_language || 'en',
+    status: emailStatus,
+    provider: emailDelivery.provider || null,
+    providerMessageId: emailDelivery.id || null,
+    failureReason: emailDelivery.error || emailDelivery.reason || null,
+    sentAt: emailDelivery.sent ? new Date() : null
+  });
+  await logNotification(db, {
+    userId: saved.id,
+    recipientPhone: phone,
+    recipientEmail: email,
+    channel: 'email',
+    type: 'broker_account_approved',
+    status: emailStatus,
+    failureReason: emailDelivery.error || emailDelivery.reason || null,
+    payloadSummary: {
+      agent_id: agent.id,
+      temporary_password_issued: Boolean(temporaryPassword),
+      provider_configured: emailProviderConfigured(),
+      dashboard_url: dashboardUrl
+    }
+  });
+  await writeAudit('broker_account_provisioned', {
+    agent_id: agent.id,
+    user_id: saved.id,
+    temporary_password_issued: Boolean(temporaryPassword),
+    email_status: emailStatus
+  }, adminActorId(req || {}));
+
+  return {
+    status: 'provisioned',
+    user_id: saved.id,
+    email_status: emailStatus,
+    temporary_password_issued: Boolean(temporaryPassword),
+    force_password_change: Boolean(profilePatch.force_password_change)
+  };
 }
 
 function escapeHtml(value = '') {
@@ -3527,6 +3731,18 @@ router.get('/agents', async (req, res, next) => {
         a.email,
         a.licence_number,
         a.registration_status,
+        a.user_id,
+        a.nin,
+        a.identity_document_name,
+        a.identity_document_url,
+        a.identity_document_type,
+        a.identity_document_uploaded_at,
+        a.verification_reason,
+        a.privacy_consent_accepted,
+        a.privacy_consent_at,
+        a.data_retention_notice_accepted,
+        a.data_retention_notice_at,
+        a.approved_at,
         a.featured_homepage,
         a.featured_at,
         a.rating,
@@ -3605,9 +3821,35 @@ router.patch('/agents/:id/status', async (req, res, next) => {
 
     const updated = await db.query(
       `UPDATE agents
-       SET status = $2, updated_at = NOW()
+       SET status = $2,
+           approved_at = CASE WHEN $2 = 'approved' THEN COALESCE(approved_at, NOW()) ELSE approved_at END,
+           updated_at = NOW()
        WHERE id = $1
-       RETURNING id, full_name, company_name, status, updated_at`,
+       RETURNING
+         id,
+         full_name,
+         company_name,
+         phone,
+         whatsapp,
+         email,
+         licence_number,
+         registration_status,
+         districts_covered,
+         specializations,
+         nin,
+         identity_document_name,
+         identity_document_url,
+         identity_document_type,
+         identity_document_uploaded_at,
+         verification_reason,
+         privacy_consent_accepted,
+         privacy_consent_at,
+         data_retention_notice_accepted,
+         data_retention_notice_at,
+         user_id,
+         approved_at,
+         status,
+         updated_at`,
       [req.params.id, status]
     );
 
@@ -3620,7 +3862,18 @@ router.patch('/agents/:id/status', async (req, res, next) => {
       status
     });
 
-    return res.json({ ok: true, data: updated.rows[0] });
+    let accountProvisioning = null;
+    if (status === 'approved') {
+      accountProvisioning = await provisionApprovedBrokerAccount(updated.rows[0], req);
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        ...updated.rows[0],
+        account_provisioning: accountProvisioning
+      }
+    });
   } catch (error) {
     return next(error);
   }

@@ -4,6 +4,7 @@ const db = require('../config/database');
 const logger = require('../config/logger');
 const smsService = require('../models/smsService');
 const {
+  sendOtpEmail,
   sendPropertySubmissionNotification,
   sendSupportEmail
 } = require('../services/emailService');
@@ -382,10 +383,16 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
   if (resolvedChannel === 'email') {
     let delivery = null;
     try {
-      delivery = await sendSupportEmail({
+      delivery = await sendOtpEmail({
         to: identifier,
         subject: audience === 'agent' ? 'MakaUg agent verification code' : 'MakaUg listing verification code',
-        text: otpCopy
+        otp,
+        expiresMinutes,
+        purpose: audience === 'agent' ? 'agent' : 'listing',
+        intro: audience === 'agent'
+          ? 'Welcome to MakaUg broker verification. Use this code to continue your broker application.'
+          : 'Use this code to continue publishing your property on MakaUg.',
+        footer: otpCopy
       });
     } catch (error) {
       logger.error('Listing OTP email failed:', error.message);

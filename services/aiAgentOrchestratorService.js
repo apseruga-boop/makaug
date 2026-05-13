@@ -140,6 +140,16 @@ function mergeConfig(agentConfig, fallback) {
   return { ...fallback, ...agentConfig };
 }
 
+async function safeCount(sql, params = []) {
+  try {
+    const result = await db.query(sql, params);
+    return Number(result.rows[0]?.total || 0);
+  } catch (error) {
+    logger.warn('AI agent count skipped', { error: error.message });
+    return 0;
+  }
+}
+
 async function runListingQualityGuard({ agent, limit = 40 }) {
   const config = mergeConfig(agent.config, {
     minDescriptionLength: 80,
@@ -390,7 +400,119 @@ async function runSupportTriageAssistant({ agent, limit = 30 }) {
   };
 }
 
+async function runManagingDirectorCeo({ agent }) {
+  const config = mergeConfig(agent.config, {
+    maxFindings: 25,
+    reviewBacklogHigh: 20,
+    failedNotificationHigh: 5
+  });
+  const [
+    pendingListings,
+    pendingBrokers,
+    failedEmails,
+    failedNotifications,
+    openLeads,
+    pendingCampaigns,
+    unpaidInvoices
+  ] = await Promise.all([
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE status IN ('failed','provider_missing')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE status NOT IN ('closed','resolved')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status IN ('draft','submitted','pending_payment','pending_approval')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM invoices WHERE status NOT IN ('paid','void','cancelled')")
+  ]);
+
+  const findings = [];
+  const pushFinding = (finding) => {
+    if (findings.length < safeInt(config.maxFindings, 25)) findings.push(finding);
+  };
+
+  if (pendingBrokers > 0) {
+    pushFinding({
+      entity_type: 'broker_pipeline',
+      entity_id: 'pending_brokers',
+      severity: pendingBrokers >= 5 ? 'high' : 'medium',
+      finding_type: 'broker_approval_backlog',
+      message: `${pendingBrokers} broker application(s) are waiting for admin review and account provisioning.`,
+      recommendation: {
+        action_type: 'open_admin_workflow',
+        action_payload: { path: '/admin', tab: 'accounts', focus: 'admin-broker-accounts-table' }
+      }
+    });
+  }
+  if (pendingListings >= safeInt(config.reviewBacklogHigh, 20)) {
+    pushFinding({
+      entity_type: 'listing_pipeline',
+      entity_id: 'pending_listings',
+      severity: 'high',
+      finding_type: 'listing_review_backlog',
+      message: `${pendingListings} listings are pending review. This can slow marketplace freshness and broker trust.`,
+      recommendation: {
+        action_type: 'open_admin_workflow',
+        action_payload: { path: '/admin/moderation', focus: 'admin-listings-control' }
+      }
+    });
+  }
+  if ((failedEmails + failedNotifications) >= safeInt(config.failedNotificationHigh, 5)) {
+    pushFinding({
+      entity_type: 'notification_ops',
+      entity_id: 'failed_delivery',
+      severity: 'critical',
+      finding_type: 'failed_notification_backlog',
+      message: `${failedEmails} failed/provider-missing email log(s) and ${failedNotifications} failed notification(s) need provider or retry review.`,
+      recommendation: {
+        action_type: 'open_admin_workflow',
+        action_payload: { path: '/admin/setup-status', focus: 'providers' }
+      }
+    });
+  }
+  if (openLeads > 0) {
+    pushFinding({
+      entity_type: 'revenue_ops',
+      entity_id: 'open_leads',
+      severity: openLeads >= 10 ? 'high' : 'medium',
+      finding_type: 'open_lead_follow_up',
+      message: `${openLeads} lead(s) are open and should be followed up through CRM or WhatsApp.`,
+      recommendation: {
+        action_type: 'open_admin_workflow',
+        action_payload: { path: '/admin/leads', focus: 'admin-crm-leads-table' }
+      }
+    });
+  }
+  if (pendingCampaigns > 0 || unpaidInvoices > 0) {
+    pushFinding({
+      entity_type: 'advertising_revenue',
+      entity_id: 'campaigns_and_invoices',
+      severity: pendingCampaigns + unpaidInvoices >= 5 ? 'high' : 'medium',
+      finding_type: 'advertising_revenue_follow_up',
+      message: `${pendingCampaigns} campaign(s) and ${unpaidInvoices} invoice(s) may need payment, approval, or launch follow-up.`,
+      recommendation: {
+        action_type: 'open_admin_workflow',
+        action_payload: { path: '/admin/advertising', focus: 'admin-advertising-control' }
+      }
+    });
+  }
+
+  return {
+    findings,
+    summary: {
+      role: 'managing_director_ceo',
+      pending_listings: pendingListings,
+      pending_brokers: pendingBrokers,
+      failed_emails: failedEmails,
+      failed_notifications: failedNotifications,
+      open_leads: openLeads,
+      pending_campaigns: pendingCampaigns,
+      unpaid_invoices: unpaidInvoices,
+      findings_count: findings.length
+    }
+  };
+}
+
 async function runAgentChecks({ agent, limit = 40 }) {
+  if (agent.code === 'managing_director_ceo') return runManagingDirectorCeo({ agent, limit });
   if (agent.code === 'listing_quality_guard') return runListingQualityGuard({ agent, limit });
   if (agent.code === 'id_match_guard') return runIdMatchGuard({ agent, limit });
   if (agent.code === 'image_integrity_guard') return runImageIntegrityGuard({ agent, limit });

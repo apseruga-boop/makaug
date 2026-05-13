@@ -168,12 +168,14 @@ function run() {
   const propertySeekerRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'property-seeker.js'), 'utf8');
   const studentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'student.js'), 'utf8');
   const fieldAgentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'field-agent.js'), 'utf8');
+  const agentsRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'agents.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
   const authRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
   const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const authFlowServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'authFlowService.js'), 'utf8');
   const advertisingRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'advertising.js'), 'utf8');
   const aiRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'ai.js'), 'utf8');
+  const aiAgentOrchestratorService = fs.readFileSync(path.join(__dirname, '..', 'services', 'aiAgentOrchestratorService.js'), 'utf8');
   const healthRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'health.js'), 'utf8');
   const whatsappRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
   const aiServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'aiService.js'), 'utf8');
@@ -656,6 +658,14 @@ function run() {
   assert(emailServiceSource.includes('buildWelcomeEmailHtml'), 'welcome email should use a branded account-created template');
   assert(emailServiceSource.includes('What your account opens up'), 'welcome email should explain what the account unlocks');
   assert(emailServiceSource.includes('Your makaug.com account is ready'), 'welcome email should use lowercase public brand display');
+  assert(emailServiceSource.includes('sendOtpEmail') && emailServiceSource.includes('Welcome broker, verify your application'), 'OTP email should use a branded, broker-aware template');
+  assert(emailServiceSource.includes('sendBrokerApprovalEmail') && emailServiceSource.includes('Temporary password'), 'broker approval email should support temporary password onboarding');
+  assert(propertiesRoutes.includes('sendOtpEmail') && propertiesRoutes.includes('Welcome to MakaUg broker verification'), 'broker listing OTP route should send branded email OTP copy');
+  assert(agentsRoutes.includes('identity_document_url') && agentsRoutes.includes('privacy_consent_accepted') && agentsRoutes.includes('data_retention_notice_accepted'), 'broker application backend should require National ID upload and privacy/data-retention consent');
+  assert(adminRoutes.includes('provisionApprovedBrokerAccount') && adminRoutes.includes('broker_account_approved') && adminRoutes.includes('force_password_change'), 'admin broker approval should provision dashboard access, email the broker, and force first password change');
+  assert(frontendSource.includes('id="agent-id-photo-file"') && frontendSource.includes('agent-privacy-consent') && frontendSource.includes('agent-retention-consent'), 'broker signup form should collect National ID upload and privacy/data deletion notices');
+  assert(frontendSource.includes('Approve & send access') && frontendSource.includes('Review ID'), 'admin broker review UI should expose ID review and approval/access actions');
+  assert(aiAgentOrchestratorService.includes('runManagingDirectorCeo') && aiAgentOrchestratorService.includes('broker_approval_backlog'), 'Managing Director AI agent should monitor broker backlog and launch-critical business queues');
 
   const mortgagePayment = computeMortgagePayment(200000000, 16, 20);
   assert(mortgagePayment > 2700000 && mortgagePayment < 2900000, 'mortgage amortization formula should produce a realistic repayment');

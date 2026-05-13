@@ -197,7 +197,19 @@ function mapRemoteAgentForUi(agent = {}) {
     featured_at: agent.featured_at || null,
     status: agent.status || "approved",
     districts_covered: covered,
-    specializations
+    specializations,
+    user_id: agent.user_id || "",
+    nin: agent.nin || "",
+    identity_document_name: agent.identity_document_name || "",
+    identity_document_url: agent.identity_document_url || "",
+    identity_document_type: agent.identity_document_type || "",
+    identity_document_uploaded_at: agent.identity_document_uploaded_at || "",
+    verification_reason: agent.verification_reason || "",
+    privacy_consent_accepted: agent.privacy_consent_accepted === true,
+    privacy_consent_at: agent.privacy_consent_at || "",
+    data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
+    data_retention_notice_at: agent.data_retention_notice_at || "",
+    approved_at: agent.approved_at || ""
   };
 }
 
@@ -513,6 +525,8 @@ let agentOtpVerifiedEmail = "";
 let agentOtpChannel = "phone";
 let agentProfilePhotoDataUrl = "";
 let agentProfilePhotoFileName = "";
+let agentIdentityPhotoDataUrl = "";
+let agentIdentityPhotoFileName = "";
 let lpLastHierarchySignature = "";
 let lpLastAddressValue = "";
 let lpAreaManualOverride = false;
@@ -6543,6 +6557,9 @@ function renderAgentDashboard() {
   body.classList.remove("hidden");
 
   const broker = resolveCurrentAgentProfile();
+  const profile = authState.user.profile_data || {};
+  const forcePasswordChange = profile.force_password_change === true || String(profile.force_password_change || "").toLowerCase() === "true";
+  document.getElementById("agent-password-notice")?.classList.toggle("hidden", !forcePasswordChange);
   const nameEl = document.getElementById("agent-dashboard-name");
   const statusEl = document.getElementById("agent-dashboard-status");
   const gridEl = document.getElementById("agent-listings-grid");
@@ -9251,6 +9268,9 @@ function renderAdminBrokerRows(agents) {
           : { cls: "bg-amber-100 text-amber-700", label: "Pending" };
     const contact = [agent.phone, agent.email].filter(Boolean).join(" • ") || "-";
     const whatsappUrl = agent.phone ? buildWhatsAppUrl(agent.phone, `Hello ${agent.name || "there"}, this is MakaUg. We are following up on your broker account.`) : "";
+    const idDocumentUploaded = Boolean(agent.identity_document_url);
+    const hasPrivacyConsent = agent.privacy_consent_accepted === true && agent.data_retention_notice_accepted === true;
+    const approveLabel = status === "approved" ? "Move to Pending" : "Approve & send access";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -9258,12 +9278,14 @@ function renderAdminBrokerRows(agents) {
             <div class="font-bold text-gray-900">${adminEscape(agent.name || "Broker")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "MakaUg")} • ${adminEscape(contact)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.area || "Uganda")} • ${adminEscape(agent.licence || "No licence recorded")}</div>
+            <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}${agent.user_id ? ` • User linked: ${adminEscape(agent.user_id)}` : ""}</div>
           </div>
           <div class="flex gap-1.5 flex-wrap justify-end">
             <span class="text-[11px] font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
             <span class="text-[11px] font-semibold px-2 py-1 rounded ${registration.cls}">${registration.label}</span>
           </div>
         </div>
+        ${agent.verification_reason ? `<div class="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-2 text-xs text-amber-900"><strong>Broker reason:</strong> ${adminEscape(agent.verification_reason)}</div>` : ""}
         <div class="grid sm:grid-cols-4 gap-2 mt-3 text-xs">
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Live Listings</div><div class="font-black text-gray-900">${adminEscape(agent.live_listings || 0)}</div></div>
           <div class="rounded-lg bg-gray-50 border border-gray-200 p-2"><div class="text-gray-500">Pending</div><div class="font-black text-gray-900">${adminEscape(agent.pending_listings || 0)}</div></div>
@@ -9272,9 +9294,10 @@ function renderAdminBrokerRows(agents) {
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
           <button onclick="openBrokerProfile(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Profile</button>
+          ${idDocumentUploaded ? `<a href="${adminAttr(agent.identity_document_url)}" target="_blank" rel="noopener noreferrer" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review ID</a>` : ""}
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
           ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("MakaUg broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
-          ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${status === "approved" ? "Move to Pending" : "Approve"}</button>` : ""}
+          ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -11644,14 +11667,17 @@ async function adminSetAgentStatus(agentId, status) {
     return;
   }
   try {
-    await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
+    const response = await apiRequest(`/api/admin/agents/${encodeURIComponent(agentId)}/status`, {
       method: "PATCH",
       headers: adminAuthHeaders(),
       body: { status }
     });
     await refreshBrokersFromApi({ silent: true });
     await renderAdminDashboard();
-    toast(`Broker updated: ${status}.`);
+    const provisioning = response?.data?.account_provisioning;
+    const emailStatus = provisioning?.email_status ? ` Email: ${provisioning.email_status}.` : "";
+    const accessNote = provisioning?.temporary_password_issued ? " Temporary password issued." : "";
+    toast(`Broker updated: ${status}.${accessNote}${emailStatus}`);
   } catch (e) {
     toast(`Broker update failed: ${e.message || "error"}`);
   }
@@ -12077,6 +12103,15 @@ async function submitAccountPassword() {
 	          msg.textContent = dashboardText("passwordChanged");
 	          msg.classList.remove("hidden");
 	        }
+	        if (authState?.user) {
+	          const nextProfile = {
+	            ...(authState.user.profile_data || {}),
+	            force_password_change: false,
+	            temporary_password_cleared_at: new Date().toISOString()
+	          };
+	          persistAuthState(authState.token, { ...authState.user, profile_data: nextProfile });
+	          renderAgentDashboard();
+	        }
 	        toast(dashboardText("passwordChanged"));
 	      } catch (error) {
 	        toast(error.message || "Could not update password.");
@@ -12144,6 +12179,9 @@ async function finalizeAuth(data, source, preferredAudience = "") {
 		        await openAdminControl(pendingAdmin.control, { source: "auth_admin_return" });
 		      } else {
 		        openSignedInDashboard(dashboardRouteForPortalMode(resolvedUser.portal_mode) || responseRedirect);
+		      }
+		      if (resolvedUser.profile_data?.force_password_change === true || String(resolvedUser.profile_data?.force_password_change || "").toLowerCase() === "true") {
+		        toast("Please change your temporary password in Account Settings.");
 		      }
 		      trackEvent("auth_success", { source, role: user.role || "" }).catch(() => {});
 		    }
@@ -15494,6 +15532,56 @@ function removeAgentProfilePhoto() {
   toast("Broker profile photo removed.");
 }
 
+function renderAgentIdentityPhotoPreview() {
+  const preview = document.getElementById("agent-id-photo-preview");
+  const help = document.getElementById("agent-id-photo-help");
+  if (!preview) return;
+  if (agentIdentityPhotoDataUrl) {
+    preview.innerHTML = `<img src="${adminAttr(agentIdentityPhotoDataUrl)}" alt="National ID preview" class="w-full h-full object-cover">`;
+    if (help) help.textContent = `${agentIdentityPhotoFileName || "National ID photo"} is ready for secure admin review.`;
+    return;
+  }
+  preview.innerHTML = `<div class="text-3xl text-gray-400">ID</div>`;
+  if (help) help.textContent = "Upload a clear photo of your National ID. This is used only for broker verification review.";
+}
+
+function resetAgentIdentityPhoto() {
+  agentIdentityPhotoDataUrl = "";
+  agentIdentityPhotoFileName = "";
+  const input = document.getElementById("agent-id-photo-file");
+  if (input) input.value = "";
+  renderAgentIdentityPhotoPreview();
+}
+
+async function handleAgentIdentityPhotoSelection(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  if (!String(file.type || "").startsWith("image/")) {
+    resetAgentIdentityPhoto();
+    toast("Upload the National ID as an image file.");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    resetAgentIdentityPhoto();
+    toast("National ID image must be 5MB or smaller.");
+    return;
+  }
+  try {
+    agentIdentityPhotoDataUrl = await compressPhotoForSubmission(file, { maxSide: 1200, quality: 0.78 });
+    agentIdentityPhotoFileName = file.name || "national-id.jpg";
+    renderAgentIdentityPhotoPreview();
+    toast("National ID photo added for broker review.");
+  } catch (error) {
+    resetAgentIdentityPhoto();
+    toast("Could not prepare National ID photo.");
+  }
+}
+
+function removeAgentIdentityPhoto() {
+  resetAgentIdentityPhoto();
+  toast("National ID photo removed.");
+}
+
 function onAgentPhoneInput() {
   const input = document.getElementById("agent-phone");
   const normalized = normalizePhoneInput(input?.value || "");
@@ -15650,6 +15738,9 @@ async function submitAgentApplication() {
   const email = (document.getElementById("agent-email")?.value || "").trim().toLowerCase();
   const districtsCovered = (document.getElementById("agent-areas")?.value || "").trim();
   const nin = normalizeNinInput((document.getElementById("agent-nin")?.value || "").trim());
+  const verificationReason = (document.getElementById("agent-verification-reason")?.value || "").trim();
+  const privacyConsentAccepted = document.getElementById("agent-privacy-consent")?.checked === true;
+  const retentionNoticeAccepted = document.getElementById("agent-retention-consent")?.checked === true;
   const registrationStatus = "not_registered";
   const fieldAgentAssisted = (document.getElementById("agent-field-assisted")?.value || "no") === "yes";
   const fieldAgentId = normalizeFieldAgentCode(document.getElementById("agent-field-id")?.value || "");
@@ -15670,6 +15761,18 @@ async function submitAgentApplication() {
   }
   if (!isValidUgNin(nin)) {
     toast("Please enter a valid Uganda NIN.");
+    return;
+  }
+  if (!agentIdentityPhotoDataUrl) {
+    toast("Please upload a clear National ID photo for broker review.");
+    return;
+  }
+  if (!verificationReason) {
+    toast("Please tell us why you are applying for broker access.");
+    return;
+  }
+  if (!privacyConsentAccepted || !retentionNoticeAccepted) {
+    toast("Please confirm the privacy, security, and deletion notices.");
     return;
   }
   const otpVerified = !!agentRegistrationOtpToken && (
@@ -15707,6 +15810,15 @@ async function submitAgentApplication() {
         registration_request: "admin_review",
         otp_channel: otpChannel,
         listing_otp_token: agentRegistrationOtpToken,
+        verification_reason: verificationReason,
+        privacy_consent_accepted: privacyConsentAccepted,
+        data_retention_notice_accepted: retentionNoticeAccepted,
+        identity_document: {
+          name: agentIdentityPhotoFileName || "national-id.jpg",
+          type: "image/jpeg",
+          size: Math.round((agentIdentityPhotoDataUrl || "").length * 0.75),
+          data_url: agentIdentityPhotoDataUrl
+        },
         profile_photo_url: agentProfilePhotoDataUrl || undefined,
         bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
       }
@@ -15714,6 +15826,7 @@ async function submitAgentApplication() {
     await trackEvent("agent_register_submit", { district_scope: districtsCovered });
     toast("Application submitted. Broker verification will be reviewed by admin.");
     resetAgentProfilePhoto();
+    resetAgentIdentityPhoto();
     closeModal("broker-reg-modal");
   } catch (error) {
     toast(error.message || "Could not submit application.");
@@ -27706,6 +27819,7 @@ function openModal(id) {
     syncAgentRegistrationForm();
     resetAgentRegistrationOtpState();
     resetAgentProfilePhoto();
+    resetAgentIdentityPhoto();
   }
   syncModalOpenState();
   return true;
@@ -27717,6 +27831,7 @@ function closeModal(id) {
   if (id === "broker-reg-modal") {
     resetAgentRegistrationOtpState();
     resetAgentProfilePhoto();
+    resetAgentIdentityPhoto();
   }
   syncModalOpenState();
 }

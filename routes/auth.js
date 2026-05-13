@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
-const { sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendOtpEmail, sendSupportEmail, sendWelcomeEmail } = require('../services/emailService');
 const {
   buildOtpSuccessPayload,
   dashboardForUser,
@@ -481,10 +481,18 @@ async function issueOtp({ purpose, channel = 'phone', phone = '', email = '', pr
   if (resolvedChannel === 'email') {
     let delivery = null;
     try {
-      delivery = await sendSupportEmail({
+      delivery = await sendOtpEmail({
         to: identifier,
-        subject: 'makaug.com verification code',
-        text: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
+        subject: purpose === 'signup'
+          ? 'Welcome to makaug.com - your verification code'
+          : 'makaug.com verification code',
+        otp,
+        expiresMinutes,
+        purpose: 'account',
+        intro: purpose === 'signup'
+          ? 'Welcome to makaug.com. Use this code to verify your account and continue safely.'
+          : 'Use this makaug.com code to continue securely.',
+        footer: getOtpCopy(preferredLanguage, { otp, expiresMinutes, purpose })
       });
     } catch (error) {
       logger.error('Failed to send OTP email', error.message);
@@ -1602,7 +1610,17 @@ router.post('/change-password', async (req, res, next) => {
     }
 
     const newHash = await bcrypt.hash(newPassword, 10);
-    await db.query('UPDATE users SET password_hash = $2 WHERE id = $1', [auth.userId, newHash]);
+    await db.query(
+      `UPDATE users
+       SET password_hash = $2,
+           profile_data = COALESCE(profile_data, '{}'::jsonb)
+             || jsonb_build_object(
+               'force_password_change', false,
+               'temporary_password_cleared_at', NOW()::text
+             )
+       WHERE id = $1`,
+      [auth.userId, newHash]
+    );
     await recordAdminPasswordChange(db, user, req);
 
     return res.json({ ok: true, data: { changed: true } });

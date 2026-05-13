@@ -17,6 +17,10 @@ function stripHtml(value) {
   return String(value || '').replace(/<[^>]*>/g, '').trim();
 }
 
+function cleanText(value) {
+  return String(value || '').trim();
+}
+
 function escapeHtml(value) {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -802,11 +806,142 @@ async function sendWelcomeEmail({ to, user = {} }) {
   });
 }
 
+function emailProviderConfigured() {
+  const smtp = getSmtpConfig();
+  return Boolean(
+    getMicrosoftGraphConfig()
+      || (smtp && (!smtp.requireAuth || (smtp.user && smtp.pass)))
+      || String(process.env.RESEND_API_KEY || '').trim()
+      || String(process.env.MAIL_WEBHOOK_URL || '').trim()
+  );
+}
+
+function buildOtpEmailHtml({ subject, heading, otp, expiresMinutes, intro, footer }) {
+  const safeSubject = escapeHtml(subject || 'Your makaug.com verification code');
+  const safeHeading = escapeHtml(heading || 'Your verification code');
+  const siteUrl = getPublicSiteUrl();
+  const whatsappUrl = getSupportWhatsappUrl();
+  const supportEmail = getSupportEmail();
+  return `<!doctype html>
+<html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${safeSubject}</title></head>
+  <body style="margin:0;background:#f4f7f2;font-family:Arial,Helvetica,sans-serif;color:#111827;">
+    <div style="display:none;max-height:0;overflow:hidden;color:#f4f7f2;">${safeHeading}: ${escapeHtml(otp)}</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f7f2;padding:24px 12px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #dbe7d7;box-shadow:0 18px 40px rgba(15,23,42,0.10);">
+          <tr><td style="background:linear-gradient(135deg,#064e3b 0%,#166534 58%,#d6a62a 100%);padding:30px;color:#ffffff;">
+            <div style="font-size:30px;font-weight:900;letter-spacing:.2px;line-height:1;"><span>makaug</span><span style="color:#f8d767;">.com</span></div>
+            <div style="margin-top:10px;color:#dcfce7;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;">Uganda Property</div>
+            <h1 style="margin:20px 0 0;font-size:28px;line-height:1.2;font-weight:900;">${safeHeading}</h1>
+            <p style="margin:12px 0 0;color:#ecfdf3;font-size:15px;line-height:1.6;max-width:520px;">${escapeHtml(intro || 'Use this code to continue securely on makaug.com.')}</p>
+          </td></tr>
+          <tr><td style="padding:28px 30px;">
+            <div style="border:1px solid #bbf7d0;background:#ecfdf3;border-radius:18px;padding:20px;text-align:center;">
+              <div style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.12em;color:#166534;">Your one-time code</div>
+              <div style="font-size:42px;letter-spacing:.16em;font-weight:900;color:#111827;margin-top:10px;">${escapeHtml(otp)}</div>
+              <div style="font-size:13px;color:#4b5563;margin-top:10px;">This code expires in ${escapeHtml(expiresMinutes)} minutes. Do not share it with anyone.</div>
+            </div>
+            <p style="margin:18px 0 0;color:#4b5563;font-size:14px;line-height:1.6;">${escapeHtml(footer || 'If you did not request this, you can ignore this email.')}</p>
+            <div style="margin-top:22px;">
+              <a href="${escapeHtml(siteUrl)}" style="display:inline-block;background:#166534;color:#ffffff;text-decoration:none;border-radius:13px;padding:14px 18px;font-size:14px;font-weight:900;margin-right:8px;">Open makaug.com</a>
+              <a href="${escapeHtml(whatsappUrl)}" style="display:inline-block;background:#ecfdf3;color:#166534;text-decoration:none;border:1px solid #bbf7d0;border-radius:13px;padding:13px 16px;font-size:14px;font-weight:900;">WhatsApp support</a>
+            </div>
+          </td></tr>
+          <tr><td style="background:#f8faf7;border-top:1px solid #e5efe2;padding:18px 28px;color:#6b7280;font-size:12px;line-height:1.6;">
+            Need help? WhatsApp <a href="${escapeHtml(whatsappUrl)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(getSupportPhone())}</a> or email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#166534;font-weight:700;text-decoration:none;">${escapeHtml(supportEmail)}</a>.
+          </td></tr>
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+}
+
+async function sendOtpEmail({ to, subject, otp, expiresMinutes, purpose = 'account', intro, footer }) {
+  const recipient = String(to || '').trim();
+  if (!recipient) return { sent: false, reason: 'no_recipient' };
+  const purposeLabel = purpose === 'agent'
+    ? 'broker verification'
+    : purpose === 'listing'
+      ? 'listing verification'
+      : 'account verification';
+  const safeSubject = subject || `Your makaug.com ${purposeLabel} code`;
+  const text = [
+    intro || `Welcome to makaug.com ${purposeLabel}.`,
+    '',
+    `Your code is ${otp}.`,
+    `It expires in ${expiresMinutes} minutes.`,
+    'Do not share this code with anyone.',
+    '',
+    footer || 'Enter the code on makaug.com to continue safely.'
+  ].join('\n');
+  const html = buildOtpEmailHtml({
+    subject: safeSubject,
+    heading: purpose === 'agent' ? 'Welcome broker, verify your application' : 'Your makaug.com verification code',
+    otp,
+    expiresMinutes,
+    intro: intro || `Welcome to makaug.com. Use this code to continue your ${purposeLabel}.`,
+    footer
+  });
+  return sendSupportEmail({ to: recipient, subject: safeSubject, text, html });
+}
+
+async function sendBrokerApprovalEmail({ to, firstName = 'there', agent = {}, temporaryPassword = '', dashboardUrl = `${getPublicSiteUrl()}/broker-dashboard`, supportUrl = getSupportWhatsappUrl() }) {
+  const recipient = String(to || '').trim();
+  if (!recipient) return { sent: false, reason: 'no_recipient' };
+  const safeFirstName = cleanText(firstName || agent.full_name || 'there');
+  const hasTemporaryPassword = Boolean(String(temporaryPassword || '').trim());
+  const subject = hasTemporaryPassword
+    ? 'Your makaug.com broker account is ready'
+    : 'Your makaug.com broker account has been approved';
+  const text = [
+    `Hello ${safeFirstName},`,
+    '',
+    'Your makaug.com broker account has been reviewed and approved.',
+    '',
+    `Email: ${recipient}`,
+    hasTemporaryPassword ? `Temporary password: ${temporaryPassword}` : 'Use your existing makaug.com password to sign in.',
+    `Broker profile: ${agent.full_name || agent.company_name || 'Broker account'}`,
+    `Dashboard: ${dashboardUrl}`,
+    '',
+    hasTemporaryPassword
+      ? 'Please sign in and change this temporary password immediately from Account Settings.'
+      : 'You can now sign in and manage your broker dashboard.',
+    'Your dashboard lets you manage property listings, view leads, track listing performance, update your profile, and request boosts/advertising review.',
+    '',
+    `Need help? WhatsApp MakaUg: ${supportUrl}`,
+    '',
+    'Welcome to MakaUg.'
+  ].join('\n');
+  const html = buildWelcomeEmailHtml({
+    firstName: safeFirstName,
+    roleContent: welcomeRoleContent({ role: 'agent_broker', profile_data: { audience: 'agent' } }),
+    preferredLanguage: 'English',
+    preferredChannel: 'WhatsApp',
+    siteUrl: getPublicSiteUrl(),
+    whatsappUrl: supportUrl,
+    weeklyTipsEnabled: true
+  }).replace(
+    '<p style="margin:22px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">You can update your contact details, password, language, and preferences from Account Settings. We never send or reveal your password.</p>',
+    `<div style="margin-top:22px;border:1px solid #fde68a;background:#fffbeb;border-radius:16px;padding:16px;">
+      <div style="font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#92400e;">Broker access</div>
+      <div style="font-size:14px;color:#111827;line-height:1.7;margin-top:8px;"><strong>Email:</strong> ${escapeHtml(recipient)}<br>${hasTemporaryPassword ? `<strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}<br>` : ''}<strong>Next step:</strong> ${hasTemporaryPassword ? 'Sign in and change your password immediately.' : 'Sign in with your existing password.'}</div>
+    </div>
+    <p style="margin:18px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">You can update your contact details, password, language, verification profile, and preferences from Account Settings.</p>`
+  );
+
+  return sendSupportEmail({ to: recipient, subject, text, html });
+}
+
 module.exports = {
+  emailProviderConfigured,
   getSupportEmail,
   getSupportPhone,
   getSupportWhatsappUrl,
+  sendOtpEmail,
   sendSupportEmail,
+  sendBrokerApprovalEmail,
   sendPropertySubmissionNotification,
   sendListingModerationNotification,
   sendWelcomeEmail
