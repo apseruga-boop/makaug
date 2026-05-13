@@ -180,7 +180,7 @@ fi
 
 # 5) Agent registration
 step "POST /api/agents/register"
-if request_json POST /api/agents/register "{\"full_name\":\"Smoke Agent\",\"licence_number\":\"AREA/SMOKE/$(date +%s)\",\"phone\":\"$PHONE_AGENT\",\"whatsapp\":\"$PHONE_AGENT\",\"districts_covered\":\"Kampala, Wakiso\",\"nin\":\"SMOKE-NIN-123456\"}"; then
+if request_json POST /api/agents/register "{\"full_name\":\"Smoke Agent\",\"licence_number\":\"AREA/SMOKE/$(date +%s)\",\"phone\":\"$PHONE_AGENT\",\"whatsapp\":\"$PHONE_AGENT\",\"email\":\"agent.$(date +%s)@example.com\",\"districts_covered\":\"Kampala, Wakiso\",\"nin\":\"SMOKE-NIN-123456\",\"verification_reason\":\"Smoke test broker verification request\",\"identity_document_url\":\"data:text/plain;base64,U01PS0UtSURFTlRJVFktRE9DVU1FTlQ=\",\"identity_document_name\":\"smoke-national-id.txt\",\"identity_document_type\":\"text/plain\",\"privacy_consent_accepted\":true,\"data_retention_notice_accepted\":true}"; then
   if assert_status 201 && assert_ok_true; then pass; else fail "Expected 201 with ok=true"; fi
 else
   fail "Request failed"
