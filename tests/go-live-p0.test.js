@@ -1188,6 +1188,9 @@ function run() {
   assert(missedCallMigration.includes('related_lead_id UUID REFERENCES leads'), 'missed-call events must link to CRM leads');
   assert(frontendSource.includes('missed WhatsApp calls'), 'Admin CRM copy should show missed WhatsApp calls as a lead source');
   assert(frontendSource.includes('Missed WhatsApp call'), 'Admin CRM lead rows should highlight missed WhatsApp call leads');
+  assert(frontendSource.includes('Run Managing Director'), 'Admin dashboard should expose a Managing Director run control');
+  assert(appSource.includes('runManagingDirectorAgent'), 'Frontend should call the Managing Director AI agent');
+  assert(appSource.includes('agent_code: "managing_director_ceo"'), 'Managing Director run control must target the CEO agent');
   assert(whatsappRoutes.includes('🟩🟨 *makaug.com*'), 'WhatsApp runtime replies should use the makaug.com branded card header');
   assert(aiServiceSource.includes('Do not repeat the same instruction, menu, greeting, or link twice'), 'LLM prompt must explicitly avoid duplicated WhatsApp copy');
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');

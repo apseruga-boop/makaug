@@ -7362,6 +7362,49 @@ function askAdminAiAssistant() {
   answer.innerHTML = html;
 }
 
+async function runManagingDirectorAgent() {
+  const target = document.getElementById("admin-ai-agent-results");
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    if (target) target.innerHTML = "Sign in as admin or save ADMIN_API_KEY first.";
+    return;
+  }
+  if (target) target.innerHTML = "Running the MakaUg Managing Director now...";
+  try {
+    const response = await apiRequest("/api/admin/ai-agents/run", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        agent_code: "managing_director_ceo",
+        trigger_source: "admin_dashboard",
+        created_by: authState?.user?.email || "founder_dashboard",
+        limit: 40
+      }
+    });
+    const result = response?.data || {};
+    const findings = Array.isArray(result.findings) ? result.findings : [];
+    const runStatus = result.run?.status || "completed";
+    const findingRows = findings.length
+      ? findings.slice(0, 5).map((finding) => `
+        <li class="mt-2">
+          <strong>${adminEscape(finding.severity || "info")}:</strong>
+          ${adminEscape(finding.message || finding.finding_type || "Finding")}
+          ${finding.recommendation ? `<div class="text-xs text-green-800 mt-1">${adminEscape(finding.recommendation).slice(0, 220)}</div>` : ""}
+        </li>`).join("")
+      : "<li class=\"mt-2\">No urgent findings in this run.</li>";
+    if (target) {
+      target.innerHTML = `
+        <div class="font-bold">Managing Director run: ${adminEscape(runStatus)}</div>
+        <div class="text-xs mt-1">Findings created: ${adminEscape(findings.length)}</div>
+        <ul class="list-disc pl-5 mt-2">${findingRows}</ul>`;
+    }
+    toast(`Managing Director run finished: ${findings.length} finding${findings.length === 1 ? "" : "s"}.`);
+  } catch (error) {
+    if (target) target.innerHTML = `Managing Director run failed: ${adminEscape(error.message || "Unknown error")}`;
+    toast(error.message || "Managing Director run failed.");
+  }
+}
+
 function adminAuthHeaders() {
   if (adminApiKey) return { "x-api-key": adminApiKey };
   if (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin") {
