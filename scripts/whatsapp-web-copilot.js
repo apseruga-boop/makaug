@@ -42,6 +42,7 @@ const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAP
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
+const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
 let activeInboundRecipientHint = '';
 const COMPOSER_SELECTORS = [
@@ -119,6 +120,17 @@ function rememberBrowserMessageKey(browserMessageKey) {
     const first = seenBrowserMessageIds.values().next().value;
     if (first) seenBrowserMessageIds.delete(first);
   }
+}
+
+function rememberCallEventKey(callEventKey, ttlMs = 10 * 60 * 1000) {
+  if (!callEventKey) return false;
+  const now = Date.now();
+  for (const [storedKey, seenAt] of seenCallEventKeys.entries()) {
+    if (now - seenAt > ttlMs) seenCallEventKeys.delete(storedKey);
+  }
+  if (seenCallEventKeys.has(callEventKey)) return false;
+  seenCallEventKeys.set(callEventKey, now);
+  return true;
 }
 
 function outboxReplyDedupeKey(item = {}) {
@@ -236,6 +248,73 @@ async function detectWhatsappReady(page) {
       ready: (hasChatShell || hasChatList || hasLoggedInCopy) && !waitingForLogin
     };
   });
+}
+
+async function detectAndDeclineIncomingCall(page) {
+  return page.evaluate(() => {
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 10 && rect.height > 10;
+    };
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+    const header = document.querySelector('header');
+    const headerTitle = header?.querySelector('span[title]')?.getAttribute('title')
+      || Array.from(header?.querySelectorAll('[dir="auto"]') || []).map((el) => normalize(el.textContent)).find(Boolean)
+      || '';
+    const candidates = Array.from(document.querySelectorAll('button,[role="button"]'))
+      .filter(isVisible)
+      .map((button) => {
+        const label = normalize([
+          button.getAttribute('aria-label'),
+          button.getAttribute('title'),
+          button.getAttribute('data-testid'),
+          button.getAttribute('data-icon'),
+          button.innerText,
+          button.textContent
+        ].filter(Boolean).join(' '));
+        return { button, label };
+      });
+    const decline = candidates.find(({ label }) => (
+      /\b(decline|reject|ignore|end call|hang up|hangup|dismiss)\b/i.test(label)
+      || /call-(?:end|reject|decline)/i.test(label)
+    ));
+    if (!decline) return { detected: false };
+
+    const root = decline.button.closest('[role="dialog"], [aria-modal="true"], [data-testid*="call" i]')
+      || decline.button.closest('div')
+      || document.body;
+    const rootText = normalize(root.innerText || root.textContent || '');
+    const bodyText = normalize(document.body?.innerText || '');
+    const callText = rootText || bodyText;
+    const callDetected = /\b(incoming|calling|call|video call|voice call)\b/i.test(callText + ' ' + decline.label);
+    if (!callDetected) return { detected: false };
+
+    const nameCandidates = Array.from(root.querySelectorAll('span[title], [dir="auto"], h1, h2, h3'))
+      .map((el) => normalize(el.getAttribute('title') || el.textContent))
+      .filter((text) => text && !/\b(decline|accept|call|video|voice|ringing)\b/i.test(text));
+    const callerName = nameCandidates[0] || headerTitle || '';
+    const phoneDigits = (callerName || headerTitle || callText).replace(/\D/g, '');
+    const chatKey = phoneDigits.length >= 9 ? phoneDigits : (headerTitle || callerName);
+    const callType = /video/i.test(callText + ' ' + decline.label) ? 'video' : 'voice';
+    decline.button.click();
+
+    return {
+      detected: true,
+      declined: true,
+      chatKey,
+      callerName,
+      callType,
+      label: decline.label,
+      rawText: callText.slice(0, 500),
+      eventId: `web-call-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    };
+  }).catch((error) => ({
+    detected: false,
+    error: error.message || String(error)
+  }));
 }
 
 async function scanChatRows(page, { unreadOnly = true, limit = 20 } = {}) {
@@ -1372,6 +1451,39 @@ async function main() {
         continue;
       }
 
+      let processedCallEvents = 0;
+      let sentAfterCall = 0;
+      const callEvent = await detectAndDeclineIncomingCall(page);
+      if (callEvent.detected) {
+        const callKey = `${normalizeChatKey(callEvent.chatKey || callEvent.callerName || '')}:${callEvent.callType || 'voice'}:${normalizeReplyText(callEvent.rawText || callEvent.label || '').slice(0, 160)}`;
+        if (rememberCallEventKey(callKey)) {
+          log(`declined incoming WhatsApp ${callEvent.callType || 'voice'} call from ${callEvent.chatKey || callEvent.callerName || 'unknown caller'}`);
+          const result = await apiRequest('/api/whatsapp/web-bridge/call', {
+            method: 'POST',
+            body: {
+              client_id: CLIENT_ID,
+              operator_name: OPERATOR_NAME || null,
+              phone: callEvent.chatKey || callEvent.callerName || '',
+              contact_name: callEvent.callerName || '',
+              call_id: callEvent.eventId,
+              call_type: callEvent.callType || 'voice',
+              status: callEvent.declined ? 'declined' : 'missed',
+              declined: !!callEvent.declined,
+              current_url: page.url(),
+              metadata: {
+                raw_text: callEvent.rawText || '',
+                button_label: callEvent.label || '',
+                source: 'whatsapp_web_call_detector'
+              }
+            }
+          });
+          processedCallEvents = result.duplicate ? 0 : 1;
+          if (result.data?.queued_reply && callEvent.chatKey) {
+            sentAfterCall = await processOutbox(page, { recipient: callEvent.chatKey, maxSends: 1 });
+          }
+        }
+      }
+
       const activeProcessed = await ingestActiveChat(page);
       const sentAfterActive = activeProcessed ? await processOutbox(page, { maxSends: 2 }) : 0;
       const unreadResult = activeProcessed
@@ -1380,7 +1492,7 @@ async function main() {
       const sentAfterUnread = unreadResult.processed ? await processOutbox(page, { maxSends: 2 }) : 0;
       let recentSweepResult = { scanned: 0, processed: 0 };
       let sentAfterSweep = 0;
-      const hadLiveActivity = !!(activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
+      const hadLiveActivity = !!(processedCallEvents || sentAfterCall || activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
       if (!hadLiveActivity && now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
         recentSweepResult = await ingestRecentChatsSweep(page);
         lastRecentSweep = Date.now();
@@ -1389,7 +1501,7 @@ async function main() {
         }
       }
       const sentAtLoopEnd = await processOutbox(page, { maxSends: 2 });
-      const sentCount = sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
+      const sentCount = sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {
@@ -1399,6 +1511,7 @@ async function main() {
           active_chat_key: normalizeChatKey(activeSnapshot.chatKey || ''),
           unread_count: unreadResult.unreadCount || 0,
           stats: {
+            processed_call_events: processedCallEvents || 0,
             processed_unread: unreadResult.processed || 0,
             processed_active: activeProcessed || 0,
             processed_recent_sweep: recentSweepResult.processed || 0,

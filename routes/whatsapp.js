@@ -24,9 +24,12 @@ const {
 } = require('../services/locationSearchService');
 const {
   getWhatsappConversationControl,
-  syncWhatsappConversationState
+  syncWhatsappConversationState,
+  updateWhatsappConversationControl
 } = require('../services/whatsappConversationService');
-const { sendSupportEmail } = require('../services/emailService');
+const { sendSupportEmail, getSupportEmail } = require('../services/emailService');
+const { createLead, addLeadActivity } = require('../services/leadService');
+const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const {
   claimWhatsappWebBridgeMessages,
   getWhatsappWebBridgeToken,
@@ -1516,6 +1519,42 @@ async function parseMetaInboundMessages(payload = {}) {
   return collected;
 }
 
+function parseMetaCallEvents(payload = {}) {
+  const collected = [];
+
+  for (const entry of payload.entry || []) {
+    for (const change of entry.changes || []) {
+      const value = change?.value || {};
+      for (const call of value.calls || []) {
+        const phone = normalizeInput(
+          call.from
+          || call.customer?.phone_number
+          || call.customer?.wa_id
+          || call.wa_id
+          || call.phone
+        );
+        if (!phone) continue;
+
+        const status = normalizeInput(call.status || call.event || call.type || 'received').toLowerCase();
+        const direction = normalizeInput(call.direction || call.call_direction || 'inbound').toLowerCase();
+        if (direction && direction !== 'inbound' && direction !== 'incoming') continue;
+        if (['accepted', 'answered', 'connected', 'in_progress'].includes(status)) continue;
+
+        collected.push({
+          provider: 'meta',
+          phone,
+          callId: normalizeInput(call.id || call.call_id || call.callId) || null,
+          status: status || 'received',
+          callType: normalizeInput(call.call_type || call.type || call.media_type || 'voice') || 'voice',
+          metadata: call
+        });
+      }
+    }
+  }
+
+  return collected;
+}
+
 function splitMetaText(text, maxLen = 3600) {
   const clean = String(text || '').trim();
   if (!clean) return [];
@@ -2753,6 +2792,640 @@ async function clearSessionData(phone) {
   );
 }
 
+function getLeadNotificationEmail() {
+  return process.env.LEAD_NOTIFICATION_EMAIL || getSupportEmail() || 'info@makaug.com';
+}
+
+function missedCallIntroMessage(lang = 'en') {
+  const messages = {
+    en: `${whatsappBrandHeader('Missed call')}\nThanks for calling makaug.com. This WhatsApp line is managed by our assistant, so we do not pick up calls here.\n\nPlease type what you need in one message. Someone from MakaUg will be in touch if the assistant cannot resolve it.`,
+    lg: `${whatsappBrandHeader('Essimu efubiddwa')}\nWebale okukuba essimu ku makaug.com. Line eno ya WhatsApp ekola n'omuyambi waffe, tetugikwata nga call.\n\nWandiika ky'oyagala mu message emu. Omuntu wa MakaUg ajja kukuyamba singa assistant tasobodde kukimaliriza.`,
+    sw: `${whatsappBrandHeader('Simu iliyokosa')}\nAsante kwa kupiga makaug.com. Namba hii ya WhatsApp inaendeshwa na assistant wetu, kwa hiyo hatupokei simu hapa.\n\nAndika unachohitaji kwa ujumbe mmoja. Mtu wa MakaUg atawasiliana nawe kama assistant hawezi kumaliza hilo.`
+  };
+  return messages[lang] || messages.en;
+}
+
+function missedCallNeedPrompt(lang = 'en') {
+  const messages = {
+    en: `${whatsappBrandHeader('How can we help?')}\nPlease type what you need in one message, for example: "I need a 2-bedroom rental in Ntinda" or "I need help listing my property".`,
+    lg: `${whatsappBrandHeader('Tuyambe tutya?')}\nWandiika ky'oyagala mu message emu, okugeza: "Nnoonya enyumba ya bedrooms 2 e Ntinda" oba "Njagala okuyambibwa okulisting property".`,
+    sw: `${whatsappBrandHeader('Tukusaidieje?')}\nAndika unachohitaji kwa ujumbe mmoja, mfano: "Nahitaji nyumba ya vyumba 2 Ntinda" au "Nahitaji msaada kuorodhesha nyumba".`
+  };
+  return messages[lang] || messages.en;
+}
+
+function missedCallNeedReceivedMessage(lang = 'en') {
+  const messages = {
+    en: `${whatsappBrandHeader('Request received')}\nGot it. I have saved this for the MakaUg team and I will try to help here first.\n\nIs this resolved?\nReply *YES* if yes, or *NO* if you need a person to call you.`,
+    lg: `${whatsappBrandHeader('Ekisabiddwa kifuniddwa')}\nKitegedde. Nkitadde mu system ya MakaUg era nja kusooka okugezaako okukuyamba wano.\n\nKiwedde?\nDdamu *YES* oba *NO* bwoyagala omuntu akukubire.`,
+    sw: `${whatsappBrandHeader('Ombi limepokelewa')}\nNimekupata. Nimehifadhi hili kwa timu ya MakaUg na nitajaribu kukusaidia hapa kwanza.\n\nLimesuluhishwa?\nJibu *YES* kama ndiyo, au *NO* kama unahitaji mtu akupigie.`
+  };
+  return messages[lang] || messages.en;
+}
+
+function missedCallResolvedMessage(lang = 'en') {
+  const messages = {
+    en: `${whatsappBrandHeader('Resolved')}\nPerfect, I have marked this as resolved. Type *MENU* anytime if you need anything else.`,
+    lg: `${whatsappBrandHeader('Kiwedde')}\nKirungi, nkimaze okukimanyisa nti kiwedde. Wandiika *MENU* bwoba oyagala ekirala.`,
+    sw: `${whatsappBrandHeader('Limesuluhishwa')}\nSawa, nimeliweka kama limetatuliwa. Andika *MENU* wakati wowote ukihitaji kitu kingine.`
+  };
+  return messages[lang] || messages.en;
+}
+
+function missedCallEscalatedMessage(lang = 'en') {
+  const messages = {
+    en: `${whatsappBrandHeader('Agent notified')}\nNo problem. A MakaUg agent has been notified and will give you a call at the earliest opportunity.\n\nYou can keep adding details here while you wait.`,
+    lg: `${whatsappBrandHeader('Agent ategeezeddwa')}\nTewali buzibu. Agent wa MakaUg ategeezeddwa era ajja kukukubira amangu ddala.\n\nOsobola okwongera ebisingawo wano nga olinze.`,
+    sw: `${whatsappBrandHeader('Agent amejulishwa')}\nSawa. Agent wa MakaUg amejulishwa na atakupigia haraka iwezekanavyo.\n\nUnaweza kuongeza maelezo hapa ukiwa unasubiri.`
+  };
+  return messages[lang] || messages.en;
+}
+
+async function logWhatsappCallEvent({
+  phone,
+  provider = 'whatsapp',
+  callId = null,
+  status = 'received',
+  callType = 'voice',
+  contactName = '',
+  relatedLeadId = null,
+  metadata = {}
+} = {}) {
+  const cleanPhone = normalizeInput(phone);
+  if (!cleanPhone) return null;
+  try {
+    const result = await db.query(
+      `INSERT INTO whatsapp_call_events (
+         phone, provider, call_id, status, call_type, contact_name, related_lead_id, metadata, first_seen_at, last_seen_at
+       )
+       VALUES ($1,$2,NULLIF($3,''),$4,$5,NULLIF($6,''),$7,$8::jsonb,NOW(),NOW())
+       ON CONFLICT (call_id) WHERE call_id IS NOT NULL
+       DO UPDATE SET
+         status = EXCLUDED.status,
+         related_lead_id = COALESCE(EXCLUDED.related_lead_id, whatsapp_call_events.related_lead_id),
+         metadata = COALESCE(whatsapp_call_events.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+         last_seen_at = NOW()
+       RETURNING *, (xmax = 0) AS inserted`,
+      [
+        cleanPhone,
+        normalizeInput(provider) || 'whatsapp',
+        normalizeInput(callId),
+        normalizeInput(status) || 'received',
+        normalizeInput(callType) || 'voice',
+        normalizeInput(contactName),
+        relatedLeadId || null,
+        JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {})
+      ]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    if (!['42P01', '42703', '42P10'].includes(error.code)) {
+      logger.warn('WhatsApp call event log failed', { phone: cleanPhone, error: error.message });
+    }
+    return null;
+  }
+}
+
+async function safeConversationControl(phone, patch = {}, actorId = 'whatsapp_runtime') {
+  try {
+    return await updateWhatsappConversationControl(phone, patch, actorId);
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('WhatsApp conversation control update failed', { phone, error: error.message });
+    }
+    return null;
+  }
+}
+
+async function createMissedCallLead({
+  phone,
+  contactName = '',
+  needText = '',
+  provider = 'whatsapp',
+  callId = null,
+  callType = 'voice',
+  status = 'received',
+  language = 'en',
+  metadata = {}
+} = {}) {
+  const cleanPhone = normalizeInput(phone);
+  if (!cleanPhone) return null;
+  const message = normalizeInput(needText) || 'Customer called the WhatsApp assistant. Awaiting their written request.';
+  const lead = await createLead(db, {
+    source: 'whatsapp_missed_call',
+    leadType: 'callback',
+    category: 'WhatsApp missed call',
+    message,
+    lifecycleStage: needText ? 'contacted' : 'awaiting_customer',
+    leadStatus: 'open',
+    priority: needText ? 'high' : 'normal',
+    slaStatus: 'open',
+    activityType: needText ? 'missed_call_need_received' : 'missed_call_received',
+    activityMessage: message,
+    contact: {
+      name: contactName || 'WhatsApp caller',
+      phone: cleanPhone,
+      whatsapp: cleanPhone,
+      preferredContactChannel: 'whatsapp',
+      preferredLanguage: language,
+      roleType: 'property_seeker',
+      whatsappConsent: true,
+      consentStatus: 'legitimate_interest'
+    },
+    metadata: {
+      provider,
+      call_id: callId || null,
+      call_type: callType || 'voice',
+      call_status: status || 'received',
+      missed_call_flow: true,
+      ...(metadata && typeof metadata === 'object' ? metadata : {})
+    }
+  });
+  if (lead) {
+    await logWhatsappCallEvent({
+      phone: cleanPhone,
+      provider,
+      callId,
+      status,
+      callType,
+      contactName,
+      relatedLeadId: lead.id,
+      metadata: {
+        lead_id: lead.id,
+        need_text: needText || null,
+        ...(metadata && typeof metadata === 'object' ? metadata : {})
+      }
+    });
+  }
+  return lead;
+}
+
+async function updateMissedCallLeadNeed({ leadId, phone, needText, language = 'en', metadata = {} } = {}) {
+  const cleanNeed = normalizeInput(needText);
+  if (!cleanNeed) return null;
+  if (leadId) {
+    try {
+      const result = await db.query(
+        `UPDATE leads
+         SET message = $2,
+             lifecycle_stage = 'contacted',
+             lead_status = 'open',
+             priority = 'high',
+             metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [
+          leadId,
+          cleanNeed,
+          JSON.stringify({
+            need_text: cleanNeed,
+            need_received_at: new Date().toISOString(),
+            ...(metadata && typeof metadata === 'object' ? metadata : {})
+          })
+        ]
+      );
+      const lead = result.rows[0] || null;
+      if (lead) {
+        await addLeadActivity(db, {
+          leadId: lead.id,
+          actorType: 'customer',
+          activityType: 'missed_call_need_received',
+          message: cleanNeed,
+          metadata: { phone, language }
+        });
+        return lead;
+      }
+    } catch (error) {
+      if (!['42P01', '42703'].includes(error.code)) {
+        logger.warn('Missed call lead update failed', { leadId, error: error.message });
+      }
+    }
+  }
+  return createMissedCallLead({
+    phone,
+    needText: cleanNeed,
+    language,
+    metadata
+  });
+}
+
+async function createLeadFollowUpTask({ leadId, title, dueMinutes = 15 } = {}) {
+  if (!leadId) return null;
+  try {
+    const result = await db.query(
+      `INSERT INTO lead_tasks (lead_id, title, due_at, status)
+       VALUES ($1,$2,NOW() + ($3::text || ' minutes')::interval,'open')
+       RETURNING *`,
+      [leadId, normalizeInput(title) || 'Call WhatsApp missed-call lead', String(Math.max(1, Number(dueMinutes) || 15))]
+    );
+    return result.rows[0] || null;
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('Missed call follow-up task failed', { leadId, error: error.message });
+    }
+    return null;
+  }
+}
+
+async function notifyMissedCallLead({
+  lead = {},
+  phone,
+  contactName = '',
+  needText = '',
+  stage = 'received',
+  provider = 'whatsapp',
+  callId = null
+} = {}) {
+  const recipientEmail = getLeadNotificationEmail();
+  const subject = stage === 'escalated'
+    ? '[MakaUg] WhatsApp caller needs a human callback'
+    : '[MakaUg] WhatsApp missed-call lead received';
+  const text = [
+    stage === 'escalated'
+      ? 'A WhatsApp missed-call conversation was not resolved by the assistant and needs a human callback.'
+      : 'A person called the MakaUg WhatsApp assistant number.',
+    '',
+    `Lead ID: ${lead?.id || '-'}`,
+    `Caller: ${contactName || 'Unknown WhatsApp caller'}`,
+    `Phone/WhatsApp: ${phone || '-'}`,
+    `Provider: ${provider || 'whatsapp'}`,
+    `Call ID: ${callId || '-'}`,
+    `Stage: ${stage}`,
+    '',
+    `Need: ${needText || lead?.message || 'Awaiting written request'}`,
+    '',
+    `Open Lead Centre: ${HOME_URL}/admin/leads`,
+    `Open WhatsApp Inbox: ${HOME_URL}/admin/whatsapp-inbox`
+  ].join('\n');
+
+  const delivery = await sendSupportEmail({
+    to: recipientEmail,
+    subject,
+    text
+  });
+
+  await logNotification(db, {
+    recipientEmail,
+    channel: 'email',
+    type: stage === 'escalated' ? 'whatsapp_missed_call_escalated' : 'whatsapp_missed_call_lead',
+    status: notificationStatusFromDelivery(delivery),
+    relatedLeadId: lead?.id || null,
+    failureReason: delivery?.error || delivery?.reason || null,
+    sentAt: delivery?.sent ? new Date().toISOString() : null,
+    payloadSummary: {
+      phone,
+      stage,
+      provider,
+      call_id: callId || null,
+      lead_id: lead?.id || null
+    }
+  });
+
+  return delivery;
+}
+
+function notifyMissedCallLeadInBackground(input = {}) {
+  notifyMissedCallLead(input).catch((error) => {
+    logger.warn('Missed call lead notification failed', {
+      phone: input.phone,
+      stage: input.stage,
+      error: error.message || String(error)
+    });
+  });
+}
+
+async function markMissedCallLeadResolved({ leadId, phone, resolved = true, note = '' } = {}) {
+  if (!leadId) return null;
+  try {
+    const statusFields = resolved
+      ? {
+          lifecycleStage: 'closed',
+          leadStatus: 'closed',
+          outcome: 'resolved_by_assistant',
+          priority: 'normal'
+        }
+      : {
+          lifecycleStage: 'needs_human',
+          leadStatus: 'open',
+          outcome: null,
+          priority: 'urgent'
+        };
+    const result = await db.query(
+      `UPDATE leads
+       SET lifecycle_stage = $2,
+           lead_status = $3,
+           priority = $4,
+           outcome = $5,
+           next_follow_up_at = CASE WHEN $6::boolean THEN next_follow_up_at ELSE NOW() END,
+           metadata = COALESCE(metadata, '{}'::jsonb) || $7::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [
+        leadId,
+        statusFields.lifecycleStage,
+        statusFields.leadStatus,
+        statusFields.priority,
+        statusFields.outcome,
+        resolved === true,
+        JSON.stringify({
+          missed_call_resolved: resolved === true,
+          missed_call_resolution_at: new Date().toISOString(),
+          phone
+        })
+      ]
+    );
+    const lead = result.rows[0] || null;
+    if (lead) {
+      await addLeadActivity(db, {
+        leadId: lead.id,
+        actorType: resolved ? 'customer' : 'system',
+        activityType: resolved ? 'missed_call_resolved' : 'missed_call_escalated',
+        message: note || (resolved ? 'Customer confirmed the missed-call request was resolved.' : 'Customer said the missed-call request is not resolved. Human callback required.'),
+        metadata: { phone }
+      });
+    }
+    return lead;
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('Missed call lead resolution update failed', { leadId, error: error.message });
+    }
+    return null;
+  }
+}
+
+async function handleWhatsappCallEvent({
+  phone,
+  provider = 'whatsapp',
+  callId = null,
+  status = 'received',
+  callType = 'voice',
+  contactName = '',
+  metadata = {}
+} = {}) {
+  const cleanPhone = normalizeInput(phone);
+  if (!cleanPhone) {
+    const error = new Error('phone is required for WhatsApp call event');
+    error.status = 400;
+    throw error;
+  }
+
+  await getSession(cleanPhone);
+  const firstLog = await logWhatsappCallEvent({
+    phone: cleanPhone,
+    provider,
+    callId,
+    status,
+    callType,
+    contactName,
+    metadata
+  });
+  const duplicate = firstLog?.inserted === false && callId;
+  if (duplicate) {
+    return {
+      duplicate: true,
+      message: '',
+      nextStep: 'missed_call_need',
+      lead: null
+    };
+  }
+
+  const lead = await createMissedCallLead({
+    phone: cleanPhone,
+    contactName,
+    provider,
+    callId,
+    callType,
+    status,
+    metadata
+  });
+  await patchSessionData(cleanPhone, {
+    missed_call_flow: {
+      status: 'awaiting_need',
+      lead_id: lead?.id || null,
+      phone: cleanPhone,
+      contact_name: contactName || null,
+      provider,
+      call_id: callId || null,
+      call_type: callType || 'voice',
+      started_at: new Date().toISOString()
+    }
+  });
+  await updateSession(cleanPhone, { current_step: 'missed_call_need', current_intent: 'support' });
+  await logWhatsappMessage({
+    userPhone: cleanPhone,
+    waMessageId: callId ? `call:${provider}:${callId}` : null,
+    direction: 'inbound',
+    messageType: 'call',
+    payload: {
+      provider,
+      call_id: callId || null,
+      status,
+      call_type: callType,
+      contact_name: contactName || null,
+      metadata
+    }
+  });
+  await syncWhatsappConversationState({
+    phone: cleanPhone,
+    direction: 'inbound',
+    intent: 'support',
+    preferredLanguage: 'en',
+    currentStep: 'missed_call_need',
+    provider,
+    messageType: 'call',
+    metadata: {
+      missed_call_flow: true,
+      call_id: callId || null,
+      call_status: status || 'received',
+      lead_id: lead?.id || null
+    }
+  });
+  await safeConversationControl(cleanPhone, {
+    status: 'awaiting_customer',
+    category: 'support',
+    priority: 'high',
+    metadata: {
+      missed_call_flow: true,
+      call_id: callId || null,
+      lead_id: lead?.id || null
+    }
+  }, 'whatsapp_missed_call');
+
+  notifyMissedCallLeadInBackground({
+    lead,
+    phone: cleanPhone,
+    contactName,
+    stage: 'received',
+    provider,
+    callId
+  });
+
+  return {
+    duplicate: false,
+    message: missedCallIntroMessage('en'),
+    nextStep: 'missed_call_need',
+    lead
+  };
+}
+
+async function handleMissedCallNeedReply({ phone, lang, cleanBody, sessionData = {}, metadata = {} } = {}) {
+  if (['menu', 'home'].includes(String(cleanBody || '').trim().toLowerCase())) {
+    await patchSessionData(phone, { missed_call_flow: { status: 'abandoned_to_menu', abandoned_at: new Date().toISOString() } });
+    return { message: welcomeMessage(lang, sessionData), nextStep: 'main_menu' };
+  }
+  if (!cleanBody || isGreetingText(cleanBody)) {
+    return { message: missedCallNeedPrompt(lang), nextStep: 'missed_call_need' };
+  }
+
+  const flow = sessionData.missed_call_flow && typeof sessionData.missed_call_flow === 'object'
+    ? sessionData.missed_call_flow
+    : {};
+  const lead = await updateMissedCallLeadNeed({
+    leadId: flow.lead_id || null,
+    phone,
+    needText: cleanBody,
+    language: lang,
+    metadata
+  });
+  await patchSessionData(phone, {
+    missed_call_flow: {
+      ...flow,
+      status: 'asked_resolution',
+      lead_id: lead?.id || flow.lead_id || null,
+      need_text: cleanBody,
+      need_received_at: new Date().toISOString()
+    }
+  });
+  await safeConversationControl(phone, {
+    status: 'awaiting_customer',
+    category: 'support',
+    priority: 'high',
+    last_summary: cleanBody.slice(0, 500),
+    metadata: {
+      missed_call_flow: true,
+      lead_id: lead?.id || flow.lead_id || null,
+      need_received: true
+    }
+  }, 'whatsapp_missed_call_need');
+
+  notifyMissedCallLeadInBackground({
+    lead,
+    phone,
+    contactName: flow.contact_name || '',
+    needText: cleanBody,
+    stage: 'need_received',
+    provider: flow.provider || 'whatsapp',
+    callId: flow.call_id || null
+  });
+
+  return { message: missedCallNeedReceivedMessage(lang), nextStep: 'missed_call_resolved' };
+}
+
+async function handleMissedCallResolutionReply({ phone, lang, cleanBody, sessionData = {} } = {}) {
+  const flow = sessionData.missed_call_flow && typeof sessionData.missed_call_flow === 'object'
+    ? sessionData.missed_call_flow
+    : {};
+
+  if (['menu', 'home'].includes(String(cleanBody || '').trim().toLowerCase())) {
+    await patchSessionData(phone, {
+      missed_call_flow: {
+        ...flow,
+        status: 'abandoned_to_menu',
+        abandoned_at: new Date().toISOString()
+      }
+    });
+    return { message: welcomeMessage(lang, sessionData), nextStep: 'main_menu' };
+  }
+
+  if (isAffirmativeReply(cleanBody)) {
+    const lead = await markMissedCallLeadResolved({
+      leadId: flow.lead_id || null,
+      phone,
+      resolved: true
+    });
+    await patchSessionData(phone, {
+      missed_call_flow: {
+        ...flow,
+        status: 'resolved',
+        resolved_at: new Date().toISOString()
+      }
+    });
+    await safeConversationControl(phone, {
+      status: 'resolved',
+      category: 'support',
+      priority: 'normal',
+      metadata: {
+        missed_call_flow: true,
+        lead_id: lead?.id || flow.lead_id || null,
+        resolved_by_customer: true
+      }
+    }, 'whatsapp_missed_call_resolved');
+    return { message: missedCallResolvedMessage(lang), nextStep: 'main_menu' };
+  }
+
+  if (isNegativeReply(cleanBody)) {
+    const lead = await markMissedCallLeadResolved({
+      leadId: flow.lead_id || null,
+      phone,
+      resolved: false
+    });
+    await createLeadFollowUpTask({
+      leadId: lead?.id || flow.lead_id || null,
+      title: `Call back WhatsApp missed-call lead ${phone}`,
+      dueMinutes: 15
+    });
+    await patchSessionData(phone, {
+      missed_call_flow: {
+        ...flow,
+        status: 'escalated',
+        escalated_at: new Date().toISOString()
+      }
+    });
+    await safeConversationControl(phone, {
+      status: 'needs_human',
+      category: 'support',
+      priority: 'urgent',
+      ai_mode: 'copilot',
+      metadata: {
+        missed_call_flow: true,
+        lead_id: lead?.id || flow.lead_id || null,
+        human_callback_required: true
+      }
+    }, 'whatsapp_missed_call_escalated');
+    notifyMissedCallLeadInBackground({
+      lead,
+      phone,
+      contactName: flow.contact_name || '',
+      needText: flow.need_text || '',
+      stage: 'escalated',
+      provider: flow.provider || 'whatsapp',
+      callId: flow.call_id || null
+    });
+    return { message: missedCallEscalatedMessage(lang), nextStep: 'main_menu' };
+  }
+
+  await addLeadActivity(db, {
+    leadId: flow.lead_id || null,
+    actorType: 'customer',
+    activityType: 'missed_call_extra_detail',
+    message: cleanBody,
+    metadata: { phone }
+  }).catch(() => null);
+  await patchSessionData(phone, {
+    missed_call_flow: {
+      ...flow,
+      extra_detail: cleanBody,
+      extra_detail_at: new Date().toISOString()
+    }
+  });
+  return {
+    message: `${whatsappBrandHeader('Quick check')}\nThanks, I added that detail.\n\nIs this resolved now?\nReply *YES* if yes, or *NO* if you need a person to call you.`,
+    nextStep: 'missed_call_resolved'
+  };
+}
+
 async function findPropertiesForWhatsapp(searchType, location) {
   const values = ['approved'];
   let where = 'WHERE status = $1';
@@ -3643,7 +4316,7 @@ const STEPS = [
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value',
   'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
-  'verify_otp', 'submitted'
+  'verify_otp', 'missed_call_need', 'missed_call_resolved', 'submitted'
 ];
 
 async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
@@ -3706,6 +4379,28 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       optInSource: 'whatsapp_keyword_start'
     });
     return respond('✅ You are now subscribed for MakaUg updates. Reply MENU to continue.', 'main_menu');
+  }
+
+  if (step === 'missed_call_need') {
+    return handleMissedCallNeedReply({
+      phone,
+      lang,
+      cleanBody,
+      sessionData,
+      metadata: {
+        source: 'whatsapp_missed_call_reply',
+        intent: intentResult?.intent || null
+      }
+    });
+  }
+
+  if (step === 'missed_call_resolved') {
+    return handleMissedCallResolutionReply({
+      phone,
+      lang,
+      cleanBody,
+      sessionData
+    });
   }
 
   if (bodyUpper === 'MENU' || bodyUpper === 'HOME') {
@@ -5330,8 +6025,54 @@ router.post('/webhook', async (req, res) => {
   try {
     // Meta WhatsApp Cloud API mode
     if (isMetaWebhookPayload(req.body)) {
+      const inboundCalls = parseMetaCallEvents(req.body);
       const inboundMessages = await parseMetaInboundMessages(req.body);
-      if (!inboundMessages.length) return res.status(200).json({ ok: true, ignored: true });
+      if (!inboundMessages.length && !inboundCalls.length) return res.status(200).json({ ok: true, ignored: true });
+
+      for (const call of inboundCalls) {
+        try {
+          const { message, nextStep, duplicate } = await handleWhatsappCallEvent({
+            phone: call.phone,
+            provider: 'meta',
+            callId: call.callId,
+            status: call.status,
+            callType: call.callType,
+            metadata: call.metadata
+          });
+
+          if (message && !duplicate) {
+            await sendMetaTextMessage(call.phone, message);
+            await logWhatsappMessage({
+              userPhone: call.phone,
+              waMessageId: null,
+              direction: 'outbound',
+              messageType: 'text',
+              payload: {
+                provider: 'meta',
+                reply: message,
+                nextStep,
+                source: 'whatsapp_missed_call'
+              }
+            });
+            await syncWhatsappConversationState({
+              phone: call.phone,
+              direction: 'outbound',
+              preferredLanguage: 'en',
+              currentStep: nextStep,
+              provider: 'meta',
+              messageType: 'text',
+              ai: true,
+              metadata: {
+                source: 'whatsapp_missed_call',
+                call_id: call.callId || null,
+                last_reply_preview: String(message || '').slice(0, 240)
+              }
+            });
+          }
+        } catch (err) {
+          logger.error(`Meta call event processing failed for ${call.phone}`, err);
+        }
+      }
 
       for (const inbound of inboundMessages) {
         try {
@@ -5467,6 +6208,85 @@ router.post('/web-bridge/heartbeat', async (req, res) => {
 
   return res.json({ ok: true, data: client });
 });
+
+// POST /api/whatsapp/web-bridge/call
+router.post('/web-bridge/call', asyncRoute(async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const phone = normalizeBridgeInboundKey(req.body.phone || req.body.chat_key || req.body.contact_key);
+  const dryRun = ['1', 'true', 'yes'].includes(String(req.body.dry_run || req.body.dryRun || '').trim().toLowerCase());
+  if (!phone) {
+    return res.status(400).json({ ok: false, error: 'phone or chat_key is required' });
+  }
+
+  const inboundMetadata = req.body.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+  const contactName = cleanDisplayName(req.body.contact_name || req.body.contactName || inboundMetadata.contact_name || inboundMetadata.contactName || inboundMetadata.chat_title);
+  const callId = normalizeInput(req.body.call_id || req.body.callId || req.body.event_id || req.body.eventId) || `web-call:${crypto.createHash('sha1').update(JSON.stringify({
+    phone,
+    contactName,
+    createdAt: req.body.created_at || req.body.timestamp || '',
+    callType: req.body.call_type || req.body.callType || 'voice'
+  })).digest('hex')}`;
+  const runtimePhone = dryRun ? createBridgeDryRunKey(phone, req.body.dry_run_session || req.body.dryRunSession || req.body.client_id || '') : phone;
+  const { message, nextStep, duplicate, lead } = await handleWhatsappCallEvent({
+    phone: runtimePhone,
+    provider: 'web_bridge',
+    callId: dryRun ? `${callId}:dryrun:${runtimePhone.split(':').pop()}` : callId,
+    status: req.body.status || 'declined',
+    callType: req.body.call_type || req.body.callType || 'voice',
+    contactName,
+    metadata: {
+      ...inboundMetadata,
+      declined_by_bridge: req.body.declined === true || req.body.declined === 'true',
+      client_id: req.body.client_id || null,
+      created_at: req.body.created_at || req.body.timestamp || null
+    }
+  });
+
+  let queuedReply = null;
+  if (message && !dryRun && !duplicate) {
+    queuedReply = await queueWhatsappWebBridgeAutoReply({
+      phone,
+      message,
+      nextStep,
+      inboundMessageId: callId,
+      source: 'whatsapp_missed_call',
+      actorId: 'system'
+    });
+  }
+
+  if (req.body.client_id && !dryRun) {
+    await upsertWhatsappWebBridgeClient({
+      clientId: req.body.client_id,
+      operatorName: req.body.operator_name || null,
+      status: 'online',
+      browserName: req.body.browser_name || 'Google Chrome',
+      activeChatKey: phone,
+      unreadCount: req.body.unread_count || 0,
+      currentUrl: req.body.current_url || null,
+      stats: req.body.stats || {},
+      metadata: {
+        ...inboundMetadata,
+        last_call_event_id: callId,
+        last_call_declined_at: new Date().toISOString()
+      }
+    });
+  }
+
+  return res.json({
+    ok: true,
+    duplicate: !!duplicate,
+    data: {
+      inbound_call_id: callId,
+      next_step: nextStep,
+      message,
+      dry_run: dryRun,
+      lead_id: lead?.id || null,
+      queued_reply: !!queuedReply,
+      queue_id: queuedReply?.id || null
+    }
+  });
+}));
 
 // POST /api/whatsapp/web-bridge/inbound
 router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {

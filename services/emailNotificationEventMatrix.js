@@ -23,6 +23,8 @@ const EMAIL_NOTIFICATION_EVENT_MATRIX = {
   callback_requested: { templateKey: 'callback_requested', channels: ['email', 'whatsapp', 'in_app'], transactional: true, adminLogRequired: true },
   enquiry_sent: { templateKey: 'enquiry_sent', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   whatsapp_contact_initiated: { templateKey: 'whatsapp_contact_initiated', channels: ['in_app'], transactional: true, adminLogRequired: true },
+  whatsapp_missed_call_lead: { templateKey: 'whatsapp_missed_call_lead', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
+  whatsapp_missed_call_escalated: { templateKey: 'whatsapp_missed_call_escalated', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   mortgage_lead_received: { templateKey: 'mortgage_lead_received', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   help_request_submitted: { templateKey: 'help_request', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },
   career_interest_submitted: { templateKey: 'career_interest', channels: ['email', 'in_app'], transactional: true, adminLogRequired: true },

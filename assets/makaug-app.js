@@ -7835,12 +7835,14 @@ function renderAdminCrmLeadsRows(leads = []) {
   wrap.innerHTML = rows.slice(0, 25).map((lead) => {
     const score = Number(lead.lead_score || 0);
     const hot = score >= 50 || String(lead.priority || "").toLowerCase() === "urgent";
+    const missedCall = String(lead.source || "").toLowerCase() === "whatsapp_missed_call";
     return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div class="font-bold text-gray-800">${adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
+          <div class="font-bold text-gray-800">${missedCall ? "Missed WhatsApp call" : adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(lead.contact_name || "Unknown contact")} • ${adminEscape(lead.contact_phone || lead.contact_email || "-")}</div>
           <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
+          ${missedCall ? `<div class="text-xs font-bold text-red-700 mt-2">Callback path: WhatsApp bot asked for the need, then escalates here if unresolved.</div>` : ""}
           ${lead.message ? `<div class="text-xs text-gray-700 mt-2">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
         </div>
         <span class="text-xs font-bold px-2 py-1 rounded-full ${hot ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}">Score ${adminEscape(score)}</span>

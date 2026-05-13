@@ -203,6 +203,7 @@ function run() {
   const kingDashboardControlMap = fs.readFileSync(path.join(__dirname, '..', 'docs', 'king-dashboard-control-map.md'), 'utf8');
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
+  const missedCallMigration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '037_whatsapp_missed_call_leads.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
   for (const publicRoute of PUBLIC_ROUTES) {
     const publicHtml = sanitizePublicHtml(sourceHtml, { pathname: publicRoute });
@@ -1176,6 +1177,17 @@ function run() {
   assert(whatsappWebCopilotScript.includes('suppressed duplicate queued reply'), 'WhatsApp Web copilot must suppress recently sent duplicate queue rows');
   assert(whatsappWebCopilotScript.includes('refusing to mark reply as sent'), 'WhatsApp Web copilot must not mark unconfirmed sends as sent');
   assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');
+  assert(whatsappWebCopilotScript.includes('detectAndDeclineIncomingCall'), 'WhatsApp Web copilot must detect and decline incoming calls');
+  assert(whatsappWebCopilotScript.includes('/api/whatsapp/web-bridge/call'), 'WhatsApp Web copilot must send call events to the backend');
+  assert(whatsappRoutes.includes("router.post('/web-bridge/call'"), 'WhatsApp backend must expose a bridge call event endpoint');
+  assert(whatsappRoutes.includes('parseMetaCallEvents'), 'WhatsApp backend must parse Meta call webhook events');
+  assert(whatsappRoutes.includes('whatsapp_missed_call'), 'WhatsApp missed calls must create CRM leads with a dedicated source');
+  assert(whatsappRoutes.includes('missed_call_resolved'), 'WhatsApp missed-call flow must ask whether the issue was resolved');
+  assert(whatsappRoutes.includes('LEAD_NOTIFICATION_EMAIL'), 'WhatsApp missed-call escalation must support a lead notification email recipient');
+  assert(/CREATE TABLE IF NOT EXISTS\s+whatsapp_call_events/i.test(missedCallMigration), 'missed-call migration must create whatsapp_call_events');
+  assert(missedCallMigration.includes('related_lead_id UUID REFERENCES leads'), 'missed-call events must link to CRM leads');
+  assert(frontendSource.includes('missed WhatsApp calls'), 'Admin CRM copy should show missed WhatsApp calls as a lead source');
+  assert(frontendSource.includes('Missed WhatsApp call'), 'Admin CRM lead rows should highlight missed WhatsApp call leads');
   assert(whatsappRoutes.includes('🟩🟨 *makaug.com*'), 'WhatsApp runtime replies should use the makaug.com branded card header');
   assert(aiServiceSource.includes('Do not repeat the same instruction, menu, greeting, or link twice'), 'LLM prompt must explicitly avoid duplicated WhatsApp copy');
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');
@@ -1241,6 +1253,8 @@ function run() {
     'payment_link_created',
     'new_listing_pending_review',
     'whatsapp_contact_initiated',
+    'whatsapp_missed_call_lead',
+    'whatsapp_missed_call_escalated',
     'email_failed',
     'whatsapp_failed'
   ]) {
