@@ -11,6 +11,7 @@ const adminAgentsRoute = read('routes/admin-agents.js');
 const aiCeoRoute = read('routes/ai-ceo.js');
 const server = read('server.js');
 const migration = read('db/migrations/035_ai_ceo_phone_control.sql');
+const ownerColumnMigration = read('db/migrations/039_ai_ceo_command_owner_columns.sql');
 const html = read('index.html');
 const app = read('assets/makaug-app.js');
 const scheduleScript = read('scripts/send-ai-ceo-morning-report.js');
@@ -44,6 +45,8 @@ assert(migration.includes('ai_ceo_reports'), 'Migration must create AI CEO repor
 assert(migration.includes('ai_ceo_commands'), 'Migration must create AI CEO commands table');
 assert(migration.includes('managing_director_ceo'), 'Migration must seed the AI CEO agent');
 assert(migration.includes('requires_founder_approval'), 'Migration must add founder approval metadata');
+assert(ownerColumnMigration.includes('requester_phone'), 'Migration must add requester_phone for live AI CEO phone command logging');
+assert(ownerColumnMigration.includes('requester_chat_id'), 'Migration must add requester_chat_id for owner Telegram command logging');
 
 assert(html.includes('Founder-controlled AI CEO'), 'Admin dashboard must show the AI CEO panel');
 assert(app.includes('askAiCeoCommand'), 'Frontend must allow founder dashboard commands');
