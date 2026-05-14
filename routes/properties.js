@@ -1,4 +1,5 @@
 const express = require('express');
+const jwt = require('jsonwebtoken');
 
 const db = require('../config/database');
 const logger = require('../config/logger');
@@ -27,6 +28,7 @@ const { logNotification, notificationStatusFromDelivery } = require('../services
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { createLead } = require('../services/leadService');
+const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
 const {
   asArray,
@@ -80,11 +82,65 @@ function normalizeEmail(email) {
   return cleanText(email).toLowerCase();
 }
 
+function getBearerToken(req) {
+  const authHeader = req.get('authorization') || '';
+  if (authHeader.startsWith('Bearer ')) return authHeader.slice(7).trim();
+  const cookieHeader = req.get('cookie') || '';
+  const match = cookieHeader.match(/(?:^|;\s*)makaug_auth_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+async function getOptionalAuthUser(req) {
+  const token = getBearerToken(req);
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const result = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, profile_data
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [decoded.sub]
+    );
+    return result.rows[0] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function normalizeUgPhone(phone) {
   const value = normalizePhone(phone);
   if (/^0\d{9}$/.test(value)) return `+256${value.slice(1)}`;
   if (/^256\d{9}$/.test(value)) return `+${value}`;
   return value;
+}
+
+function phoneDigits(phone = '') {
+  return normalizePhone(phone).replace(/\D+/g, '');
+}
+
+async function findBrokerAgentForUser(user = {}) {
+  if (!user?.id || user.role !== 'agent_broker') return null;
+  const email = normalizeEmail(user.email || '');
+  const digits = phoneDigits(user.phone || '');
+  const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
+  const brokerAgentIdRaw = cleanText(profile.broker_agent_id || '');
+  const brokerAgentId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(brokerAgentIdRaw)
+    ? brokerAgentIdRaw
+    : '';
+  const result = await db.query(
+    `SELECT id, full_name, phone, whatsapp, email, status
+     FROM agents
+     WHERE ($1::uuid IS NOT NULL AND id = $1)
+        OR user_id = $2
+        OR ($3::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($3))
+        OR ($4::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $4)
+        OR ($4::text <> '' AND regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $4)
+     ORDER BY id = $1 DESC, user_id = $2 DESC, updated_at DESC
+     LIMIT 1`,
+    [brokerAgentId || null, user.id, email, digits]
+  );
+  return result.rows[0] || null;
 }
 
 function isValidUgPhone(phone) {
@@ -1276,6 +1332,20 @@ router.post('/listing-intent', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const body = req.body || {};
+    const authUser = await getOptionalAuthUser(req);
+    const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
+    const requestedBrokerSubmission = authUser?.role === 'agent_broker'
+      && (
+        cleanText(body.lister_type).toLowerCase() === 'agent'
+        || cleanText(body.listed_via).toLowerCase().includes('broker')
+        || extraFields?.broker_submission === true
+      );
+    let brokerAgent = requestedBrokerSubmission ? await findBrokerAgentForUser(authUser) : null;
+    if (requestedBrokerSubmission && !brokerAgent) {
+      await ensurePostVerificationRecords(db, authUser);
+      brokerAgent = await findBrokerAgentForUser(authUser);
+    }
+    const brokerCanSkipOwnerIdentity = Boolean(brokerAgent?.id);
 
     const listingType = normalizeListingType(body.listing_type);
     const title = cleanText(body.title);
@@ -1297,9 +1367,17 @@ router.post('/', async (req, res, next) => {
       errors.push('district must be one of Uganda\'s valid districts');
     }
 
-    const listerEmail = cleanText(body.lister_email);
+    const brokerFullName = cleanText([authUser?.first_name, authUser?.last_name].filter(Boolean).join(' '));
+    const listerName = brokerCanSkipOwnerIdentity
+      ? (brokerAgent.full_name || brokerFullName || 'MakaUg broker')
+      : cleanText(body.lister_name);
+    const listerEmail = brokerCanSkipOwnerIdentity
+      ? cleanText(authUser?.email || brokerAgent?.email || body.lister_email)
+      : cleanText(body.lister_email);
     const listerEmailNormalized = normalizeEmail(listerEmail);
-    const listerPhone = normalizeUgPhone(body.lister_phone);
+    const listerPhone = brokerCanSkipOwnerIdentity
+      ? normalizeUgPhone(authUser?.phone || brokerAgent?.phone || brokerAgent?.whatsapp || body.lister_phone)
+      : normalizeUgPhone(body.lister_phone);
     const listingOtpToken = cleanText(body.listing_otp_token);
     const otpChannelInput = cleanText(body.otp_channel || body.extra_fields?.verify?.otp_channel || 'phone').toLowerCase();
     const otpChannel = otpChannelInput === 'email' ? 'email' : 'phone';
@@ -1310,7 +1388,6 @@ router.post('/', async (req, res, next) => {
     const inquiryReference = cleanText(body.inquiry_reference) || buildListingReference();
     const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
     const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
-    const extraFields = typeof body.extra_fields === 'object' && body.extra_fields !== null ? body.extra_fields : {};
     const idDocumentName = cleanText(body.id_document_name || extraFields?.verify?.id_document_name);
     const idDocumentUrl = cleanText(body.id_document_url || extraFields?.verify?.id_document_url);
     const idDocumentType = cleanText(body.id_document_type || body.id_document_mime_type || extraFields?.verify?.id_document_type || extraFields?.verify?.id_document_mime_type);
@@ -1321,8 +1398,13 @@ router.post('/', async (req, res, next) => {
     if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
 
-    const listedVia = cleanText(body.listed_via || 'website').toLowerCase();
-    const enforceOtp = listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop';
+    const listedVia = cleanText(body.listed_via || (brokerCanSkipOwnerIdentity ? 'broker_dashboard' : 'website')).toLowerCase();
+    const listedViaBrokerPath = listedVia.includes('broker');
+    const enforceOtp = !brokerCanSkipOwnerIdentity && (listedVia === 'website' || listedVia === 'web' || listedVia === 'desktop' || listedViaBrokerPath);
+    const resolvedListerType = brokerCanSkipOwnerIdentity ? 'agent' : (cleanText(body.lister_type) || 'owner');
+    if (listedViaBrokerPath && !brokerCanSkipOwnerIdentity) {
+      errors.push('Signed-in broker profile is required before using the broker listing path');
+    }
     const submittedImageItems = asArray(body.images)
       .map((item) => {
         if (typeof item === 'string') {
@@ -1386,14 +1468,20 @@ router.post('/', async (req, res, next) => {
     }
 
     const amenities = asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean);
-	    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
-	    const availableFrom = cleanText(body.available_from || extraFields.available_from);
-	    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
-	    if (videoUrl) extraFields.video_url = videoUrl;
-	    if (/youtube\.com|youtu\.be/i.test(videoUrl)) extraFields.youtube_url = videoUrl;
-	    if (availableFrom) extraFields.available_from = availableFrom;
+    const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
+    const availableFrom = cleanText(body.available_from || extraFields.available_from);
+    const preferredContactMethod = cleanText(body.preferred_contact_method || extraFields.preferred_contact_method || body.extra_fields?.contact_pref).toLowerCase();
+    if (videoUrl) extraFields.video_url = videoUrl;
+    if (/youtube\.com|youtu\.be/i.test(videoUrl)) extraFields.youtube_url = videoUrl;
+    if (availableFrom) extraFields.available_from = availableFrom;
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
+    }
+    if (brokerCanSkipOwnerIdentity) {
+      extraFields.broker_submission = true;
+      extraFields.broker_agent_id = brokerAgent.id;
+      extraFields.broker_listing_review = 'Admin approval required before this broker listing goes live.';
+      extraFields.skip_owner_identity_recheck = true;
     }
 
     const insertResult = await db.query(
@@ -1491,10 +1579,10 @@ router.post('/', async (req, res, next) => {
         newUntil,
         JSON.stringify(amenities),
         JSON.stringify(extraFields),
-        cleanText(body.lister_name) || null,
+        listerName || null,
         listerPhone || null,
         listerEmailNormalized || null,
-        cleanText(body.lister_type) || 'owner',
+        resolvedListerType,
         listedVia || 'website',
         cleanText(body.source) || 'website',
         status,
@@ -1506,12 +1594,37 @@ router.post('/', async (req, res, next) => {
     );
 
     const propertyId = insertResult.rows[0].id;
+    if (brokerCanSkipOwnerIdentity) {
+      await db.query(
+        `UPDATE properties
+         SET agent_id = $2,
+             lister_type = 'agent',
+             lister_name = COALESCE(NULLIF($3, ''), lister_name),
+             lister_phone = COALESCE(NULLIF($4, ''), lister_phone),
+             lister_email = COALESCE(NULLIF($5, ''), lister_email),
+             extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $6::jsonb,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [
+          propertyId,
+          brokerAgent.id,
+          listerName,
+          listerPhone,
+          listerEmailNormalized,
+          JSON.stringify({
+            broker_agent_id: brokerAgent.id,
+            broker_status: brokerAgent.status || 'pending',
+            broker_submission: true
+          })
+        ]
+      );
+    }
     captureLearningEvent({
       eventName: 'property_listing_submitted',
       source: cleanText(body.source) || 'website',
       channel: 'web',
       sessionId: `property_listing:${propertyId}`,
-      externalUserId: listerPhone || listerEmailNormalized || cleanText(body.lister_name) || propertyId,
+      externalUserId: listerPhone || listerEmailNormalized || listerName || propertyId,
       inputText: [title, description, district, area].filter(Boolean).join(' | '),
       responseText: 'Listing submitted for MakaUg admin review.',
       payload: {
@@ -1524,7 +1637,7 @@ router.post('/', async (req, res, next) => {
         price_period: cleanText(body.price_period) || null,
         property_type: cleanText(body.property_type) || null,
         available_from: extraFields.available_from || null,
-        lister_type: cleanText(body.lister_type) || 'owner',
+        lister_type: resolvedListerType,
         image_count: submittedImages.length,
         inquiry_reference: inquiryReference
       },
@@ -1552,12 +1665,12 @@ router.post('/', async (req, res, next) => {
     const submissionLead = await createLead(db, {
       listingId: propertyId,
       contact: {
-        name: cleanText(body.lister_name) || 'Listing owner',
+        name: listerName || 'Listing owner',
         phone: listerPhone || null,
         email: listerEmailNormalized || null,
         preferredContactChannel: preferredContactMethod || 'whatsapp',
         preferredLanguage: normalizePreferredLanguage(body.preferred_language),
-        roleType: cleanText(body.lister_type) || 'listing_owner',
+        roleType: brokerCanSkipOwnerIdentity ? 'broker' : (resolvedListerType || 'listing_owner'),
         locationInterest: [area, district].filter(Boolean).join(', '),
         categoryInterest: listingType,
         budgetRange: price ? String(price) : ''
@@ -1572,7 +1685,8 @@ router.post('/', async (req, res, next) => {
       metadata: {
         inquiry_reference: inquiryReference,
         image_count: imageUrls.length,
-        listed_via: listedVia || 'website'
+        listed_via: listedVia || 'website',
+        broker_agent_id: brokerCanSkipOwnerIdentity ? brokerAgent.id : null
       }
     });
 
@@ -1582,6 +1696,7 @@ router.post('/', async (req, res, next) => {
         propertyId,
         payload: {
           ...body,
+          lister_name: listerName,
           lister_phone: listerPhone,
           lister_email: listerEmailNormalized || null,
           listing_type: listingType,
@@ -1601,7 +1716,7 @@ router.post('/', async (req, res, next) => {
       title,
       listing_type: listingType,
       inquiry_reference: inquiryReference,
-      lister_name: cleanText(body.lister_name) || null,
+      lister_name: listerName || null,
       lister_phone: listerPhone || null,
       lister_email: listerEmailNormalized || null
     };
@@ -1634,7 +1749,7 @@ router.post('/', async (req, res, next) => {
       logEmailEvent(db, {
         eventType: 'listing_submitted',
         recipientEmail: listerEmailNormalized || null,
-        recipientRole: cleanText(body.lister_type) || 'owner',
+        recipientRole: resolvedListerType || 'owner',
         templateKey: 'property_submitted',
         subject: 'Your MakaUg property listing has been submitted',
         language: normalizePreferredLanguage(body.preferred_language),

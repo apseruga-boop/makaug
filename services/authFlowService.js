@@ -75,6 +75,33 @@ function buildOtpSuccessPayload({ user, token, preferredAudience = '', pendingIn
   };
 }
 
+function cleanText(value = '') {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizePhoneDigits(value = '') {
+  return cleanText(value).replace(/\D+/g, '');
+}
+
+function parseCsvList(value = '') {
+  if (Array.isArray(value)) {
+    return value.map((item) => cleanText(item)).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map((item) => cleanText(item))
+    .filter(Boolean);
+}
+
+function parseBooleanLike(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  const text = cleanText(value).toLowerCase();
+  if (!text) return fallback;
+  if (['1', 'true', 'yes', 'y', 'on'].includes(text)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
+  return fallback;
+}
+
 async function ensurePostVerificationRecords(db, user = {}) {
   if (!db || !user?.id) return;
   const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
@@ -123,12 +150,154 @@ async function ensurePostVerificationRecords(db, user = {}) {
   }
 
   if (audience === 'agent') {
+    const fullName = cleanText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'MakaUg broker';
+    const email = cleanText(user.email || '');
+    const phone = cleanText(user.phone || '');
+    const phoneDigits = normalizePhoneDigits(phone);
+    const districtsCovered = parseCsvList(profile.agent_districts || profile.preferred_areas);
+    const specializations = parseCsvList(profile.agent_specialities || profile.property_type_interest);
+    const privacyConsentAccepted = parseBooleanLike(profile.broker_privacy_consent_accepted, false);
+    const dataRetentionNoticeAccepted = parseBooleanLike(profile.broker_data_retention_notice_accepted, false);
+    const brokerDocUrl = cleanText(profile.broker_identity_document_url);
+    const brokerDocName = cleanText(profile.broker_identity_document_name);
+    const brokerDocType = cleanText(profile.broker_identity_document_type);
+    const nationalIdNumber = cleanText(profile.broker_national_id_number || profile.national_id_number).toUpperCase();
+    const verificationReason = cleanText(profile.broker_verification_reason)
+      || 'Broker identity verification submitted during makaug.com account creation.';
+    const resolvedLicence = cleanText(profile.area_licence_number || profile.agent_licence_number)
+      || `PENDING-${String(user.id).slice(0, 8).toUpperCase()}`;
+    const companyName = cleanText(profile.agent_company) || null;
+    const profilePhotoUrl = cleanText(profile.broker_profile_photo_url) || null;
+    const bio = cleanText(profile.broker_bio)
+      || (specializations.length
+        ? `MakaUg broker covering ${districtsCovered.slice(0, 3).join(', ') || 'Uganda'} properties.`
+        : null);
+
+    const existing = await db.query(
+      `SELECT id
+       FROM agents
+       WHERE user_id = $1
+          OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
+          OR ($3::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $3)
+       ORDER BY user_id = $1 DESC, updated_at DESC
+       LIMIT 1`,
+      [user.id, email, phoneDigits]
+    );
+
+    let brokerAgentId = existing.rows[0]?.id || null;
+    if (brokerAgentId) {
+      const updated = await db.query(
+        `UPDATE agents
+         SET user_id = $1,
+             full_name = COALESCE(NULLIF($2, ''), full_name),
+             company_name = COALESCE($3, company_name),
+             licence_number = COALESCE(NULLIF($4, ''), licence_number),
+             registration_status = 'not_registered',
+             listing_limit = 2147483647,
+             phone = COALESCE(NULLIF($5, ''), phone),
+             whatsapp = COALESCE(NULLIF($5, ''), whatsapp),
+             email = COALESCE(NULLIF($6, ''), email),
+             districts_covered = CASE WHEN cardinality($7::text[]) > 0 THEN $7::text[] ELSE districts_covered END,
+             specializations = CASE WHEN cardinality($8::text[]) > 0 THEN $8::text[] ELSE specializations END,
+             nin = COALESCE(NULLIF($9, ''), nin),
+             identity_document_name = COALESCE(NULLIF($10, ''), identity_document_name),
+             identity_document_url = COALESCE(NULLIF($11, ''), identity_document_url),
+             identity_document_type = COALESCE(NULLIF($12, ''), identity_document_type),
+             identity_document_uploaded_at = CASE WHEN NULLIF($11, '') IS NOT NULL THEN NOW() ELSE identity_document_uploaded_at END,
+             verification_reason = COALESCE(NULLIF($13, ''), verification_reason),
+             privacy_consent_accepted = privacy_consent_accepted OR $14,
+             privacy_consent_at = CASE WHEN $14 THEN COALESCE(privacy_consent_at, NOW()) ELSE privacy_consent_at END,
+             data_retention_notice_accepted = data_retention_notice_accepted OR $15,
+             data_retention_notice_at = CASE WHEN $15 THEN COALESCE(data_retention_notice_at, NOW()) ELSE data_retention_notice_at END,
+             profile_photo_url = COALESCE($16, profile_photo_url),
+             bio = COALESCE($17, bio),
+             status = CASE WHEN status = 'approved' THEN status ELSE 'pending' END,
+             updated_at = NOW()
+         WHERE id = $18
+         RETURNING id`,
+        [
+          user.id,
+          fullName,
+          companyName,
+          resolvedLicence,
+          phone,
+          email,
+          districtsCovered,
+          specializations,
+          nationalIdNumber,
+          brokerDocName,
+          brokerDocUrl,
+          brokerDocType,
+          verificationReason,
+          privacyConsentAccepted,
+          dataRetentionNoticeAccepted,
+          profilePhotoUrl,
+          bio,
+          brokerAgentId
+        ]
+      );
+      brokerAgentId = updated.rows[0]?.id || brokerAgentId;
+    } else {
+      const inserted = await db.query(
+        `INSERT INTO agents (
+          full_name,
+          company_name,
+          licence_number,
+          registration_status,
+          listing_limit,
+          phone,
+          whatsapp,
+          email,
+          districts_covered,
+          specializations,
+          nin,
+          identity_document_name,
+          identity_document_url,
+          identity_document_type,
+          identity_document_uploaded_at,
+          verification_reason,
+          privacy_consent_accepted,
+          privacy_consent_at,
+          data_retention_notice_accepted,
+          data_retention_notice_at,
+          profile_photo_url,
+          bio,
+          user_id,
+          status
+        ) VALUES ($1,$2,$3,'not_registered',2147483647,$4,$4,$5,$6,$7,$8,$9,$10,$11,CASE WHEN NULLIF($10, '') IS NOT NULL THEN NOW() ELSE NULL END,$12,$13,CASE WHEN $13 THEN NOW() ELSE NULL END,$14,CASE WHEN $14 THEN NOW() ELSE NULL END,$15,$16,$17,'pending')
+        RETURNING id`,
+        [
+          fullName,
+          companyName,
+          resolvedLicence,
+          phone,
+          email || null,
+          districtsCovered,
+          specializations,
+          nationalIdNumber || null,
+          brokerDocName || null,
+          brokerDocUrl || null,
+          brokerDocType || null,
+          verificationReason,
+          privacyConsentAccepted,
+          dataRetentionNoticeAccepted,
+          profilePhotoUrl,
+          bio,
+          user.id
+        ]
+      );
+      brokerAgentId = inserted.rows[0]?.id || null;
+    }
+
     await db.query(
       `UPDATE users
        SET profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
            updated_at = NOW()
        WHERE id = $1`,
-      [user.id, JSON.stringify({ broker_review_status: 'pending_review' })]
+      [user.id, JSON.stringify({
+        broker_review_status: 'pending_review',
+        broker_agent_id: brokerAgentId
+      })]
     );
     return;
   }

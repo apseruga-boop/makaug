@@ -115,6 +115,16 @@ function sanitizeProfileData(input = {}) {
     'agent_languages',
     'active_listing_count',
     'preferred_updates',
+    'broker_national_id_number',
+    'broker_identity_document_name',
+    'broker_identity_document_type',
+    'broker_identity_document_uploaded',
+    'broker_identity_document_uploaded_at',
+    'broker_verification_reason',
+    'broker_privacy_consent_accepted',
+    'broker_data_retention_notice_accepted',
+    'broker_profile_photo_url',
+    'broker_bio',
     'field_agent_territory',
     'field_agent_areas',
     'field_agent_languages',
@@ -129,11 +139,23 @@ function sanitizeProfileData(input = {}) {
     'campaign_interest',
     'campaign_location'
   ];
-  return allowed.reduce((acc, key) => {
+  const sanitized = allowed.reduce((acc, key) => {
     const value = cleanText(source[key]);
     if (value) acc[key] = value.slice(0, 240);
     return acc;
   }, {});
+
+  const longFileKeys = ['broker_identity_document_url'];
+  longFileKeys.forEach((key) => {
+    const value = String(source[key] || '').trim();
+    const isImageDataUrl = /^data:image\/[a-z0-9.+-]+;base64,/i.test(value);
+    const isRemoteUrl = /^https?:\/\//i.test(value);
+    if (value && (isImageDataUrl || isRemoteUrl)) {
+      sanitized[key] = value.slice(0, 5 * 1024 * 1024);
+    }
+  });
+
+  return sanitized;
 }
 
 function createToken(user) {

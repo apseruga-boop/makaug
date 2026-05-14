@@ -178,10 +178,10 @@ function mapRemoteAgentForUi(agent = {}) {
     email: agent.email || "",
     whatsapp: String(agent.whatsapp || agent.phone || "").replace(/\D/g, ""),
     area,
-    rating: Number(agent.rating || 0) || 4.5,
+    rating: Number(agent.rating || 0) || 0,
     listings: Number(agent.listings_count || agent.total_listings || agent.listings || 0) || 0,
     live_listings: Number(agent.live_listings || agent.listings_count || 0) || 0,
-    pending_listings: Number(agent.pending_listings || 0) || 0,
+    pending_listings: Number(agent.pending_listings || agent.pending_listings_count || 0) || 0,
     rejected_listings: Number(agent.rejected_listings || 0) || 0,
     sales: Number(agent.sales_count || agent.sales || 0) || 0,
     emoji: agent.profile_photo_url ? "" : "👔",
@@ -420,6 +420,8 @@ const HOW_TO_VIDEO_SLOTS = [
   { key: "student-accommodation", title: "How to find student accommodation", description: "Search by campus, budget, room type, Wi-Fi, security, and move-in timing.", category: "student", youtubeVideoId: "", ctaLabel: "Find student rooms", ctaUrl: "/student-accommodation" },
   { key: "list-property", title: "How to list property", description: "Create a listing, add key details, verify contact information, and submit.", category: "listing", youtubeVideoId: "", ctaLabel: "List Property", ctaUrl: "/list-property" },
   { key: "location-and-photos", title: "How to add property location and photos", description: "Use Find address or place, confirm the map pin, and upload useful photos.", category: "listing", youtubeVideoId: "", ctaLabel: "Open listing form", ctaUrl: "/list-property" },
+  { key: "broker-dashboard", title: "How brokers use the dashboard", description: "Update your broker card, submit listings for review, track leads, and manage account settings.", category: "broker", youtubeVideoId: "", ctaLabel: "Open broker dashboard", ctaUrl: "/broker-dashboard" },
+  { key: "broker-boost-property", title: "How to boost a broker listing", description: "Preview sponsored placement, choose reach or days live, and prepare payment before a campaign goes live.", category: "broker", youtubeVideoId: "", ctaLabel: "Advertise with MakaUg", ctaUrl: "/advertise" },
   { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask MakaUg", ctaUrl: "https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" },
   { key: "save-searches-alerts", title: "How to save searches and create alerts", description: "Keep track of demand and get notified when matching listings appear.", category: "alerts", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
   { key: "book-viewing-callback", title: "How to book a viewing or request callback", description: "Understand viewing buttons, callback requests, and follow-up tracking.", category: "viewings", youtubeVideoId: "", ctaLabel: "Find properties", ctaUrl: "/for-sale" },
@@ -440,6 +442,8 @@ let lastPage = "home";
 let currentTab = "sale";
 let savedIds = new Set();
 let authState = { token: null, user: null };
+let brokerDashboardCache = null;
+let brokerSettingsPhotoDataUrl = "";
 let finderDashboardViewLoggedForUser = "";
 let socialAuthConfig = { providers: {} };
 let authSignInAudience = "finder";
@@ -6542,7 +6546,231 @@ async function renderStudentDashboard() {
   }
 }
 
-function renderAgentDashboard() {
+function brokerDisplayPhone(broker = {}) {
+  const raw = String(broker.phone || broker.whatsapp || "").trim();
+  if (!raw) return "";
+  if (raw.startsWith("+")) return raw;
+  const digits = raw.replace(/\D/g, "");
+  return digits.startsWith("256") ? `+${digits}` : raw;
+}
+
+function brokerInitials(name = "") {
+  const parts = String(name || publicBrand()).trim().split(/\s+/).filter(Boolean);
+  return (parts[0]?.[0] || "M") + (parts[1]?.[0] || "");
+}
+
+function renderBrokerDashboardBadges(broker = {}, stats = {}) {
+  const status = String(broker.status || "pending").toLowerCase();
+  const reg = String(broker.registration_status || "not_registered").toLowerCase();
+  const badges = [
+    status === "approved" ? "Approved broker" : "Awaiting MakaUg review",
+    reg === "registered" ? "Registered" : "Review before public listing",
+    broker.identity_document_url ? "National ID uploaded" : "ID check pending",
+    `${Number(stats.pending_listings || broker.pending_listings || 0)} listings in review`
+  ];
+  return badges.map((label) => `<span class="inline-flex items-center rounded-full bg-green-50 border border-green-100 px-2.5 py-1 text-xs font-bold text-green-800">${adminEscape(label)}</span>`).join("");
+}
+
+function getBrokerDashboardLocalListings(broker = {}) {
+  const brokerId = String(broker.id || "");
+  const email = String(authState?.user?.email || broker.email || "").toLowerCase();
+  const digits = normalizeDigits(authState?.user?.phone || broker.phone || broker.whatsapp || "");
+  return PROPERTIES.filter((p) => {
+    const listingAgent = String(p.agent || p.agent_id || "");
+    const listingEmail = String(p.lister_email || p.email || "").toLowerCase();
+    const listingPhone = normalizeDigits(p.lister_phone || p.phone || "");
+    return (brokerId && listingAgent === brokerId)
+      || (email && listingEmail === email)
+      || (digits && listingPhone === digits);
+  });
+}
+
+function mergeBrokerDashboardListings(remoteListings = [], broker = {}) {
+  const rows = [];
+  const seen = new Set();
+  remoteListings.map((item) => mapRemotePropertyForUi(item)).concat(getBrokerDashboardLocalListings(broker)).forEach((listing) => {
+    const id = String(listing.id || listing.backend_id || "");
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    rows.push(listing);
+  });
+  return rows;
+}
+
+function renderBrokerDashboardListingCard(p) {
+  const status = String(p.status || "pending").toLowerCase();
+  const statusClass = status === "approved"
+    ? "bg-green-50 border-green-100 text-green-800"
+    : (status === "rejected" ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800");
+  return `
+    <div class="border border-gray-200 rounded-xl p-4 bg-white">
+      <div class="flex items-start justify-between gap-2">
+        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="text-left font-black text-gray-900 line-clamp-2 hover:text-green-700">${adminEscape(p.title || "MakaUg listing")}</button>
+        <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusClass}">${adminEscape(status === "approved" ? "Live" : (status === "rejected" ? "Needs changes" : "In review"))}</span>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "Location pending")}</p>
+      <div class="text-sm font-bold text-green-700 mt-2">${fmtP(p.price || 0, p.period || p.price_period || "")}</div>
+      <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
+        <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1">Views: ${getPropertyViewCount(p.id)}</span>
+        <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1">Saves: ${getPropertySaveCount(p.id)}</span>
+      </div>
+      <div class="mt-3 flex gap-2 flex-wrap">
+        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">View</button>
+        <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>
+      </div>
+    </div>`;
+}
+
+function renderBrokerProfilePreview(broker = {}, listings = [], stats = {}) {
+  const preview = document.getElementById("agent-profile-card-preview");
+  if (!preview) return;
+  const phone = brokerDisplayPhone(broker);
+  const whatsapp = String(broker.whatsapp || phone || "").replace(/\D/g, "");
+  const areas = Array.isArray(broker.districts_covered) && broker.districts_covered.length ? broker.districts_covered : String(broker.area || "Uganda").split("•").map((x) => x.trim()).filter(Boolean);
+  const specs = Array.isArray(broker.specializations) && broker.specializations.length ? broker.specializations : (broker.specialties || []);
+  preview.innerHTML = `
+    <div class="flex items-start gap-4">
+      <div>${brokerAvatarHtml(broker, "w-24 h-24 border-4")}</div>
+      <div class="min-w-0 flex-1">
+        <div class="text-xs font-black uppercase tracking-wide text-green-700">Public broker card preview</div>
+        <h3 class="text-2xl font-black text-gray-900 mt-1">${adminEscape(broker.name || "MakaUg broker")}</h3>
+        <p class="text-sm text-gray-500">${adminEscape(broker.company || "Independent broker")}</p>
+        <p class="text-sm text-gray-600 mt-2">${adminEscape(broker.bio || "Add a short broker bio so clients know where you work and what you handle.")}</p>
+        <div class="grid grid-cols-2 gap-2 mt-4 text-center">
+          <div class="rounded-xl bg-green-50 border border-green-100 p-3">
+            <div class="text-2xl font-black text-green-900">${Number(stats.active_listings ?? listings.filter((item) => item.status === "approved").length)}</div>
+            <div class="text-xs text-green-800">Active Listings</div>
+          </div>
+          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3">
+            <div class="text-2xl font-black text-amber-900">${Number(stats.pending_listings ?? listings.filter((item) => item.status === "pending").length)}</div>
+            <div class="text-xs text-amber-800">In Review</div>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5 mt-3">
+          ${areas.slice(0, 4).map((area) => `<span class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">${adminEscape(area)}</span>`).join("")}
+          ${specs.slice(0, 4).map((spec) => `<span class="rounded-full bg-green-50 px-2 py-1 text-xs text-green-800">${adminEscape(spec)}</span>`).join("")}
+        </div>
+        <div class="grid sm:grid-cols-2 gap-2 mt-4">
+          ${phone ? `<a href="tel:${adminAttr(phone)}" class="bg-green-800 hover:bg-green-700 text-white text-center rounded-xl py-2 text-sm font-bold">Call ${adminEscape((broker.name || "Broker").split(" ")[0])}</a>` : ""}
+          ${whatsapp ? `<a href="https://wa.me/${adminAttr(whatsapp)}" target="_blank" rel="noopener" class="bg-green-500 hover:bg-green-400 text-white text-center rounded-xl py-2 text-sm font-bold">WhatsApp</a>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderBrokerQuickstartPanel() {
+  const panel = document.getElementById("broker-quickstart-panel");
+  if (!panel) return;
+  const videos = howToVideosForContext("broker").slice(0, 3);
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-black text-green-950">Broker quick start</h2>
+        <p class="text-sm text-green-900 mt-1">List online, track review status, then boost approved properties when campaign payments are enabled.</p>
+      </div>
+      <span class="rounded-full bg-white border border-green-100 px-3 py-1 text-xs font-black text-green-800">How-to</span>
+    </div>
+    <div class="grid gap-2 mt-4">
+      <button onclick="startBrokerOnlineListing()" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
+        <div class="font-black text-green-950">1. List a property online</div>
+        <div class="text-xs text-green-800">Your broker account fills contact details and skips repeated OTP/ID checks.</div>
+      </button>
+      <button onclick="handleAdvertisePropertyCta(event)" class="text-left rounded-xl bg-white border border-amber-100 p-3 hover:border-amber-400">
+        <div class="font-black text-amber-950">2. Boost an approved listing</div>
+        <div class="text-xs text-amber-900">Preview sponsored placement, reach, days live, and payment once advertising is active.</div>
+      </button>
+      <a href="https://wa.me/256760112587?text=Hi%20MakaUg%2C%20I%20need%20broker%20dashboard%20support." target="_blank" rel="noopener" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
+        <div class="font-black text-green-950">3. Get help from MakaUg</div>
+        <div class="text-xs text-green-800">Ask about listings, verification, leads, or WhatsApp AI.</div>
+      </a>
+    </div>
+    <div class="mt-4 grid gap-2">
+      ${videos.map((video) => `<button onclick="openHowToVideo('${video.key}')" class="text-left rounded-xl border border-green-100 bg-white px-3 py-2 text-sm font-bold text-green-800">${adminEscape(video.title)}</button>`).join("")}
+    </div>`;
+}
+
+function hydrateBrokerSettingsForm(broker = {}) {
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = value || "";
+  };
+  set("broker-settings-full-name", broker.name || "");
+  set("broker-settings-company", broker.company || "");
+  set("broker-settings-whatsapp", brokerDisplayPhone(broker));
+  set("broker-settings-areas", Array.isArray(broker.districts_covered) ? broker.districts_covered.join(", ") : (broker.area || ""));
+  set("broker-settings-specializations", Array.isArray(broker.specializations) ? broker.specializations.join(", ") : (broker.specialties || []).join(", "));
+  set("broker-settings-bio", broker.bio || "");
+  const preview = document.getElementById("broker-settings-photo-preview");
+  const photo = brokerSettingsPhotoDataUrl || broker.photo || broker.profile_photo_url || "";
+  if (preview) {
+    preview.innerHTML = photo
+      ? `<img src="${adminAttr(photo)}" alt="Broker profile photo" class="w-full h-full object-cover">`
+      : adminEscape(brokerInitials(broker.name));
+  }
+}
+
+async function handleBrokerSettingsPhoto(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  if (!file.type || !file.type.startsWith("image/")) {
+    toast("Choose an image for your broker profile photo.");
+    event.target.value = "";
+    return;
+  }
+  try {
+    brokerSettingsPhotoDataUrl = await compressPhotoForSubmission(file, { maxSide: 700, quality: 0.76 });
+    hydrateBrokerSettingsForm(brokerDashboardCache?.broker || {});
+  } catch (error) {
+    toast("Could not read that profile photo. Please try another image.");
+    event.target.value = "";
+  }
+}
+
+async function saveBrokerProfileSettings() {
+  const statusEl = document.getElementById("broker-settings-status");
+  const payload = {
+    full_name: (document.getElementById("broker-settings-full-name")?.value || "").trim(),
+    company_name: (document.getElementById("broker-settings-company")?.value || "").trim(),
+    whatsapp: normalizePhoneInput(document.getElementById("broker-settings-whatsapp")?.value || ""),
+    districts_covered: (document.getElementById("broker-settings-areas")?.value || "").trim(),
+    specializations: (document.getElementById("broker-settings-specializations")?.value || "").trim(),
+    bio: (document.getElementById("broker-settings-bio")?.value || "").trim(),
+    profile_photo_url: brokerSettingsPhotoDataUrl || brokerDashboardCache?.broker?.photo || ""
+  };
+  if (statusEl) {
+    statusEl.className = "rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-blue-900";
+    statusEl.textContent = "Saving broker profile...";
+    statusEl.classList.remove("hidden");
+  }
+  try {
+    const res = await apiRequest("/api/agents/me", { method: "PATCH", body: payload });
+    brokerSettingsPhotoDataUrl = "";
+    const updated = mapRemoteAgentForUi(res?.data || {});
+    brokerDashboardCache = { ...(brokerDashboardCache || {}), broker: updated };
+    if (statusEl) {
+      statusEl.className = "rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-900";
+      statusEl.textContent = "Broker profile saved. Public card updates after MakaUg review rules are applied.";
+    }
+    await renderAgentDashboard();
+  } catch (error) {
+    if (statusEl) {
+      statusEl.className = "rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-900";
+      statusEl.textContent = error.message || "Could not save broker profile.";
+    }
+    toast(error.message || "Could not save broker profile.");
+  }
+}
+
+function startBrokerOnlineListing() {
+  lpListingPathChoice = "online";
+  navigatePublicRoute("/list-property?mode=online&type=rent", null, { source: "broker_dashboard_list_property" });
+  window.setTimeout(() => {
+    chooseListPropertyOnline({ source: "broker_dashboard", skipModalClose: true });
+    prefillBrokerListingIdentity();
+  }, 150);
+}
+
+async function renderAgentDashboard() {
   const gate = document.getElementById("agent-auth-gate");
   const body = document.getElementById("agent-body");
   if (!gate || !body) return;
@@ -6556,48 +6784,78 @@ function renderAgentDashboard() {
   gate.classList.add("hidden");
   body.classList.remove("hidden");
 
-  const broker = resolveCurrentAgentProfile();
+  let payload = null;
+  if (authState?.token && !authState?.user?.is_demo) {
+    try {
+      const res = await apiRequest("/api/agents/me");
+      payload = res?.data || res || null;
+    } catch (error) {
+      console.warn("Broker dashboard backend unavailable", error);
+    }
+  }
+
+  const broker = payload?.agent ? mapRemoteAgentForUi(payload.agent) : resolveCurrentAgentProfile();
   const profile = authState.user.profile_data || {};
   const forcePasswordChange = profile.force_password_change === true || String(profile.force_password_change || "").toLowerCase() === "true";
   document.getElementById("agent-password-notice")?.classList.toggle("hidden", !forcePasswordChange);
   const nameEl = document.getElementById("agent-dashboard-name");
   const statusEl = document.getElementById("agent-dashboard-status");
+  const summaryEl = document.getElementById("agent-dashboard-summary");
+  const badgesEl = document.getElementById("agent-dashboard-badges");
+  const avatarEl = document.getElementById("agent-profile-avatar");
   const gridEl = document.getElementById("agent-listings-grid");
 
   if (!broker) {
     if (nameEl) nameEl.textContent = `${authState.user.first_name || "Broker"} ${authState.user.last_name || ""}`.trim();
-    if (statusEl) statusEl.textContent = "No broker profile linked yet. Register as a broker to unlock listing analytics.";
+    if (statusEl) statusEl.textContent = "Broker profile is being linked. Add your National ID and broker details if prompted.";
+    if (summaryEl) summaryEl.textContent = "Once linked, your public broker card, listings, lead activity, and boost tools will appear here.";
+    if (badgesEl) badgesEl.innerHTML = `<span class="inline-flex items-center rounded-full bg-amber-50 border border-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">Broker profile pending</span>`;
     if (gridEl) {
-      gridEl.innerHTML = `<div class="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">No linked broker profile found. Please register through “Register as Broker”.</div>`;
+      gridEl.innerHTML = `<div class="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">No linked broker profile found yet. The backend links by broker account email, phone/WhatsApp, and broker profile ID.</div>`;
     }
+    renderBrokerQuickstartPanel();
     return;
   }
 
-  const myListings = PROPERTIES.filter((p) => String(p.agent || "") === String(broker.id || ""));
-  const totalViews = myListings.reduce((sum, p) => sum + getPropertyViewCount(p.id), 0);
-  const totalSaves = myListings.reduce((sum, p) => sum + getPropertySaveCount(p.id), 0);
-  const profileViews = getBrokerProfileViewCount(broker.id);
+  const myListings = mergeBrokerDashboardListings(payload?.listings || [], broker);
+  const stats = payload?.stats || {};
+  brokerDashboardCache = { payload, broker, listings: myListings };
+  const totalViews = Number(stats.listing_views ?? myListings.reduce((sum, p) => sum + getPropertyViewCount(p.id), 0));
+  const totalSaves = Number(stats.listing_saves ?? myListings.reduce((sum, p) => sum + getPropertySaveCount(p.id), 0));
+  const profileViews = Number(stats.profile_views ?? getBrokerProfileViewCount(broker.id));
+  const activeCount = Number(stats.active_listings ?? myListings.filter((item) => item.status === "approved").length);
 
-  if (nameEl) nameEl.textContent = `${broker.name} • ${broker.company}`;
+  if (nameEl) nameEl.textContent = broker.name || "MakaUg broker";
   if (statusEl) {
-    const regLabel = broker.registration_status === "registered" ? "Registered" : "Under review";
-    statusEl.textContent = `${regLabel} broker`;
+    const regLabel = broker.status === "approved" ? "Approved" : "Under MakaUg review";
+    statusEl.textContent = `${regLabel} broker • ${broker.company || "Independent broker"}`;
+  }
+  if (summaryEl) summaryEl.textContent = broker.bio || "Add your broker bio, areas covered, specialisations, and profile photo so clients understand who they are contacting.";
+  if (badgesEl) badgesEl.innerHTML = renderBrokerDashboardBadges(broker, stats);
+  if (avatarEl) {
+    const photo = broker.photo || broker.profile_photo_url || "";
+    avatarEl.innerHTML = photo
+      ? `<img src="${adminAttr(photo)}" alt="${adminAttr(broker.name || "Broker")}" class="w-full h-full object-cover">`
+      : adminEscape(brokerInitials(broker.name));
   }
 
   const setText = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = String(value);
   };
-  setText("agent-stat-listings", myListings.length);
+  setText("agent-stat-listings", activeCount);
   setText("agent-stat-views", totalViews);
   setText("agent-stat-saves", totalSaves);
   setText("agent-stat-profile-views", profileViews);
+  renderBrokerProfilePreview(broker, myListings, stats);
+  renderBrokerQuickstartPanel();
+  hydrateBrokerSettingsForm(broker);
 
   if (gridEl) {
     if (!myListings.length) {
-      gridEl.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No listings yet. Click “+ List Property” to publish your first listing.</div>`;
+      gridEl.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No broker listings yet. Use “List Property” to submit online. Broker listings go to MakaUg review first and only go live after approval.</div>`;
     } else {
-      gridEl.innerHTML = myListings.map(renderDashboardCard).join("");
+      gridEl.innerHTML = myListings.map(renderBrokerDashboardListingCard).join("");
     }
   }
 }
@@ -14417,10 +14675,11 @@ function setListWizardStep(step) {
       label.className = "text-green-700/80 font-semibold text-sm";
     }
   });
-  applyListThemeToControls();
-  if (next === 1) refreshListPinMapFromInputs();
-  if (next === 2) updateLpPhotoRequirements();
-  if (next === 4) {
+	  applyListThemeToControls();
+	  if (next === 1) refreshListPinMapFromInputs();
+	  if (next === 2) updateLpPhotoRequirements();
+	  if (next === 3) prefillBrokerListingIdentity();
+	  if (next === 4) {
     updateListPreview();
     ensureListPreviewMap();
     setTimeout(() => {
@@ -14642,11 +14901,62 @@ function renderLpVideoPreview() {
         title: translateListingLabel("Video preview"),
         sub: translateListingLabel("This is how the video tour will appear after review.")
       })
-    : `<div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">${translateListingLabel("Add a YouTube walkthrough link to show an embedded preview here.")}</div>`;
+	    : `<div class="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">${translateListingLabel("Add a YouTube walkthrough link to show an embedded preview here.")}</div>`;
+}
+
+function isSignedInBrokerListing() {
+  return authState?.user?.role === "agent_broker";
+}
+
+function brokerListingContactDetails() {
+  const broker = brokerDashboardCache?.broker || resolveCurrentAgentProfile() || {};
+  const user = authState?.user || {};
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  return {
+    broker,
+    name: broker.name || fullName || "MakaUg broker",
+    phone: normalizePhoneInput(user.phone || broker.phone || broker.whatsapp || ""),
+    email: String(user.email || broker.email || "").toLowerCase(),
+    nin: normalizeNinInput(broker.nin || user.profile_data?.broker_national_id_number || "")
+  };
+}
+
+function prefillBrokerListingIdentity() {
+  if (!isSignedInBrokerListing()) {
+    document.getElementById("lp-broker-fast-track-note")?.classList.add("hidden");
+    return;
+  }
+  const details = brokerListingContactDetails();
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el && !el.value) el.value = value || "";
+  };
+  set("lp-verify-name", details.name);
+  set("lp-public-name", details.name);
+  set("lp-verify-phone", details.phone);
+  set("lp-verify-email", details.email);
+  set("lp-verify-nin", details.nin || "BROKER-VERIFIED");
+  ["lp-verify-terms", "lp-verify-fraud", "lp-verify-consent", "lp-verify-nin-match"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = true;
+  });
+  const note = document.getElementById("lp-broker-fast-track-note");
+  if (note) note.classList.remove("hidden");
+  setTextById("lp-otp-status", "Broker account verified. No extra OTP is needed for broker listings.");
+  renderListReviewSummary();
 }
 
 function validateListStep3() {
   clearLpValidationErrors("#lp-step-3");
+  if (isSignedInBrokerListing()) {
+    prefillBrokerListingIdentity();
+    const details = brokerListingContactDetails();
+    if (!details.email && !details.phone) {
+      toast("Your broker account needs an email or WhatsApp number before listing.");
+      return false;
+    }
+    return true;
+  }
   const name = lpVal("lp-verify-name");
   const email = lpVal("lp-verify-email");
   const phone = normalizePhoneInput(lpVal("lp-verify-phone"));
@@ -14925,11 +15235,38 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
         ownership_verification_requested: ownerVerificationRequested
       },
       field_agent_assisted: fieldAgentAssisted,
-      field_agent_id: fieldAgentAssisted ? fieldAgentId : null
-    }
-  };
+	      field_agent_id: fieldAgentAssisted ? fieldAgentId : null
+	    }
+	  };
 
-  if (type === "sale") {
+	  if (isSignedInBrokerListing()) {
+	    const details = brokerListingContactDetails();
+	    payload.listed_via = "broker_dashboard";
+	    payload.source = "broker_dashboard";
+	    payload.lister_name = details.name || payload.lister_name;
+	    payload.lister_display_name = details.name || payload.lister_display_name;
+	    payload.lister_phone = details.phone || payload.lister_phone;
+	    payload.lister_email = details.email || payload.lister_email;
+	    payload.lister_type = "agent";
+	    payload.verification_terms_accepted = true;
+	    payload.listing_otp_token = null;
+	    payload.id_number = details.nin || null;
+	    payload.id_document_name = null;
+	    payload.id_document_url = null;
+	    payload.id_document_type = null;
+	    payload.extra_fields.broker_submission = true;
+	    payload.extra_fields.broker_agent_id = details.broker?.id || null;
+	    payload.extra_fields.lister_registration_status = details.broker?.registration_status || "not_registered";
+	    payload.extra_fields.verify = {
+	      ...(payload.extra_fields.verify || {}),
+	      broker_fast_track: true,
+	      contact_preference: payload.preferred_contact_method || "both",
+	      public_display_name: details.name || payload.lister_display_name,
+	      ownership_verification_requested: ownerVerificationRequested
+	    };
+	  }
+
+	  if (type === "sale") {
     payload.title_type = extra.title_type || null;
     payload.year_built = parseIntSafe(extra.year_built);
   }
@@ -16302,6 +16639,9 @@ let accountAccessPendingOtp = null;
 let accountAccessCreateStep = "details";
 let accountAccessContactVerificationToken = "";
 let accountAccessForgotResetState = null;
+let accountAccessBrokerIdentityDataUrl = "";
+let accountAccessBrokerIdentityFileName = "";
+let accountAccessBrokerIdentityFileType = "";
 
 const ACCOUNT_ACCESS_ROLE_THEME = {
   finder: {
@@ -16725,13 +17065,16 @@ function accountAccessText(key) {
       otpPhone: "SMS / Text",
       detailsTitle: "Confirm contact details",
       preferencesTitle: "Quick preferences",
+      brokerIdTitle: "Verify broker identity",
       passwordTitle: "Create password",
       sendCode: "Send verification code",
       verifyCode: "Verify code",
       createFinal: "Create account",
       contactStepNote: "Add your first name, second name, email, and mobile number. We will send a code before you choose preferences.",
       preferencesStepNote: "Tell us what you are looking for so your dashboard starts useful.",
+      brokerIdStepNote: "Upload a photo of your National ID and enter the ID number. This is kept securely for broker review and fraud prevention.",
       passwordStepNote: "Create a password, confirm it, and accept the terms before opening your dashboard.",
+      brokerIdRequirement: "Broker accounts must add a National ID number and upload a clear ID photo before creating a password.",
       forgotTitle: "Reset password",
       resetIdentifier: "Email address or phone number",
       resetCode: "Reset code",
@@ -17230,7 +17573,13 @@ function updateAccountAccessProgress(step = "account") {
   accountAccessDrawerStep = step;
   const progress = document.getElementById("account-access-progress-summary");
   if (!progress) return;
-  const labels = {
+  const labels = isAccountAccessBrokerCreateFlow() ? {
+    details: "1 of 5: Details",
+    verify: "2 of 5: Verify",
+    preferences: "3 of 5: Broker details",
+    broker_id: "4 of 5: National ID",
+    password: "5 of 5: Password"
+  } : {
     details: "1 of 4: Details",
     verify: "2 of 4: Verify",
     preferences: "3 of 4: Preferences",
@@ -17307,14 +17656,95 @@ function applyAccountAccessTheme() {
   });
 }
 
+function isAccountAccessBrokerCreateFlow() {
+  return accountAccessDrawerAudience === "agent";
+}
+
+function getAccountAccessBrokerIdentityDetails() {
+  return {
+    nin: normalizeNinInput(document.getElementById("account-access-broker-id-number")?.value || ""),
+    fileName: accountAccessBrokerIdentityFileName || "",
+    fileType: accountAccessBrokerIdentityFileType || "",
+    dataUrl: accountAccessBrokerIdentityDataUrl || ""
+  };
+}
+
+function updateAccountAccessBrokerIdentityState() {
+  const input = document.getElementById("account-access-broker-id-number");
+  if (input) input.value = normalizeNinInput(input.value || "");
+  const preview = document.getElementById("account-access-broker-id-preview");
+  if (!preview) return;
+  const details = getAccountAccessBrokerIdentityDetails();
+  preview.classList.toggle("hidden", !details.fileName && !details.nin);
+  preview.innerHTML = `
+    <div class="font-black text-green-950">Broker ID check</div>
+    <div class="mt-1">${details.nin ? `ID number: ${adminEscape(details.nin)}` : "Add your National ID number."}</div>
+    <div>${details.fileName ? `Photo ready: ${adminEscape(details.fileName)}` : "Upload a clear photo of the ID card."}</div>
+  `;
+}
+
+async function handleAccountAccessBrokerIdentitySelection(event) {
+  const file = event?.target?.files?.[0];
+  accountAccessBrokerIdentityDataUrl = "";
+  accountAccessBrokerIdentityFileName = "";
+  accountAccessBrokerIdentityFileType = "";
+  if (!file) {
+    updateAccountAccessBrokerIdentityState();
+    return;
+  }
+  if (!file.type || !file.type.startsWith("image/")) {
+    toast("Upload the National ID as a photo image, not a PDF.");
+    event.target.value = "";
+    updateAccountAccessBrokerIdentityState();
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    toast("That ID photo is too large. Please upload an image under 8MB.");
+    event.target.value = "";
+    updateAccountAccessBrokerIdentityState();
+    return;
+  }
+  try {
+    accountAccessBrokerIdentityDataUrl = await compressPhotoForSubmission(file, { maxSide: 1200, quality: 0.78 });
+    accountAccessBrokerIdentityFileName = file.name || "national-id-photo.jpg";
+    accountAccessBrokerIdentityFileType = file.type || "image/jpeg";
+    updateAccountAccessBrokerIdentityState();
+    toast("National ID photo added for broker review.");
+  } catch (error) {
+    toast("Could not read that ID photo. Please try another image.");
+    event.target.value = "";
+    updateAccountAccessBrokerIdentityState();
+  }
+}
+
+function validateAccountAccessBrokerIdentityStep() {
+  if (!isAccountAccessBrokerCreateFlow()) return true;
+  const details = getAccountAccessBrokerIdentityDetails();
+  if (!details.nin || !isValidUgNin(details.nin)) {
+    toast("Enter a valid Uganda National ID number/NIN for broker verification.");
+    document.getElementById("account-access-broker-id-number")?.focus();
+    return false;
+  }
+  if (!details.dataUrl) {
+    toast("Upload a clear photo of your National ID before creating a broker password.");
+    document.getElementById("account-access-broker-id-file")?.focus();
+    return false;
+  }
+  return true;
+}
+
 function getAccountAccessCreatePasswordReadiness() {
   const password = (document.getElementById("account-access-create-password")?.value || "").trim();
   const confirmPassword = (document.getElementById("account-access-confirm-password")?.value || "").trim();
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const missing = [];
-  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
-  if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
+	  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
+	  if (isAccountAccessBrokerCreateFlow()) {
+	    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
+	    if (!brokerIdentity.nin || !brokerIdentity.dataUrl) missing.push(accountAccessText("brokerIdRequirement"));
+	  }
+	  if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
   if (!confirmPassword || password !== confirmPassword) missing.push(accountAccessText("confirmRequirement"));
   if (!termsAccepted) missing.push(accountAccessText("termsRequirement"));
   if (!privacyAccepted) missing.push(accountAccessText("privacyRequirement"));
@@ -17377,11 +17807,13 @@ function updateAccountAccessCreateFinalState() {
 }
 
 function setAccountAccessCreateStep(step = "details") {
-  accountAccessCreateStep = ["details", "verify", "preferences", "password"].includes(step) ? step : "details";
+  accountAccessCreateStep = ["details", "verify", "preferences", "broker_id", "password"].includes(step) ? step : "details";
+  if (accountAccessCreateStep === "broker_id" && !isAccountAccessBrokerCreateFlow()) accountAccessCreateStep = "password";
   const isVerify = accountAccessCreateStep === "verify";
   const stepIds = {
     details: "account-access-create-details-step",
     preferences: "account-access-create-preferences-step",
+    broker_id: "account-access-create-broker-id-step",
     password: "account-access-create-password-step"
   };
   Object.entries(stepIds).forEach(([key, id]) => {
@@ -17393,27 +17825,29 @@ function setAccountAccessCreateStep(step = "details") {
   document.getElementById("account-access-password-wrap")?.classList.add("hidden");
   document.getElementById("account-access-forgot-wrap")?.classList.add("hidden");
   const note = document.getElementById("account-access-create-flow-note");
-  if (note) {
-    const noteKey = accountAccessCreateStep === "preferences"
-      ? "preferencesStepNote"
-      : (accountAccessCreateStep === "password" ? "passwordStepNote" : "contactStepNote");
-    setAccountAccessFlowNote(accountAccessText(noteKey), "info");
-  }
-  const titles = {
-    details: accountAccessText("detailsTitle"),
-    verify: accountAccessText("verifyTitle"),
-    preferences: accountAccessText("preferencesTitle"),
-    password: accountAccessText("passwordTitle")
-  };
+	  if (note) {
+	    const noteKey = accountAccessCreateStep === "preferences"
+	      ? "preferencesStepNote"
+	      : (accountAccessCreateStep === "broker_id" ? "brokerIdStepNote" : (accountAccessCreateStep === "password" ? "passwordStepNote" : "contactStepNote"));
+	    setAccountAccessFlowNote(accountAccessText(noteKey), "info");
+	  }
+	  const titles = {
+	    details: accountAccessText("detailsTitle"),
+	    verify: accountAccessText("verifyTitle"),
+	    preferences: accountAccessText("preferencesTitle"),
+	    broker_id: accountAccessText("brokerIdTitle"),
+	    password: accountAccessText("passwordTitle")
+	  };
   setTextById("account-access-mode-label", titles[accountAccessCreateStep] || accountAccessText("createAccount"));
   const btn = document.getElementById("account-access-continue-btn");
   if (btn) {
     const labels = {
-      details: accountAccessText("sendCode"),
-      verify: accountAccessText("verifyCode"),
-      preferences: accountAccessText("continue"),
-      password: accountAccessText("createFinal")
-    };
+	      details: accountAccessText("sendCode"),
+	      verify: accountAccessText("verifyCode"),
+	      preferences: accountAccessText("continue"),
+	      broker_id: accountAccessText("continue"),
+	      password: accountAccessText("createFinal")
+	    };
     btn.textContent = labels[accountAccessCreateStep] || accountAccessText("continue");
   }
   updateAccountAccessProgress(accountAccessCreateStep);
@@ -17424,10 +17858,13 @@ function setAccountAccessCreateStep(step = "details") {
 
 function showAccountAccessRolePicker() {
   accountAccessDrawerMode = "signin";
-  accountAccessPendingOtp = null;
-  accountAccessContactVerificationToken = "";
-  accountAccessCreateStep = "details";
-  accountAccessForgotResetState = null;
+	  accountAccessPendingOtp = null;
+	  accountAccessContactVerificationToken = "";
+	  accountAccessCreateStep = "details";
+	  accountAccessForgotResetState = null;
+	  accountAccessBrokerIdentityDataUrl = "";
+	  accountAccessBrokerIdentityFileName = "";
+	  accountAccessBrokerIdentityFileType = "";
   const signInWrap = document.getElementById("account-access-signin-wrap");
   const createWrap = document.getElementById("account-access-create-wrap");
   const passwordWrap = document.getElementById("account-access-password-wrap");
@@ -17571,6 +18008,28 @@ function ensureAccountAccessDrawer() {
             <div id="account-access-create-preferences-step" data-auth-create-step="preferences" class="hidden space-y-3">
               <div class="text-xs font-bold text-gray-600 mb-2" data-auth-text="quickPreferences">Quick preferences</div>
               <div id="account-access-screening" class="grid sm:grid-cols-2 gap-3"></div>
+            </div>
+            <div id="account-access-create-broker-id-step" data-auth-create-step="broker_id" class="hidden space-y-3">
+              <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                <div class="font-black text-sm text-amber-950">Broker security check</div>
+                <p class="mt-1">Upload a clear photo of your National ID and enter the ID number/NIN. This protects property seekers and helps MakaUg review broker accounts before listings go live.</p>
+              </div>
+              <div class="grid sm:grid-cols-2 gap-3">
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID number / NIN</span>
+                  <input id="account-access-broker-id-number" autocomplete="off" maxlength="32" oninput="updateAccountAccessBrokerIdentityState()" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-base uppercase" placeholder="CMxxxxxxxxxxxx">
+                </label>
+                <label class="block">
+                  <span class="block text-xs font-bold text-gray-600 mb-1">National ID photo</span>
+                  <input id="account-access-broker-id-file" type="file" accept="image/*" onchange="handleAccountAccessBrokerIdentitySelection(event)" class="w-full min-h-[52px] border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
+                </label>
+              </div>
+              <div id="account-access-broker-id-preview" class="hidden rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-900"></div>
+              <div class="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-950 space-y-1">
+                <p><strong>Your data is protected:</strong> we use this ID check only for broker review, safety, fraud prevention, and legal compliance.</p>
+                <p>You can request access, correction, export, or deletion. If your account is deleted, MakaUg deletes or anonymises broker ID data unless a legal retention duty applies.</p>
+                <p>Your broker listings still require MakaUg admin approval before they appear publicly.</p>
+              </div>
             </div>
             <div id="account-access-create-password-step" data-auth-create-step="password" class="hidden space-y-3">
               <div id="account-access-final-next-step" class="rounded-2xl border border-green-100 bg-green-50 px-3 py-2 text-xs text-green-900" data-auth-text="finalNextStep">
@@ -17768,10 +18227,13 @@ function updateAccountAccessSignInCopy() {
 
 function openAccountAccessDrawer(mode = "signin", audience = "finder") {
   accountAccessDrawerMode = mode === "create" ? "create" : "signin";
-  accountAccessPendingOtp = null;
-  accountAccessContactVerificationToken = "";
-  accountAccessCreateStep = "details";
-  accountAccessForgotResetState = null;
+	  accountAccessPendingOtp = null;
+	  accountAccessContactVerificationToken = "";
+	  accountAccessCreateStep = "details";
+	  accountAccessForgotResetState = null;
+	  accountAccessBrokerIdentityDataUrl = "";
+	  accountAccessBrokerIdentityFileName = "";
+	  accountAccessBrokerIdentityFileType = "";
   accountAccessDrawerLastFocus = document.activeElement;
   const drawer = ensureAccountAccessDrawer();
   drawer.classList.remove("hidden");
@@ -17890,12 +18352,18 @@ async function continueAccountAccess() {
     if (accountAccessCreateStep === "details") {
       await submitAccountAccessContactOtp();
       return;
-    }
-    if (accountAccessCreateStep === "preferences") {
-      setAccountAccessCreateStep("password");
-      setTimeout(() => document.getElementById("account-access-create-password")?.focus(), 30);
-      return;
-    }
+	    }
+	    if (accountAccessCreateStep === "preferences") {
+	      setAccountAccessCreateStep(isAccountAccessBrokerCreateFlow() ? "broker_id" : "password");
+	      setTimeout(() => document.getElementById(isAccountAccessBrokerCreateFlow() ? "account-access-broker-id-number" : "account-access-create-password")?.focus(), 30);
+	      return;
+	    }
+	    if (accountAccessCreateStep === "broker_id") {
+	      if (!validateAccountAccessBrokerIdentityStep()) return;
+	      setAccountAccessCreateStep("password");
+	      setTimeout(() => document.getElementById("account-access-create-password")?.focus(), 30);
+	      return;
+	    }
     await submitAccountAccessCreate();
     return;
   }
@@ -18194,12 +18662,28 @@ async function submitAccountAccessCreate() {
     toast("Please accept the Terms and Privacy Policy to continue.");
     return;
   }
-  if (!accountAccessContactVerificationToken) {
-    toast("Please verify your email or SMS code before creating the account.");
-    setAccountAccessCreateStep("details");
-    return;
-  }
-  const profileData = collectAccountAccessScreeningData();
+	  if (!accountAccessContactVerificationToken) {
+	    toast("Please verify your email or SMS code before creating the account.");
+	    setAccountAccessCreateStep("details");
+	    return;
+	  }
+	  if (!validateAccountAccessBrokerIdentityStep()) {
+	    setAccountAccessCreateStep("broker_id");
+	    return;
+	  }
+	  const profileData = collectAccountAccessScreeningData();
+	  if (isAccountAccessBrokerCreateFlow()) {
+	    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
+	    profileData.broker_national_id_number = brokerIdentity.nin;
+	    profileData.broker_identity_document_name = brokerIdentity.fileName;
+	    profileData.broker_identity_document_type = brokerIdentity.fileType;
+	    profileData.broker_identity_document_url = brokerIdentity.dataUrl;
+	    profileData.broker_identity_document_uploaded = "true";
+	    profileData.broker_identity_document_uploaded_at = new Date().toISOString();
+	    profileData.broker_verification_reason = "Broker account verification, property seeker safety, fraud prevention, and admin review before listings go live.";
+	    profileData.broker_privacy_consent_accepted = "true";
+	    profileData.broker_data_retention_notice_accepted = "true";
+	  }
   const roleLabel = accountAccessDrawerAudience === "agent"
     ? "Broker"
     : (accountAccessDrawerAudience === "field_agent"
@@ -18548,6 +19032,8 @@ function howToVideosForContext(context = "all") {
     help: ["search", "listing", "alerts", "viewings", "safety", "whatsapp", "student"],
     "how-it-works": ["search", "listing", "alerts", "viewings", "whatsapp", "safety"],
     "list-property": ["listing"],
+    broker: ["broker", "listing", "ai"],
+    "broker-dashboard": ["broker", "listing", "ai"],
     students: ["student", "alerts", "viewings"],
     "student-accommodation": ["student", "alerts", "viewings"],
     safety: ["safety", "whatsapp"],
@@ -21724,7 +22210,7 @@ function renderBrokers(id, list) {
         <p class="text-center text-gray-500 text-sm">${b.company}</p>
         ${renderBrokerRegistrationBadge(b) ? `<div class="mt-3 text-center">${renderBrokerRegistrationBadge(b)}</div>` : ""}
 
-        <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+        <div class="grid grid-cols-2 gap-2 mt-4 text-center">
           <div>
             <div class="text-2xl font-bold text-gray-900 leading-none">${b.listings}</div>
             <div class="text-xs text-gray-500">${translateListingLabel("Active Listings")}</div>
@@ -21732,10 +22218,6 @@ function renderBrokers(id, list) {
           <div>
             <div class="text-2xl font-bold text-gray-900 leading-none">${b.sales || 0}</div>
             <div class="text-xs text-gray-500">${translateListingLabel("Sales")}</div>
-          </div>
-          <div>
-            <div class="text-2xl font-bold text-gray-900 leading-none">⭐${b.rating}</div>
-            <div class="text-xs text-gray-500">${translateListingLabel("Rating")}</div>
           </div>
         </div>
 
@@ -21760,10 +22242,10 @@ function renderBrokers(id, list) {
       <p class="text-sm text-gray-500 text-center">${b.company}</p>
       ${renderBrokerRegistrationBadge(b, "text-[11px]") ? `<div class="mt-2 text-center">${renderBrokerRegistrationBadge(b, "text-[11px]")}</div>` : ""}
       <p class="text-xs text-gray-500 mt-2 text-center"><i class="fas fa-map-marker-alt text-green-600"></i> ${b.area}</p>
-      <div class="mt-3 flex justify-center gap-5 text-sm">
-        <span><strong>${b.listings}</strong> ${translateListingLabel("listings")}</span>
-        <span>⭐ ${b.rating}</span>
-      </div>
+	      <div class="mt-3 flex justify-center gap-5 text-sm">
+	        <span><strong>${b.listings}</strong> ${translateListingLabel("listings")}</span>
+	        <span>${adminEscape((b.specialties || [])[0] || "Broker")}</span>
+	      </div>
       <div class="grid grid-cols-2 gap-2 mt-4">
         <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("Call")}</a>
         <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
@@ -27160,10 +27642,10 @@ function openBrokerProfile(id) {
             <div>
               <h1 class="text-3xl font-black text-gray-900">${b.name}</h1>
               <p class="text-gray-500 mt-1">${b.company}</p>
-              <div class="mt-2 flex flex-wrap gap-2">
-                ${renderBrokerRegistrationBadge(b)}
-                <span class="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs font-semibold px-2.5 py-1 rounded-full">⭐ ${b.rating} Rating</span>
-              </div>
+	              <div class="mt-2 flex flex-wrap gap-2">
+	                ${renderBrokerRegistrationBadge(b)}
+	                <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fas fa-shield-halved"></i> Broker profile</span>
+	              </div>
             </div>
             <div class="text-sm text-gray-600">
               <div class="flex items-center gap-2"><i class="fas fa-map-marker-alt text-green-600 w-4"></i>${b.area}</div>
@@ -27174,7 +27656,7 @@ function openBrokerProfile(id) {
 
           <p class="text-gray-700 mt-4 leading-relaxed">${b.bio || "Professional real estate broker helping clients buy, rent, and invest with confidence."}</p>
 
-          <div class="grid sm:grid-cols-3 gap-3 mt-5">
+	          <div class="grid sm:grid-cols-2 gap-3 mt-5">
             <div class="bg-green-50 rounded-xl p-3 text-center">
               <div class="text-2xl font-bold text-gray-900">${b.listings}</div>
               <div class="text-xs text-gray-500">Active Listings</div>
@@ -27183,11 +27665,7 @@ function openBrokerProfile(id) {
               <div class="text-2xl font-bold text-gray-900">${b.sales || 0}</div>
               <div class="text-xs text-gray-500">Sales Completed</div>
             </div>
-            <div class="bg-green-50 rounded-xl p-3 text-center">
-              <div class="text-2xl font-bold text-gray-900">⭐${b.rating}</div>
-              <div class="text-xs text-gray-500">Client Rating</div>
-            </div>
-          </div>
+	          </div>
 
           <div class="mt-5 flex flex-wrap gap-2">
             ${(b.specialties || []).map((s) => `<span class="bg-gray-100 text-gray-700 text-xs font-medium px-2.5 py-1 rounded-full">${s}</span>`).join("")}

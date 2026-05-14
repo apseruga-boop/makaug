@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { asArray, cleanText, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { logNotification } = require('../services/notificationLogService');
+const { ensurePostVerificationRecords } = require('../services/authFlowService');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { parsePagination, toPagination } = require('../utils/pagination');
 
@@ -75,6 +76,207 @@ function cleanBrokerUpload(value, fallbackName = 'broker document') {
     uploaded_at: new Date().toISOString()
   };
 }
+
+function getBearerToken(req) {
+  const authHeader = req.get('authorization') || '';
+  if (authHeader.startsWith('Bearer ')) return authHeader.slice(7).trim();
+  const cookieHeader = req.get('cookie') || '';
+  const match = cookieHeader.match(/(?:^|;\s*)makaug_auth_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : '';
+}
+
+async function getAuthenticatedUser(req) {
+  const token = getBearerToken(req);
+  if (!token || !process.env.JWT_SECRET) return null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const result = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, preferred_language, profile_data
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [decoded.sub]
+    );
+    return result.rows[0] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function phoneDigits(value = '') {
+  return cleanText(value).replace(/\D+/g, '');
+}
+
+async function fetchBrokerAgentForUser(user) {
+  if (!user?.id) return null;
+  const email = normalizeEmail(user.email || '');
+  const digits = phoneDigits(user.phone || '');
+  const result = await db.query(
+    `SELECT
+      a.*,
+      COALESCE(p.active_listings, 0) AS listings_count,
+      COALESCE(lp.pending_listings, 0) AS pending_listings_count
+     FROM agents a
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS active_listings
+       FROM properties p
+       WHERE p.agent_id = a.id AND p.status = 'approved'
+     ) p ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS pending_listings
+       FROM properties p
+       WHERE p.agent_id = a.id AND p.status = 'pending'
+     ) lp ON true
+     WHERE a.user_id = $1
+        OR ($2::text <> '' AND LOWER(COALESCE(a.email, '')) = LOWER($2))
+        OR ($3::text <> '' AND regexp_replace(COALESCE(a.phone, ''), '\\D', '', 'g') = $3)
+        OR ($3::text <> '' AND regexp_replace(COALESCE(a.whatsapp, ''), '\\D', '', 'g') = $3)
+     ORDER BY a.user_id = $1 DESC, a.updated_at DESC
+     LIMIT 1`,
+    [user.id, email, digits]
+  );
+  return result.rows[0] || null;
+}
+
+async function fetchBrokerListings({ agent, user }) {
+  if (!agent?.id && !user?.id) return [];
+  const email = normalizeEmail(user?.email || agent?.email || '');
+  const digits = phoneDigits(user?.phone || agent?.phone || agent?.whatsapp || '');
+  const result = await db.query(
+    `SELECT id, title, listing_type, district, area, price, price_period, status, created_at, updated_at,
+            inquiry_reference, lister_email, lister_phone, agent_id
+     FROM properties
+     WHERE ($1::uuid IS NOT NULL AND agent_id = $1)
+        OR ($2::text <> '' AND LOWER(COALESCE(lister_email, '')) = LOWER($2))
+        OR ($3::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = $3)
+     ORDER BY created_at DESC
+     LIMIT 100`,
+    [agent?.id || null, email, digits]
+  );
+  return result.rows;
+}
+
+router.get('/me', async (req, res, next) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ ok: false, error: 'Sign in required' });
+    if (user.role !== 'agent_broker') return res.status(403).json({ ok: false, error: 'Broker account required' });
+
+    let agent = await fetchBrokerAgentForUser(user);
+    if (!agent) {
+      await ensurePostVerificationRecords(db, user);
+      agent = await fetchBrokerAgentForUser(user);
+    }
+
+    const listings = await fetchBrokerListings({ agent, user });
+    const linkedListingIds = listings.map((item) => item.id);
+    const saveCountResult = linkedListingIds.length
+      ? await db.query(
+          `SELECT COUNT(*)::int AS total
+           FROM saved_properties
+           WHERE property_id = ANY($1::uuid[])`,
+          [linkedListingIds]
+        ).catch(() => ({ rows: [{ total: 0 }] }))
+      : { rows: [{ total: 0 }] };
+
+    return res.json({
+      ok: true,
+      data: {
+        user,
+        agent,
+        listings,
+        stats: {
+          active_listings: listings.filter((item) => item.status === 'approved').length,
+          pending_listings: listings.filter((item) => item.status === 'pending').length,
+          listing_saves: Number(saveCountResult.rows[0]?.total || 0),
+          listing_views: 0,
+          profile_views: 0
+        },
+        capabilities: {
+          can_skip_listing_otp: true,
+          can_skip_listing_identity_upload: true,
+          listings_require_admin_approval: true,
+          can_boost_properties: true
+        }
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.patch('/me', async (req, res, next) => {
+  try {
+    const user = await getAuthenticatedUser(req);
+    if (!user) return res.status(401).json({ ok: false, error: 'Sign in required' });
+    if (user.role !== 'agent_broker') return res.status(403).json({ ok: false, error: 'Broker account required' });
+
+    let agent = await fetchBrokerAgentForUser(user);
+    if (!agent) {
+      await ensurePostVerificationRecords(db, user);
+      agent = await fetchBrokerAgentForUser(user);
+    }
+    if (!agent?.id) return res.status(404).json({ ok: false, error: 'Broker profile not found' });
+
+    const body = req.body || {};
+    const fullName = cleanText(body.full_name).slice(0, 160);
+    const companyName = cleanText(body.company_name).slice(0, 160);
+    const bio = cleanText(body.bio).slice(0, 1000);
+    const whatsapp = normalizeUgPhone(body.whatsapp || body.phone || '');
+    const profilePhotoUrl = String(body.profile_photo_url || '').trim();
+    const districtsCovered = parseCsvList(body.districts_covered || body.areas);
+    const specializations = parseCsvList(body.specializations);
+
+    if (whatsapp && !isValidPhone(whatsapp)) return res.status(400).json({ ok: false, error: 'whatsapp is invalid' });
+    if (profilePhotoUrl && !(/^data:image\//i.test(profilePhotoUrl) || /^https?:\/\//i.test(profilePhotoUrl))) {
+      return res.status(400).json({ ok: false, error: 'profile_photo_url must be an image data URL or remote image URL' });
+    }
+
+    const updated = await db.query(
+      `UPDATE agents
+       SET full_name = COALESCE(NULLIF($1, ''), full_name),
+           company_name = COALESCE(NULLIF($2, ''), company_name),
+           bio = COALESCE(NULLIF($3, ''), bio),
+           whatsapp = COALESCE(NULLIF($4, ''), whatsapp),
+           phone = COALESCE(NULLIF($4, ''), phone),
+           profile_photo_url = COALESCE(NULLIF($5, ''), profile_photo_url),
+           districts_covered = CASE WHEN cardinality($6::text[]) > 0 THEN $6::text[] ELSE districts_covered END,
+           specializations = CASE WHEN cardinality($7::text[]) > 0 THEN $7::text[] ELSE specializations END,
+           updated_at = NOW()
+       WHERE id = $8
+       RETURNING *`,
+      [
+        fullName,
+        companyName,
+        bio,
+        whatsapp,
+        profilePhotoUrl.slice(0, 5 * 1024 * 1024),
+        districtsCovered,
+        specializations,
+        agent.id
+      ]
+    );
+
+    await db.query(
+      `UPDATE users
+       SET profile_data = COALESCE(profile_data, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [user.id, JSON.stringify({
+        broker_agent_id: agent.id,
+        agent_company: companyName || agent.company_name || '',
+        agent_districts: districtsCovered.length ? districtsCovered.join(', ') : (agent.districts_covered || []).join(', '),
+        agent_specialities: specializations.length ? specializations.join(', ') : (agent.specializations || []).join(', '),
+        broker_profile_photo_url: profilePhotoUrl || agent.profile_photo_url || '',
+        broker_bio: bio || agent.bio || ''
+      })]
+    );
+
+    return res.json({ ok: true, data: updated.rows[0] });
+  } catch (error) {
+    return next(error);
+  }
+});
 
 router.get('/', async (req, res, next) => {
   try {

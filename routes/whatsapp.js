@@ -1432,6 +1432,23 @@ function normalizePhoneForMeta(value) {
   return String(value || '').replace(/\D/g, '');
 }
 
+async function findBrokerAgentByContact({ phone = '', email = '' } = {}) {
+  const phoneDigits = normalizePhoneForMeta(phone);
+  const emailValue = String(email || '').trim().toLowerCase();
+  if (!phoneDigits && !emailValue) return null;
+  const result = await db.query(
+    `SELECT id, status, registration_status, full_name, phone, whatsapp, email
+     FROM agents
+     WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1)
+        OR ($1::text <> '' AND regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1)
+        OR ($2::text <> '' AND LOWER(COALESCE(email, '')) = LOWER($2))
+     ORDER BY status = 'approved' DESC, updated_at DESC
+     LIMIT 1`,
+    [phoneDigits, emailValue]
+  );
+  return result.rows[0] || null;
+}
+
 async function fetchMetaMediaUrl(mediaId) {
   if (!mediaId || !WHATSAPP_ACCESS_TOKEN) return null;
   try {
@@ -5713,6 +5730,37 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
 
       const propertyId = result.rows[0].id;
+      const matchedBroker = await findBrokerAgentByContact({
+        phone: d.owner_phone || d.lister_phone || phone,
+        email: d.lister_email || ''
+      });
+      if (matchedBroker?.id) {
+        await db.query(
+          `UPDATE properties
+           SET agent_id = $2,
+               lister_type = 'agent',
+               lister_name = COALESCE(NULLIF($3, ''), lister_name),
+               lister_phone = COALESCE(NULLIF($4, ''), lister_phone),
+               lister_email = COALESCE(NULLIF($5, ''), lister_email),
+               extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $6::jsonb,
+               updated_at = NOW()
+           WHERE id = $1`,
+          [
+            propertyId,
+            matchedBroker.id,
+            matchedBroker.full_name || d.lister_name || d.contact_display_name || '',
+            matchedBroker.phone || d.owner_phone || d.lister_phone || '',
+            matchedBroker.email || d.lister_email || '',
+            JSON.stringify({
+              broker_submission: true,
+              broker_agent_id: matchedBroker.id,
+              broker_status: matchedBroker.status || 'pending',
+              broker_matched_by: d.lister_email ? 'email_or_phone' : 'phone',
+              whatsapp_broker_fast_track: true
+            })
+          ]
+        );
+      }
       const refCode = String(propertyId).substring(0, 8).toUpperCase();
 
       if (d.photos && d.photos.length) {
