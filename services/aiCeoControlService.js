@@ -615,7 +615,7 @@ async function handleCeoCommand({
     return handleEmailCommand({ commandText: cleanCommand, channel, requestedBy, requesterPhone, requesterChatId });
   }
 
-  const reportType = channel === 'whatsapp_owner' || channel === 'telegram_owner' ? 'phone' : 'command';
+  const reportType = 'command';
   const reportData = await runCeoMorningReport({ reportType, createdBy: requestedBy });
   let response = reportData.summary;
 

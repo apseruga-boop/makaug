@@ -25,6 +25,7 @@ assert(service.includes('dryrun:'), 'AI CEO owner phone matching must work for W
 assert(service.includes('isAiCeoOwnerPhone'), 'AI CEO service must verify owner phone before WhatsApp control');
 assert(service.includes('handleOwnerWhatsappCommand'), 'AI CEO service must expose WhatsApp owner command handling');
 assert(service.includes('AI_CEO_EMAIL_SEND_MODE'), 'AI CEO email sending must have a direct/draft mode kill switch');
+assert(!service.includes("reportType = channel === 'whatsapp_owner'"), 'Owner phone commands must use an ai_ceo_reports report_type accepted by the live schema');
 assert(service.includes('queueFounderApprovalAction'), 'AI CEO must queue risky actions for founder approval');
 assert(service.includes('sendSupportEmail'), 'AI CEO must be able to send outgoing email through the existing email service');
 assert(service.includes('sendTelegramMessage'), 'AI CEO service must support Telegram owner replies');
