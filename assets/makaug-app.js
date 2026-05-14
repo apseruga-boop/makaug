@@ -8073,6 +8073,168 @@ function renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel = "") {
   }
 }
 
+function adminFormatUgx(value) {
+  return `UGX ${Number(value || 0).toLocaleString("en-UG")}`;
+}
+
+function adminCommandSelectorForTab(tab = "review") {
+  const map = {
+    review: "#admin-review-queue-control",
+    actioned: "#admin-actioned-listings-control",
+    live: "#admin-live-followup-control",
+    accounts: "#admin-accounts-control",
+    "field-agents": "#admin-field-agent-control",
+    ads: "#admin-advertising-control",
+    whatsapp: "#admin-whatsapp-control",
+    notifications: "#admin-notifications-control",
+    listings: "#admin-listings-control"
+  };
+  return map[tab] || "#admin-workflow-tabs";
+}
+
+function adminBuildCommandCentre(remoteSnap, localSnap) {
+  const command = remoteSnap?.commandCentre || {};
+  const metrics = command.metrics || {};
+  const summary = remoteSnap?.summary || {};
+  const localSummary = localSnap?.summary || {};
+  const advertising = remoteSnap?.advertisingSummary || {};
+  const crm = remoteSnap?.crmSummary || {};
+  const whatsapp = remoteSnap?.whatsappSummary || {};
+  const fallbackMetrics = {
+    pending_listings: Number(summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
+    live_listings: Number(summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+    hidden_listings: Number(summary?.properties?.hidden ?? localSummary.hiddenListings ?? 0),
+    deleted_listings: Number(summary?.properties?.deleted ?? localSummary.deletedListings ?? 0),
+    broker_pending: Number(summary?.agents?.pending ?? localSummary.notRegisteredAgents ?? 0),
+    broker_approved: Number(summary?.agents?.approved ?? localSummary.registeredAgents ?? 0),
+    open_leads: Number(crm?.leads?.open ?? crm?.summary?.open_leads ?? adminCrmLeads.length ?? 0),
+    hot_leads: Number(crm?.leads?.hot ?? crm?.summary?.hot_leads ?? 0),
+    overdue_tasks: Number(crm?.tasks?.overdue ?? crm?.summary?.overdue_followups ?? 0),
+    whatsapp_needs_human: Number(whatsapp?.needs_human ?? 0),
+    failed_emails: adminEmailLogs.filter((row) => ["failed", "provider_missing", "bounced", "error"].includes(String(row.status || "").toLowerCase())).length,
+    failed_whatsapp: adminWhatsappLogs.filter((row) => ["failed", "provider_missing", "error"].includes(String(row.status || "").toLowerCase())).length,
+    advertising_open_leads: Number(advertising.open_inquiries ?? 0),
+    live_ads: Number(advertising.live_campaigns ?? 0),
+    paid_revenue_ugx: Number(advertising.paid_revenue_ugx ?? 0),
+    quoted_pipeline_ugx: Number(advertising.quoted_pipeline_ugx ?? 0),
+    test_records: 0,
+    property_requests: Array.isArray(remoteSnap?.propertyRequests) ? remoteSnap.propertyRequests.length : 0
+  };
+  const merged = { ...fallbackMetrics, ...metrics };
+  const decisions = Array.isArray(command.decisions) && command.decisions.length ? command.decisions : [
+    { key: "listing_review", label: "Listings waiting for approval", value: merged.pending_listings, priority: merged.pending_listings ? "high" : "clear", tab: "review", action: "Approve, reject, hide, or request changes." },
+    { key: "lead_follow_up", label: "Open CRM leads", value: merged.open_leads, priority: merged.hot_leads || merged.overdue_tasks ? "high" : merged.open_leads ? "medium" : "clear", tab: "notifications", action: "Work hot leads and overdue follow-ups first." },
+    { key: "broker_review", label: "Broker accounts needing review", value: merged.broker_pending, priority: merged.broker_pending ? "high" : "clear", tab: "accounts", action: "Review broker ID, consent, and approval state." },
+    { key: "whatsapp_handoff", label: "WhatsApp needs human", value: merged.whatsapp_needs_human, priority: merged.whatsapp_needs_human ? "high" : "clear", tab: "whatsapp", action: "Resolve, reply, or hand off conversations." },
+    { key: "advertising_revenue", label: "Advertising pipeline", value: merged.advertising_open_leads, priority: merged.advertising_open_leads ? "medium" : "clear", tab: "ads", action: "Move advertiser interest to campaign and payment." }
+  ];
+  return { metrics: merged, decisions };
+}
+
+function adminPriorityClass(priority = "clear") {
+  const key = String(priority || "clear").toLowerCase();
+  if (key === "high") return "border-red-100 bg-red-50 text-red-800";
+  if (key === "medium") return "border-amber-100 bg-amber-50 text-amber-900";
+  return "border-green-100 bg-green-50 text-green-800";
+}
+
+function renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel = "") {
+  const { metrics, decisions } = adminBuildCommandCentre(remoteSnap, localSnap);
+  const source = document.getElementById("admin-command-source");
+  if (source) source.textContent = sourceLabel.replace(/^Data source:\s*/i, "") || "live admin data";
+
+  const cleanMode = document.getElementById("admin-clean-mode-status");
+  if (cleanMode) {
+    cleanMode.textContent = adminCleanModeEnabled()
+      ? `Clean launch view on - ${Number(metrics.test_records || 0)} QA/test record${Number(metrics.test_records || 0) === 1 ? "" : "s"} hidden from default lists`
+      : "Clean launch view off - showing every backend record";
+  }
+
+  const metricsGrid = document.getElementById("admin-command-metrics-grid");
+  if (metricsGrid) {
+    const cards = [
+      ["Listings to decide", metrics.pending_listings, "text-amber-700", "review", "admin-review-queue-control"],
+      ["Live on site", metrics.live_listings, "text-green-700", "live", "admin-live-followup-control"],
+      ["Open leads", metrics.open_leads, "text-blue-700", "notifications", "admin-notifications-control"],
+      ["WhatsApp handoffs", metrics.whatsapp_needs_human, "text-red-700", "whatsapp", "admin-whatsapp-control"],
+      ["Broker reviews", metrics.broker_pending, "text-amber-700", "accounts", "admin-broker-accounts-table"],
+      ["Ad leads", metrics.advertising_open_leads, "text-emerald-700", "ads", "admin-advertising-control"],
+      ["Revenue paid", adminFormatUgx(metrics.paid_revenue_ugx), "text-gray-900", "ads", "admin-advertising-control"],
+      ["Pipeline quote", adminFormatUgx(metrics.quoted_pipeline_ugx), "text-fuchsia-700", "ads", "admin-advertising-control"]
+    ];
+    metricsGrid.innerHTML = cards.map(([label, value, tone, tab, selector]) => `
+      <button type="button" onclick="adminOpenDecision('${adminAttr(tab)}', '#${adminAttr(selector)}')" class="text-left rounded-2xl border border-gray-200 bg-white hover:border-green-300 hover:bg-green-50 p-4 transition">
+        <div class="text-[11px] font-black uppercase tracking-wide text-gray-500">${adminEscape(label)}</div>
+        <div class="mt-1 text-2xl font-black ${tone}">${adminEscape(value)}</div>
+      </button>
+    `).join("");
+  }
+
+  const queue = document.getElementById("admin-decision-queue");
+  if (queue) {
+    queue.innerHTML = decisions.map((decision) => {
+      const tab = decision.tab || "review";
+      const selector = adminCommandSelectorForTab(tab);
+      return `
+        <button type="button" onclick="adminOpenDecision('${adminAttr(tab)}', '${adminAttr(selector)}')" class="w-full text-left border rounded-2xl p-4 transition hover:shadow-sm ${adminPriorityClass(decision.priority)}">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm font-black text-gray-950">${adminEscape(decision.label || "Decision")}</div>
+              <div class="text-xs mt-1 opacity-80">${adminEscape(decision.action || "Open the matching control panel.")}</div>
+            </div>
+            <div class="text-2xl font-black">${adminEscape(decision.value ?? 0)}</div>
+          </div>
+        </button>`;
+    }).join("");
+  }
+
+  const revenue = document.getElementById("admin-revenue-focus");
+  if (revenue) {
+    const pipeline = Number(metrics.quoted_pipeline_ugx || 0);
+    const paid = Number(metrics.paid_revenue_ugx || 0);
+    const openAdLeads = Number(metrics.advertising_open_leads || 0);
+    revenue.innerHTML = `
+      <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+        <div class="text-xs font-black uppercase tracking-wide text-amber-800">Money focus</div>
+        <div class="mt-2 text-sm text-amber-950">Open ad leads: <strong>${adminEscape(openAdLeads)}</strong>. Quoted pipeline: <strong>${adminEscape(adminFormatUgx(pipeline))}</strong>. Paid: <strong>${adminEscape(adminFormatUgx(paid))}</strong>.</div>
+        <button type="button" onclick="adminOpenDecision('ads', '#admin-advertising-control')" class="mt-3 rounded-xl bg-amber-700 px-4 py-2 text-xs font-black text-white">Open Advertising Desk</button>
+      </div>`;
+  }
+
+  const liveStatus = document.getElementById("admin-live-site-status");
+  if (liveStatus) {
+    liveStatus.innerHTML = `
+      <div class="rounded-2xl border border-green-100 bg-green-50 p-4">
+        <div class="text-xs font-black uppercase tracking-wide text-green-800">Launch hygiene</div>
+        <div class="mt-2 text-sm text-green-950">Live listings: <strong>${adminEscape(metrics.live_listings || 0)}</strong>. Hidden: <strong>${adminEscape(metrics.hidden_listings || 0)}</strong>. Deleted: <strong>${adminEscape(metrics.deleted_listings || 0)}</strong>. Test/QA hidden by default: <strong>${adminEscape(metrics.test_records || 0)}</strong>.</div>
+        <button type="button" onclick="adminOpenDecision('listings', '#admin-listings-control')" class="mt-3 rounded-xl bg-green-800 px-4 py-2 text-xs font-black text-white">Open Listing Motherboard</button>
+      </div>`;
+  }
+}
+
+function adminRunCommandSearch() {
+  const input = document.getElementById("admin-command-search");
+  const result = document.getElementById("admin-command-search-result");
+  const q = String(input?.value || "").toLowerCase().trim();
+  if (!result) return;
+  if (!q) {
+    result.textContent = "Type a plain-English admin question or task, for example: show leads, review brokers, check failed emails, or open ads.";
+    return;
+  }
+  const routes = [
+    { terms: ["lead", "crm", "callback", "viewing", "mortgage", "enquiry", "enquiries"], tab: "notifications", selector: "#admin-notifications-control", label: "Leads & Notifications" },
+    { terms: ["whatsapp", "chat", "handoff", "conversation", "language"], tab: "whatsapp", selector: "#admin-whatsapp-control", label: "WhatsApp Inbox" },
+    { terms: ["ad", "advert", "revenue", "payment", "invoice", "boost", "campaign"], tab: "ads", selector: "#admin-advertising-control", label: "Advertising Desk" },
+    { terms: ["broker", "agent account", "account", "password", "user", "student"], tab: "accounts", selector: "#admin-accounts-control", label: "Accounts & Outreach" },
+    { terms: ["field", "payout", "pin", "territory"], tab: "field-agents", selector: "#admin-field-agent-control", label: "Field Agent Control Centre" },
+    { terms: ["listing", "property", "delete", "hide", "approve", "pending", "live"], tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
+    { terms: ["review", "queue", "moderate"], tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" }
+  ];
+  const match = routes.find((route) => route.terms.some((term) => q.includes(term))) || routes[0];
+  result.innerHTML = `Best panel: <strong>${adminEscape(match.label)}</strong>. Opening it now.`;
+  adminOpenDecision(match.tab, match.selector);
+}
+
 function askAdminAiAssistant() {
   if (!adminAiSnapshot) {
     toast("Refresh admin data first.");
@@ -8178,6 +8340,48 @@ function adminAttr(value) {
   return adminEscape(value);
 }
 
+function adminCleanModeEnabled() {
+  const toggle = document.getElementById("admin-live-clean-mode");
+  return !toggle || toggle.checked !== false;
+}
+
+function adminRecordLooksLikeTest(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  if (extra.is_test === true || extra.launch_proof === true || extra.non_public_test === true) return true;
+  const hay = [
+    row.title,
+    row.full_name,
+    row.name,
+    row.first_name,
+    row.last_name,
+    row.company_name,
+    row.company,
+    row.email,
+    row.lister_email,
+    row.phone,
+    row.lister_phone,
+    row.inquiry_reference,
+    row.reference
+  ].filter(Boolean).join(" ").toLowerCase();
+  return /(^|\s)(qa|dummy|sample)(\s|$)|qa-test|delete|makaug\.invalid|launch proof|non_public_test|xcv|fgfgf|hssjjk|dkskdk|akdk|fsbf|bxb/.test(hay);
+}
+
+function adminApplyLaunchCleanFilter(rows = []) {
+  const source = Array.isArray(rows) ? rows : [];
+  if (!adminCleanModeEnabled()) return source;
+  return source.filter((row) => !adminRecordLooksLikeTest(row));
+}
+
+function adminScrollTo(selector) {
+  const target = selector ? document.querySelector(selector) : null;
+  if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function adminOpenDecision(tab = "review", selector = "") {
+  setAdminWorkflowTab(tab);
+  setTimeout(() => adminScrollTo(selector || `[data-admin-tab-panel="${tab}"]`), 40);
+}
+
 function adminListingIdArg(value) {
   return adminEscape(JSON.stringify(String(value || "")));
 }
@@ -8240,8 +8444,9 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const [summaryRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
     apiRequest("/api/admin/summary", { headers }),
+    apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
     apiRequest("/api/properties?status=pending&limit=100", { headers }),
     apiRequest("/api/properties?status=all&limit=100", { headers }),
@@ -8295,6 +8500,7 @@ async function fetchRemoteAdminSnapshot() {
   adminWhatsappLogs = Array.isArray(whatsappLogsRes?.data) ? whatsappLogsRes.data : [];
   return {
     summary: summaryRes?.data || {},
+    commandCentre: commandCentreRes?.data || {},
     recent: recentRes?.data || {},
     pendingListings,
     liveListings,
@@ -8323,11 +8529,12 @@ async function fetchRemoteAdminSnapshot() {
 function renderAdminPendingRows(listings) {
   const wrap = document.getElementById("admin-pending-table");
   if (!wrap) return;
-  if (!listings.length) {
+  const cleanListings = adminApplyLaunchCleanFilter(listings);
+  if (!cleanListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
     return;
   }
-  wrap.innerHTML = listings.map((p) => {
+  wrap.innerHTML = cleanListings.map((p) => {
     const statusMeta = adminStatusBadge(p.status);
     const locationText = [p.area, p.district].filter(Boolean).join(", ") || "-";
     const createdText = listingDateMeta(p);
@@ -8357,7 +8564,7 @@ function renderAdminPendingRows(listings) {
 function renderAdminActionedRows(listings) {
   const wrap = document.getElementById("admin-actioned-table");
   if (!wrap) return;
-  const view = [...(listings || [])]
+  const view = adminApplyLaunchCleanFilter(listings)
     .filter((p) => ["approved", "sold", "rejected", "hidden", "deleted"].includes(normalizeModerationStatus(p.status)))
     .sort((a, b) => {
       const ad = parseDateSafe(a.reviewed_at || a.approved_at || a.updated_at || a.created_at)?.getTime() || 0;
@@ -8432,7 +8639,7 @@ function buildAdminFollowUpWhatsAppMessage(p = {}) {
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
-  const live = [...(listings || [])]
+  const live = adminApplyLaunchCleanFilter(listings)
     .filter((p) => normalizeModerationStatus(p.status) === "approved")
     .sort((a, b) => {
       const af = isFeaturedListing(a) ? 1 : 0;
@@ -8472,7 +8679,7 @@ function renderAdminFeaturedRows(listings) {
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
-  const view = [...(listings || [])].filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
+  const view = adminApplyLaunchCleanFilter(listings).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
     return;
@@ -8510,7 +8717,7 @@ function renderAdminAllListingsRows(listings) {
   if (!wrap) return;
   const q = (document.getElementById("admin-listings-q")?.value || "").toLowerCase().trim();
   const statusFilter = (document.getElementById("admin-listings-status")?.value || "").toLowerCase().trim();
-  let view = [...(listings || [])];
+  let view = adminApplyLaunchCleanFilter(listings);
   if (statusFilter) {
     view = view.filter((p) => normalizeModerationStatus(p.status) === statusFilter);
   }
@@ -8769,6 +8976,7 @@ async function renderAdminDashboard() {
   setText("admin-stat-ad-revenue", `UGX ${Number(remoteSnap?.advertisingSummary?.paid_revenue_ugx || 0).toLocaleString("en-UG")}`);
   if (sourceEl) sourceEl.textContent = sourceLabel;
   renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
+  renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel);
 
   const adminUsers = remoteSnap?.users || localSnap.users || [];
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
@@ -9965,7 +10173,7 @@ function renderAdminUsersRows(users) {
   const roleFilter = (document.getElementById("admin-users-role")?.value || "").trim().toLowerCase();
   const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
   adminCurrentUsers = Array.isArray(users) ? users : [];
-  const view = adminCurrentUsers.filter((user) => {
+  const view = adminApplyLaunchCleanFilter(adminCurrentUsers).filter((user) => {
     const role = String(user.role || "buyer_renter").toLowerCase();
     const hay = [
       user.first_name,
@@ -10030,7 +10238,7 @@ function renderAdminUsersRows(users) {
 function renderAdminBrokerRows(agents) {
   const wrap = document.getElementById("admin-broker-accounts-table");
   if (!wrap) return;
-  const rows = Array.isArray(agents) ? agents.slice(0, 50) : [];
+  const rows = adminApplyLaunchCleanFilter(agents).slice(0, 50);
   if (!rows.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-white border border-gray-200 rounded-xl p-4">No broker profiles found in the current dataset.</div>`;
     return;
@@ -10086,7 +10294,7 @@ function renderAdminBrokerRows(agents) {
 function renderAdminFeaturedAgentsRows(agents) {
   const wrap = document.getElementById("admin-featured-agents-table");
   if (!wrap) return;
-  const rows = [...(Array.isArray(agents) ? agents : [])]
+  const rows = adminApplyLaunchCleanFilter(agents)
     .filter((agent) => String(agent?.status || "approved").toLowerCase() !== "rejected")
     .sort((a, b) => {
       const af = a?.featured_homepage === true ? 1 : 0;
@@ -22883,7 +23091,7 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
   "/king/dashboard": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "King Dashboard" },
-  "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#admin-launch-control", label: "Launch Control" },
+  "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "Launch Control" },
   "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },

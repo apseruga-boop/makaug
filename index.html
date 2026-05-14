@@ -4228,7 +4228,66 @@
           </div>
         </div>
 
-        <div id="admin-control-shortcuts" class="bg-white border border-green-100 rounded-2xl p-5">
+        <div id="admin-command-centre" class="bg-white border border-green-100 rounded-2xl overflow-hidden">
+          <div class="grid xl:grid-cols-[1.05fr,0.95fr] gap-0">
+            <div class="p-6 bg-gradient-to-br from-green-950 via-green-900 to-emerald-800 text-white">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-wide text-green-200">MakaUg backend operating system</p>
+                  <h3 class="mt-2 text-3xl font-black serif">Today’s control room</h3>
+                  <p class="mt-2 max-w-2xl text-sm text-green-50">One clean place to decide what goes live, who needs a reply, where money is waiting, and what the AI CEO should inspect next.</p>
+                </div>
+                <span id="admin-command-source" class="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-green-50">loading data</span>
+              </div>
+              <div id="admin-command-metrics-grid" class="mt-5 grid sm:grid-cols-2 xl:grid-cols-4 gap-3 text-gray-900"></div>
+              <div class="mt-5 grid md:grid-cols-[1fr,150px,170px] gap-2">
+                <input id="admin-command-search" onkeydown="if(event.key==='Enter') adminRunCommandSearch()" class="w-full rounded-xl border border-white/20 bg-white/95 px-4 py-3 text-sm text-gray-900" placeholder="Ask the backend: show leads, review brokers, open ads, check failed emails...">
+                <button type="button" onclick="adminRunCommandSearch()" class="rounded-xl bg-amber-400 px-4 py-3 text-sm font-black text-green-950">Find panel</button>
+                <button type="button" onclick="runManagingDirectorAgent(); adminScrollTo('#admin-ai-agent-results')" class="rounded-xl bg-white/10 px-4 py-3 text-sm font-black text-white border border-white/20">Run AI CEO</button>
+              </div>
+              <div id="admin-command-search-result" class="mt-3 rounded-xl border border-white/15 bg-white/10 p-3 text-xs text-green-50">Type a plain-English admin question or task, for example: show leads, review brokers, check failed emails, or open ads.</div>
+            </div>
+            <div class="p-6 bg-white">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-wide text-green-700">Decision queue</p>
+                  <h3 class="mt-1 text-2xl font-black text-gray-900">Work from the top</h3>
+                  <p class="mt-1 text-sm text-gray-500">Each item opens the exact backend panel that controls it.</p>
+                </div>
+                <label class="inline-flex items-center gap-2 rounded-full border border-green-100 bg-green-50 px-3 py-2 text-xs font-bold text-green-800">
+                  <input id="admin-live-clean-mode" type="checkbox" checked onchange="renderAdminDashboard()" class="accent-green-700">
+                  Clean launch view
+                </label>
+              </div>
+              <div id="admin-clean-mode-status" class="mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-xs font-semibold text-green-900">Clean launch view on.</div>
+              <div id="admin-decision-queue" class="mt-4 space-y-3"></div>
+            </div>
+          </div>
+          <div class="grid md:grid-cols-2 gap-4 border-t border-green-100 bg-gray-50 p-5">
+            <div id="admin-live-site-status"></div>
+            <div id="admin-revenue-focus"></div>
+          </div>
+        </div>
+
+        <div id="king-control-map" class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-black text-gray-900">Simple backend map</h3>
+              <p class="text-sm text-gray-500 mt-1">Use these six areas. Everything else sits inside one of them.</p>
+            </div>
+            <span class="rounded-full bg-gray-900 px-3 py-1 text-xs font-black text-white">AI CEO friendly</span>
+          </div>
+          <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
+            <button type="button" onclick="adminOpenDecision('review', '#admin-review-queue-control')" class="text-left rounded-2xl border border-amber-100 bg-amber-50 p-4 hover:bg-white"><strong>1. Listings</strong><br><span class="text-gray-600">Review, approve, reject, hide, delete, feature, and inspect every property.</span></button>
+            <button type="button" onclick="adminOpenDecision('notifications', '#admin-notifications-control')" class="text-left rounded-2xl border border-green-100 bg-green-50 p-4 hover:bg-white"><strong>2. Leads</strong><br><span class="text-gray-600">WhatsApp, viewings, callbacks, saved searches, mortgage, help, and advertiser intent.</span></button>
+            <button type="button" onclick="adminOpenDecision('accounts', '#admin-accounts-control')" class="text-left rounded-2xl border border-blue-100 bg-blue-50 p-4 hover:bg-white"><strong>3. Accounts</strong><br><span class="text-gray-600">Users, students, brokers, passwords, approvals, privacy and data deletion.</span></button>
+            <button type="button" onclick="adminOpenDecision('whatsapp', '#admin-whatsapp-control')" class="text-left rounded-2xl border border-emerald-100 bg-emerald-50 p-4 hover:bg-white"><strong>4. WhatsApp AI</strong><br><span class="text-gray-600">Conversations, missed calls, language, human handoff, and message logs.</span></button>
+            <button type="button" onclick="adminOpenDecision('ads', '#admin-advertising-control')" class="text-left rounded-2xl border border-orange-100 bg-orange-50 p-4 hover:bg-white"><strong>5. Money</strong><br><span class="text-gray-600">Ad leads, boost plans, placements, payment status, campaigns and revenue.</span></button>
+            <a href="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="text-left rounded-2xl border border-gray-200 bg-gray-50 p-4 hover:bg-white"><strong>6. Launch & proof</strong><br><span class="text-gray-600">Provider status, routes, security, email/SMS/WhatsApp health, and launch evidence.</span></a>
+          </div>
+        </div>
+
+        <div id="admin-control-shortcuts" class="hidden bg-white border border-green-100 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">King Control Shortcuts</h3>
@@ -4262,7 +4321,7 @@
           </div>
         </div>
 
-        <div id="king-control-map" class="bg-white border border-green-100 rounded-2xl p-5">
+        <div id="king-control-map-legacy" class="hidden bg-white border border-green-100 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">King Dashboard Control Map</h3>
@@ -4330,7 +4389,7 @@
           </div>
         </div>
 
-        <div id="admin-launch-control" class="bg-white border border-amber-100 rounded-2xl p-5">
+        <div id="admin-launch-control" class="hidden bg-white border border-amber-100 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">Launch Control</h3>
@@ -4385,7 +4444,7 @@
           <p id="admin-summary-note" class="text-xs text-gray-500 mt-2">Data source: local browser data.</p>
         </div>
 
-        <div id="admin-crm-shell" class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="admin-crm-shell" class="hidden bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
               <h3 class="text-xl font-bold text-gray-800">CRM Lead Centre</h3>
@@ -4441,7 +4500,7 @@
           <div id="admin-ai-agent-results" class="mt-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">Managing Director findings will appear here after a run.</div>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="hidden grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Total Listings</div>
             <div id="admin-stat-total-listings" class="text-3xl font-black text-gray-900 mt-1">0</div>
@@ -4536,7 +4595,7 @@
           </div>
         </div>
 
-        <div class="bg-white border border-gray-200 rounded-2xl p-3">
+        <div id="admin-workflow-tabs" class="bg-white border border-gray-200 rounded-2xl p-3 sticky top-20 z-20 shadow-sm">
           <div class="flex gap-2 overflow-x-auto">
             <button type="button" data-admin-tab-button="review" onclick="setAdminWorkflowTab('review')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Review Queue</button>
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
@@ -6067,7 +6126,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "broker-national-id-20260514";
+        window.__makaugAppVersion = "admin-command-centre-20260514";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;

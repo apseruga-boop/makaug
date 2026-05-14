@@ -1583,6 +1583,160 @@ router.get('/summary', async (req, res, next) => {
   }
 });
 
+router.get('/command-centre', async (_req, res, next) => {
+  try {
+    const [
+      pendingListings,
+      liveListings,
+      deletedListings,
+      hiddenListings,
+      brokerPending,
+      brokerApproved,
+      crmLeads,
+      hotLeads,
+      overdueTasks,
+      whatsappNeedsHuman,
+      failedEmails,
+      failedWhatsapp,
+      adOpenLeads,
+      liveAds,
+      paidRevenue,
+      quotedPipeline,
+      testListings,
+      testUsers,
+      propertyRequests
+    ] = await Promise.all([
+      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved','sold')"),
+      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status = 'open'"),
+      safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE priority IN ('high','urgent') OR lead_score >= 50"),
+      safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
+      safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),
+      safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
+      safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
+      safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')"),
+      safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'"),
+      safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0)),
+      safeOne("SELECT COALESCE(SUM(quoted_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE status NOT IN ('cancelled')", [], { total: 0 }).then((row) => Number(row.total || 0)),
+      safeCount(
+        `SELECT COUNT(*)::int AS total
+         FROM properties
+         WHERE COALESCE(extra_fields->>'is_test', '') = 'true'
+            OR COALESCE(extra_fields->>'launch_proof', '') = 'true'
+            OR LOWER(COALESCE(title, '')) ~ '(qa|test|delete|dummy|sample|launch proof)'
+            OR LOWER(COALESCE(lister_email, '')) LIKE '%makaug.invalid%'`
+      ),
+      safeCount(
+        `SELECT COUNT(*)::int AS total
+         FROM users
+         WHERE LOWER(COALESCE(email, '')) LIKE '%makaug.invalid%'
+            OR LOWER(CONCAT_WS(' ', first_name, last_name, email)) ~ '(qa|test|delete|dummy|sample)'`
+      ),
+      safeCount('SELECT COUNT(*)::int AS total FROM property_requests')
+    ]);
+
+    const decisions = [
+      {
+        key: 'listing_review',
+        label: 'Listings waiting for approval',
+        value: pendingListings,
+        priority: pendingListings ? 'high' : 'clear',
+        route: '/admin/moderation',
+        tab: 'review',
+        action: 'Approve, reject, hide, or request changes before anything goes live.'
+      },
+      {
+        key: 'broker_review',
+        label: 'Broker accounts needing review',
+        value: brokerPending,
+        priority: brokerPending ? 'high' : 'clear',
+        route: '/admin/accounts',
+        tab: 'accounts',
+        action: 'Review ID, privacy consent, status, and send access only after approval.'
+      },
+      {
+        key: 'lead_follow_up',
+        label: 'Open CRM leads',
+        value: crmLeads,
+        priority: hotLeads || overdueTasks ? 'high' : crmLeads ? 'medium' : 'clear',
+        route: '/admin/crm',
+        tab: 'notifications',
+        action: 'Follow hot and overdue leads first; assign owner action where needed.'
+      },
+      {
+        key: 'whatsapp_handoff',
+        label: 'WhatsApp needs human',
+        value: whatsappNeedsHuman,
+        priority: whatsappNeedsHuman ? 'high' : 'clear',
+        route: '/admin/whatsapp-inbox',
+        tab: 'whatsapp',
+        action: 'Open escalated conversations, reply, resolve, or hand over to owner.'
+      },
+      {
+        key: 'advertising_revenue',
+        label: 'Advertising pipeline',
+        value: adOpenLeads,
+        priority: adOpenLeads ? 'medium' : 'clear',
+        route: '/admin/advertising',
+        tab: 'ads',
+        action: 'Turn advertiser interest into campaign drafts, invoices, payments, and live placements.'
+      },
+      {
+        key: 'communication_health',
+        label: 'Failed communication logs',
+        value: failedEmails + failedWhatsapp,
+        priority: failedEmails + failedWhatsapp ? 'high' : 'clear',
+        route: '/admin/notifications',
+        tab: 'notifications',
+        action: 'Check failed email and WhatsApp logs before launch traffic increases.'
+      },
+      {
+        key: 'launch_cleanup',
+        label: 'QA/test records hidden by clean mode',
+        value: testListings + testUsers,
+        priority: testListings + testUsers ? 'medium' : 'clear',
+        route: '/admin/listings',
+        tab: 'listings',
+        action: 'Default view hides obvious test records; uncheck clean mode when you need to audit them.'
+      }
+    ];
+
+    return res.json({
+      ok: true,
+      data: {
+        generated_at: new Date().toISOString(),
+        metrics: {
+          pending_listings: pendingListings,
+          live_listings: liveListings,
+          hidden_listings: hiddenListings,
+          deleted_listings: deletedListings,
+          broker_pending: brokerPending,
+          broker_approved: brokerApproved,
+          open_leads: crmLeads,
+          hot_leads: hotLeads,
+          overdue_tasks: overdueTasks,
+          whatsapp_needs_human: whatsappNeedsHuman,
+          failed_emails: failedEmails,
+          failed_whatsapp: failedWhatsapp,
+          advertising_open_leads: adOpenLeads,
+          live_ads: liveAds,
+          paid_revenue_ugx: paidRevenue,
+          quoted_pipeline_ugx: quotedPipeline,
+          test_records: testListings + testUsers,
+          property_requests: propertyRequests
+        },
+        decisions
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/recent', async (req, res, next) => {
   try {
     const [recentProperties, recentAgents, recentReports, recentUsers, recentPropertyRequests] = await Promise.all([

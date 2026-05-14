@@ -819,6 +819,13 @@ function run() {
   assert(frontendSource.includes('id="admin-launch-control"'), 'admin launch control should exist');
   assert(frontendSource.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
   assert(frontendSource.includes('id="admin-control-shortcuts"'), 'admin dashboard should expose direct owner control shortcuts');
+  assert(frontendSource.includes('id="admin-command-centre"'), 'admin dashboard should expose the simplified command centre');
+  assert(frontendSource.includes('id="admin-decision-queue"'), 'admin dashboard should show a decision-first queue');
+  assert(frontendSource.includes('id="admin-command-search"') && frontendSource.includes('adminRunCommandSearch'), 'admin dashboard should support plain-English panel search');
+  assert(frontendSource.includes('id="admin-live-clean-mode"') && frontendSource.includes('adminApplyLaunchCleanFilter'), 'admin dashboard should default to a clean launch view that hides obvious QA/test noise');
+  assert(frontendSource.includes('AI CEO friendly') && frontendSource.includes('Run AI CEO'), 'admin dashboard should be structured for the AI CEO workflow');
+  assert(adminRoutes.includes("router.get('/command-centre'"), 'admin backend should expose a compact command-centre API for dashboard and AI CEO decisions');
+  assert(frontendSource.includes('/api/admin/command-centre'), 'admin dashboard should load the command-centre API');
   assert(frontendSource.includes('King Dashboard'), 'owner control centre should be labelled King Dashboard');
   assert(frontendSource.includes('id="king-control-map"'), 'King dashboard should expose the full control map');
   assert(frontendSource.includes('King Dashboard Control Map'), 'King control map should be visible in the protected dashboard');
