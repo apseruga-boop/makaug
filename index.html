@@ -3707,13 +3707,22 @@
   </div>
 
   <div id="page-agent-dashboard" class="page">
-    <div class="bg-green-800 py-8 text-white">
-      <div class="max-w-6xl mx-auto px-4">
-        <h1 class="text-3xl font-black serif">Broker Dashboard</h1>
-        <p class="text-green-200 mt-1">Manage listings and monitor engagement performance</p>
+    <div class="bg-green-900 py-8 text-white">
+      <div class="max-w-7xl mx-auto px-4">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <p id="agent-dashboard-weather" class="text-xs font-black uppercase tracking-wide text-green-200">Broker workspace</p>
+            <h1 id="agent-dashboard-greeting" class="text-3xl md:text-4xl font-black serif mt-1">Broker Dashboard</h1>
+            <p class="text-green-100 mt-2 max-w-3xl">Run your MakaUg profile, listings, leads, WhatsApp enquiries, training, and boost campaigns from one workspace.</p>
+          </div>
+          <div class="bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-sm text-green-50">
+            <div class="font-black">Secure broker session</div>
+            <div>Only signed-in broker accounts can submit fast-track listings.</div>
+          </div>
+        </div>
       </div>
     </div>
-    <div class="max-w-6xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto px-4 py-8">
       <div id="agent-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
         <div class="text-4xl mb-3">🧑‍💼</div>
         <h2 class="text-xl font-bold text-gray-800 mb-2">Broker sign in required</h2>
@@ -3722,20 +3731,22 @@
       </div>
 
       <div id="agent-body" class="hidden space-y-6">
-        <div class="bg-white border border-gray-200 rounded-2xl p-6">
-          <div class="flex justify-between items-start gap-4 flex-wrap">
-            <div class="flex items-start gap-4">
-              <div id="agent-profile-avatar" class="w-20 h-20 rounded-full bg-green-100 text-green-900 flex items-center justify-center text-3xl font-black shrink-0">M</div>
-              <div>
-                <h2 id="agent-dashboard-name" class="text-2xl font-black text-gray-900">Broker Profile</h2>
+        <div class="bg-white border border-gray-200 rounded-2xl p-5 md:p-6">
+          <div class="grid lg:grid-cols-[1fr_auto] gap-5 items-start">
+            <div class="flex items-start gap-4 min-w-0">
+              <div id="agent-profile-avatar" class="w-20 h-20 rounded-full bg-green-100 text-green-900 flex items-center justify-center text-3xl font-black shrink-0 overflow-hidden">M</div>
+              <div class="min-w-0">
+                <div class="text-xs font-black uppercase tracking-wide text-green-700">Broker operating centre</div>
+                <h2 id="agent-dashboard-name" class="text-2xl md:text-3xl font-black text-gray-900 leading-tight">Broker Profile</h2>
                 <p id="agent-dashboard-status" class="text-sm text-gray-500 mt-1">Status information</p>
-                <p id="agent-dashboard-summary" class="text-sm text-gray-600 mt-2 max-w-2xl">Your broker profile, listings, leads, and advertising tools appear here after verification.</p>
+                <p id="agent-dashboard-summary" class="text-sm text-gray-600 mt-2 max-w-3xl">Your broker profile, listings, leads, WhatsApp requests, and advertising tools appear here after verification.</p>
                 <div id="agent-dashboard-badges" class="flex flex-wrap gap-2 mt-3"></div>
               </div>
             </div>
-            <div class="flex gap-2 flex-wrap">
+            <div class="flex gap-2 flex-wrap lg:justify-end">
               <button onclick="startBrokerOnlineListing()" class="bg-green-700 text-white hover:bg-green-600 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1" aria-hidden="true"></i> List Property</button>
-              <button onclick="document.getElementById('broker-settings-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Broker Settings</button>
+              <button onclick="shareBrokerCard()" class="border border-green-200 text-green-800 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-share-nodes mr-1" aria-hidden="true"></i> Share Card</button>
+              <button onclick="openBrokerSettingsModal()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Broker Settings</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold">Sign Out</button>
             </div>
           </div>
@@ -3747,7 +3758,21 @@
           <button onclick="showPage('account')" class="mt-3 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">Open account settings</button>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div id="broker-dashboard-tabs" class="bg-white border border-gray-200 rounded-2xl p-2 flex gap-2 overflow-x-auto">
+          <a href="#broker-overview-panel" class="whitespace-nowrap rounded-xl bg-green-700 text-white px-4 py-2 text-sm font-bold">Overview</a>
+          <a href="#broker-listings-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Listings</a>
+          <a href="#broker-leads-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Leads</a>
+          <a href="#broker-profile-share-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Profile and card</a>
+          <a href="#broker-boost-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">Boost</a>
+          <a href="#broker-learning-panel" class="whitespace-nowrap rounded-xl bg-gray-50 text-gray-700 px-4 py-2 text-sm font-bold hover:bg-green-50">How-to</a>
+        </div>
+
+        <div id="broker-overview-panel" class="grid lg:grid-cols-[1.2fr_0.8fr] gap-4">
+          <div id="broker-dashboard-today" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
+          <div id="broker-quick-list-panel" class="bg-green-50 border border-green-100 rounded-2xl p-5"></div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="text-sm text-gray-500">Active Listings</div>
             <div id="agent-stat-listings" class="text-3xl font-black text-gray-900 mt-1">0</div>
@@ -3764,61 +3789,116 @@
             <div class="text-sm text-gray-500">Profile Views</div>
             <div id="agent-stat-profile-views" class="text-3xl font-black text-gray-900 mt-1">0</div>
           </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Lead Enquiries</div>
+            <div id="agent-stat-leads" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
         </div>
 
-        <div class="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
-          <div id="agent-profile-card-preview" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
-          <div id="broker-quickstart-panel" class="bg-green-50 border border-green-100 rounded-2xl p-5"></div>
-        </div>
-
-        <div class="bg-white border border-gray-200 rounded-2xl p-5">
-          <h2 class="text-xl font-bold text-gray-800 mb-4">Your Listings and Review Status</h2>
-          <div id="agent-listings-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
-        </div>
-        <div id="broker-settings-panel" class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="broker-listings-panel" class="bg-white border border-gray-200 rounded-2xl p-5">
           <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
             <div>
-              <h2 class="text-xl font-bold text-gray-900">Broker account settings</h2>
-              <p class="text-sm text-gray-600">Update the broker card that property seekers see. Saved changes update the backend profile; listings still need MakaUg approval before going live.</p>
+              <h2 class="text-xl font-bold text-gray-900">Listings desk</h2>
+              <p class="text-sm text-gray-600">Create, preview, edit, share, and boost listings. New or edited broker listings still wait for MakaUg approval before going public.</p>
             </div>
-            <button onclick="showPage('account')" class="border border-green-700 text-green-800 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Password & account security</button>
+            <button onclick="startBrokerOnlineListing()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Fast-track listing upload</button>
           </div>
-          <div class="grid lg:grid-cols-[180px_1fr] gap-5">
-            <div>
-              <label class="block text-xs font-bold text-gray-600 mb-2">Broker profile photo</label>
-              <div id="broker-settings-photo-preview" class="w-32 h-32 rounded-full bg-green-100 text-green-900 flex items-center justify-center text-4xl font-black overflow-hidden">M</div>
-              <input id="broker-settings-photo-input" type="file" accept="image/*" onchange="handleBrokerSettingsPhoto(event)" class="mt-3 w-full text-xs">
-            </div>
-            <div class="grid sm:grid-cols-2 gap-3">
-              <label class="block">
-                <span class="block text-xs font-bold text-gray-600 mb-1">Display name</span>
-                <input id="broker-settings-full-name" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Broker name">
-              </label>
-              <label class="block">
-                <span class="block text-xs font-bold text-gray-600 mb-1">Agency / company</span>
-                <input id="broker-settings-company" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Independent broker or agency">
-              </label>
-              <label class="block">
-                <span class="block text-xs font-bold text-gray-600 mb-1">WhatsApp number</span>
-                <input id="broker-settings-whatsapp" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="+256 7XX XXX XXX">
-              </label>
-              <label class="block">
-                <span class="block text-xs font-bold text-gray-600 mb-1">Areas covered</span>
-                <input id="broker-settings-areas" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Kampala, Wakiso, Mukono">
-              </label>
-              <label class="block sm:col-span-2">
-                <span class="block text-xs font-bold text-gray-600 mb-1">Specialisations</span>
-                <input id="broker-settings-specializations" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Rentals, land, commercial, student housing">
-              </label>
-              <label class="block sm:col-span-2">
-                <span class="block text-xs font-bold text-gray-600 mb-1">About you</span>
-                <textarea id="broker-settings-bio" rows="4" class="w-full border border-gray-200 rounded-xl px-3 py-2" placeholder="Tell property seekers who you help, where you work, and what kind of properties you handle."></textarea>
-              </label>
-              <div class="sm:col-span-2 flex gap-2 flex-wrap">
-                <button onclick="saveBrokerProfileSettings()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save broker card</button>
-                <button onclick="startBrokerOnlineListing()" class="border border-green-700 text-green-800 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">List another property</button>
+          <div id="agent-listings-grid" class="grid lg:grid-cols-2 gap-4"></div>
+        </div>
+
+        <div id="broker-leads-panel" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
+
+        <div id="broker-profile-share-panel" class="grid lg:grid-cols-[1.1fr_0.9fr] gap-4">
+          <div id="agent-profile-card-preview" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
+          <div id="broker-whatsapp-card" class="bg-white border border-green-100 rounded-2xl p-5"></div>
+        </div>
+
+        <div id="broker-boost-panel" class="bg-white border border-gray-200 rounded-2xl p-5"></div>
+
+        <div id="broker-learning-panel" class="grid lg:grid-cols-[0.95fr_1.05fr] gap-4">
+          <div id="broker-quickstart-panel" class="bg-green-50 border border-green-100 rounded-2xl p-5"></div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h2 class="text-xl font-black text-gray-900">Broker support library</h2>
+                <p class="text-sm text-gray-600 mt-1">Training videos, PDF guides, terms, privacy, and direct support for active brokers.</p>
               </div>
-              <div id="broker-settings-status" class="sm:col-span-2 hidden rounded-xl border px-3 py-2 text-sm"></div>
+              <span class="rounded-full bg-amber-50 border border-amber-100 px-3 py-1 text-xs font-black text-amber-800">Self-service</span>
+            </div>
+            <div id="broker-resource-grid" class="grid sm:grid-cols-2 gap-3 mt-4"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="broker-settings-panel" class="hidden fixed inset-0 z-[70] bg-black/50 p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="broker-settings-title">
+      <div class="max-w-6xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div class="bg-green-900 text-white px-5 py-4 flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-green-200">Broker profile window</p>
+            <h2 id="broker-settings-title" class="text-2xl font-black serif">Broker account settings</h2>
+            <p class="text-sm text-green-100 mt-1">Edit the broker card that property seekers see. Saved changes update the backend profile; listings still need MakaUg approval before going live.</p>
+          </div>
+          <button onclick="closeBrokerSettingsModal()" class="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-white text-2xl leading-none" aria-label="Close broker settings">&times;</button>
+        </div>
+        <div class="p-5">
+          <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-5">
+            <div>
+              <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+                <div>
+                  <h3 class="text-xl font-bold text-gray-900">Profile details</h3>
+                  <p class="text-sm text-gray-600">This becomes your public broker card, WhatsApp share card, and profile page identity.</p>
+                </div>
+                <button onclick="showPage('account')" class="border border-green-700 text-green-800 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Password & account security</button>
+              </div>
+              <div class="grid lg:grid-cols-[170px_1fr] gap-5">
+                <div>
+                  <label class="block text-xs font-bold text-gray-600 mb-2">Broker profile photo</label>
+                  <div id="broker-settings-photo-preview" class="w-32 h-32 rounded-full bg-green-100 text-green-900 flex items-center justify-center text-4xl font-black overflow-hidden">M</div>
+                  <input id="broker-settings-photo-input" type="file" accept="image/*" onchange="handleBrokerSettingsPhoto(event)" class="mt-3 w-full text-xs">
+                  <p class="text-xs text-gray-500 mt-2">Use a clear face photo or agency logo. This appears on Find Brokers and shared cards.</p>
+                </div>
+                <div class="grid sm:grid-cols-2 gap-3">
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Display name</span>
+                    <input id="broker-settings-full-name" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Broker name">
+                  </label>
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Agency / company</span>
+                    <input id="broker-settings-company" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Independent broker or agency">
+                  </label>
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">WhatsApp number</span>
+                    <input id="broker-settings-whatsapp" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="+256 7XX XXX XXX">
+                  </label>
+                  <label class="block">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Areas covered</span>
+                    <input id="broker-settings-areas" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Kampala, Wakiso, Mukono">
+                  </label>
+                  <label class="block sm:col-span-2">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">Specialisations</span>
+                    <input id="broker-settings-specializations" class="w-full min-h-[48px] border border-gray-200 rounded-xl px-3 py-2" placeholder="Rentals, land, commercial, student housing">
+                  </label>
+                  <label class="block sm:col-span-2">
+                    <span class="block text-xs font-bold text-gray-600 mb-1">About you</span>
+                    <textarea id="broker-settings-bio" rows="5" class="w-full border border-gray-200 rounded-xl px-3 py-2" placeholder="Tell property seekers who you help, where you work, and what kind of properties you handle."></textarea>
+                  </label>
+                  <div class="sm:col-span-2 flex gap-2 flex-wrap">
+                    <button onclick="polishBrokerBioDraft()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Polish bio draft</button>
+                    <button onclick="saveBrokerProfileSettings()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">Save broker card</button>
+                    <button onclick="startBrokerOnlineListing()" class="border border-green-700 text-green-800 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">List another property</button>
+                  </div>
+                  <div id="broker-settings-status" class="sm:col-span-2 hidden rounded-xl border px-3 py-2 text-sm"></div>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div id="broker-settings-live-preview" class="bg-green-50 border border-green-100 rounded-2xl p-4"></div>
+              <div class="mt-4 bg-amber-50 border border-amber-100 rounded-2xl p-4 text-sm text-amber-950">
+                <h3 class="font-black">Data, privacy, and approval</h3>
+                <p class="mt-1">Your National ID and broker verification details are used for safety, fraud prevention, legal compliance, and broker review. If your account is deleted, MakaUg deletes or anonymises broker ID data unless legal retention is required.</p>
+                <p class="mt-2">Any listing you create or edit remains hidden from the public website until MakaUg approves it.</p>
+              </div>
             </div>
           </div>
         </div>

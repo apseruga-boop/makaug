@@ -183,6 +183,7 @@ function mapRemoteAgentForUi(agent = {}) {
     live_listings: Number(agent.live_listings || agent.listings_count || 0) || 0,
     pending_listings: Number(agent.pending_listings || agent.pending_listings_count || 0) || 0,
     rejected_listings: Number(agent.rejected_listings || 0) || 0,
+    lead_enquiries: Number(agent.lead_enquiries || agent.inquiry_count || 0) || 0,
     sales: Number(agent.sales_count || agent.sales || 0) || 0,
     emoji: agent.profile_photo_url ? "" : "👔",
     photo: agent.profile_photo_url || "",
@@ -6605,26 +6606,138 @@ function mergeBrokerDashboardListings(remoteListings = [], broker = {}) {
   return rows;
 }
 
+function brokerMetric(value = 0) {
+  return Number(value || 0).toLocaleString("en-UG");
+}
+
+function brokerListingStatusMeta(status = "") {
+  const normalized = String(status || "pending").toLowerCase();
+  if (normalized === "approved" || normalized === "live" || normalized === "published") {
+    return { label: "Live", className: "bg-green-50 border-green-100 text-green-800", next: "Visible on makaug.com" };
+  }
+  if (normalized === "rejected" || normalized === "declined") {
+    return { label: "Needs changes", className: "bg-red-50 border-red-100 text-red-800", next: "Fix and resubmit for MakaUg review" };
+  }
+  return { label: "In review", className: "bg-amber-50 border-amber-100 text-amber-800", next: "Waiting for MakaUg admin approval" };
+}
+
+function brokerListingLeadCount(p = {}) {
+  return Number(p.inquiry_count || p.lead_count || p.leads || 0) || 0;
+}
+
+function brokerListingQualityScore(p = {}) {
+  let score = 20;
+  if (p.title && String(p.title).trim().length > 8) score += 15;
+  if (p.price && Number(p.price) > 0) score += 15;
+  if (p.district || p.area || p.resolved_location_label) score += 15;
+  if (Array.isArray(p.images) && p.images.length >= 3) score += 20;
+  else if (p.img || (Array.isArray(p.images) && p.images.length)) score += 10;
+  if ((p.desc || p.description || "").length > 80) score += 10;
+  if (p.video_url || p.youtube_url) score += 5;
+  return Math.min(100, score);
+}
+
+function brokerDashboardProfileUrl(broker = {}) {
+  if (broker?.id) return `${window.location.origin || "https://makaug.com"}${getBrokerProfilePath(broker)}`;
+  return `${window.location.origin || "https://makaug.com"}/find-brokers`;
+}
+
+function buildBrokerDashboardShareText(broker = {}, stats = {}) {
+  const phone = brokerDisplayPhone(broker);
+  const whatsapp = String(broker.whatsapp || phone || "").replace(/\D/g, "");
+  const areas = Array.isArray(broker.districts_covered) && broker.districts_covered.length
+    ? broker.districts_covered.join(", ")
+    : (broker.area || "Uganda");
+  const url = brokerDashboardProfileUrl(broker);
+  return [
+    `makaug.com broker card: ${broker.name || "MakaUg broker"}`,
+    broker.company || "Independent broker",
+    `Areas: ${areas}`,
+    `Active listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
+    phone ? `Call: ${phone}` : "",
+    whatsapp ? `WhatsApp: https://wa.me/${whatsapp}` : "",
+    url
+  ].filter(Boolean).join("\n");
+}
+
+async function shareBrokerCard(channel = "native") {
+  const broker = brokerDashboardCache?.broker;
+  if (!broker) {
+    toast("Broker profile is still loading.");
+    return;
+  }
+  const stats = brokerDashboardCache?.payload?.stats || {};
+  const shareUrl = brokerDashboardProfileUrl(broker);
+  const shareText = buildBrokerDashboardShareText(broker, stats);
+  try {
+    if (channel === "native" && navigator.share) {
+      await navigator.share({ title: `${broker.name || "MakaUg broker"} on makaug.com`, text: shareText, url: shareUrl });
+      return;
+    }
+    if (channel === "whatsapp") {
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const copied = await copyTextToClipboard(shareText);
+    toast(copied ? "Broker card copied. Share it on WhatsApp or social media." : "Unable to copy broker card right now.");
+  } catch (_) {
+    toast("Unable to share broker card right now.");
+  }
+}
+
+function openBrokerSettingsModal() {
+  const modal = document.getElementById("broker-settings-panel");
+  if (!modal) return;
+  hydrateBrokerSettingsForm(brokerDashboardCache?.broker || {});
+  renderBrokerSettingsLivePreview(brokerDashboardCache?.broker || {}, brokerDashboardCache?.listings || [], brokerDashboardCache?.payload?.stats || {});
+  modal.classList.remove("hidden");
+  document.body.classList.add("overflow-hidden");
+  window.setTimeout(() => document.getElementById("broker-settings-full-name")?.focus(), 30);
+}
+
+function closeBrokerSettingsModal() {
+  const modal = document.getElementById("broker-settings-panel");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  document.body.classList.remove("overflow-hidden");
+}
+
 function renderBrokerDashboardListingCard(p) {
-  const status = String(p.status || "pending").toLowerCase();
-  const statusClass = status === "approved"
-    ? "bg-green-50 border-green-100 text-green-800"
-    : (status === "rejected" ? "bg-red-50 border-red-100 text-red-800" : "bg-amber-50 border-amber-100 text-amber-800");
+  const statusMeta = brokerListingStatusMeta(p.status);
+  const views = getPropertyViewCount(p.id);
+  const saves = getPropertySaveCount(p.id);
+  const leads = brokerListingLeadCount(p);
+  const quality = brokerListingQualityScore(p);
+  const shouldBoost = String(p.status || "").toLowerCase() === "approved" && (views >= 25 || saves >= 5 || leads >= 2);
+  const location = [p.area, p.district].filter(Boolean).join(", ") || "Location pending";
   return `
-    <div class="border border-gray-200 rounded-xl p-4 bg-white">
-      <div class="flex items-start justify-between gap-2">
-        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="text-left font-black text-gray-900 line-clamp-2 hover:text-green-700">${adminEscape(p.title || "MakaUg listing")}</button>
-        <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusClass}">${adminEscape(status === "approved" ? "Live" : (status === "rejected" ? "Needs changes" : "In review"))}</span>
+    <div class="border border-gray-200 rounded-2xl p-4 bg-white">
+      <div class="grid sm:grid-cols-[120px_1fr] gap-4">
+        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="h-28 rounded-xl bg-gray-100 overflow-hidden border border-gray-100">
+          <img src="${adminAttr(p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500&q=80")}" alt="${adminAttr(p.title || "Broker listing")}" class="w-full h-full object-cover">
+        </button>
+        <div class="min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="text-left font-black text-gray-900 line-clamp-2 hover:text-green-700">${adminEscape(p.title || "MakaUg listing")}</button>
+            <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusMeta.className}">${adminEscape(statusMeta.label)}</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(p.subtype || p.type || "Property")}</p>
+          <div class="text-sm font-bold text-green-700 mt-2">${fmtP(p.price || 0, p.period || p.price_period || "")}</div>
+          <div class="mt-3 grid grid-cols-4 gap-2 text-xs text-gray-600">
+            <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(views)}</strong><br>Views</span>
+            <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(saves)}</strong><br>Saves</span>
+            <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${brokerMetric(leads)}</strong><br>Leads</span>
+            <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1"><strong>${quality}%</strong><br>Quality</span>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">${adminEscape(statusMeta.next)}${shouldBoost ? " • Good candidate for boost." : ""}</p>
+        </div>
       </div>
-      <p class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "Location pending")}</p>
-      <div class="text-sm font-bold text-green-700 mt-2">${fmtP(p.price || 0, p.period || p.price_period || "")}</div>
-      <div class="mt-3 grid grid-cols-2 gap-2 text-xs text-gray-600">
-        <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1">Views: ${getPropertyViewCount(p.id)}</span>
-        <span class="rounded-lg bg-gray-50 border border-gray-100 px-2 py-1">Saves: ${getPropertySaveCount(p.id)}</span>
-      </div>
-      <div class="mt-3 flex gap-2 flex-wrap">
-        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">View</button>
-        <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>
+      <div class="mt-4 flex gap-2 flex-wrap">
+        <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Preview</button>
+        <button onclick="editBrokerListing(${propertyIdArg(p.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-bold">Edit</button>
+        <button onclick="shareBrokerListing(${propertyIdArg(p.id)})" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Share</button>
+        <button onclick="openBrokerBoostPlanner(${propertyIdArg(p.id)})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Boost</button>
+        <button onclick="requestBrokerListingRemoval(${propertyIdArg(p.id)})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Request removal</button>
       </div>
     </div>`;
 }
@@ -6636,34 +6749,85 @@ function renderBrokerProfilePreview(broker = {}, listings = [], stats = {}) {
   const whatsapp = String(broker.whatsapp || phone || "").replace(/\D/g, "");
   const areas = Array.isArray(broker.districts_covered) && broker.districts_covered.length ? broker.districts_covered : String(broker.area || "Uganda").split("•").map((x) => x.trim()).filter(Boolean);
   const specs = Array.isArray(broker.specializations) && broker.specializations.length ? broker.specializations : (broker.specialties || []);
+  const avatarBroker = { ...broker, emoji: broker.photo || broker.profile_photo_url ? "" : brokerInitials(broker.name) };
   preview.innerHTML = `
-    <div class="flex items-start gap-4">
-      <div>${brokerAvatarHtml(broker, "w-24 h-24 border-4")}</div>
-      <div class="min-w-0 flex-1">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
         <div class="text-xs font-black uppercase tracking-wide text-green-700">Public broker card preview</div>
-        <h3 class="text-2xl font-black text-gray-900 mt-1">${adminEscape(broker.name || "MakaUg broker")}</h3>
-        <p class="text-sm text-gray-500">${adminEscape(broker.company || "Independent broker")}</p>
-        <p class="text-sm text-gray-600 mt-2">${adminEscape(broker.bio || "Add a short broker bio so clients know where you work and what you handle.")}</p>
-        <div class="grid grid-cols-2 gap-2 mt-4 text-center">
-          <div class="rounded-xl bg-green-50 border border-green-100 p-3">
-            <div class="text-2xl font-black text-green-900">${Number(stats.active_listings ?? listings.filter((item) => item.status === "approved").length)}</div>
-            <div class="text-xs text-green-800">Active Listings</div>
+        <h2 class="text-xl font-black text-gray-900 mt-1">What property seekers see</h2>
+      </div>
+      <button onclick="shareBrokerCard()" class="border border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Share public card</button>
+    </div>
+    <div class="mt-4 border border-green-100 rounded-2xl p-4 bg-gradient-to-br from-white to-green-50">
+      <div class="grid sm:grid-cols-[120px_1fr] gap-4">
+        <div>${brokerAvatarHtml(avatarBroker, "w-28 h-28 border-4")}</div>
+        <div class="min-w-0">
+          <h3 class="text-2xl font-black text-gray-900 leading-tight">${adminEscape(broker.name || "MakaUg broker")}</h3>
+          <p class="text-sm text-gray-500">${adminEscape(broker.company || "Independent broker")}</p>
+          <p class="text-sm text-gray-600 mt-2">${adminEscape(broker.bio || "Add a short broker bio so clients know where you work and what you handle.")}</p>
+          <div class="grid sm:grid-cols-3 gap-2 mt-4 text-center">
+            <div class="rounded-xl bg-white border border-green-100 p-3">
+              <div class="text-2xl font-black text-green-900">${brokerMetric(stats.active_listings ?? listings.filter((item) => item.status === "approved").length)}</div>
+              <div class="text-xs text-green-800">Active Listings</div>
+            </div>
+            <div class="rounded-xl bg-white border border-amber-100 p-3">
+              <div class="text-2xl font-black text-amber-900">${brokerMetric(stats.pending_listings ?? listings.filter((item) => item.status === "pending").length)}</div>
+              <div class="text-xs text-amber-800">In Review</div>
+            </div>
+            <div class="rounded-xl bg-white border border-blue-100 p-3">
+              <div class="text-2xl font-black text-blue-900">${brokerMetric(stats.lead_enquiries ?? listings.reduce((sum, item) => sum + brokerListingLeadCount(item), 0))}</div>
+              <div class="text-xs text-blue-800">Lead Enquiries</div>
+            </div>
           </div>
-          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3">
-            <div class="text-2xl font-black text-amber-900">${Number(stats.pending_listings ?? listings.filter((item) => item.status === "pending").length)}</div>
-            <div class="text-xs text-amber-800">In Review</div>
+          <div class="flex flex-wrap gap-1.5 mt-3">
+            ${areas.slice(0, 5).map((area) => `<span class="rounded-full bg-white border border-gray-100 px-2 py-1 text-xs text-gray-700">${adminEscape(area)}</span>`).join("")}
+            ${specs.slice(0, 5).map((spec) => `<span class="rounded-full bg-green-100 px-2 py-1 text-xs text-green-900">${adminEscape(spec)}</span>`).join("")}
           </div>
-        </div>
-        <div class="flex flex-wrap gap-1.5 mt-3">
-          ${areas.slice(0, 4).map((area) => `<span class="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-700">${adminEscape(area)}</span>`).join("")}
-          ${specs.slice(0, 4).map((spec) => `<span class="rounded-full bg-green-50 px-2 py-1 text-xs text-green-800">${adminEscape(spec)}</span>`).join("")}
-        </div>
-        <div class="grid sm:grid-cols-2 gap-2 mt-4">
-          ${phone ? `<a href="tel:${adminAttr(phone)}" class="bg-green-800 hover:bg-green-700 text-white text-center rounded-xl py-2 text-sm font-bold">Call ${adminEscape((broker.name || "Broker").split(" ")[0])}</a>` : ""}
-          ${whatsapp ? `<a href="https://wa.me/${adminAttr(whatsapp)}" target="_blank" rel="noopener" class="bg-green-500 hover:bg-green-400 text-white text-center rounded-xl py-2 text-sm font-bold">WhatsApp</a>` : ""}
+          <div class="grid sm:grid-cols-3 gap-2 mt-4">
+            ${phone ? `<a href="tel:${adminAttr(phone)}" class="bg-green-800 hover:bg-green-700 text-white text-center rounded-xl py-2 text-sm font-bold">Call</a>` : ""}
+            ${whatsapp ? `<a href="https://wa.me/${adminAttr(whatsapp)}" target="_blank" rel="noopener" class="bg-green-500 hover:bg-green-400 text-white text-center rounded-xl py-2 text-sm font-bold">WhatsApp</a>` : ""}
+            <button onclick="shareBrokerCard('whatsapp')" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl py-2 text-sm font-bold">Share</button>
+          </div>
         </div>
       </div>
     </div>`;
+}
+
+function renderBrokerSettingsLivePreview(broker = {}, listings = [], stats = {}) {
+  const preview = document.getElementById("broker-settings-live-preview");
+  if (!preview) return;
+  const liveBroker = {
+    ...broker,
+    name: (document.getElementById("broker-settings-full-name")?.value || broker.name || "").trim(),
+    company: (document.getElementById("broker-settings-company")?.value || broker.company || "").trim(),
+    whatsapp: normalizePhoneInput(document.getElementById("broker-settings-whatsapp")?.value || broker.whatsapp || ""),
+    bio: (document.getElementById("broker-settings-bio")?.value || broker.bio || "").trim(),
+    districts_covered: (document.getElementById("broker-settings-areas")?.value || "").split(",").map((x) => x.trim()).filter(Boolean),
+    specializations: (document.getElementById("broker-settings-specializations")?.value || "").split(",").map((x) => x.trim()).filter(Boolean),
+    photo: brokerSettingsPhotoDataUrl || broker.photo || broker.profile_photo_url || ""
+  };
+  if (!liveBroker.photo) liveBroker.emoji = brokerInitials(liveBroker.name);
+  preview.innerHTML = `
+    <div class="text-xs font-black uppercase tracking-wide text-green-700">Live preview</div>
+    <div class="mt-3 flex items-start gap-3">
+      ${brokerAvatarHtml(liveBroker, "w-20 h-20 border-4")}
+      <div>
+        <h3 class="text-xl font-black text-gray-900">${adminEscape(liveBroker.name || "MakaUg broker")}</h3>
+        <p class="text-sm text-gray-600">${adminEscape(liveBroker.company || "Independent broker")}</p>
+        <p class="text-sm text-gray-700 mt-2">${adminEscape(liveBroker.bio || "Add a broker bio to build trust.")}</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-4 text-center">
+      <div class="rounded-xl bg-white border border-green-100 p-3">
+        <div class="text-xl font-black text-green-900">${brokerMetric(stats.active_listings || 0)}</div>
+        <div class="text-xs text-green-800">Live</div>
+      </div>
+      <div class="rounded-xl bg-white border border-amber-100 p-3">
+        <div class="text-xl font-black text-amber-900">${brokerMetric(stats.pending_listings || 0)}</div>
+        <div class="text-xs text-amber-800">In review</div>
+      </div>
+    </div>
+    <button onclick="shareBrokerCard('whatsapp')" class="mt-4 w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 text-sm font-bold">Share WhatsApp broker card</button>`;
 }
 
 function renderBrokerQuickstartPanel() {
@@ -6674,27 +6838,297 @@ function renderBrokerQuickstartPanel() {
     <div class="flex items-start justify-between gap-3">
       <div>
         <h2 class="text-xl font-black text-green-950">Broker quick start</h2>
-        <p class="text-sm text-green-900 mt-1">List online, track review status, then boost approved properties when campaign payments are enabled.</p>
+        <p class="text-sm text-green-900 mt-1">A simple operating rhythm for posting quickly, staying approved, and turning enquiries into viewings.</p>
       </div>
       <span class="rounded-full bg-white border border-green-100 px-3 py-1 text-xs font-black text-green-800">How-to</span>
     </div>
     <div class="grid gap-2 mt-4">
       <button onclick="startBrokerOnlineListing()" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
-        <div class="font-black text-green-950">1. List a property online</div>
-        <div class="text-xs text-green-800">Your broker account fills contact details and skips repeated OTP/ID checks.</div>
+        <div class="font-black text-green-950">1. Add properties online</div>
+        <div class="text-xs text-green-800">Your broker account skips repeated OTP and ID checks. MakaUg still reviews before public listing.</div>
       </button>
-      <button onclick="handleAdvertisePropertyCta(event)" class="text-left rounded-xl bg-white border border-amber-100 p-3 hover:border-amber-400">
-        <div class="font-black text-amber-950">2. Boost an approved listing</div>
-        <div class="text-xs text-amber-900">Preview sponsored placement, reach, days live, and payment once advertising is active.</div>
+      <button onclick="document.getElementById('broker-leads-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
+        <div class="font-black text-green-950">2. Work the lead queue</div>
+        <div class="text-xs text-green-800">Web enquiries, WhatsApp requests, and missed-call escalations are grouped by listing.</div>
       </button>
-      <a href="https://wa.me/256760112587?text=Hi%20MakaUg%2C%20I%20need%20broker%20dashboard%20support." target="_blank" rel="noopener" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
-        <div class="font-black text-green-950">3. Get help from MakaUg</div>
-        <div class="text-xs text-green-800">Ask about listings, verification, leads, or WhatsApp AI.</div>
-      </a>
+      <button onclick="openBrokerBoostPlanner()" class="text-left rounded-xl bg-white border border-amber-100 p-3 hover:border-amber-400">
+        <div class="font-black text-amber-950">3. Boost strong listings</div>
+        <div class="text-xs text-amber-900">Preview sponsored placement, reach, days live, and payment readiness.</div>
+      </button>
     </div>
     <div class="mt-4 grid gap-2">
       ${videos.map((video) => `<button onclick="openHowToVideo('${video.key}')" class="text-left rounded-xl border border-green-100 bg-white px-3 py-2 text-sm font-bold text-green-800">${adminEscape(video.title)}</button>`).join("")}
     </div>`;
+}
+
+function renderBrokerTodayPanel(broker = {}, listings = [], stats = {}) {
+  const panel = document.getElementById("broker-dashboard-today");
+  if (!panel) return;
+  const pending = Number(stats.pending_listings ?? listings.filter((item) => String(item.status || "").toLowerCase() === "pending").length);
+  const live = Number(stats.active_listings ?? listings.filter((item) => String(item.status || "").toLowerCase() === "approved").length);
+  const leads = Number(stats.lead_enquiries ?? listings.reduce((sum, item) => sum + brokerListingLeadCount(item), 0));
+  const topListing = [...listings].sort((a, b) => (getPropertyViewCount(b.id) + brokerListingLeadCount(b) * 4) - (getPropertyViewCount(a.id) + brokerListingLeadCount(a) * 4))[0];
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <div class="text-xs font-black uppercase tracking-wide text-green-700">Today</div>
+        <h2 class="text-2xl font-black text-gray-900 mt-1">Your broker control room</h2>
+        <p class="text-sm text-gray-600 mt-1">Keep your profile sharp, listings moving through review, and buyer or tenant leads followed up quickly.</p>
+      </div>
+      <button onclick="openBrokerSettingsModal()" class="border border-green-200 text-green-800 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Update profile</button>
+    </div>
+    <div class="grid sm:grid-cols-3 gap-3 mt-5">
+      <div class="rounded-2xl bg-green-50 border border-green-100 p-4">
+        <div class="text-3xl font-black text-green-900">${brokerMetric(live)}</div>
+        <div class="text-sm font-bold text-green-800">Live listings</div>
+        <p class="text-xs text-green-800 mt-1">Approved and visible to seekers.</p>
+      </div>
+      <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+        <div class="text-3xl font-black text-amber-900">${brokerMetric(pending)}</div>
+        <div class="text-sm font-bold text-amber-800">In review</div>
+        <p class="text-xs text-amber-800 mt-1">Admin approval required before going live.</p>
+      </div>
+      <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+        <div class="text-3xl font-black text-blue-900">${brokerMetric(leads)}</div>
+        <div class="text-sm font-bold text-blue-800">Lead enquiries</div>
+        <p class="text-xs text-blue-800 mt-1">From website forms and listing contact actions.</p>
+      </div>
+    </div>
+    <div class="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div class="text-xs font-black uppercase tracking-wide text-gray-500">Recommended next action</div>
+      <h3 class="font-black text-gray-900 mt-1">${topListing ? adminEscape(topListing.title || "Review your best listing") : "Add your first broker listing"}</h3>
+      <p class="text-sm text-gray-600 mt-1">${topListing ? "Check listing quality, share the property card, and boost it when approved if demand is strong." : "Use the broker fast-track listing form. Your contact details and ID verification stay attached to your broker account."}</p>
+      <div class="flex gap-2 flex-wrap mt-3">
+        <button onclick="${topListing ? `openPropertyCardDetail(event, ${propertyIdArg(topListing.id)})` : "startBrokerOnlineListing()"}" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold">${topListing ? "Preview listing" : "Start listing"}</button>
+        <button onclick="openBrokerBoostPlanner(${topListing ? propertyIdArg(topListing.id) : ""})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-bold">Open boost planner</button>
+      </div>
+    </div>`;
+}
+
+function renderBrokerQuickListPanel(broker = {}) {
+  const panel = document.getElementById("broker-quick-list-panel");
+  if (!panel) return;
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="text-xs font-black uppercase tracking-wide text-green-700">Fast-track upload</div>
+        <h2 class="text-xl font-black text-green-950 mt-1">List faster as a broker</h2>
+        <p class="text-sm text-green-900 mt-1">Your email, WhatsApp, broker ID, and National ID verification are already linked. Upload the property online and MakaUg reviews it before publication.</p>
+      </div>
+      <span class="rounded-full bg-white border border-green-100 px-3 py-1 text-xs font-black text-green-800">Broker only</span>
+    </div>
+    <div class="grid gap-2 mt-4 text-sm">
+      <div class="rounded-xl bg-white border border-green-100 p-3"><strong>1.</strong> Property name, price, location, and type.</div>
+      <div class="rounded-xl bg-white border border-green-100 p-3"><strong>2.</strong> Photos, features, and contact preference.</div>
+      <div class="rounded-xl bg-white border border-green-100 p-3"><strong>3.</strong> Submit to MakaUg review. No repeated OTP or ID upload.</div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-2 mt-4">
+      <button onclick="startBrokerOnlineListing()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 font-black">Upload property</button>
+      <button onclick="shareBrokerCard('whatsapp')" class="bg-white border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 font-black">Share broker card</button>
+    </div>
+    <p class="text-xs text-green-800 mt-3">Signed in as ${adminEscape(broker.email || brokerDisplayPhone(broker) || "broker account")}. If you use WhatsApp with the same phone or email, MakaUg links it to this broker profile.</p>`;
+}
+
+function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
+  const panel = document.getElementById("broker-leads-panel");
+  if (!panel) return;
+  const leadRows = listings
+    .map((listing) => ({
+      listing,
+      leads: brokerListingLeadCount(listing),
+      views: getPropertyViewCount(listing.id),
+      saves: getPropertySaveCount(listing.id)
+    }))
+    .sort((a, b) => (b.leads * 10 + b.views + b.saves * 2) - (a.leads * 10 + a.views + a.saves * 2))
+    .slice(0, 5);
+  const totalLeads = Number(stats.lead_enquiries ?? listings.reduce((sum, item) => sum + brokerListingLeadCount(item), 0));
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="text-xs font-black uppercase tracking-wide text-blue-700">Lead centre</div>
+        <h2 class="text-xl font-black text-gray-900 mt-1">Enquiries, WhatsApp, and callback follow-up</h2>
+        <p class="text-sm text-gray-600 mt-1">Website enquiries are counted from the backend by listing. WhatsApp AI and missed-call escalations feed the lead-generation workflow and owner notifications.</p>
+      </div>
+      <a href="mailto:info@makaug.com?subject=Broker%20lead%20support" class="border border-blue-200 text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Email MakaUg</a>
+    </div>
+    <div class="grid md:grid-cols-3 gap-3 mt-4">
+      <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
+        <div class="text-3xl font-black text-blue-900">${brokerMetric(totalLeads)}</div>
+        <div class="text-sm font-bold text-blue-800">Total lead enquiries</div>
+      </div>
+      <div class="rounded-2xl bg-green-50 border border-green-100 p-4">
+        <div class="text-3xl font-black text-green-900">${brokerMetric(listings.filter((item) => String(item.status || "").toLowerCase() === "approved").length)}</div>
+        <div class="text-sm font-bold text-green-800">Lead-ready listings</div>
+      </div>
+      <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4">
+        <div class="text-3xl font-black text-amber-900">${brokerMetric(listings.filter((item) => String(item.status || "").toLowerCase() !== "approved").length)}</div>
+        <div class="text-sm font-bold text-amber-800">Awaiting approval</div>
+      </div>
+    </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-gray-500 border-b">
+            <th class="py-2 pr-3">Listing</th>
+            <th class="py-2 pr-3">Leads</th>
+            <th class="py-2 pr-3">Views</th>
+            <th class="py-2 pr-3">Next action</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${leadRows.length ? leadRows.map(({ listing, leads, views }) => `
+            <tr class="border-b last:border-b-0">
+              <td class="py-3 pr-3 font-bold text-gray-900">${adminEscape(listing.title || "MakaUg listing")}<div class="text-xs font-normal text-gray-500">${adminEscape([listing.area, listing.district].filter(Boolean).join(", ") || "Location pending")}</div></td>
+              <td class="py-3 pr-3">${brokerMetric(leads)}</td>
+              <td class="py-3 pr-3">${brokerMetric(views)}</td>
+              <td class="py-3 pr-3"><button onclick="openPropertyCardDetail(event, ${propertyIdArg(listing.id)})" class="border border-green-200 text-green-700 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-green-50">Open listing</button></td>
+            </tr>`).join("") : `<tr><td colspan="4" class="py-4 text-gray-500">No listing enquiries yet. As listings go live, enquiries from property cards will appear here.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderBrokerWhatsAppCard(broker = {}, stats = {}) {
+  const panel = document.getElementById("broker-whatsapp-card");
+  if (!panel) return;
+  const shareText = buildBrokerDashboardShareText(broker, stats);
+  panel.innerHTML = `
+    <div class="text-xs font-black uppercase tracking-wide text-green-700">WhatsApp agent card</div>
+    <h2 class="text-xl font-black text-gray-900 mt-1">Ready-to-send broker card</h2>
+    <p class="text-sm text-gray-600 mt-1">Use this for WhatsApp, Facebook, LinkedIn, and direct referrals. It keeps your MakaUg profile, phone, areas, and live listing count together.</p>
+    <div id="broker-dashboard-whatsapp-share-card" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm whitespace-pre-line text-green-950">${adminEscape(shareText)}</div>
+    <div class="grid sm:grid-cols-2 gap-2 mt-4">
+      <button onclick="shareBrokerCard('whatsapp')" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 font-bold">Send on WhatsApp</button>
+      <button onclick="shareBrokerCard('copy')" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-2 font-bold">Copy card</button>
+    </div>`;
+}
+
+function renderBrokerBoostPanel(listingId = "") {
+  const panel = document.getElementById("broker-boost-panel");
+  if (!panel) return;
+  const listings = brokerDashboardCache?.listings || [];
+  const selected = listings.find((item) => String(item.id) === String(listingId)) || listings.find((item) => String(item.status || "").toLowerCase() === "approved") || listings[0] || null;
+  const views = selected ? getPropertyViewCount(selected.id) : 0;
+  const leads = selected ? brokerListingLeadCount(selected) : 0;
+  const baseReach = Math.max(450, (views * 18) + (leads * 120) + 600);
+  const isLive = selected && String(selected.status || "").toLowerCase() === "approved";
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="text-xs font-black uppercase tracking-wide text-amber-700">Advertising desk</div>
+        <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
+        <p class="text-sm text-gray-600 mt-1">Plan sponsored placement, preview where the ad sits, and prepare payments. Campaigns go live after payment and MakaUg approval.</p>
+      </div>
+      <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Open public ad options</button>
+    </div>
+    <div class="grid lg:grid-cols-[0.9fr_1.1fr] gap-4 mt-4">
+      <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <label class="block text-xs font-black text-gray-600 mb-2">Property to boost</label>
+        <select id="broker-boost-listing-select" onchange="openBrokerBoostPlanner(this.value)" class="w-full min-h-[46px] rounded-xl border border-gray-200 px-3">
+          ${listings.length ? listings.map((item) => `<option value="${adminAttr(item.id)}" ${selected && String(item.id) === String(selected.id) ? "selected" : ""}>${adminEscape(item.title || "MakaUg listing")} - ${adminEscape(brokerListingStatusMeta(item.status).label)}</option>`).join("") : `<option>No listings yet</option>`}
+        </select>
+        <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
+          <div class="rounded-xl bg-white border border-gray-100 p-3"><strong>${selected ? brokerMetric(views) : "0"}</strong><br><span class="text-xs text-gray-500">Views</span></div>
+          <div class="rounded-xl bg-white border border-gray-100 p-3"><strong>${selected ? brokerMetric(leads) : "0"}</strong><br><span class="text-xs text-gray-500">Leads</span></div>
+        </div>
+        <p class="text-xs text-gray-600 mt-3">${isLive ? "This listing can be prepared for boost once campaign payment is enabled." : "This listing must be approved before an ad can go live."}</p>
+      </div>
+      <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+        <div class="grid md:grid-cols-3 gap-3">
+          <div class="rounded-xl bg-white border border-amber-100 p-3">
+            <div class="text-xs text-amber-800">Placement</div>
+            <div class="font-black text-amber-950">Homepage + category sponsor</div>
+          </div>
+          <div class="rounded-xl bg-white border border-amber-100 p-3">
+            <div class="text-xs text-amber-800">Estimated reach</div>
+            <div class="font-black text-amber-950">${brokerMetric(baseReach)} seekers</div>
+          </div>
+          <div class="rounded-xl bg-white border border-amber-100 p-3">
+            <div class="text-xs text-amber-800">Starting guide</div>
+            <div class="font-black text-amber-950">UGX ${Number(35000).toLocaleString("en-UG")}</div>
+          </div>
+        </div>
+        <div class="mt-4 rounded-2xl bg-white border border-amber-100 p-4">
+          <div class="text-xs font-black uppercase tracking-wide text-amber-700">Preview</div>
+          <div class="mt-2 flex items-center gap-3">
+            <div class="w-24 h-20 rounded-xl bg-gray-100 overflow-hidden">${selected ? `<img src="${adminAttr(selected.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500&q=80")}" alt="${adminAttr(selected.title || "Listing")}" class="w-full h-full object-cover">` : ""}</div>
+            <div>
+              <div class="text-[11px] font-black text-amber-700 uppercase">Sponsored MakaUg broker listing</div>
+              <h3 class="font-black text-gray-900">${adminEscape(selected?.title || "Choose a listing")}</h3>
+              <p class="text-sm text-gray-600">${adminEscape(selected ? [selected.area, selected.district].filter(Boolean).join(", ") : "Approved listing required")}</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-2 flex-wrap mt-4">
+          <button onclick="toast('Payment checkout will connect here after the advertising payment provider is enabled.')" class="bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-black">Prepare campaign</button>
+          <a href="mailto:info@makaug.com?subject=Broker%20boost%20campaign" class="border border-amber-300 text-amber-800 hover:bg-white rounded-xl px-4 py-2 text-sm font-black">Ask MakaUg ads team</a>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderBrokerResourceGrid() {
+  const grid = document.getElementById("broker-resource-grid");
+  if (!grid) return;
+  const resources = [
+    { title: "How to list properties online", text: "Step-by-step video guide for fast-track broker uploads.", action: "openHowToVideo('broker-dashboard')" },
+    { title: "Photos and location quality", text: "Checklist for clean images, correct district, and fraud-safe details.", action: "openHowToVideo('property-location')" },
+    { title: "Broker terms and privacy", text: "How MakaUg protects ID data, broker profiles, and property seeker information.", action: "showPage('privacy-policy')" },
+    { title: "Support and PDF guides", text: "Request broker guides, training files, or onboarding help.", action: "window.open('mailto:info@makaug.com?subject=Broker%20training%20guides', '_self')" }
+  ];
+  grid.innerHTML = resources.map((item) => `
+    <button onclick="${item.action}" class="text-left rounded-2xl border border-gray-200 bg-white p-4 hover:border-green-300">
+      <div class="font-black text-gray-900">${adminEscape(item.title)}</div>
+      <p class="text-sm text-gray-600 mt-1">${adminEscape(item.text)}</p>
+    </button>`).join("");
+}
+
+function openBrokerBoostPlanner(listingId = "") {
+  renderBrokerBoostPanel(listingId);
+  document.getElementById("broker-boost-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function shareBrokerListing(id) {
+  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
+  if (!listing) {
+    toast("Listing not found.");
+    return;
+  }
+  const text = `${listing.title || "MakaUg property"}\n${[listing.area, listing.district].filter(Boolean).join(", ")}\n${fmtP(listing.price || 0, listing.period || listing.price_period || "")}\n${getPropertyShareUrl(listing)}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: listing.title || "MakaUg property", text, url: getPropertyShareUrl(listing) });
+      return;
+    }
+    const copied = await copyTextToClipboard(text);
+    toast(copied ? "Listing share text copied." : "Unable to copy listing right now.");
+  } catch (_) {
+    toast("Unable to share listing right now.");
+  }
+}
+
+function editBrokerListing(id) {
+  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
+  startBrokerOnlineListing();
+  toast(listing ? `Opening broker upload for edits to ${listing.title || "this listing"}. MakaUg review still applies.` : "Opening broker upload. MakaUg review still applies.");
+}
+
+function requestBrokerListingRemoval(id) {
+  const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
+  const title = listing?.title || "this listing";
+  toast(`Removal request noted for ${title}. MakaUg admin approval is required before public changes.`);
+}
+
+function polishBrokerBioDraft() {
+  const name = (document.getElementById("broker-settings-full-name")?.value || brokerDashboardCache?.broker?.name || "I").trim();
+  const company = (document.getElementById("broker-settings-company")?.value || "independent broker").trim();
+  const areas = (document.getElementById("broker-settings-areas")?.value || "Uganda").trim();
+  const specs = (document.getElementById("broker-settings-specializations")?.value || "rentals, sales, and verified property support").trim();
+  const draft = `${name} is a ${company} on makaug.com, helping property seekers across ${areas}. I specialise in ${specs}, respond quickly on WhatsApp, and keep listings clear, current, and ready for MakaUg review.`;
+  const bio = document.getElementById("broker-settings-bio");
+  if (bio) bio.value = draft;
+  renderBrokerSettingsLivePreview(brokerDashboardCache?.broker || {}, brokerDashboardCache?.listings || [], brokerDashboardCache?.payload?.stats || {});
+  toast("Bio draft polished. Review it before saving.");
 }
 
 function hydrateBrokerSettingsForm(broker = {}) {
@@ -6715,6 +7149,7 @@ function hydrateBrokerSettingsForm(broker = {}) {
       ? `<img src="${adminAttr(photo)}" alt="Broker profile photo" class="w-full h-full object-cover">`
       : adminEscape(brokerInitials(broker.name));
   }
+  renderBrokerSettingsLivePreview(broker, brokerDashboardCache?.listings || [], brokerDashboardCache?.payload?.stats || {});
 }
 
 async function handleBrokerSettingsPhoto(event) {
@@ -6791,6 +7226,8 @@ async function renderAgentDashboard() {
 
   gate.classList.add("hidden");
   body.classList.remove("hidden");
+  setTextById("agent-dashboard-greeting", `${timeOfDayGreeting()}, ${authState.user.first_name || "broker"}`);
+  setTextById("agent-dashboard-weather", `${new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })} • Broker workspace • Uganda property desk`);
 
   let payload = null;
   if (authState?.token && !authState?.user?.is_demo) {
@@ -6814,6 +7251,17 @@ async function renderAgentDashboard() {
   const gridEl = document.getElementById("agent-listings-grid");
 
   if (!broker) {
+    const fallbackBroker = {
+      name: `${authState.user.first_name || "Broker"} ${authState.user.last_name || ""}`.trim(),
+      email: authState.user.email || "",
+      phone: authState.user.phone || "",
+      whatsapp: authState.user.phone || "",
+      company: "Broker profile pending",
+      bio: "Your broker profile is being linked. Once approved, your public card, listings, leads, and boost tools appear here.",
+      districts_covered: [],
+      specializations: []
+    };
+    brokerDashboardCache = { payload: null, broker: fallbackBroker, listings: [] };
     if (nameEl) nameEl.textContent = `${authState.user.first_name || "Broker"} ${authState.user.last_name || ""}`.trim();
     if (statusEl) statusEl.textContent = "Broker profile is being linked. Add your National ID and broker details if prompted.";
     if (summaryEl) summaryEl.textContent = "Once linked, your public broker card, listings, lead activity, and boost tools will appear here.";
@@ -6821,7 +7269,20 @@ async function renderAgentDashboard() {
     if (gridEl) {
       gridEl.innerHTML = `<div class="col-span-full bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">No linked broker profile found yet. The backend links by broker account email, phone/WhatsApp, and broker profile ID.</div>`;
     }
+    setTextById("agent-stat-listings", "0");
+    setTextById("agent-stat-views", "0");
+    setTextById("agent-stat-saves", "0");
+    setTextById("agent-stat-profile-views", "0");
+    setTextById("agent-stat-leads", "0");
+    renderBrokerTodayPanel(fallbackBroker, [], {});
+    renderBrokerQuickListPanel(fallbackBroker);
+    renderBrokerProfilePreview(fallbackBroker, [], {});
+    renderBrokerWhatsAppCard(fallbackBroker, {});
+    renderBrokerLeadPanel(fallbackBroker, [], {});
+    renderBrokerBoostPanel();
     renderBrokerQuickstartPanel();
+    renderBrokerResourceGrid();
+    hydrateBrokerSettingsForm(fallbackBroker);
     return;
   }
 
@@ -6832,6 +7293,7 @@ async function renderAgentDashboard() {
   const totalSaves = Number(stats.listing_saves ?? myListings.reduce((sum, p) => sum + getPropertySaveCount(p.id), 0));
   const profileViews = Number(stats.profile_views ?? getBrokerProfileViewCount(broker.id));
   const activeCount = Number(stats.active_listings ?? myListings.filter((item) => item.status === "approved").length);
+  const leadCount = Number(stats.lead_enquiries ?? myListings.reduce((sum, p) => sum + brokerListingLeadCount(p), 0));
 
   if (nameEl) nameEl.textContent = broker.name || "MakaUg broker";
   if (statusEl) {
@@ -6855,8 +7317,15 @@ async function renderAgentDashboard() {
   setText("agent-stat-views", totalViews);
   setText("agent-stat-saves", totalSaves);
   setText("agent-stat-profile-views", profileViews);
-  renderBrokerProfilePreview(broker, myListings, stats);
+  setText("agent-stat-leads", leadCount);
+  renderBrokerTodayPanel(broker, myListings, { ...stats, lead_enquiries: leadCount });
+  renderBrokerQuickListPanel(broker);
+  renderBrokerProfilePreview(broker, myListings, { ...stats, lead_enquiries: leadCount });
+  renderBrokerWhatsAppCard(broker, { ...stats, lead_enquiries: leadCount });
+  renderBrokerLeadPanel(broker, myListings, { ...stats, lead_enquiries: leadCount });
+  renderBrokerBoostPanel();
   renderBrokerQuickstartPanel();
+  renderBrokerResourceGrid();
   hydrateBrokerSettingsForm(broker);
 
   if (gridEl) {
@@ -22948,6 +23417,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     registration_status: p?.registration_status || p?.agent_registration_status || p?.extra_fields?.lister_registration_status || "not_registered",
     lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
     inquiry_reference: p?.inquiry_reference || "",
+    inquiry_count: Number(p?.inquiry_count || p?.lead_count || p?.leads || 0) || 0,
     agent: p?.agent_id || p?.agent || null,
     lister_display_name: p?.lister_name || p?.contact_display_name || "",
     area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",

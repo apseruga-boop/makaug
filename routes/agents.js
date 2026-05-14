@@ -115,7 +115,8 @@ async function fetchBrokerAgentForUser(user) {
     `SELECT
       a.*,
       COALESCE(p.active_listings, 0) AS listings_count,
-      COALESCE(lp.pending_listings, 0) AS pending_listings_count
+      COALESCE(lp.pending_listings, 0) AS pending_listings_count,
+      COALESCE(li.lead_enquiries, 0) AS lead_enquiries
      FROM agents a
      LEFT JOIN LATERAL (
        SELECT COUNT(*)::int AS active_listings
@@ -127,6 +128,12 @@ async function fetchBrokerAgentForUser(user) {
        FROM properties p
        WHERE p.agent_id = a.id AND p.status = 'pending'
      ) lp ON true
+     LEFT JOIN LATERAL (
+       SELECT COUNT(pi.*)::int AS lead_enquiries
+       FROM properties p
+       JOIN property_inquiries pi ON pi.property_id = p.id
+       WHERE p.agent_id = a.id
+     ) li ON true
      WHERE a.user_id = $1
         OR ($2::text <> '' AND LOWER(COALESCE(a.email, '')) = LOWER($2))
         OR ($3::text <> '' AND regexp_replace(COALESCE(a.phone, ''), '\\D', '', 'g') = $3)
@@ -143,13 +150,19 @@ async function fetchBrokerListings({ agent, user }) {
   const email = normalizeEmail(user?.email || agent?.email || '');
   const digits = phoneDigits(user?.phone || agent?.phone || agent?.whatsapp || '');
   const result = await db.query(
-    `SELECT id, title, listing_type, district, area, price, price_period, status, created_at, updated_at,
-            inquiry_reference, lister_email, lister_phone, agent_id
-     FROM properties
-     WHERE ($1::uuid IS NOT NULL AND agent_id = $1)
-        OR ($2::text <> '' AND LOWER(COALESCE(lister_email, '')) = LOWER($2))
-        OR ($3::text <> '' AND regexp_replace(COALESCE(lister_phone, ''), '\\D', '', 'g') = $3)
-     ORDER BY created_at DESC
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.status, p.created_at, p.updated_at,
+            p.inquiry_reference, p.lister_email, p.lister_phone, p.agent_id,
+            COALESCE(i.inquiry_count, 0) AS inquiry_count
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT COUNT(*)::int AS inquiry_count
+       FROM property_inquiries pi
+       WHERE pi.property_id = p.id
+     ) i ON true
+     WHERE ($1::uuid IS NOT NULL AND p.agent_id = $1)
+        OR ($2::text <> '' AND LOWER(COALESCE(p.lister_email, '')) = LOWER($2))
+        OR ($3::text <> '' AND regexp_replace(COALESCE(p.lister_phone, ''), '\\D', '', 'g') = $3)
+     ORDER BY p.created_at DESC
      LIMIT 100`,
     [agent?.id || null, email, digits]
   );
@@ -189,6 +202,7 @@ router.get('/me', async (req, res, next) => {
           active_listings: listings.filter((item) => item.status === 'approved').length,
           pending_listings: listings.filter((item) => item.status === 'pending').length,
           listing_saves: Number(saveCountResult.rows[0]?.total || 0),
+          lead_enquiries: listings.reduce((sum, item) => sum + Number(item.inquiry_count || 0), 0),
           listing_views: 0,
           profile_views: 0
         },
