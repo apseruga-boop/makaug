@@ -4382,6 +4382,14 @@ function isValidUgNin(value) {
   return /^(CM|CF|PM|PF)[A-Z0-9]{12}$/.test(nin);
 }
 
+function isValidBrokerNationalId(value) {
+  const idNumber = normalizeNinInput(value);
+  const compact = idNumber.replace(/-/g, "");
+  if (isValidUgNin(compact)) return true;
+  if (!/^[A-Z0-9-]{6,32}$/.test(idNumber) || compact.length < 8) return false;
+  return /[A-Z]/.test(compact) && /\d{4,}/.test(compact);
+}
+
 function normalizeDigits(value) {
   return String(value || "").replace(/[^0-9]/g, "");
 }
@@ -17720,8 +17728,8 @@ async function handleAccountAccessBrokerIdentitySelection(event) {
 function validateAccountAccessBrokerIdentityStep() {
   if (!isAccountAccessBrokerCreateFlow()) return true;
   const details = getAccountAccessBrokerIdentityDetails();
-  if (!details.nin || !isValidUgNin(details.nin)) {
-    toast("Enter a valid Uganda National ID number/NIN for broker verification.");
+  if (!details.nin || !isValidBrokerNationalId(details.nin)) {
+    toast("Enter the National ID number shown on your ID card.");
     document.getElementById("account-access-broker-id-number")?.focus();
     return false;
   }
@@ -17739,12 +17747,12 @@ function getAccountAccessCreatePasswordReadiness() {
   const termsAccepted = document.getElementById("account-access-terms")?.checked === true;
   const privacyAccepted = document.getElementById("account-access-privacy")?.checked === true;
   const missing = [];
-	  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
-	  if (isAccountAccessBrokerCreateFlow()) {
-	    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
-	    if (!brokerIdentity.nin || !brokerIdentity.dataUrl) missing.push(accountAccessText("brokerIdRequirement"));
-	  }
-	  if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
+  if (!accountAccessContactVerificationToken) missing.push(accountAccessText("verifiedRequirement"));
+  if (isAccountAccessBrokerCreateFlow()) {
+    const brokerIdentity = getAccountAccessBrokerIdentityDetails();
+    if (!isValidBrokerNationalId(brokerIdentity.nin) || !brokerIdentity.dataUrl) missing.push(accountAccessText("brokerIdRequirement"));
+  }
+  if (password.length < 8) missing.push(accountAccessText("passwordRequirement"));
   if (!confirmPassword || password !== confirmPassword) missing.push(accountAccessText("confirmRequirement"));
   if (!termsAccepted) missing.push(accountAccessText("termsRequirement"));
   if (!privacyAccepted) missing.push(accountAccessText("privacyRequirement"));
