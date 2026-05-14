@@ -4497,6 +4497,24 @@
             <button type="button" onclick="runManagingDirectorAgent()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Run Managing Director</button>
           </div>
           <div id="admin-ai-answer" class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Refresh the admin dashboard to load live insight data.</div>
+          <div id="admin-ai-ceo-panel" class="mt-4 rounded-2xl border border-green-100 bg-white p-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <p class="text-xs font-black uppercase tracking-wide text-green-700">Founder-controlled AI CEO</p>
+                <h4 class="mt-1 text-lg font-black text-gray-900">Morning report, commands, approvals, and kill switches</h4>
+                <p class="mt-1 text-xs text-gray-500">The AI CEO can inspect, draft, report, and route work. Founder approval is required before listings go live, ads spend, public posts, bulk outreach, data deletion, or access changes.</p>
+              </div>
+              <span id="admin-ai-ceo-status-pill" class="rounded-full bg-gray-100 px-3 py-1 text-xs font-black text-gray-700">Not loaded</span>
+            </div>
+            <div id="admin-ai-ceo-kill-switches" class="mt-3 flex flex-wrap gap-2 text-xs"></div>
+            <div class="mt-4 grid md:grid-cols-[1fr,180px,180px] gap-2">
+              <input id="admin-ai-ceo-command" class="w-full border border-green-100 rounded-xl px-4 py-2.5 text-sm" placeholder="Ask the AI CEO: morning report, revenue, leads, WhatsApp health, field agents...">
+              <button type="button" onclick="askAiCeoCommand()" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Ask AI CEO</button>
+              <button type="button" onclick="runAiCeoMorningReport()" class="bg-gray-900 hover:bg-gray-800 text-white px-4 py-2.5 rounded-xl text-sm font-semibold">Morning report</button>
+            </div>
+            <div id="admin-ai-ceo-output" class="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Load the dashboard, then ask the AI CEO for the latest operating view.</div>
+            <div id="admin-ai-ceo-approvals" class="mt-3 grid md:grid-cols-2 gap-3 text-sm"></div>
+          </div>
           <div id="admin-ai-agent-results" class="mt-3 rounded-xl border border-green-100 bg-green-50 p-4 text-sm text-green-900">Managing Director findings will appear here after a run.</div>
         </div>
 

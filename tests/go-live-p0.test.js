@@ -170,6 +170,7 @@ function run() {
   const fieldAgentRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'field-agent.js'), 'utf8');
   const agentsRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'agents.js'), 'utf8');
   const adminRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin.js'), 'utf8');
+  const adminAgentsRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'admin-agents.js'), 'utf8');
   const authRoutes = fs.readFileSync(path.join(__dirname, '..', 'routes', 'auth.js'), 'utf8');
   const serverSource = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
   const authFlowServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'authFlowService.js'), 'utf8');
@@ -204,6 +205,7 @@ function run() {
   const task3Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '033_task3_engagement_crm.sql'), 'utf8');
   const task4Migration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '034_task4_super_admin_alerts_payments.sql'), 'utf8');
   const missedCallMigration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '037_whatsapp_missed_call_leads.sql'), 'utf8');
+  const aiCeoMigration = fs.readFileSync(path.join(__dirname, '..', 'db', 'migrations', '038_ai_ceo_operating_system.sql'), 'utf8');
   const superAdminScript = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'create-super-admin.js'), 'utf8');
   for (const publicRoute of PUBLIC_ROUTES) {
     const publicHtml = sanitizePublicHtml(sourceHtml, { pathname: publicRoute });
@@ -826,6 +828,15 @@ function run() {
   assert(frontendSource.includes('AI CEO friendly') && frontendSource.includes('Run AI CEO'), 'admin dashboard should be structured for the AI CEO workflow');
   assert(adminRoutes.includes("router.get('/command-centre'"), 'admin backend should expose a compact command-centre API for dashboard and AI CEO decisions');
   assert(frontendSource.includes('/api/admin/command-centre'), 'admin dashboard should load the command-centre API');
+  assert(frontendSource.includes('id="admin-ai-ceo-panel"') && frontendSource.includes('Founder-controlled AI CEO'), 'admin dashboard should expose the founder-controlled AI CEO panel');
+  assert(appSource.includes('runAiCeoMorningReport') && appSource.includes('/api/admin/ai-agents/ceo/morning-report'), 'frontend should run and save AI CEO morning reports');
+  assert(appSource.includes('askAiCeoCommand') && appSource.includes('/api/admin/ai-agents/ceo/command'), 'frontend should support founder commands for the AI CEO');
+  assert(appSource.includes('loadAiCeoStatus') && appSource.includes('/api/admin/ai-agents/ceo/status'), 'frontend should load AI CEO status, approvals, and kill switches');
+  assert(adminAgentsRoutes.includes("router.get('/ceo/status'") && adminAgentsRoutes.includes("router.post('/ceo/morning-report'") && adminAgentsRoutes.includes("router.post('/ceo/command'"), 'AI CEO should expose protected status, morning-report, and command APIs');
+  assert(aiAgentOrchestratorService.includes('buildManagingDirectorMorningReport') && aiAgentOrchestratorService.includes('collectCeoOperatingMetrics'), 'AI CEO service should build a real operating report from backend metrics');
+  assert(aiAgentOrchestratorService.includes('DEFAULT_CEO_KILL_SWITCHES') && aiAgentOrchestratorService.includes('Founder approval required before this AI CEO action can execute'), 'AI CEO service should enforce kill switches and founder approval gates');
+  assert(aiCeoMigration.includes('CREATE TABLE IF NOT EXISTS ai_ceo_reports') && aiCeoMigration.includes('CREATE TABLE IF NOT EXISTS ai_ceo_commands'), 'AI CEO migration should persist reports and founder command history');
+  assert(aiCeoMigration.includes('autonomous_listing_approval') && aiCeoMigration.includes('founder_approval_required_for_external_actions'), 'AI CEO migration should seed explicit kill switches');
   assert(frontendSource.includes('King Dashboard'), 'owner control centre should be labelled King Dashboard');
   assert(frontendSource.includes('id="king-control-map"'), 'King dashboard should expose the full control map');
   assert(frontendSource.includes('King Dashboard Control Map'), 'King control map should be visible in the protected dashboard');
@@ -1223,6 +1234,9 @@ function run() {
   assert(frontendSource.includes('Run Managing Director'), 'Admin dashboard should expose a Managing Director run control');
   assert(appSource.includes('runManagingDirectorAgent'), 'Frontend should call the Managing Director AI agent');
   assert(appSource.includes('agent_code: "managing_director_ceo"'), 'Managing Director run control must target the CEO agent');
+  assert(appSource.includes('Morning report saved') && appSource.includes('Founder approval guardrail is active'), 'AI CEO dashboard responses should show morning-report proof and approval guardrails');
+  assert(aiAgentOrchestratorService.includes('traffic_report') && aiAgentOrchestratorService.includes('advertising_revenue') && aiAgentOrchestratorService.includes('whatsapp_health'), 'AI CEO command router should answer traffic, revenue, and WhatsApp health questions');
+  assert(aiCeoMigration.includes('social posts without founder approval') && aiAgentOrchestratorService.includes('bulk outreach'), 'AI CEO guardrails should cover social posting and lead-generation outreach');
   assert(whatsappRoutes.includes('🟩🟨 *makaug.com*'), 'WhatsApp runtime replies should use the makaug.com branded card header');
   assert(aiServiceSource.includes('Do not repeat the same instruction, menu, greeting, or link twice'), 'LLM prompt must explicitly avoid duplicated WhatsApp copy');
   assert(smsServiceSource.includes('TWILIO_SMS_FROM'), 'SMS delivery should support explicit Twilio SMS sender env');

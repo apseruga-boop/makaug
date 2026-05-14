@@ -8296,9 +8296,162 @@ async function runManagingDirectorAgent() {
         <ul class="list-disc pl-5 mt-2">${findingRows}</ul>`;
     }
     toast(`Managing Director run finished: ${findings.length} finding${findings.length === 1 ? "" : "s"}.`);
+    loadAiCeoStatus({ silent: true });
   } catch (error) {
     if (target) target.innerHTML = `Managing Director run failed: ${adminEscape(error.message || "Unknown error")}`;
     toast(error.message || "Managing Director run failed.");
+  }
+}
+
+function renderAiCeoStatus(data) {
+  const statusPill = document.getElementById("admin-ai-ceo-status-pill");
+  const switchesEl = document.getElementById("admin-ai-ceo-kill-switches");
+  const outputEl = document.getElementById("admin-ai-ceo-output");
+  const approvalsEl = document.getElementById("admin-ai-ceo-approvals");
+  if (!statusPill && !switchesEl && !outputEl && !approvalsEl) return;
+
+  const killSwitches = data?.kill_switches || {};
+  const lastReport = data?.last_report || null;
+  const pendingActions = Array.isArray(data?.pending_actions) ? data.pending_actions : [];
+  const openFindings = Array.isArray(data?.open_findings) ? data.open_findings : [];
+  const recentCommands = Array.isArray(data?.recent_commands) ? data.recent_commands : [];
+  const deliveryChannels = Array.isArray(data?.delivery_channels) ? data.delivery_channels : [];
+  const guardrails = Array.isArray(data?.guardrails) ? data.guardrails : [];
+
+  if (statusPill) {
+    statusPill.textContent = data?.enabled ? `Active • ${adminEscape(data.run_mode || "recommend")}` : "Paused";
+    statusPill.className = data?.enabled
+      ? "rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-800"
+      : "rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-800";
+  }
+
+  if (switchesEl) {
+    const switchRows = Object.entries(killSwitches).map(([key, value]) => {
+      const blocked = value === false;
+      const label = key.replace(/_/g, " ");
+      return `<span class="rounded-full ${blocked ? "bg-red-50 text-red-700 border-red-100" : "bg-green-50 text-green-800 border-green-100"} border px-3 py-1 font-bold">${blocked ? "Blocked" : "On"}: ${adminEscape(label)}</span>`;
+    }).join("");
+    switchesEl.innerHTML = switchRows || "<span class=\"text-gray-500\">No kill switches loaded yet.</span>";
+  }
+
+  if (outputEl) {
+    const reportSummary = lastReport?.summary || "No saved morning report yet. Run one before live operations begin.";
+    const channels = deliveryChannels.length ? deliveryChannels.join(", ") : "dashboard";
+    const latestCommand = recentCommands[0]?.response_summary || "";
+    outputEl.innerHTML = `
+      <div class="font-black text-gray-900">Latest AI CEO view</div>
+      <p class="mt-1">${adminEscape(reportSummary)}</p>
+      <div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(openFindings.length)}</strong><br>open finding(s)</div>
+        <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(pendingActions.length)}</strong><br>pending action(s)</div>
+        <div class="rounded-xl bg-white border border-gray-200 p-3"><strong>${adminEscape(channels)}</strong><br>delivery channels</div>
+      </div>
+      ${latestCommand ? `<div class="mt-3 rounded-xl border border-green-100 bg-green-50 p-3 text-green-900"><strong>Last command:</strong> ${adminEscape(latestCommand)}</div>` : ""}
+      ${guardrails.length ? `<ul class="mt-3 list-disc pl-5 text-xs text-gray-600">${guardrails.slice(0, 4).map((item) => `<li>${adminEscape(item)}</li>`).join("")}</ul>` : ""}`;
+  }
+
+  if (approvalsEl) {
+    const actionCards = pendingActions.length
+      ? pendingActions.slice(0, 4).map((action) => `
+        <div class="rounded-xl border border-amber-100 bg-amber-50 p-3">
+          <div class="text-xs font-black uppercase text-amber-800">${adminEscape(action.risk_level || "medium")} risk</div>
+          <div class="mt-1 font-bold text-gray-900">${adminEscape(action.action_type || "AI action")}</div>
+          <p class="mt-1 text-xs text-gray-600">${adminEscape(action.approval_reason || "Founder review required before external action.")}</p>
+        </div>`).join("")
+      : `<div class="rounded-xl border border-green-100 bg-green-50 p-3 text-green-900">No pending AI CEO approvals right now.</div>`;
+    approvalsEl.innerHTML = actionCards;
+  }
+}
+
+async function loadAiCeoStatus({ silent = false } = {}) {
+  if (!canUseLiveAdminApi()) {
+    if (!silent) toast("Sign in as admin or save ADMIN_API_KEY first.");
+    renderAiCeoStatus({ enabled: false, kill_switches: {}, pending_actions: [], open_findings: [] });
+    return null;
+  }
+  try {
+    const response = await apiRequest("/api/admin/ai-agents/ceo/status", {
+      headers: adminAuthHeaders()
+    });
+    renderAiCeoStatus(response?.data || {});
+    return response?.data || {};
+  } catch (error) {
+    const outputEl = document.getElementById("admin-ai-ceo-output");
+    if (outputEl) outputEl.innerHTML = `AI CEO status failed: ${adminEscape(error.message || "Unknown error")}`;
+    if (!silent) toast(error.message || "AI CEO status failed.");
+    return null;
+  }
+}
+
+async function runAiCeoMorningReport() {
+  const outputEl = document.getElementById("admin-ai-ceo-output");
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  if (outputEl) outputEl.innerHTML = "Running the AI CEO morning report now...";
+  try {
+    const response = await apiRequest("/api/admin/ai-agents/ceo/morning-report", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        trigger_source: "admin_dashboard_morning_report",
+        created_by: authState?.user?.email || "founder_dashboard",
+        limit: 40
+      }
+    });
+    const data = response?.data || {};
+    const report = data.report || {};
+    if (outputEl) {
+      outputEl.innerHTML = `
+        <div class="font-black text-gray-900">Morning report saved</div>
+        <p class="mt-1">${adminEscape(report.summary || "Report generated.")}</p>
+        <div class="mt-3 text-xs text-gray-600">Findings created: ${adminEscape((data.findings || []).length)}</div>`;
+    }
+    await loadAiCeoStatus({ silent: true });
+    toast("AI CEO morning report generated.");
+  } catch (error) {
+    if (outputEl) outputEl.innerHTML = `AI CEO morning report failed: ${adminEscape(error.message || "Unknown error")}`;
+    toast(error.message || "AI CEO morning report failed.");
+  }
+}
+
+async function askAiCeoCommand() {
+  const input = document.getElementById("admin-ai-ceo-command");
+  const outputEl = document.getElementById("admin-ai-ceo-output");
+  const command = (input?.value || "").trim();
+  if (!command) {
+    toast("Type a command for the AI CEO first.");
+    return;
+  }
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  if (outputEl) outputEl.innerHTML = "Asking the AI CEO...";
+  try {
+    const response = await apiRequest("/api/admin/ai-agents/ceo/command", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        command_text: command,
+        channel: "dashboard",
+        requested_by: authState?.user?.email || "founder_dashboard"
+      }
+    });
+    const data = response?.data || {};
+    const summary = data.response?.summary || data.command?.response_summary || "AI CEO answered.";
+    if (outputEl) {
+      outputEl.innerHTML = `
+        <div class="font-black text-gray-900">AI CEO response</div>
+        <p class="mt-1">${adminEscape(summary)}</p>
+        ${data.response?.requires_founder_approval ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs font-bold text-amber-800">Founder approval guardrail is active for this request.</div>` : ""}`;
+    }
+    await loadAiCeoStatus({ silent: true });
+    toast("AI CEO response ready.");
+  } catch (error) {
+    if (outputEl) outputEl.innerHTML = `AI CEO command failed: ${adminEscape(error.message || "Unknown error")}`;
+    toast(error.message || "AI CEO command failed.");
   }
 }
 
@@ -8977,6 +9130,7 @@ async function renderAdminDashboard() {
   if (sourceEl) sourceEl.textContent = sourceLabel;
   renderAdminAiAssistant(remoteSnap, localSnap, sourceLabel);
   renderAdminCommandCentre(remoteSnap, localSnap, sourceLabel);
+  loadAiCeoStatus({ silent: true });
 
   const adminUsers = remoteSnap?.users || localSnap.users || [];
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];

@@ -21,6 +21,71 @@ function safeText(value, max = 1000) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
+const AI_CEO_AGENT_CODE = 'managing_director_ceo';
+
+const DEFAULT_CEO_KILL_SWITCHES = {
+  autonomous_listing_approval: false,
+  autonomous_public_posting: false,
+  autonomous_payment_spend: false,
+  autonomous_bulk_outreach: false,
+  autonomous_password_or_access_changes: false,
+  autonomous_data_deletion: false,
+  customer_reply_requires_review_when_confidence_low: true,
+  founder_approval_required_for_external_actions: true
+};
+
+const CEO_OPERATING_AREAS = [
+  'site_health',
+  'listing_review',
+  'broker_and_field_agent_ops',
+  'crm_leads',
+  'customer_comms',
+  'whatsapp_ai_health',
+  'email_sms_health',
+  'advertising_revenue',
+  'social_content_drafts',
+  'llm_learning'
+];
+
+const CEO_APPROVAL_ACTION_TYPES = new Set([
+  'set_property_status',
+  'send_support_email',
+  'update_agent_status',
+  'draft_customer_reply',
+  'draft_outreach_email',
+  'draft_social_post',
+  'create_ad_campaign',
+  'spend_ad_budget',
+  'delete_customer_data',
+  'change_user_access',
+  'notify_founder'
+]);
+
+function getCeoKillSwitches(agentConfig = {}) {
+  const configSwitches = agentConfig && typeof agentConfig === 'object' && agentConfig.killSwitches
+    ? agentConfig.killSwitches
+    : {};
+  return { ...DEFAULT_CEO_KILL_SWITCHES, ...configSwitches };
+}
+
+function getCeoDeliveryChannels(agentConfig = {}) {
+  const channels = Array.isArray(agentConfig?.deliveryChannels) ? agentConfig.deliveryChannels : [];
+  return channels.length ? channels : ['dashboard', 'email_founder', 'whatsapp_owner'];
+}
+
+function buildApprovalRecommendation({ actionType = 'founder_review_required', payload = {}, reason, riskLevel = 'high' }) {
+  return {
+    action_type: actionType,
+    requires_founder_approval: true,
+    risk_level: riskLevel,
+    approval_reason: safeText(reason || 'Founder approval required before this external or irreversible action.', 500),
+    action_payload: {
+      ...payload,
+      founder_review_required: true
+    }
+  };
+}
+
 async function getAgentByCode(code) {
   const result = await db.query(
     `SELECT id, code, name, description, enabled, run_mode, config, created_at, updated_at
@@ -125,12 +190,24 @@ async function createActionFromFinding({ findingId, recommendation = {} }) {
   const actionPayload = recommendation.action_payload && typeof recommendation.action_payload === 'object'
     ? recommendation.action_payload
     : {};
+  const requiresFounderApproval = recommendation.requires_founder_approval !== undefined
+    ? asBool(recommendation.requires_founder_approval)
+    : CEO_APPROVAL_ACTION_TYPES.has(actionType);
+  const riskLevel = ['low', 'medium', 'high', 'critical'].includes(String(recommendation.risk_level || '').toLowerCase())
+    ? String(recommendation.risk_level).toLowerCase()
+    : (requiresFounderApproval ? 'high' : 'medium');
+  const approvalReason = safeText(
+    recommendation.approval_reason || (requiresFounderApproval ? 'Founder approval required before the AI CEO takes this action.' : ''),
+    500
+  ) || null;
 
   const result = await db.query(
-    `INSERT INTO ai_agent_actions (finding_id, action_type, action_payload, status)
-     VALUES ($1, $2, $3::jsonb, 'pending')
-     RETURNING id, finding_id, action_type, action_payload, status, created_at`,
-    [findingId, actionType, JSON.stringify(actionPayload)]
+    `INSERT INTO ai_agent_actions (
+       finding_id, action_type, action_payload, status, requires_founder_approval, approval_reason, risk_level
+     )
+     VALUES ($1, $2, $3::jsonb, 'pending', $4, $5, $6)
+     RETURNING id, finding_id, action_type, action_payload, status, requires_founder_approval, approval_reason, risk_level, created_at`,
+    [findingId, actionType, JSON.stringify(actionPayload), requiresFounderApproval, approvalReason, riskLevel]
   );
   return result.rows[0] || null;
 }
@@ -147,6 +224,26 @@ async function safeCount(sql, params = []) {
   } catch (error) {
     logger.warn('AI agent count skipped', { error: error.message });
     return 0;
+  }
+}
+
+async function safeOne(sql, params = [], fallback = {}) {
+  try {
+    const result = await db.query(sql, params);
+    return result.rows[0] || fallback;
+  } catch (error) {
+    logger.warn('AI agent query skipped', { error: error.message });
+    return fallback;
+  }
+}
+
+async function safeRows(sql, params = []) {
+  try {
+    const result = await db.query(sql, params);
+    return result.rows || [];
+  } catch (error) {
+    logger.warn('AI agent rows skipped', { error: error.message });
+    return [];
   }
 }
 
@@ -400,119 +497,386 @@ async function runSupportTriageAssistant({ agent, limit = 30 }) {
   };
 }
 
+async function collectCeoOperatingMetrics() {
+  const [
+    todayEngagement,
+    last48Engagement,
+    pendingListings,
+    liveListings,
+    pendingFieldAgentListings,
+    activeFieldAgents,
+    pendingBrokers,
+    approvedBrokers,
+    failedEmails,
+    failedNotifications,
+    failedWhatsapp,
+    openLeads,
+    hotLeads,
+    overdueTasks,
+    propertyRequests,
+    whatsappNeedsHuman,
+    whatsappInbound24h,
+    whatsappOutbound24h,
+    missedCalls24h,
+    pendingCampaigns,
+    liveAds,
+    adOpenLeads,
+    paidRevenue,
+    quotedPipeline,
+    unpaidInvoices,
+    trainingCandidates,
+    feedbackRows,
+    recentErrors
+  ] = await Promise.all([
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS events,
+         COUNT(DISTINCT COALESCE(NULLIF(client_id, ''), NULLIF(user_phone, ''), payload->>'session_id'))::int AS visitors
+       FROM analytics_events
+       WHERE created_at >= CURRENT_DATE`,
+      [],
+      { events: 0, visitors: 0 }
+    ),
+    safeOne(
+      `SELECT
+         COUNT(*)::int AS events,
+         COUNT(DISTINCT COALESCE(NULLIF(client_id, ''), NULLIF(user_phone, ''), payload->>'session_id'))::int AS visitors,
+         COUNT(*) FILTER (WHERE event_name IN ('property_open','property_view'))::int AS property_views,
+         COUNT(*) FILTER (WHERE event_name IN ('property_search','near_me_search'))::int AS searches
+       FROM analytics_events
+       WHERE created_at >= NOW() - INTERVAL '48 hours'`,
+      [],
+      { events: 0, visitors: 0, property_views: 0, searches: 0 }
+    ),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved','sold')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending' AND (source = 'field_agent' OR listed_via = 'field_agent' OR extra_fields->>'source_role' = 'field_agent')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM users WHERE role = 'field_agent' AND status = 'active'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'approved' AND COALESCE(registration_status, 'not_registered') = 'registered'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing','bounced','error')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE status IN ('failed','provider_missing','bounced','error')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing','error')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status NOT IN ('closed','resolved','won','lost','archived')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE lead_status NOT IN ('closed','resolved','won','lost','archived') AND (priority IN ('high','urgent') OR lead_score >= 50)"),
+    safeCount("SELECT COUNT(*)::int AS total FROM lead_tasks WHERE status = 'open' AND due_at < NOW()"),
+    safeCount("SELECT COUNT(*)::int AS total FROM property_requests"),
+    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_conversation_state WHERE status IN ('needs_human','escalated')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'inbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_messages WHERE direction = 'outbound' AND created_at >= NOW() - INTERVAL '24 hours'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_call_events WHERE created_at >= NOW() - INTERVAL '24 hours'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status IN ('draft','awaiting_payment','paid')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status = 'live'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM advertising_inquiries WHERE status IN ('new','contacted','proposal_sent')"),
+    safeOne("SELECT COALESCE(SUM(paid_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE payment_status = 'paid'", [], { total: 0 }).then((row) => Number(row.total || 0)),
+    safeOne("SELECT COALESCE(SUM(quoted_amount_ugx), 0)::bigint AS total FROM advertising_campaigns WHERE status NOT IN ('cancelled')", [], { total: 0 }).then((row) => Number(row.total || 0)),
+    safeCount("SELECT COUNT(*)::int AS total FROM invoices WHERE status NOT IN ('paid','void','cancelled')"),
+    safeCount("SELECT COUNT(*)::int AS total FROM ai_events_normalized WHERE is_training_candidate = TRUE AND created_at >= NOW() - INTERVAL '7 days'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM ai_model_feedback WHERE created_at >= NOW() - INTERVAL '7 days'"),
+    safeCount("SELECT COUNT(*)::int AS total FROM ai_agent_runs WHERE status = 'failed' AND created_at >= NOW() - INTERVAL '24 hours'")
+  ]);
+
+  return {
+    generated_at: new Date().toISOString(),
+    engagement: {
+      today_events: Number(todayEngagement.events || 0),
+      today_visitors: Number(todayEngagement.visitors || 0),
+      last_48h_events: Number(last48Engagement.events || 0),
+      last_48h_visitors: Number(last48Engagement.visitors || 0),
+      last_48h_property_views: Number(last48Engagement.property_views || 0),
+      last_48h_searches: Number(last48Engagement.searches || 0)
+    },
+    listings: {
+      pending: pendingListings,
+      live: liveListings,
+      pending_field_agent: pendingFieldAgentListings
+    },
+    brokers_and_field_agents: {
+      pending_brokers: pendingBrokers,
+      approved_brokers: approvedBrokers,
+      active_field_agents: activeFieldAgents,
+      pending_field_agent_listings: pendingFieldAgentListings
+    },
+    leads: {
+      open: openLeads,
+      hot: hotLeads,
+      overdue_tasks: overdueTasks,
+      property_requests: propertyRequests
+    },
+    communications: {
+      failed_emails: failedEmails,
+      failed_notifications: failedNotifications,
+      failed_whatsapp: failedWhatsapp,
+      whatsapp_needs_human: whatsappNeedsHuman,
+      whatsapp_inbound_24h: whatsappInbound24h,
+      whatsapp_outbound_24h: whatsappOutbound24h,
+      missed_calls_24h: missedCalls24h
+    },
+    advertising: {
+      pending_campaigns: pendingCampaigns,
+      live_ads: liveAds,
+      open_ad_leads: adOpenLeads,
+      paid_revenue_ugx: paidRevenue,
+      quoted_pipeline_ugx: quotedPipeline,
+      unpaid_invoices: unpaidInvoices
+    },
+    learning: {
+      training_candidates_7d: trainingCandidates,
+      feedback_rows_7d: feedbackRows
+    },
+    system_health: {
+      failed_ai_agent_runs_24h: recentErrors
+    }
+  };
+}
+
+function buildCeoPriorities(metrics, config = {}) {
+  const priorities = [];
+  const addPriority = (item) => priorities.push({
+    requires_founder_approval: false,
+    ...item
+  });
+  const leadSlaHours = safeInt(config.leadSlaHours, 4);
+
+  if (metrics.listings.pending > 0) {
+    addPriority({
+      area: 'listing_review',
+      severity: metrics.listings.pending >= safeInt(config.reviewBacklogHigh, 20) ? 'high' : 'medium',
+      title: 'Listings waiting for approval',
+      metric: metrics.listings.pending,
+      route: '/admin/moderation',
+      action: 'Review, approve, reject, or request changes. AI CEO must not make listings live.'
+    });
+  }
+  if (metrics.brokers_and_field_agents.pending_brokers > 0) {
+    addPriority({
+      area: 'broker_and_field_agent_ops',
+      severity: metrics.brokers_and_field_agents.pending_brokers >= 5 ? 'high' : 'medium',
+      title: 'Broker accounts need founder review',
+      metric: metrics.brokers_and_field_agents.pending_brokers,
+      route: '/admin/accounts',
+      action: 'Check ID, privacy consent, profile quality, and approve only when ready.',
+      requires_founder_approval: true
+    });
+  }
+  if (metrics.leads.hot > 0 || metrics.leads.overdue_tasks > 0) {
+    addPriority({
+      area: 'crm_leads',
+      severity: metrics.leads.overdue_tasks > 0 ? 'high' : 'medium',
+      title: 'Lead follow-up queue',
+      metric: metrics.leads.hot + metrics.leads.overdue_tasks,
+      route: '/admin/crm',
+      action: `Follow hot leads and tasks older than ${leadSlaHours} hours first; draft replies before sending.`
+    });
+  }
+  if (metrics.communications.whatsapp_needs_human > 0 || metrics.communications.missed_calls_24h > 0) {
+    addPriority({
+      area: 'whatsapp_ai_health',
+      severity: metrics.communications.whatsapp_needs_human > 0 ? 'high' : 'medium',
+      title: 'WhatsApp conversations need human attention',
+      metric: metrics.communications.whatsapp_needs_human + metrics.communications.missed_calls_24h,
+      route: '/admin/whatsapp-inbox',
+      action: 'Review escalations, missed calls, language handling, and unresolved conversations.'
+    });
+  }
+  if ((metrics.communications.failed_emails + metrics.communications.failed_notifications + metrics.communications.failed_whatsapp) > 0) {
+    addPriority({
+      area: 'email_sms_health',
+      severity: (metrics.communications.failed_emails + metrics.communications.failed_notifications + metrics.communications.failed_whatsapp) >= safeInt(config.failedNotificationHigh, 5) ? 'critical' : 'high',
+      title: 'Failed communication provider logs',
+      metric: metrics.communications.failed_emails + metrics.communications.failed_notifications + metrics.communications.failed_whatsapp,
+      route: '/admin/notifications',
+      action: 'Check email, SMS, and WhatsApp failures before customer trust is affected.'
+    });
+  }
+  if (metrics.advertising.open_ad_leads > 0 || metrics.advertising.pending_campaigns > 0 || metrics.advertising.unpaid_invoices > 0) {
+    addPriority({
+      area: 'advertising_revenue',
+      severity: metrics.advertising.unpaid_invoices > 0 ? 'high' : 'medium',
+      title: 'Advertising revenue follow-up',
+      metric: metrics.advertising.open_ad_leads + metrics.advertising.pending_campaigns + metrics.advertising.unpaid_invoices,
+      route: '/admin/advertising',
+      action: 'Turn advertiser interest into reviewed campaign drafts, invoices, payments, and live placements.',
+      requires_founder_approval: true
+    });
+  }
+  if (metrics.system_health.failed_ai_agent_runs_24h > 0) {
+    addPriority({
+      area: 'site_health',
+      severity: 'critical',
+      title: 'AI operations failures',
+      metric: metrics.system_health.failed_ai_agent_runs_24h,
+      route: '/admin/setup-status',
+      action: 'Inspect failed agent runs, provider health, and backend connection probes.'
+    });
+  }
+  if (metrics.learning.training_candidates_7d > 0 || metrics.learning.feedback_rows_7d > 0) {
+    addPriority({
+      area: 'llm_learning',
+      severity: 'low',
+      title: 'Learning data ready for review',
+      metric: metrics.learning.training_candidates_7d + metrics.learning.feedback_rows_7d,
+      route: '/admin/whatsapp-inbox',
+      action: 'Review training candidates before feeding them into the LLM improvement loop.'
+    });
+  }
+
+  return priorities;
+}
+
+function buildCeoApprovalsRequired(metrics) {
+  return [
+    {
+      area: 'listing_review',
+      label: 'Listings cannot go live without founder/admin approval',
+      count: metrics.listings.pending,
+      route: '/admin/moderation'
+    },
+    {
+      area: 'broker_review',
+      label: 'Broker applications require ID and account review',
+      count: metrics.brokers_and_field_agents.pending_brokers,
+      route: '/admin/accounts'
+    },
+    {
+      area: 'advertising_revenue',
+      label: 'Campaigns, spend, public placements, and paid boosts need founder approval',
+      count: metrics.advertising.pending_campaigns + metrics.advertising.unpaid_invoices,
+      route: '/admin/advertising'
+    },
+    {
+      area: 'external_comms',
+      label: 'Low-confidence customer replies, social posts, and lead-gen outreach remain draft-only until reviewed',
+      count: metrics.leads.hot + metrics.communications.whatsapp_needs_human,
+      route: '/admin/crm'
+    }
+  ].filter((item) => item.count > 0 || item.area === 'external_comms');
+}
+
+function summarizeCeoReport(metrics, priorities) {
+  const topPriority = priorities[0]?.title || 'No urgent blocker found';
+  return [
+    `MakaUg AI CEO morning report: ${metrics.engagement.today_visitors} visitor(s) today, ${metrics.engagement.last_48h_property_views} property view(s) in the last 48h.`,
+    `${metrics.listings.pending} listing(s) need review, ${metrics.brokers_and_field_agents.pending_brokers} broker application(s) need review, ${metrics.leads.open} lead(s) are open.`,
+    `Advertising shows UGX ${metrics.advertising.paid_revenue_ugx} paid and UGX ${metrics.advertising.quoted_pipeline_ugx} quoted pipeline.`,
+    `Top intervention: ${topPriority}.`
+  ].join(' ');
+}
+
+async function buildManagingDirectorMorningReport({ agent = null, run = null, reportType = 'morning' } = {}) {
+  const ceoAgent = agent || await getAgentByCode(AI_CEO_AGENT_CODE);
+  const config = mergeConfig(ceoAgent?.config, {});
+  const metrics = await collectCeoOperatingMetrics();
+  const priorities = buildCeoPriorities(metrics, config);
+  const approvalsRequired = buildCeoApprovalsRequired(metrics);
+  const killSwitches = getCeoKillSwitches(config);
+
+  return {
+    report_type: reportType,
+    generated_at: metrics.generated_at,
+    run_id: run?.id || null,
+    agent_code: AI_CEO_AGENT_CODE,
+    summary: summarizeCeoReport(metrics, priorities),
+    metrics,
+    priorities,
+    approvals_required: approvalsRequired,
+    kill_switches: killSwitches,
+    delivery_channels: getCeoDeliveryChannels(config),
+    operating_areas: Array.isArray(config.operatingAreas) && config.operatingAreas.length
+      ? config.operatingAreas
+      : CEO_OPERATING_AREAS
+  };
+}
+
+async function saveCeoReport({ report, runId = null, createdBy = 'ai_ceo' }) {
+  const result = await db.query(
+    `INSERT INTO ai_ceo_reports (
+       run_id, report_type, status, summary, metrics, priorities, approvals_required, kill_switches, delivery_channels, created_by
+     )
+     VALUES ($1, $2, 'sent_to_founder', $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8::jsonb, $9)
+     RETURNING id, run_id, report_date, report_type, status, summary, metrics, priorities, approvals_required, kill_switches, delivery_channels, created_by, created_at`,
+    [
+      runId,
+      safeText(report.report_type, 30) || 'morning',
+      safeText(report.summary, 2000),
+      JSON.stringify(report.metrics || {}),
+      JSON.stringify(report.priorities || []),
+      JSON.stringify(report.approvals_required || []),
+      JSON.stringify(report.kill_switches || {}),
+      JSON.stringify(report.delivery_channels || []),
+      safeText(createdBy, 120) || 'ai_ceo'
+    ]
+  );
+  return result.rows[0] || null;
+}
+
 async function runManagingDirectorCeo({ agent }) {
   const config = mergeConfig(agent.config, {
     maxFindings: 25,
     reviewBacklogHigh: 20,
-    failedNotificationHigh: 5
+    failedNotificationHigh: 5,
+    leadSlaHours: 4
   });
-  const [
-    pendingListings,
-    pendingBrokers,
-    failedEmails,
-    failedNotifications,
-    openLeads,
-    pendingCampaigns,
-    unpaidInvoices
-  ] = await Promise.all([
-    safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
-    safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending'"),
-    safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE status IN ('failed','provider_missing')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM leads WHERE status NOT IN ('closed','resolved')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM advertising_campaigns WHERE status IN ('draft','submitted','pending_payment','pending_approval')"),
-    safeCount("SELECT COUNT(*)::int AS total FROM invoices WHERE status NOT IN ('paid','void','cancelled')")
-  ]);
+  const report = await buildManagingDirectorMorningReport({ agent });
 
-  const findings = [];
-  const pushFinding = (finding) => {
-    if (findings.length < safeInt(config.maxFindings, 25)) findings.push(finding);
-  };
-
-  if (pendingBrokers > 0) {
-    pushFinding({
-      entity_type: 'broker_pipeline',
-      entity_id: 'pending_brokers',
-      severity: pendingBrokers >= 5 ? 'high' : 'medium',
-      finding_type: 'broker_approval_backlog',
-      message: `${pendingBrokers} broker application(s) are waiting for admin review and account provisioning.`,
-      recommendation: {
-        action_type: 'open_admin_workflow',
-        action_payload: { path: '/admin', tab: 'accounts', focus: 'admin-broker-accounts-table' }
-      }
-    });
-  }
-  if (pendingListings >= safeInt(config.reviewBacklogHigh, 20)) {
-    pushFinding({
-      entity_type: 'listing_pipeline',
-      entity_id: 'pending_listings',
-      severity: 'high',
-      finding_type: 'listing_review_backlog',
-      message: `${pendingListings} listings are pending review. This can slow marketplace freshness and broker trust.`,
-      recommendation: {
-        action_type: 'open_admin_workflow',
-        action_payload: { path: '/admin/moderation', focus: 'admin-listings-control' }
-      }
-    });
-  }
-  if ((failedEmails + failedNotifications) >= safeInt(config.failedNotificationHigh, 5)) {
-    pushFinding({
-      entity_type: 'notification_ops',
-      entity_id: 'failed_delivery',
-      severity: 'critical',
-      finding_type: 'failed_notification_backlog',
-      message: `${failedEmails} failed/provider-missing email log(s) and ${failedNotifications} failed notification(s) need provider or retry review.`,
-      recommendation: {
-        action_type: 'open_admin_workflow',
-        action_payload: { path: '/admin/setup-status', focus: 'providers' }
-      }
-    });
-  }
-  if (openLeads > 0) {
-    pushFinding({
-      entity_type: 'revenue_ops',
-      entity_id: 'open_leads',
-      severity: openLeads >= 10 ? 'high' : 'medium',
-      finding_type: 'open_lead_follow_up',
-      message: `${openLeads} lead(s) are open and should be followed up through CRM or WhatsApp.`,
-      recommendation: {
-        action_type: 'open_admin_workflow',
-        action_payload: { path: '/admin/leads', focus: 'admin-crm-leads-table' }
-      }
-    });
-  }
-  if (pendingCampaigns > 0 || unpaidInvoices > 0) {
-    pushFinding({
-      entity_type: 'advertising_revenue',
-      entity_id: 'campaigns_and_invoices',
-      severity: pendingCampaigns + unpaidInvoices >= 5 ? 'high' : 'medium',
-      finding_type: 'advertising_revenue_follow_up',
-      message: `${pendingCampaigns} campaign(s) and ${unpaidInvoices} invoice(s) may need payment, approval, or launch follow-up.`,
-      recommendation: {
-        action_type: 'open_admin_workflow',
-        action_payload: { path: '/admin/advertising', focus: 'admin-advertising-control' }
-      }
-    });
-  }
+  const findings = (report.priorities || []).slice(0, safeInt(config.maxFindings, 25)).map((priority) => {
+    const approvalRecommendation = priority.requires_founder_approval
+      ? buildApprovalRecommendation({
+          actionType: 'founder_review_required',
+          payload: {
+            route: priority.route,
+            area: priority.area,
+            title: priority.title,
+            recommended_action: priority.action
+          },
+          reason: `${priority.title} needs founder/admin approval or review before any external change.`,
+          riskLevel: priority.severity === 'critical' ? 'critical' : 'high'
+        })
+      : {
+          action_type: 'open_admin_workflow',
+          action_payload: {
+            path: priority.route,
+            area: priority.area,
+            focus: priority.title,
+            recommended_action: priority.action
+          },
+          risk_level: priority.severity === 'critical' ? 'high' : 'medium',
+          requires_founder_approval: false
+        };
+    return {
+      entity_type: priority.area,
+      entity_id: priority.area,
+      severity: priority.severity,
+      finding_type: priority.area === 'broker_and_field_agent_ops' ? 'broker_approval_backlog' : priority.area,
+      message: `${priority.title}: ${priority.metric}. ${priority.action}`,
+      recommendation: approvalRecommendation
+    };
+  });
 
   return {
     findings,
     summary: {
-      role: 'managing_director_ceo',
-      pending_listings: pendingListings,
-      pending_brokers: pendingBrokers,
-      failed_emails: failedEmails,
-      failed_notifications: failedNotifications,
-      open_leads: openLeads,
-      pending_campaigns: pendingCampaigns,
-      unpaid_invoices: unpaidInvoices,
+      role: AI_CEO_AGENT_CODE,
+      ai_ceo_operating_system: true,
+      morning_report_ready: true,
+      pending_listings: report.metrics.listings.pending,
+      pending_brokers: report.metrics.brokers_and_field_agents.pending_brokers,
+      failed_emails: report.metrics.communications.failed_emails,
+      failed_notifications: report.metrics.communications.failed_notifications,
+      failed_whatsapp: report.metrics.communications.failed_whatsapp,
+      open_leads: report.metrics.leads.open,
+      pending_campaigns: report.metrics.advertising.pending_campaigns,
+      unpaid_invoices: report.metrics.advertising.unpaid_invoices,
+      paid_revenue_ugx: report.metrics.advertising.paid_revenue_ugx,
+      kill_switches: report.kill_switches,
+      approvals_required: report.approvals_required,
       findings_count: findings.length
     }
   };
 }
 
 async function runAgentChecks({ agent, limit = 40 }) {
-  if (agent.code === 'managing_director_ceo') return runManagingDirectorCeo({ agent, limit });
+  if (agent.code === AI_CEO_AGENT_CODE) return runManagingDirectorCeo({ agent, limit });
   if (agent.code === 'listing_quality_guard') return runListingQualityGuard({ agent, limit });
   if (agent.code === 'id_match_guard') return runIdMatchGuard({ agent, limit });
   if (agent.code === 'image_integrity_guard') return runImageIntegrityGuard({ agent, limit });
@@ -614,6 +978,213 @@ async function runAllEnabledAgents({ triggerSource = 'manual', createdBy = 'admi
     results.push(result);
   }
   return results;
+}
+
+async function runCeoMorningReport({ triggerSource = 'manual_morning_report', createdBy = 'founder_dashboard', limit = 40 } = {}) {
+  const runResult = await runAgent({
+    agentCode: AI_CEO_AGENT_CODE,
+    triggerSource,
+    createdBy,
+    limit
+  });
+  const report = await buildManagingDirectorMorningReport({
+    agent: runResult.agent,
+    run: runResult.run,
+    reportType: 'morning'
+  });
+  const savedReport = await saveCeoReport({
+    report,
+    runId: runResult.run?.id || null,
+    createdBy
+  });
+  return {
+    agent: runResult.agent,
+    run: runResult.run,
+    findings: runResult.findings,
+    report: savedReport || report
+  };
+}
+
+async function getCeoStatus() {
+  const agent = await getAgentByCode(AI_CEO_AGENT_CODE);
+  const config = mergeConfig(agent?.config, {});
+  const [lastReport, lastRun, openFindings, pendingActions, recentCommands] = await Promise.all([
+    safeOne(
+      `SELECT id, run_id, report_date, report_type, status, summary, metrics, priorities, approvals_required, kill_switches, delivery_channels, created_by, created_at
+       FROM ai_ceo_reports
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [],
+      null
+    ),
+    safeOne(
+      `SELECT r.id, r.status, r.output_summary, r.error_message, r.started_at, r.finished_at, r.created_at
+       FROM ai_agent_runs r
+       JOIN ai_agents a ON a.id = r.agent_id
+       WHERE a.code = $1
+       ORDER BY r.created_at DESC
+       LIMIT 1`,
+      [AI_CEO_AGENT_CODE],
+      null
+    ),
+    safeRows(
+      `SELECT f.id, f.severity, f.finding_type, f.message, f.recommendation, f.status, f.created_at
+       FROM ai_agent_findings f
+       JOIN ai_agents a ON a.id = f.agent_id
+       WHERE a.code = $1
+         AND f.status = 'open'
+       ORDER BY
+         CASE f.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+         f.created_at DESC
+       LIMIT 20`,
+      [AI_CEO_AGENT_CODE]
+    ),
+    safeRows(
+      `SELECT act.id, act.action_type, act.action_payload, act.status, act.requires_founder_approval, act.approval_reason, act.risk_level, act.created_at
+       FROM ai_agent_actions act
+       JOIN ai_agent_findings f ON f.id = act.finding_id
+       JOIN ai_agents a ON a.id = f.agent_id
+       WHERE a.code = $1
+         AND act.status IN ('pending','failed')
+       ORDER BY
+         CASE act.risk_level WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
+         act.created_at DESC
+       LIMIT 20`,
+      [AI_CEO_AGENT_CODE]
+    ),
+    safeRows(
+      `SELECT id, channel, requested_by, command_text, status, intent, response_summary, requires_founder_approval, created_at, handled_at
+       FROM ai_ceo_commands
+       ORDER BY created_at DESC
+       LIMIT 10`
+    )
+  ]);
+
+  return {
+    agent,
+    enabled: !!agent?.enabled,
+    run_mode: agent?.run_mode || 'recommend',
+    operating_areas: Array.isArray(config.operatingAreas) && config.operatingAreas.length
+      ? config.operatingAreas
+      : CEO_OPERATING_AREAS,
+    kill_switches: getCeoKillSwitches(config),
+    delivery_channels: getCeoDeliveryChannels(config),
+    last_report: lastReport,
+    last_run: lastRun,
+    open_findings: openFindings,
+    pending_actions: pendingActions,
+    recent_commands: recentCommands,
+    guardrails: Array.isArray(config.guardrails) ? config.guardrails : []
+  };
+}
+
+function detectCeoCommandIntent(commandText) {
+  const text = String(commandText || '').toLowerCase();
+  if (/\b(approve|go live|delete|remove|post|publish|spend|pay|change password|grant access|revoke access|bulk|blast)\b/.test(text)) return 'approval_guardrail';
+  if (/money|revenue|advert|ad |ads|invoice|payment|boost/.test(text)) return 'advertising_revenue';
+  if (/visitor|visited|traffic|view|search/.test(text)) return 'traffic_report';
+  if (/listing|property|properties|review/.test(text)) return 'listing_report';
+  if (/lead|query|queries|customer|callback|viewing/.test(text)) return 'lead_report';
+  if (/whatsapp|call|message|language|chatbot/.test(text)) return 'whatsapp_health';
+  if (/field agent|agent|broker/.test(text)) return 'agent_ops';
+  if (/email|sms|notification/.test(text)) return 'communication_health';
+  if (/learn|llm|training|model/.test(text)) return 'llm_learning';
+  return 'morning_report';
+}
+
+function buildCeoCommandResponse({ intent, commandText, report }) {
+  const metrics = report.metrics || {};
+  const dangerous = intent === 'approval_guardrail';
+  const topPriorities = (report.priorities || []).slice(0, 4);
+  let responseSummary = report.summary;
+  let responsePayload = {
+    intent,
+    command_text: safeText(commandText, 1000),
+    metrics,
+    priorities: topPriorities,
+    next_actions: topPriorities.map((item) => ({
+      title: item.title,
+      route: item.route,
+      action: item.action,
+      requires_founder_approval: !!item.requires_founder_approval
+    })),
+    kill_switches: report.kill_switches
+  };
+
+  if (intent === 'traffic_report') {
+    responseSummary = `Traffic: ${metrics.engagement.today_visitors} visitor(s) today, ${metrics.engagement.today_events} event(s) today, ${metrics.engagement.last_48h_property_views} property view(s), and ${metrics.engagement.last_48h_searches} search event(s) in the last 48h.`;
+  } else if (intent === 'listing_report') {
+    responseSummary = `Listings: ${metrics.listings.live} live, ${metrics.listings.pending} pending review, and ${metrics.listings.pending_field_agent} pending from field-agent flows. Nothing goes live until founder/admin approval.`;
+  } else if (intent === 'lead_report') {
+    responseSummary = `Leads: ${metrics.leads.open} open, ${metrics.leads.hot} hot/high-value, ${metrics.leads.overdue_tasks} overdue task(s), and ${metrics.leads.property_requests} property request(s).`;
+  } else if (intent === 'whatsapp_health') {
+    responseSummary = `WhatsApp: ${metrics.communications.whatsapp_inbound_24h} inbound and ${metrics.communications.whatsapp_outbound_24h} outbound message(s) in 24h, ${metrics.communications.whatsapp_needs_human} needing human review, ${metrics.communications.missed_calls_24h} missed call event(s), and ${metrics.communications.failed_whatsapp} failed WhatsApp log(s).`;
+  } else if (intent === 'agent_ops') {
+    responseSummary = `Agents: ${metrics.brokers_and_field_agents.pending_brokers} broker application(s) need review, ${metrics.brokers_and_field_agents.approved_brokers} broker(s) are registered, ${metrics.brokers_and_field_agents.active_field_agents} field agent(s) are active, and ${metrics.brokers_and_field_agents.pending_field_agent_listings} field-agent listing(s) are pending.`;
+  } else if (intent === 'communication_health') {
+    responseSummary = `Comms health: ${metrics.communications.failed_emails} failed email log(s), ${metrics.communications.failed_notifications} failed notification(s), and ${metrics.communications.failed_whatsapp} failed WhatsApp log(s).`;
+  } else if (intent === 'advertising_revenue') {
+    responseSummary = `Revenue: UGX ${metrics.advertising.paid_revenue_ugx} paid, UGX ${metrics.advertising.quoted_pipeline_ugx} quoted pipeline, ${metrics.advertising.open_ad_leads} ad lead(s), ${metrics.advertising.pending_campaigns} pending campaign(s), and ${metrics.advertising.unpaid_invoices} unpaid invoice(s).`;
+  } else if (intent === 'llm_learning') {
+    responseSummary = `Learning loop: ${metrics.learning.training_candidates_7d} training candidate(s) and ${metrics.learning.feedback_rows_7d} model feedback row(s) are available from the last 7 days. Review before feeding improvements into the chatbot.`;
+  } else if (dangerous) {
+    responseSummary = 'Guardrail active: I can prepare the recommendation, draft, route, or report, but I will not approve listings, delete data, publish posts, spend money, send bulk outreach, or change access without founder approval.';
+    responsePayload = {
+      ...responsePayload,
+      blocked_action: true,
+      approval_required: true
+    };
+  }
+
+  return {
+    responseSummary,
+    responsePayload,
+    requiresFounderApproval: dangerous
+  };
+}
+
+async function handleCeoCommand({ commandText, channel = 'dashboard', requestedBy = 'founder_dashboard' }) {
+  const cleanCommand = safeText(commandText, 2000);
+  if (!cleanCommand) {
+    throw new Error('AI CEO command is required');
+  }
+  const normalizedChannel = ['dashboard', 'whatsapp_owner', 'telegram_owner', 'email', 'system'].includes(String(channel || '').trim())
+    ? String(channel).trim()
+    : 'dashboard';
+
+  const agent = await getAgentByCode(AI_CEO_AGENT_CODE);
+  const report = await buildManagingDirectorMorningReport({ agent, reportType: 'command' });
+  const intent = detectCeoCommandIntent(cleanCommand);
+  const response = buildCeoCommandResponse({ intent, commandText: cleanCommand, report });
+  const status = response.requiresFounderApproval ? 'needs_approval' : 'answered';
+
+  const inserted = await db.query(
+    `INSERT INTO ai_ceo_commands (
+       channel, requested_by, command_text, status, intent, response_summary, response_payload, requires_founder_approval, handled_at
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, NOW())
+     RETURNING id, channel, requested_by, command_text, status, intent, response_summary, response_payload, requires_founder_approval, created_at, handled_at`,
+    [
+      normalizedChannel,
+      safeText(requestedBy, 120) || 'founder_dashboard',
+      cleanCommand,
+      status,
+      intent,
+      safeText(response.responseSummary, 3000),
+      JSON.stringify(response.responsePayload || {}),
+      response.requiresFounderApproval
+    ]
+  );
+
+  return {
+    command: inserted.rows[0],
+    report,
+    response: {
+      summary: response.responseSummary,
+      payload: response.responsePayload,
+      requires_founder_approval: response.requiresFounderApproval
+    }
+  };
 }
 
 async function listRuns({ limit = 50 }) {
@@ -742,6 +1313,9 @@ async function listActions({ status = '', limit = 100 }) {
        a.status,
        a.approved_by,
        a.executed_by,
+       a.requires_founder_approval,
+       a.approval_reason,
+       a.risk_level,
        a.result_payload,
        a.error_message,
        a.created_at,
@@ -763,7 +1337,7 @@ async function approveAction({ actionId, actorId = 'admin_api_key' }) {
          updated_at = NOW()
      WHERE id = $1
        AND status IN ('pending', 'failed')
-     RETURNING id, action_type, action_payload, status, approved_by, updated_at`,
+     RETURNING id, action_type, action_payload, status, approved_by, requires_founder_approval, approval_reason, risk_level, updated_at`,
     [actionId, actorId]
   );
   return result.rows[0] || null;
@@ -771,7 +1345,7 @@ async function approveAction({ actionId, actorId = 'admin_api_key' }) {
 
 async function executeAction({ actionId, actorId = 'super_admin_key' }) {
   const actionResult = await db.query(
-    `SELECT id, action_type, action_payload, status
+    `SELECT id, finding_id, action_type, action_payload, status, requires_founder_approval, approval_reason, risk_level
      FROM ai_agent_actions
      WHERE id = $1
      LIMIT 1`,
@@ -782,6 +1356,9 @@ async function executeAction({ actionId, actorId = 'super_admin_key' }) {
 
   if (!['approved', 'pending', 'failed'].includes(action.status)) {
     throw new Error('Action is not executable in current state');
+  }
+  if (action.requires_founder_approval && action.status !== 'approved') {
+    throw new Error('Founder approval required before this AI CEO action can execute');
   }
 
   const payload = action.action_payload && typeof action.action_payload === 'object'
@@ -841,6 +1418,22 @@ async function executeAction({ actionId, actorId = 'super_admin_key' }) {
       resultPayload = {
         draft: payload
       };
+    } else if ([
+      'open_admin_workflow',
+      'founder_review_required',
+      'draft_customer_reply',
+      'draft_outreach_email',
+      'draft_social_post',
+      'run_health_probe',
+      'notify_founder'
+    ].includes(action.action_type)) {
+      resultPayload = {
+        no_external_side_effect: true,
+        review_payload: payload,
+        guardrail: action.requires_founder_approval
+          ? 'Founder approval was required for this reviewed AI CEO action.'
+          : 'No external mutation was performed.'
+      };
     } else {
       throw new Error(`Unsupported action_type: ${action.action_type}`);
     }
@@ -889,6 +1482,10 @@ module.exports = {
   updateAgent,
   runAgent,
   runAllEnabledAgents,
+  runCeoMorningReport,
+  getCeoStatus,
+  handleCeoCommand,
+  buildManagingDirectorMorningReport,
   listRuns,
   listFindings,
   decideFinding,

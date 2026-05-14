@@ -6,6 +6,9 @@ const {
   updateAgent,
   runAgent,
   runAllEnabledAgents,
+  runCeoMorningReport,
+  getCeoStatus,
+  handleCeoCommand,
   listRuns,
   listFindings,
   decideFinding,
@@ -68,6 +71,41 @@ router.post('/run', async (req, res, next) => {
       triggerSource,
       createdBy,
       limit
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/ceo/status', async (_req, res, next) => {
+  try {
+    const data = await getCeoStatus();
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/ceo/morning-report', async (req, res, next) => {
+  try {
+    const data = await runCeoMorningReport({
+      triggerSource: String(req.body.trigger_source || 'admin_dashboard_morning_report').trim(),
+      createdBy: String(req.body.created_by || 'founder_dashboard').trim(),
+      limit: toLimit(req.body.limit, 40, 200)
+    });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/ceo/command', async (req, res, next) => {
+  try {
+    const data = await handleCeoCommand({
+      commandText: req.body.command_text || req.body.command || '',
+      channel: String(req.body.channel || 'dashboard').trim(),
+      requestedBy: String(req.body.requested_by || req.body.created_by || 'founder_dashboard').trim()
     });
     return res.json({ ok: true, data });
   } catch (error) {
