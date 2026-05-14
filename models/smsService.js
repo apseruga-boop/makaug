@@ -1,6 +1,6 @@
-const twilio = require('twilio');
 const logger = require('../config/logger');
 
+let twilioPackage = null;
 let client = null;
 
 function getClient() {
@@ -11,7 +11,8 @@ function getClient() {
 
   if (!sid || !token) return null;
 
-  client = twilio(sid, token);
+  if (!twilioPackage) twilioPackage = require('twilio');
+  client = twilioPackage(sid, token);
   return client;
 }
 

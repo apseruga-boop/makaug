@@ -39,6 +39,7 @@ const {
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
+const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
 
@@ -5943,6 +5944,38 @@ async function processInboundRuntime({
     });
     return {
       message: t(voiceLang, voiceTranscriptionUnavailable ? 'voiceTranscriptionUnavailable' : 'voiceNotUnderstood'),
+      nextStep: sessionStep
+    };
+  }
+
+  const ownerCommand = await handleOwnerWhatsappCommand({
+    phone,
+    commandText: effectiveBody,
+    contactName
+  }).catch((error) => {
+    logger.warn('AI CEO owner WhatsApp command failed:', error.message || String(error));
+    return { handled: true, response: 'I could not complete that AI CEO command. Please check the admin dashboard logs.' };
+  });
+  if (ownerCommand?.handled) {
+    const reply = ownerCommand.response || ownerCommand.summary || 'Done.';
+    await logIntent({
+      userPhone: phone,
+      waMessageId: inboundMessageId,
+      detectedIntent: `ai_ceo_${ownerCommand.intent || 'command'}`,
+      confidence: 1,
+      language: sessionLang,
+      currentStep: sessionStep,
+      rawText: effectiveBody,
+      transcript: transcriptRecord?.text || null,
+      entities: {
+        channel: 'whatsapp_owner',
+        command_id: ownerCommand.command?.id || null,
+        status: ownerCommand.status || null
+      },
+      modelUsed: 'ai_ceo_control_service'
+    });
+    return {
+      message: reply,
       nextStep: sessionStep
     };
   }

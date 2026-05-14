@@ -1,7 +1,6 @@
-const twilio = require('twilio');
-
 const logger = require('../config/logger');
 
+let twilioPackage = null;
 let twilioClient = null;
 
 function normalizeUgPhoneForWhatsApp(phone) {
@@ -17,7 +16,8 @@ function getTwilioClient() {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!sid || !token) return null;
-  twilioClient = twilio(sid, token);
+  if (!twilioPackage) twilioPackage = require('twilio');
+  twilioClient = twilioPackage(sid, token);
   return twilioClient;
 }
 
