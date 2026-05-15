@@ -47,10 +47,46 @@ const PRIMARY_ACTIONS = [
   { route: '/', selector: '#footer-link-safety', label: 'Footer Safety', expectUrl: '/safety', marker: 'Safety' }
 ];
 
+const AUDIT_ROUTE_PAGE_IDS = {
+  '/': 'page-home',
+  '/to-rent': 'page-rent',
+  '/for-sale': 'page-sale',
+  '/land': 'page-land',
+  '/student-accommodation': 'page-students',
+  '/commercial': 'page-commercial',
+  '/brokers': 'page-brokers',
+  '/list-property': 'page-list-property',
+  '/advertise': 'page-advertise',
+  '/mortgage': 'page-mortgage',
+  '/login': 'page-login',
+  '/about': 'page-about',
+  '/help': 'page-help',
+  '/safety': 'page-safety',
+  '/anti-fraud': 'page-fraud'
+};
+
 async function go(page, route) {
-  await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  const targetUrl = `${BASE_URL}${route}?v=${Date.now()}`;
+  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForLoadState('networkidle', { timeout: 2500 }).catch(() => {});
   await page.waitForTimeout(180);
+  const expectedPageId = AUDIT_ROUTE_PAGE_IDS[route] || '';
+  const expectedPath = route.replace(/\/+$/, '') || '/';
+  const routeReady = async (timeout = 2500) => page.waitForFunction(({ expectedPageId, expectedPath }) => {
+    if (!expectedPageId) return true;
+    const path = (window.location.pathname || '/').replace(/\/+$/, '') || '/';
+    const pageEl = document.getElementById(expectedPageId);
+    return path === expectedPath && pageEl?.classList.contains('active') && !pageEl.classList.contains('route-fragment-loading');
+  }, { expectedPageId, expectedPath }, { timeout }).then(() => true).catch(() => false);
+  if (expectedPageId && !(await routeReady())) {
+    await page.evaluate((targetRoute) => {
+      if (typeof window.navigatePublicRoute === 'function') window.navigatePublicRoute(targetRoute);
+    }, route).catch(() => {});
+    await routeReady(7000);
+  }
+  if (process.env.CLICK_PROBE_DEBUG_ROUTE === '1') {
+    console.log(`DEBUG go route=${route} target=${targetUrl} final=${page.url()}`);
+  }
 }
 
 async function visibleText(page) {
@@ -67,20 +103,24 @@ async function visibleText(page) {
   return '';
 }
 
-async function waitForMapIfPresent(page) {
-  const hasMap = await page.locator('#map-home:visible, #map-sale:visible, #map-rent:visible, #map-students:visible, #map-commercial:visible, #map-land:visible, #map-brokers:visible').count();
+async function waitForMapIfPresent(page, route) {
+  const pageId = AUDIT_ROUTE_PAGE_IDS[route] || '';
+  const scope = pageId ? `#${pageId}` : '.page.active';
+  const hasMap = await page.locator(`${scope} #map-home:visible, ${scope} #map-sale:visible, ${scope} #map-rent:visible, ${scope} #map-students:visible, ${scope} #map-commercial:visible, ${scope} #map-land:visible, ${scope} #map-brokers:visible`).count();
   if (!hasMap) return false;
-  await page.evaluate(() => {
-    const map = document.querySelector('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers');
+  await page.evaluate((expectedPageId) => {
+    const activePage = document.getElementById(expectedPageId) || document.querySelector('.page.active') || document;
+    const map = activePage.querySelector('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers');
     if (map) map.scrollIntoView({ block: 'center', inline: 'center' });
-  }).catch(() => {});
+  }, pageId).catch(() => {});
   await page.waitForTimeout(3400);
   return true;
 }
 
-async function visiblePublicMapId(page) {
-  return page.evaluate(() => {
-    return Array.from(document.querySelectorAll('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers'))
+async function visiblePublicMapId(page, route) {
+  return page.evaluate((expectedPageId) => {
+    const activePage = document.getElementById(expectedPageId) || document.querySelector('.page.active') || document;
+    return Array.from(activePage.querySelectorAll('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers'))
       .map((el) => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
@@ -90,7 +130,7 @@ async function visiblePublicMapId(page) {
         };
       })
       .find((item) => item.visible)?.id || '';
-  }).catch(() => '');
+  }, AUDIT_ROUTE_PAGE_IDS[route] || '').catch(() => '');
 }
 
 async function triggerGoogleMarkerObject(page, mapId) {
@@ -116,9 +156,11 @@ async function triggerGoogleMarkerObject(page, mapId) {
 }
 
 async function clickGoogleMarkerCandidate(page, mapId) {
-  const candidates = await page.evaluate(() => {
+  if (await triggerGoogleMarkerObject(page, mapId)) return true;
+  const candidates = await page.evaluate((activeMapId) => {
+    const root = document.getElementById(activeMapId) || document;
     const blocked = /^(Map|Satellite)$|keyboard|terms|report|fullscreen|street view|zoom|pegman|map data|imagery/i;
-    return Array.from(document.querySelectorAll('.gm-style [role="button"], .gm-style img[alt], .gm-style [title]'))
+    return Array.from(root.querySelectorAll('.gm-style [role="button"], .gm-style img[alt], .gm-style [title]'))
       .map((el) => {
         const style = window.getComputedStyle(el);
         const rect = el.getBoundingClientRect();
@@ -141,7 +183,7 @@ async function clickGoogleMarkerCandidate(page, mapId) {
         return item.label || /marker|spotlight|red|maps\.gstatic\.com\/mapfiles/i.test(item.src);
       })
       .slice(0, 14);
-  });
+  }, mapId || '');
   for (const candidate of candidates) {
     await page.mouse.click(candidate.x, candidate.y).catch(() => {});
     await page.waitForSelector('.gm-style-iw:visible, [data-map-marker-popup]:visible', { timeout: 1300 }).catch(() => {});
@@ -222,7 +264,9 @@ async function auditVisibleActions(page) {
 
 async function auditCardsAndMarkers(page, route) {
   const checks = [];
-  const card = page.locator('.property-card:visible, [data-property-card]:visible, [data-property-id]:visible').first();
+  const pageId = AUDIT_ROUTE_PAGE_IDS[route] || '';
+  const cardScope = pageId ? page.locator(`#${pageId}`) : page;
+  const card = cardScope.locator('.property-card:visible, [data-property-card]:visible').first();
   if (await card.count()) {
     const before = page.url();
     await card.click({ timeout: 8000 }).catch((error) => {
@@ -235,13 +279,16 @@ async function auditCardsAndMarkers(page, route) {
     if (before === after && !/Back to results|Property Details|Book Viewing|Request Callback|WhatsApp/i.test(text)) {
       checks.push('listing/property card did not open a detail view or route');
     }
-    await go(page, route);
   }
-  const hasMap = await waitForMapIfPresent(page);
-  const markerCount = await page.locator('.leaflet-marker-icon:visible, [data-map-marker]:visible').count();
+  await go(page, route);
+  const hasMap = await waitForMapIfPresent(page, route);
+  const activeMapId = await visiblePublicMapId(page, route);
+  const markerRoot = activeMapId ? `#${activeMapId}` : '';
+  const markerCount = markerRoot ? await page.locator(`${markerRoot} .leaflet-marker-icon:visible, ${markerRoot} [data-map-marker]:visible`).count() : 0;
   if (markerCount) {
-    const markerIndex = await page.evaluate(() => {
-      const nodes = Array.from(document.querySelectorAll('.leaflet-marker-icon, [data-map-marker]'))
+    const markerIndex = await page.evaluate((activeMapId) => {
+      const root = document.getElementById(activeMapId) || document;
+      const nodes = Array.from(root.querySelectorAll('.leaflet-marker-icon, [data-map-marker]'))
         .filter((el) => {
           const style = window.getComputedStyle(el);
           const rect = el.getBoundingClientRect();
@@ -257,11 +304,11 @@ async function auditCardsAndMarkers(page, route) {
         if (top === el || el.contains(top)) return i;
       }
       return -1;
-    });
+    }, activeMapId);
     if (markerIndex < 0) {
       checks.push('no unobstructed map marker was clickable');
     } else {
-      const marker = page.locator('.leaflet-marker-icon:visible, [data-map-marker]:visible').nth(markerIndex);
+      const marker = page.locator(`${markerRoot} .leaflet-marker-icon:visible, ${markerRoot} [data-map-marker]:visible`).nth(markerIndex);
       await marker.click({ timeout: 8000 }).catch((error) => {
         checks.push(`map marker click failed: ${error.message}`);
       });
@@ -271,12 +318,36 @@ async function auditCardsAndMarkers(page, route) {
     if (!popupOrDetail) checks.push('map marker did not open popup/detail');
     else await clickPopupDetailOrBrokerAction(page, checks);
   } else if (hasMap) {
-    const googlePopupOpened = await clickGoogleMarkerCandidate(page, await visiblePublicMapId(page));
+    const googlePopupOpened = await clickGoogleMarkerCandidate(page, activeMapId);
     if (googlePopupOpened) {
       await clickPopupDetailOrBrokerAction(page, checks);
     } else {
       const visibleCards = await page.locator('.property-card:visible, [data-property-card]:visible, .broker-grid-card:visible').count();
-      if (visibleCards) checks.push('map has listing/broker cards but no clickable marker popup was found');
+      if (visibleCards) {
+        const debug = await page.evaluate((expectedPageId) => {
+          const activePage = document.getElementById(expectedPageId) || document.querySelector('.page.active') || document;
+          const activeMap = Array.from(activePage.querySelectorAll('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers'))
+            .find((el) => {
+              const style = window.getComputedStyle(el);
+              const rect = el.getBoundingClientRect();
+              return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 120 && rect.height > 120;
+            })?.id || '';
+          const registry = typeof markers !== 'undefined' ? markers : {};
+          const providers = typeof mapProviders !== 'undefined' ? mapProviders : {};
+          return {
+            href: window.location.href,
+            expectedPageId,
+            expectedExists: !!document.getElementById(expectedPageId),
+            activePages: Array.from(document.querySelectorAll('.page.active')).map((el) => el.id),
+            activeMap,
+            helper: typeof window.__makaugOpenFirstPublicMapMarker === 'function',
+            provider: providers?.[activeMap] || '',
+            markerCount: Array.isArray(registry?.[activeMap]) ? registry[activeMap].length : null,
+            publicListings: typeof getPublicListings === 'function' ? getPublicListings().length : null
+          };
+        }, AUDIT_ROUTE_PAGE_IDS[route] || '').catch(() => ({}));
+        checks.push(`map has listing/broker cards but no clickable marker popup was found ${JSON.stringify(debug)}`);
+      }
     }
   }
   return checks;
@@ -335,14 +406,17 @@ async function main() {
   const page = await context.newPage();
   const consoleIssues = [];
   const responseFailures = [];
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleIssues.push({ kind: 'console', text: msg.text() });
-  });
-  page.on('pageerror', (err) => consoleIssues.push({ kind: 'pageerror', text: err.message || String(err) }));
-  page.on('response', (response) => {
-    const status = response.status();
-    if (status >= 400) responseFailures.push({ status, url: response.url() });
-  });
+  const watchPage = (targetPage) => {
+    targetPage.on('console', (msg) => {
+      if (msg.type() === 'error') consoleIssues.push({ kind: 'console', text: msg.text() });
+    });
+    targetPage.on('pageerror', (err) => consoleIssues.push({ kind: 'pageerror', text: err.message || String(err) }));
+    targetPage.on('response', (response) => {
+      const status = response.status();
+      if (status >= 400) responseFailures.push({ status, url: response.url() });
+    });
+  };
+  watchPage(page);
 
   const results = [];
   try {
@@ -407,19 +481,28 @@ async function main() {
     }
 
     const auditRoutes = ['/', '/to-rent', '/for-sale', '/land', '/student-accommodation', '/commercial', '/brokers', '/list-property', '/advertise', '/mortgage', '/login', '/about', '/help', '/safety', '/anti-fraud'];
+    await page.close().catch(() => {});
+    const auditContext = await browser.newContext({ viewport: { width: 1365, height: 900 } });
     for (const route of auditRoutes) {
-      await go(page, route);
-      const actions = await auditVisibleActions(page);
-      const dead = actions.filter((item) => !actionHasDestination(item));
-      const cardMarkerFailures = await auditCardsAndMarkers(page, route);
-      results.push({
-        label: `Visible action audit ${route}`,
-        route,
-        selector: `${actions.length} visible actions`,
-        ok: dead.length === 0 && cardMarkerFailures.length === 0,
-        failures: dead.slice(0, 5).map((item) => `dead visible action: ${item.id || item.label || item.tag}`).concat(cardMarkerFailures)
-      });
+      const auditPage = await auditContext.newPage();
+      watchPage(auditPage);
+      try {
+        await go(auditPage, route);
+        const actions = await auditVisibleActions(auditPage);
+        const dead = actions.filter((item) => !actionHasDestination(item));
+        const cardMarkerFailures = await auditCardsAndMarkers(auditPage, route);
+        results.push({
+          label: `Visible action audit ${route}`,
+          route,
+          selector: `${actions.length} visible actions`,
+          ok: dead.length === 0 && cardMarkerFailures.length === 0,
+          failures: dead.slice(0, 5).map((item) => `dead visible action: ${item.id || item.label || item.tag}`).concat(cardMarkerFailures)
+        });
+      } finally {
+        await auditPage.close().catch(() => {});
+      }
     }
+    await auditContext.close().catch(() => {});
   } finally {
     await browser.close();
   }
