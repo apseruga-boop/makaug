@@ -41,6 +41,10 @@ for (const expected of [
 }
 assert(adminRoutes.includes('router.use(requireAdminApiKey)'), 'Outlook routes must inherit admin API protection');
 assert(adminRoutes.includes('writeAudit') && adminRoutes.includes('outlook_agent_send_attempt'), 'Outlook send attempts must be audited');
+assert(adminRoutes.includes("router.post('/outreach/email/send'"), 'Admin outreach email send route must exist');
+assert(adminRoutes.includes('reviewed=true is required before sending'), 'Outreach sends must require explicit human review');
+assert(adminRoutes.includes('outreach_email_send_attempt'), 'Outreach sends must be audited and logged');
+assert(adminRoutes.includes('outboundEmailDisclosureOk'), 'Outreach emails must enforce site and unsubscribe disclosure');
 
 assert(migration.includes('CREATE TABLE IF NOT EXISTS outlook_email_threads'), 'Migration must create Outlook thread inventory');
 assert(migration.includes('CREATE TABLE IF NOT EXISTS outlook_email_actions'), 'Migration must create Outlook action queue');
@@ -62,6 +66,7 @@ assert(envExample.includes('OUTLOOK_AI_DRAFT_ONLY=true'), 'Example env must defa
 assert(envExample.includes('OUTLOOK_AI_REQUIRE_APPROVAL=true'), 'Example env must default Outlook agent to approval-required');
 assert(pkg.scripts['ai:outlook-email-agent'], 'Package scripts must expose Outlook email agent scheduler');
 assert(probe.includes("router.get('/outlook-agent/status'"), 'Backend connection probe must check Outlook agent status route');
+assert(probe.includes("router.post('/outreach/email/send'"), 'Backend connection probe must check outreach email send route');
 assert(docs.includes('Microsoft Graph') && docs.includes('npm run ai:outlook-email-agent'), 'Outlook agent docs must explain Graph setup and scheduler');
 
 console.log('Outlook AI email agent wiring tests passed');

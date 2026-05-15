@@ -140,6 +140,7 @@ function sourceWiringChecks() {
     ['AI assistant creates CRM lead', 'routes/ai.js', 'createLead'],
     ['admin alerts visible', 'routes/admin.js', "router.get('/alerts'"],
     ['admin email logs visible', 'routes/admin.js', "router.get('/emails'"],
+    ['admin reviewed outreach email send route visible', 'routes/admin.js', "router.post('/outreach/email/send'"],
     ['admin Outlook AI email agent status visible', 'routes/admin.js', "router.get('/outlook-agent/status'"],
     ['admin Outlook AI email agent draft route visible', 'routes/admin.js', "router.post('/outlook-agent/draft'"],
     ['admin WhatsApp logs visible', 'routes/admin.js', "router.get('/whatsapp-message-logs'"],

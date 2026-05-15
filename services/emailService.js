@@ -13,6 +13,12 @@ function getSupportWhatsappUrl() {
   return digits ? `https://wa.me/${digits}` : 'https://wa.me/256760112587';
 }
 
+function getDefaultEmailFrom() {
+  const configured = cleanText(process.env.EMAIL_FROM);
+  if (configured) return configured;
+  return `makaug.com <${getSupportEmail()}>`;
+}
+
 function stripHtml(value) {
   return String(value || '').replace(/<[^>]*>/g, '').trim();
 }
@@ -371,7 +377,7 @@ async function sendViaSmtp({ to, subject, text, html, replyTo }) {
   const transporter = getSmtpTransporter();
   if (!transporter) return { sent: false, reason: 'smtp_not_configured' };
 
-  const from = process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>';
+  const from = getDefaultEmailFrom();
   const message = {
     from,
     to,
@@ -402,7 +408,7 @@ async function sendViaResend({ to, subject, text, html, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { sent: false, reason: 'resend_not_configured' };
 
-  const from = process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>';
+  const from = getDefaultEmailFrom();
 
   const payload = {
     from,
@@ -442,7 +448,7 @@ async function sendViaWebhook({ to, subject, text, html, replyTo }) {
     text,
     html,
     reply_to: replyTo || null,
-    from: process.env.EMAIL_FROM || 'makaug.com <noreply@makaug.com>'
+    from: getDefaultEmailFrom()
   };
 
   const resp = await fetch(webhook, {
@@ -936,6 +942,7 @@ async function sendBrokerApprovalEmail({ to, firstName = 'there', agent = {}, te
 
 module.exports = {
   emailProviderConfigured,
+  getDefaultEmailFrom,
   getSupportEmail,
   getSupportPhone,
   getSupportWhatsappUrl,

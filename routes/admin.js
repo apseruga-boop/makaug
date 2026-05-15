@@ -46,6 +46,7 @@ const {
 } = require('../services/whatsappWebBridgeService');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
+  getDefaultEmailFrom,
   getSupportEmail,
   getSupportWhatsappUrl,
   sendBrokerApprovalEmail,
@@ -373,6 +374,19 @@ function envSet(key) {
 
 function emailProviderConfigured() {
   return emailProviderConfiguredByService();
+}
+
+function outboundEmailDisclosureOk(text = '') {
+  const body = String(text || '').toLowerCase();
+  return body.includes('makaug.com')
+    && body.includes('unsubscribe')
+    && (body.includes('https://makaug.com') || body.includes('makaug.com'));
+}
+
+function emailDomain(value = '') {
+  const email = normalizeEmail(value);
+  const [, domain] = email.split('@');
+  return domain || '';
 }
 
 function splitBrokerName(fullName = '') {
@@ -5256,6 +5270,85 @@ router.get('/emails', async (req, res, next) => {
       ).catch(() => ({ rows: [] }));
       return res.json({ ok: true, data: fallback.rows, pagination: toPagination(fallback.rows.length, 1, 100), fallback: true });
     }
+    return next(error);
+  }
+});
+
+router.post('/outreach/email/send', async (req, res, next) => {
+  try {
+    const recipientEmail = normalizeEmail(req.body?.to || req.body?.email);
+    const subject = cleanText(req.body?.subject);
+    const bodyText = cleanText(req.body?.body || req.body?.text);
+    const leadId = cleanText(req.body?.lead_id || req.body?.leadId);
+    const leadName = cleanText(req.body?.name || req.body?.lead_name || req.body?.leadName);
+    const source = cleanText(req.body?.source);
+    const reviewed = req.body?.reviewed === true || String(req.body?.reviewed || '').toLowerCase() === 'true';
+    const errors = [];
+
+    if (!reviewed) errors.push('reviewed=true is required before sending');
+    if (!isValidEmail(recipientEmail)) errors.push('to must be a valid email address');
+    if (!subject) errors.push('subject is required');
+    if (subject.length > 180) errors.push('subject must be 180 characters or fewer');
+    if (!bodyText) errors.push('body is required');
+    if (bodyText.length > 8000) errors.push('body must be 8000 characters or fewer');
+    if (!outboundEmailDisclosureOk(bodyText)) {
+      errors.push('body must include makaug.com and an unsubscribe instruction');
+    }
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Invalid outreach email payload', details: errors });
+    }
+    if (!emailProviderConfigured()) {
+      return res.status(409).json({
+        ok: false,
+        error: 'Email provider is not configured',
+        missingEnv: missingProviderEnv('email')
+      });
+    }
+
+    const delivery = await sendSupportEmail({
+      to: recipientEmail,
+      subject,
+      text: bodyText,
+      replyTo: getSupportEmail()
+    });
+    const status = notificationStatusFromDelivery(delivery);
+    await logEmailEvent(db, {
+      eventType: 'outreach_email_send_attempt',
+      recipientEmail,
+      recipientRole: 'outreach_lead',
+      templateKey: 'lead_outreach_launch_invitation',
+      subject,
+      status,
+      provider: delivery.provider || null,
+      providerMessageId: delivery.id || null,
+      failureReason: delivery.sent ? null : (delivery.error || delivery.reason || 'outreach_email_send_failed'),
+      sentAt: delivery.sent ? new Date() : null
+    });
+    await writeAudit('outreach_email_send_attempt', {
+      lead_id: leadId || null,
+      lead_name: leadName || null,
+      recipient_domain: emailDomain(recipientEmail),
+      source: source || null,
+      subject,
+      sent: delivery.sent === true,
+      provider: delivery.provider || null,
+      from: getDefaultEmailFrom(),
+      status,
+      reason: delivery.sent ? null : (delivery.error || delivery.reason || null)
+    }, adminActorId(req));
+
+    return res.status(delivery.sent ? 200 : 502).json({
+      ok: delivery.sent === true,
+      data: {
+        status,
+        provider: delivery.provider || null,
+        message_id: delivery.id || null,
+        accepted: delivery.accepted || [],
+        from: getDefaultEmailFrom()
+      },
+      reason: delivery.sent ? null : (delivery.error || delivery.reason || 'outreach_email_send_failed')
+    });
+  } catch (error) {
     return next(error);
   }
 });
