@@ -29168,6 +29168,25 @@ function clearMapMarkers(mapId) {
   markers[mapId] = [];
 }
 
+function openFirstPublicMapMarkerForQa(mapId) {
+  const id = String(mapId || "");
+  const marker = (markers[id] || []).find(Boolean);
+  if (!marker) return false;
+  try {
+    if (mapProviders[id] === "google" && window.google?.maps?.event) {
+      window.google.maps.event.trigger(marker, "click");
+      return true;
+    }
+    if (marker.openPopup) {
+      marker.openPopup();
+      return true;
+    }
+  } catch (error) {}
+  return false;
+}
+
+window.__makaugOpenFirstPublicMapMarker = openFirstPublicMapMarkerForQa;
+
 function addGoogleMarkers(mapId, list) {
   const map = maps[mapId];
   if (!map || !window.google?.maps) return;

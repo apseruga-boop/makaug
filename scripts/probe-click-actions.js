@@ -78,7 +78,44 @@ async function waitForMapIfPresent(page) {
   return true;
 }
 
-async function clickGoogleMarkerCandidate(page) {
+async function visiblePublicMapId(page) {
+  return page.evaluate(() => {
+    return Array.from(document.querySelectorAll('#map-home, #map-sale, #map-rent, #map-students, #map-commercial, #map-land, #map-brokers'))
+      .map((el) => {
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return {
+          id: el.id,
+          visible: style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 120 && rect.height > 120
+        };
+      })
+      .find((item) => item.visible)?.id || '';
+  }).catch(() => '');
+}
+
+async function triggerGoogleMarkerObject(page, mapId) {
+  if (!mapId) return false;
+  const triggered = await page.evaluate((activeMapId) => {
+    try {
+      if (typeof window.__makaugOpenFirstPublicMapMarker === 'function') {
+        return window.__makaugOpenFirstPublicMapMarker(activeMapId);
+      }
+      if (!window.google?.maps?.event) return false;
+      const registry = typeof markers !== 'undefined' ? markers : {};
+      const candidate = (registry?.[activeMapId] || []).find((marker) => marker && typeof marker.getMap === 'function' && marker.getMap());
+      if (!candidate) return false;
+      window.google.maps.event.trigger(candidate, 'click');
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }, mapId).catch(() => false);
+  if (!triggered) return false;
+  await page.waitForSelector('.gm-style-iw:visible, [data-map-marker-popup]:visible', { timeout: 1600 }).catch(() => {});
+  return Boolean(await page.locator('.gm-style-iw:visible, [data-map-marker-popup]:visible').count());
+}
+
+async function clickGoogleMarkerCandidate(page, mapId) {
   const candidates = await page.evaluate(() => {
     const blocked = /^(Map|Satellite)$|keyboard|terms|report|fullscreen|street view|zoom|pegman|map data|imagery/i;
     return Array.from(document.querySelectorAll('.gm-style [role="button"], .gm-style img[alt], .gm-style [title]'))
@@ -111,7 +148,7 @@ async function clickGoogleMarkerCandidate(page) {
     const opened = await page.locator('.gm-style-iw:visible, [data-map-marker-popup]:visible').count();
     if (opened) return true;
   }
-  return false;
+  return triggerGoogleMarkerObject(page, mapId);
 }
 
 async function clickPopupDetailOrBrokerAction(page, checks) {
@@ -234,7 +271,7 @@ async function auditCardsAndMarkers(page, route) {
     if (!popupOrDetail) checks.push('map marker did not open popup/detail');
     else await clickPopupDetailOrBrokerAction(page, checks);
   } else if (hasMap) {
-    const googlePopupOpened = await clickGoogleMarkerCandidate(page);
+    const googlePopupOpened = await clickGoogleMarkerCandidate(page, await visiblePublicMapId(page));
     if (googlePopupOpened) {
       await clickPopupDetailOrBrokerAction(page, checks);
     } else {

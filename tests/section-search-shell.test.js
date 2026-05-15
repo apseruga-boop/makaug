@@ -44,6 +44,8 @@ test('section search route mount feeds analytics and backend probes', () => {
 test('release probes assert section search shells on public routes', () => {
   assert.match(backendProbeSource, /frontend section search shell config exists/);
   assert.match(routeProbeSource, /missing section search shell/);
+  assert.match(routeProbeSource, /route-fragment-loading/);
+  assert.match(routeProbeSource, /publicRouteSkeleton/);
   assert.match(browserProbeSource, /SECTION_SEARCH_ROUTES/);
   for (const [section] of sections) {
     assert.match(routeProbeSource, new RegExp(`'${section}'`));

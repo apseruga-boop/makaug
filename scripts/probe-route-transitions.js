@@ -67,6 +67,7 @@ async function waitForActivePage(page, expectedId) {
   await page.waitForFunction((id) => {
     const el = document.getElementById(id);
     if (!el || !el.classList.contains('active')) return false;
+    if (el.classList.contains('route-fragment-loading') || el.dataset.publicRouteSkeleton) return false;
     const style = window.getComputedStyle(el);
     const rect = el.getBoundingClientRect();
     return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 200 && rect.height > 120;

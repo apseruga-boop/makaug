@@ -960,6 +960,10 @@ function run() {
   assert(frontendSource.includes('/api/property-seeker/recently-viewed'), 'property detail opens should connect to the backend recently-viewed API');
   assert(frontendSource.includes('map_property_click'), 'map View Property click should emit analytics');
   assert(clickProbeScript.includes('map popup View Property did not open a listing detail route/view'), 'click probe should fail if map View Property does not open detail');
+  assert(frontendSource.includes('window.__makaugOpenFirstPublicMapMarker'), 'public maps should expose a safe QA marker-open helper');
+  assert(clickProbeScript.includes('triggerGoogleMarkerObject'), 'click probe should verify Google marker objects when rendered marker DOM is not stable');
+  assert(clickProbeScript.includes('__makaugOpenFirstPublicMapMarker'), 'click probe should use the safe public map marker QA helper');
+  assert(clickProbeScript.includes("window.google.maps.event.trigger(candidate, 'click')"), 'click probe should trigger Google marker click handlers directly');
   assert(frontendSource.includes('id="hero-location-control"'), 'homepage should include compact Location control');
   assert(frontendSource.includes('aria-label="Use location search"'), 'homepage Location control should be accessible');
   assert(frontendSource.includes('Location search uses a 10 mile radius by default.'), 'homepage Location helper should explain the default radius');
