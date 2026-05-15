@@ -8649,7 +8649,7 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, allRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, allRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     apiRequest("/api/admin/summary", { headers }),
     apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
@@ -8671,6 +8671,8 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/leads?limit=50", { headers }),
     apiRequest("/api/admin/notifications?limit=50", { headers }),
     apiRequest("/api/admin/emails?limit=50", { headers }),
+    apiRequest("/api/admin/outlook-agent/status", { headers }).catch(() => ({ data: {} })),
+    apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }).catch(() => ({ data: [] })),
     apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing);
@@ -8703,6 +8705,8 @@ async function fetchRemoteAdminSnapshot() {
   adminNotificationLogs = Array.isArray(notificationsRes?.data) ? notificationsRes.data : [];
   adminEmailLogs = Array.isArray(emailsRes?.data) ? emailsRes.data : [];
   adminWhatsappLogs = Array.isArray(whatsappLogsRes?.data) ? whatsappLogsRes.data : [];
+  const outlookAgentStatus = outlookStatusRes?.data || {};
+  const outlookAgentActions = Array.isArray(outlookActionsRes?.data) ? outlookActionsRes.data : [];
   return {
     summary: summaryRes?.data || {},
     commandCentre: commandCentreRes?.data || {},
@@ -8727,6 +8731,8 @@ async function fetchRemoteAdminSnapshot() {
     crmTasks: adminCrmTasks,
     notificationLogs: adminNotificationLogs,
     emailLogs: adminEmailLogs,
+    outlookAgentStatus,
+    outlookAgentActions,
     whatsappLogs: adminWhatsappLogs
   };
 }
@@ -9097,6 +9103,66 @@ function renderAdminLogRows(id, logs = [], options = {}) {
   }).join("");
 }
 
+function adminOutlookStatusClass(status) {
+  const st = String(status || "").toLowerCase();
+  if (["sent", "approved", "draft_ready"].includes(st)) return "bg-green-100 text-green-700";
+  if (["draft_pending_approval", "pending", "queued"].includes(st)) return "bg-amber-100 text-amber-800";
+  if (["failed", "rejected"].includes(st)) return "bg-red-100 text-red-700";
+  return "bg-gray-100 text-gray-700";
+}
+
+function renderAdminOutlookAgentStatus(status = {}) {
+  const wrap = document.getElementById("admin-outlook-agent-status");
+  if (!wrap) return;
+  const counters = status.counters || {};
+  const items = [
+    ["Agent", status.enabled ? "Enabled" : "Disabled", status.enabled ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"],
+    ["Graph", status.configured ? "Connected" : "Needs config", status.configured ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"],
+    ["Mode", status.draftOnly ? "Draft only" : "Direct allowed", status.draftOnly ? "bg-blue-100 text-blue-800" : "bg-red-100 text-red-800"],
+    ["Pending", counters.pendingDrafts ?? 0, "bg-white text-gray-800"],
+    ["Sent", counters.sentReplies ?? 0, "bg-white text-gray-800"]
+  ];
+  wrap.innerHTML = items.map(([label, value, cls]) => `
+    <div class="border border-emerald-200 bg-white rounded-xl p-3">
+      <div class="text-[11px] uppercase tracking-wide text-gray-500 font-bold">${adminEscape(label)}</div>
+      <div class="mt-1 inline-flex px-2 py-1 rounded-full text-xs font-bold ${cls}">${adminEscape(value)}</div>
+    </div>`).join("");
+}
+
+function renderAdminOutlookAgentActions(actions = [], status = {}) {
+  const wrap = document.getElementById("admin-outlook-agent-actions");
+  if (!wrap) return;
+  const rows = Array.isArray(actions) ? actions : [];
+  if (!rows.length) {
+    wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No Outlook AI drafts yet.</div>`;
+    return;
+  }
+  wrap.innerHTML = rows.slice(0, 20).map((row) => {
+    const id = adminAttr(row.id || "");
+    const st = row.status || "draft_pending_approval";
+    const canSend = !status.draftOnly && ["approved", "draft_ready"].includes(String(st).toLowerCase());
+    const failure = row.failure_reason || "";
+    const created = row.created_at || row.createdAt || row.received_at || row.receivedAt || new Date().toISOString();
+    return `<div class="border border-gray-200 rounded-xl p-3 bg-white">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="font-bold text-gray-800 break-words">${adminEscape(row.subject || "Outlook draft")}</div>
+          <div class="text-xs text-gray-500 mt-1">${adminEscape(row.from_email || row.to_email || "-")} • ${adminEscape(row.category || "general_support")}</div>
+          <div class="text-xs text-gray-600 mt-2 line-clamp-3 whitespace-pre-line">${adminEscape(row.body_text || row.inbound_preview || "")}</div>
+          ${failure ? `<div class="text-xs text-red-700 mt-2">${adminEscape(failure)}</div>` : ""}
+          <div class="text-[11px] text-gray-400 mt-2">${adminEscape(formatListingDate(created))}${row.graph_draft_id ? " • Outlook draft saved" : ""}</div>
+        </div>
+        <span class="shrink-0 text-[11px] font-bold px-2 py-1 rounded-full ${adminOutlookStatusClass(st)}">${adminEscape(st)}</span>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-3">
+        <button onclick="adminApproveOutlookDraft('${id}')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Approve</button>
+        <button onclick="adminRejectOutlookDraft('${id}')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
+        <button onclick="adminSendOutlookDraft('${id}')" ${canSend ? "" : "disabled"} class="${canSend ? "bg-gray-900 hover:bg-gray-800 text-white" : "bg-gray-100 text-gray-400 cursor-not-allowed"} px-3 py-1.5 rounded-lg text-xs font-semibold">Send</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
 async function renderAdminDashboard() {
   const gate = document.getElementById("admin-auth-gate");
   const body = document.getElementById("admin-body");
@@ -9219,6 +9285,8 @@ async function renderAdminDashboard() {
   renderAdminCrmOverview(remoteSnap?.crmSummary || {});
   renderAdminCrmLeadsRows(remoteSnap?.crmLeads || []);
   renderAdminCrmTasksRows(remoteSnap?.crmTasks || []);
+  renderAdminOutlookAgentStatus(remoteSnap?.outlookAgentStatus || {});
+  renderAdminOutlookAgentActions(remoteSnap?.outlookAgentActions || [], remoteSnap?.outlookAgentStatus || {});
   renderAdminLogRows("admin-notification-log", remoteSnap?.notificationLogs || [], { empty: "No notification records yet. Failed sends and safe provider-missing logs will appear here." });
   renderAdminLogRows("admin-email-log", remoteSnap?.emailLogs || [], { empty: "No email log records yet. Listing submissions, OTPs, account events, and failure logs will appear here." });
   renderAdminLogRows("admin-whatsapp-log", remoteSnap?.whatsappLogs || [], { empty: "No WhatsApp message log records yet. Template/freeform send attempts will appear here." });
@@ -12652,6 +12720,111 @@ async function adminQuickRejectListing(listingId) {
   await openAdminListingReview(listingId);
   const reasonEl = document.getElementById("admin-review-reason");
   if (reasonEl && !reasonEl.value.trim()) reasonEl.focus();
+}
+
+async function adminSyncOutlookAgent() {
+  if (!canUseLiveAdminApi()) {
+    toast("Connect the admin API key first.");
+    return;
+  }
+  try {
+    const response = await apiRequest("/api/admin/outlook-agent/sync", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { limit: 10, unread_only: true, create_graph_draft: true }
+    });
+    const synced = response?.data?.synced ?? 0;
+    toast(`Outlook sync checked ${synced} message${Number(synced) === 1 ? "" : "s"}.`);
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Outlook sync failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminDraftOutlookReply(event) {
+  if (event?.preventDefault) event.preventDefault();
+  if (!canUseLiveAdminApi()) {
+    toast("Connect the admin API key first.");
+    return;
+  }
+  const fromEmail = (document.getElementById("admin-outlook-from-email")?.value || "").trim();
+  const fromName = (document.getElementById("admin-outlook-from-name")?.value || "").trim();
+  const subject = (document.getElementById("admin-outlook-subject")?.value || "").trim();
+  const body = (document.getElementById("admin-outlook-body")?.value || "").trim();
+  if (!fromEmail || !subject || !body) {
+    toast("Sender email, subject, and message are required.");
+    return;
+  }
+  try {
+    const response = await apiRequest("/api/admin/outlook-agent/draft", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        from_email: fromEmail,
+        from_name: fromName,
+        subject,
+        body,
+        create_graph_draft: true
+      }
+    });
+    const status = response?.data?.action?.status || "drafted";
+    toast(`Outlook AI reply ${status}.`);
+    ["admin-outlook-subject", "admin-outlook-body"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Draft failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminApproveOutlookDraft(actionId) {
+  if (!actionId || !canUseLiveAdminApi()) return;
+  try {
+    await apiRequest(`/api/admin/outlook-agent/actions/${encodeURIComponent(actionId)}/approve`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    toast("Outlook draft approved.");
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Approve failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminRejectOutlookDraft(actionId) {
+  if (!actionId || !canUseLiveAdminApi()) return;
+  const reason = window.prompt("Reason for rejecting this draft?", "Rejected by admin") || "Rejected by admin";
+  try {
+    await apiRequest(`/api/admin/outlook-agent/actions/${encodeURIComponent(actionId)}/reject`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { reason }
+    });
+    toast("Outlook draft rejected.");
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Reject failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminSendOutlookDraft(actionId) {
+  if (!actionId || !canUseLiveAdminApi()) return;
+  const ok = window.confirm("Send this approved Outlook AI reply now?");
+  if (!ok) return;
+  try {
+    await apiRequest(`/api/admin/outlook-agent/actions/${encodeURIComponent(actionId)}/send`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    toast("Outlook reply sent.");
+    await renderAdminDashboard();
+  } catch (e) {
+    toast(`Send blocked: ${e.message || "guardrail active"}`);
+  }
 }
 
 async function adminSetListingStatus(localId, nextStatus, backendId = "") {

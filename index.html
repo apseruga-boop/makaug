@@ -5162,6 +5162,38 @@
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Logs</button>
           </div>
           <div id="admin-crm-overview" class="grid sm:grid-cols-2 xl:grid-cols-6 gap-3 mb-5"></div>
+          <div class="border border-emerald-200 rounded-2xl p-4 bg-emerald-50 mb-5">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h4 class="text-lg font-bold text-gray-800">Outlook AI Email Agent</h4>
+                <p class="text-xs text-emerald-800 mt-1">Microsoft Graph mailbox control for inbound email drafts, approval, and send guardrails.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button onclick="adminSyncOutlookAgent()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Sync Inbox</button>
+                <button onclick="renderAdminDashboard()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Agent</button>
+              </div>
+            </div>
+            <div id="admin-outlook-agent-status" class="grid sm:grid-cols-2 xl:grid-cols-5 gap-3 mt-4"></div>
+            <div class="grid xl:grid-cols-[0.9fr,1.1fr] gap-4 mt-4">
+              <form onsubmit="adminDraftOutlookReply(event)" class="border border-emerald-200 bg-white rounded-2xl p-4">
+                <div class="font-bold text-gray-800 mb-2">Draft a Reply</div>
+                <div class="grid gap-2">
+                  <input id="admin-outlook-from-email" type="email" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Sender email">
+                  <input id="admin-outlook-from-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Sender name">
+                  <input id="admin-outlook-subject" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Email subject">
+                  <textarea id="admin-outlook-body" rows="4" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Paste the customer email here"></textarea>
+                  <button class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-2 rounded-lg text-sm font-semibold">Create Draft</button>
+                </div>
+              </form>
+              <div class="border border-emerald-200 bg-white rounded-2xl p-4">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                  <div class="font-bold text-gray-800">Draft Queue</div>
+                  <span class="text-[11px] text-gray-500">Approve, reject, or send only when guardrails allow.</span>
+                </div>
+                <div id="admin-outlook-agent-actions" class="space-y-3"></div>
+              </div>
+            </div>
+          </div>
           <div class="grid xl:grid-cols-[1.1fr,0.9fr] gap-5">
             <div class="border border-gray-200 rounded-2xl p-4 bg-gray-50">
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">

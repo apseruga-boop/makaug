@@ -63,6 +63,15 @@ const { markInvoicePaidManually, paymentProviderConfigured } = require('../servi
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const {
+  approveOutlookEmailAction,
+  getOutlookAgentStatus,
+  listOutlookEmailActions,
+  queueOutlookReplyDraft,
+  rejectOutlookEmailAction,
+  sendApprovedOutlookEmailAction,
+  syncOutlookInbox
+} = require('../services/outlookAiEmailAgentService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
 const { getProviderMeta } = require('../services/llmProvider');
@@ -5246,6 +5255,125 @@ router.get('/emails', async (req, res, next) => {
          LIMIT 100`
       ).catch(() => ({ rows: [] }));
       return res.json({ ok: true, data: fallback.rows, pagination: toPagination(fallback.rows.length, 1, 100), fallback: true });
+    }
+    return next(error);
+  }
+});
+
+router.get('/outlook-agent/status', async (req, res, next) => {
+  try {
+    const data = await getOutlookAgentStatus(db);
+    return res.json({ ok: true, data });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/outlook-agent/actions', async (req, res, next) => {
+  try {
+    const { limit } = parsePagination(req.query);
+    const data = await listOutlookEmailActions(db, {
+      limit,
+      status: cleanText(req.query.status)
+    });
+    return res.json({ ok: true, data, pagination: toPagination(data.length, 1, limit) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/outlook-agent/sync', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.body?.limit || req.query?.limit || '10', 10) || 10, 1), 50);
+    const result = await syncOutlookInbox(db, {
+      limit,
+      unreadOnly: req.body?.unread_only !== false,
+      createGraphDraft: req.body?.create_graph_draft !== false
+    });
+    await writeAudit('outlook_agent_sync', {
+      ok: result.ok,
+      synced: result.synced || 0,
+      reason: result.reason || null
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/outlook-agent/draft', async (req, res, next) => {
+  try {
+    const fromEmail = cleanText(req.body?.from_email || req.body?.fromEmail || req.body?.email);
+    const subject = cleanText(req.body?.subject);
+    const body = cleanText(req.body?.body || req.body?.body_preview || req.body?.bodyPreview);
+    const errors = [];
+    if (!isValidEmail(fromEmail)) errors.push('from_email must be a valid email address');
+    if (!subject) errors.push('subject is required');
+    if (!body) errors.push('body is required');
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Invalid Outlook draft payload', details: errors });
+    }
+    const result = await queueOutlookReplyDraft(db, {
+      ...req.body,
+      fromEmail,
+      subject,
+      body
+    }, {
+      source: 'king_dashboard_manual_draft',
+      createGraphDraft: req.body?.create_graph_draft !== false
+    });
+    await writeAudit('outlook_agent_draft_created', {
+      action_id: result.action?.id || null,
+      category: result.draft?.category || null,
+      graph_draft_id: result.graphDraft?.graphDraftId || null
+    }, adminActorId(req));
+    return res.status(201).json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/outlook-agent/actions/:id/approve', async (req, res, next) => {
+  try {
+    const action = await approveOutlookEmailAction(db, req.params.id, adminActorId(req));
+    if (!action) return res.status(404).json({ ok: false, error: 'Outlook email action not found' });
+    await writeAudit('outlook_agent_draft_approved', { action_id: action.id }, adminActorId(req));
+    return res.json({ ok: true, data: action });
+  } catch (error) {
+    if (['22P02', '42P01', '42703'].includes(error.code)) {
+      return res.status(error.code === '22P02' ? 400 : 404).json({ ok: false, error: 'Outlook email action not available' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/outlook-agent/actions/:id/reject', async (req, res, next) => {
+  try {
+    const action = await rejectOutlookEmailAction(db, req.params.id, adminActorId(req), cleanText(req.body?.reason));
+    if (!action) return res.status(404).json({ ok: false, error: 'Outlook email action not found' });
+    await writeAudit('outlook_agent_draft_rejected', { action_id: action.id }, adminActorId(req));
+    return res.json({ ok: true, data: action });
+  } catch (error) {
+    if (['22P02', '42P01', '42703'].includes(error.code)) {
+      return res.status(error.code === '22P02' ? 400 : 404).json({ ok: false, error: 'Outlook email action not available' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/outlook-agent/actions/:id/send', async (req, res, next) => {
+  try {
+    const result = await sendApprovedOutlookEmailAction(db, req.params.id, adminActorId(req));
+    const status = result.sent ? 200 : 409;
+    await writeAudit('outlook_agent_send_attempt', {
+      action_id: req.params.id,
+      sent: result.sent,
+      reason: result.reason || result.error || null
+    }, adminActorId(req));
+    return res.status(status).json({ ok: result.sent, data: result.action || null, reason: result.reason || result.error || null });
+  } catch (error) {
+    if (['22P02', '42P01', '42703'].includes(error.code)) {
+      return res.status(error.code === '22P02' ? 400 : 404).json({ ok: false, error: 'Outlook email action not available' });
     }
     return next(error);
   }
