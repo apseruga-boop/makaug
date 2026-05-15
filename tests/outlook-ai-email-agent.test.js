@@ -47,6 +47,7 @@ assert(migration.includes('CREATE TABLE IF NOT EXISTS outlook_email_actions'), '
 assert(migration.includes('outlook_ai_email_agent'), 'Migration must seed/register the Outlook AI agent');
 
 assert(html.includes('Outlook AI Email Agent'), 'King dashboard must show Outlook AI Email Agent controls');
+assert(html.includes('outlook-email-agent-20260515'), 'Frontend cache version must be bumped for Outlook agent rollout');
 assert(html.includes('admin-outlook-agent-status'), 'King dashboard must include Outlook status container');
 assert(html.includes('admin-outlook-agent-actions'), 'King dashboard must include Outlook action queue');
 assert(app.includes('/api/admin/outlook-agent/status'), 'Frontend must fetch Outlook agent status');
