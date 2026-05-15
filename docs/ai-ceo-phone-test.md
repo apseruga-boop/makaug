@@ -19,7 +19,7 @@ AI_CEO_PHONE_TEST_TIMEOUT_MS=15000
 
 `AI_CEO_OWNER_PHONES` can contain more than one trusted phone, separated by commas. Those numbers can control the AI CEO over WhatsApp.
 
-`AI_CEO_REPORT_WHATSAPP_RECIPIENTS` can contain one or more report-only partner numbers, separated by commas. These recipients receive the scheduled morning WhatsApp report but are not authorised for WhatsApp CEO commands unless they are also added to `AI_CEO_OWNER_PHONES`.
+`AI_CEO_REPORT_WHATSAPP_RECIPIENTS` can contain one or more report-only partner numbers, separated by commas. These recipients receive the scheduled morning WhatsApp report and can request read-only reports such as `CEO report`, `CEO leads`, or `CEO WhatsApp health`. They are not authorised for risky WhatsApp CEO commands such as email sending unless they are also added to `AI_CEO_OWNER_PHONES`.
 
 Keep `AI_CEO_EMAIL_SEND_MODE=draft` until founder approval for direct sending is intentional.
 

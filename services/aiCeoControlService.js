@@ -39,6 +39,16 @@ const PHONE_COMMAND_KEYWORDS = [
   'health'
 ];
 
+const REPORT_RECIPIENT_READ_ONLY_INTENTS = new Set([
+  'morning_report',
+  'whatsapp_health',
+  'lead_report',
+  'listing_report',
+  'agent_report',
+  'revenue_report',
+  'general'
+]);
+
 function safeText(value, max = 4000) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
@@ -117,6 +127,14 @@ function isAiCeoOwnerPhone(phone) {
   const incoming = normalizePhoneForOwnerMatch(phone);
   if (!incoming) return false;
   return getConfiguredOwnerPhones().some((allowed) => {
+    return incoming === allowed || incoming.endsWith(allowed) || allowed.endsWith(incoming);
+  });
+}
+
+function isAiCeoReportRecipientPhone(phone) {
+  const incoming = normalizePhoneForOwnerMatch(phone);
+  if (!incoming) return false;
+  return getConfiguredReportWhatsappRecipients().some((allowed) => {
     return incoming === allowed || incoming.endsWith(allowed) || allowed.endsWith(incoming);
   });
 }
@@ -750,19 +768,35 @@ async function handleOwnerWhatsappCommand({ phone, commandText, contactName = ''
   if (!isOwnerWhatsappControlEnabled()) {
     return { handled: false, reason: 'owner_whatsapp_control_disabled' };
   }
-  if (!isAiCeoOwnerPhone(phone)) {
-    return { handled: false, reason: 'not_configured_owner_phone' };
-  }
   if (!isAiCeoPhoneCommand(commandText)) {
     return { handled: false, reason: 'not_ai_ceo_command' };
+  }
+  const isOwner = isAiCeoOwnerPhone(phone);
+  const isReportRecipient = isAiCeoReportRecipientPhone(phone);
+  if (!isOwner && !isReportRecipient) {
+    return { handled: false, reason: 'not_configured_owner_phone' };
+  }
+  const intent = detectCeoCommandIntent(commandText);
+  if (!isOwner && !REPORT_RECIPIENT_READ_ONLY_INTENTS.has(intent)) {
+    return {
+      handled: true,
+      status: 'blocked',
+      intent,
+      response: [
+        'This WhatsApp number can receive and request AI CEO reports only.',
+        'Ask the founder to add you to AI_CEO_OWNER_PHONES if you need command access.'
+      ].join('\n')
+    };
   }
   const result = await handleCeoCommand({
     commandText,
     channel: 'whatsapp_owner',
-    requestedBy: contactName ? `whatsapp:${contactName}` : 'whatsapp_owner',
+    requestedBy: isOwner
+      ? (contactName ? `whatsapp:${contactName}` : 'whatsapp_owner')
+      : (contactName ? `whatsapp_report_recipient:${contactName}` : 'whatsapp_report_recipient'),
     requesterPhone: phone
   });
-  return { handled: true, ...result };
+  return { handled: true, reportOnly: !isOwner, ...result };
 }
 
 async function sendReportToFounderWhatsapp(reportText, { source = 'ai_ceo', actorId = 'ai_ceo' } = {}) {
@@ -845,6 +879,7 @@ module.exports = {
   handleOwnerWhatsappCommand,
   isAiCeoOwnerPhone,
   isAiCeoPhoneCommand,
+  isAiCeoReportRecipientPhone,
   isAiCeoTelegramOwnerChat,
   runCeoMorningReport,
   sendReportToFounderWhatsapp,
