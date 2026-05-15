@@ -442,6 +442,128 @@
       font-weight: 600;
       white-space: nowrap;
     }
+    .section-search-legacy-hidden { display: none !important; }
+    .section-search-shell {
+      position: sticky;
+      top: 4rem;
+      z-index: 42;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+      background: #f8fafc;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+    }
+    .section-search-inner {
+      max-width: 80rem;
+      margin: 0 auto;
+      padding: 12px 16px;
+    }
+    .section-search-form {
+      display: grid;
+      grid-template-columns: minmax(220px, 2fr) auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+    .section-search-query {
+      position: relative;
+      min-width: 0;
+    }
+    .section-search-query i {
+      position: absolute;
+      left: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      font-size: 13px;
+      pointer-events: none;
+    }
+    .section-search-text-input,
+    .section-search-filter-row select {
+      width: 100%;
+      min-width: 0;
+      height: 44px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      border-radius: 8px;
+      background: #ffffff;
+      color: #111827;
+      font-size: 14px;
+      outline: none;
+    }
+    .section-search-text-input {
+      padding: 0 13px 0 38px;
+    }
+    .section-search-filter-row select {
+      padding: 0 10px;
+      font-weight: 700;
+    }
+    .section-search-text-input:focus,
+    .section-search-filter-row select:focus {
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+    }
+    .section-search-filter-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .section-search-submit,
+    .section-search-location {
+      height: 44px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 0 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+    .section-search-submit {
+      border: 1px solid #14532d;
+      background: #166534;
+      color: #ffffff;
+    }
+    .section-search-submit:hover { background: #15803d; }
+    .section-search-location {
+      border: 1px solid rgba(22, 101, 52, 0.28);
+      background: #ffffff;
+      color: #14532d;
+    }
+    .section-search-location:hover { background: #f0fdf4; }
+    #page-sale .section-search-shell { background: linear-gradient(90deg, #f0fdf4, #ffffff); }
+    #page-rent .section-search-shell { background: linear-gradient(90deg, #eff6ff, #ffffff); }
+    #page-students .section-search-shell { background: linear-gradient(90deg, #faf5ff, #ffffff); }
+    #page-commercial .section-search-shell { background: linear-gradient(90deg, #fff7ed, #ffffff); }
+    #page-land .section-search-shell { background: linear-gradient(90deg, #ecfdf5, #ffffff); }
+    #page-brokers .section-search-shell {
+      position: relative;
+      top: auto;
+      z-index: 1;
+      border: 1px solid #dcfce7;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    #page-brokers .section-search-inner { padding: 10px; }
+    @media (max-width: 1023px) {
+      .section-search-shell {
+        position: relative;
+        top: auto;
+      }
+      .section-search-form {
+        grid-template-columns: 1fr;
+      }
+      .section-search-filter-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .section-search-submit,
+      .section-search-location {
+        width: 100%;
+      }
+    }
+    @media (max-width: 520px) {
+      .section-search-inner { padding: 10px 12px; }
+      .section-search-filter-row { grid-template-columns: 1fr; }
+    }
     .property-card { transition: transform .2s ease, box-shadow .2s ease; }
     .property-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(0,0,0,.12); }
     .mortgage-result-pop {
@@ -6144,7 +6266,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "admin-command-centre-20260514";
+        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;

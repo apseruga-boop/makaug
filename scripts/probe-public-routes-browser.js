@@ -83,6 +83,16 @@ const EXPECTED_PAGE_IDS = {
   '/login': 'page-login'
 };
 
+const SECTION_SEARCH_ROUTES = {
+  '/to-rent': 'rent',
+  '/for-sale': 'sale',
+  '/land': 'land',
+  '/student-accommodation': 'students',
+  '/students': 'students',
+  '/commercial': 'commercial',
+  '/brokers': 'brokers'
+};
+
 const FORBIDDEN_VISIBLE_TEXT = [
   'Admin Dashboard',
   'Admin API Key',
@@ -97,6 +107,17 @@ const FORBIDDEN_VISIBLE_TEXT = [
   'Listing Review',
   'Paste ADMIN_API_KEY',
   'Sign Out'
+];
+
+const FORBIDDEN_PUBLIC_LISTING_TEXT = [
+  'Luxury Villa in Kololo',
+  '3-Bed Apartment - Nakasero',
+  'Kikoni Student Hostel',
+  'Wandegeya Studio Apartment',
+  '0.5 Acre Plot - Namugongo',
+  '1-Acre Commercial Plot - Mbale',
+  '4-Bed Home - Muyenga',
+  '2-Bed Apartment - Ntinda'
 ];
 
 function chromeExecutable() {
@@ -125,11 +146,14 @@ async function probeRoute(page, route) {
   await page.waitForTimeout(300);
 
   const expectedPageId = EXPECTED_PAGE_IDS[route];
-  const data = await page.evaluate(({ expectedPageId, forbidden }) => {
+  const sectionShell = SECTION_SEARCH_ROUTES[route] || '';
+  const data = await page.evaluate(({ expectedPageId, forbidden, forbiddenListings, sectionShell }) => {
     const text = document.body.innerText.replace(/\s+/g, ' ').trim();
     const expected = document.getElementById(expectedPageId);
     const expectedStyle = expected ? window.getComputedStyle(expected) : null;
     const expectedRect = expected ? expected.getBoundingClientRect() : null;
+    const shell = sectionShell ? document.querySelector(`[data-section-search-shell="${sectionShell}"]`) : null;
+    const shellRect = shell ? shell.getBoundingClientRect() : null;
     const activeSkeletons = Array.from(document.querySelectorAll('.page.active[data-public-route-skeleton], .page.active.route-fragment-loading')).map((el) => el.id || '(no id)');
     const activePages = Array.from(document.querySelectorAll('.page.active')).map((el) => {
       const style = window.getComputedStyle(el);
@@ -159,9 +183,19 @@ async function probeRoute(page, route) {
         skeleton: expected.matches('[data-public-route-skeleton], .route-fragment-loading') || /Loading the latest makaug\.com page\./i.test(expected.innerText || ''),
         text: expected.innerText.replace(/\s+/g, ' ').trim().slice(0, 500)
       } : null,
-      forbiddenFound: forbidden.filter((item) => text.includes(item))
+      sectionShell: sectionShell ? {
+        key: sectionShell,
+        exists: !!shell,
+        display: shell ? window.getComputedStyle(shell).display : '',
+        height: Math.round(shellRect?.height || 0),
+        hasInput: !!shell?.querySelector('.section-search-text-input'),
+        hasFilters: shell ? shell.querySelectorAll('.section-search-filter-row select').length : 0,
+        hasSubmit: !!shell?.querySelector('.section-search-submit')
+      } : null,
+      forbiddenFound: forbidden.filter((item) => text.includes(item)),
+      forbiddenListingFound: forbiddenListings.filter((item) => text.includes(item))
     };
-  }, { expectedPageId, forbidden: FORBIDDEN_VISIBLE_TEXT });
+  }, { expectedPageId, forbidden: FORBIDDEN_VISIBLE_TEXT, forbiddenListings: FORBIDDEN_PUBLIC_LISTING_TEXT, sectionShell });
 
   const failures = [];
   const status = response ? response.status() : 0;
@@ -177,7 +211,15 @@ async function probeRoute(page, route) {
   if (data.activeSkeletons.length) failures.push(`active temporary route skeleton(s): ${data.activeSkeletons.join(', ')}`);
   if (data.text.includes('Loading the latest makaug.com page.')) failures.push('public route skeleton fallback still visible');
   if (!marker) failures.push(`missing visible route marker (${(MARKERS[route] || []).join(' | ')})`);
+  if (sectionShell) {
+    if (!data.sectionShell.exists) failures.push(`missing section search shell ${sectionShell}`);
+    if (data.sectionShell.display === 'none' || data.sectionShell.height < 40) failures.push(`section search shell ${sectionShell} is hidden/too short`);
+    if (!data.sectionShell.hasInput) failures.push(`section search shell ${sectionShell} missing text input`);
+    if (!data.sectionShell.hasSubmit) failures.push(`section search shell ${sectionShell} missing submit`);
+    if (data.sectionShell.hasFilters < 4) failures.push(`section search shell ${sectionShell} missing filter controls`);
+  }
   for (const forbidden of data.forbiddenFound) failures.push(`forbidden visible text: ${forbidden}`);
+  for (const forbidden of data.forbiddenListingFound) failures.push(`uncontrolled seed listing visible: ${forbidden}`);
   if (data.text.includes('This area only This area only')) failures.push('duplicate location scope label');
 
   return {
@@ -187,6 +229,7 @@ async function probeRoute(page, route) {
     marker,
     textLength: data.textLength,
     expected: data.expected,
+    sectionShell: data.sectionShell,
     activePages: data.activePages,
     failures
   };

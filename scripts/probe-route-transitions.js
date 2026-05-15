@@ -8,13 +8,13 @@ const IS_LOCAL_BASE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/i.test(BASE_
 
 const ROUTES = [
   ['/', 'page-home'],
-  ['/for-sale', 'page-sale'],
-  ['/to-rent', 'page-rent'],
-  ['/student-accommodation', 'page-students'],
-  ['/students', 'page-students'],
-  ['/commercial', 'page-commercial'],
-  ['/land', 'page-land'],
-  ['/brokers', 'page-brokers'],
+  ['/for-sale', 'page-sale', 'sale'],
+  ['/to-rent', 'page-rent', 'rent'],
+  ['/student-accommodation', 'page-students', 'students'],
+  ['/students', 'page-students', 'students'],
+  ['/commercial', 'page-commercial', 'commercial'],
+  ['/land', 'page-land', 'land'],
+  ['/brokers', 'page-brokers', 'brokers'],
   ['/mortgage', 'page-mortgage'],
   ['/discover-ai-chatbot', 'page-ai-chatbot'],
   ['/about', 'page-about'],
@@ -97,7 +97,7 @@ async function main() {
     await waitForActivePage(page, 'page-home');
     await page.waitForFunction(() => typeof window.navigatePublicRoute === 'function', { timeout: 10000 });
 
-    for (const [route, expectedId] of ROUTES) {
+    for (const [route, expectedId, sectionShell] of ROUTES) {
       if (process.env.ROUTE_TRANSITION_VERBOSE === '1') console.log(`CHECK ${route} -> ${expectedId}`);
       const started = Date.now();
       const transition = await page.evaluate((targetRoute) => {
@@ -130,26 +130,50 @@ async function main() {
         throw new Error(`${error.message || error} while waiting for ${route} -> ${expectedId}; debug=${JSON.stringify(debug)}`);
       }
       await page.waitForTimeout(route === '/list-property' ? 180 : 40);
-      const state = await page.evaluate((expectedId) => {
+      const state = await page.evaluate(({ expectedId, sectionShell }) => {
         const activePages = Array.from(document.querySelectorAll('.page.active')).map((el) => {
           const rect = el.getBoundingClientRect();
           return { id: el.id, height: Math.round(rect.height), width: Math.round(rect.width) };
         });
         const openModals = Array.from(document.querySelectorAll('.modal-overlay.open')).map((el) => el.id);
         const active = document.getElementById(expectedId);
+        const shell = sectionShell ? document.querySelector(`[data-section-search-shell="${sectionShell}"]`) : null;
+        const shellRect = shell ? shell.getBoundingClientRect() : null;
+        const legacyHidden = sectionShell
+          ? Array.from(document.querySelectorAll('.section-search-legacy-hidden')).some((el) => {
+              if (sectionShell === 'brokers') return !!el.querySelector('#broker-q-f');
+              return !!el.querySelector(`#${sectionShell === 'students' ? 'student-q-f' : sectionShell === 'sale' ? 'sale-location-f' : sectionShell === 'rent' ? 'rent-location-f' : `${sectionShell}-q-f`}`);
+            })
+          : false;
         return {
           activePages,
           openModals,
           expectedActive: !!active?.classList.contains('active'),
+          sectionShell: sectionShell ? {
+            key: sectionShell,
+            exists: !!shell,
+            height: Math.round(shellRect?.height || 0),
+            visible: !!shell && window.getComputedStyle(shell).display !== 'none' && (shellRect?.height || 0) > 40,
+            hasSearchInput: !!shell?.querySelector('.section-search-text-input'),
+            hasSubmit: !!shell?.querySelector('.section-search-submit'),
+            legacyHidden
+          } : null,
           bodyModalOpen: document.body.classList.contains('modal-open'),
           href: window.location.href,
           pathname: window.location.pathname,
           navigationCount: performance.getEntriesByType('navigation').length
         };
-      }, expectedId);
+      }, { expectedId, sectionShell });
       const failures = [];
       if (transition.handled !== false) failures.push('navigatePublicRoute did not handle route');
       if (!state.expectedActive) failures.push(`${expectedId} was not active`);
+      if (sectionShell) {
+        if (!state.sectionShell.exists) failures.push(`missing section search shell ${sectionShell}`);
+        if (!state.sectionShell.visible) failures.push(`section search shell ${sectionShell} is not visible`);
+        if (!state.sectionShell.hasSearchInput) failures.push(`section search shell ${sectionShell} missing input`);
+        if (!state.sectionShell.hasSubmit) failures.push(`section search shell ${sectionShell} missing submit`);
+        if (!state.sectionShell.legacyHidden) failures.push(`legacy search controls not hidden for ${sectionShell}`);
+      }
       if (state.activePages.length !== 1) failures.push(`expected exactly one active page, got ${state.activePages.map((p) => p.id).join(',') || 'none'}`);
       if (state.navigationCount !== transition.before.navigationCount) failures.push('browser performed a full navigation during SPA transition');
       if (route !== '/list-property' && state.bodyModalOpen) failures.push(`modal overlay left open: ${state.openModals.join(',') || 'unknown'}`);
@@ -161,6 +185,7 @@ async function main() {
         pathname: state.pathname,
         activePages: state.activePages,
         openModals: state.openModals,
+        sectionShell: state.sectionShell,
         failures
       });
     }

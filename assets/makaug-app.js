@@ -6387,8 +6387,8 @@ async function renderFinderDashboard() {
 	      const localRecommendations = backendRecommendations.length ? backendRecommendations : getLocalFinderRecommendations(userProfile, 4);
 	      const savedList = backendSaved.length ? backendSaved : getPublicListings().filter((p) => isPropertySaved(p.id));
   const recentViewed = backendRecent.length ? backendRecent : (activity.recentViewed || [])
-    .map((id) => PROPERTIES.find((p) => String(p.id) === String(id)))
-    .filter((item) => item && isListingPublicVisible(item))
+    .map((id) => getPublicListings().find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id)))
+    .filter(Boolean)
     .slice(0, 6);
   const savedSearches = Array.isArray(payload?.savedSearches) ? payload.savedSearches : [];
   const viewings = Array.isArray(payload?.viewings) ? payload.viewings : [];
@@ -6584,7 +6584,7 @@ function getBrokerDashboardLocalListings(broker = {}) {
   const brokerId = String(broker.id || "");
   const email = String(authState?.user?.email || broker.email || "").toLowerCase();
   const digits = normalizeDigits(authState?.user?.phone || broker.phone || broker.whatsapp || "");
-  return PROPERTIES.filter((p) => {
+  return PROPERTIES.filter((p) => isBackendControlledListing(p)).filter((p) => {
     const listingAgent = String(p.agent || p.agent_id || "");
     const listingEmail = String(p.lister_email || p.email || "").toLowerCase();
     const listingPhone = normalizeDigits(p.lister_phone || p.phone || "");
@@ -7382,6 +7382,7 @@ function getFieldSourceListingsForUser(user) {
   const profile = user?.profile_data && typeof user.profile_data === "object" ? user.profile_data : {};
   const code = normalizeFieldAgentCode(user?.field_agent_code || profile.field_agent_code || profile.employee_number || "");
   const real = PROPERTIES
+    .filter((p) => isBackendControlledListing(p))
     .filter((p) => {
       const textCode = extractFieldAgentCodeFromText(p?.desc || p?.description || "");
       const listingCode = normalizeFieldAgentCode(p?.field_agent_id || p?.field_agent_code || p?.extra_fields?.field_agent_id || p?.extra_fields?.field_agent_code || p?.extra_fields?.field_agent_reference || "");
@@ -7879,8 +7880,36 @@ function isListingPublicVisible(property) {
   return status === "approved" || status === "sold";
 }
 
+function isLocalDevelopmentHost() {
+  try {
+    const host = String(window.location.hostname || "").toLowerCase();
+    return !host || host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1";
+  } catch (error) {
+    return false;
+  }
+}
+
+function publicSampleListingsEnabled() {
+  try {
+    return window.MAKAUG_ALLOW_SAMPLE_LISTINGS === true && isLocalDevelopmentHost();
+  } catch (error) {
+    return false;
+  }
+}
+
+function isBackendControlledListing(property) {
+  const backendId = String(property?.backend_id || "").trim();
+  return property?.remote_source === "api"
+    || property?.backend_controlled === true
+    || property?.owner_preview_visible === true
+    || backendId.length > 0;
+}
+
 function getPublicListings() {
-  return PROPERTIES.filter((p) => isListingPublicVisible(p));
+  return PROPERTIES.filter((p) => (
+    isListingPublicVisible(p)
+    && (isBackendControlledListing(p) || publicSampleListingsEnabled())
+  ));
 }
 
 function isFeaturedListing(property) {
@@ -7939,10 +7968,12 @@ function getKnownUsersForAdmin() {
 }
 
 function buildLocalAdminSnapshot() {
-  const allListings = PROPERTIES.map((p) => ({
-    ...p,
-    moderation_status: normalizeModerationStatus(p.status)
-  }));
+  const allListings = PROPERTIES
+    .filter((p) => isBackendControlledListing(p) || publicSampleListingsEnabled())
+    .map((p) => ({
+      ...p,
+      moderation_status: normalizeModerationStatus(p.status)
+    }));
   allListings.sort((a, b) => {
     const ad = parseDateSafe(a.created_at || a.updated_at)?.getTime() || 0;
     const bd = parseDateSafe(b.created_at || b.updated_at)?.getTime() || 0;
@@ -8576,6 +8607,22 @@ function setAdminWorkflowTab(tab = "review") {
   if (activeAdminWorkflowTab !== "review") closeAdminReviewPanel();
 }
 
+async function fetchAdminPaginatedRows(path, headers, options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit || 100), 1), 100);
+  const maxPages = Math.min(Math.max(Number(options.maxPages || 10), 1), 25);
+  const rows = [];
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const separator = path.includes("?") ? "&" : "?";
+    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { headers });
+    rows.push(...(Array.isArray(response?.data) ? response.data : []));
+    totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
+    page += 1;
+  } while (page <= totalPages && page <= maxPages);
+  return rows;
+}
+
 async function fetchRemoteAdminSnapshot() {
   if (!canUseLiveAdminApi()) return null;
   const headers = adminAuthHeaders();
@@ -8597,12 +8644,12 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const [summaryRes, commandCentreRes, recentRes, pendingRes, allRes, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, allRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, whatsappLogsRes] = await Promise.all([
     apiRequest("/api/admin/summary", { headers }),
     apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
-    apiRequest("/api/properties?status=pending&limit=100", { headers }),
-    apiRequest("/api/properties?status=all&limit=100", { headers }),
+    fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 10 }),
+    fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 10 }),
     apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
     apiRequest("/api/admin/agents?limit=100", { headers }),
     apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
@@ -8621,12 +8668,12 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/emails?limit=50", { headers }),
     apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
   ]);
-  const pendingListings = (pendingRes?.data || []).map(normalizeRemoteAdminListing);
-  const allListings = (allRes?.data || []).map(normalizeRemoteAdminListing);
+  const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing);
+  const allListings = (allRows || []).map(normalizeRemoteAdminListing);
   let liveListings = allListings.filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status)));
   try {
-    const liveRes = await apiRequest("/api/admin/properties/live?limit=100", { headers });
-    liveListings = (liveRes?.data || []).map(normalizeRemoteAdminListing);
+    const liveRows = await fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 });
+    liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
   } catch (e) {}
   adminRemoteListings = allListings;
   adminLiveListings = liveListings;
@@ -9137,7 +9184,7 @@ async function renderAdminDashboard() {
   renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
   renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
   renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
-  renderAdminFeaturedRows(remoteSnap?.allListings || localSnap.allListings || []);
+  renderAdminFeaturedRows(remoteSnap?.liveListings || localSnap.liveListings || []);
   renderAdminOutreachOverview({
     summary,
     users: adminUsers,
@@ -12607,6 +12654,9 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "") {
   ) || adminRemoteListings.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))
+  ) || adminLiveListings.find(
+    (p) => String(p.id) === String(localId)
+      || (backendId && String(p.backend_id || "") === String(backendId))
   );
   if (!listing) {
     toast("Listing not found in current snapshot.");
@@ -12677,6 +12727,8 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "") {
         });
         const remoteIdx = adminRemoteListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
         if (remoteIdx >= 0) adminRemoteListings[remoteIdx] = { ...adminRemoteListings[remoteIdx], ...listing };
+        const liveIdx = adminLiveListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+        if (liveIdx >= 0) adminLiveListings[liveIdx] = { ...adminLiveListings[liveIdx], ...listing };
       }
       if (normalizedStatus === "approved") {
         try {
@@ -21547,6 +21599,7 @@ function applyHeroSearchHandoff(page) {
     setValue("sale-type-f", filters.bedrooms === "studio" ? "studio" : filters.propertyType || "");
     filterListings("sale");
   }
+  syncSectionSearchShell(page);
   return true;
 }
 
@@ -23434,6 +23487,7 @@ function showPage(page, options = {}) {
     lastPage = currentPage;
     currentPage = targetPage;
     closeRouteTransientModals(targetPage, previousPage);
+    mountSectionSearchShell(targetPage);
     if (options.history !== false) updateRouteHistoryForPage(targetPage, options.source || "show_page");
   } else {
     const route = routeForPage(targetPage);
@@ -23632,6 +23686,7 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
     setLang(currentLang, true, false);
     showPage(page, { history: false, source, scroll: options.scroll !== false });
     applyHeroSearchHandoff(page);
+    runSectionSearch(page, { source: `${source}_fragment` });
     return true;
   } catch (error) {
     if (!isCurrentPublicRouteLoad(loadToken, page)) return false;
@@ -24093,20 +24148,26 @@ function setTab(el, type) {
   }
 }
 
-function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, resultsCount = 0 } = {}) {
+function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, nearState = null, resultsCount = 0, category = currentTab } = {}) {
+  const searchCategory = category || currentTab;
   const payload = {
     query,
-    category: currentTab,
+    category: searchCategory,
     source: nearState ? "homepage_location_control" : "homepage_search",
     language: currentLang || "en",
     session: getAnalyticsClientId(),
     resultsCount
   };
-  if (currentTab === "students") {
+  if (searchCategory === "students") {
     payload.student_portal = "true";
   } else {
-    payload.listing_type = currentTab;
+    payload.listing_type = searchCategory;
   }
+  const setFilter = (camelKey, snakeKey, value) => {
+    if (!value) return;
+    payload[camelKey] = value;
+    payload[snakeKey] = value;
+  };
   if (area) payload.area = area;
   if (filters.propertyType) payload.propertyType = filters.propertyType;
   if (filters.propertyType) payload.property_type = filters.propertyType;
@@ -24118,10 +24179,8 @@ function buildHeroSearchBackendPayload({ query = "", area = "", filters = {}, ne
   if (filters.bedrooms) payload.bedrooms = filters.bedrooms;
   if (filters.bathrooms) payload.bathrooms = filters.bathrooms;
   if (filters.amenities) payload.amenities = filters.amenities;
-  if (filters.commercialType) payload.commercialType = filters.commercialType;
-  if (filters.commercialType) payload.commercial_type = filters.commercialType;
-  if (filters.landTitleType) payload.landTitleType = filters.landTitleType;
-  if (filters.landTitleType) payload.land_title_type = filters.landTitleType;
+  setFilter("commercialType", "commercial_type", filters.commercialType);
+  setFilter("landTitleType", "land_title_type", filters.landTitleType);
   if (filters.sort) payload.sort = filters.sort;
   if (nearState) {
     payload.lat = nearState.lat;
@@ -24162,6 +24221,342 @@ function recordHeroSearchBackendPayload(payload = {}) {
         error: error?.message || "network_error"
       });
     });
+}
+
+const SECTION_SEARCH_CONFIGS = {
+  sale: {
+    key: "sale",
+    backendCategory: "sale",
+    queryId: "sale-location-f",
+    locationButtonId: "sale-use-location-btn",
+    placeholder: "Search by area, district or keyword",
+    legacySelector: ".bg-gradient-to-r",
+    resultCountId: "sale-count",
+    filters: [
+      { id: "sale-radius-f", key: "radius" },
+      { id: "sale-min-price-f", key: "minPrice" },
+      { id: "sale-price-f", key: "maxPrice" },
+      { id: "sale-min-beds-f", key: "bedrooms" },
+      { id: "sale-beds-f", key: "maxBeds" },
+      { id: "sale-type-f", key: "propertyType" }
+    ]
+  },
+  rent: {
+    key: "rent",
+    backendCategory: "rent",
+    queryId: "rent-location-f",
+    locationButtonId: "rent-use-location-btn",
+    placeholder: "Search rentals by area or keyword",
+    legacySelector: ".bg-gradient-to-r",
+    resultCountId: "rent-count",
+    filters: [
+      { id: "rent-radius-f", key: "radius" },
+      { id: "rent-min-price-f", key: "minPrice" },
+      { id: "rent-price-f", key: "maxPrice" },
+      { id: "rent-min-beds-f", key: "bedrooms" },
+      { id: "rent-beds-f", key: "maxBeds" },
+      { id: "rent-type-f", key: "propertyType" }
+    ]
+  },
+  students: {
+    key: "students",
+    backendCategory: "students",
+    queryId: "student-q-f",
+    locationButtonId: "student-use-location-btn",
+    placeholder: "Search by campus, hostel, area or keyword",
+    legacySelector: ".bg-gradient-to-r",
+    filters: [
+      { id: "student-radius-f", key: "radius" },
+      { id: "student-type-quick-f", key: "propertyType" },
+      { id: "student-budget-f", key: "maxPrice" },
+      { id: "student-uni-f", key: "studentCampus" },
+      { id: "student-amenity-f", key: "amenities" },
+      { id: "student-sort-f", key: "sort" }
+    ]
+  },
+  land: {
+    key: "land",
+    backendCategory: "land",
+    queryId: "land-q-f",
+    locationButtonId: "land-use-location-btn",
+    placeholder: "Search by area, title type or keyword",
+    legacySelector: ".bg-gradient-to-r",
+    filters: [
+      { id: "land-radius-f", key: "radius" },
+      { id: "land-type-f", key: "landTitleType" },
+      { id: "land-min-price-f", key: "minPrice" },
+      { id: "land-price-f", key: "maxPrice" },
+      { id: "land-min-size-f", key: "minSize" },
+      { id: "land-sort-f", key: "sort" }
+    ]
+  },
+  commercial: {
+    key: "commercial",
+    backendCategory: "commercial",
+    queryId: "commercial-q-f",
+    locationButtonId: "commercial-use-location-btn",
+    placeholder: "Search offices, shops, warehouses or areas",
+    legacySelector: ".bg-gradient-to-r",
+    filters: [
+      { id: "commercial-radius-f", key: "radius" },
+      { id: "commercial-type-f", key: "commercialType" },
+      { id: "commercial-min-price-f", key: "minPrice" },
+      { id: "commercial-price-f", key: "maxPrice" },
+      { id: "commercial-size-f", key: "minSize" },
+      { id: "commercial-sort-f", key: "sort" }
+    ]
+  },
+  brokers: {
+    key: "brokers",
+    backendCategory: "brokers",
+    queryId: "broker-q-f",
+    locationButtonId: "",
+    placeholder: "Search broker, agency, district or speciality",
+    legacySelector: ".flex.flex-wrap",
+    filters: [
+      { id: "broker-district-f", key: "district" },
+      { id: "broker-specialty-f", key: "specialty" },
+      { id: "broker-language-f", key: "language" },
+      { id: "broker-status-f", key: "status" }
+    ]
+  }
+};
+
+function sectionSearchConfigFor(page) {
+  return SECTION_SEARCH_CONFIGS[normalizePageKey(page)] || null;
+}
+
+function sectionSearchShellId(page) {
+  const config = sectionSearchConfigFor(page);
+  return config ? `section-search-shell-${config.key}` : "";
+}
+
+function sectionSearchFieldId(config, field) {
+  return `section-search-${config.key}-${field.key}`;
+}
+
+function sectionSearchLegacyContainer(config) {
+  const query = document.getElementById(config.queryId);
+  if (!query) return null;
+  return query.closest(config.legacySelector) || query.closest("section") || query.parentElement;
+}
+
+function sectionSearchSelectMarkup(config, field) {
+  const source = document.getElementById(field.id);
+  const options = source
+    ? Array.from(source.options).map((option) => `<option value="${adminAttr(option.value || "")}">${adminEscape(option.textContent || "")}</option>`).join("")
+    : `<option value="">${adminEscape(field.label || "Filter")}</option>`;
+  return `<select id="${adminAttr(sectionSearchFieldId(config, field))}" data-section-search-field="${adminAttr(field.key)}" data-section-search-source="${adminAttr(field.id)}" aria-label="${adminAttr(field.label || source?.options?.[0]?.textContent || "Filter")}">${options}</select>`;
+}
+
+function syncSectionSearchShell(page) {
+  const config = sectionSearchConfigFor(page);
+  if (!config) return false;
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell) return false;
+  const shellInput = shell.querySelector(".section-search-text-input");
+  const legacyInput = document.getElementById(config.queryId);
+  if (shellInput && legacyInput && shellInput.value !== legacyInput.value) shellInput.value = legacyInput.value || "";
+  config.filters.forEach((field) => {
+    const source = document.getElementById(field.id);
+    const target = document.getElementById(sectionSearchFieldId(config, field));
+    if (!source || !target) return;
+    const currentOptions = Array.from(target.options).map((option) => option.value).join("|");
+    const sourceOptions = Array.from(source.options).map((option) => option.value).join("|");
+    if (currentOptions !== sourceOptions) {
+      target.innerHTML = Array.from(source.options).map((option) => `<option value="${adminAttr(option.value || "")}">${adminEscape(option.textContent || "")}</option>`).join("");
+    }
+    if (Array.from(target.options).some((option) => option.value === source.value)) target.value = source.value;
+  });
+  return true;
+}
+
+function syncSectionSearchToLegacy(page) {
+  const config = sectionSearchConfigFor(page);
+  if (!config) return null;
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell) return null;
+  const values = {
+    query: shell.querySelector(".section-search-text-input")?.value || ""
+  };
+  const legacyInput = document.getElementById(config.queryId);
+  if (legacyInput && legacyInput.value !== values.query) legacyInput.value = values.query;
+  config.filters.forEach((field) => {
+    const shellField = shell.querySelector(`[data-section-search-field="${field.key}"]`);
+    const source = document.getElementById(field.id);
+    const value = shellField?.value || "";
+    values[field.key] = value;
+    if (source && source.value !== value && Array.from(source.options || []).some((option) => option.value === value)) source.value = value;
+  });
+  return values;
+}
+
+function sectionSearchResultCount(page, result) {
+  if (Array.isArray(result)) return result.length;
+  const config = sectionSearchConfigFor(page);
+  if (config?.resultCountId) {
+    const count = parseInt(document.getElementById(config.resultCountId)?.textContent || "0", 10);
+    if (Number.isFinite(count)) return count;
+  }
+  if (page === "brokers") return document.querySelectorAll("#brokers-grid .broker-grid-card").length;
+  return null;
+}
+
+function sectionSearchFilterPayload(config, values = {}) {
+  const filters = {
+    propertyType: values.propertyType || "",
+    minPrice: parseInt(values.minPrice || "0", 10) || 0,
+    maxPrice: parseInt(values.maxPrice || "0", 10) || 0,
+    bedrooms: values.bedrooms || "",
+    amenities: values.amenities || "",
+    commercialType: config.key === "commercial" ? (values.commercialType || values.propertyType || "") : "",
+    landTitleType: config.key === "land" ? (values.landTitleType || values.propertyType || "") : "",
+    sort: values.sort || "newest",
+    currency: activeCur || "UGX"
+  };
+  if (values.studentCampus) filters.studentCampus = values.studentCampus;
+  return filters;
+}
+
+function recordSectionSearchBackendProbe(page, values = {}, resultsCount = 0, source = "section_shell") {
+  const config = sectionSearchConfigFor(page);
+  if (!config) return;
+  const params = new URLSearchParams();
+  const isBrokerSearch = config.backendCategory === "brokers";
+  params.set("limit", "12");
+  params.set("source", source);
+  if (values.query) params.set(isBrokerSearch ? "search" : "query", values.query);
+  if (values.district) params.set("district", values.district);
+  const endpoint = isBrokerSearch
+    ? `${API_BASE}/api/agents?${params.toString()}`
+    : `${API_BASE}/api/properties/search?${params.toString()}`;
+  trackEvent("section_search_backend_probe", {
+    page: config.key,
+    backend_endpoint: isBrokerSearch ? "agents" : "properties_search",
+    source,
+    results_count: resultsCount
+  });
+  if (isBrokerSearch) {
+    fetch(endpoint, { credentials: "same-origin" })
+      .then((res) => res.json().catch(() => ({})).then((body) => ({ ok: res.ok, body })))
+      .then(({ ok, body }) => {
+        trackEvent("section_search_backend_checked", {
+          page: config.key,
+          backend_endpoint: "agents",
+          backend_ok: ok,
+          backend_results: Array.isArray(body?.data) ? body.data.length : null
+        });
+      })
+      .catch((error) => {
+        trackEvent("section_search_backend_check_failed", {
+          page: config.key,
+          backend_endpoint: "agents",
+          error: error?.message || "network_error"
+        });
+      });
+    return;
+  }
+  recordHeroSearchBackendPayload(buildHeroSearchBackendPayload({
+    query: values.query || "",
+    area: values.district || values.studentCampus || "",
+    filters: sectionSearchFilterPayload(config, values),
+    nearState: getNearMeSearchState(config.key),
+    resultsCount,
+    category: config.backendCategory
+  }));
+}
+
+function runSectionSearch(page, { source = "section_shell", backend = true } = {}) {
+  const config = sectionSearchConfigFor(page);
+  if (!config) return false;
+  const values = syncSectionSearchToLegacy(config.key) || {};
+  let result = [];
+  if (config.key === "sale" || config.key === "rent") result = filterListings(config.key) || [];
+  if (config.key === "students") result = filterStudents() || [];
+  if (config.key === "commercial") result = filterCommercial() || [];
+  if (config.key === "land") result = filterLand() || [];
+  if (config.key === "brokers") result = applyBrokerFilters() || [];
+  const resultsCount = sectionSearchResultCount(config.key, result);
+  trackEvent("section_search_run", {
+    page: config.key,
+    backend_category: config.backendCategory,
+    source,
+    query: values.query || "",
+    results_count: resultsCount
+  });
+  if (backend !== false) recordSectionSearchBackendProbe(config.key, values, resultsCount, source);
+  return false;
+}
+
+function wireSectionSearchShell(config) {
+  const shell = document.getElementById(sectionSearchShellId(config.key));
+  if (!shell || shell.dataset.sectionSearchWired === "1") return;
+  shell.dataset.sectionSearchWired = "1";
+  const input = shell.querySelector(".section-search-text-input");
+  if (input) {
+    input.addEventListener("input", () => runSectionSearch(config.key, { source: "section_shell_input", backend: false }));
+    wireInputTypeahead(input.id, () => config.key === "brokers" ? getBrokerSuggestionPool() : getLocationSuggestionPool(config.key === "students"), () => runSectionSearch(config.key, { source: "section_shell_typeahead" }));
+  }
+  shell.querySelectorAll("[data-section-search-field]").forEach((field) => {
+    field.addEventListener("change", () => runSectionSearch(config.key, { source: "section_shell_filter" }));
+  });
+  const form = shell.querySelector("form");
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    runSectionSearch(config.key, { source: "section_shell_submit" });
+  });
+  shell.querySelector("[data-section-search-location]")?.addEventListener("click", () => {
+    applyNearMe(config.key);
+    window.setTimeout(() => syncSectionSearchShell(config.key), 350);
+  });
+  shell.querySelector("[data-section-search-register]")?.addEventListener("click", () => openModal("broker-reg-modal"));
+}
+
+function mountSectionSearchShell(page) {
+  const config = sectionSearchConfigFor(page);
+  if (!config) return false;
+  const pageEl = document.getElementById(`page-${config.key}`);
+  const query = document.getElementById(config.queryId);
+  if (!pageEl || !query) return false;
+  const shellId = sectionSearchShellId(config.key);
+  const existing = document.getElementById(shellId);
+  const legacy = sectionSearchLegacyContainer(config);
+  if (legacy) legacy.classList.add("section-search-legacy-hidden");
+  if (existing) {
+    syncSectionSearchShell(config.key);
+    wireSectionSearchShell(config);
+    return true;
+  }
+  const shell = document.createElement("section");
+  shell.id = shellId;
+  shell.className = "section-search-shell";
+  shell.setAttribute("data-section-search-shell", config.key);
+  const locationButton = config.locationButtonId
+    ? `<button type="button" class="section-search-location" data-section-search-location="1"><i class="fas fa-location-crosshairs"></i>Use my location</button>`
+    : `<button type="button" class="section-search-location" data-section-search-register="1"><i class="fas fa-id-card"></i>Register</button>`;
+  shell.innerHTML = `
+    <div class="section-search-inner">
+      <form class="section-search-form">
+        <label class="section-search-query" for="section-search-${adminAttr(config.key)}-query">
+          <i class="fas fa-search"></i>
+          <input id="section-search-${adminAttr(config.key)}-query" class="section-search-text-input" autocomplete="off" placeholder="${adminAttr(config.placeholder)}">
+        </label>
+        ${locationButton}
+        <button type="submit" class="section-search-submit"><i class="fas fa-search"></i>Search</button>
+      </form>
+      <div class="section-search-filter-row">
+        ${config.filters.map((field) => sectionSearchSelectMarkup(config, field)).join("")}
+      </div>
+    </div>
+  `;
+  if (legacy?.parentNode) {
+    legacy.parentNode.insertBefore(shell, legacy);
+  } else {
+    pageEl.insertBefore(shell, pageEl.firstElementChild?.nextSibling || pageEl.firstChild);
+  }
+  syncSectionSearchShell(config.key);
+  wireSectionSearchShell(config);
+  return true;
 }
 
 function doSearch() {
@@ -24344,6 +24739,7 @@ function filterListings(page) {
     if (saleCountEl) saleCountEl.textContent = list.length;
     renderGrid("sale-grid", list);
     setMapMarkers("map-sale", list);
+    return list;
   } else if (page === "rent") {
     const q = (document.getElementById("rent-location-f")?.value || "").toLowerCase().trim();
     const dRaw = document.getElementById("rent-district-f")?.value || "";
@@ -24375,7 +24771,9 @@ function filterListings(page) {
     if (rentCountEl) rentCountEl.textContent = list.length;
     renderGrid("rent-grid", list);
     setMapMarkers("map-rent", list);
+    return list;
   }
+  return list;
 }
 
 function filterStudents() {
@@ -28556,6 +28954,8 @@ function applyBrokerFilters() {
     return districtMatch && specialtyMatch && languageMatch && statusMatch && textMatch;
   });
   renderBrokers("brokers-grid", list);
+  setBrokerMapMarkers(list);
+  return list;
 }
 
 function filterBrokers(q) {

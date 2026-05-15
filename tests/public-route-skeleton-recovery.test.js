@@ -23,5 +23,5 @@ test('browser public route probe fails when the temporary route skeleton is visi
 });
 
 test('public app cache version is bumped for the route skeleton fix', () => {
-  assert.match(htmlSource, /route-skeleton-recovery-20260510/);
+  assert.match(htmlSource, /section-search-shell-20260512/);
 });

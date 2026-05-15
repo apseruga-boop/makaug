@@ -985,8 +985,8 @@ function run() {
   assert(!frontendSource.includes('heroAmenitySecurity'), 'Amenity labels should not use the sanitizer-sensitive Security key');
   assert(frontendSource.includes('setHeroSelectOptions("hero-amenities-f", amenityOptions'), 'homepage should refresh the Amenities dropdown from category config');
   assert(frontendSource.includes('setHeroFilterControlVisible("hero-bedrooms-f", Boolean(config.showBedrooms))'), 'homepage should toggle Bedrooms visibility from category config');
-  assert(frontendSource.includes('payload.commercialType = filters.commercialType'), 'homepage commercial searches should send commercialType to the backend');
-  assert(frontendSource.includes('payload.landTitleType = filters.landTitleType'), 'homepage land searches should send landTitleType to the backend');
+  assert(frontendSource.includes('setFilter("commercialType", "commercial_type", filters.commercialType)'), 'homepage commercial searches should send commercialType to the backend');
+  assert(frontendSource.includes('setFilter("landTitleType", "land_title_type", filters.landTitleType)'), 'homepage land searches should send landTitleType to the backend');
   assert(!frontendSource.includes('Manual area, radius, and property filters stay active.'), 'homepage advanced filters should not show the removed manual/radius helper copy');
   assert(frontendSource.includes('No exact matches yet.'), 'search no-results state should use the required launch copy');
   assert(frontendSource.includes('DEFAULT_NEAR_ME_RADIUS_MI = 10'), 'near-me search should default to 10 miles');
