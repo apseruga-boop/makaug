@@ -8556,6 +8556,11 @@ function adminApplyLaunchCleanFilter(rows = []) {
   return source.filter((row) => !adminRecordLooksLikeTest(row));
 }
 
+function adminPublicControlVisibilityBadge(row = {}) {
+  if (!adminRecordLooksLikeTest(row)) return "";
+  return `<span class="ml-2 inline-flex align-middle rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800">Test-like public listing</span>`;
+}
+
 function adminScrollTo(selector) {
   const target = selector ? document.querySelector(selector) : null;
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -8839,7 +8844,7 @@ function buildAdminFollowUpWhatsAppMessage(p = {}) {
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
-  const live = adminApplyLaunchCleanFilter(listings)
+  const live = (Array.isArray(listings) ? listings : [])
     .filter((p) => normalizeModerationStatus(p.status) === "approved")
     .sort((a, b) => {
       const af = isFeaturedListing(a) ? 1 : 0;
@@ -8858,11 +8863,12 @@ function renderAdminFeaturedRows(listings) {
     const id = String(p.backend_id || p.id || "");
     const idArg = adminListingIdArg(id);
     const featured = isFeaturedListing(p);
+    const visibilityBadge = adminPublicControlVisibilityBadge(p);
     return `
       <div class="border ${featured ? "border-green-200 bg-green-50" : "border-gray-200 bg-white"} rounded-xl p-4">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
-            <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}</div>
+            <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}${visibilityBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
             <div class="text-xs text-gray-500 mt-1">${featured ? `Featured since ${adminEscape(formatListingDate(p.featured_at || p.extra_fields?.featured_at || p.updated_at))}` : "Not currently on the homepage featured section."}</div>
           </div>
@@ -8879,7 +8885,7 @@ function renderAdminFeaturedRows(listings) {
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
-  const view = adminApplyLaunchCleanFilter(listings).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
+  const view = (Array.isArray(listings) ? listings : []).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
     return;
@@ -8889,11 +8895,12 @@ function renderAdminLiveListingsRows(listings) {
     const idArg = adminListingIdArg(id);
     const featured = isFeaturedListing(p);
     const followClass = p.follow_up_due ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-700";
+    const visibilityBadge = adminPublicControlVisibilityBadge(p);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
-            <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}</div>
+            <div class="font-bold text-gray-800 break-words">${adminEscape(p.title || "Untitled listing")}${visibilityBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")} • Ref: ${adminEscape(p.inquiry_reference || id || "-")}</div>
             <div class="text-xs text-gray-500 mt-1">Live: ${adminEscape(adminLiveAtText(p))} • Owner: ${adminEscape(p.lister_name || "-")} • ${adminEscape(p.lister_phone || p.lister_email || "-")}</div>
           </div>
@@ -8917,7 +8924,7 @@ function renderAdminAllListingsRows(listings) {
   if (!wrap) return;
   const q = (document.getElementById("admin-listings-q")?.value || "").toLowerCase().trim();
   const statusFilter = (document.getElementById("admin-listings-status")?.value || "").toLowerCase().trim();
-  let view = adminApplyLaunchCleanFilter(listings);
+  let view = Array.isArray(listings) ? listings : [];
   if (statusFilter) {
     view = view.filter((p) => normalizeModerationStatus(p.status) === statusFilter);
   }
@@ -8946,11 +8953,12 @@ function renderAdminAllListingsRows(listings) {
     const backendId = String(p.backend_id || p.id || "");
     const reviewId = backendId || localId;
     const reviewArg = adminListingIdArg(reviewId);
+    const visibilityBadge = adminPublicControlVisibilityBadge(p);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
+            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${visibilityBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")}</div>
             <div class="text-xs text-gray-500 mt-1">ID: ${adminEscape(localId || "-")} • ${adminEscape(listingDateMeta(p))}</div>
           </div>
