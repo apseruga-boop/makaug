@@ -85,7 +85,26 @@ function getConfiguredOwnerPhones() {
     'SUPER_ADMIN_PHONE'
   )
     .map(normalizePhoneForOwnerMatch)
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((phone, index, phones) => phones.indexOf(phone) === index);
+}
+
+function uniquePhones(values = []) {
+  return values
+    .map(normalizePhoneForOwnerMatch)
+    .filter(Boolean)
+    .filter((phone, index, phones) => phones.indexOf(phone) === index);
+}
+
+function getConfiguredReportWhatsappRecipients() {
+  return uniquePhones([
+    ...getConfiguredOwnerPhones(),
+    ...envList(
+      'AI_CEO_REPORT_WHATSAPP_RECIPIENTS',
+      'AI_CEO_REPORT_WHATSAPP_RECIPIENT',
+      'AI_CEO_OWNER_REPORT_PHONES'
+    )
+  ]);
 }
 
 function getConfiguredOwnerTelegramChats() {
@@ -714,6 +733,7 @@ async function getCeoStatus() {
     phoneControl: {
       whatsapp_enabled: isOwnerWhatsappControlEnabled(),
       configured_owner_phone_count: getConfiguredOwnerPhones().length,
+      configured_report_recipient_count: getConfiguredReportWhatsappRecipients().length,
       command_prefix: process.env.AI_CEO_OWNER_COMMAND_PREFIX || 'keyword based',
       telegram_configured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
       telegram_owner_chat_count: getConfiguredOwnerTelegramChats().length
@@ -746,8 +766,8 @@ async function handleOwnerWhatsappCommand({ phone, commandText, contactName = ''
 }
 
 async function sendReportToFounderWhatsapp(reportText, { source = 'ai_ceo', actorId = 'ai_ceo' } = {}) {
-  const recipients = getConfiguredOwnerPhones();
-  if (!recipients.length) return { sent: false, reason: 'no_owner_phone_configured' };
+  const recipients = getConfiguredReportWhatsappRecipients();
+  if (!recipients.length) return { sent: false, reason: 'no_report_whatsapp_recipient_configured' };
   const sent = [];
   for (const recipient of recipients) {
     try {
@@ -819,6 +839,7 @@ module.exports = {
   emailProviderConfigured,
   getCeoStatus,
   getConfiguredOwnerPhones,
+  getConfiguredReportWhatsappRecipients,
   handleCeoCommand,
   handleInboundEmailForCeo,
   handleOwnerWhatsappCommand,

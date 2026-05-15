@@ -9,6 +9,7 @@ Set these in local `.env` and in Render:
 ```env
 AI_CEO_OWNER_WHATSAPP_ENABLED=true
 AI_CEO_OWNER_PHONES=+44XXXXXXXXXX
+AI_CEO_REPORT_WHATSAPP_RECIPIENTS=+256XXXXXXXXX
 AI_CEO_PHONE_TEST_OWNER=+44XXXXXXXXXX
 AI_CEO_OWNER_COMMAND_PREFIX=CEO
 AI_CEO_EMAIL_SEND_MODE=draft
@@ -16,7 +17,11 @@ AI_CEO_PHONE_TEST_COMMAND=CEO report
 AI_CEO_PHONE_TEST_TIMEOUT_MS=15000
 ```
 
-`AI_CEO_OWNER_PHONES` can contain more than one trusted phone, separated by commas. Keep `AI_CEO_EMAIL_SEND_MODE=draft` until founder approval for direct sending is intentional.
+`AI_CEO_OWNER_PHONES` can contain more than one trusted phone, separated by commas. Those numbers can control the AI CEO over WhatsApp.
+
+`AI_CEO_REPORT_WHATSAPP_RECIPIENTS` can contain one or more report-only partner numbers, separated by commas. These recipients receive the scheduled morning WhatsApp report but are not authorised for WhatsApp CEO commands unless they are also added to `AI_CEO_OWNER_PHONES`.
+
+Keep `AI_CEO_EMAIL_SEND_MODE=draft` until founder approval for direct sending is intentional.
 
 The test also needs `DATABASE_URL` because it verifies command logging, AI CEO report generation, and WhatsApp runtime routing.
 

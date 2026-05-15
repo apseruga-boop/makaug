@@ -22,6 +22,8 @@ const envExample = read('.env.example');
 const pkg = JSON.parse(read('package.json'));
 
 assert(service.includes('AI_CEO_OWNER_PHONES'), 'AI CEO service must require configured owner phone numbers');
+assert(service.includes('AI_CEO_REPORT_WHATSAPP_RECIPIENTS'), 'AI CEO service must support report-only WhatsApp recipients');
+assert(service.includes('getConfiguredReportWhatsappRecipients'), 'AI CEO service must expose report recipient parsing');
 assert(service.includes('dryrun:'), 'AI CEO owner phone matching must work for WhatsApp web-bridge dry-run tests');
 assert(service.includes('isAiCeoOwnerPhone'), 'AI CEO service must verify owner phone before WhatsApp control');
 assert(service.includes('handleOwnerWhatsappCommand'), 'AI CEO service must expose WhatsApp owner command handling');
@@ -61,6 +63,7 @@ assert(phoneTestScript.includes('handleOwnerWhatsappCommand'), 'CEO phone test m
 assert(phoneTestScript.includes('processInboundRuntime'), 'CEO phone test must verify WhatsApp runtime interception');
 assert(phoneTestScript.includes('non_owner_blocked'), 'CEO phone test must prove non-owner phones are blocked');
 assert(envExample.includes('AI_CEO_OWNER_PHONES='), 'Example env must document AI CEO owner phones');
+assert(envExample.includes('AI_CEO_REPORT_WHATSAPP_RECIPIENTS='), 'Example env must document report-only WhatsApp recipients');
 assert(envExample.includes('AI_CEO_PHONE_TEST_OWNER='), 'Example env must document CEO phone test owner override');
 assert(!smsService.includes("const twilio = require('twilio')"), 'SMS service must lazy-load Twilio so CEO phone tests do not hang when SMS is unused');
 assert(!whatsappNotificationService.includes("const twilio = require('twilio')"), 'WhatsApp notification service must lazy-load Twilio so CEO phone tests do not hang when Twilio is unused');
