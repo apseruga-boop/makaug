@@ -383,10 +383,20 @@ function outboundEmailDisclosureOk(text = '') {
     && (body.includes('https://makaug.com') || body.includes('makaug.com'));
 }
 
+function outboundWhatsappDisclosureOk(text = '') {
+  const body = String(text || '').toLowerCase();
+  return body.includes('makaug.com') && /\bstop\b/.test(body);
+}
+
 function emailDomain(value = '') {
   const email = normalizeEmail(value);
   const [, domain] = email.split('@');
   return domain || '';
+}
+
+function phoneLastDigits(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits ? digits.slice(-4) : '';
 }
 
 function splitBrokerName(fullName = '') {
@@ -5347,6 +5357,175 @@ router.post('/outreach/email/send', async (req, res, next) => {
         from: getDefaultEmailFrom()
       },
       reason: delivery.sent ? null : (delivery.error || delivery.reason || 'outreach_email_send_failed')
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/outreach/whatsapp/send', async (req, res, next) => {
+  try {
+    const phone = normalizeConversationPhone(req.body?.to || req.body?.phone || req.body?.whatsapp);
+    const bodyText = cleanText(req.body?.body || req.body?.text || req.body?.message);
+    const leadId = cleanText(req.body?.lead_id || req.body?.leadId);
+    const leadName = cleanText(req.body?.name || req.body?.lead_name || req.body?.leadName);
+    const source = cleanText(req.body?.source);
+    const reviewed = req.body?.reviewed === true || String(req.body?.reviewed || '').toLowerCase() === 'true';
+    const requestedDeliveryMode = String(req.body?.delivery_mode || '').trim().toLowerCase();
+    const effectiveDeliveryMode = ['provider', 'web_bridge', 'auto'].includes(requestedDeliveryMode)
+      ? requestedDeliveryMode
+      : getWhatsappDeliveryMode();
+    const manualUrl = buildManualWhatsAppUrl(phone, bodyText);
+    const errors = [];
+
+    if (!reviewed) errors.push('reviewed=true is required before sending');
+    if (!phone || phone.replace(/\D/g, '').length < 9) errors.push('to/phone must be a valid WhatsApp number');
+    if (!bodyText) errors.push('body is required');
+    if (bodyText.length > 1200) errors.push('body must be 1200 characters or fewer');
+    if (!outboundWhatsappDisclosureOk(bodyText)) {
+      errors.push('body must include makaug.com and STOP opt-out wording');
+    }
+    if (errors.length) {
+      return res.status(400).json({ ok: false, error: 'Invalid outreach WhatsApp payload', details: errors, manual_url: manualUrl || null });
+    }
+
+    const bridgeEnabled = isWhatsappWebBridgeEnabled();
+    const canUseProvider = providerConfigured('whatsapp');
+    if (!bridgeEnabled && !canUseProvider) {
+      return res.status(409).json({
+        ok: false,
+        error: 'WhatsApp provider is not configured',
+        missingEnv: missingProviderEnv('whatsapp'),
+        manual_url: manualUrl || null
+      });
+    }
+
+    let delivery = { sent: false, provider: null };
+    let queuedForBridge = false;
+    let bridgeQueueId = null;
+
+    if (effectiveDeliveryMode === 'web_bridge' || (effectiveDeliveryMode === 'auto' && bridgeEnabled)) {
+      try {
+        const queued = await queueWhatsappWebBridgeMessage({
+          recipient: phone,
+          text: bodyText,
+          source: 'admin_outreach_whatsapp',
+          actorId: adminActorId(req),
+          metadata: {
+            lead_id: leadId || null,
+            lead_name: leadName || null,
+            source: source || null,
+            reviewed: true,
+            outbound_type: 'lead_outreach_opt_in'
+          }
+        });
+        queuedForBridge = true;
+        bridgeQueueId = queued?.id || null;
+        delivery = {
+          sent: false,
+          queued: true,
+          provider: 'whatsapp_web_bridge',
+          id: bridgeQueueId,
+          duplicate_suppressed: queued?.duplicate_suppressed === true
+        };
+      } catch (error) {
+        delivery = {
+          sent: false,
+          provider: 'whatsapp_web_bridge',
+          error: error.message || 'whatsapp_web_bridge_queue_failed'
+        };
+      }
+    } else {
+      delivery = await sendWhatsAppText({ to: phone, body: bodyText });
+      if (!delivery.sent && bridgeEnabled) {
+        const providerFailure = delivery;
+        try {
+          const queued = await queueWhatsappWebBridgeMessage({
+            recipient: phone,
+            text: bodyText,
+            source: 'admin_outreach_whatsapp',
+            actorId: adminActorId(req),
+            metadata: {
+              fallback_from: providerFailure.provider || 'provider',
+              lead_id: leadId || null,
+              lead_name: leadName || null,
+              source: source || null,
+              reviewed: true,
+              outbound_type: 'lead_outreach_opt_in'
+            }
+          });
+          queuedForBridge = true;
+          bridgeQueueId = queued?.id || null;
+          delivery = {
+            sent: false,
+            queued: true,
+            provider: 'whatsapp_web_bridge',
+            id: bridgeQueueId,
+            fallback_reason: providerFailure.reason || providerFailure.error || null,
+            duplicate_suppressed: queued?.duplicate_suppressed === true
+          };
+        } catch (error) {
+          delivery = {
+            sent: false,
+            provider: providerFailure.provider || 'whatsapp_web_bridge',
+            reason: providerFailure.reason || null,
+            error: error.message || providerFailure.error || 'whatsapp_web_bridge_queue_failed'
+          };
+        }
+      }
+    }
+
+    const status = notificationStatusFromDelivery(delivery);
+    await logWhatsAppMessage(db, {
+      recipientPhone: phone,
+      templateKey: 'lead_outreach_opt_in',
+      messageType: 'outreach',
+      status,
+      failureReason: delivery.sent || delivery.queued ? null : (delivery.error || delivery.reason || 'outreach_whatsapp_send_failed'),
+      sentAt: delivery.sent ? new Date() : null
+    });
+    await logNotification(db, {
+      recipientPhone: phone,
+      channel: 'whatsapp',
+      type: 'outreach_whatsapp_send_attempt',
+      status,
+      payloadSummary: {
+        lead_id: leadId || null,
+        lead_name: leadName || null,
+        source: source || null,
+        provider: delivery.provider || null,
+        queued_for_bridge: queuedForBridge,
+        message_preview: bodyText.slice(0, 160)
+      },
+      failureReason: delivery.sent || delivery.queued ? null : (delivery.error || delivery.reason || 'outreach_whatsapp_send_failed'),
+      sentAt: delivery.sent ? new Date() : null
+    });
+    await writeAudit('outreach_whatsapp_send_attempt', {
+      lead_id: leadId || null,
+      lead_name: leadName || null,
+      recipient_last4: phoneLastDigits(phone),
+      source: source || null,
+      sent: delivery.sent === true,
+      queued_for_bridge: queuedForBridge,
+      bridge_queue_id: bridgeQueueId,
+      provider: delivery.provider || null,
+      delivery_mode: effectiveDeliveryMode,
+      status,
+      reason: delivery.sent || delivery.queued ? null : (delivery.error || delivery.reason || null)
+    }, adminActorId(req));
+
+    const ok = delivery.sent === true || delivery.queued === true;
+    return res.status(ok ? 200 : 502).json({
+      ok,
+      data: {
+        status,
+        provider: delivery.provider || null,
+        queued_for_bridge: queuedForBridge,
+        bridge_queue_id: bridgeQueueId,
+        duplicate_suppressed: delivery.duplicate_suppressed === true,
+        manual_url: manualUrl || null
+      },
+      reason: ok ? null : (delivery.error || delivery.reason || 'outreach_whatsapp_send_failed')
     });
   } catch (error) {
     return next(error);
