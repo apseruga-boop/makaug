@@ -58,7 +58,7 @@ const {
 } = require('../services/locationSearchService');
 
 const router = express.Router();
-const LAUNCH_SEED_LISTING_MARKER = 'SOFT LAUNCH TEST - DELETE';
+const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 
 function addFilter(filters, values, clause, ...vals) {
   let prepared = clause;
@@ -70,18 +70,21 @@ function addFilter(filters, values, clause, ...vals) {
 }
 
 function isLaunchSeedListing(row = {}) {
-  return String(row.title || '').includes(LAUNCH_SEED_LISTING_MARKER)
-    || String(row.description || '').includes(LAUNCH_SEED_LISTING_MARKER);
+  const title = String(row.title || '');
+  const description = String(row.description || '');
+  return LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker));
 }
 
 function addPublicLaunchSeedFilter(filters, values) {
-  addFilter(
-    filters,
-    values,
-    "(COALESCE(p.title, '') NOT ILIKE ? AND COALESCE(p.description, '') NOT ILIKE ?)",
-    `%${LAUNCH_SEED_LISTING_MARKER}%`,
-    `%${LAUNCH_SEED_LISTING_MARKER}%`
-  );
+  LAUNCH_SEED_LISTING_MARKERS.forEach((marker) => {
+    addFilter(
+      filters,
+      values,
+      "(COALESCE(p.title, '') NOT ILIKE ? AND COALESCE(p.description, '') NOT ILIKE ?)",
+      `%${marker}%`,
+      `%${marker}%`
+    );
+  });
 }
 
 function normalizeListingType(type) {
