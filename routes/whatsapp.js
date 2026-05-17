@@ -1241,13 +1241,52 @@ function mapListingTypeInput(input) {
     '4': 'student',
     '5': 'commercial',
     sale: 'sale',
+    'for sale': 'sale',
+    sell: 'sale',
+    selling: 'sale',
     rent: 'rent',
+    'to rent': 'rent',
+    'for rent': 'rent',
+    rental: 'rent',
     land: 'land',
+    plot: 'land',
+    plots: 'land',
     student: 'student',
     students: 'student',
+    'student accommodation': 'student',
+    hostel: 'student',
     commercial: 'commercial'
   };
   return map[key] || null;
+}
+
+function inferListingTypeFromStartRequest(input, entities = {}) {
+  const text = normalizeInput(input).toLowerCase();
+  const entityType = normalizeListingType(entities?.listing_type || entities?.listingType || '');
+  if (entityType && entityType !== 'any') return entityType;
+  const typeMatch = text.match(/\btype\s*:\s*(student accommodation|commercial|for sale|to rent|for rent|sale|rent|rental|land|plot|hostel)\b/i);
+  if (typeMatch) return mapListingTypeInput(typeMatch[1]) || null;
+  if (/\b(student accommodation|student rooms?|student housing|hostel|campus)\b/i.test(text)) return 'student';
+  if (/\b(commercial|office|retail|warehouse|shop|business space)\b/i.test(text)) return 'commercial';
+  if (/\b(land|plot|plots|acre|acres|farm)\b/i.test(text)) return 'land';
+  if (/\b(to rent|for rent|rent out|rental|lease|letting)\b/i.test(text)) return 'rent';
+  if (/\b(for sale|sale|sell|selling)\b/i.test(text)) return 'sale';
+  return null;
+}
+
+function isListingStartRequest(input, intentResult = {}) {
+  const text = normalizeInput(input).toLowerCase();
+  if (!text) return false;
+  const confidence = Number(intentResult?.confidence || 0);
+  const aiListingIntent = intentResult?.intent === 'property_listing' && confidence >= 0.45;
+  const listingWords = /\b(list|listing|listed|post|submit|upload|add|create|advertise)\b/i.test(text);
+  const explicitListingRequest = (
+    /\b(i|we)\b.{0,40}\b(want|need|would like|am looking|are looking|wanting)\b.{0,50}\b(to )?(list|post|submit|upload|add|create)\b/i.test(text)
+    || /\b(help me|please help|can you|kindly)\b.{0,60}\b(list|post|submit|upload|add|create)\b/i.test(text)
+    || /\b(list|post|submit|upload|add|create|advertise)\b.{0,90}\b(property|listing|house|home|land|plot|rental|room|apartment|commercial|student|for sale|to rent)\b/i.test(text)
+    || /\b(property|house|home|land|plot|rental|room|apartment|commercial|student)\b.{0,90}\b(listing|listed|post|submit|upload)\b/i.test(text)
+  );
+  return explicitListingRequest || (aiListingIntent && listingWords);
 }
 
 function mapSearchTypeInput(input) {
@@ -4618,6 +4657,24 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
     const next = menuRouteReply(lang, globalRoute);
     return respond(next.message, next.nextStep);
+  }
+
+  const explicitListingStart = ['greeting', 'main_menu'].includes(step)
+    && isListingStartRequest(cleanBody, intentResult);
+  if (explicitListingStart) {
+    const inferredListingType = inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
+    await patchSessionData(phone, {
+      pending_search_filters: null,
+      natural_query_text: null,
+      search_type: null,
+      listing_start_captured_at: new Date().toISOString(),
+      listing_start_text: cleanBody
+    });
+    if (inferredListingType) {
+      await patchDraft(phone, { listing_type: inferredListingType });
+      return respond(t(lang, 'askOwnership'), 'ownership');
+    }
+    return respond(t(lang, 'askListingType'), 'listing_type');
   }
 
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {

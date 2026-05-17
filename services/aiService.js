@@ -372,11 +372,11 @@ function heuristicIntent(text) {
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
   }
-  if (/(help|support|human|call me|contact)/.test(t)) {
-    return { intent: 'support', confidence: 0.64, entities: {} };
-  }
   if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
+  }
+  if (/(help|support|human|call me|contact)/.test(t)) {
+    return { intent: 'support', confidence: 0.64, entities: {} };
   }
   if (/(near me|nearby|my location|share location|shared location|around me)/.test(t)) {
     return { intent: 'search_near_me', confidence: 0.72, entities: { near_me: true } };
@@ -962,6 +962,7 @@ Return strict JSON only:
 }
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
+- Property listing must win when the user says they want to list, post, upload, submit, add, or create a listing/property, even when the same message says "for sale" or "to rent".
 - search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
 - apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, land title, or commercial type.
 - save_search and create_alert store location/radius when available. property_need_request is for no-results demand capture.
