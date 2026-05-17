@@ -17500,6 +17500,16 @@ function setListPropertyFormVisible(visible) {
   }
 }
 
+function isMobileListPropertyExperience() {
+  try {
+    const narrowViewport = window.matchMedia?.("(max-width: 767px)")?.matches === true;
+    const touchFirst = window.matchMedia?.("(pointer: coarse)")?.matches === true && Number(window.innerWidth || 0) <= 900;
+    return narrowViewport || touchFirst;
+  } catch (_) {
+    return Number(window.innerWidth || 0) > 0 && Number(window.innerWidth || 0) <= 767;
+  }
+}
+
 function maybeOpenListPropertyChoiceModal() {
   if (currentPage !== "list-property") return;
   const mode = getListPropertyRouteMode();
@@ -17509,13 +17519,29 @@ function maybeOpenListPropertyChoiceModal() {
     chooseListPropertyOnline({ source: "route_query", skipModalClose: true });
     return;
   }
+  if (mode === "whatsapp" || isMobileListPropertyExperience()) {
+    setListPropertyFormVisible(false);
+    window.setTimeout(() => {
+      if (currentPage === "list-property" && !lpListingPathChoice) {
+        chooseListPropertyWhatsApp({
+          source: mode === "whatsapp" ? "route_query" : "mobile_route_auto",
+          sameWindow: true
+        });
+      }
+    }, 80);
+    return;
+  }
   setListPropertyFormVisible(false);
   window.setTimeout(() => {
     if (currentPage === "list-property" && !lpListingPathChoice) openListPropertyOptions();
   }, 120);
 }
 
-function openListPropertyOptions() {
+function openListPropertyOptions(options = {}) {
+  if (isMobileListPropertyExperience() && options.forceChoice !== true) {
+    chooseListPropertyWhatsApp({ source: options.source || "mobile_options_auto", sameWindow: true });
+    return;
+  }
   if (!document.getElementById("list-choice-modal")) {
     trackEvent("list_property_cta_clicked", { source: "public_route_fallback" });
     window.location.href = "/list-property";
@@ -17565,6 +17591,11 @@ function handleListPropertyFreeCta(event) {
     signed_in: !!authState?.user
   });
   const inferredType = inferListTypeFromCurrentRoute();
+  setListChoiceType(inferredType);
+  if (isMobileListPropertyExperience()) {
+    chooseListPropertyWhatsApp({ source: "mobile_list_property_cta", sameWindow: true });
+    return;
+  }
   navigatePublicRoute(`/list-property?type=${encodeURIComponent(inferredType)}`, null, { source: "list_property_cta" });
 }
 
@@ -17630,7 +17661,7 @@ function listPropertyWhatsAppUrl() {
 
 function updateListPropertyWhatsAppLinks() {
   const href = listPropertyWhatsAppUrl();
-  ["lp-wa-link", "lp-whatsapp-option-btn"].forEach((id) => {
+  ["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].forEach((id) => {
     const link = document.getElementById(id);
     if (link) link.href = href;
   });
@@ -17655,6 +17686,7 @@ function chooseListPropertyOnline(options = {}) {
 function chooseListPropertyWhatsApp(options = {}) {
   const event = options.event;
   const href = listPropertyWhatsAppUrl();
+  const sameWindow = options.sameWindow === true || isMobileListPropertyExperience();
   logListPropertyIntent("whatsapp_ai", { source: options.source || "list_property_choice" });
   try {
     const link = event?.currentTarget || document.getElementById("lp-whatsapp-option-btn") || document.getElementById("lp-wa-link");
@@ -17662,7 +17694,11 @@ function chooseListPropertyWhatsApp(options = {}) {
   } catch (_) {}
   closeModal("list-choice-modal");
   if (!event) {
-    window.open(href, "_blank", "noopener,noreferrer");
+    if (sameWindow) {
+      window.location.href = href;
+    } else {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
   }
   return true;
 }
