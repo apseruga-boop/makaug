@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">MakaUg launch welcome card for Uganda agents</title>
+  <desc id="desc">A branded launch card inviting agents and brokers to post property listings for free on makaug.com.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f7fff5"/>
+      <stop offset="0.52" stop-color="#e7f3ff"/>
+      <stop offset="1" stop-color="#fff6d9"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" x2="1">
+      <stop offset="0" stop-color="#2f7d43"/>
+      <stop offset="1" stop-color="#54a45f"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <circle cx="1052" cy="72" r="112" fill="#f6bd38" opacity="0.25"/>
+  <circle cx="112" cy="532" r="145" fill="#2f7d43" opacity="0.10"/>
+  <circle cx="768" cy="590" r="88" fill="#2463eb" opacity="0.10"/>
+
+  <g transform="translate(72 58)">
+    <rect x="0" y="0" width="1056" height="514" rx="38" fill="#ffffff" filter="url(#shadow)"/>
+    <rect x="0" y="0" width="1056" height="146" rx="38" fill="url(#green)"/>
+    <path d="M0 108h1056v38H0z" fill="url(#green)"/>
+
+    <g transform="translate(48 40)">
+      <rect x="0" y="0" width="72" height="72" rx="20" fill="#ffffff"/>
+      <text x="36" y="51" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#2f7d43">M</text>
+      <text x="96" y="38" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="800" fill="#ffffff">makaug<tspan fill="#f6bd38">.com</tspan></text>
+      <text x="99" y="67" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#dff7e4" letter-spacing="2">UGANDA PROPERTY</text>
+    </g>
+
+    <g transform="translate(48 184)">
+      <text x="0" y="0" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#111827">Uganda agents:</text>
+      <text x="0" y="64" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#2f7d43">list properties free today</text>
+      <text x="0" y="112" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">Join the launch wave. Reach buyers, renters, students,</text>
+      <text x="0" y="144" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">land seekers, and commercial clients in one trusted place.</text>
+
+      <g transform="translate(0 178)">
+        <rect x="0" y="0" width="206" height="62" rx="18" fill="#ecfdf3"/>
+        <text x="103" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#2f7d43">Free to post</text>
+        <rect x="224" y="0" width="196" height="62" rx="18" fill="#eef4ff"/>
+        <text x="322" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#2463eb">7 languages</text>
+        <rect x="438" y="0" width="248" height="62" rx="18" fill="#fff8e5"/>
+        <text x="562" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#a16207">WhatsApp leads</text>
+      </g>
+
+      <text x="0" y="284" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="900" fill="#111827">Start here: makaug.com/list-property</text>
+    </g>
+
+    <g transform="translate(800 176)">
+      <rect x="0" y="0" width="198" height="286" rx="34" fill="#111827"/>
+      <rect x="15" y="18" width="168" height="250" rx="24" fill="#f7f5f0"/>
+      <rect x="34" y="46" width="130" height="34" rx="17" fill="#2f7d43"/>
+      <text x="99" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" fill="#ffffff">MakaUg</text>
+      <rect x="30" y="104" width="138" height="86" rx="18" fill="#ffffff"/>
+      <text x="99" y="133" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="900" fill="#2f7d43">7</text>
+      <text x="99" y="160" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#111827">languages</text>
+      <text x="99" y="213" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800" fill="#2463eb">Sale | Rent | Land</text>
+      <text x="99" y="240" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="800" fill="#2f7d43">Students | Commercial</text>
+    </g>
+  </g>
+</svg>
