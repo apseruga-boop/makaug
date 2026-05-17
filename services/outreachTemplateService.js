@@ -1,6 +1,6 @@
 const AGENT_WELCOME_CARD_PATH = '/assets/marketing/makaug-agent-welcome.html';
 const AGENT_WELCOME_CARD_URL = `https://makaug.com${AGENT_WELCOME_CARD_PATH}`;
-const AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY = 'lead_outreach_agent_welcome_launch_card';
+const AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY = 'lead_outreach_agent_welcome_free_card';
 
 function cleanName(value) {
   return String(value || '')
@@ -38,10 +38,10 @@ function buildAgentWelcomeWhatsappMessage({
     'The link above opens a short welcome guide for agents.',
     '',
     'A few helpful things:',
-    '- It is free to list property on makaug.com during launch. No listing charge.',
+    '- It is free to list property on makaug.com. No listing charge.',
     '- You can add homes, rentals, land, commercial spaces, and student accommodation.',
     '- Clients can search on the website and contact through phone, WhatsApp, or enquiry forms.',
-    '- makaug.com supports seven language flows. On WhatsApp, reply LANG to change language.',
+    '- The welcome page has a language selector for English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, and Lusoga. On WhatsApp, reply LANG to change language.',
     '- If you prefer, reply YES and we can guide your first listing on WhatsApp.',
     '',
     `Website listing page: ${listPropertyUrl}`,

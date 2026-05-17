@@ -10,15 +10,15 @@
   <meta property="og:url" content="https://makaug.com/assets/marketing/makaug-agent-welcome.html">
   <meta property="og:title" content="Welcome to makaug.com: agents can list free">
   <meta property="og:description" content="A simple, friendly way for Uganda agents and brokers to list property free, receive enquiries, and support clients in seven languages.">
-  <meta property="og:image" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card.png">
-  <meta property="og:image:secure_url" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card.png">
+  <meta property="og:image" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card-free.png">
+  <meta property="og:image:secure_url" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card-free.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Welcome to makaug.com: list properties free">
   <meta name="twitter:description" content="A simple property service helping Uganda agents, brokers, owners, renters, students, land seekers, and commercial clients connect.">
-  <meta name="twitter:image" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card.png">
+  <meta name="twitter:image" content="https://makaug.com/assets/marketing/makaug-agent-welcome-card-free.png">
   <style>
     :root {
       color-scheme: light;
@@ -65,6 +65,47 @@
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 22px;
+    }
+    .language-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin: 16px 0 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.9);
+    }
+    .language-panel strong {
+      display: block;
+      color: var(--green-dark);
+      font-size: 15px;
+      margin-bottom: 3px;
+    }
+    .language-panel p {
+      margin: 0;
+      font-size: 14px;
+    }
+    .language-panel label {
+      display: block;
+      color: var(--green-dark);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .06em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+    .language-panel select {
+      min-width: 190px;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 800;
+      padding: 0 12px;
     }
     h1 {
       margin: 0 0 10px;
@@ -155,6 +196,13 @@
     @media (max-width: 760px) {
       body { padding: 16px; }
       .hero-card { grid-template-columns: 1fr; padding: 12px; }
+      .language-panel {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .language-panel select {
+        width: 100%;
+      }
       .deck {
         display: flex;
         overflow-x: auto;
@@ -177,71 +225,409 @@
 <body>
   <main>
     <section class="hero-card">
-      <img src="/assets/marketing/makaug-agent-welcome-card.png" width="1200" height="630" alt="makaug.com welcome card for Uganda agents and brokers">
+      <img src="/assets/marketing/makaug-agent-welcome-card-free.png" width="1200" height="630" alt="makaug.com welcome card for Uganda agents and brokers">
       <div class="hero-copy">
-        <h1>Welcome to makaug.com</h1>
-        <p>We built makaug.com to help Uganda agents, brokers, agencies, and owners make genuine property easier to find online. You can list homes, rentals, land, commercial spaces, and student accommodation for free during launch. No listing charge.</p>
-        <a href="/list-property">List free on makaug.com</a>
+        <h1 data-i18n="heroTitle">Welcome to makaug.com</h1>
+        <p data-i18n="heroBody">We built makaug.com to help Uganda agents, brokers, agencies, and owners make genuine property easier to find online. You can list homes, rentals, land, commercial spaces, and student accommodation for free. No listing charge.</p>
+        <a href="/list-property" data-i18n="primaryCta">List free on makaug.com</a>
       </div>
     </section>
 
-    <p class="deck-label">Agent welcome guide</p>
+    <section class="language-panel" aria-label="Choose welcome guide language">
+      <div>
+        <strong data-i18n="languageTitle">Read this guide in another language</strong>
+        <p data-i18n="languageBody">Choose one of the seven makaug.com languages for this welcome guide.</p>
+      </div>
+      <div>
+        <label for="agent-welcome-language" data-i18n="languageLabel">Language</label>
+        <select id="agent-welcome-language">
+          <option value="en">English</option>
+          <option value="lg">Luganda</option>
+          <option value="sw">Kiswahili</option>
+          <option value="ac">Acholi</option>
+          <option value="ny">Runyankole</option>
+          <option value="rn">Rukiga</option>
+          <option value="sm">Lusoga</option>
+        </select>
+      </div>
+    </section>
+
+    <p class="deck-label" data-i18n="deckLabel">Agent welcome guide</p>
     <section class="deck" aria-label="makaug.com agent welcome guide">
       <article class="slide">
         <div>
-          <small>01 / Who we are</small>
-          <h2>A property service built to help</h2>
-          <p>makaug.com helps people search for homes, rentals, student rooms, land, and commercial spaces across Uganda.</p>
+          <small data-i18n="slide1Eyebrow">01 / Who we are</small>
+          <h2 data-i18n="slide1Title">A property service built to help</h2>
+          <p data-i18n="slide1Body">makaug.com helps people search for homes, rentals, student rooms, land, and commercial spaces across Uganda.</p>
         </div>
-        <p><strong>You are welcome:</strong> agents, brokers, agencies, caretakers, and owners with genuine listings.</p>
+        <p><strong data-i18n="slide1Strong">You are welcome:</strong> <span data-i18n="slide1Note">agents, brokers, agencies, caretakers, and owners with genuine listings.</span></p>
       </article>
       <article class="slide">
         <div>
-          <small>02 / Free to list</small>
-          <h2>Post your properties for free</h2>
-          <p>During launch, agents can add property listings at no cost. We want to make onboarding simple and useful first.</p>
+          <small data-i18n="slide2Eyebrow">02 / Free to list</small>
+          <h2 data-i18n="slide2Title">Post your properties for free</h2>
+          <p data-i18n="slide2Body">Agents can add property listings at no cost. We want to make onboarding simple and useful first.</p>
         </div>
-        <p><strong>No listing charge:</strong> start with the website form or WhatsApp assistant.</p>
+        <p><strong data-i18n="slide2Strong">No listing charge:</strong> <span data-i18n="slide2Note">start with the website form or WhatsApp assistant.</span></p>
       </article>
       <article class="slide">
         <div>
-          <small>03 / Languages</small>
-          <h2>Seven languages for more clients</h2>
-          <p>People can use makaug.com and the WhatsApp assistant in supported language flows. On WhatsApp, they can reply LANG to change language.</p>
+          <small data-i18n="slide3Eyebrow">03 / Languages</small>
+          <h2 data-i18n="slide3Title">Seven languages for more clients</h2>
+          <p data-i18n="slide3Body">People can use makaug.com and the WhatsApp assistant in supported language flows. On WhatsApp, they can reply LANG to change language.</p>
         </div>
-        <p><strong>Coverage:</strong> sale, rent, land, student, and commercial.</p>
+        <p><strong data-i18n="slide3Strong">Coverage:</strong> <span data-i18n="slide3Note">sale, rent, land, student, and commercial.</span></p>
       </article>
       <article class="slide">
         <div>
-          <small>04 / Easy listing</small>
-          <h2>Use the website or WhatsApp</h2>
-          <p>List on makaug.com with the guided form, or use the WhatsApp assistant on mobile and we will guide the title, location, price, photos, and contact details.</p>
+          <small data-i18n="slide4Eyebrow">04 / Easy listing</small>
+          <h2 data-i18n="slide4Title">Use the website or WhatsApp</h2>
+          <p data-i18n="slide4Body">List on makaug.com with the guided form, or use the WhatsApp assistant on mobile and we will guide the title, location, price, photos, and contact details.</p>
         </div>
-        <p><strong>Good listings:</strong> clear photos, accurate location, real price, verified contact.</p>
+        <p><strong data-i18n="slide4Strong">Good listings:</strong> <span data-i18n="slide4Note">clear photos, accurate location, real price, verified contact.</span></p>
       </article>
       <article class="slide">
         <div>
-          <small>05 / Broker profile</small>
-          <h2>Register so clients can trust you</h2>
-          <p>A broker profile helps clients see your name, company, areas covered, specialties, and contact options before they enquire.</p>
+          <small data-i18n="slide5Eyebrow">05 / Broker profile</small>
+          <h2 data-i18n="slide5Title">Register so clients can trust you</h2>
+          <p data-i18n="slide5Body">A broker profile helps clients see your name, company, areas covered, specialties, and contact options before they enquire.</p>
         </div>
-        <p><strong>Tip:</strong> keep your profile accurate so people know who they are speaking to.</p>
+        <p><strong data-i18n="slide5Strong">Tip:</strong> <span data-i18n="slide5Note">keep your profile accurate so people know who they are speaking to.</span></p>
       </article>
       <article class="slide">
         <div>
-          <small>06 / What happens next</small>
-          <h2>Submit, review, then go live</h2>
-          <p>We review listings for quality and safety before publishing. Once live, clients can contact you through phone, WhatsApp, or the website enquiry flow.</p>
+          <small data-i18n="slide6Eyebrow">06 / What happens next</small>
+          <h2 data-i18n="slide6Title">Submit, review, then go live</h2>
+          <p data-i18n="slide6Body">We review listings for quality and safety before publishing. Once live, clients can contact you through phone, WhatsApp, or the website enquiry flow.</p>
         </div>
-        <p><strong>Need help?</strong> reply YES on WhatsApp and our team can guide you gently.</p>
+        <p><strong data-i18n="slide6Strong">Need help?</strong> <span data-i18n="slide6Note">reply YES on WhatsApp and our team can guide you gently.</span></p>
       </article>
     </section>
 
     <nav class="actions" aria-label="Agent onboarding actions">
-      <a href="/list-property">List free on makaug.com</a>
-      <a class="secondary" href="/broker-signup">Register as a broker</a>
-      <a class="gold" href="https://wa.me/256760112587?text=Hi%20makaug.com%2C%20I%27m%20an%20agent%20and%20I%27d%20like%20help%20listing%20properties%20through%20WhatsApp.%20Please%20guide%20me." target="_blank" rel="noopener noreferrer">List with WhatsApp help</a>
+      <a href="/list-property" data-i18n="primaryCta">List free on makaug.com</a>
+      <a class="secondary" href="/broker-signup" data-i18n="brokerCta">Register as a broker</a>
+      <a class="gold" href="https://wa.me/256760112587?text=Hi%20makaug.com%2C%20I%27m%20an%20agent%20and%20I%27d%20like%20help%20listing%20properties%20through%20WhatsApp.%20Please%20guide%20me." target="_blank" rel="noopener noreferrer" data-i18n="whatsappCta">List with WhatsApp help</a>
     </nav>
   </main>
+  <script>
+    const AGENT_WELCOME_I18N = {
+      en: {
+        heroTitle: 'Welcome to makaug.com',
+        heroBody: 'We built makaug.com to help Uganda agents, brokers, agencies, and owners make genuine property easier to find online. You can list homes, rentals, land, commercial spaces, and student accommodation for free. No listing charge.',
+        primaryCta: 'List free on makaug.com',
+        languageTitle: 'Read this guide in another language',
+        languageBody: 'Choose one of the seven makaug.com languages for this welcome guide.',
+        languageLabel: 'Language',
+        deckLabel: 'Agent welcome guide',
+        slide1Eyebrow: '01 / Who we are',
+        slide1Title: 'A property service built to help',
+        slide1Body: 'makaug.com helps people search for homes, rentals, student rooms, land, and commercial spaces across Uganda.',
+        slide1Strong: 'You are welcome:',
+        slide1Note: 'agents, brokers, agencies, caretakers, and owners with genuine listings.',
+        slide2Eyebrow: '02 / Free to list',
+        slide2Title: 'Post your properties for free',
+        slide2Body: 'Agents can add property listings at no cost. We want to make onboarding simple and useful first.',
+        slide2Strong: 'No listing charge:',
+        slide2Note: 'start with the website form or WhatsApp assistant.',
+        slide3Eyebrow: '03 / Languages',
+        slide3Title: 'Seven languages for more clients',
+        slide3Body: 'People can use makaug.com and the WhatsApp assistant in supported language flows. On WhatsApp, they can reply LANG to change language.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, and commercial.',
+        slide4Eyebrow: '04 / Easy listing',
+        slide4Title: 'Use the website or WhatsApp',
+        slide4Body: 'List on makaug.com with the guided form, or use the WhatsApp assistant on mobile and we will guide the title, location, price, photos, and contact details.',
+        slide4Strong: 'Good listings:',
+        slide4Note: 'clear photos, accurate location, real price, verified contact.',
+        slide5Eyebrow: '05 / Broker profile',
+        slide5Title: 'Register so clients can trust you',
+        slide5Body: 'A broker profile helps clients see your name, company, areas covered, specialties, and contact options before they enquire.',
+        slide5Strong: 'Tip:',
+        slide5Note: 'keep your profile accurate so people know who they are speaking to.',
+        slide6Eyebrow: '06 / What happens next',
+        slide6Title: 'Submit, review, then go live',
+        slide6Body: 'We review listings for quality and safety before publishing. Once live, clients can contact you through phone, WhatsApp, or the website enquiry flow.',
+        slide6Strong: 'Need help?',
+        slide6Note: 'reply YES on WhatsApp and our team can guide you gently.',
+        brokerCta: 'Register as a broker',
+        whatsappCta: 'List with WhatsApp help'
+      },
+      lg: {
+        heroTitle: 'Tukwaniriza ku makaug.com',
+        heroBody: 'Twazimba makaug.com okuyamba ba agenti, ba broker, kampuni, n’abalina amayumba mu Uganda okuteeka ebintu byabwe ku mutimbagano mu ngeri ennyangu. Oyinza okuteekako amayumba, rentals, ettaka, ebizimbe by’obusuubuzi, n’ebisulo by’abayizi ku bwereere. Tewali ssente za listing.',
+        primaryCta: 'Teeka property ku makaug.com ku bwereere',
+        languageTitle: 'Soma guide eno mu lulimi olulala',
+        languageBody: 'Londa olulimi lumu ku nnimi omusanvu eza makaug.com.',
+        languageLabel: 'Olulimi',
+        deckLabel: 'Guide ya agenti',
+        slide1Eyebrow: '01 / Ffe baani',
+        slide1Title: 'Service ya property ey’okuyamba',
+        slide1Body: 'makaug.com eyamba abantu okunoonya amayumba, rentals, ebisulo by’abayizi, ettaka, n’ebifo by’obusuubuzi mu Uganda.',
+        slide1Strong: 'Tukwaniriza:',
+        slide1Note: 'ba agenti, ba broker, agencies, caretakers, n’abalina listings entuufu.',
+        slide2Eyebrow: '02 / Ku bwereere',
+        slide2Title: 'Teekako property zo ku bwereere',
+        slide2Body: 'Ba agenti basobola okuteekako listings za property awatali kusasula. Twagala onboarding ebe nnyangu era ey’omugaso.',
+        slide2Strong: 'Tewali ssente za listing:',
+        slide2Note: 'tandika ne form ya website oba WhatsApp assistant.',
+        slide3Eyebrow: '03 / Ennimi',
+        slide3Title: 'Ennimi omusanvu okuyamba clients abangi',
+        slide3Body: 'Abantu basobola okukozesa makaug.com ne WhatsApp assistant mu nnimi ezisigiddwaawo. Ku WhatsApp, basobola okuddamu LANG okukyusa olulimi.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, ne commercial.',
+        slide4Eyebrow: '04 / Listing ennyangu',
+        slide4Title: 'Kozesa website oba WhatsApp',
+        slide4Body: 'Teeka property ku makaug.com ng’okozesa form, oba kozesa WhatsApp assistant ku ssimu tukuyambe title, location, price, photos, ne contact details.',
+        slide4Strong: 'Listings ennungi:',
+        slide4Note: 'photos ennyonjo, location entuufu, price entuufu, contact ekakasiddwa.',
+        slide5Eyebrow: '05 / Profile ya broker',
+        slide5Title: 'Wewandiise clients bakwesige',
+        slide5Body: 'Profile ya broker eyamba clients okulaba erinnya lyo, kampuni, areas, specialties, ne contacts nga tebannakusaba.',
+        slide5Strong: 'Amagezi:',
+        slide5Note: 'kuuma profile yo nga ntuufu abantu bamanye gwe boogera naye.',
+        slide6Eyebrow: '06 / Ekiddako',
+        slide6Title: 'Submit, review, oluvannyuma go live',
+        slide6Body: 'Tukebera listings olw’omutindo n’obukuumi nga tezinnaba kufulumizibwa. Bwe ziba live, clients bakutuukirira ku phone, WhatsApp, oba enquiry ya website.',
+        slide6Strong: 'Weetaaga obuyambi?',
+        slide6Note: 'ddamu YES ku WhatsApp team yaffe ekuyambe mpola.',
+        brokerCta: 'Wewandiise nga broker',
+        whatsappCta: 'Listinga ng’oyambibwa ku WhatsApp'
+      },
+      sw: {
+        heroTitle: 'Karibu makaug.com',
+        heroBody: 'Tumejenga makaug.com kusaidia mawakala, madalali, kampuni, na wamiliki Uganda kuweka mali halisi mtandaoni kwa urahisi. Unaweza kuorodhesha nyumba, upangishaji, ardhi, nafasi za biashara, na makazi ya wanafunzi bure. Hakuna ada ya listing.',
+        primaryCta: 'Orodhesha bure kwenye makaug.com',
+        languageTitle: 'Soma mwongozo huu kwa lugha nyingine',
+        languageBody: 'Chagua moja ya lugha saba za makaug.com kwa mwongozo huu.',
+        languageLabel: 'Lugha',
+        deckLabel: 'Mwongozo wa wakala',
+        slide1Eyebrow: '01 / Sisi ni nani',
+        slide1Title: 'Huduma ya mali iliyojengwa kusaidia',
+        slide1Body: 'makaug.com husaidia watu kutafuta nyumba, upangishaji, vyumba vya wanafunzi, ardhi, na nafasi za biashara kote Uganda.',
+        slide1Strong: 'Unakaribishwa:',
+        slide1Note: 'mawakala, madalali, kampuni, wasimamizi, na wamiliki wenye listings halisi.',
+        slide2Eyebrow: '02 / Bure kuorodhesha',
+        slide2Title: 'Weka mali zako bure',
+        slide2Body: 'Mawakala wanaweza kuongeza listings bila gharama. Tunataka onboarding iwe rahisi na ya manufaa.',
+        slide2Strong: 'Hakuna ada ya listing:',
+        slide2Note: 'anza na fomu ya tovuti au msaidizi wa WhatsApp.',
+        slide3Eyebrow: '03 / Lugha',
+        slide3Title: 'Lugha saba kwa wateja zaidi',
+        slide3Body: 'Watu wanaweza kutumia makaug.com na msaidizi wa WhatsApp katika lugha zinazotumika. Kwenye WhatsApp, wanaweza kujibu LANG kubadilisha lugha.',
+        slide3Strong: 'Inahusu:',
+        slide3Note: 'kuuza, kupanga, ardhi, wanafunzi, na biashara.',
+        slide4Eyebrow: '04 / Listing rahisi',
+        slide4Title: 'Tumia tovuti au WhatsApp',
+        slide4Body: 'Orodhesha kwenye makaug.com kwa fomu rahisi, au tumia msaidizi wa WhatsApp kwenye simu tukusaidie title, location, price, photos, na contact details.',
+        slide4Strong: 'Listings nzuri:',
+        slide4Note: 'picha wazi, location sahihi, bei halisi, contact iliyothibitishwa.',
+        slide5Eyebrow: '05 / Profile ya broker',
+        slide5Title: 'Jisajili ili wateja wakuamini',
+        slide5Body: 'Profile ya broker huwasaidia wateja kuona jina, kampuni, maeneo, utaalamu, na njia za mawasiliano kabla hawajauliza.',
+        slide5Strong: 'Kidokezo:',
+        slide5Note: 'weka profile yako sahihi ili watu wajue wanazungumza na nani.',
+        slide6Eyebrow: '06 / Kinachofuata',
+        slide6Title: 'Tuma, tukague, kisha iwe live',
+        slide6Body: 'Tunakagua listings kwa ubora na usalama kabla ya kuchapisha. Ikishakuwa live, wateja wanaweza kukupigia, kutumia WhatsApp, au enquiry ya tovuti.',
+        slide6Strong: 'Unahitaji msaada?',
+        slide6Note: 'jibu YES kwenye WhatsApp na timu yetu itakuongoza polepole.',
+        brokerCta: 'Jisajili kama broker',
+        whatsappCta: 'Orodhesha kwa msaada wa WhatsApp'
+      },
+      ac: {
+        heroTitle: 'Wajoli i makaug.com',
+        heroBody: 'Wa yubu makaug.com me konyo agent, broker, kampuni, ki wegi jami i Uganda me keto property ada i internet ma yot. I twero keto ot, rent, ngom, kabedo me business, ki kabedo pa student free. Pe tye charge me listing.',
+        primaryCta: 'Ket property free i makaug.com',
+        languageTitle: 'Kwan guide man i leb mukene',
+        languageBody: 'Yer acel ikom leb abiro pa makaug.com pi guide man.',
+        languageLabel: 'Leb',
+        deckLabel: 'Guide pa agent',
+        slide1Eyebrow: '01 / Wan ngaa',
+        slide1Title: 'Service me property ma oyubbe me kony',
+        slide1Body: 'makaug.com konyo dano yenyo ot, rent, room pa student, ngom, ki kabedo me business i Uganda.',
+        slide1Strong: 'Wan wajoli:',
+        slide1Note: 'agent, broker, agency, caretaker, ki wegi listing ma ada.',
+        slide2Eyebrow: '02 / Free me keto',
+        slide2Title: 'Ket property mamegi free',
+        slide2Body: 'Agent twero medo property listings labongo cul. Wa mito onboarding obed yot ki ber.',
+        slide2Strong: 'Pe tye charge me listing:',
+        slide2Note: 'cak ki form me website onyo WhatsApp assistant.',
+        slide3Eyebrow: '03 / Leb',
+        slide3Title: 'Leb abiro pi clients mapol',
+        slide3Body: 'Dano twero tic ki makaug.com ki WhatsApp assistant i leb ma kigwoko. I WhatsApp, gi twero dwoko LANG me loko leb.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, ki commercial.',
+        slide4Eyebrow: '04 / Listing ma yot',
+        slide4Title: 'Tii ki website onyo WhatsApp',
+        slide4Body: 'Ket i makaug.com ki form, onyo tii ki WhatsApp assistant i phone wek wakony title, location, price, photos, ki contact details.',
+        slide4Strong: 'Listings maber:',
+        slide4Note: 'photos maleng, location atir, price ada, contact ma ki verify.',
+        slide5Eyebrow: '05 / Profile pa broker',
+        slide5Title: 'Register wek clients geni in',
+        slide5Body: 'Profile pa broker konyo clients neno nying, kampuni, areas, specialties, ki contact options mapwod pe gipenyo.',
+        slide5Strong: 'Tam:',
+        slide5Note: 'gwok profile ni obed atir wek dano nge ngat ma gi twak kwede.',
+        slide6Eyebrow: '06 / Gin ma lubo',
+        slide6Title: 'Submit, review, dok go live',
+        slide6Body: 'Wa review listings pi quality ki safety mapwod pe wa publish. Ka dong live, clients twero rwomo in ki phone, WhatsApp, onyo enquiry me website.',
+        slide6Strong: 'Imito kony?',
+        slide6Note: 'dwok YES i WhatsApp, team wa bikonyi mot.',
+        brokerCta: 'Register calo broker',
+        whatsappCta: 'List ki kony me WhatsApp'
+      },
+      ny: {
+        heroTitle: 'Tukwanirize aha makaug.com',
+        heroBody: 'Tukombekire makaug.com kuhwera aba agenti, aba broker, amakampuni, n’abanyine eby’obutaka omuri Uganda kuta ebintu byabo aha internet byorobi. Noobaasa kuta amaka, rentals, eitaka, ebifo by’obushuubuzi, n’eby’okutuura by’abayizi ahabwereere. Tihariho sente za listing.',
+        primaryCta: 'Ta property ahabwereere aha makaug.com',
+        languageTitle: 'Shoma guide egi omu rurimi orundi',
+        languageBody: 'Toorana rumwe aha ndimi mushanju za makaug.com.',
+        languageLabel: 'Orurimi',
+        deckLabel: 'Guide y’aba agenti',
+        slide1Eyebrow: '01 / Nitwe baahi',
+        slide1Title: 'Service ya property ey’okuhwera',
+        slide1Body: 'makaug.com eehwera abantu kusherura amaka, rentals, eby’okutuura by’abayizi, eitaka, n’ebifo by’obushuubuzi omuri Uganda.',
+        slide1Strong: 'Twakwakiira:',
+        slide1Note: 'aba agenti, aba broker, agencies, caretakers, n’abanyine listings ez’amazima.',
+        slide2Eyebrow: '02 / Free kuta listing',
+        slide2Title: 'Ta properties zaawe ahabwereere',
+        slide2Body: 'Aba agenti nibabaasa kwongyeraho listings za property hatariho kushashura. Nitwenda onboarding ebe nyorobi kandi ey’omugasho.',
+        slide2Strong: 'Tihariho sente za listing:',
+        slide2Note: 'tandika na form ya website nari WhatsApp assistant.',
+        slide3Eyebrow: '03 / Endimi',
+        slide3Title: 'Endimi mushanju kuhwera clients baingi',
+        slide3Body: 'Abantu nibabaasa kukozesa makaug.com na WhatsApp assistant omu ndimi ezishagikiirwe. Kuri WhatsApp, nibashobora kugarukamu LANG kuhindura orurimi.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, na commercial.',
+        slide4Eyebrow: '04 / Listing nyorobi',
+        slide4Title: 'Kozesa website nari WhatsApp',
+        slide4Body: 'Ta listing aha makaug.com n’efomu, nari kozesa WhatsApp assistant aha phone tukuhwere title, location, price, photos, na contact details.',
+        slide4Strong: 'Listings nungi:',
+        slide4Note: 'photos zirungi, location ehikire, price y’amazima, contact erikuhamibwa.',
+        slide5Eyebrow: '05 / Profile ya broker',
+        slide5Title: 'Weyandikise clients bakwesige',
+        slide5Body: 'Profile ya broker eehwera clients kureeba eiziina, kampuni, areas, specialties, na contact options batakakubuurize.',
+        slide5Strong: 'Amagezi:',
+        slide5Note: 'guma profile yaawe ehikire abantu bamanye ou barikugamba nawe.',
+        slide6Eyebrow: '06 / Ekirikukurataho',
+        slide6Title: 'Submit, review, kandi go live',
+        slide6Body: 'Nitushwijuma listings ahabw’omutindo n’oburinzi tutakazita live. Zaaba live, clients nibabaasa kukuhikaaho na phone, WhatsApp, nari enquiry ya website.',
+        slide6Strong: 'Noyenda obuhwezi?',
+        slide6Note: 'garukamu YES kuri WhatsApp team yaitu ekuhwere mpora.',
+        brokerCta: 'Weyandikise nka broker',
+        whatsappCta: 'Listinga n’obuhwezi bwa WhatsApp'
+      },
+      rn: {
+        heroTitle: 'Tukwanirize aha makaug.com',
+        heroBody: 'Tukombekire makaug.com kuhwera aba agenti, aba broker, amakampuni, n’abanyine properties omuri Uganda kuta ebintu byabo aha internet byorobi. Noobaasa kuta amaka, rentals, eitaka, ebifo by’obushuubuzi, n’eby’okutuura by’abayizi ahabwereere. Tihariho sente za listing.',
+        primaryCta: 'Ta property ahabwereere aha makaug.com',
+        languageTitle: 'Shoma guide egi omu rukiga nari orurimi orundi',
+        languageBody: 'Toorana rumwe aha ndimi mushanju za makaug.com.',
+        languageLabel: 'Orurimi',
+        deckLabel: 'Guide y’aba agenti',
+        slide1Eyebrow: '01 / Nitwe baahi',
+        slide1Title: 'Service ya property ey’okuhwera',
+        slide1Body: 'makaug.com eehwera abantu kusherura amaka, rentals, eby’okutuura by’abayizi, eitaka, n’ebifo by’obushuubuzi omuri Uganda.',
+        slide1Strong: 'Twakwakiira:',
+        slide1Note: 'aba agenti, aba broker, agencies, caretakers, n’abanyine listings ez’amazima.',
+        slide2Eyebrow: '02 / Free kuta listing',
+        slide2Title: 'Ta properties zaawe ahabwereere',
+        slide2Body: 'Aba agenti nibabaasa kwongyeraho listings za property hatariho kushashura. Nitwenda onboarding ebe nyorobi kandi ey’omugasho.',
+        slide2Strong: 'Tihariho sente za listing:',
+        slide2Note: 'tandika na form ya website nari WhatsApp assistant.',
+        slide3Eyebrow: '03 / Endimi',
+        slide3Title: 'Endimi mushanju kuhwera clients baingi',
+        slide3Body: 'Abantu nibabaasa kukozesa makaug.com na WhatsApp assistant omu ndimi ezishagikiirwe. Kuri WhatsApp, nibashobora kugarukamu LANG kuhindura orurimi.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, na commercial.',
+        slide4Eyebrow: '04 / Listing nyorobi',
+        slide4Title: 'Kozesa website nari WhatsApp',
+        slide4Body: 'Ta listing aha makaug.com n’efomu, nari kozesa WhatsApp assistant aha phone tukuhwere title, location, price, photos, na contact details.',
+        slide4Strong: 'Listings nungi:',
+        slide4Note: 'photos zirungi, location ehikire, price y’amazima, contact erikuhamibwa.',
+        slide5Eyebrow: '05 / Profile ya broker',
+        slide5Title: 'Weyandikise clients bakwesige',
+        slide5Body: 'Profile ya broker eehwera clients kureeba eiziina, kampuni, areas, specialties, na contact options batakakubuurize.',
+        slide5Strong: 'Amagezi:',
+        slide5Note: 'guma profile yaawe ehikire abantu bamanye ou barikugamba nawe.',
+        slide6Eyebrow: '06 / Ekirikukurataho',
+        slide6Title: 'Submit, review, kandi go live',
+        slide6Body: 'Nitushwijuma listings ahabw’omutindo n’oburinzi tutakazita live. Zaaba live, clients nibabaasa kukuhikaaho na phone, WhatsApp, nari enquiry ya website.',
+        slide6Strong: 'Noyenda obuhwezi?',
+        slide6Note: 'garukamu YES kuri WhatsApp team yaitu ekuhwere mpora.',
+        brokerCta: 'Weyandikise nka broker',
+        whatsappCta: 'Listinga n’obuhwezi bwa WhatsApp'
+      },
+      sm: {
+        heroTitle: 'Tukwaniriza ku makaug.com',
+        heroBody: 'Twakola makaug.com okuyamba ba agenti, ba broker, amakampuni, n’abalina property mu Uganda okuteeka property entuufu ku internet mu ngeri ennyangu. Osobola okuteekako amayumba, rentals, eitaka, ebifo by’obusuubuzi, n’ebisulo by’abayizi ku bwereere. Tewali ssente za listing.',
+        primaryCta: 'Teeka property ku makaug.com ku bwereere',
+        languageTitle: 'Soma guide eno mu lulimi olundi',
+        languageBody: 'Londa lulimi lumu ku nnimi omusanvu eza makaug.com.',
+        languageLabel: 'Olulimi',
+        deckLabel: 'Guide ya agenti',
+        slide1Eyebrow: '01 / Ffe baani',
+        slide1Title: 'Service ya property ey’okuyamba',
+        slide1Body: 'makaug.com eyamba abantu okunoonya amayumba, rentals, ebisulo by’abayizi, eitaka, n’ebifo by’obusuubuzi mu Uganda.',
+        slide1Strong: 'Tukwaniriza:',
+        slide1Note: 'ba agenti, ba broker, agencies, caretakers, n’abalina listings entuufu.',
+        slide2Eyebrow: '02 / Free kuteekako',
+        slide2Title: 'Teekako property zo ku bwereere',
+        slide2Body: 'Ba agenti basobola okwongerako listings za property nga tebasasudde. Twagala onboarding ebe nnyangu era ey’omugaso.',
+        slide2Strong: 'Tewali ssente za listing:',
+        slide2Note: 'tandika ne form ya website oba WhatsApp assistant.',
+        slide3Eyebrow: '03 / Ennimi',
+        slide3Title: 'Ennimi omusanvu okuyamba clients abangi',
+        slide3Body: 'Abantu basobola okukozesa makaug.com ne WhatsApp assistant mu nnimi ezisigiddwaawo. Ku WhatsApp, basobola okuddamu LANG okukyusa olulimi.',
+        slide3Strong: 'Coverage:',
+        slide3Note: 'sale, rent, land, student, ne commercial.',
+        slide4Eyebrow: '04 / Listing ennyangu',
+        slide4Title: 'Kozesa website oba WhatsApp',
+        slide4Body: 'Teeka listing ku makaug.com n’efomu, oba kozesa WhatsApp assistant ku ssimu tukuyambe title, location, price, photos, ne contact details.',
+        slide4Strong: 'Listings ennungi:',
+        slide4Note: 'photos ennyonjo, location entuufu, price entuufu, contact ekakasiddwa.',
+        slide5Eyebrow: '05 / Profile ya broker',
+        slide5Title: 'Wewandiise clients bakwesige',
+        slide5Body: 'Profile ya broker eyamba clients okulaba erinnya lyo, kampuni, areas, specialties, ne contacts nga tebannakusaba.',
+        slide5Strong: 'Amagezi:',
+        slide5Note: 'kuuma profile yo nga ntuufu abantu bamanye gwe boogera naye.',
+        slide6Eyebrow: '06 / Ekiddako',
+        slide6Title: 'Submit, review, oluvannyuma go live',
+        slide6Body: 'Tukebera listings olw’omutindo n’obukuumi nga tezinnaba kufulumizibwa. Bwe ziba live, clients bakutuukirira ku phone, WhatsApp, oba enquiry ya website.',
+        slide6Strong: 'Weetaaga obuyambi?',
+        slide6Note: 'ddamu YES ku WhatsApp team yaffe ekuyambe mpola.',
+        brokerCta: 'Wewandiise nga broker',
+        whatsappCta: 'Listinga ng’oyambibwa ku WhatsApp'
+      }
+    };
+
+    function applyAgentWelcomeLanguage(code) {
+      const lang = AGENT_WELCOME_I18N[code] ? code : 'en';
+      const copy = AGENT_WELCOME_I18N[lang];
+      document.documentElement.lang = lang;
+      document.querySelectorAll('[data-i18n]').forEach((node) => {
+        const key = node.getAttribute('data-i18n');
+        node.textContent = copy[key] || AGENT_WELCOME_I18N.en[key] || '';
+      });
+      const selector = document.getElementById('agent-welcome-language');
+      if (selector && selector.value !== lang) selector.value = lang;
+      try {
+        localStorage.setItem('makaug_lang', lang);
+        localStorage.setItem('makaug_agent_welcome_lang', lang);
+      } catch (error) {}
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(window.location.search);
+      let saved = 'en';
+      try {
+        saved = localStorage.getItem('makaug_agent_welcome_lang') || localStorage.getItem('makaug_lang') || 'en';
+      } catch (error) {}
+      applyAgentWelcomeLanguage(params.get('lang') || saved || 'en');
+      document.getElementById('agent-welcome-language')?.addEventListener('change', (event) => {
+        applyAgentWelcomeLanguage(event.target.value);
+      });
+    });
+  </script>
 </body>
 </html>
