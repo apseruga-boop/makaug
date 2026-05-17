@@ -9,6 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const script = read('scripts/seed-sourced-inventory-candidates.js');
 const frontend = read('assets/makaug-app.js');
+const adminRoute = read('routes/admin.js');
 const propertiesRoute = read('routes/properties.js');
 const pkg = JSON.parse(read('package.json'));
 
@@ -65,4 +66,11 @@ test('package script exposes the safe inventory intake command', () => {
     'node scripts/seed-sourced-inventory-candidates.js',
     'package.json should expose inventory seed command'
   );
+});
+
+test('admin-only endpoint can seed production candidates without public submission notifications', () => {
+  assert(adminRoute.includes("router.use(requireAdminApiKey)"), 'admin routes must be protected before seed endpoint');
+  assert(adminRoute.includes("router.post('/sourced-inventory-candidates/seed'"), 'admin seed endpoint should exist');
+  assert(adminRoute.includes('seedSourcedInventoryCandidates'), 'admin endpoint should use direct DB seed service');
+  assert(adminRoute.includes('admin_sourced_inventory_candidates_seeded'), 'admin endpoint should write audit trail');
 });

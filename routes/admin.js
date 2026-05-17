@@ -75,6 +75,10 @@ const {
 } = require('../services/outlookAiEmailAgentService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
+const {
+  SOURCE: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+  seedSourcedInventoryCandidates
+} = require('../scripts/seed-sourced-inventory-candidates');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -1902,6 +1906,29 @@ router.get('/properties/live', async (req, res, next) => {
       data: rows.rows,
       pagination: toPagination(total, page, limit)
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/sourced-inventory-candidates/seed', async (req, res, next) => {
+  try {
+    const count = Math.min(Math.max(parseInt(req.body?.count || '200', 10) || 200, 1), 1000);
+    const replace = req.body?.replace !== false;
+    const result = await seedSourcedInventoryCandidates({
+      db,
+      count,
+      replace,
+      cleanupOnly: false
+    });
+    await writeAudit('admin_sourced_inventory_candidates_seeded', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      count,
+      replace,
+      created_properties: result.created_properties,
+      guardrails: result.guardrails
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
   } catch (error) {
     return next(error);
   }

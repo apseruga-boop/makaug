@@ -285,22 +285,22 @@ function buildListing(sequence, type) {
   };
 }
 
-function plannedListings() {
+function plannedListings(count = COUNT) {
   const listings = [];
   let sequence = 1;
   for (const plan of PLAN) {
-    const typeCount = Math.floor((plan.target / DEFAULT_COUNT) * COUNT);
+    const typeCount = Math.floor((plan.target / DEFAULT_COUNT) * count);
     for (let i = 0; i < typeCount; i += 1) {
       listings.push(buildListing(sequence, plan.type));
       sequence += 1;
     }
   }
-  while (listings.length < COUNT) {
+  while (listings.length < count) {
     const plan = pick(PLAN, listings.length);
     listings.push(buildListing(sequence, plan.type));
     sequence += 1;
   }
-  return listings.slice(0, COUNT);
+  return listings.slice(0, count);
 }
 
 async function cleanup(client) {
@@ -384,58 +384,25 @@ async function insertListing(client, listing) {
   return propertyId;
 }
 
-function summarize(listings) {
-  const byType = listings.reduce((acc, item) => {
-    acc[item.listing_type] = (acc[item.listing_type] || 0) + 1;
-    return acc;
-  }, {});
-  return {
-    count: listings.length,
-    by_type: byType,
-    districts: new Set(listings.map((item) => item.district)).size,
-    areas: new Set(listings.map((item) => item.area)).size,
-    image_rows: listings.reduce((sum, item) => sum + item.images.length, 0),
-    samples: listings.slice(0, 5).map((item) => ({
-      title: item.title,
-      type: item.listing_type,
-      district: item.district,
-      area: item.area,
-      status: item.status,
-      consent_required: true
-    }))
-  };
-}
-
-async function main() {
-  const listings = plannedListings();
-  if (DRY_RUN) {
-    console.log(JSON.stringify({
-      ok: true,
-      action: 'dry-run',
-      source: SOURCE,
-      run_id: RUN_ID,
-      target_status: 'pending',
-      approval_guardrail: 'verification_terms_accepted=false, no ID document, consent_required=true',
-      ...summarize(listings)
-    }, null, 2));
-    return;
-  }
-
-  if (!CONFIRM && !CLEANUP) {
-    console.error('Refusing to write without --confirm. Use --dry-run first, then --confirm to create pending sourced candidates.');
-    process.exit(2);
-  }
-
-  const db = require('../config/database');
+async function seedSourcedInventoryCandidates({
+  db,
+  count = DEFAULT_COUNT,
+  replace = false,
+  cleanupOnly = false
+} = {}) {
+  if (!db?.pool) throw new Error('db.pool is required');
+  const safeCount = Number.isFinite(Number(count)) && Number(count) > 0
+    ? Math.min(Number.parseInt(count, 10), MAX_COUNT)
+    : DEFAULT_COUNT;
+  const listings = plannedListings(safeCount);
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
     let cleanupResult = null;
-    if (CLEANUP || REPLACE) cleanupResult = await cleanup(client);
-    if (CLEANUP && !REPLACE) {
+    if (cleanupOnly || replace) cleanupResult = await cleanup(client);
+    if (cleanupOnly && !replace) {
       await client.query('COMMIT');
-      console.log(JSON.stringify({ ok: true, action: 'cleanup', source: SOURCE, deleted: cleanupResult }, null, 2));
-      return;
+      return { ok: true, action: 'cleanup', source: SOURCE, deleted: cleanupResult };
     }
 
     const created = [];
@@ -462,9 +429,10 @@ async function main() {
        WHERE source = $1`,
       [SOURCE]
     );
-    console.log(JSON.stringify({
+
+    return {
       ok: true,
-      action: REPLACE ? 'replace' : 'seed',
+      action: replace ? 'replace' : 'seed',
       source: SOURCE,
       run_id: RUN_ID,
       cleanup: cleanupResult,
@@ -472,17 +440,85 @@ async function main() {
       by_type: summary.rows,
       guardrails: guardrails.rows[0],
       cleanup_command: 'node scripts/seed-sourced-inventory-candidates.js --cleanup --confirm'
-    }, null, 2));
+    };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
   } finally {
     client.release();
+  }
+}
+
+function summarize(listings) {
+  const byType = listings.reduce((acc, item) => {
+    acc[item.listing_type] = (acc[item.listing_type] || 0) + 1;
+    return acc;
+  }, {});
+  return {
+    count: listings.length,
+    by_type: byType,
+    districts: new Set(listings.map((item) => item.district)).size,
+    areas: new Set(listings.map((item) => item.area)).size,
+    image_rows: listings.reduce((sum, item) => sum + item.images.length, 0),
+    samples: listings.slice(0, 5).map((item) => ({
+      title: item.title,
+      type: item.listing_type,
+      district: item.district,
+      area: item.area,
+      status: item.status,
+      consent_required: true
+    }))
+  };
+}
+
+async function main() {
+  const listings = plannedListings(COUNT);
+  if (DRY_RUN) {
+    console.log(JSON.stringify({
+      ok: true,
+      action: 'dry-run',
+      source: SOURCE,
+      run_id: RUN_ID,
+      target_status: 'pending',
+      approval_guardrail: 'verification_terms_accepted=false, no ID document, consent_required=true',
+      ...summarize(listings)
+    }, null, 2));
+    return;
+  }
+
+  if (!CONFIRM && !CLEANUP) {
+    console.error('Refusing to write without --confirm. Use --dry-run first, then --confirm to create pending sourced candidates.');
+    process.exit(2);
+  }
+
+  const db = require('../config/database');
+  try {
+    const result = await seedSourcedInventoryCandidates({
+      db,
+      count: COUNT,
+      replace: REPLACE,
+      cleanupOnly: CLEANUP
+    });
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    throw error;
+  } finally {
     await db.pool.end();
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  SOURCE,
+  DEFAULT_COUNT,
+  MAX_COUNT,
+  plannedListings,
+  summarize,
+  seedSourcedInventoryCandidates
+};
