@@ -8562,6 +8562,18 @@ function adminPublicControlVisibilityBadge(row = {}) {
   return `<span class="ml-2 inline-flex align-middle rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800">Test-like public listing</span>`;
 }
 
+function adminSourcedInventoryCandidateBadge(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const source = String(row.source || "").toLowerCase();
+  const listedVia = String(row.listed_via || "").toLowerCase();
+  const isCandidate = row.sourced_inventory_candidate === true
+    || extra.sourced_inventory_candidate === true
+    || source === "sourced_inventory_candidate_v1"
+    || listedVia === "sourced_inventory";
+  if (!isCandidate) return "";
+  return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Sourced candidate</span>`;
+}
+
 function adminScrollTo(selector) {
   const target = selector ? document.querySelector(selector) : null;
   if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -8755,13 +8767,15 @@ function renderAdminPendingRows(listings) {
     const reviewId = backendId || localId;
     const reviewArg = adminListingIdArg(reviewId);
     const featured = isFeaturedListing(p);
+    const sourceBadge = adminSourcedInventoryCandidateBadge(p);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex justify-between items-start gap-3 flex-wrap">
           <div>
-            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}</div>
+            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${sourceBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(locationText)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(createdText)} • Ref: ${adminEscape(p.inquiry_reference || reviewId || "-")}</div>
+            ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Consent, contact, authorised photos, and ownership must be verified before approval.</div>` : ""}
           </div>
           <span class="text-xs font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
         </div>
@@ -8961,13 +8975,15 @@ function renderAdminAllListingsRows(listings) {
     const reviewId = backendId || localId;
     const reviewArg = adminListingIdArg(reviewId);
     const visibilityBadge = adminPublicControlVisibilityBadge(p);
+    const sourceBadge = adminSourcedInventoryCandidateBadge(p);
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${visibilityBadge}</div>
+            <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${visibilityBadge}${sourceBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape([p.area, p.district].filter(Boolean).join(", ") || "-")}</div>
             <div class="text-xs text-gray-500 mt-1">ID: ${adminEscape(localId || "-")} • ${adminEscape(listingDateMeta(p))}</div>
+            ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Sourcing review required before public approval.</div>` : ""}
           </div>
           <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
         </div>
@@ -12624,6 +12640,7 @@ function renderAdminReviewPanel(review) {
   const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
   const listerVerification = adminVerificationBadge(listerVerificationStatus);
   const ownerVerificationRequested = review.extra_fields?.ownership_verification_requested || review.extra_fields?.verify?.ownership_verification_requested;
+  const sourcedCandidateBadge = adminSourcedInventoryCandidateBadge(review);
   const automatedBadge = automated.status === "pass"
     ? { cls: "bg-green-100 text-green-700", label: "Automated checks passed" }
     : automated.status === "warning"
@@ -12660,8 +12677,9 @@ function renderAdminReviewPanel(review) {
           <div class="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Listing</div>
-              <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(review.title || "Untitled listing")}</h4>
+              <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(review.title || "Untitled listing")}${sourcedCandidateBadge}</h4>
               <p class="text-sm text-gray-600 mt-1">${adminEscape(review.description || "")}</p>
+              ${sourcedCandidateBadge ? `<div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900"><strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.</div>` : ""}
             </div>
             <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
           </div>

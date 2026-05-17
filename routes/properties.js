@@ -868,6 +868,9 @@ async function listPropertiesHandler(req, res, next) {
         p.property_type,
         p.title_type,
         p.status,
+        p.moderation_stage,
+        p.moderation_notes,
+        p.moderation_reason,
         p.sold_at,
         p.created_at,
         p.latitude,
@@ -877,6 +880,13 @@ async function listPropertiesHandler(req, res, next) {
         p.inquiry_reference,
         p.amenities,
         p.agent_id,
+        p.source,
+        p.listed_via,
+        p.lister_name,
+        p.lister_phone,
+        p.lister_email,
+        p.extra_fields AS admin_extra_fields,
+        p.extra_fields->>'sourced_inventory_candidate' AS sourced_inventory_candidate,
         p.extra_fields->>'city' AS city,
         p.extra_fields->>'neighborhood' AS neighborhood,
         p.extra_fields->>'street_name' AS street_name,
@@ -957,9 +967,22 @@ async function listPropertiesHandler(req, res, next) {
     return res.json({
       ok: true,
       data: listResult.rows.map((row) => {
+        const {
+          admin_extra_fields: adminExtraFields,
+          source: rowSource,
+          listed_via: rowListedVia,
+          lister_name: rowListerName,
+          lister_phone: rowListerPhone,
+          lister_email: rowListerEmail,
+          moderation_stage: rowModerationStage,
+          moderation_notes: rowModerationNotes,
+          moderation_reason: rowModerationReason,
+          sourced_inventory_candidate: rowSourcedInventoryCandidate,
+          ...publicRow
+        } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
-        return {
-          ...row,
+        const responseRow = {
+          ...publicRow,
           listingId: row.id,
           slug: row.id,
           url: `/property/${row.id}`,
@@ -975,6 +998,20 @@ async function listPropertiesHandler(req, res, next) {
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
           distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2))
         };
+        if (adminAccess) {
+          responseRow.source = rowSource || null;
+          responseRow.listed_via = rowListedVia || null;
+          responseRow.lister_name = rowListerName || null;
+          responseRow.lister_phone = rowListerPhone || null;
+          responseRow.lister_email = rowListerEmail || null;
+          responseRow.moderation_stage = rowModerationStage || null;
+          responseRow.moderation_notes = rowModerationNotes || null;
+          responseRow.moderation_reason = rowModerationReason || null;
+          responseRow.extra_fields = adminExtraFields || {};
+          responseRow.sourced_inventory_candidate = rowSourcedInventoryCandidate === 'true'
+            || adminExtraFields?.sourced_inventory_candidate === true;
+        }
+        return responseRow;
       }),
       search: hasRadiusSearch ? {
         latitude: searchLat,
