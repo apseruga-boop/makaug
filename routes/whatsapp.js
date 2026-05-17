@@ -2539,6 +2539,8 @@ function isNegativeReply(value) {
   if (!clean && !compact) return false;
   if (['2', 'n', 'no', 'nope', 'nah', 'cancel', 'stop', 'menu'].includes(clean)) return true;
   if (['NO', 'CANCEL', 'STOP'].includes(compact)) return true;
+  if (/\b(need|want|please|can)\b.*\b(person|human|team|someone|call|callback)\b/i.test(clean)) return true;
+  if (/\b(person|human|team|someone)\b.*\b(call|callback)\b/i.test(clean)) return true;
   return /\b(no|cancel|stop)\b/i.test(clean);
 }
 
@@ -3389,6 +3391,69 @@ async function handleMissedCallNeedReply({ phone, lang, cleanBody, sessionData =
   });
 
   return { message: missedCallNeedReceivedMessage(lang), nextStep: 'missed_call_resolved' };
+}
+
+function isFreshRequestDuringMissedCallFlow(cleanBody = '', intentResult = {}) {
+  const text = normalizeInput(cleanBody).toLowerCase();
+  if (!text) return false;
+  if (['menu', 'home', 'reset', 'restart', 'lang', 'language'].includes(text)) return false;
+  const greetingOnly = /^(hi|hello|hey|hiya|yo|good morning|good afternoon|good evening|morning|afternoon|evening|habari|mambo|jambo|mirembe|oli otya|apwoyo|agandi)[.!?\s]*$/i.test(text);
+  if (isAffirmativeReply(text) || isNegativeReply(text) || greetingOnly) return false;
+  const route = intentMenuRoute(intentResult?.intent);
+  const confidence = Number(intentResult?.confidence || 0);
+  if (route && route !== 'support' && confidence >= 0.45) return true;
+  if (route === 'support' && confidence >= 0.7) return true;
+  return /\b(list|listing|post|upload|sell|rent out|search|find|looking for|student accommodation|hostel|rental|rent|buy|house|home|apartment|flat|land|plot|commercial|broker|agent|mortgage|advertise|campaign|report listing|fraud|whatsapp ai)\b/i.test(text)
+    || /\bneed\b.{0,80}\b(property|room|house|home|apartment|flat|rental|rent|land|plot|commercial|broker|agent|mortgage|listing|student)\b/i.test(text)
+    || /\bwant\b.{0,80}\b(list|post|search|find|property|broker|agent|mortgage|advertise)\b/i.test(text);
+}
+
+async function abandonMissedCallFlowForNewRequest({ phone, step, cleanBody, sessionData = {}, intentResult = {} } = {}) {
+  const flow = sessionData.missed_call_flow && typeof sessionData.missed_call_flow === 'object'
+    ? sessionData.missed_call_flow
+    : {};
+  await patchSessionData(phone, {
+    missed_call_flow: {
+      ...flow,
+      status: 'interrupted_by_new_request',
+      interrupted_step: step,
+      interrupted_text: cleanBody,
+      interrupted_intent: intentResult?.intent || null,
+      interrupted_at: new Date().toISOString()
+    },
+    missed_call_interrupted_by_new_request: {
+      step,
+      text: cleanBody,
+      intent: intentResult?.intent || null,
+      confidence: intentResult?.confidence || null,
+      at: new Date().toISOString()
+    }
+  });
+  if (flow.lead_id) {
+    await addLeadActivity(db, {
+      leadId: flow.lead_id,
+      actorType: 'customer',
+      activityType: 'missed_call_interrupted_by_new_request',
+      message: cleanBody,
+      metadata: {
+        phone,
+        previous_step: step,
+        intent: intentResult?.intent || null
+      }
+    }).catch(() => null);
+  }
+  await safeConversationControl(phone, {
+    status: 'active',
+    category: intentResult?.intent || 'whatsapp_ai',
+    priority: 'normal',
+    metadata: {
+      missed_call_flow_interrupted: true,
+      next_route: intentMenuRoute(intentResult?.intent) || null,
+      previous_missed_call_step: step,
+      intent: intentResult?.intent || null
+    }
+  }, 'whatsapp_new_request_interrupt');
+  await updateSession(phone, { current_step: 'main_menu', current_intent: intentResult?.intent || null });
 }
 
 async function handleMissedCallResolutionReply({ phone, lang, cleanBody, sessionData = {} } = {}) {
@@ -4391,7 +4456,7 @@ const STEPS = [
 async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
   const session = await getSession(phone);
   const lang = resolveLangCode(runtime.language || session.language || 'en');
-  const step = session.current_step;
+  let step = session.current_step;
   const draft = session.listing_draft || {};
   const sessionData = session.session_data || {};
   const intentResult = runtime.intent || null;
@@ -4448,6 +4513,20 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       optInSource: 'whatsapp_keyword_start'
     });
     return respond('✅ You are now subscribed for MakaUg updates. Reply MENU to continue.', 'main_menu');
+  }
+
+  if (
+    ['missed_call_need', 'missed_call_resolved'].includes(step)
+    && isFreshRequestDuringMissedCallFlow(cleanBody, intentResult)
+  ) {
+    await abandonMissedCallFlowForNewRequest({
+      phone,
+      step,
+      cleanBody,
+      sessionData,
+      intentResult
+    });
+    step = 'main_menu';
   }
 
   if (step === 'missed_call_need') {

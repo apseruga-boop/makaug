@@ -26,6 +26,9 @@ assert(message.startsWith(AGENT_WELCOME_CARD_URL), 'WhatsApp preview card link s
 assert(message.includes('hope you are well'), 'Agent welcome message must use a warm opening');
 assert(message.includes('free to post'), 'Agent welcome message must call out free posting');
 assert(message.includes('7 languages'), 'Agent welcome message must call out seven languages');
+assert(message.includes('short agent starter deck'), 'Agent welcome message must explain the click-through deck');
+assert(message.includes('WhatsApp AI'), 'Agent welcome message must mention WhatsApp AI listing capture');
+assert(message.includes('Broker registration is here'), 'Agent welcome message must include broker registration path');
 assert(message.includes('we can guide you through your first listings'), 'Agent welcome message must offer onboarding help');
 assert(message.includes('makaug.com'), 'Agent welcome message must include makaug.com');
 assert(message.includes('Reply STOP'), 'Agent welcome message must include STOP opt-out wording');
@@ -34,6 +37,12 @@ assert(message.length <= 1200, 'Agent welcome WhatsApp message must fit outreach
 assert(cardHtml.includes('og:image'), 'Welcome page must expose an Open Graph image for WhatsApp preview cards');
 assert(cardHtml.includes('makaug-agent-welcome-card.png'), 'Welcome page must point WhatsApp previews to the PNG card');
 assert(cardHtml.includes('List a property free'), 'Welcome page must include a visible listing CTA');
+assert(cardHtml.includes('Agent starter deck'), 'Welcome page must include the agent starter deck');
+assert(cardHtml.includes('Online form or WhatsApp AI'), 'Welcome page must explain WhatsApp AI listing capture');
+assert(cardHtml.includes('Register as a broker'), 'Welcome page must include broker registration CTA');
+assert(cardHtml.includes('List via WhatsApp AI'), 'Welcome page must include WhatsApp AI CTA');
+assert(cardHtml.includes('href="/broker-signup"'), 'Welcome page broker CTA must route to broker signup');
+assert(cardHtml.includes('aria-label="MakaUg agent starter deck"'), 'Welcome page deck must be accessible');
 
 assert(cardSvg.includes('Welcome, Uganda agents'), 'Welcome card must use a warmer welcome headline');
 assert(cardSvg.includes('list property free today'), 'Welcome card must include the launch free-posting promise');

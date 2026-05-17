@@ -21,27 +21,32 @@ function buildAgentWelcomeWhatsappMessage({
   name = '',
   source = '',
   cardUrl = AGENT_WELCOME_CARD_URL,
-  listPropertyUrl = 'https://makaug.com/list-property'
+  listPropertyUrl = 'https://makaug.com/list-property',
+  brokerSignupUrl = 'https://makaug.com/broker-signup'
 } = {}) {
   const firstName = firstNameFromLeadName(name);
   const sourceLine = source
-    ? `I came across your public property contact details via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)} and wanted to introduce ourselves respectfully.`
+    ? `I found your public property contact via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)} and wanted to introduce ourselves respectfully.`
     : 'I wanted to introduce MakaUg properly and warmly.';
 
   return [
     cardUrl,
     '',
     `Hi ${firstName}, hope you are well. This is the MakaUg team.`,
-    `${sourceLine} We are launching makaug.com, a Uganda-first property marketplace built to help genuine agents, brokers, agencies, and property owners get more visibility without adding another complicated platform.`,
+    `${sourceLine} We are launching makaug.com, a Uganda-first property marketplace helping genuine agents, brokers, agencies, and owners get more visibility without adding another complicated platform.`,
     '',
-    'A few helpful things for agents:',
+    'The link above opens a short agent starter deck with the main ways to use MakaUg.',
+    '',
+    'Helpful things for agents:',
     '- It is free to post property listings during launch',
-    '- makaug.com supports 7 languages, so more local clients can understand and enquire',
+    '- makaug.com supports 7 languages for more local enquiries',
     '- You can list homes for sale, rentals, land, commercial spaces, and student accommodation',
-    '- Enquiries can come through the website and WhatsApp-friendly follow-up',
+    '- You can list through the website form or use WhatsApp AI for guided capture',
+    '- Broker registration gives you a public profile and clearer contact path',
     '- If you need help, we can guide you through your first listings',
     '',
-    `You can have a look or start here: ${listPropertyUrl}`,
+    `Start here: ${listPropertyUrl}`,
+    `Broker registration is here: ${brokerSignupUrl}`,
     '',
     'If this sounds useful, reply YES and we will help with onboarding today. Reply STOP and we will not contact you again.'
   ].join('\n');
