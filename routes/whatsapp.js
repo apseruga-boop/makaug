@@ -4504,6 +4504,26 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const compactUpper = normalizeOptKeyword(bodyUpper);
 
   const respond = (msg, nextStep) => ({ message: msg, nextStep });
+  const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
+  const explicitListingStart = listingStartSteps.includes(step)
+    && isListingStartRequest(cleanBody, intentResult);
+  const routeExplicitListingStart = async () => {
+    const inferredListingType = inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
+    await patchSessionData(phone, {
+      idle_resume_prompt: null,
+      pending_search_filters: null,
+      natural_query_text: null,
+      search_type: null,
+      listing_start_captured_at: new Date().toISOString(),
+      listing_start_source_step: step,
+      listing_start_text: cleanBody
+    });
+    if (inferredListingType) {
+      await patchDraft(phone, { listing_type: inferredListingType });
+      return respond(t(lang, 'askOwnership'), 'ownership');
+    }
+    return respond(t(lang, 'askListingType'), 'listing_type');
+  };
 
   if (!STEPS.includes(step)) {
     await updateSession(phone, { current_step: 'greeting' });
@@ -4595,6 +4615,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(welcomeMessage(lang, sessionData), 'main_menu');
   }
 
+  if (explicitListingStart) {
+    return routeExplicitListingStart();
+  }
+
   const idlePrompt = sessionData.idle_resume_prompt && typeof sessionData.idle_resume_prompt === 'object'
     ? sessionData.idle_resume_prompt
     : null;
@@ -4657,24 +4681,6 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (['greeting', 'main_menu'].includes(step) && globalRoute === 'agent_registration') {
     const next = menuRouteReply(lang, globalRoute);
     return respond(next.message, next.nextStep);
-  }
-
-  const explicitListingStart = ['greeting', 'main_menu'].includes(step)
-    && isListingStartRequest(cleanBody, intentResult);
-  if (explicitListingStart) {
-    const inferredListingType = inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
-    await patchSessionData(phone, {
-      pending_search_filters: null,
-      natural_query_text: null,
-      search_type: null,
-      listing_start_captured_at: new Date().toISOString(),
-      listing_start_text: cleanBody
-    });
-    if (inferredListingType) {
-      await patchDraft(phone, { listing_type: inferredListingType });
-      return respond(t(lang, 'askOwnership'), 'ownership');
-    }
-    return respond(t(lang, 'askListingType'), 'listing_type');
   }
 
   if (['greeting', 'main_menu'].includes(step) && /\b(agent|broker|realtor)\b/i.test(cleanBody)) {
