@@ -1331,7 +1331,7 @@
   <div class="bg-green-900 text-white text-sm py-2">
     <div class="max-w-7xl mx-auto px-4 flex justify-between gap-3 flex-wrap">
       <div class="topbar-left flex items-center gap-4">
-        <a href="https://wa.me/256760112587" target="_blank" class="hover:text-green-200"><i class="fab fa-whatsapp text-green-300"></i> WhatsApp 0760112587</a>
+        <a id="topbar-whatsapp-link" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="hover:text-green-200" data-public-whatsapp-link data-whatsapp-context="auto"><i class="fab fa-whatsapp text-green-300"></i> WhatsApp 0760112587</a>
         <a href="mailto:info@makaug.com" class="hover:text-green-200 hidden sm:block"><i class="fas fa-envelope text-green-300"></i> info@makaug.com</a>
       </div>
       <div class="topbar-actions flex items-center gap-2 flex-wrap">
@@ -2494,7 +2494,7 @@
             <li id="ai-benefit-3" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Get direct WhatsApp and call contacts for matching brokers.</span></li>
             <li id="ai-benefit-4" class="flex gap-2"><i class="fas fa-check-circle text-green-600 mt-0.5"></i><span>Use the chatbot in 7 Ugandan languages with fast replies.</span></li>
           </ul>
-          <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+use+the+AI+chatbot" target="_blank" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold">
+          <a id="ai-cta-btn" href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+use+the+AI+chatbot" target="_blank" rel="noopener noreferrer" class="inline-flex mt-5 items-center gap-2 bg-green-600 hover:bg-green-500 text-white rounded-xl px-5 py-3 font-semibold" data-public-whatsapp-link data-whatsapp-context="ai-chatbot">
             <i class="fab fa-whatsapp text-lg"></i> Start Chatbot on WhatsApp
           </a>
         </div>
@@ -2597,7 +2597,7 @@
           </ul>
           <div class="grid sm:grid-cols-2 gap-3 mt-5">
             <button id="fraud-report-btn" onclick="openModal('report-modal')" class="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-lg text-sm font-semibold">Report a Listing</button>
-            <a id="fraud-wa-btn" href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+report+a+suspicious+listing" target="_blank" class="w-full inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold">
+            <a id="fraud-wa-btn" href="https://wa.me/256760112587?text=Hello+MakaUg,+I+want+to+report+a+suspicious+listing" target="_blank" rel="noopener noreferrer" class="w-full inline-flex items-center justify-center gap-2 bg-green-700 hover:bg-green-600 text-white px-4 py-2.5 rounded-lg text-sm font-semibold" data-public-whatsapp-link data-whatsapp-context="fraud">
               <i class="fab fa-whatsapp"></i> WhatsApp Fraud Team
             </a>
           </div>
@@ -3733,7 +3733,7 @@
               <div id="student-dashboard-greeting" class="text-xl font-black text-gray-900">Welcome back</div>
               <p id="student-dashboard-greeting-sub" class="text-sm text-gray-500 mt-1">Your student accommodation matches, saved rooms, and recent views live here.</p>
             </div>
-            <button onclick="window.open('https://wa.me/256760112587?text=I%20need%20help%20finding%20student%20accommodation%20on%20MakaUg','_blank')" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">WhatsApp MakaUg</button>
+            <button onclick="openSupportWhatsApp('students', { source: 'student_dashboard_whatsapp' })" class="bg-green-700 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">WhatsApp MakaUg</button>
           </div>
         </div>
 
@@ -5296,7 +5296,7 @@
         <div class="flex flex-wrap gap-2 mt-6">
           <a href="/for-sale" class="about-cta bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
           <a href="/list-property" class="about-cta bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List Property</a>
-          <a href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp">Ask MakaUg on WhatsApp</a>
+          <a href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">Ask MakaUg on WhatsApp</a>
         </div>
       </div>
     </div>
@@ -5508,9 +5508,9 @@
             Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.
           </p>
           <div class="mt-4 space-y-2 text-sm text-green-200">
-            <a id="footer-whatsapp-label" href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">📲 WhatsApp: 0760112587</a>
+            <a id="footer-whatsapp-label" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">📲 WhatsApp: 0760112587</a>
             <a id="footer-email-label" href="mailto:info@makaug.com" class="block hover:text-white">📧 Email: info@makaug.com</a>
-            <a id="footer-chat-whatsapp" href="https://wa.me/256760112587" target="_blank" class="block hover:text-white">💬 Chat on WhatsApp</a>
+            <a id="footer-chat-whatsapp" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" class="block hover:text-white" data-public-whatsapp-link data-whatsapp-context="auto">💬 Chat on WhatsApp</a>
             <span id="footer-location-label" class="block">📍 Kampala, Uganda</span>
           </div>
         </div>
@@ -5580,7 +5580,7 @@
     </div>
   </footer>
 
-  <a href="https://wa.me/256760112587" target="_blank" class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center text-2xl shadow-xl z-40"><i class="fab fa-whatsapp"></i></a>
+  <a id="floating-whatsapp-link" href="https://wa.me/256760112587" target="_blank" rel="noopener noreferrer" aria-label="Ask MakaUg on WhatsApp" class="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center text-2xl shadow-xl z-40" data-public-whatsapp-link data-whatsapp-context="auto"><i class="fab fa-whatsapp"></i></a>
   <div class="toast" id="toast-el"></div>
 
   <div id="admin-evidence-modal" class="modal-overlay">
@@ -5717,7 +5717,7 @@
         <button onclick="closeModal('listing-submit-modal'); openSignedInDashboard()" class="flex-1 border border-green-700 text-green-700 hover:bg-green-50 py-2.5 rounded-lg font-semibold text-sm" id="listing-submit-dashboard-btn">Go to dashboard</button>
         <button onclick="closeModal('listing-submit-modal')" class="flex-1 border border-gray-300 text-gray-700 hover:bg-gray-50 py-2.5 rounded-lg font-semibold text-sm" id="listing-submit-close-btn">Close</button>
       </div>
-      <p class="text-xs text-gray-500 mt-3"><span id="listing-submit-support-label">Support:</span> <a class="text-green-700 font-bold" href="mailto:info@makaug.com">info@makaug.com</a> · <a id="listing-submit-whatsapp-link" class="text-green-700 font-bold" href="https://wa.me/256760112587" target="_blank" rel="noopener">Contact MakaUg on WhatsApp</a></p>
+      <p class="text-xs text-gray-500 mt-3"><span id="listing-submit-support-label">Support:</span> <a class="text-green-700 font-bold" href="mailto:info@makaug.com">info@makaug.com</a> · <a id="listing-submit-whatsapp-link" class="text-green-700 font-bold" href="https://wa.me/256760112587" target="_blank" rel="noopener" data-public-whatsapp-link data-whatsapp-context="list-property">Contact MakaUg on WhatsApp</a></p>
     </div>
   </div>
 
@@ -6298,7 +6298,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515";
+        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;

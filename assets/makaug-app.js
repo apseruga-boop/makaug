@@ -547,6 +547,7 @@ let lpStreetSuggestSeq = 0;
 let detailGalleryPhotos = [];
 let detailGalleryPhotoIndex = 0;
 let activeDetailPropertyId = "";
+let activeBrokerProfileId = "";
 let adminAccessUnlocked = false;
 let adminUnlockTapBuffer = [];
 const lpHierarchyAnchorCache = new Map();
@@ -9598,6 +9599,182 @@ function buildWhatsAppUrl(phone, message) {
   return `https://wa.me/${recipient}?text=${encodeURIComponent(String(message || "").trim())}`;
 }
 
+const MAKAUG_SUPPORT_WHATSAPP = "256760112587";
+const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
+  home: "Hi MakaUg, I'm on makaug.com and need property help. Please guide me with the best next step.",
+  sale: "Hi MakaUg, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
+  rent: "Hi MakaUg, I'm on the To Rent page and I'm looking for a rental. Please help me with area, budget, bedrooms, availability, and viewing options.",
+  students: "Hi MakaUg, I'm looking for student accommodation. Please help me find safe rooms near campus, with price, distance, rules, and availability.",
+  commercial: "Hi MakaUg, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
+  land: "Hi MakaUg, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps.",
+  brokers: "Hi MakaUg, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
+  mortgage: "Hi MakaUg, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
+  "ai-chatbot": "Hi MakaUg, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
+  about: "Hi MakaUg, I'm learning about makaug.com and would like property help. Please guide me on the best next step.",
+  advertise: "Hi MakaUg, I want to advertise or boost a property or brand campaign on makaug.com. Please share the options and next steps.",
+  "how-it-works": "Hi MakaUg, I'm reading how makaug.com works. Please guide me through the right property journey.",
+  careers: "Hi MakaUg, I'm interested in careers or field operations. Please tell me the next step.",
+  help: "Hi MakaUg, I need help on makaug.com. Please connect me to support and guide me through the next step.",
+  safety: "Hi MakaUg, I need safety guidance before I continue with a property conversation. Please help me check the next step safely.",
+  fraud: "Hi MakaUg, I want to report or check a suspicious property issue. Please help me review it safely.",
+  "list-property": "Hi MakaUg, I want to list a property on makaug.com. Please help me choose the right listing path and prepare the details and photos.",
+  "broker-profile": "Hi MakaUg, I'm viewing a broker profile on makaug.com. Please help me confirm the best way to contact this broker safely.",
+  detail: "Hi MakaUg, I'm viewing a property on makaug.com. Please help me confirm availability and the next safe step."
+});
+
+function inferWhatsappContextFromText(text = "") {
+  const raw = String(text || "").toLowerCase();
+  if (raw.includes("student") || raw.includes("campus")) return "students";
+  if (raw.includes("rent") || raw.includes("rental")) return "rent";
+  if (raw.includes("sale") || raw.includes("buy") || raw.includes("buyer")) return "sale";
+  if (raw.includes("land") || raw.includes("title")) return "land";
+  if (raw.includes("commercial") || raw.includes("business")) return "commercial";
+  if (raw.includes("broker") || raw.includes("agent")) return "brokers";
+  if (raw.includes("mortgage") || raw.includes("affordability")) return "mortgage";
+  if (raw.includes("advertis") || raw.includes("campaign")) return "advertise";
+  if (raw.includes("career") || raw.includes("cv")) return "careers";
+  if (raw.includes("fraud") || raw.includes("suspicious") || raw.includes("safety")) return "fraud";
+  if (raw.includes("ai") || raw.includes("chatbot")) return "ai-chatbot";
+  if (raw.includes("list") && raw.includes("property")) return "list-property";
+  if (raw.includes("help") || raw.includes("support")) return "help";
+  return "";
+}
+
+function currentPublicWhatsappContextKey(explicit = "") {
+  const direct = String(explicit || "").trim().toLowerCase();
+  if (PUBLIC_WHATSAPP_CONTEXTS[direct]) return direct;
+  const page = normalizePageKey(direct || currentPage || "");
+  if (PUBLIC_WHATSAPP_CONTEXTS[page]) return page;
+  try {
+    const pathPage = pageForPublicRoute(window.location.pathname || "/");
+    if (PUBLIC_WHATSAPP_CONTEXTS[pathPage]) return pathPage;
+  } catch (_) {}
+  const fromText = inferWhatsappContextFromText(direct);
+  if (fromText && PUBLIC_WHATSAPP_CONTEXTS[fromText]) return fromText;
+  return PUBLIC_WHATSAPP_CONTEXTS[currentPage] ? currentPage : "home";
+}
+
+function buildDetailSupportWhatsappMessage() {
+  if (currentPage !== "detail" || !activeDetailPropertyId || typeof findPropertyForUi !== "function") return "";
+  const p = findPropertyForUi(activeDetailPropertyId);
+  if (!p) return "";
+  const title = cleanWhatsappValue(p.title) || "this property";
+  const location = getListingWhatsappLocation(p);
+  const ref = getListingWhatsappRef(p);
+  const url = getPropertyShareUrl(p);
+  return [
+    `Hi MakaUg, I'm viewing this listing on makaug.com: ${title} in ${location}.`,
+    "Please help me confirm availability and the next safe step.",
+    ref ? `Ref: ${ref}` : "",
+    url
+  ].filter(Boolean).join(" ");
+}
+
+function buildBrokerProfileSupportWhatsappMessage() {
+  if (currentPage !== "broker-profile" || !activeBrokerProfileId || typeof findBrokerById !== "function") return "";
+  const broker = findBrokerById(activeBrokerProfileId);
+  if (!broker) return "";
+  const name = cleanWhatsappValue(broker.name) || "this broker";
+  const company = cleanWhatsappValue(broker.company);
+  const area = cleanWhatsappValue(broker.area);
+  return [
+    `Hi MakaUg, I'm viewing the broker profile for ${name}${company ? ` at ${company}` : ""}.`,
+    area ? `They appear to cover ${area}.` : "",
+    "Please help me confirm the best way to contact them safely.",
+    getBrokerShareUrl(broker)
+  ].filter(Boolean).join(" ");
+}
+
+function buildPublicWhatsappMessage(context = {}) {
+  const contextKey = currentPublicWhatsappContextKey(context.context || context.page || context.intent || "");
+  const specialMessage = contextKey === "detail"
+    ? buildDetailSupportWhatsappMessage()
+    : (contextKey === "broker-profile" ? buildBrokerProfileSupportWhatsappMessage() : "");
+  const base = specialMessage || PUBLIC_WHATSAPP_CONTEXTS[contextKey] || PUBLIC_WHATSAPP_CONTEXTS.home;
+  const topic = cleanWhatsappValue(context.topic || "");
+  const path = cleanWhatsappValue(context.path || `${window.location.pathname || "/"}${window.location.search || ""}`);
+  return [
+    base,
+    topic ? `Topic: ${topic}.` : "",
+    path ? `Page: makaug.com${path.startsWith("/") ? path : `/${path}`}` : ""
+  ].filter(Boolean).join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
+}
+
+function supportWhatsappUrl(context = {}) {
+  return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildPublicWhatsappMessage(context));
+}
+
+function resolveWhatsappContextForLink(link) {
+  if (!link) return currentPublicWhatsappContextKey();
+  const explicit = link.dataset?.whatsappContext || "";
+  if (explicit) return currentPublicWhatsappContextKey(explicit);
+  let existingText = "";
+  try {
+    const parsed = new URL(link.getAttribute("href") || link.href || "", window.location.origin);
+    existingText = parsed.searchParams.get("text") || "";
+  } catch (_) {}
+  return currentPublicWhatsappContextKey(inferWhatsappContextFromText(existingText || link.textContent || ""));
+}
+
+function bindSupportWhatsappAnalytics(link) {
+  if (!link || link.dataset.whatsappAnalyticsBound === "1") return;
+  link.dataset.whatsappAnalyticsBound = "1";
+  link.addEventListener("click", () => {
+    const context = link.dataset.whatsappResolvedContext || resolveWhatsappContextForLink(link);
+    trackEvent("whatsapp_support_clicked", {
+      page: currentPage || "",
+      context,
+      href_path: window.location.pathname || "/",
+      link_id: link.id || "",
+      link_label: cleanWhatsappValue(link.textContent || "").slice(0, 80)
+    });
+  });
+}
+
+function syncPublicWhatsappLinks(root = document) {
+  const scope = root && root.querySelectorAll ? root : document;
+  const links = scope.querySelectorAll('a[href^="https://wa.me/256760112587"], a[href^="https://wa.me/+256760112587"], a[data-public-whatsapp-link]');
+  links.forEach((link) => {
+    if (!link || link.dataset.whatsappStatic === "true") return;
+    if (["lp-wa-link", "lp-whatsapp-option-btn", "lp-whatsapp-option-inline-btn"].includes(link.id || "")) return;
+    const context = resolveWhatsappContextForLink(link);
+    link.href = supportWhatsappUrl({ context });
+    link.dataset.whatsappResolvedContext = context;
+    bindSupportWhatsappAnalytics(link);
+  });
+}
+
+function openSupportWhatsApp(context = "", options = {}) {
+  const contextKey = currentPublicWhatsappContextKey(context);
+  const href = supportWhatsappUrl({ context: contextKey, topic: options.topic || "" });
+  trackEvent("whatsapp_support_clicked", {
+    page: currentPage || "",
+    context: contextKey,
+    href_path: window.location.pathname || "/",
+    link_id: options.source || "programmatic"
+  });
+  if (options.sameWindow === true) {
+    window.location.href = href;
+    return;
+  }
+  window.open(href, "_blank", "noopener,noreferrer");
+}
+
+function buildBrokerContactWhatsappMessage(b = {}) {
+  const name = cleanWhatsappValue(b.name) || "there";
+  const firstName = name.split(/\s+/).filter(Boolean)[0] || name;
+  const company = cleanWhatsappValue(b.company);
+  const area = cleanWhatsappValue(b.area);
+  const specialties = Array.isArray(b.specialties) ? b.specialties.map(cleanWhatsappValue).filter(Boolean).slice(0, 2).join(", ") : "";
+  return [
+    `Hi ${firstName}, I found your broker profile on makaug.com.`,
+    company ? `I saw ${company} listed there.` : "",
+    area ? `I need help with property around ${area}.` : "I need help with property in Uganda.",
+    specialties ? `I noticed you work with ${specialties}.` : "",
+    "Please let me know what is available and the next safe step."
+  ].filter(Boolean).join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
+}
+
 function cleanWhatsappValue(value) {
   const raw = String(value ?? "").trim();
   if (!raw || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null") return "";
@@ -17656,7 +17833,7 @@ function buildListPropertyWhatsAppMessage() {
 }
 
 function listPropertyWhatsAppUrl() {
-  return `https://wa.me/256760112587?text=${encodeURIComponent(buildListPropertyWhatsAppMessage())}`;
+  return buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, buildListPropertyWhatsAppMessage());
 }
 
 function updateListPropertyWhatsAppLinks() {
@@ -20736,6 +20913,7 @@ function openPageMod(page) {
   }
   if (body) body.innerHTML = html;
   if (body) localizePageModalContent(body);
+  syncPublicWhatsappLinks(body);
   openModal("page-modal");
   if (page === "advertise") hydrateAdvertisePricingPreview();
 }
@@ -23334,7 +23512,7 @@ function renderBrokers(id, list) {
 
         <div class="mt-auto grid grid-cols-2 gap-2 mt-4">
           <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="broker-action-btn border border-green-700 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-phone text-[11px]"></i><span>${translateListingLabel("Call")}</span></a>
-          <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>${translateListingLabel("WhatsApp")}</span></a>
+          <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="broker-action-btn bg-green-500 text-white rounded-xl hover:bg-green-400 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-whatsapp text-[12px]"></i><span>${translateListingLabel("WhatsApp")}</span></a>
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>${translateListingLabel("Share WA")}</span></button>
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>${translateListingLabel("Share X")}</span></button>
         </div>
@@ -23357,7 +23535,7 @@ function renderBrokers(id, list) {
 	      </div>
       <div class="grid grid-cols-2 gap-2 mt-4">
         <a href="tel:${b.phone}" onclick="event.stopPropagation()" class="border border-green-700 text-green-700 text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("Call")}</a>
-        <a href="https://wa.me/${b.whatsapp}" target="_blank" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
+        <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
       </div>
       <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
     </div>`).join("");
@@ -23415,6 +23593,7 @@ function renderAll() {
   renderFieldDashboard();
   renderAdvertiserDashboard();
   ensureRevenuePlacements();
+  syncPublicWhatsappLinks();
 }
 
 const PAGE_ROUTE_MAP = Object.freeze({
@@ -23759,6 +23938,7 @@ function showPage(page, options = {}) {
       maybeOpenListPropertyChoiceModal();
     }
   }
+  syncPublicWhatsappLinks();
 }
 
 const PUBLIC_ROUTE_SKELETON_LABELS = Object.freeze({
@@ -29077,6 +29257,7 @@ async function openDetail(id, options = {}) {
 function openBrokerProfile(id) {
   const b = findBrokerById(id);
   if (!b) return;
+  activeBrokerProfileId = String(b.id || id || "");
   recordBrokerProfileView(id);
   const list = getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
@@ -29131,7 +29312,7 @@ function openBrokerProfile(id) {
 
           <div class="grid sm:grid-cols-2 gap-2 mt-6">
             <a href="tel:${b.phone}" class="block bg-green-700 text-white text-center py-2.5 rounded-xl font-semibold">📞 Call ${b.name.split(" ")[0]}</a>
-            <a href="https://wa.me/${b.whatsapp}" target="_blank" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">📲 WhatsApp</a>
+            <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" class="block bg-green-500 text-white text-center py-2.5 rounded-xl font-semibold">📲 WhatsApp</a>
           </div>
           <button type="button" onclick="shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center py-2.5 rounded-xl font-semibold hover:bg-green-50">🔗 Share Broker Card</button>
         </div>

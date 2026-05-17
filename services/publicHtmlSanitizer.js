@@ -419,13 +419,27 @@ function renderSyntheticRouteContent(pathname = '/') {
   const pathName = normalizePath(pathname).toLowerCase();
   const content = SYNTHETIC_PUBLIC_ROUTE_CONTENT[pathName];
   if (!content) return '';
+  const whatsappContext = {
+    '/advertise': 'advertise',
+    '/careers': 'careers',
+    '/help': 'help',
+    '/safety': 'safety',
+    '/anti-fraud': 'fraud',
+    '/report-fraud': 'fraud',
+    '/list-property': 'list-property',
+    '/student-accommodation': 'students',
+    '/students': 'students'
+  }[pathName] || 'home';
   const ctaHtml = content.ctas.map((item, index) => {
     const href = (content.links || [])[index] || '/help';
     const external = /^https?:|^mailto:/i.test(href);
+    const supportWhatsAppAttrs = /^https:\/\/wa\.me\/256760112587/i.test(href)
+      ? ` data-public-whatsapp-link data-whatsapp-context="${whatsappContext}"`
+      : '';
     const ctaKey = content.i18nPrefix && content.ctaKeys?.[index]
       ? ` data-content-i18n="${content.i18nPrefix}.${content.ctaKeys[index]}"`
       : '';
-    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900"${ctaKey}>${item}</a>`;
+    return `<a href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''} class="inline-flex rounded-lg bg-white/90 px-3 py-2 text-sm font-semibold text-green-900"${ctaKey}${supportWhatsAppAttrs}>${item}</a>`;
   }).join('');
   const videoContext = {
     '/about': 'about',
@@ -455,7 +469,7 @@ function renderSyntheticRouteContent(pathname = '/') {
         <h2 class="text-2xl font-bold text-gray-900 serif"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.title"` : ''}>${content.title}</h2>
         <p class="text-gray-600 mt-3"${content.i18nPrefix ? ` data-content-i18n="${content.i18nPrefix}.subtitle"` : ''}>${content.body}</p>
         ${content.extraHtml || ''}
-        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold">Ask makaug.com on WhatsApp</a>
+        <a href="https://wa.me/256760112587" class="inline-flex mt-5 rounded-xl bg-green-700 px-5 py-3 text-white font-semibold" data-public-whatsapp-link data-whatsapp-context="${whatsappContext}">Ask makaug.com on WhatsApp</a>
       </div>
     </section>
     ${videoSection}
