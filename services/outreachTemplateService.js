@@ -26,29 +26,28 @@ function buildAgentWelcomeWhatsappMessage({
 } = {}) {
   const firstName = firstNameFromLeadName(name);
   const sourceLine = source
-    ? `I found your public property contact via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)} and wanted to introduce ourselves respectfully.`
-    : 'I wanted to introduce MakaUg properly and warmly.';
+    ? `I came across your public property contact via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)} and hope it is okay to introduce ourselves.`
+    : 'I hope it is okay to introduce makaug.com properly.';
 
   return [
     cardUrl,
     '',
-    `Hi ${firstName}, hope you are well. This is the MakaUg team.`,
-    `${sourceLine} We are launching makaug.com, a Uganda-first property marketplace helping genuine agents, brokers, agencies, and owners get more visibility without adding another complicated platform.`,
+    `Hi ${firstName}, hope you are well. This is the makaug.com team.`,
+    `${sourceLine} We built makaug.com to help agents, brokers, agencies, and property owners make genuine Uganda property easier to find online.`,
     '',
-    'The link above opens a short agent starter deck with the main ways to use MakaUg.',
+    'The link above opens a short welcome guide for agents.',
     '',
-    'Helpful things for agents:',
-    '- It is free to post property listings during launch',
-    '- makaug.com supports 7 languages for more local enquiries',
-    '- You can list homes for sale, rentals, land, commercial spaces, and student accommodation',
-    '- You can list through the website form or use WhatsApp AI for guided capture',
-    '- Broker registration gives you a public profile and clearer contact path',
-    '- If you need help, we can guide you through your first listings',
+    'A few helpful things:',
+    '- It is free to list property on makaug.com during launch. No listing charge.',
+    '- You can add homes, rentals, land, commercial spaces, and student accommodation.',
+    '- Clients can search on the website and contact through phone, WhatsApp, or enquiry forms.',
+    '- makaug.com supports seven language flows. On WhatsApp, reply LANG to change language.',
+    '- If you prefer, reply YES and we can guide your first listing on WhatsApp.',
     '',
-    `Start here: ${listPropertyUrl}`,
-    `Broker registration is here: ${brokerSignupUrl}`,
+    `Website listing page: ${listPropertyUrl}`,
+    `Broker registration: ${brokerSignupUrl}`,
     '',
-    'If this sounds useful, reply YES and we will help with onboarding today. Reply STOP and we will not contact you again.'
+    'Thank you. Reply STOP and we will not contact you again.'
   ].join('\n');
 }
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
-  <title id="title">MakaUg launch welcome card for Uganda agents</title>
-  <desc id="desc">A branded launch card inviting agents and brokers to post property listings for free on makaug.com.</desc>
+  <title id="title">makaug.com welcome card for Uganda agents</title>
+  <desc id="desc">A warm branded card inviting agents and brokers to list property for free on makaug.com and use WhatsApp help.</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0" stop-color="#f7fff5"/>
@@ -34,18 +34,18 @@
     </g>
 
     <g transform="translate(48 184)">
-      <text x="0" y="0" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#111827">Welcome, Uganda agents</text>
-      <text x="0" y="64" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#2f7d43">list property free today</text>
-      <text x="0" y="112" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">A simpler way to reach buyers, renters, students,</text>
-      <text x="0" y="144" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">land seekers, and commercial clients across Uganda.</text>
+      <text x="0" y="0" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#111827">Hello Uganda agents</text>
+      <text x="0" y="64" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="900" fill="#2f7d43">list property free with us</text>
+      <text x="0" y="112" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">makaug.com helps people find homes, rentals, land,</text>
+      <text x="0" y="144" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="600" fill="#4b5563">student rooms, and commercial spaces online.</text>
 
       <g transform="translate(0 178)">
         <rect x="0" y="0" width="206" height="62" rx="18" fill="#ecfdf3"/>
-        <text x="103" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#2f7d43">Free to post</text>
+        <text x="103" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#2f7d43">Free to list</text>
         <rect x="224" y="0" width="196" height="62" rx="18" fill="#eef4ff"/>
         <text x="322" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#2463eb">7 languages</text>
         <rect x="438" y="0" width="248" height="62" rx="18" fill="#fff8e5"/>
-        <text x="562" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#a16207">WhatsApp leads</text>
+        <text x="562" y="39" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="900" fill="#a16207">WhatsApp help</text>
       </g>
 
       <text x="0" y="284" font-family="Arial, Helvetica, sans-serif" font-size="29" font-weight="900" fill="#111827">Start here: makaug.com/list-property</text>
@@ -55,7 +55,7 @@
       <rect x="0" y="0" width="198" height="286" rx="34" fill="#111827"/>
       <rect x="15" y="18" width="168" height="250" rx="24" fill="#f7f5f0"/>
       <rect x="34" y="46" width="130" height="34" rx="17" fill="#2f7d43"/>
-      <text x="99" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="900" fill="#ffffff">MakaUg</text>
+      <text x="99" y="69" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="900" fill="#ffffff">makaug.com</text>
       <rect x="30" y="104" width="138" height="86" rx="18" fill="#ffffff"/>
       <text x="99" y="133" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="900" fill="#2f7d43">7</text>
       <text x="99" y="160" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="800" fill="#111827">languages</text>
