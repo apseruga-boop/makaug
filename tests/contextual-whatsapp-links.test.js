@@ -63,6 +63,7 @@ for (const expected of [
 
 assert(html.includes("openSupportWhatsApp('students', { source: 'student_dashboard_whatsapp' })"), 'student help CTA should use the shared contextual WhatsApp opener');
 assert(html.includes('contextual-whatsapp-20260517'), 'Frontend cache version must be bumped for contextual WhatsApp rollout');
+assert(html.includes('whatsapp-prefill-copy-20260517'), 'Frontend cache version must be bumped for WhatsApp listing prefill copy changes');
 assert(sanitizer.includes('data-public-whatsapp-link data-whatsapp-context="${whatsappContext}"'), 'synthetic public routes should mark support WhatsApp links for runtime context sync');
 
 console.log('Contextual WhatsApp link tests passed');

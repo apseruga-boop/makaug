@@ -15,5 +15,9 @@ assert(appSource.includes('options.forceChoice !== true'), 'Desktop/operator flo
 assert(appSource.includes('const sameWindow = options.sameWindow === true || isMobileListPropertyExperience()'), 'Mobile WhatsApp routing must use same-tab navigation for app handoff');
 assert(appSource.includes('"lp-whatsapp-option-inline-btn"'), 'Inline WhatsApp listing card href must stay synced with listing context');
 assert(appSource.includes('mode === "online"'), 'Desktop and explicit online route must still support the online listing form');
+assert(appSource.includes('I would like to list a property'), 'WhatsApp listing prefill should read like a human message');
+assert(appSource.includes('for sale'), 'WhatsApp listing prefill should describe sale listings naturally');
+assert(appSource.includes('Please guide me through the WhatsApp listing process.'), 'WhatsApp listing prefill should ask for guided capture');
+assert(!appSource.includes('Type: ${type}'), 'WhatsApp listing prefill must not expose internal Type field labels');
 
 console.log('List-property mobile WhatsApp routing tests passed');

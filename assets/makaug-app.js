@@ -17821,14 +17821,20 @@ function logListPropertyIntent(mode, extra = {}) {
 }
 
 function buildListPropertyWhatsAppMessage() {
-  const type = getSelectedListPropertyTypeLabel();
+  const selectedType = getListChoiceType();
+  const typePhrase = {
+    sale: "for sale",
+    rent: "for rent",
+    student: "as student accommodation",
+    land: "as land",
+    commercial: "as commercial property"
+  }[selectedType] || "";
   const title = (document.getElementById("lp-title")?.value || document.getElementById("listing-title")?.value || "").trim();
   const location = (document.getElementById("lp-place-search")?.value || document.getElementById("lp-address-search")?.value || document.getElementById("lp-manual-landmark")?.value || "").trim();
-  const parts = ["Hi MakaUg, I want to list a property."];
-  if (type) parts.push(`Type: ${type}.`);
-  if (title) parts.push(`Title: ${title}.`);
-  if (location) parts.push(`Location: ${location}.`);
-  parts.push("Please help me create the listing.");
+  const parts = [`Hi MakaUg, I would like to list a property${typePhrase ? ` ${typePhrase}` : ""} on makaug.com.`];
+  if (title) parts.push(`The property is called ${title}.`);
+  if (location) parts.push(`It is in ${location}.`);
+  parts.push("Please guide me through the WhatsApp listing process.");
   return parts.join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
 }
 
