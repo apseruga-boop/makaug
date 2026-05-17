@@ -25,24 +25,25 @@ function buildAgentWelcomeWhatsappMessage({
 } = {}) {
   const firstName = firstNameFromLeadName(name);
   const sourceLine = source
-    ? `I found your public property contact details via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)}.`
-    : 'I wanted to introduce MakaUg properly.';
+    ? `I came across your public property contact details via ${String(source).replace(/\s+/g, ' ').trim().slice(0, 90)} and wanted to introduce ourselves respectfully.`
+    : 'I wanted to introduce MakaUg properly and warmly.';
 
   return [
     cardUrl,
     '',
-    `Hi ${firstName}, this is MakaUg.`,
-    `${sourceLine} We are launching Uganda's property marketplace and inviting agents, brokers, agencies, and owners to post listings free today.`,
+    `Hi ${firstName}, hope you are well. This is the MakaUg team.`,
+    `${sourceLine} We are launching makaug.com, a Uganda-first property marketplace built to help genuine agents, brokers, agencies, and property owners get more visibility without adding another complicated platform.`,
     '',
-    'Why it is worth joining now:',
-    '- Free to post sale, rent, land, commercial, and student listings',
-    '- makaug.com works in 7 languages for more local reach',
-    '- Buyers and renters can enquire through the website and WhatsApp',
-    '- Early agents get launch visibility while the platform grows',
+    'A few helpful things for agents:',
+    '- It is free to post property listings during launch',
+    '- makaug.com supports 7 languages, so more local clients can understand and enquire',
+    '- You can list homes for sale, rentals, land, commercial spaces, and student accommodation',
+    '- Enquiries can come through the website and WhatsApp-friendly follow-up',
+    '- If you need help, we can guide you through your first listings',
     '',
-    `Start here: ${listPropertyUrl}`,
+    `You can have a look or start here: ${listPropertyUrl}`,
     '',
-    'Reply YES for onboarding help today. Reply STOP and we will not contact you again.'
+    'If this sounds useful, reply YES and we will help with onboarding today. Reply STOP and we will not contact you again.'
   ].join('\n');
 }
 
