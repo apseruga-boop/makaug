@@ -53,6 +53,14 @@ test('browser release probe blocks uncontrolled seed listings from public pages'
   assert.match(browserProbeSource, /uncontrolled seed listing visible/);
 });
 
+test('anonymous public property APIs suppress launch seed QA listings', () => {
+  const routeSource = fs.readFileSync('routes/properties.js', 'utf8');
+  assert.match(routeSource, /LAUNCH_SEED_LISTING_MARKER = 'SOFT LAUNCH TEST - DELETE'/);
+  assert.match(routeSource, /function addPublicLaunchSeedFilter/);
+  assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
+  assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
 test('public app cache version is bumped for controlled inventory rollout', () => {
   assert.match(htmlSource, /controlled-public-inventory-20260514/);
   assert.match(htmlSource, /admin-live-control-parity-20260515/);

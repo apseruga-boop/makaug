@@ -58,6 +58,7 @@ const {
 } = require('../services/locationSearchService');
 
 const router = express.Router();
+const LAUNCH_SEED_LISTING_MARKER = 'SOFT LAUNCH TEST - DELETE';
 
 function addFilter(filters, values, clause, ...vals) {
   let prepared = clause;
@@ -66,6 +67,21 @@ function addFilter(filters, values, clause, ...vals) {
     prepared = prepared.replace('?', `$${values.length}`);
   });
   filters.push(prepared);
+}
+
+function isLaunchSeedListing(row = {}) {
+  return String(row.title || '').includes(LAUNCH_SEED_LISTING_MARKER)
+    || String(row.description || '').includes(LAUNCH_SEED_LISTING_MARKER);
+}
+
+function addPublicLaunchSeedFilter(filters, values) {
+  addFilter(
+    filters,
+    values,
+    "(COALESCE(p.title, '') NOT ILIKE ? AND COALESCE(p.description, '') NOT ILIKE ?)",
+    `%${LAUNCH_SEED_LISTING_MARKER}%`,
+    `%${LAUNCH_SEED_LISTING_MARKER}%`
+  );
 }
 
 function normalizeListingType(type) {
@@ -88,6 +104,10 @@ function getBearerToken(req) {
   const cookieHeader = req.get('cookie') || '';
   const match = cookieHeader.match(/(?:^|;\s*)makaug_auth_token=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : '';
+}
+
+function hasAdminCredentialHint(req) {
+  return Boolean(req.get('x-api-key') || getBearerToken(req));
 }
 
 async function getOptionalAuthUser(req) {
@@ -623,11 +643,21 @@ async function listPropertiesHandler(req, res, next) {
     const radiusKm = requestedRadiusKm || normalizeRadiusKm(requestedRadiusMiles ? requestedRadiusMiles * 1.609344 : null, DEFAULT_SEARCH_RADIUS_MILES);
     let distanceSql = 'NULL::numeric';
 
-    if (requestingModerationData && !(await hasAdminAccess(req))) {
-      return res.status(403).json({
-        ok: false,
-        error: 'Admin access is required to list non-public properties'
-      });
+    let adminAccess = false;
+    if (requestingModerationData) {
+      adminAccess = await hasAdminAccess(req);
+      if (!adminAccess) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Admin access is required to list non-public properties'
+        });
+      }
+    } else if (hasAdminCredentialHint(req)) {
+      adminAccess = await hasAdminAccess(req);
+    }
+
+    if (!adminAccess) {
+      addPublicLaunchSeedFilter(filters, values);
     }
 
     if (studentPortal) {
@@ -967,11 +997,17 @@ router.get('/:id', async (req, res, next) => {
 
     const { property, images } = loaded;
     const ownerToken = getOwnerEditTokenFromRequest(req);
+    const ownerCanPreview = canUseOwnerEditToken(property, ownerToken);
+    const adminAccess = hasAdminCredentialHint(req) ? await hasAdminAccess(req) : false;
     const canViewNonPublic = property.status === 'approved'
-      || canUseOwnerEditToken(property, ownerToken)
-      || await hasAdminAccess(req);
+      || ownerCanPreview
+      || adminAccess;
 
     if (!canViewNonPublic) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    if (isLaunchSeedListing(property) && !ownerCanPreview && !adminAccess) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
 
