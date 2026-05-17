@@ -59,6 +59,7 @@ const {
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
+const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
 
 function addFilter(filters, values, clause, ...vals) {
   let prepared = clause;
@@ -71,8 +72,10 @@ function addFilter(filters, values, clause, ...vals) {
 
 function isLaunchSeedListing(row = {}) {
   const title = String(row.title || '');
+  const normalizedTitle = title.trim().toLowerCase();
   const description = String(row.description || '');
-  return LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker));
+  return LAUNCH_DUMMY_LISTING_TITLES.has(normalizedTitle)
+    || LAUNCH_SEED_LISTING_MARKERS.some((marker) => title.includes(marker) || description.includes(marker));
 }
 
 function addPublicLaunchSeedFilter(filters, values) {
@@ -84,6 +87,9 @@ function addPublicLaunchSeedFilter(filters, values) {
       `%${marker}%`,
       `%${marker}%`
     );
+  });
+  LAUNCH_DUMMY_LISTING_TITLES.forEach((title) => {
+    addFilter(filters, values, 'LOWER(TRIM(COALESCE(p.title, \'\'))) <> ?', title);
   });
 }
 

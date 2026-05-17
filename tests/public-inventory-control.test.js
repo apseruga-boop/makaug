@@ -56,8 +56,10 @@ test('browser release probe blocks uncontrolled seed listings from public pages'
 test('anonymous public property APIs suppress launch seed QA listings', () => {
   const routeSource = fs.readFileSync('routes/properties.js', 'utf8');
   assert.match(routeSource, /LAUNCH_SEED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
+  assert.match(routeSource, /LAUNCH_DUMMY_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
   assert.match(routeSource, /function addPublicLaunchSeedFilter/);
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
+  assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
 });
 
