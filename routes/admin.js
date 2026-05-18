@@ -101,6 +101,8 @@ const FIELD_AGENT_PAYOUT_DAY = 'Friday';
 const FIELD_AGENT_ID_START = 7300;
 const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 const FIELD_AGENT_DIRECTORY_LIMIT = 10000;
+const ADMIN_LISTING_IMAGE_MAX_BYTES = 6 * 1024 * 1024;
+const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
 
 function numberOrZero(value) {
   const n = Number(value || 0);
@@ -293,6 +295,50 @@ async function writeAudit(action, details = {}, actorId = 'admin_api_key') {
 
 function adminActorId(req) {
   return req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+}
+
+function parseBooleanLike(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  const text = cleanText(value).toLowerCase();
+  if (!text) return fallback;
+  if (['1', 'true', 'yes', 'y', 'on', 'authorised', 'authorized'].includes(text)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(text)) return false;
+  return fallback;
+}
+
+function dataUrlApproxBytes(value = '') {
+  const match = String(value || '').match(/^data:[^,]+,([a-z0-9+/=\s]+)$/i);
+  if (!match) return 0;
+  const base64 = match[1].replace(/\s+/g, '');
+  return Math.floor((base64.length * 3) / 4);
+}
+
+function cleanAdminListingImageUpload(value = {}, fallbackLabel = 'Authorised property photo') {
+  if (!value || typeof value !== 'object') return null;
+  const url = String(value.url || value.data_url || value.dataUrl || '').trim();
+  if (!url) return null;
+  const isImageDataUrl = /^data:image\/(?:jpe?g|png|webp|gif);base64,/i.test(url);
+  const isRemoteImageUrl = /^https?:\/\//i.test(url);
+  if (!isImageDataUrl && !isRemoteImageUrl) {
+    const err = new Error('Listing image must be an image upload or HTTPS image URL.');
+    err.status = 400;
+    throw err;
+  }
+  if (isImageDataUrl) {
+    const approxBytes = dataUrlApproxBytes(url);
+    if (approxBytes > ADMIN_LISTING_IMAGE_MAX_BYTES) {
+      const err = new Error('Listing image is too large. Upload must be 6MB or smaller after compression.');
+      err.status = 400;
+      throw err;
+    }
+  }
+  return {
+    url,
+    slot_key: cleanText(value.slot_key || value.slot || '').slice(0, 80) || null,
+    room_label: cleanText(value.room_label || value.label || fallbackLabel).slice(0, 120) || fallbackLabel,
+    is_primary: parseBooleanLike(value.is_primary || value.primary, false),
+    sort_order: Math.max(0, parseInt(value.sort_order, 10) || 0)
+  };
 }
 
 function normalizeFieldAgentCode(value = '') {
@@ -2090,6 +2136,281 @@ router.get('/properties/:id/review', async (req, res, next) => {
     return res.json({ ok: true, data: review });
   } catch (error) {
     return next(error);
+  }
+});
+
+router.post('/properties/:id/images', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  const client = await db.pool.connect();
+  try {
+    const confirmRights = parseBooleanLike(req.body?.confirm_rights || req.body?.image_rights_confirmed, false);
+    if (!confirmRights) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Admin image upload requires image rights confirmation'
+      });
+    }
+    const requestedImages = Array.isArray(req.body?.images) ? req.body.images : [req.body || {}];
+    const uploads = requestedImages
+      .map((item, index) => cleanAdminListingImageUpload(item, index === 0 ? 'Primary authorised photo' : `Authorised photo ${index + 1}`))
+      .filter(Boolean);
+    if (!uploads.length) {
+      return res.status(400).json({ ok: false, error: 'No listing images were provided' });
+    }
+    if (uploads.length > ADMIN_LISTING_IMAGE_MAX_COUNT) {
+      return res.status(400).json({ ok: false, error: `Upload no more than ${ADMIN_LISTING_IMAGE_MAX_COUNT} listing images at once` });
+    }
+
+    await client.query('BEGIN');
+    const property = await client.query('SELECT id, status FROM properties WHERE id = $1 LIMIT 1', [req.params.id]);
+    if (!property.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    const replaceAll = parseBooleanLike(req.body?.replace_all || req.body?.replaceAll, false);
+    const existingCount = await client.query('SELECT COUNT(*)::int AS count FROM property_images WHERE property_id = $1', [req.params.id]);
+    const shouldMakeFirstPrimary = replaceAll || Number(existingCount.rows[0]?.count || 0) === 0 || uploads.some((image) => image.is_primary);
+    if (replaceAll) {
+      await client.query('DELETE FROM property_images WHERE property_id = $1', [req.params.id]);
+    }
+    if (shouldMakeFirstPrimary) {
+      await client.query('UPDATE property_images SET is_primary = false WHERE property_id = $1', [req.params.id]);
+    }
+    const requestedPrimaryIndex = uploads.findIndex((image) => image.is_primary);
+    const created = [];
+    for (const [index, image] of uploads.entries()) {
+      const isPrimary = shouldMakeFirstPrimary
+        ? (requestedPrimaryIndex >= 0 ? index === requestedPrimaryIndex : index === 0)
+        : false;
+      const inserted = await client.query(
+        `INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, url, is_primary, sort_order, slot_key, room_label, created_at`,
+        [
+          req.params.id,
+          image.url,
+          isPrimary,
+          image.sort_order || index,
+          image.slot_key,
+          image.room_label
+        ]
+      );
+      created.push(inserted.rows[0]);
+    }
+    await client.query(
+      `UPDATE properties
+       SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+         || jsonb_build_object(
+           'consent_confirmed', true,
+           'image_rights_confirmed', true,
+           'image_rights_status', 'admin_uploaded_authorised_images',
+           'admin_image_upload', $2::jsonb
+         ),
+         updated_at = NOW()
+       WHERE id = $1`,
+      [req.params.id, JSON.stringify({
+        at: new Date().toISOString(),
+        actor_id: actorId,
+        action: replaceAll ? 'replace_all' : 'add',
+        image_count: created.length
+      })]
+    );
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
+      [
+        req.params.id,
+        actorId,
+        replaceAll ? 'admin_listing_images_replaced' : 'admin_listing_images_uploaded',
+        property.rows[0].status,
+        'Admin confirmed image rights and uploaded authorised listing photos.',
+        `${created.length} authorised image(s) ${replaceAll ? 'replaced all existing listing images' : 'added to the listing'}.`,
+        JSON.stringify({ image_count: created.length, replace_all: replaceAll })
+      ]
+    );
+    await client.query('COMMIT');
+    await writeAudit(replaceAll ? 'admin_listing_images_replaced' : 'admin_listing_images_uploaded', {
+      property_id: req.params.id,
+      image_count: created.length,
+      replace_all: replaceAll
+    }, actorId);
+    const review = await loadPropertyReview(req.params.id);
+    return res.json({ ok: true, data: review });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query(
+      `SELECT p.id AS property_id, p.status, i.id AS image_id, i.is_primary
+       FROM properties p
+       JOIN property_images i ON i.property_id = p.id
+       WHERE p.id = $1 AND i.id = $2
+       LIMIT 1`,
+      [req.params.id, req.params.imageId]
+    );
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Listing image not found' });
+    }
+
+    const hasNewImage = Boolean(String(req.body?.url || req.body?.data_url || req.body?.dataUrl || '').trim());
+    if (hasNewImage && !parseBooleanLike(req.body?.confirm_rights || req.body?.image_rights_confirmed, false)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'Replacing a listing image requires image rights confirmation' });
+    }
+    const image = hasNewImage
+      ? cleanAdminListingImageUpload(req.body || {}, cleanText(req.body?.room_label || req.body?.label) || 'Authorised property photo')
+      : null;
+    const setParts = [];
+    const values = [req.params.id, req.params.imageId];
+    let paramIndex = 3;
+    if (image) {
+      setParts.push(`url = $${paramIndex++}`);
+      values.push(image.url);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'room_label') || Object.prototype.hasOwnProperty.call(req.body || {}, 'label') || image) {
+      setParts.push(`room_label = $${paramIndex++}`);
+      values.push(image?.room_label || cleanText(req.body?.room_label || req.body?.label).slice(0, 120) || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'slot_key') || Object.prototype.hasOwnProperty.call(req.body || {}, 'slot') || image) {
+      setParts.push(`slot_key = $${paramIndex++}`);
+      values.push(image?.slot_key || cleanText(req.body?.slot_key || req.body?.slot).slice(0, 80) || null);
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'sort_order')) {
+      setParts.push(`sort_order = $${paramIndex++}`);
+      values.push(Math.max(0, parseInt(req.body.sort_order, 10) || 0));
+    }
+    const makePrimary = parseBooleanLike(req.body?.is_primary || req.body?.primary, false);
+    if (makePrimary) {
+      await client.query('UPDATE property_images SET is_primary = false WHERE property_id = $1', [req.params.id]);
+      setParts.push('is_primary = true');
+    }
+    if (!setParts.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ ok: false, error: 'No image changes were provided' });
+    }
+    const updated = await client.query(
+      `UPDATE property_images
+       SET ${setParts.join(', ')}
+       WHERE property_id = $1 AND id = $2
+       RETURNING id, url, is_primary, sort_order, slot_key, room_label, created_at`,
+      values
+    );
+    if (hasNewImage) {
+      await client.query(
+        `UPDATE properties
+         SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object(
+             'consent_confirmed', true,
+             'image_rights_confirmed', true,
+             'image_rights_status', 'admin_uploaded_authorised_images',
+             'admin_image_upload', $2::jsonb
+           ),
+           updated_at = NOW()
+         WHERE id = $1`,
+        [req.params.id, JSON.stringify({
+          at: new Date().toISOString(),
+          actor_id: actorId,
+          action: 'replace_one',
+          image_id: req.params.imageId
+        })]
+      );
+    }
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, status_from, status_to, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$4,$5,$6,$7::jsonb)`,
+      [
+        req.params.id,
+        actorId,
+        hasNewImage ? 'admin_listing_image_replaced' : 'admin_listing_image_updated',
+        existing.rows[0].status,
+        hasNewImage ? 'Admin confirmed image rights and replaced a listing photo.' : 'Admin updated listing image metadata.',
+        hasNewImage ? 'One authorised listing image was replaced.' : 'Listing image metadata was updated.',
+        JSON.stringify({ image_id: req.params.imageId, primary: makePrimary, replaced: hasNewImage })
+      ]
+    );
+    await client.query('COMMIT');
+    await writeAudit(hasNewImage ? 'admin_listing_image_replaced' : 'admin_listing_image_updated', {
+      property_id: req.params.id,
+      image_id: req.params.imageId,
+      primary: makePrimary,
+      replaced: hasNewImage
+    }, actorId);
+    const review = await loadPropertyReview(req.params.id);
+    return res.json({ ok: true, data: review, image: updated.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/properties/:id/images/:imageId', async (req, res, next) => {
+  const actorId = adminActorId(req);
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await client.query(
+      `DELETE FROM property_images
+       WHERE property_id = $1 AND id = $2
+       RETURNING id, is_primary`,
+      [req.params.id, req.params.imageId]
+    );
+    if (!existing.rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ ok: false, error: 'Listing image not found' });
+    }
+    if (existing.rows[0].is_primary) {
+      await client.query(
+        `UPDATE property_images
+         SET is_primary = true
+         WHERE id = (
+           SELECT id
+           FROM property_images
+           WHERE property_id = $1
+           ORDER BY sort_order ASC, created_at ASC
+           LIMIT 1
+         )`,
+        [req.params.id]
+      );
+    }
+    await client.query('UPDATE properties SET updated_at = NOW() WHERE id = $1', [req.params.id]);
+    await client.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, reason, notes, delivery)
+       VALUES ($1,$2,$3,$4,$5,$6::jsonb)`,
+      [
+        req.params.id,
+        actorId,
+        'admin_listing_image_deleted',
+        'Admin removed listing photo.',
+        'One listing image was removed from King review.',
+        JSON.stringify({ image_id: req.params.imageId })
+      ]
+    );
+    await client.query('COMMIT');
+    await writeAudit('admin_listing_image_deleted', {
+      property_id: req.params.id,
+      image_id: req.params.imageId
+    }, actorId);
+    const review = await loadPropertyReview(req.params.id);
+    return res.json({ ok: true, data: review });
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    return next(error);
+  } finally {
+    client.release();
   }
 });
 

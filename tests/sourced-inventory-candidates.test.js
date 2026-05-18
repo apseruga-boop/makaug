@@ -182,6 +182,20 @@ test('Bakaima admin path and dashboard action are protected and auditable', () =
   assert(frontend.includes('WhatsApp share card'), 'review panel should label the WhatsApp share copy clearly');
 });
 
+test('King review queue can manage authorised listing photos', () => {
+  assert(adminRoute.includes("router.post('/properties/:id/images'"), 'admin should be able to add listing photos');
+  assert(adminRoute.includes("router.patch('/properties/:id/images/:imageId'"), 'admin should be able to replace/set primary listing photos');
+  assert(adminRoute.includes("router.delete('/properties/:id/images/:imageId'"), 'admin should be able to delete listing photos');
+  assert(adminRoute.includes('Admin image upload requires image rights confirmation'), 'admin photo upload should require rights confirmation');
+  assert(adminRoute.includes('admin_uploaded_authorised_images'), 'admin uploads should mark sourced candidates as having authorised images');
+  assert(frontend.includes('function adminUploadListingPhotos'), 'dashboard should expose bulk listing photo upload');
+  assert(frontend.includes('function adminReplaceListingPhoto'), 'dashboard should expose per-photo replacement');
+  assert(frontend.includes('function adminSetListingPhotoPrimary'), 'dashboard should allow choosing the primary image');
+  assert(frontend.includes('function adminDeleteListingPhoto'), 'dashboard should allow deleting bad listing images');
+  assert(frontend.includes('Upload authorised agent photos'), 'photo panel should make the agent-photo workflow visible');
+  assert(frontend.includes('Replace all current photos'), 'photo panel should support replacing poor existing images');
+});
+
 test('Bakaima WhatsApp share card carries listing URL and agent contact', () => {
   const platinum = plannedBakaimaListings().find((listing) => /Platinum Estate/i.test(listing.title));
   assert(platinum, 'Platinum Estate listing should be prepared from the supplied flyer');

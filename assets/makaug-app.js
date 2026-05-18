@@ -9820,6 +9820,123 @@ function adminListingPhotoEvidence(review = {}, img = {}, idx = 0) {
   };
 }
 
+async function adminPrepareAuthorisedListingPhoto(file, label = "Authorised property photo") {
+  if (!file || !(file.type || "").startsWith("image/")) {
+    throw new Error("Choose a JPG, PNG, or WebP image file.");
+  }
+  if (file.size > 15 * 1024 * 1024) {
+    throw new Error(`${file.name || "Photo"} is too large. Use an image below 15MB before compression.`);
+  }
+  const dataUrl = await compressPhotoForSubmission(file, { maxSide: 2200, quality: 0.86 });
+  if (!dataUrl) throw new Error(`${file.name || "Photo"} could not be prepared.`);
+  return {
+    data_url: dataUrl,
+    room_label: label,
+    slot_key: "",
+    confirm_rights: true
+  };
+}
+
+async function adminUploadListingPhotos() {
+  const review = adminActiveReview || {};
+  if (!review.id || !canUseLiveAdminApi()) return;
+  const input = document.getElementById("admin-listing-photo-upload");
+  const replaceAll = !!document.getElementById("admin-listing-photo-replace-all")?.checked;
+  const files = Array.from(input?.files || []);
+  if (!files.length) {
+    toast("Choose one or more property photos first.");
+    return;
+  }
+  const ok = window.confirm(replaceAll
+    ? "Replace all current listing images with these authorised photos?"
+    : "Add these authorised property photos to the listing?");
+  if (!ok) return;
+  try {
+    toast("Preparing authorised photos...");
+    const images = [];
+    for (const [idx, file] of files.entries()) {
+      images.push({
+        ...(await adminPrepareAuthorisedListingPhoto(file, idx === 0 ? "Primary authorised photo" : `Authorised photo ${idx + 1}`)),
+        is_primary: idx === 0
+      });
+    }
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(review.id)}/images`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        confirm_rights: true,
+        replace_all: replaceAll,
+        images
+      }
+    });
+    if (input) input.value = "";
+    const replaceCheckbox = document.getElementById("admin-listing-photo-replace-all");
+    if (replaceCheckbox) replaceCheckbox.checked = false;
+    renderAdminReviewPanel(response?.data || {});
+    toast(replaceAll ? "Listing photos replaced." : "Listing photos uploaded.");
+  } catch (e) {
+    toast(`Photo upload failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminReplaceListingPhoto(imageId, input) {
+  const review = adminActiveReview || {};
+  if (!review.id || !imageId || !canUseLiveAdminApi()) return;
+  const file = input?.files?.[0];
+  if (!file) return;
+  const current = (Array.isArray(review.images) ? review.images : []).find((img) => String(img.id) === String(imageId));
+  try {
+    toast("Replacing listing photo...");
+    const payload = await adminPrepareAuthorisedListingPhoto(file, current?.room_label || "Authorised property photo");
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(review.id)}/images/${encodeURIComponent(imageId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: {
+        ...payload,
+        confirm_rights: true
+      }
+    });
+    if (input) input.value = "";
+    renderAdminReviewPanel(response?.data || {});
+    toast("Listing photo replaced.");
+  } catch (e) {
+    toast(`Photo replace failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminSetListingPhotoPrimary(imageId) {
+  const review = adminActiveReview || {};
+  if (!review.id || !imageId || !canUseLiveAdminApi()) return;
+  try {
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(review.id)}/images/${encodeURIComponent(imageId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { is_primary: true }
+    });
+    renderAdminReviewPanel(response?.data || {});
+    toast("Primary photo updated.");
+  } catch (e) {
+    toast(`Primary update failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminDeleteListingPhoto(imageId) {
+  const review = adminActiveReview || {};
+  if (!review.id || !imageId || !canUseLiveAdminApi()) return;
+  const ok = window.confirm("Remove this photo from the listing?");
+  if (!ok) return;
+  try {
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(review.id)}/images/${encodeURIComponent(imageId)}`, {
+      method: "DELETE",
+      headers: adminAuthHeaders()
+    });
+    renderAdminReviewPanel(response?.data || {});
+    toast("Listing photo removed.");
+  } catch (e) {
+    toast(`Photo delete failed: ${e.message || "error"}`);
+  }
+}
+
 function adminEvidenceMediaHtml(url, label = "Evidence") {
   const src = String(url || "");
   if (!src) return `<div class="text-sm text-gray-500">No preview file stored.</div>`;
@@ -13055,12 +13172,32 @@ function renderAdminReviewPanel(review) {
             <h4 class="font-bold text-gray-800">Photos</h4>
             <button onclick="openAdminEvidence('${adminAttr(photoEvidenceId)}')" class="text-xs text-green-700 font-semibold hover:underline">${images.length} image${images.length === 1 ? "" : "s"}</button>
           </div>
+          <div class="mb-3 rounded-xl border border-green-100 bg-green-50 p-3">
+            <div class="text-xs font-black uppercase tracking-wide text-green-800">Upload authorised agent photos</div>
+            <div class="mt-1 text-xs text-green-900">Use this when an agent sends better HD property photos. Images are compressed for web and stored against this listing.</div>
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <input id="admin-listing-photo-upload" type="file" accept="image/*" multiple class="block text-xs text-gray-700 file:mr-3 file:rounded-lg file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-bold file:text-green-700">
+              <label class="inline-flex items-center gap-2 text-xs font-semibold text-green-900">
+                <input id="admin-listing-photo-replace-all" type="checkbox" class="rounded border-green-200 text-green-700">
+                Replace all current photos
+              </label>
+              <button type="button" onclick="adminUploadListingPhotos()" class="bg-green-700 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Upload Photos</button>
+            </div>
+          </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             ${images.length ? images.map((img, idx) => `
-              <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, adminListingPhotoEvidence(review, img, idx)))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
-                <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
-                <div class="px-2 py-1 text-[11px] text-gray-500">${adminEscape(img.room_label || img.slot_key || img.slot || `Photo ${idx + 1}`)}${img.is_primary ? " • Primary" : ""}${adminIsGeneratedPlaceholderPhoto(review, img) ? " • Placeholder" : ""}</div>
-              </button>
+              <div class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50">
+                <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, adminListingPhotoEvidence(review, img, idx)))}')" class="block w-full text-left hover:ring-2 hover:ring-green-200">
+                  <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
+                  <div class="px-2 py-1 text-[11px] text-gray-500">${adminEscape(img.room_label || img.slot_key || img.slot || `Photo ${idx + 1}`)}${img.is_primary ? " • Primary" : ""}${adminIsGeneratedPlaceholderPhoto(review, img) ? " • Placeholder" : ""}</div>
+                </button>
+                <div class="border-t border-gray-200 p-2 flex flex-wrap gap-1.5">
+                  <input id="admin-replace-photo-${adminAttr(img.id || idx)}" type="file" accept="image/*" class="hidden" onchange="adminReplaceListingPhoto('${adminAttr(img.id || "")}', this)">
+                  <button type="button" onclick="document.getElementById('admin-replace-photo-${adminAttr(img.id || idx)}')?.click()" class="border border-green-200 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[10px] font-bold">Replace</button>
+                  ${img.is_primary ? "" : `<button type="button" onclick="adminSetListingPhotoPrimary('${adminAttr(img.id || "")}')" class="border border-gray-200 text-gray-700 hover:bg-white px-2 py-1 rounded text-[10px] font-bold">Primary</button>`}
+                  <button type="button" onclick="adminDeleteListingPhoto('${adminAttr(img.id || "")}')" class="border border-red-200 text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[10px] font-bold">Delete</button>
+                </div>
+              </div>
             `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}
           </div>
         </div>
