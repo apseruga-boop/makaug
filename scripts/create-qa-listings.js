@@ -18,6 +18,7 @@ const QA_EMAIL = String(process.env.QA_LISTER_EMAIL || '').trim();
 const QA_PHONE = String(process.env.QA_LISTER_PHONE || '').trim();
 const RUN_ID = String(process.env.QA_RUN_ID || new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 12));
 const LISTING_COUNT = Math.max(1, Math.min(parseInt(process.env.QA_LISTING_COUNT || '25', 10) || 25, 500));
+const TYPE_COUNTS_INPUT = String(process.env.QA_TYPE_COUNTS || '').trim();
 const OUTPUT_FILE = process.env.QA_OUTPUT_FILE
   || path.join(process.cwd(), 'qa-output', `makaug-qa-listings-${RUN_ID}.json`);
 
@@ -31,6 +32,7 @@ function usage() {
     'Optional:',
     '  QA_BASE_URL=https://makaug.com',
     '  QA_LISTING_COUNT=200          # default 25, max 500',
+    '  QA_TYPE_COUNTS=sale:10,rent:10,student:10,commercial:10',
     '  QA_LISTER_EMAIL=your-test-inbox@example.com',
     '  QA_LISTER_PHONE=+256770123456',
     '  QA_APPROVE=1                # approve after automated review passes',
@@ -219,11 +221,39 @@ function chooseLocation(globalIndex, listingType) {
 }
 
 function plannedConfigs(total) {
+  const requestedTypeCounts = parseTypeCounts(TYPE_COUNTS_INPUT);
+  if (requestedTypeCounts.length) {
+    return requestedTypeCounts.flatMap(({ type, count }) => {
+      const config = typeConfigs.find((item) => item.type === type);
+      return Array.from({ length: count }, () => config);
+    });
+  }
   const weighted = [];
   typeConfigs.forEach((config) => {
     for (let i = 0; i < config.weight; i += 1) weighted.push(config);
   });
   return Array.from({ length: total }, (_, idx) => weighted[idx % weighted.length]);
+}
+
+function parseTypeCounts(input) {
+  if (!input) return [];
+  const allowed = new Set(typeConfigs.map((config) => config.type));
+  const parsed = input
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [rawType, rawCount] = part.split(':');
+      const type = String(rawType || '').trim().toLowerCase();
+      const count = Number.parseInt(String(rawCount || '').trim(), 10);
+      if (!allowed.has(type)) throw new Error(`Unsupported QA_TYPE_COUNTS type: ${type}`);
+      if (!Number.isFinite(count) || count < 0) throw new Error(`Invalid QA_TYPE_COUNTS count for ${type}`);
+      return { type, count };
+    })
+    .filter((item) => item.count > 0);
+  const total = parsed.reduce((sum, item) => sum + item.count, 0);
+  if (total > 500) throw new Error('QA_TYPE_COUNTS total must be 500 or less');
+  return parsed;
 }
 
 function buildPayload(config, indexWithinType, globalIndex) {
@@ -480,7 +510,15 @@ async function main() {
   if (summary.failed > 0) process.exitCode = 1;
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  buildPayload,
+  parseTypeCounts,
+  plannedConfigs,
+};

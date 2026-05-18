@@ -1,6 +1,6 @@
 # MakaUg Performance Audit
 
-Generated: 2026-05-17T02:34:43.849Z
+Generated: 2026-05-18T02:14:52.593Z
 
 Base URL: https://makaug.com
 
@@ -11,56 +11,56 @@ Launch targets:
 - Google Maps should not load on the homepage before active map use.
 - Google Maps should not load on homepage, mortgage, advertise, or login routes before active map use.
 
-Slowest route: `/brokers` (mobile) at 895ms.
+Slowest route: `/about` (mobile) at 1005ms.
 
 | Route | Viewport | Status | Body visible ms | DCL ms | Load ms | Resources | JS | CSS | Google Maps | Console errors | Result |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|---:|---|
-| `/` | desktop | 200 | 755 | 786 | 1299 | 16 | 2 | 1 | no | 0 | pass |
-| `/to-rent` | desktop | 200 | 798 | 763 | 1920 | 34 | 9 | 1 | yes | 0 | pass |
-| `/for-sale` | desktop | 200 | 782 | 757 | 788 | 32 | 9 | 1 | yes | 0 | pass |
-| `/land` | desktop | 200 | 655 | 641 | 673 | 35 | 9 | 1 | yes | 0 | pass |
-| `/student-accommodation` | desktop | 200 | 626 | 610 | 646 | 36 | 9 | 1 | yes | 0 | pass |
-| `/students` | desktop | 200 | 722 | 714 | 747 | 37 | 9 | 1 | yes | 0 | pass |
-| `/commercial` | desktop | 200 | 638 | 596 | 623 | 36 | 9 | 1 | yes | 0 | pass |
-| `/brokers` | desktop | 200 | 648 | 646 | 686 | 34 | 9 | 1 | yes | 0 | pass |
-| `/list-property` | desktop | 200 | 662 | 645 | 745 | 30 | 8 | 1 | yes | 0 | pass |
-| `/about` | desktop | 200 | 625 | 601 | 633 | 18 | 2 | 1 | no | 0 | pass |
-| `/how-it-works` | desktop | 200 | 616 | 590 | 614 | 18 | 2 | 1 | no | 0 | pass |
-| `/careers` | desktop | 200 | 686 | 656 | 678 | 17 | 2 | 1 | no | 0 | pass |
-| `/help` | desktop | 200 | 629 | 607 | 634 | 18 | 2 | 1 | no | 0 | pass |
-| `/safety` | desktop | 200 | 660 | 648 | 676 | 18 | 2 | 1 | no | 0 | pass |
-| `/anti-fraud` | desktop | 200 | 619 | 607 | 634 | 18 | 2 | 1 | no | 0 | pass |
-| `/report-fraud` | desktop | 200 | 731 | 719 | 750 | 18 | 2 | 1 | no | 0 | pass |
-| `/privacy-policy` | desktop | 200 | 729 | 717 | 741 | 17 | 2 | 1 | no | 0 | pass |
-| `/cookie-policy` | desktop | 200 | 633 | 619 | 641 | 17 | 2 | 1 | no | 0 | pass |
-| `/terms` | desktop | 200 | 666 | 650 | 671 | 17 | 2 | 1 | no | 0 | pass |
-| `/advertise` | desktop | 200 | 648 | 634 | 656 | 17 | 2 | 1 | no | 0 | pass |
-| `/mortgage` | desktop | 200 | 620 | 605 | 641 | 19 | 2 | 1 | no | 0 | pass |
-| `/discover-ai-chatbot` | desktop | 200 | 620 | 618 | 650 | 19 | 2 | 1 | no | 0 | pass |
-| `/login` | desktop | 200 | 629 | 606 | 637 | 17 | 2 | 1 | no | 0 | pass |
-| `/` | mobile | 200 | 690 | 669 | 701 | 20 | 2 | 1 | no | 0 | pass |
-| `/to-rent` | mobile | 200 | 628 | 632 | 660 | 25 | 7 | 1 | yes | 0 | pass |
-| `/for-sale` | mobile | 200 | 888 | 852 | 878 | 25 | 7 | 1 | yes | 0 | pass |
-| `/land` | mobile | 200 | 742 | 747 | 776 | 25 | 7 | 1 | yes | 0 | pass |
-| `/student-accommodation` | mobile | 200 | 618 | 601 | 635 | 26 | 7 | 1 | yes | 0 | pass |
-| `/students` | mobile | 200 | 628 | 629 | 660 | 26 | 7 | 1 | yes | 0 | pass |
-| `/commercial` | mobile | 200 | 617 | 597 | 624 | 25 | 7 | 1 | yes | 0 | pass |
-| `/brokers` | mobile | 200 | 895 | 873 | 904 | 25 | 7 | 1 | yes | 0 | pass |
-| `/list-property` | mobile | 200 | 680 | 665 | 729 | 28 | 8 | 1 | yes | 0 | pass |
-| `/about` | mobile | 200 | 622 | 601 | 628 | 18 | 2 | 1 | no | 0 | pass |
-| `/how-it-works` | mobile | 200 | 647 | 632 | 658 | 18 | 2 | 1 | no | 0 | pass |
-| `/careers` | mobile | 200 | 619 | 599 | 620 | 17 | 2 | 1 | no | 0 | pass |
-| `/help` | mobile | 200 | 725 | 702 | 727 | 18 | 2 | 1 | no | 0 | pass |
-| `/safety` | mobile | 200 | 614 | 611 | 638 | 18 | 2 | 1 | no | 0 | pass |
-| `/anti-fraud` | mobile | 200 | 620 | 606 | 633 | 18 | 2 | 1 | no | 0 | pass |
-| `/report-fraud` | mobile | 200 | 623 | 614 | 643 | 18 | 2 | 1 | no | 0 | pass |
-| `/privacy-policy` | mobile | 200 | 612 | 592 | 612 | 17 | 2 | 1 | no | 0 | pass |
-| `/cookie-policy` | mobile | 200 | 654 | 649 | 669 | 17 | 2 | 1 | no | 0 | pass |
-| `/terms` | mobile | 200 | 704 | 659 | 679 | 17 | 2 | 1 | no | 0 | pass |
-| `/advertise` | mobile | 200 | 698 | 671 | 696 | 17 | 2 | 1 | no | 0 | pass |
-| `/mortgage` | mobile | 200 | 877 | 867 | 908 | 18 | 2 | 1 | no | 0 | pass |
-| `/discover-ai-chatbot` | mobile | 200 | 696 | 678 | 703 | 19 | 2 | 1 | no | 0 | pass |
-| `/login` | mobile | 200 | 670 | 642 | 671 | 17 | 2 | 1 | no | 0 | pass |
+| `/` | desktop | 200 | 945 | 982 | 1563 | 17 | 2 | 1 | no | 0 | pass |
+| `/to-rent` | desktop | 200 | 620 | 615 | 1823 | 29 | 8 | 1 | yes | 0 | pass |
+| `/for-sale` | desktop | 200 | 704 | 696 | 728 | 45 | 10 | 1 | yes | 0 | pass |
+| `/land` | desktop | 200 | 619 | 610 | 642 | 46 | 10 | 1 | yes | 0 | pass |
+| `/student-accommodation` | desktop | 200 | 874 | 880 | 913 | 47 | 10 | 1 | yes | 0 | pass |
+| `/students` | desktop | 200 | 648 | 639 | 671 | 47 | 10 | 1 | yes | 0 | pass |
+| `/commercial` | desktop | 200 | 651 | 638 | 667 | 46 | 10 | 1 | yes | 0 | pass |
+| `/brokers` | desktop | 200 | 702 | 685 | 717 | 36 | 9 | 1 | yes | 0 | pass |
+| `/list-property` | desktop | 200 | 644 | 639 | 709 | 27 | 8 | 1 | yes | 0 | pass |
+| `/about` | desktop | 200 | 737 | 725 | 753 | 17 | 2 | 1 | no | 0 | pass |
+| `/how-it-works` | desktop | 200 | 615 | 598 | 622 | 17 | 2 | 1 | no | 0 | pass |
+| `/careers` | desktop | 200 | 616 | 598 | 619 | 16 | 2 | 1 | no | 0 | pass |
+| `/help` | desktop | 200 | 622 | 616 | 642 | 17 | 2 | 1 | no | 0 | pass |
+| `/safety` | desktop | 200 | 697 | 683 | 709 | 17 | 2 | 1 | no | 0 | pass |
+| `/anti-fraud` | desktop | 200 | 629 | 615 | 641 | 17 | 2 | 1 | no | 0 | pass |
+| `/report-fraud` | desktop | 200 | 700 | 690 | 717 | 17 | 2 | 1 | no | 0 | pass |
+| `/privacy-policy` | desktop | 200 | 657 | 642 | 662 | 16 | 2 | 1 | no | 0 | pass |
+| `/cookie-policy` | desktop | 200 | 671 | 659 | 684 | 16 | 2 | 1 | no | 0 | pass |
+| `/terms` | desktop | 200 | 720 | 702 | 721 | 16 | 2 | 1 | no | 0 | pass |
+| `/advertise` | desktop | 200 | 717 | 703 | 724 | 16 | 2 | 1 | no | 0 | pass |
+| `/mortgage` | desktop | 200 | 674 | 668 | 705 | 18 | 2 | 1 | no | 0 | pass |
+| `/discover-ai-chatbot` | desktop | 200 | 954 | 933 | 962 | 18 | 2 | 1 | no | 0 | pass |
+| `/login` | desktop | 200 | 655 | 643 | 673 | 16 | 2 | 1 | no | 0 | pass |
+| `/` | mobile | 200 | 616 | 609 | 643 | 19 | 2 | 1 | no | 0 | pass |
+| `/to-rent` | mobile | 200 | 736 | 707 | 734 | 23 | 6 | 1 | yes | 0 | pass |
+| `/for-sale` | mobile | 200 | 975 | 963 | 990 | 23 | 6 | 1 | yes | 0 | pass |
+| `/land` | mobile | 200 | 761 | 754 | 787 | 23 | 6 | 1 | yes | 0 | pass |
+| `/student-accommodation` | mobile | 200 | 752 | 736 | 770 | 24 | 6 | 1 | yes | 0 | pass |
+| `/students` | mobile | 200 | 629 | 616 | 650 | 24 | 6 | 1 | yes | 0 | pass |
+| `/commercial` | mobile | 200 | 613 | 602 | 629 | 23 | 6 | 1 | yes | 0 | pass |
+| `/brokers` | mobile | 200 | 683 | 665 | 697 | 24 | 7 | 1 | yes | 0 | pass |
+| `/list-property` | mobile | 200 | 761 | 746 | 0 | 9 | 2 | 3 | no | 0 | pass |
+| `/about` | mobile | 200 | 1005 | 660 | 712 | 15 | 2 | 1 | no | 0 | pass |
+| `/how-it-works` | mobile | 200 | 739 | 731 | 761 | 17 | 2 | 1 | no | 0 | pass |
+| `/careers` | mobile | 200 | 759 | 716 | 736 | 16 | 2 | 1 | no | 0 | pass |
+| `/help` | mobile | 200 | 763 | 752 | 777 | 17 | 2 | 1 | no | 0 | pass |
+| `/safety` | mobile | 200 | 765 | 755 | 782 | 17 | 2 | 1 | no | 0 | pass |
+| `/anti-fraud` | mobile | 200 | 658 | 652 | 682 | 17 | 2 | 1 | no | 0 | pass |
+| `/report-fraud` | mobile | 200 | 616 | 610 | 634 | 17 | 2 | 1 | no | 0 | pass |
+| `/privacy-policy` | mobile | 200 | 972 | 958 | 977 | 16 | 2 | 1 | no | 0 | pass |
+| `/cookie-policy` | mobile | 200 | 619 | 599 | 618 | 16 | 2 | 1 | no | 0 | pass |
+| `/terms` | mobile | 200 | 760 | 745 | 766 | 16 | 2 | 1 | no | 0 | pass |
+| `/advertise` | mobile | 200 | 673 | 660 | 680 | 16 | 2 | 1 | no | 0 | pass |
+| `/mortgage` | mobile | 200 | 676 | 670 | 710 | 17 | 2 | 1 | no | 0 | pass |
+| `/discover-ai-chatbot` | mobile | 200 | 644 | 630 | 656 | 18 | 2 | 1 | no | 0 | pass |
+| `/login` | mobile | 200 | 758 | 741 | 770 | 16 | 2 | 1 | no | 0 | pass |
 
 Notes:
 - These are lab probes from Playwright/Chrome against the configured base URL.

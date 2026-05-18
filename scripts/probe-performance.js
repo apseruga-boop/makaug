@@ -96,6 +96,15 @@ function isLocalOptionalResponseFailure(failure) {
   ].some((prefix) => pathname.startsWith(prefix));
 }
 
+function isKnownExternalOptionalResponseFailure(failure) {
+  try {
+    const url = new URL(failure.url);
+    return url.hostname === 'api.whatsapp.com' && url.pathname === '/data/manifest.json';
+  } catch {
+    return false;
+  }
+}
+
 function significantConsoleIssues(issues, responseFailures) {
   return issues.filter((issue) => {
     if (issue.kind === 'pageerror') return true;
@@ -104,6 +113,12 @@ function significantConsoleIssues(issues, responseFailures) {
       && /Failed to load resource: the server responded with a status of/i.test(issue.text || '')
       && responseFailures.length > 0
       && responseFailures.every(isLocalOptionalResponseFailure)
+    ) {
+      return false;
+    }
+    if (
+      /Manifest fetch from https:\/\/api\.whatsapp\.com\/data\/manifest\.json failed|Failed to load resource: the server responded with a status of 404/i.test(issue.text || '')
+      && responseFailures.some(isKnownExternalOptionalResponseFailure)
     ) {
       return false;
     }
@@ -130,10 +145,10 @@ async function probeRoute(page, route, viewportName = 'desktop') {
   const startedAt = Date.now();
   let response;
   try {
-    response = await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'commit', timeout: 30000 });
+    response = await gotoRouteWithRetry(page, route, 'commit');
   } catch (error) {
     if (!/waitUntil/i.test(error.message || '')) throw error;
-    response = await page.goto(`${BASE_URL}${route}?v=${Date.now()}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    response = await gotoRouteWithRetry(page, route, 'domcontentloaded');
   }
   await page.waitForFunction((id) => {
     const el = document.getElementById(id);
@@ -171,7 +186,7 @@ async function probeRoute(page, route, viewportName = 'desktop') {
   page.off('pageerror', onPageError);
   page.off('response', onResponse);
 
-  const significantResponses = responseFailures.filter((failure) => !isLocalOptionalResponseFailure(failure));
+  const significantResponses = responseFailures.filter((failure) => !isLocalOptionalResponseFailure(failure) && !isKnownExternalOptionalResponseFailure(failure));
   const consoleErrors = significantConsoleIssues(consoleIssues, responseFailures).map((issue) => issue.text);
   const failures = [];
   if ((response?.status() || 0) !== 200) failures.push(`expected 200, got ${response?.status() || 0}`);
@@ -191,6 +206,18 @@ async function probeRoute(page, route, viewportName = 'desktop') {
     failures,
     ...metrics
   };
+}
+
+async function gotoRouteWithRetry(page, route, waitUntil) {
+  const urlForAttempt = () => `${BASE_URL}${route}?v=${Date.now()}`;
+  try {
+    return await page.goto(urlForAttempt(), { waitUntil, timeout: 30000 });
+  } catch (error) {
+    const message = error.message || '';
+    if (!/ERR_ABORTED|Navigation failed because page was closed|net::ERR_/i.test(message)) throw error;
+    await page.waitForTimeout(350);
+    return page.goto(urlForAttempt(), { waitUntil, timeout: 30000 });
+  }
 }
 
 function markdown(results) {
