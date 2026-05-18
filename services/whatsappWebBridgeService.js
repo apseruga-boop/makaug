@@ -272,7 +272,7 @@ async function markWhatsappWebBridgeMessageSent(id, patch = {}) {
 }
 
 async function markWhatsappWebBridgeMessageFailed(id, errorMessage = 'bridge_send_failed', patch = {}) {
-  const retryDelay = Math.min(120, Math.max(3, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 3)));
+  const retryDelay = Math.min(120, Math.max(1, Number(process.env.WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1)));
   const metadata = patch && typeof patch === 'object' ? patch : {};
   const result = await db.query(
     `UPDATE outbound_message_queue

@@ -40,6 +40,21 @@ const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHAT
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
+const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 1800);
+const SEND_CONFIRM_MS = Math.min(4000, Math.max(900, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 1800));
+const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 900);
+const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
+  3000,
+  Math.max(400, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 900)
+);
+const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 1400);
+const SEND_RETRY_CONFIRM_MS = Math.min(
+  3000,
+  Math.max(900, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 1400)
+);
+const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
+);
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
@@ -1358,8 +1373,18 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
   if (!composerCleared) return false;
 
   // Composer-cleared alone is not enough: WhatsApp Web can clear the input
-  // before the outgoing bubble appears. Wait for the real outgoing message.
-  return waitForOutgoingReplyConfirmation(page, text, beforeState, 6000);
+  // before the outgoing bubble appears. Wait briefly for the real outgoing
+  // message, then optionally accept the cleared composer as a fast confirmation.
+  if (await waitForOutgoingReplyConfirmation(page, text, beforeState, SEND_CONFIRM_AFTER_CLEAR_MS)) {
+    return true;
+  }
+
+  if (TRUST_SEND_ON_COMPOSER_CLEAR) {
+    log('outgoing bubble was not observed quickly; accepting cleared composer as sent');
+    return true;
+  }
+
+  return false;
 }
 
 async function replaceComposerText(page, text, timeoutMs = 1200) {
@@ -1444,7 +1469,7 @@ async function typeAndSendReply(page, text) {
   }
 
   await clickWhatsAppSend(page);
-  const confirmed = await waitForPostSendConfirmation(page, text, beforeState, 6500);
+  const confirmed = await waitForPostSendConfirmation(page, text, beforeState, SEND_CONFIRM_MS);
   if (confirmed) return true;
 
   let composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
@@ -1457,7 +1482,7 @@ async function typeAndSendReply(page, text) {
   const expectedPrefix = normalizeReplyText(text).slice(0, 120);
   if (composerText && normalizeReplyText(composerText).includes(expectedPrefix)) {
     await page.keyboard.press('Enter');
-    const confirmedAfterEnter = await waitForPostSendConfirmation(page, text, beforeState, 4500);
+    const confirmedAfterEnter = await waitForPostSendConfirmation(page, text, beforeState, SEND_RETRY_CONFIRM_MS);
     if (confirmedAfterEnter) return true;
   }
 
@@ -1469,7 +1494,7 @@ async function typeAndSendReply(page, text) {
 
   if (normalizeReplyText(composerState.text || '').includes(expectedPrefix)) {
     await clickWhatsAppSend(page);
-    const confirmedAfterRetry = await waitForPostSendConfirmation(page, text, beforeState, 4500);
+    const confirmedAfterRetry = await waitForPostSendConfirmation(page, text, beforeState, SEND_RETRY_CONFIRM_MS);
     if (confirmedAfterRetry) return true;
   }
 
