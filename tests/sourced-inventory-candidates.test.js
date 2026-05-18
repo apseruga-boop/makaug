@@ -8,6 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const script = read('scripts/seed-sourced-inventory-candidates.js');
+const imageImportScript = read('scripts/import-sourced-candidate-images.js');
 const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
 const html = read('index.html');
@@ -47,6 +48,16 @@ test('sourced candidate seed avoids copied third-party images and source URLs', 
   });
 });
 
+test('sourced candidate image import requires authorised photos and only updates candidates', () => {
+  assert(imageImportScript.includes('source = $1'), 'image import should match the sourced candidate source only');
+  assert(imageImportScript.includes('consent_confirmed'), 'image import should require consent confirmation');
+  assert(imageImportScript.includes('image_rights_confirmed'), 'image import should require image rights confirmation');
+  assert(imageImportScript.includes('authorised_imported'), 'image import should mark images as authorised imports');
+  assert(imageImportScript.includes('sourced_candidate_authorised_images_imported'), 'image import should write moderation event history');
+  assert(imageImportScript.includes('Refusing to write in production without --confirm'), 'production writes should require explicit confirmation');
+  assert(imageImportScript.includes('source_urls'), 'image import should retain source URLs for King review');
+});
+
 test('King dashboard visibly separates sourced candidates from ordinary reviews', () => {
   assert(frontend.includes('function adminIsSourcedInventoryCandidate'), 'dashboard should have sourced candidate detection helper');
   assert(frontend.includes('function adminSourcedInventoryCandidateBadge'), 'dashboard should have sourced candidate badge helper');
@@ -69,6 +80,11 @@ test('package script exposes the safe inventory intake command', () => {
     pkg.scripts['inventory:seed-sourced-candidates'],
     'node scripts/seed-sourced-inventory-candidates.js',
     'package.json should expose inventory seed command'
+  );
+  assert.strictEqual(
+    pkg.scripts['inventory:import-sourced-images'],
+    'node scripts/import-sourced-candidate-images.js',
+    'package.json should expose sourced candidate image import command'
   );
 });
 
