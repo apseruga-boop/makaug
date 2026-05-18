@@ -50,6 +50,17 @@ const WHATSAPP_ACCESS_TOKEN = (process.env.WHATSAPP_ACCESS_TOKEN || '').trim();
 const WHATSAPP_PHONE_NUMBER_ID = (process.env.WHATSAPP_PHONE_NUMBER_ID || '').trim();
 const WHATSAPP_VERIFY_TOKEN = (process.env.WHATSAPP_VERIFY_TOKEN || '').trim();
 const WHATSAPP_WEB_BRIDGE_TOKEN = getWhatsappWebBridgeToken();
+const WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS = Math.min(
+  2500,
+  Math.max(300, Number(process.env.WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS || 900))
+);
+const WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS = Math.min(
+  2500,
+  Math.max(300, Number(process.env.WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS || 900))
+);
+const WHATSAPP_LANGUAGE_AI_MODE = String(process.env.WHATSAPP_LANGUAGE_AI_MODE || 'fast').trim().toLowerCase();
+const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEARCH_AI_MODE || 'fast').trim().toLowerCase();
+const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 
 // Language Translations
 const T = {
@@ -717,7 +728,7 @@ function fastWhatsappRuntimeHints({
   if (mediaUrl || sharedLocation) return null;
 
   const clean = normalizeInput(text);
-  if (!clean || clean.length > 90) return null;
+  if (!clean || clean.length > 520) return null;
 
   const compact = normalizeOptKeyword(clean);
   const language = {
@@ -757,7 +768,43 @@ function fastWhatsappRuntimeHints({
     }
   }
 
+  if (!intent) {
+    const route = contextualPageRouteFromMessage(clean);
+    if (route === 'listing_type' || isListingStartRequest(clean, { intent: 'property_listing', confidence: 0.99 })) {
+      intent = 'property_listing';
+      const listingType = inferListingTypeFromStartRequest(clean, {});
+      if (listingType) intentEntities.listing_type = listingType;
+    } else if (route === 'search_type') intent = 'property_search';
+    else if (route === 'agent_area') intent = 'agent_search';
+    else if (route === 'agent_registration') intent = 'agent_registration';
+    else if (route === 'account_help') intent = 'account_help';
+    else if (route === 'mortgage_help') intent = 'mortgage_help';
+    else if (route === 'report_listing') intent = 'report_listing';
+    else if (route === 'support') intent = 'support';
+  }
+
+  if (!intent) {
+    const searchFilters = sanitizeNaturalSearchFilters(
+      extractNaturalSearchFilters(clean, {}, 'any', {}),
+      clean
+    );
+    if (searchFilters.hasSignal && (searchFilters.area || searchFilters.useSharedLocation || searchFilters.searchType !== 'any')) {
+      intent = 'property_search';
+      intentEntities.listing_type = searchFilters.searchType || 'any';
+      if (searchFilters.area) intentEntities.area = searchFilters.area;
+      if (searchFilters.bedsMin) intentEntities.bedrooms = searchFilters.bedsMin;
+      if (searchFilters.maxBudgetUgx) intentEntities.budget_max = searchFilters.maxBudgetUgx;
+      if (searchFilters.propertyType) intentEntities.property_type = searchFilters.propertyType;
+    }
+  }
+
   if (!intent) return null;
+
+  if (detectedTextLanguage.code && detectedTextLanguage.confidence >= 0.84) {
+    language.code = detectedTextLanguage.code;
+    language.source = detectedTextLanguage.source || 'heuristic';
+    language.confidence = Math.max(language.confidence || 0, detectedTextLanguage.confidence);
+  }
 
   return {
     language,
@@ -847,6 +894,24 @@ function mergeAiLanguageDetection(baseLanguage = {}, aiLanguage = {}) {
   }
 
   return baseLanguage;
+}
+
+function shouldRunWhatsappLanguageAi({ text = '', sessionStep = 'greeting', preliminaryLanguage = {} } = {}) {
+  if (WHATSAPP_LANGUAGE_AI_MODE === 'off') return false;
+  if (WHATSAPP_LANGUAGE_AI_MODE === 'always') return true;
+  if (WHATSAPP_LANGUAGE_AI_MODE !== 'auto') return false;
+
+  const clean = normalizeInput(text);
+  if (!clean || clean.length < 16) return false;
+  if (parseLanguageChange(clean)) return false;
+
+  const source = String(preliminaryLanguage.source || '').toLowerCase();
+  const confidence = Number(preliminaryLanguage.confidence || 0);
+  if (['heuristic', 'intent_entity', 'greeting_heuristic', 'template_fast_path', 'voice_transcription', 'voice_transcript_text'].includes(source) && confidence >= 0.84) {
+    return false;
+  }
+
+  return ['greeting', 'main_menu', 'choose_language', 'submitted'].includes(String(sessionStep || 'greeting'));
 }
 
 function photoRequirementLabel(index, lang = 'en') {
@@ -1037,7 +1102,7 @@ function noMatchChallengeReply(lang, sessionData = {}) {
 }
 
 async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {
-  if (!isLlmEnabled()) {
+  if (!isLlmEnabled() || WHATSAPP_REPLY_AI_MODE === 'off' || WHATSAPP_REPLY_AI_MODE === 'fast') {
     return friendlyUnknownReply(lang);
   }
 
@@ -1054,7 +1119,7 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
   };
 
   try {
-    const reply = await suggestWhatsappAssistantReply({
+    const reply = await withTimeout(suggestWhatsappAssistantReply({
       userMessage: body,
       intent: intentResult?.intent || 'unknown',
       language: lang,
@@ -1075,7 +1140,7 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
         ],
         preferredLink: linkByRoute[inferredRoute] || HOME_URL
       }
-    });
+    }), WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS, null, 'WhatsApp assistant fallback');
 
     if (reply?.text && reply.model && !reply.model.startsWith('template')) {
       return reply.text;
@@ -1152,6 +1217,17 @@ async function withTimeout(promise, timeoutMs, fallbackValue = null, label = 'op
   } finally {
     if (timer) clearTimeout(timer);
   }
+}
+
+function deferWhatsappWork(label, task) {
+  const runner = typeof setImmediate === 'function' ? setImmediate : (fn) => setTimeout(fn, 0);
+  runner(() => {
+    Promise.resolve()
+      .then(task)
+      .catch((error) => {
+        logger.warn(`${label} failed after WhatsApp reply was released:`, error.message || String(error));
+      });
+  });
 }
 
 function normalizeBridgeInboundKey(value) {
@@ -2295,6 +2371,26 @@ function mergeNaturalSearchFilters(primary = {}, secondary = {}) {
   return merged;
 }
 
+function shouldUseAiNaturalSearchExtraction(deterministic = {}, text = '') {
+  if (WHATSAPP_NATURAL_SEARCH_AI_MODE === 'off') return false;
+  if (WHATSAPP_NATURAL_SEARCH_AI_MODE === 'always') return true;
+  if (WHATSAPP_NATURAL_SEARCH_AI_MODE !== 'auto') return false;
+
+  const clean = normalizeInput(text);
+  if (!clean || clean.length < 12) return false;
+  if (!deterministic.hasSignal) return false;
+
+  const hasActionableSignal = Boolean(
+    deterministic.area
+    || deterministic.useSharedLocation
+    || deterministic.bedsMin > 0
+    || deterministic.propertyType
+    || deterministic.maxBudgetUgx > 0
+    || (deterministic.searchType && deterministic.searchType !== 'any')
+  );
+  return !hasActionableSignal;
+}
+
 async function resolveNaturalSearchFilters({
   text,
   entities = {},
@@ -2306,13 +2402,18 @@ async function resolveNaturalSearchFilters({
     extractNaturalSearchFilters(text, entities, fallbackType, sessionData),
     text
   );
+
+  if (!shouldUseAiNaturalSearchExtraction(deterministic, text)) {
+    return deterministic;
+  }
+
   try {
-    const aiExtract = await extractNaturalPropertyQuery({
+    const aiExtract = await withTimeout(extractNaturalPropertyQuery({
       text,
       language,
       sessionData,
       fallbackType
-    });
+    }), WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS, deterministic, 'WhatsApp natural search extraction');
     const merged = sanitizeNaturalSearchFilters(mergeNaturalSearchFilters(aiExtract, deterministic), text);
     if (deterministic.searchType && deterministic.searchType !== 'any') merged.searchType = deterministic.searchType;
     if (deterministic.area) merged.area = deterministic.area;
@@ -4530,7 +4631,7 @@ const STEPS = [
 ];
 
 async function processMessage(phone, body, mediaUrl, sharedLocation = null, runtime = {}) {
-  const session = await getSession(phone);
+  const session = runtime.session || await getSession(phone);
   const lang = resolveLangCode(runtime.language || session.language || 'en');
   let step = session.current_step;
   const draft = session.listing_draft || {};
@@ -6014,7 +6115,7 @@ async function processInboundRuntime({
   );
 
   if (contactName) {
-    await patchSessionData(phone, { contact_name: contactName });
+    deferWhatsappWork('WhatsApp contact-name session patch', () => patchSessionData(phone, { contact_name: contactName }));
   }
 
   let effectiveBody = normalizeInput(body);
@@ -6180,15 +6281,20 @@ async function processInboundRuntime({
       sessionLang,
       intentResult: null
     }));
-  const aiLanguage = transcriptRecord?.text
-    ? null
-    : (fastHints
-      ? null
-      : await detectWhatsappLanguage({
+  const shouldUseAiLanguage = !transcriptRecord?.text
+    && !fastHints
+    && shouldRunWhatsappLanguageAi({
+      text: effectiveBody,
+      sessionStep,
+      preliminaryLanguage
+    });
+  const aiLanguage = shouldUseAiLanguage
+    ? await withTimeout(detectWhatsappLanguage({
       text: effectiveBody,
       sessionLanguage: preliminaryLanguage.code || sessionLang,
       step: sessionStep
-      }));
+    }), WHATSAPP_FAST_ASSISTANT_TIMEOUT_MS, null, 'WhatsApp language detection')
+    : null;
   const classifierLanguageResult = mergeAiLanguageDetection(preliminaryLanguage, aiLanguage);
   const classifierLanguage = classifierLanguageResult.code || preliminaryLanguage.code || sessionLang;
 
@@ -6215,7 +6321,7 @@ async function processInboundRuntime({
     await updateSession(phone, { language: runtimeLang });
   }
 
-  await logIntent({
+  deferWhatsappWork('WhatsApp intent log', () => logIntent({
     userPhone: phone,
     waMessageId: inboundMessageId,
     detectedIntent: intentResult.intent,
@@ -6226,7 +6332,7 @@ async function processInboundRuntime({
     transcript: transcriptRecord?.text || null,
     entities: intentResult.entities || {},
     modelUsed: intentResult.model || null
-  });
+  }));
 
   const shouldPauseAutomation = ['off', 'copilot'].includes(String(conversationControl?.ai_mode || '').toLowerCase())
     || ['needs_human', 'escalated'].includes(String(conversationControl?.status || '').toLowerCase());
@@ -6271,6 +6377,7 @@ async function processInboundRuntime({
     {
       intent: intentResult,
       language: activeLang,
+      session,
       mediaType: normalizedMediaType,
       mediaCount: Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0)),
       transcript: transcriptRecord?.text || null
@@ -6285,33 +6392,37 @@ async function processInboundRuntime({
   const runtimeLatencyMs = Math.max(0, Date.now() - runtimeStartedAt);
 
   await updateSession(phone, { current_step: nextStep, current_intent: intentResult.intent || null });
-  const refreshedSession = await getSession(phone);
-  await upsertWhatsappUserProfile(phone, {
-    preferredLanguage: refreshedSession.language || runtimeLang,
-    metadata: {
-      last_intent: intentResult.intent || 'unknown',
-      last_step: nextStep,
-      last_language_source: detectedLanguage.source || null,
-      last_runtime_latency_ms: runtimeLatencyMs,
-      ...(contactName ? { display_name: contactName } : {})
-    }
-  });
+  const finalPreferredLanguage = activeLang || runtimeLang || sessionLang;
+  deferWhatsappWork('WhatsApp profile/conversation sync', async () => {
+    await upsertWhatsappUserProfile(phone, {
+      preferredLanguage: finalPreferredLanguage,
+      metadata: {
+        last_intent: intentResult.intent || 'unknown',
+        last_step: nextStep,
+        last_language_source: detectedLanguage.source || null,
+        last_runtime_latency_ms: runtimeLatencyMs,
+        fast_language_path: !shouldUseAiLanguage,
+        ...(contactName ? { display_name: contactName } : {})
+      }
+    });
 
-  await syncWhatsappConversationState({
-    phone,
-    direction: 'inbound',
-    intent: intentResult.intent,
-    preferredLanguage: refreshedSession.language || runtimeLang,
-    currentStep: nextStep,
-    provider,
-    messageType,
-    metadata: {
-      last_inbound_message_id: inboundMessageId || null,
-      runtime_latency_ms: runtimeLatencyMs,
-      language_source: detectedLanguage.source || null,
-      classifier_language: classifierLanguage,
-      intent_model: intentResult.model || null
-    }
+    await syncWhatsappConversationState({
+      phone,
+      direction: 'inbound',
+      intent: intentResult.intent,
+      preferredLanguage: finalPreferredLanguage,
+      currentStep: nextStep,
+      provider,
+      messageType,
+      metadata: {
+        last_inbound_message_id: inboundMessageId || null,
+        runtime_latency_ms: runtimeLatencyMs,
+        language_source: detectedLanguage.source || null,
+        classifier_language: classifierLanguage,
+        intent_model: intentResult.model || null,
+        fast_language_path: !shouldUseAiLanguage
+      }
+    });
   });
 
   return { message, nextStep };
@@ -7001,7 +7112,10 @@ module.exports = router;
 module.exports.__test = {
   processInboundRuntime,
   contextualPageRouteFromMessage,
+  fastWhatsappRuntimeHints,
   menuRouteReply,
   parseInboundLocation,
-  normalizeBridgeInboundKey
+  normalizeBridgeInboundKey,
+  shouldRunWhatsappLanguageAi,
+  shouldUseAiNaturalSearchExtraction
 };

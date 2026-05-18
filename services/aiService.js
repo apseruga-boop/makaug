@@ -39,6 +39,7 @@ const INTENTS = [
 ];
 
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const WHATSAPP_INTENT_AI_MODE = String(process.env.WHATSAPP_INTENT_AI_MODE || 'fast').trim().toLowerCase();
 
 function getClient() {
   return getProviderClient();
@@ -412,6 +413,8 @@ function shouldUseFastIntentPath({ text = '', step = '', fallback = {} } = {}) {
   const confidence = safeNumber(fallback.confidence, 0);
 
   if (!clean) return true;
+  if (WHATSAPP_INTENT_AI_MODE === 'off' || WHATSAPP_INTENT_AI_MODE === 'fast') return true;
+  if (WHATSAPP_INTENT_AI_MODE === 'always') return false;
 
   // Borrowed from the Claw runtime idea of keeping the hot message loop lean:
   // deterministic flow steps should not wait on a model unless the message is
