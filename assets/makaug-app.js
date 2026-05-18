@@ -8787,6 +8787,55 @@ function renderAdminPendingRows(listings) {
   }).join("");
 }
 
+async function adminSeedSourcedInventoryCandidates() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const ok = window.confirm("Create/rebuild 200 pending sourced candidates in the King review queue? Existing sourced candidates from this seed will be replaced.");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const button = document.getElementById("admin-seed-sourced-candidates-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Creating 200 pending sourced candidates now...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/sourced-inventory-candidates/seed", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { count: 200, replace: true }
+    });
+    const data = response?.data || {};
+    const guardrails = data.guardrails || {};
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">Sourced candidates created</div>
+        <div class="mt-1">${adminEscape(data.created_properties || guardrails.total || 0)} pending records are now in the King review queue.</div>
+        <div class="mt-1">Guardrails: ${adminEscape(guardrails.consent_required || 0)} require consent, ${adminEscape(guardrails.approval_blocked || 0)} blocked until verification.</div>`;
+    }
+    toast("200 sourced candidates are ready for review.");
+    await renderAdminDashboard();
+    setAdminWorkflowTab("review");
+    adminScrollTo("#admin-review-queue-control");
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Could not create sourced candidates: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Seed failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
 function renderAdminActionedRows(listings) {
   const wrap = document.getElementById("admin-actioned-table");
   if (!wrap) return;

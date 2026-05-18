@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const script = read('scripts/seed-sourced-inventory-candidates.js');
 const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
+const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const pkg = JSON.parse(read('package.json'));
 
@@ -73,4 +74,12 @@ test('admin-only endpoint can seed production candidates without public submissi
   assert(adminRoute.includes("router.post('/sourced-inventory-candidates/seed'"), 'admin seed endpoint should exist');
   assert(adminRoute.includes('seedSourcedInventoryCandidates'), 'admin endpoint should use direct DB seed service');
   assert(adminRoute.includes('admin_sourced_inventory_candidates_seeded'), 'admin endpoint should write audit trail');
+});
+
+test('King review queue has one-click sourced candidate creation', () => {
+  assert(html.includes('admin-seed-sourced-candidates-btn'), 'review queue should expose sourced candidate button');
+  assert(html.includes('admin-sourced-candidates-status'), 'review queue should expose seed status output');
+  assert(frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should implement seed action');
+  assert(frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should call protected admin seed endpoint');
+  assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
 });
