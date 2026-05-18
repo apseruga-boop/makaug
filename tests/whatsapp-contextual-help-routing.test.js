@@ -31,6 +31,12 @@ async function run() {
   assert.strictEqual(loginIntent.intent, 'account_help', 'Login process should not be treated as generic support');
   assert(loginIntent.confidence >= 0.7, 'Login process should be confident enough to avoid a confirmation loop');
 
+  const humanSupportIntent = await classifyWhatsappIntent({
+    text: 'I am in London and need human help with my account',
+    step: 'main_menu',
+  });
+  assert.strictEqual(humanSupportIntent.intent, 'support', 'Explicit human support requests should not be swallowed by account help');
+
   const brokerReply = menuRouteReply('en', 'agent_registration').message;
   assert(brokerReply.includes('/broker-signup'), 'Broker reply must point to the broker signup route');
   assert(brokerReply.includes('/login'), 'Broker reply should include the login route for existing users');

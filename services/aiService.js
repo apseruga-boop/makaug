@@ -366,6 +366,9 @@ function heuristicIntent(text) {
   const t = String(text || '').toLowerCase();
   if (!t) return { intent: 'unknown', confidence: 0.1, entities: {} };
 
+  if (/(human support|human help|real person|speak to (?:a )?(?:person|human|team)|talk to (?:a )?(?:person|human|team)|call me|contact support|support team)/.test(t)) {
+    return { intent: 'support', confidence: 0.74, entities: {} };
+  }
   if (/(login process|log in process|sign in process|account access|cannot log in|can't log in|password|otp|account|sign in|login|saved|profile)/.test(t)) {
     return { intent: 'account_help', confidence: 0.72, entities: {} };
   }
@@ -378,7 +381,7 @@ function heuristicIntent(text) {
   if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
-  if (/(help|support|human|call me|contact)/.test(t)) {
+  if (/(support|human|call me|contact)/.test(t)) {
     return { intent: 'support', confidence: 0.64, entities: {} };
   }
   if (/(near me|nearby|my location|share location|shared location|around me)/.test(t)) {

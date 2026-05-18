@@ -4493,6 +4493,10 @@ function contextualPageRouteFromMessage(text = '') {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
 
+  if (/\b(human support|human help|real person|speak to (?:a )?(?:person|human|team)|talk to (?:a )?(?:person|human|team)|call me|contact support|support team)\b/i.test(clean)) {
+    return 'support';
+  }
+
   if (/\b(log\s*in|login|sign\s*in|signin|password|otp|account access|dashboard access|cannot log in|can't log in)\b/i.test(clean)) {
     return 'account_help';
   }
