@@ -79,6 +79,7 @@ test('admin-only endpoint can seed production candidates without public submissi
 test('King review queue has one-click sourced candidate creation', () => {
   assert(html.includes('admin-seed-sourced-candidates-btn'), 'review queue should expose sourced candidate button');
   assert(html.includes('admin-sourced-candidates-status'), 'review queue should expose seed status output');
+  assert(frontend.includes('function ensureAdminSourcedCandidateControls'), 'frontend should inject seed controls when cached HTML is stale');
   assert(frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should implement seed action');
   assert(frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should call protected admin seed endpoint');
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');

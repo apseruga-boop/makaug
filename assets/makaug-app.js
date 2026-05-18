@@ -8753,6 +8753,7 @@ async function fetchRemoteAdminSnapshot() {
 function renderAdminPendingRows(listings) {
   const wrap = document.getElementById("admin-pending-table");
   if (!wrap) return;
+  ensureAdminSourcedCandidateControls();
   const cleanListings = adminApplyLaunchCleanFilter(listings);
   if (!cleanListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
@@ -8785,6 +8786,26 @@ function renderAdminPendingRows(listings) {
         </div>
       </div>`;
   }).join("");
+}
+
+function ensureAdminSourcedCandidateControls() {
+  const panel = document.getElementById("admin-review-queue-control");
+  const table = document.getElementById("admin-pending-table");
+  if (!panel || !table) return;
+  if (!document.getElementById("admin-sourced-candidates-status")) {
+    const status = document.createElement("div");
+    status.id = "admin-sourced-candidates-status";
+    status.className = "hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900";
+    table.parentNode.insertBefore(status, table);
+  }
+  if (document.getElementById("admin-seed-sourced-candidates-btn")) return;
+  const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
+  const actions = document.createElement("div");
+  actions.className = "flex items-center gap-2 flex-wrap";
+  actions.innerHTML = `
+    <button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>
+    <button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>`;
+  if (header) header.appendChild(actions);
 }
 
 async function adminSeedSourcedInventoryCandidates() {
