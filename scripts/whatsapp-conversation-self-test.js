@@ -211,6 +211,23 @@ const scenarios = [
     ]
   },
   {
+    name: 'Stale broker signup page message resumes as broker help',
+    messages: [
+      '1',
+      '1',
+      '1',
+      { body: 'Hello', metadata: { force_idle_minutes: 3 } },
+      "Hi MakaUg, I'm on makaug.com and need property help. Please guide me with the best next step.\nPage: makaug.com/broker-signup"
+    ],
+    expect: [
+      { step: 'listing_type' },
+      { step: 'ownership' },
+      { step: 'ask_field_agent' },
+      { step: 'ask_field_agent', includesAny: ['carry on where we left off', 'new request', 'CONTINUE'] },
+      { step: 'main_menu', includesAny: ['Broker sign-up', '/broker-signup', 'Log in'], excludes: ['Choose what you need', 'Search for a property'] }
+    ]
+  },
+  {
     name: 'Listing flow recovers when a delayed listing-type answer arrives at ownership step',
     messages: [
       '1',
@@ -420,7 +437,14 @@ const scenarios = [
     name: 'Agent registration points to broker website page',
     messages: ['How do I sign up as an agent?'],
     expect: [
-      { step: 'main_menu', includesAny: ['Register as a broker', '#page-brokers', 'broker'], excludes: ['Wandiika'] }
+      { step: 'main_menu', includesAny: ['Broker sign-up', '/broker-signup', 'broker'], excludes: ['Wandiika'] }
+    ]
+  },
+  {
+    name: 'Login process help stays on account access',
+    messages: ['Can you help with the login process?'],
+    expect: [
+      { step: 'main_menu', includesAny: ['Login help', '/login', 'password'], excludes: ['Search for a property', 'Which area'] }
     ]
   },
   {

@@ -253,9 +253,9 @@ function buildIntentLink(intent) {
   ].includes(key)) return `${PUBLIC_BASE_URL}/#page-sale`;
   if (key === 'property_listing') return `${PUBLIC_BASE_URL}/#page-list-property`;
   if (key === 'agent_search') return `${PUBLIC_BASE_URL}/#page-brokers`;
-  if (key === 'agent_registration') return `${PUBLIC_BASE_URL}/#page-brokers`;
+  if (key === 'agent_registration') return `${PUBLIC_BASE_URL}/broker-signup`;
   if (key === 'mortgage_help') return `${PUBLIC_BASE_URL}/#page-mortgage`;
-  if (key === 'account_help' || key === 'saved_properties') return `${PUBLIC_BASE_URL}/#page-account`;
+  if (key === 'account_help' || key === 'saved_properties') return `${PUBLIC_BASE_URL}/login`;
   if (key === 'report_listing') return `${PUBLIC_BASE_URL}/#page-report`;
   return PUBLIC_BASE_URL;
 }
@@ -366,8 +366,11 @@ function heuristicIntent(text) {
   const t = String(text || '').toLowerCase();
   if (!t) return { intent: 'unknown', confidence: 0.1, entities: {} };
 
-  if (/(register agent|agent registration|sign up as (?:an )?agent|become (?:an )?agent|join as (?:an )?agent|area licence|license|lisensi|licence)/.test(t)) {
-    return { intent: 'agent_registration', confidence: 0.68, entities: {} };
+  if (/(login process|log in process|sign in process|account access|cannot log in|can't log in|password|otp|account|sign in|login|saved|profile)/.test(t)) {
+    return { intent: 'account_help', confidence: 0.72, entities: {} };
+  }
+  if (/(register agent|agent registration|sign up as (?:an )?agent|sign up as (?:a )?broker|broker signup|broker sign up|become (?:an )?agent|become (?:a )?broker|join as (?:an )?agent|join as (?:a )?broker|area licence|license|lisensi|licence)/.test(t)) {
+    return { intent: 'agent_registration', confidence: 0.72, entities: {} };
   }
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
@@ -392,9 +395,6 @@ function heuristicIntent(text) {
   }
   if (/(mortgage|loan|deposit|repayment|interest|home loan)/.test(t)) {
     return { intent: 'mortgage_help', confidence: 0.66, entities: {} };
-  }
-  if (/(account|sign in|login|saved|password|profile|otp)/.test(t)) {
-    return { intent: 'account_help', confidence: 0.61, entities: {} };
   }
   if (/(report|fraud|scam|suspicious|fake)/.test(t)) {
     return { intent: 'report_listing', confidence: 0.7, entities: {} };

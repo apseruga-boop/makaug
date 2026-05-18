@@ -1046,9 +1046,9 @@ async function conversationalAssistantFallback({ phone, body, lang, step, intent
     listing_type: `${HOME_URL}/#page-list-property`,
     search_type: `${HOME_URL}/#page-search`,
     agent_area: `${HOME_URL}/#page-brokers`,
-    agent_registration: `${HOME_URL}/#page-brokers`,
+    agent_registration: `${HOME_URL}/broker-signup`,
     mortgage_help: `${HOME_URL}/#page-mortgage`,
-    account_help: `${HOME_URL}/#page-account`,
+    account_help: `${HOME_URL}/login`,
     report_listing: `${HOME_URL}/#page-report`,
     support: `${HOME_URL}/#page-contact`
   };
@@ -4418,7 +4418,7 @@ function intentRouteLabel(route) {
     agent_area: 'find a broker',
     agent_registration: 'register as a broker',
     mortgage_help: 'open mortgage finder',
-    account_help: 'get account/saved help',
+    account_help: 'get login/account help',
     report_listing: 'report a listing',
     support: 'contact support'
   };
@@ -4430,13 +4430,19 @@ function menuRouteReply(lang, route) {
   if (route === 'search_type') return { message: t(lang, 'askSearchType'), nextStep: 'search_type' };
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
   if (route === 'agent_registration') {
-    return { message: `📝 Register as a broker here: ${HOME_URL}/#page-brokers\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    return {
+      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join makaug.com as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive WhatsApp leads, and use seven website languages.\n\n${t(lang, 'menuHint')}`,
+      nextStep: 'main_menu'
+    };
   }
   if (route === 'mortgage_help') {
     return { message: `🏦 Use Mortgage Finder here: ${HOME_URL}/#page-mortgage\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
   }
   if (route === 'account_help') {
-    return { message: `👤 Account help: ${HOME_URL}/#page-account\n❤️ Saved properties: ${HOME_URL}/#page-saved\n\n${t(lang, 'menuHint')}`, nextStep: 'main_menu' };
+    return {
+      message: `${whatsappBrandHeader('Login help')}\nTo log in, open:\n${HOME_URL}/login\n\nUse the email or phone number you registered with. If you are creating a broker account, use:\n${HOME_URL}/broker-signup\n\nIf the code/password step fails, reply here with what you see and the team can help.\n\n${t(lang, 'menuHint')}`,
+      nextStep: 'main_menu'
+    };
   }
   if (route === 'report_listing') {
     return {
@@ -4483,6 +4489,33 @@ function intentMenuRoute(intent) {
   return '';
 }
 
+function contextualPageRouteFromMessage(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return '';
+
+  if (/\b(log\s*in|login|sign\s*in|signin|password|otp|account access|dashboard access|cannot log in|can't log in)\b/i.test(clean)) {
+    return 'account_help';
+  }
+
+  if (/\b(sign\s*up|signup|register|registration|join|become|create)\b.{0,50}\b(agent|broker)\b/i.test(clean)
+    || /\b(agent|broker)\b.{0,50}\b(sign\s*up|signup|register|registration|join|profile)\b/i.test(clean)) {
+    return 'agent_registration';
+  }
+
+  const pageMatch = clean.match(/\bpage:\s*(?:https?:\/\/)?(?:www\.)?makaug\.com(?:\/([^\s?#]+))?/i);
+  const path = normalizeInput(pageMatch?.[1] || '').replace(/^\/+/, '').toLowerCase();
+  if (!path) return '';
+
+  if (path.startsWith('broker-signup') || path.startsWith('agent-signup')) return 'agent_registration';
+  if (path.startsWith('login') || path.startsWith('signup') || path.includes('account')) return 'account_help';
+  if (path.startsWith('brokers') || path.startsWith('find-brokers') || path.startsWith('agents/')) return 'agent_area';
+  if (path.startsWith('list-property')) return 'listing_type';
+  if (path.startsWith('mortgage')) return 'mortgage_help';
+  if (path.startsWith('report-fraud') || path.startsWith('anti-fraud')) return 'report_listing';
+  if (path.startsWith('help') || path.startsWith('contact')) return 'support';
+  return '';
+}
+
 // Step machine
 const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
@@ -4507,6 +4540,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const listingStartSteps = ['greeting', 'main_menu', 'search_type', 'search_area', 'agent_area', 'submitted'];
   const explicitListingStart = listingStartSteps.includes(step)
     && isListingStartRequest(cleanBody, intentResult);
+  const contextualRoute = contextualPageRouteFromMessage(cleanBody);
+  const globalRoute = contextualRoute || intentMenuRoute(intentResult?.intent);
+  const globalIntentConfidence = contextualRoute ? 1 : Number(intentResult?.confidence || 0);
   const routeExplicitListingStart = async () => {
     const inferredListingType = inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
     await patchSessionData(phone, {
@@ -4635,6 +4671,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     });
     if (!isGreetingText(cleanBody)) {
       await updateSession(phone, { current_step: 'main_menu' });
+      if (globalRoute) {
+        const next = menuRouteReply(lang, globalRoute);
+        return respond(`Got it. I will treat this as a new request.\n\n${next.message}`, next.nextStep);
+      }
       return respond(`Got it. I will treat this as a new request.\n\n${friendlyGreetingReply(lang, sessionData)}`, 'main_menu');
     }
   }
@@ -4673,8 +4713,6 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond(stepReminderMessage(lang, step), step);
   }
 
-  const globalRoute = intentMenuRoute(intentResult?.intent);
-  const globalIntentConfidence = Number(intentResult?.confidence || 0);
   const numericOptionReply = /^[1-9]$/.test(cleanBody);
   const activeFlowOwnsNumericReply = numericOptionReply
     && !['greeting', 'main_menu', 'choose_language', 'search_type', 'search_area', 'agent_area'].includes(step);
@@ -5005,7 +5043,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
     }
 
-    const inferredRoute = intentMenuRoute(intentResult?.intent);
+    const inferredRoute = globalRoute;
     const inferredConfidence = Number(intentResult?.confidence || 0);
     const shouldConfirmIntent = inferredRoute
       && intentResult?.intent
@@ -6958,6 +6996,8 @@ router.delete('/reset/:phone', async (req, res) => {
 module.exports = router;
 module.exports.__test = {
   processInboundRuntime,
+  contextualPageRouteFromMessage,
+  menuRouteReply,
   parseInboundLocation,
   normalizeBridgeInboundKey
 };
