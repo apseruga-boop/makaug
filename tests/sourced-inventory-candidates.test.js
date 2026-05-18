@@ -13,6 +13,7 @@ const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
+const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const pkg = JSON.parse(read('package.json'));
 const {
   BAKAIMA_BATCH_ID,
@@ -173,6 +174,12 @@ test('Bakaima authorised batch creates 33 pending land listings with evidence ph
     assert(listing.images.some((image) => image.url.startsWith('data:image/svg+xml')), `${listing.title} should include generated primary card`);
     assert(listing.images.some((image) => image.url.includes('/assets/sourced/bakaima/')), `${listing.title} should include Bakaima supplied flyer image`);
   }
+});
+
+test('Bakaima admin warnings stay out of existing public descriptions', () => {
+  assert(bakaimaPublicCopyMigration.includes("extra_fields->>'source_batch' = 'bakaima_authorised_land_20260518'"), 'migration should only target the Bakaima authorised batch');
+  assert(bakaimaPublicCopyMigration.includes('Verify exact plot number, access road, title particulars, boundary marks, and availability with Bakaima before public approval.'), 'migration should remove the exact leaked admin sentence');
+  assert(bakaimaPublicCopyMigration.includes('description = replace('), 'migration should preserve the rest of the consumer description');
 });
 
 test('Bakaima admin path and dashboard action are protected and auditable', () => {
