@@ -8562,15 +8562,40 @@ function adminPublicControlVisibilityBadge(row = {}) {
   return `<span class="ml-2 inline-flex align-middle rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-black text-amber-800">Test-like public listing</span>`;
 }
 
-function adminSourcedInventoryCandidateBadge(row = {}) {
+function adminIsSourcedInventoryCandidate(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
-  const source = String(row.source || "").toLowerCase();
-  const listedVia = String(row.listed_via || "").toLowerCase();
-  const isCandidate = row.sourced_inventory_candidate === true
+  const source = String(row.source || extra.source || "").toLowerCase();
+  const listedVia = String(row.listed_via || extra.listed_via || "").toLowerCase();
+  return row.sourced_inventory_candidate === true
     || extra.sourced_inventory_candidate === true
     || source === "sourced_inventory_candidate_v1"
     || listedVia === "sourced_inventory";
-  if (!isCandidate) return "";
+}
+
+function adminSourcedCandidateSourceLinks(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const images = Array.isArray(row.images) ? row.images : [];
+  const addArray = (value) => Array.isArray(value) ? value : (value ? [value] : []);
+  const raw = [
+    row.source_url,
+    row.source_link,
+    row.original_url,
+    extra.source_url,
+    extra.source_link,
+    extra.original_url,
+    ...addArray(row.source_urls),
+    ...addArray(row.photo_source_urls),
+    ...addArray(extra.source_urls),
+    ...addArray(extra.photo_source_urls),
+    ...images.flatMap((image) => [image.source_url, image.source_link, image.original_url])
+  ];
+  return [...new Set(raw
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^https?:\/\//i.test(value)))];
+}
+
+function adminSourcedInventoryCandidateBadge(row = {}) {
+  if (!adminIsSourcedInventoryCandidate(row)) return "";
   return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Sourced candidate</span>`;
 }
 
@@ -9013,6 +9038,7 @@ function renderAdminLiveListingsRows(listings) {
 function renderAdminAllListingsRows(listings) {
   const wrap = document.getElementById("admin-all-listings-table");
   if (!wrap) return;
+  ensureAdminApril29CleanupControls();
   const q = (document.getElementById("admin-listings-q")?.value || "").toLowerCase().trim();
   const statusFilter = (document.getElementById("admin-listings-status")?.value || "").toLowerCase().trim();
   let view = Array.isArray(listings) ? listings : [];
@@ -9067,6 +9093,46 @@ function renderAdminAllListingsRows(listings) {
       </div>
     `;
   }).join("");
+}
+
+function ensureAdminApril29CleanupControls() {
+  const panel = document.getElementById("admin-listings-control");
+  if (!panel || document.getElementById("admin-april29-cleanup-controls")) return;
+  const header = panel.firstElementChild;
+  if (!header) return;
+  const controls = document.createElement("div");
+  controls.id = "admin-april29-cleanup-controls";
+  controls.className = "flex flex-col items-start sm:items-end gap-1";
+  controls.innerHTML = `
+    <button id="admin-clean-april29-tests-btn" type="button" onclick="adminCleanupApril29TestBatch()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-bold">Clean 29 Apr Test Batch</button>
+    <div id="admin-april29-cleanup-status" class="text-[11px] text-gray-500"></div>
+  `;
+  header.appendChild(controls);
+}
+
+async function adminCleanupApril29TestBatch() {
+  if (!canUseLiveAdminApi()) {
+    toast("Admin API key is required for launch cleanup.");
+    return;
+  }
+  const ok = window.confirm("Soft-delete test-like listings created on 29 Apr 2026? This does not touch ordinary listings from other dates.");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-april29-cleanup-status");
+  if (statusEl) statusEl.textContent = "Cleaning test batch...";
+  try {
+    const response = await apiRequest("/api/admin/test-listings/cleanup-april-29", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    const data = response?.data || {};
+    if (statusEl) statusEl.textContent = `Deleted ${Number(data.deleted || 0)} of ${Number(data.matched || 0)} matched test listings.`;
+    toast(`April 29 cleanup done: ${Number(data.deleted || 0)} listing${Number(data.deleted || 0) === 1 ? "" : "s"} deleted.`);
+    await renderAdminDashboard();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Cleanup failed. Check admin API access and logs.";
+    toast(`Cleanup failed: ${e.message || "error"}`);
+  }
 }
 
 function renderAdminList(id, items, renderer) {
@@ -12710,7 +12776,22 @@ function renderAdminReviewPanel(review) {
   const listerVerificationStatus = review.extra_fields?.lister_registration_status || review.registration_status || "not_registered";
   const listerVerification = adminVerificationBadge(listerVerificationStatus);
   const ownerVerificationRequested = review.extra_fields?.ownership_verification_requested || review.extra_fields?.verify?.ownership_verification_requested;
+  const isSourcedCandidate = adminIsSourcedInventoryCandidate(review);
   const sourcedCandidateBadge = adminSourcedInventoryCandidateBadge(review);
+  const sourcedCandidateSourceLinks = adminSourcedCandidateSourceLinks(review);
+  const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
+    <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
+      <strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
+      <div class="mt-2">
+        <strong>Source/photo evidence:</strong>
+        ${sourcedCandidateSourceLinks.length ? `
+          <ul class="mt-1 space-y-1">
+            ${sourcedCandidateSourceLinks.slice(0, 8).map((link) => `<li><a href="${adminAttr(link)}" target="_blank" rel="noopener" class="text-blue-700 underline break-all">${adminEscape(link)}</a></li>`).join("")}
+          </ul>
+        ` : `<span class="text-blue-800"> No source links are stored on this record yet. Use the consented source/photo records before approving if you need picture-matching proof.</span>`}
+      </div>
+    </div>
+  ` : "";
   const automatedBadge = automated.status === "pass"
     ? { cls: "bg-green-100 text-green-700", label: "Automated checks passed" }
     : automated.status === "warning"
@@ -12749,7 +12830,7 @@ function renderAdminReviewPanel(review) {
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Listing</div>
               <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(review.title || "Untitled listing")}${sourcedCandidateBadge}</h4>
               <p class="text-sm text-gray-600 mt-1">${adminEscape(review.description || "")}</p>
-              ${sourcedCandidateBadge ? `<div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900"><strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.</div>` : ""}
+              ${sourcedCandidateEvidenceHtml}
             </div>
             <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
           </div>
@@ -12881,10 +12962,12 @@ function renderAdminReviewPanel(review) {
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
+            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Sourced Candidate</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
           ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until non-overrideable red checks are resolved.</div>`}
           ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
+          ${isSourcedCandidate ? `<div class="text-xs text-blue-700 mt-2">Special sourced approval records that consent and image rights were confirmed. It only works on sourced inventory candidate records.</div>` : ""}
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -13092,8 +13175,29 @@ async function adminSendOutlookDraft(actionId) {
   }
 }
 
-async function adminSetListingStatus(localId, nextStatus, backendId = "") {
+async function adminApproveSourcedCandidateOverride(listingId) {
+  const review = adminActiveReview || {};
+  if (!adminIsSourcedInventoryCandidate(review)) {
+    toast("Special sourced approval is only available on sourced candidate records.");
+    return;
+  }
+  const sourceLinks = adminSourcedCandidateSourceLinks(review);
+  const message = sourceLinks.length
+    ? "Approve this sourced candidate under special dispensation? This confirms consent, image rights, and the stored source/photo links have been checked."
+    : "Approve this sourced candidate under special dispensation? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside MakaUg.";
+  const ok = window.confirm(message);
+  if (!ok) return;
+  await adminSetListingStatus(listingId, "approved", listingId, {
+    sourced_candidate_override: true,
+    consent_confirmed: true,
+    image_rights_confirmed: true
+  });
+}
+
+async function adminSetListingStatus(localId, nextStatus, backendId = "", options = {}) {
   const normalizedStatus = normalizeModerationStatus(nextStatus);
+  const statusOptions = options && typeof options === "object" ? options : {};
+  const isSourcedCandidateOverride = normalizedStatus === "approved" && statusOptions.sourced_candidate_override === true;
   const listing = PROPERTIES.find(
     (p) => String(p.id) === String(localId)
       || (backendId && String(p.backend_id || "") === String(backendId))
@@ -13119,7 +13223,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "") {
     const ok = window.confirm("Delete this listing from public pages? You can restore it from the admin dashboard.");
     if (!ok) return;
   }
-  if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+  if (normalizedStatus === "approved" && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId) && !isSourcedCandidateOverride) {
     const pendingWarnings = getAdminPendingWarningOverrideLabels(adminActiveReview);
     if (pendingWarnings.length) {
       toast(`Review and override warning evidence first: ${pendingWarnings.slice(0, 3).join(", ")}${pendingWarnings.length > 3 ? "..." : ""}`);
@@ -13129,6 +13233,11 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "") {
   let moderationReason = (document.getElementById("admin-review-reason")?.value || listing?.extra_fields?.moderation_reason || "").trim();
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
+  if (isSourcedCandidateOverride && !moderationReason) {
+    moderationReason = "Approved under sourced candidate special dispensation after consent, image rights, and source evidence were confirmed.";
+    const reasonEl = document.getElementById("admin-review-reason");
+    if (reasonEl) reasonEl.value = moderationReason;
+  }
   if (normalizedStatus === "rejected" && !moderationReason) {
     moderationReason = buildAdminGeneratedDecisionReason(adminActiveReview) || "";
     const reasonEl = document.getElementById("admin-review-reason");
@@ -13158,6 +13267,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "") {
         method: "PATCH",
         headers: adminAuthHeaders(),
         body: {
+          ...statusOptions,
           status: normalizedStatus,
           reason: moderationReason.trim() || undefined,
           review_notes: reviewNotes || undefined,

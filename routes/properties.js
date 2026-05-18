@@ -544,6 +544,16 @@ function parseBooleanLike(value, fallback = false) {
   return fallback;
 }
 
+function isSourcedInventoryCandidateRecord(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const source = cleanText(row.source || extra.source).toLowerCase();
+  const listedVia = cleanText(row.listed_via || extra.listed_via).toLowerCase();
+  return row.sourced_inventory_candidate === true
+    || extra.sourced_inventory_candidate === true
+    || source === 'sourced_inventory_candidate_v1'
+    || listedVia === 'sourced_inventory';
+}
+
 router.get('/suggestions', async (req, res, next) => {
   try {
     const query = cleanText(req.query.query).toLowerCase();
@@ -2117,7 +2127,7 @@ router.post('/:id/inquiries', async (req, res, next) => {
 router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
-    const moderationReason = cleanText(req.body.reason) || null;
+    let moderationReason = cleanText(req.body.reason) || null;
     const reviewNotes = cleanText(req.body.review_notes || req.body.notes) || null;
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
       ? req.body.warning_overrides
@@ -2144,6 +2154,33 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     const current = currentResult.rows[0];
+    const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
+    const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
+    const isSourcedCandidate = isSourcedInventoryCandidateRecord(current);
+    const requestedSourcedCandidateOverride = nextStatus === 'approved'
+      && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
+    const sourcedCandidateConsentConfirmed = parseBooleanLike(req.body.consent_confirmed, false);
+    const sourcedCandidateImageRightsConfirmed = parseBooleanLike(req.body.image_rights_confirmed, false);
+
+    if (requestedSourcedCandidateOverride && !isSourcedCandidate) {
+      return res.status(403).json({
+        ok: false,
+        error: 'Sourced candidate override is only available for sourced inventory candidate records'
+      });
+    }
+
+    if (requestedSourcedCandidateOverride && (!sourcedCandidateConsentConfirmed || !sourcedCandidateImageRightsConfirmed)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Consent and image rights confirmation are required for sourced candidate override',
+        details: [
+          'Set consent_confirmed=true after verifying permission to publish the listing.',
+          'Set image_rights_confirmed=true after verifying the attached photos are authorised for MakaUg use.'
+        ]
+      });
+    }
+
+    const sourcedCandidateOverride = requestedSourcedCandidateOverride && isSourcedCandidate;
     const approvalWarnings = [];
     let automatedReview = null;
     if (nextStatus === 'approved') {
@@ -2179,7 +2216,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         .map((item) => `${item.label}: open evidence and override this review flag before approving`)
       : [];
 
-    if (missingChecks.length) {
+    if (missingChecks.length && !sourcedCandidateOverride) {
       return res.status(400).json({
         ok: false,
         error: 'Approval checklist is incomplete',
@@ -2187,7 +2224,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       });
     }
 
-    if (missingWarningOverrides.length) {
+    if (missingWarningOverrides.length && !sourcedCandidateOverride) {
       return res.status(400).json({
         ok: false,
         error: 'Approval warnings require admin override',
@@ -2195,8 +2232,23 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       });
     }
 
-    const actorId = req.adminAuth?.userId || req.adminAuth?.type || 'admin_api_key';
-    const reviewerUserId = toUuidOrNull(req.adminAuth?.userId);
+    let sourcedCandidateDispensation = null;
+    if (sourcedCandidateOverride) {
+      moderationReason = moderationReason || 'Approved under sourced candidate special dispensation after consent, image rights, and source evidence were confirmed.';
+      sourcedCandidateDispensation = {
+        used: true,
+        source: 'sourced_inventory_candidate_v1',
+        at: new Date().toISOString(),
+        actor_id: actorId,
+        consent_confirmed: true,
+        image_rights_confirmed: true,
+        missing_checks_overridden: missingChecks,
+        warning_checks_overridden: missingWarningOverrides,
+        reason: moderationReason
+      };
+      approvalWarnings.push('Sourced candidate special dispensation used; admin confirmed consent and image rights before approval.');
+    }
+
     const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
     const regeneratedOwnerTokenHash = regeneratedOwnerToken ? hashOwnerEditToken(regeneratedOwnerToken) : null;
     const regeneratedOwnerTokenExpiresAt = regeneratedOwnerToken ? ownerEditTokenExpiry() : null;
@@ -2232,6 +2284,15 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
                ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
              END
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
+             || CASE
+               WHEN $12::jsonb IS NULL THEN '{}'::jsonb
+               ELSE jsonb_build_object(
+                 'sourced_candidate_special_dispensation', $12::jsonb,
+                 'consent_confirmed', true,
+                 'image_rights_confirmed', true,
+                 'image_rights_status', 'admin_confirmed_authorised'
+               )
+             END
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, approved_at, last_moderation_notification_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
         [
@@ -2245,7 +2306,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           moderationStage,
           regeneratedOwnerTokenHash,
           regeneratedOwnerTokenExpiresAt,
-          JSON.stringify(warningOverrides)
+          JSON.stringify(warningOverrides),
+          sourcedCandidateDispensation ? JSON.stringify(sourcedCandidateDispensation) : null
         ]
       );
       listing = result.rows[0];
@@ -2271,6 +2333,15 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
                'moderation_reason', $6::text,
                'review_warning_overrides', $7::jsonb
              )
+             || CASE
+               WHEN $8::jsonb IS NULL THEN '{}'::jsonb
+               ELSE jsonb_build_object(
+                 'sourced_candidate_special_dispensation', $8::jsonb,
+                 'consent_confirmed', true,
+                 'image_rights_confirmed', true,
+                 'image_rights_status', 'admin_confirmed_authorised'
+               )
+             END
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, extra_fields`,
         [
@@ -2280,7 +2351,8 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           JSON.stringify(checklist),
           reviewNotes,
           moderationReason,
-          JSON.stringify(warningOverrides)
+          JSON.stringify(warningOverrides),
+          sourcedCandidateDispensation ? JSON.stringify(sourcedCandidateDispensation) : null
         ]
       );
       listing = {
@@ -2316,6 +2388,12 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     }
 
     try {
+      const moderationEventDelivery = sourcedCandidateDispensation
+        ? {
+          ...notification,
+          sourced_candidate_special_dispensation: sourcedCandidateDispensation
+        }
+        : notification;
       await db.query(
         `INSERT INTO property_moderation_events (
           property_id,
@@ -2337,9 +2415,35 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           JSON.stringify(checklist),
           moderationReason,
           reviewNotes,
-          JSON.stringify(notification)
+          JSON.stringify(moderationEventDelivery)
         ]
       );
+      if (sourcedCandidateDispensation) {
+        await db.query(
+          `INSERT INTO property_moderation_events (
+            property_id,
+            actor_id,
+            action,
+            status_from,
+            status_to,
+            checklist,
+            reason,
+            notes,
+            delivery
+          ) VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb)`,
+          [
+            listing.id,
+            actorId,
+            'sourced_candidate_special_dispensation_used',
+            current.status,
+            nextStatus,
+            JSON.stringify(checklist),
+            moderationReason,
+            'Admin confirmed consent and image rights for this sourced inventory candidate override.',
+            JSON.stringify(sourcedCandidateDispensation)
+          ]
+        );
+      }
     } catch (error) {
       logger.error('Listing moderation event write failed after status update', {
         property_id: listing.id,

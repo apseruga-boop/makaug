@@ -48,10 +48,13 @@ test('sourced candidate seed avoids copied third-party images and source URLs', 
 });
 
 test('King dashboard visibly separates sourced candidates from ordinary reviews', () => {
+  assert(frontend.includes('function adminIsSourcedInventoryCandidate'), 'dashboard should have sourced candidate detection helper');
   assert(frontend.includes('function adminSourcedInventoryCandidateBadge'), 'dashboard should have sourced candidate badge helper');
   assert(frontend.includes('Sourced candidate'), 'dashboard should display sourced candidate copy');
   assert(frontend.includes('Sourcing review required before public approval'), 'all-listings view should warn before approval');
   assert(frontend.includes('verify consent, contact details, authorised photos'), 'review panel should show verification warning');
+  assert(frontend.includes('function adminSourcedCandidateSourceLinks'), 'review panel should expose stored source/photo evidence links');
+  assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose sourced candidate special approval control');
 });
 
 test('admin listing API exposes sourcing metadata only behind admin access', () => {
@@ -74,6 +77,25 @@ test('admin-only endpoint can seed production candidates without public submissi
   assert(adminRoute.includes("router.post('/sourced-inventory-candidates/seed'"), 'admin seed endpoint should exist');
   assert(adminRoute.includes('seedSourcedInventoryCandidates'), 'admin endpoint should use direct DB seed service');
   assert(adminRoute.includes('admin_sourced_inventory_candidates_seeded'), 'admin endpoint should write audit trail');
+});
+
+test('sourced candidate approval override is server-side limited and audited', () => {
+  assert(propertiesRoute.includes('function isSourcedInventoryCandidateRecord'), 'status route should identify sourced candidate records server-side');
+  assert(propertiesRoute.includes('sourced_candidate_override'), 'status route should require explicit sourced override flag');
+  assert(propertiesRoute.includes('consent_confirmed'), 'override should require consent confirmation');
+  assert(propertiesRoute.includes('image_rights_confirmed'), 'override should require image rights confirmation');
+  assert(propertiesRoute.includes('Sourced candidate override is only available'), 'override should reject ordinary listings');
+  assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');
+  assert(propertiesRoute.includes('sourced_candidate_special_dispensation_used'), 'override should be written to moderation history');
+});
+
+test('admin has a guarded April 29 test-batch cleanup path', () => {
+  assert(adminRoute.includes("router.post('/test-listings/cleanup-april-29'"), 'admin cleanup endpoint should exist');
+  assert(adminRoute.includes("created_at >= TIMESTAMPTZ '2026-04-29 00:00:00+00'"), 'cleanup should be scoped to April 29 only');
+  assert(adminRoute.includes('april_29_test_batch_cleanup'), 'cleanup should write audit metadata');
+  assert(frontend.includes('adminCleanupApril29TestBatch'), 'dashboard should expose cleanup action');
+  assert(frontend.includes('/api/admin/test-listings/cleanup-april-29'), 'dashboard should call protected cleanup endpoint');
+  assert(html.includes('admin-clean-april29-tests-btn'), 'all-listings panel should include cleanup control');
 });
 
 test('King review queue has one-click sourced candidate creation', () => {

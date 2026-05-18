@@ -5257,6 +5257,10 @@
               <h3 class="text-xl font-bold text-gray-800">Motherboard Listing Control</h3>
               <p class="text-xs text-gray-500 mt-1">Set listings Live, Pending, Hidden, Rejected, or Deleted. Hidden/Deleted listings are removed from public pages immediately.</p>
             </div>
+            <div id="admin-april29-cleanup-controls" class="flex flex-col items-start sm:items-end gap-1">
+              <button id="admin-clean-april29-tests-btn" type="button" onclick="adminCleanupApril29TestBatch()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-xl text-xs font-bold">Clean 29 Apr Test Batch</button>
+              <div id="admin-april29-cleanup-status" class="text-[11px] text-gray-500"></div>
+            </div>
           </div>
           <div class="grid md:grid-cols-[1fr,220px] gap-2 mb-3">
             <input id="admin-listings-q" oninput="renderAdminDashboard()" class="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm" placeholder="Search title, district, area, ID...">

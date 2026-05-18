@@ -1934,6 +1934,128 @@ router.post('/sourced-inventory-candidates/seed', async (req, res, next) => {
   }
 });
 
+router.post('/test-listings/cleanup-april-29', async (req, res, next) => {
+  try {
+    const actorId = adminActorId(req);
+    const reason = 'Removed April 29 test batch per founder launch cleanup';
+    const targetRows = await db.query(
+      `SELECT
+         id::text AS id,
+         title,
+         status,
+         created_at,
+         inquiry_reference,
+         source,
+         listed_via
+       FROM properties
+       WHERE created_at >= TIMESTAMPTZ '2026-04-29 00:00:00+00'
+         AND created_at < TIMESTAMPTZ '2026-04-30 00:00:00+00'
+         AND COALESCE(status, '') <> 'deleted'
+         AND (
+           COALESCE(source, '') ~* '(qa|test|seed|demo|soft_launch|launch_proof)'
+           OR COALESCE(listed_via, '') ~* '(qa|test|seed|demo|soft_launch|launch_proof)'
+           OR COALESCE(title, '') ~* '(qa|test|delete|dummy|sample|launch proof|soft launch|hajsk|dbdd|fgfgf|hssjjk|dkskdk|akdk|fsbf|bxb|xcv|sdgsdgd|sgsgsgsgs)'
+           OR COALESCE(description, '') ~* '(qa|test|delete|dummy|sample|launch proof|soft launch|hajsk|dbdd|fgfgf|hssjjk|dkskdk|akdk|fsbf|bxb|xcv|sdgsdgd|sgsgsgsgs)'
+           OR COALESCE(lister_name, '') ~* '(qa|test|delete|dummy|sample)'
+           OR COALESCE(lister_email, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+           OR COALESCE(inquiry_reference, '') ~* '(qa|test|dummy|sample)'
+           OR COALESCE(extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
+           OR COALESCE(extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
+           OR COALESCE(extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+         )
+       ORDER BY created_at ASC
+       LIMIT 500`
+    );
+
+    const ids = targetRows.rows.map((row) => row.id).filter(Boolean);
+    if (!ids.length) {
+      await writeAudit('april_29_test_batch_cleanup_checked', {
+        matched: 0,
+        action: 'none'
+      }, actorId);
+      return res.json({
+        ok: true,
+        data: {
+          matched: 0,
+          deleted: 0,
+          listings: []
+        }
+      });
+    }
+
+    const cleanupMeta = {
+      cleaned_at: new Date().toISOString(),
+      actor_id: actorId,
+      reason,
+      scope: 'test-like properties created on 2026-04-29 only'
+    };
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         status = 'deleted',
+         moderation_stage = 'deleted',
+         moderation_reason = $2,
+         updated_at = NOW(),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object('april_29_test_batch_cleanup', $3::jsonb)
+       WHERE id::text = ANY($1::text[])
+       RETURNING id::text AS id, title, status, created_at, inquiry_reference`,
+      [ids, reason, JSON.stringify(cleanupMeta)]
+    );
+
+    for (const row of updated.rows) {
+      try {
+        const previous = targetRows.rows.find((item) => item.id === row.id);
+        await db.query(
+          `INSERT INTO property_moderation_events (
+            property_id,
+            actor_id,
+            action,
+            status_from,
+            status_to,
+            reason,
+            notes,
+            delivery
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+          [
+            row.id,
+            actorId,
+            'april_29_test_batch_cleanup',
+            previous?.status || null,
+            'deleted',
+            reason,
+            'Soft-deleted from Motherboard Listing Control; ordinary non-test listings from the same date were not matched.',
+            JSON.stringify(cleanupMeta)
+          ]
+        );
+      } catch (_error) {
+        // The cleanup itself should not fail if the audit trail insert has a temporary schema issue.
+      }
+    }
+
+    await writeAudit('april_29_test_batch_cleanup', {
+      matched: ids.length,
+      deleted: updated.rows.length,
+      listings: updated.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        inquiry_reference: row.inquiry_reference
+      }))
+    }, actorId);
+
+    return res.json({
+      ok: true,
+      data: {
+        matched: ids.length,
+        deleted: updated.rows.length,
+        listings: updated.rows
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/:id/review', async (req, res, next) => {
   try {
     const review = await loadPropertyReview(req.params.id);
