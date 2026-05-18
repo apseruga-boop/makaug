@@ -8823,14 +8823,70 @@ function ensureAdminSourcedCandidateControls() {
     status.className = "hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900";
     table.parentNode.insertBefore(status, table);
   }
-  if (document.getElementById("admin-seed-sourced-candidates-btn")) return;
+  if (document.getElementById("admin-seed-sourced-candidates-btn") && document.getElementById("admin-seed-bakaima-listings-btn")) return;
   const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
   const actions = document.createElement("div");
   actions.className = "flex items-center gap-2 flex-wrap";
-  actions.innerHTML = `
-    <button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>
-    <button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>`;
+  const missingButtons = [];
+  if (!document.getElementById("admin-seed-bakaima-listings-btn")) {
+    missingButtons.push(`<button id="admin-seed-bakaima-listings-btn" type="button" onclick="adminSeedBakaimaAuthorisedListings()" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Create Bakaima Listings</button>`);
+  }
+  if (!document.getElementById("admin-seed-sourced-candidates-btn")) {
+    missingButtons.push(`<button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>`);
+  }
+  missingButtons.push(`<button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>`);
+  actions.innerHTML = missingButtons.join("");
   if (header) header.appendChild(actions);
+}
+
+async function adminSeedBakaimaAuthorisedListings() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const ok = window.confirm("Create/rebuild the 33 authorised Bakaima estate-plot listings in the King review queue?");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const button = document.getElementById("admin-seed-bakaima-listings-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Creating Bakaima authorised land listings now...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/bakaima-authorised-land-listings/seed", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { replace: true }
+    });
+    const data = response?.data || {};
+    const samples = Array.isArray(data.listings) ? data.listings.slice(0, 3) : [];
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">Bakaima listings created</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending Bakaima estate-plot records are now in the King review queue.</div>
+        <div class="mt-1">Contact loaded: Bakaima Real Estate Agents • +256702060075 / +256782936302 • info@bakaima.co.ug</div>
+        ${samples.length ? `<div class="mt-2">${samples.map((item) => `<div>${adminEscape(item.title || "Listing")} • ${adminEscape(item.property_url || "")}</div>`).join("")}</div>` : ""}`;
+    }
+    toast("Bakaima listings are ready for King review.");
+    await renderAdminDashboard();
+    setAdminWorkflowTab("review");
+    adminScrollTo("#admin-review-queue-control");
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Could not create Bakaima listings: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Bakaima seed failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
 }
 
 async function adminSeedSourcedInventoryCandidates() {
@@ -10035,6 +10091,21 @@ async function copyAdminWhatsAppMessage() {
   }
   const ok = await copyTextToClipboard(message);
   toast(ok ? "Message copied." : "Copy failed.");
+}
+
+function adminOpenReviewShareWhatsApp() {
+  const review = adminActiveReview || {};
+  const message = String(review.extra_fields?.whatsapp_share_card || review.whatsapp_share_card || "").trim();
+  if (!message) {
+    toast("No WhatsApp share card is stored on this listing yet.");
+    return;
+  }
+  openAdminWhatsAppMessageModal({
+    title: "Share listing card",
+    listingLabel: review.inquiry_reference || review.title || review.id || "-",
+    phone: review.lister_phone || review.extra_fields?.contact_phone_alt || "",
+    message
+  });
 }
 
 function openAdminFollowUpWhatsApp(listingId) {
@@ -12779,6 +12850,18 @@ function renderAdminReviewPanel(review) {
   const isSourcedCandidate = adminIsSourcedInventoryCandidate(review);
   const sourcedCandidateBadge = adminSourcedInventoryCandidateBadge(review);
   const sourcedCandidateSourceLinks = adminSourcedCandidateSourceLinks(review);
+  const whatsappShareCard = String(review.extra_fields?.whatsapp_share_card || review.whatsapp_share_card || "").trim();
+  const whatsappShareCardId = whatsappShareCard
+    ? registerAdminEvidence(`review-${review.id}-whatsapp-share-card`, {
+      title: "WhatsApp share card",
+      text: whatsappShareCard,
+      raw: {
+        listing_id: review.id,
+        inquiry_reference: review.inquiry_reference || "",
+        whatsapp_share_card: whatsappShareCard
+      }
+    })
+    : "";
   const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
     <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
       <strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
@@ -12790,6 +12873,16 @@ function renderAdminReviewPanel(review) {
           </ul>
         ` : `<span class="text-blue-800"> No source links are stored on this record yet. Use the consented source/photo records before approving if you need picture-matching proof.</span>`}
       </div>
+      ${whatsappShareCard ? `
+        <div class="mt-3 rounded-lg border border-blue-200 bg-white p-3">
+          <div class="font-black text-blue-950">WhatsApp share card</div>
+          <pre class="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-lg bg-blue-50 p-2 text-[11px] leading-relaxed text-blue-950">${adminEscape(whatsappShareCard)}</pre>
+          <div class="mt-2 flex gap-2 flex-wrap">
+            <button onclick="copyAdminEvidenceText('${adminAttr(whatsappShareCardId)}','text')" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Card</button>
+            <button onclick="adminOpenReviewShareWhatsApp()" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Open WhatsApp</button>
+          </div>
+        </div>
+      ` : ""}
     </div>
   ` : "";
   const automatedBadge = automated.status === "pass"

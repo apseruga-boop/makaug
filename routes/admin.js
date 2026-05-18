@@ -79,6 +79,10 @@ const {
   SOURCE: SOURCED_INVENTORY_CANDIDATE_SOURCE,
   seedSourcedInventoryCandidates
 } = require('../scripts/seed-sourced-inventory-candidates');
+const {
+  BAKAIMA_BATCH_ID,
+  seedBakaimaAuthorisedListings
+} = require('../services/bakaimaSourcedListingsService');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -1927,6 +1931,26 @@ router.post('/sourced-inventory-candidates/seed', async (req, res, next) => {
       replace,
       created_properties: result.created_properties,
       guardrails: result.guardrails
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/bakaima-authorised-land-listings/seed', async (req, res, next) => {
+  try {
+    const replace = req.body?.replace !== false;
+    const result = await seedBakaimaAuthorisedListings({
+      db,
+      replace
+    });
+    await writeAudit('admin_bakaima_authorised_land_listings_seeded', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: BAKAIMA_BATCH_ID,
+      replace,
+      created_properties: result.created_properties,
+      contact: result.contact
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

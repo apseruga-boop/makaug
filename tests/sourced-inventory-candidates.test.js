@@ -14,6 +14,14 @@ const adminRoute = read('routes/admin.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const pkg = JSON.parse(read('package.json'));
+const {
+  BAKAIMA_BATCH_ID,
+  BAKAIMA_CONTACT,
+  BAKAIMA_SOURCE,
+  plannedBakaimaListings,
+  summarizeBakaimaListings,
+  whatsappShareMessage,
+} = require('../services/bakaimaSourcedListingsService');
 
 function test(name, fn) {
   try {
@@ -86,6 +94,11 @@ test('package script exposes the safe inventory intake command', () => {
     'node scripts/import-sourced-candidate-images.js',
     'package.json should expose sourced candidate image import command'
   );
+  assert.strictEqual(
+    pkg.scripts['inventory:seed-bakaima'],
+    'node scripts/seed-bakaima-authorised-land-listings.js',
+    'package.json should expose Bakaima authorised listing seed command'
+  );
 });
 
 test('admin-only endpoint can seed production candidates without public submission notifications', () => {
@@ -121,4 +134,54 @@ test('King review queue has one-click sourced candidate creation', () => {
   assert(frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should implement seed action');
   assert(frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should call protected admin seed endpoint');
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
+});
+
+test('Bakaima authorised batch creates 33 pending land listings with evidence photos', () => {
+  const summary = summarizeBakaimaListings();
+  const listings = plannedBakaimaListings();
+  assert.strictEqual(BAKAIMA_BATCH_ID, 'bakaima_authorised_land_20260518');
+  assert.strictEqual(summary.count, 33, 'flyer-derived Bakaima batch should contain 33 estate rows');
+  assert.strictEqual(summary.by_type.land, 33, 'Bakaima batch should be land only');
+  assert.strictEqual(listings.length, 33, 'planned Bakaima listings should match summary count');
+  for (const listing of listings) {
+    const extra = JSON.parse(listing.extra_fields);
+    assert.strictEqual(listing.listing_type, 'land');
+    assert.strictEqual(listing.status, 'pending');
+    assert.strictEqual(listing.moderation_stage, 'submitted');
+    assert.strictEqual(listing.source, BAKAIMA_SOURCE);
+    assert.strictEqual(listing.listed_via, 'sourced_inventory');
+    assert.strictEqual(listing.lister_name, BAKAIMA_CONTACT.name);
+    assert.strictEqual(listing.lister_phone, BAKAIMA_CONTACT.phone);
+    assert.strictEqual(listing.lister_email, BAKAIMA_CONTACT.email);
+    assert.strictEqual(extra.source_batch, BAKAIMA_BATCH_ID);
+    assert.strictEqual(extra.consent_confirmed, true);
+    assert.strictEqual(extra.image_rights_confirmed, true);
+    assert.strictEqual(extra.map_pin_confirmed, false);
+    assert(Array.isArray(extra.authorised_flyer_urls) && extra.authorised_flyer_urls.length >= 1);
+    assert(listing.images.length >= 2, `${listing.title} should include generated card plus authorised flyer evidence`);
+    assert(listing.images.some((image) => image.url.startsWith('data:image/svg+xml')), `${listing.title} should include generated primary card`);
+    assert(listing.images.some((image) => image.url.includes('/assets/sourced/bakaima/')), `${listing.title} should include Bakaima supplied flyer image`);
+  }
+});
+
+test('Bakaima admin path and dashboard action are protected and auditable', () => {
+  assert(adminRoute.includes("router.post('/bakaima-authorised-land-listings/seed'"), 'admin Bakaima seed endpoint should exist');
+  assert(adminRoute.includes('seedBakaimaAuthorisedListings'), 'admin endpoint should use Bakaima seed service');
+  assert(adminRoute.includes('admin_bakaima_authorised_land_listings_seeded'), 'admin endpoint should write Bakaima audit trail');
+  assert(html.includes('admin-seed-bakaima-listings-btn'), 'review queue should include Bakaima creation button');
+  assert(frontend.includes('async function adminSeedBakaimaAuthorisedListings'), 'frontend should implement Bakaima seed action');
+  assert(frontend.includes('/api/admin/bakaima-authorised-land-listings/seed'), 'frontend should call protected Bakaima endpoint');
+  assert(frontend.includes('function adminOpenReviewShareWhatsApp'), 'review panel should expose stored WhatsApp share card');
+  assert(frontend.includes('WhatsApp share card'), 'review panel should label the WhatsApp share copy clearly');
+});
+
+test('Bakaima WhatsApp share card carries listing URL and agent contact', () => {
+  const platinum = plannedBakaimaListings().find((listing) => /Platinum Estate/i.test(listing.title));
+  assert(platinum, 'Platinum Estate listing should be prepared from the supplied flyer');
+  assert(platinum.images.length >= 3, 'Platinum listing should include share card, specific flyer, and price sheet');
+  const card = whatsappShareMessage(platinum.source_item, 'https://makaug.com/property/example-id');
+  assert(card.includes('https://makaug.com/property/example-id'), 'share card should include live listing URL');
+  assert(card.includes(BAKAIMA_CONTACT.phone), 'share card should include primary Bakaima phone');
+  assert(card.includes(BAKAIMA_CONTACT.phoneAlt), 'share card should include alternate Bakaima phone');
+  assert(card.includes('Price: USh 70,000,000'), 'share card should carry flyer price');
 });
