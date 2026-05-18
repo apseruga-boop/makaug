@@ -117,7 +117,7 @@ function whatsappShareMessage(item, propertyUrl) {
 }
 
 function descriptionFor(item) {
-  return `${item.estate} is a Bakaima Real Estate Agents estate plot opportunity around ${item.area}, ${item.district}, off ${item.road}. The supplied flyer positions the plots as 50x100ft estate plots with Bakaima sales support and ABSA land-loan financing guidance. The quoted cash price is ${money(item.price)}. The financing guide shows 30% deposit of ${money(item.deposit)}, 70% bank finance of ${money(item.bankFinance)}, and an estimated monthly payment of ${money(item.monthlyPayment)} over 3 years. Verify exact plot number, access road, title particulars, boundary marks, and availability with Bakaima before public approval.`;
+  return `${item.estate} is a Bakaima Real Estate Agents estate plot opportunity around ${item.area}, ${item.district}, off ${item.road}. The supplied flyer positions the plots as 50x100ft estate plots with Bakaima sales support and ABSA land-loan financing guidance. The quoted cash price is ${money(item.price)}. The financing guide shows 30% deposit of ${money(item.deposit)}, 70% bank finance of ${money(item.bankFinance)}, and an estimated monthly payment of ${money(item.monthlyPayment)} over 3 years.`;
 }
 
 function extraFieldsFor(item, propertyUrl = '') {

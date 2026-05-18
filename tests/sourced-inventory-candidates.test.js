@@ -164,6 +164,10 @@ test('Bakaima authorised batch creates 33 pending land listings with evidence ph
     assert.strictEqual(extra.consent_confirmed, true);
     assert.strictEqual(extra.image_rights_confirmed, true);
     assert.strictEqual(extra.map_pin_confirmed, false);
+    assert(!/Verify exact plot number/i.test(listing.description), `${listing.title} should not expose admin verification copy in public description`);
+    assert(!/before public approval/i.test(listing.description), `${listing.title} should not expose admin approval copy in public description`);
+    assert(extra.review_required_steps.some((step) => /Confirm exact plot pin\/boundaries/i.test(step)), `${listing.title} should keep exact pin verification in review steps`);
+    assert(listing.moderation_notes.includes('Exact plot pin'), `${listing.title} should keep exact pin verification in moderation notes`);
     assert(Array.isArray(extra.authorised_flyer_urls) && extra.authorised_flyer_urls.length >= 1);
     assert(listing.images.length >= 2, `${listing.title} should include generated card plus authorised flyer evidence`);
     assert(listing.images.some((image) => image.url.startsWith('data:image/svg+xml')), `${listing.title} should include generated primary card`);
