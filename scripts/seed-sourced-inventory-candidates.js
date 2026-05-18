@@ -140,7 +140,7 @@ function svgImage({ type, area, index, slot }) {
   <rect x="120" y="250" width="1040" height="360" rx="26" fill="#ffffff" stroke="${palette[0]}" stroke-width="8" opacity="0.92"/>
   <text x="150" y="82" font-family="Arial, sans-serif" font-size="44" font-weight="700" fill="#ffffff">makaug.com sourced candidate</text>
   <text x="150" y="365" font-family="Arial, sans-serif" font-size="62" font-weight="800" fill="#111827">${escapeSvg(label)}</text>
-  <text x="150" y="455" font-family="Arial, sans-serif" font-size="34" fill="#374151">Placeholder photo - replace after owner/agent permission</text>
+  <text x="150" y="455" font-family="Arial, sans-serif" font-size="34" fill="#374151">Internal placeholder - import authorised photo before approval</text>
   <text x="150" y="535" font-family="Arial, sans-serif" font-size="30" fill="${palette[0]}">Candidate ${String(index).padStart(3, '0')} | ${type}</text>
 </svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;

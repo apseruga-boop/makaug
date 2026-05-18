@@ -9747,6 +9747,79 @@ function renderAdminQualitySignals(review) {
     </div>`;
 }
 
+function adminEvidenceMimeType(url = "") {
+  const src = String(url || "");
+  const dataMatch = src.match(/^data:([^;,]+)[;,]/i);
+  if (dataMatch) return dataMatch[1].toLowerCase();
+  const cleanUrl = src.split("?")[0].split("#")[0].toLowerCase();
+  if (cleanUrl.endsWith(".svg")) return "image/svg+xml";
+  if (cleanUrl.endsWith(".png")) return "image/png";
+  if (cleanUrl.endsWith(".webp")) return "image/webp";
+  if (cleanUrl.endsWith(".gif")) return "image/gif";
+  if (cleanUrl.endsWith(".jpg") || cleanUrl.endsWith(".jpeg")) return "image/jpeg";
+  if (cleanUrl.endsWith(".pdf")) return "application/pdf";
+  return "";
+}
+
+function adminEvidenceExtensionForMime(mime = "") {
+  const normalized = String(mime || "").toLowerCase();
+  if (normalized === "image/svg+xml") return "svg";
+  if (normalized === "image/png") return "png";
+  if (normalized === "image/webp") return "webp";
+  if (normalized === "image/gif") return "gif";
+  if (normalized === "image/jpeg" || normalized === "image/jpg") return "jpg";
+  if (normalized === "application/pdf") return "pdf";
+  return "";
+}
+
+function adminEvidenceDownloadFilename(item = {}) {
+  const url = item.url || item.download_url || "";
+  const mimeExt = adminEvidenceExtensionForMime(adminEvidenceMimeType(url));
+  const fallback = item.title || item.room_label || "makaug-review-evidence";
+  let filename = String(item.filename || fallback)
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!filename) filename = "makaug-review-evidence";
+  if (!mimeExt) return filename;
+  const currentExt = (filename.match(/\.([a-z0-9]+)$/i) || [])[1]?.toLowerCase() || "";
+  if (currentExt === mimeExt || (mimeExt === "jpg" && currentExt === "jpeg")) return filename;
+  if (currentExt) return filename.replace(/\.[a-z0-9]+$/i, `.${mimeExt}`);
+  return `${filename}.${mimeExt}`;
+}
+
+function adminIsGeneratedPlaceholderPhoto(review = {}, image = {}) {
+  const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  const status = String(extra.image_rights_status || "").toLowerCase();
+  const url = String(image.url || "");
+  return status === "generated_placeholder_images_only" && url.startsWith("data:image/svg+xml");
+}
+
+function adminSourcedCandidateCanUseOverride(review = {}) {
+  const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  const status = String(extra.image_rights_status || "").toLowerCase();
+  return extra.consent_confirmed === true
+    && extra.image_rights_confirmed === true
+    && status !== "generated_placeholder_images_only";
+}
+
+function adminListingPhotoEvidence(review = {}, img = {}, idx = 0) {
+  const label = img.room_label || img.slot_key || img.slot || `Listing Photo ${idx + 1}`;
+  const extension = adminEvidenceExtensionForMime(adminEvidenceMimeType(img.url)) || "jpg";
+  const safeRef = String(review.inquiry_reference || review.id || "listing").replace(/[\\/:*?"<>|]+/g, "-");
+  const placeholder = adminIsGeneratedPlaceholderPhoto(review, img);
+  return {
+    kind: "media",
+    title: label,
+    url: img.url,
+    filename: `makaug-listing-${safeRef}-photo-${idx + 1}.${extension}`,
+    room_label: label,
+    is_placeholder: placeholder,
+    notice: placeholder ? "This is an internal generated placeholder, not a property photo. Import authorised property photos before approval." : ""
+  };
+}
+
 function adminEvidenceMediaHtml(url, label = "Evidence") {
   const src = String(url || "");
   if (!src) return `<div class="text-sm text-gray-500">No preview file stored.</div>`;
@@ -9786,7 +9859,7 @@ function downloadAdminEvidence(id) {
   }
   const link = document.createElement("a");
   link.href = url;
-  link.download = item.filename || "makaug-review-evidence";
+  link.download = adminEvidenceDownloadFilename(item);
   link.rel = "noopener noreferrer";
   document.body.appendChild(link);
   link.click();
@@ -12664,12 +12737,14 @@ function openAdminEvidence(id) {
   if (!bodyEl) return;
 
   if (item.kind === "media") {
+    const downloadName = adminEvidenceDownloadFilename(item);
     bodyEl.innerHTML = `
       <div class="space-y-4">
+        ${item.notice ? `<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900">${adminEscape(item.notice)}</div>` : ""}
         <div>${adminEvidenceMediaHtml(item.url, item.title || "Evidence")}</div>
         <div class="grid sm:grid-cols-2 gap-2 text-sm">
           ${item.id_number ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">ID Number</div><div class="font-mono font-bold text-gray-900 mt-1">${adminEscape(item.id_number)}</div></div>` : ""}
-          ${item.filename ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">File</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(item.filename)}</div></div>` : ""}
+          ${downloadName ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">File</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(downloadName)}</div></div>` : ""}
           ${item.room_label ? `<div class="bg-gray-50 border border-gray-200 rounded-lg p-3"><div class="text-xs uppercase text-gray-500 font-semibold">Photo Label</div><div class="font-semibold text-gray-900 mt-1">${adminEscape(item.room_label)}</div></div>` : ""}
         </div>
         <div class="flex flex-wrap gap-2">
@@ -12687,13 +12762,18 @@ function openAdminEvidence(id) {
             kind: "media",
             title: `Listing Photo ${idx + 1}`,
             url: photo.url,
-            filename: photo.filename || `makaug-photo-${idx + 1}.jpg`,
-            room_label: photo.room_label || photo.slot_key || photo.slot || ""
+            filename: adminEvidenceDownloadFilename({
+              url: photo.url,
+              filename: photo.filename || `makaug-photo-${idx + 1}`
+            }),
+            room_label: photo.room_label || photo.slot_key || photo.slot || "",
+            is_placeholder: photo.is_placeholder === true,
+            notice: photo.notice || (photo.is_placeholder === true ? "This is an internal generated placeholder, not a property photo. Import authorised property photos before approval." : "")
           });
           return `
             <button type="button" onclick="openAdminEvidence('${adminAttr(photoId)}')" class="text-left border border-gray-200 rounded-xl overflow-hidden bg-white hover:border-green-400">
               <img src="${adminAttr(photo.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-36 object-cover bg-gray-50">
-              <div class="p-2 text-xs text-gray-600">${adminEscape(photo.room_label || photo.slot_key || photo.slot || `Photo ${idx + 1}`)}${photo.is_primary ? " • Primary" : ""}</div>
+              <div class="p-2 text-xs text-gray-600">${adminEscape(photo.room_label || photo.slot_key || photo.slot || `Photo ${idx + 1}`)}${photo.is_primary ? " • Primary" : ""}${photo.is_placeholder === true ? " • Placeholder" : ""}</div>
             </button>`;
         }).join("") || `<div class="text-sm text-gray-500">No photos available.</div>`}
       </div>`;
@@ -12850,6 +12930,8 @@ function renderAdminReviewPanel(review) {
   const isSourcedCandidate = adminIsSourcedInventoryCandidate(review);
   const sourcedCandidateBadge = adminSourcedInventoryCandidateBadge(review);
   const sourcedCandidateSourceLinks = adminSourcedCandidateSourceLinks(review);
+  const hasGeneratedPlaceholderPhotos = images.some((img) => adminIsGeneratedPlaceholderPhoto(review, img));
+  const sourcedCandidateOverrideReady = adminSourcedCandidateCanUseOverride(review);
   const whatsappShareCard = String(review.extra_fields?.whatsapp_share_card || review.whatsapp_share_card || "").trim();
   const whatsappShareCardId = whatsappShareCard
     ? registerAdminEvidence(`review-${review.id}-whatsapp-share-card`, {
@@ -12865,6 +12947,11 @@ function renderAdminReviewPanel(review) {
   const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
     <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
       <strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
+      ${hasGeneratedPlaceholderPhotos ? `
+        <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-semibold text-amber-900">
+          Placeholder images are attached to this record. These are not property photos. Import authorised photos before approval.
+        </div>
+      ` : ""}
       <div class="mt-2">
         <strong>Source/photo evidence:</strong>
         ${sourcedCandidateSourceLinks.length ? `
@@ -12907,9 +12994,7 @@ function renderAdminReviewPanel(review) {
     kind: "photos",
     title: "Listing Photos",
     photos: images.map((img, idx) => ({
-      url: img.url,
-      filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg`,
-      room_label: img.room_label || img.slot_key || img.slot || "",
+      ...adminListingPhotoEvidence(review, img, idx),
       is_primary: img.is_primary
     }))
   });
@@ -12972,9 +13057,9 @@ function renderAdminReviewPanel(review) {
           </div>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
             ${images.length ? images.map((img, idx) => `
-              <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, { kind: "media", title: img.room_label || img.slot_key || `Listing Photo ${idx + 1}`, url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${idx + 1}.jpg`, room_label: img.room_label || img.slot_key || img.slot || "" }))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
+              <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`review-${review.id}-photo-${idx}`, adminListingPhotoEvidence(review, img, idx)))}')" class="block text-left border border-gray-200 rounded-lg overflow-hidden bg-gray-50 hover:border-green-400">
                 <img src="${adminEscape(img.url || "")}" alt="Listing photo ${idx + 1}" class="w-full h-24 object-cover">
-                <div class="px-2 py-1 text-[11px] text-gray-500">${adminEscape(img.room_label || img.slot_key || img.slot || `Photo ${idx + 1}`)}${img.is_primary ? " • Primary" : ""}</div>
+                <div class="px-2 py-1 text-[11px] text-gray-500">${adminEscape(img.room_label || img.slot_key || img.slot || `Photo ${idx + 1}`)}${img.is_primary ? " • Primary" : ""}${adminIsGeneratedPlaceholderPhoto(review, img) ? " • Placeholder" : ""}</div>
               </button>
             `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}
           </div>
@@ -13001,7 +13086,10 @@ function renderAdminReviewPanel(review) {
                 kind: ["image_count_checked", "image_quality_checked"].includes(item.key) ? "photos" : "json",
                 title: item.label || item.key,
                 message: item.message || "",
-                photos: ["image_count_checked", "image_quality_checked"].includes(item.key) ? images.map((img, photoIdx) => ({ url: img.url, filename: `makaug-listing-${review.inquiry_reference || review.id}-photo-${photoIdx + 1}.jpg`, is_primary: img.is_primary })) : undefined,
+                photos: ["image_count_checked", "image_quality_checked"].includes(item.key) ? images.map((img, photoIdx) => ({
+                  ...adminListingPhotoEvidence(review, img, photoIdx),
+                  is_primary: img.is_primary
+                })) : undefined,
                 raw: {
                   check: item,
                   listing_id: review.id,
@@ -13055,12 +13143,12 @@ function renderAdminReviewPanel(review) {
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
-            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Sourced Candidate</button>` : ""}
+            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Sourced Candidate</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
           ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until non-overrideable red checks are resolved.</div>`}
           ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
-          ${isSourcedCandidate ? `<div class="text-xs text-blue-700 mt-2">Special sourced approval records that consent and image rights were confirmed. It only works on sourced inventory candidate records.</div>` : ""}
+          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Special sourced approval records that consent and image rights were confirmed. It only works on sourced inventory candidate records." : "Import authorised property photos and stored consent/image-rights confirmation before using sourced candidate approval."}</div>` : ""}
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -13272,6 +13360,10 @@ async function adminApproveSourcedCandidateOverride(listingId) {
   const review = adminActiveReview || {};
   if (!adminIsSourcedInventoryCandidate(review)) {
     toast("Special sourced approval is only available on sourced candidate records.");
+    return;
+  }
+  if (!adminSourcedCandidateCanUseOverride(review)) {
+    toast("Import authorised photos and consent/image-rights evidence before approval.");
     return;
   }
   const sourceLinks = adminSourcedCandidateSourceLinks(review);

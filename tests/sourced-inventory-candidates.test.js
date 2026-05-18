@@ -50,6 +50,7 @@ test('sourced candidate seed creates 200 pending records with approval guardrail
 test('sourced candidate seed avoids copied third-party images and source URLs', () => {
   assert(script.includes('data:image/svg+xml'), 'seed should use generated placeholder media');
   assert(script.includes('generated_placeholder_images_only'), 'image rights status should be explicit');
+  assert(script.includes('Internal placeholder - import authorised photo before approval'), 'placeholder artwork must clearly say it is not an approved property photo');
   assert(script.includes('source_urls: []'), 'seed should not store scraped third-party URLs by default');
   ['images.unsplash.com', 'facebook.com', 'jiji', 'lamudi', 'ugandapropertycentre'].forEach((needle) => {
     assert(!script.toLowerCase().includes(needle), `seed must not pull copied third-party media/source: ${needle}`);
@@ -74,6 +75,9 @@ test('King dashboard visibly separates sourced candidates from ordinary reviews'
   assert(frontend.includes('verify consent, contact details, authorised photos'), 'review panel should show verification warning');
   assert(frontend.includes('function adminSourcedCandidateSourceLinks'), 'review panel should expose stored source/photo evidence links');
   assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose sourced candidate special approval control');
+  assert(frontend.includes('function adminEvidenceDownloadFilename'), 'evidence downloads should use a filename matching the actual mime type');
+  assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
+  assert(frontend.includes('Placeholder images are attached'), 'dashboard should warn when images are placeholders');
 });
 
 test('admin listing API exposes sourcing metadata only behind admin access', () => {
@@ -113,6 +117,9 @@ test('sourced candidate approval override is server-side limited and audited', (
   assert(propertiesRoute.includes('sourced_candidate_override'), 'status route should require explicit sourced override flag');
   assert(propertiesRoute.includes('consent_confirmed'), 'override should require consent confirmation');
   assert(propertiesRoute.includes('image_rights_confirmed'), 'override should require image rights confirmation');
+  assert(propertiesRoute.includes('sourcedCandidateRecordReadyForOverride'), 'override should verify the stored record is ready, not only the request body');
+  assert(propertiesRoute.includes('generated_placeholder_images_only'), 'override should reject records that still use generated placeholders');
+  assert(propertiesRoute.includes('Authorised sourced candidate photos must be imported before approval'), 'override error should explain authorised photos are required');
   assert(propertiesRoute.includes('Sourced candidate override is only available'), 'override should reject ordinary listings');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation_used'), 'override should be written to moderation history');

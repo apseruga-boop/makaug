@@ -554,6 +554,14 @@ function isSourcedInventoryCandidateRecord(row = {}) {
     || listedVia === 'sourced_inventory';
 }
 
+function sourcedCandidateRecordReadyForOverride(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const imageRightsStatus = cleanText(extra.image_rights_status).toLowerCase();
+  return parseBooleanLike(extra.consent_confirmed, false)
+    && parseBooleanLike(extra.image_rights_confirmed, false)
+    && imageRightsStatus !== 'generated_placeholder_images_only';
+}
+
 router.get('/suggestions', async (req, res, next) => {
   try {
     const query = cleanText(req.query.query).toLowerCase();
@@ -2176,6 +2184,17 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         details: [
           'Set consent_confirmed=true after verifying permission to publish the listing.',
           'Set image_rights_confirmed=true after verifying the attached photos are authorised for MakaUg use.'
+        ]
+      });
+    }
+
+    if (requestedSourcedCandidateOverride && !sourcedCandidateRecordReadyForOverride(current)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Authorised sourced candidate photos must be imported before approval',
+        details: [
+          'The record still looks like a generated placeholder or does not carry stored consent/image-rights confirmation.',
+          'Import authorised photos first, or use the Bakaima authorised seed records that already carry supplied flyer evidence.'
         ]
       });
     }
