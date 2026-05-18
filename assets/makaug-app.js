@@ -13370,13 +13370,19 @@ async function saveAdminListingReview() {
 }
 
 async function openAdminListingLivePreview(listingId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
   try {
-    const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}`, {
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(listingId)}/live-preview`, {
       headers: adminAuthHeaders()
     });
-    const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true });
+    const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, detailLoaded: true });
+    property.remote_source = "admin_preview";
     upsertPropertyForUi(property);
-    openDetail(property.id);
+    openDetail(property.id, { source: "admin_live_style_preview" });
+    toast("Live-style preview loaded.");
   } catch (e) {
     toast(`Preview failed: ${e.message || "error"}`);
   }

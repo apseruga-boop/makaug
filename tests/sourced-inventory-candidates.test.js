@@ -193,6 +193,14 @@ test('Bakaima admin path and dashboard action are protected and auditable', () =
   assert(frontend.includes('WhatsApp share card'), 'review panel should label the WhatsApp share copy clearly');
 });
 
+test('King review preview opens pending listings through a protected admin route', () => {
+  assert(adminRoute.includes("router.get('/properties/:id/live-preview'"), 'admin live-style preview endpoint should exist');
+  assert(adminRoute.includes('buildAdminLivePreviewPayload'), 'admin preview should return a consumer-shaped listing payload');
+  assert(adminRoute.includes('p.id::text = $1 OR p.inquiry_reference = $1'), 'admin preview should find listings by UUID or reference');
+  assert(frontend.includes('/api/admin/properties/${encodeURIComponent(listingId)}/live-preview'), 'review button should call the protected admin preview route');
+  assert(frontend.includes('admin_live_style_preview'), 'admin preview opens should be tracked separately from public views');
+});
+
 test('King review queue can manage authorised listing photos', () => {
   assert(adminRoute.includes("router.post('/properties/:id/images'"), 'admin should be able to add listing photos');
   assert(adminRoute.includes("router.patch('/properties/:id/images/:imageId'"), 'admin should be able to replace/set primary listing photos');

@@ -1327,7 +1327,65 @@ async function loadWhatsappConversationDetail(phone) {
   };
 }
 
+function publicPreviewExtraFields(extraFields = {}) {
+  const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  return {
+    city: extra.city || null,
+    neighborhood: extra.neighborhood || null,
+    street_name: extra.street_name || null,
+    region: extra.region || null,
+    resolved_location_label: extra.resolved_location_label || null,
+    public_display_name: extra.public_display_name || null,
+    preferred_contact_method: extra.preferred_contact_method || null,
+    video_url: extra.video_url || null,
+    youtube_url: extra.youtube_url || null,
+    area_highlights: extra.area_highlights || '',
+    nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
+    translations: extra.translations && typeof extra.translations === 'object' ? extra.translations : {},
+    size_raw: extra.size_raw || '',
+    featured: extra.featured === true,
+    featured_at: extra.featured_at || null
+  };
+}
+
+function buildAdminLivePreviewPayload(review = {}) {
+  const images = Array.isArray(review.images) ? review.images : [];
+  const primaryImage = images.find((image) => image?.is_primary)?.url || images[0]?.url || null;
+  const {
+    owner_edit_token_hash: _ownerEditTokenHash,
+    owner_edit_token_expires_at: _ownerEditTokenExpiresAt,
+    id_number: _idNumber,
+    id_document_name: _idDocumentName,
+    id_document_url: _idDocumentUrl,
+    review: _review,
+    quality_signals: _qualitySignals,
+    events: _events,
+    moderation_notes: _moderationNotes,
+    moderation_reason: _moderationReason,
+    extra_fields: rawExtraFields,
+    ...safe
+  } = review || {};
+  return {
+    ...safe,
+    listingId: safe.id,
+    slug: safe.id,
+    url: safe.id ? `/property/${safe.id}` : '',
+    category: safe.listing_type,
+    location: [safe.area, safe.district].filter(Boolean).join(', '),
+    image: primaryImage,
+    primary_image_url: primaryImage,
+    extra_fields: publicPreviewExtraFields(rawExtraFields),
+    featured: rawExtraFields?.featured === true,
+    featured_at: rawExtraFields?.featured_at || null,
+    owner_preview_visible: true,
+    admin_preview: true,
+    preview_status: safe.status || 'pending',
+    images
+  };
+}
+
 async function loadPropertyReview(propertyId) {
+  const lookup = cleanText(propertyId);
   const property = await db.query(
     `SELECT
       p.*,
@@ -1340,13 +1398,14 @@ async function loadPropertyReview(propertyId) {
       a.registration_status AS agent_registration_status
      FROM properties p
      LEFT JOIN agents a ON a.id = p.agent_id
-     WHERE p.id = $1
+     WHERE p.id::text = $1 OR p.inquiry_reference = $1
      LIMIT 1`,
-    [propertyId]
+    [lookup]
   );
 
   if (!property.rows.length) return null;
   const listing = property.rows[0];
+  const resolvedPropertyId = listing.id;
 
   const [
     images,
@@ -1362,7 +1421,7 @@ async function loadPropertyReview(propertyId) {
        FROM property_images
        WHERE property_id = $1
        ORDER BY is_primary DESC, sort_order ASC, created_at ASC`,
-      [propertyId]
+      [resolvedPropertyId]
     ),
     db.query(
       `SELECT id, title, listing_type, district, area, price, status, created_at
@@ -1374,7 +1433,7 @@ async function loadPropertyReview(propertyId) {
          )
        ORDER BY created_at DESC
        LIMIT 20`,
-      [propertyId, listing.lister_phone || null, listing.lister_email || null]
+      [resolvedPropertyId, listing.lister_phone || null, listing.lister_email || null]
     ),
     db.query(
       `SELECT id, title, listing_type, district, area, address, price, status, created_at
@@ -1396,7 +1455,7 @@ async function loadPropertyReview(propertyId) {
        ORDER BY created_at DESC
        LIMIT 20`,
       [
-        propertyId,
+        resolvedPropertyId,
         listing.title || '',
         listing.address || null,
         listing.listing_type,
@@ -1413,7 +1472,7 @@ async function loadPropertyReview(propertyId) {
        WHERE current_i.property_id = $1
        ORDER BY p.title ASC
        LIMIT 20`,
-      [propertyId]
+      [resolvedPropertyId]
     ),
     db.query(
       `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
@@ -1423,7 +1482,7 @@ async function loadPropertyReview(propertyId) {
          AND id_number = $2
        ORDER BY created_at DESC
        LIMIT 20`,
-      [propertyId, listing.id_number || null]
+      [resolvedPropertyId, listing.id_number || null]
     ),
     db.query(
       `SELECT id, first_name, last_name, phone, email, role, status, created_at
@@ -1440,7 +1499,7 @@ async function loadPropertyReview(propertyId) {
        WHERE property_id = $1
        ORDER BY created_at DESC
        LIMIT 50`,
-      [propertyId]
+      [resolvedPropertyId]
     )
   ]);
 
@@ -2134,6 +2193,22 @@ router.get('/properties/:id/review', async (req, res, next) => {
     }
 
     return res.json({ ok: true, data: review });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/:id/live-preview', async (req, res, next) => {
+  try {
+    const review = await loadPropertyReview(req.params.id);
+    if (!review) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    return res.json({
+      ok: true,
+      data: buildAdminLivePreviewPayload(review)
+    });
   } catch (error) {
     return next(error);
   }
