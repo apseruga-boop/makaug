@@ -10200,26 +10200,125 @@ function getListingWhatsappLocation(p = {}) {
     .join(", ") || "the listed location";
 }
 
+const LISTING_WHATSAPP_CONTACT_I18N = Object.freeze({
+  en: {
+    sale: "Hello, I am writing to enquire about this property for sale on makaug.com: {title}.",
+    rent: "Hello, I am writing to enquire about this rental property on makaug.com: {title}.",
+    land: "Hello, I am writing to enquire about this land listing on makaug.com: {title}.",
+    student: "Hello, I am writing to enquire about this student accommodation on makaug.com: {title}.",
+    commercial: "Hello, I am writing to enquire about this commercial property on makaug.com: {title}.",
+    location: "Location: {location}.",
+    price: "Price: {price}.",
+    next: "Please let me know if it is still available and the next step for a viewing.",
+    landNext: "Please let me know if it is still available and the next step to view the land and confirm the title or tenure details.",
+    studentNext: "Please let me know if it is still available, the room rules, and the next step for a viewing.",
+    link: "Listing link: {url}"
+  },
+  lg: {
+    sale: "Gyebale, mpandiika okubuuza ku property eno etundibwa ku makaug.com: {title}.",
+    rent: "Gyebale, mpandiika okubuuza ku property eno epangisibwa ku makaug.com: {title}.",
+    land: "Gyebale, mpandiika okubuuza ku ttaka lino ku makaug.com: {title}.",
+    student: "Gyebale, mpandiika okubuuza ku kisulo ky'abayizi kino ku makaug.com: {title}.",
+    commercial: "Gyebale, mpandiika okubuuza ku property y'obusuubuzi eno ku makaug.com: {title}.",
+    location: "Ekifo: {location}.",
+    price: "Omuwendo: {price}.",
+    next: "Nsaba mumbuulire oba ekyaliwo n'omutendera oguddako okulaba property.",
+    landNext: "Nsaba mumbuulire oba ekyaliwo n'omutendera oguddako okulaba ettaka n'okukakasa title oba tenure.",
+    studentNext: "Nsaba mumbuulire oba ekyaliwo, amateeka g'ekisulo, n'omutendera oguddako okulaba.",
+    link: "Link ya listing: {url}"
+  },
+  sw: {
+    sale: "Habari, ninaandika kuulizia mali hii ya kuuza kwenye makaug.com: {title}.",
+    rent: "Habari, ninaandika kuulizia mali hii ya kupangisha kwenye makaug.com: {title}.",
+    land: "Habari, ninaandika kuulizia tangazo hili la ardhi kwenye makaug.com: {title}.",
+    student: "Habari, ninaandika kuulizia makazi haya ya wanafunzi kwenye makaug.com: {title}.",
+    commercial: "Habari, ninaandika kuulizia mali hii ya biashara kwenye makaug.com: {title}.",
+    location: "Eneo: {location}.",
+    price: "Bei: {price}.",
+    next: "Tafadhali nijulishe kama bado ipo na hatua inayofuata kwa viewing.",
+    landNext: "Tafadhali nijulishe kama bado ipo na hatua inayofuata kuona ardhi na kuthibitisha title au tenure.",
+    studentNext: "Tafadhali nijulishe kama bado ipo, sheria za chumba, na hatua inayofuata kwa viewing.",
+    link: "Kiungo cha tangazo: {url}"
+  },
+  ac: {
+    sale: "Apwoyo, acoyo me penyo pi property man ma tye atuca i makaug.com: {title}.",
+    rent: "Apwoyo, acoyo me penyo pi property man me apanga i makaug.com: {title}.",
+    land: "Apwoyo, acoyo me penyo pi lobo man i makaug.com: {title}.",
+    student: "Apwoyo, acoyo me penyo pi kabedo pa lanyut man i makaug.com: {title}.",
+    commercial: "Apwoyo, acoyo me penyo pi property me cato man i makaug.com: {title}.",
+    location: "Kabedo: {location}.",
+    price: "Nengo: {price}.",
+    next: "Tim ber iwacci ka pud tye ki yore malubo me neno property.",
+    landNext: "Tim ber iwacci ka pud tye ki yore malubo me neno lobo ki moko title onyo tenure.",
+    studentNext: "Tim ber iwacci ka pud tye, cik pa room, ki yore malubo me neno.",
+    link: "Link pa listing: {url}"
+  },
+  ny: {
+    sale: "Orire ota, ninyandika kubuuza ahari property egi erikutundwa aha makaug.com: {title}.",
+    rent: "Orire ota, ninyandika kubuuza ahari property egi erikupangisibwa aha makaug.com: {title}.",
+    land: "Orire ota, ninyandika kubuuza ahari eitaka eri aha makaug.com: {title}.",
+    student: "Orire ota, ninyandika kubuuza ahari ebisulo by'abanyeshomesa aha makaug.com: {title}.",
+    commercial: "Orire ota, ninyandika kubuuza ahari property y'obushuubuzi aha makaug.com: {title}.",
+    location: "Ahantu: {location}.",
+    price: "Omuhendo: {price}.",
+    next: "Nyabura mumbwire yaaba ekyariho n'omutendera ogurikukurataho kureeba property.",
+    landNext: "Nyabura mumbwire yaaba ekyariho n'omutendera ogurikukurataho kureeba eitaka n'okuhamya title nari tenure.",
+    studentNext: "Nyabura mumbwire yaaba ekyariho, amateeka g'ekisenge, n'omutendera ogurikukurataho kureeba.",
+    link: "Link ya listing: {url}"
+  },
+  rn: {
+    sale: "Orire ota, ninyandika kubuuza ahari property egi erikugurishwa aha makaug.com: {title}.",
+    rent: "Orire ota, ninyandika kubuuza ahari property egi erikupangishwa aha makaug.com: {title}.",
+    land: "Orire ota, ninyandika kubuuza ahari itaka eri aha makaug.com: {title}.",
+    student: "Orire ota, ninyandika kubuuza ahari ebisulo by'abanyeshuri aha makaug.com: {title}.",
+    commercial: "Orire ota, ninyandika kubuuza ahari property y'ubucuruzi aha makaug.com: {title}.",
+    location: "Ahantu: {location}.",
+    price: "Igiciro: {price}.",
+    next: "Nyabura mumbwire niba ikiriho n'omutendera ogukurikira kureba property.",
+    landNext: "Nyabura mumbwire niba ikiriho n'omutendera ogukurikira kureba itaka no kwemeza title cyangwa tenure.",
+    studentNext: "Nyabura mumbwire niba ikiriho, amategeko y'icyumba, n'omutendera ogukurikira kureba.",
+    link: "Link ya listing: {url}"
+  },
+  sm: {
+    sale: "Gyebale, mpandiika okubuuza ku property eno etundibwa ku makaug.com: {title}.",
+    rent: "Gyebale, mpandiika okubuuza ku property eno ekodesebwa ku makaug.com: {title}.",
+    land: "Gyebale, mpandiika okubuuza ku itaka lino ku makaug.com: {title}.",
+    student: "Gyebale, mpandiika okubuuza ku kisulo ky'abaisomesa kino ku makaug.com: {title}.",
+    commercial: "Gyebale, mpandiika okubuuza ku property y'obusuubuzi eno ku makaug.com: {title}.",
+    location: "Ekifo: {location}.",
+    price: "Omuwendo: {price}.",
+    next: "Nsaba mumbuulire oba ekyaliwo n'omutendera oguddako okulaba property.",
+    landNext: "Nsaba mumbuulire oba ekyaliwo n'omutendera oguddako okulaba itaka n'okukakasa title oba tenure.",
+    studentNext: "Nsaba mumbuulire oba ekyaliwo, amateeka g'ekisulo, n'omutendera oguddako okulaba.",
+    link: "Link ya listing: {url}"
+  }
+});
+
+function listingWhatsappContactText(key, vars = {}, lang = currentLang || "en") {
+  const fallback = LANG_FALLBACK[lang] || "en";
+  const template = LISTING_WHATSAPP_CONTACT_I18N[lang]?.[key]
+    || LISTING_WHATSAPP_CONTACT_I18N[fallback]?.[key]
+    || LISTING_WHATSAPP_CONTACT_I18N.en[key]
+    || "";
+  return Object.entries(vars).reduce((acc, [name, value]) => (
+    acc.replaceAll(`{${name}}`, cleanWhatsappValue(value))
+  ), template);
+}
+
 function buildListingWhatsappMessageForUi(p = {}) {
   const title = cleanWhatsappValue(p.title) || "this property";
   const category = getListingWhatsappCategory(p);
   const location = getListingWhatsappLocation(p);
-  const ref = getListingWhatsappRef(p);
   const url = getPropertyShareUrl(p);
   const price = p.price ? fmtP(p.price, p.period) : "";
-  let message = "";
-  if (category === "rent") {
-    message = `Hi, I'm contacting you about this rental property on MakaUg: ${title} in ${location}. Is it still available for rent?`;
-  } else if (category === "land") {
-    message = `Hi, I'm contacting you about this land listing on MakaUg: ${title} in ${location}. Is it still available, and what is the title/tenure status?`;
-  } else if (category === "student") {
-    message = `Hi, I'm contacting you about this student accommodation on MakaUg: ${title} near ${location}. Is it still available?`;
-  } else if (category === "commercial") {
-    message = `Hi, I'm contacting you about this commercial property on MakaUg: ${title} in ${location}. Is it still available?`;
-  } else {
-    message = `Hi, I'm contacting you about this property for sale on MakaUg: ${title} in ${location}. Is it still available?`;
-  }
-  return [message, price ? `Price: ${price}` : "", ref ? `Ref: ${ref}` : "", url].filter(Boolean).join(" ");
+  const nextKey = category === "land" ? "landNext" : (category === "student" ? "studentNext" : "next");
+  return [
+    listingWhatsappContactText(category, { title }),
+    listingWhatsappContactText("location", { location }),
+    price ? listingWhatsappContactText("price", { price }) : "",
+    listingWhatsappContactText(nextKey),
+    url ? listingWhatsappContactText("link", { url }) : ""
+  ].filter(Boolean).join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
 }
 
 async function recordListingWhatsappClick(propertyId, message = "", targetPhone = "", source = "listing_detail_whatsapp") {
