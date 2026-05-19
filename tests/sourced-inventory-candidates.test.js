@@ -230,8 +230,10 @@ test('Carnelian authorised batch creates two pending sale listings with YouTube 
     assert.strictEqual(extra.property_url_status, 'public_after_approval');
     assert(extra.map_pin_label && /Kira/i.test(extra.map_pin_label), `${listing.title} should carry a close Kira-area map label`);
     assert(extra.map_pin_accuracy_note && /confirm the exact/i.test(extra.map_pin_accuracy_note), `${listing.title} should keep exact-gate confirmation in review metadata`);
-    assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 4, `${listing.title} should carry named nearby amenities`);
+    assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 7, `${listing.title} should carry named nearby amenities`);
     assert(extra.nearby_facilities.every((item) => item && typeof item.name === 'string' && item.name.trim() && item.name !== 'Nearby'), `${listing.title} should not store generic Nearby amenity chips`);
+    assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include nearby health facilities`);
+    assert(extra.nearby_facilities.some((item) => /school|college|secondary/i.test(`${item.type} ${item.name}`)), `${listing.title} should include schools or secondary schools`);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the YouTube source`);
     assert(!/before public approval/i.test(listing.description), `${listing.title} should not expose admin approval copy publicly`);
     assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate copy publicly`);
@@ -251,6 +253,7 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('adminCreateShareablePreviewLink'), 'review panel should expose shareable private preview link creation');
   assert(frontend.includes('/review-token'), 'review panel should call the protected preview-token route');
   assert(frontend.includes('normalizeNearbyPlaceForUi'), 'frontend should normalize old string amenities and new amenity objects');
+  assert(frontend.includes('mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw)'), 'detail page should enrich saved amenities with nearby hospitals and schools');
   assert(frontend.includes('extra.nearby_facilities'), 'property search should include persisted nearby facility names');
 });
 

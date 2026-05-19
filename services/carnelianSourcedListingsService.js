@@ -75,9 +75,13 @@ const CARNELIAN_PROPERTIES = [
     nearbyFacilities: [
       { name: 'Kira Municipal Council offices', type: 'Public services', distanceKm: 0.2 },
       { name: 'NIRA Kira offices', type: 'Public services', distanceKm: 0.2 },
+      { name: 'Kira Health Centre III', type: 'Hospital / clinic', distanceKm: 0.4 },
       { name: 'Kira town centre shops', type: 'Town centre', distanceKm: 0.3 },
       { name: 'Kira roundabout access', type: 'Transport link', distanceKm: 0.3 },
       { name: 'Namugongo Road access', type: 'Road access', distanceKm: 0.4 },
+      { name: 'Kira Secondary School Namugongo', type: 'Secondary school', distanceKm: 1.2 },
+      { name: 'Lifelink Hospital Namugongo Road', type: 'Hospital', distanceKm: 1.8 },
+      { name: 'Vienna College Namugongo Road', type: 'School', distanceKm: 2.2 },
     ],
     photos: [
       ['kira-modern-4bed-01-main.jpg', 'Exterior/front view', true],
@@ -115,9 +119,13 @@ const CARNELIAN_PROPERTIES = [
     nearbyFacilities: [
       { name: 'Kira-Shimon Road access', type: 'Road access', distanceKm: 0.4 },
       { name: 'Kitikifumba residential corridor', type: 'Neighbourhood', distanceKm: 0.6 },
+      { name: 'Kira Health Centre III', type: 'Hospital / clinic', distanceKm: 2.0 },
+      { name: 'Kira Secondary School Namugongo', type: 'Secondary school', distanceKm: 2.3 },
       { name: 'Kira town centre access', type: 'Town centre', distanceKm: 2.5 },
       { name: 'Namugongo route access', type: 'Transport link', distanceKm: 2.8 },
       { name: 'Najjera route access', type: 'Transport link', distanceKm: 3.5 },
+      { name: 'Lifelink Hospital Namugongo Road', type: 'Hospital', distanceKm: 3.6 },
+      { name: 'Vienna College Namugongo Road', type: 'School', distanceKm: 3.8 },
     ],
     photos: [
       ['kira-shimon-5bed-01-main.jpg', 'Exterior/front view', true],

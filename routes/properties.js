@@ -1994,16 +1994,33 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
     }
 
     const exists = await db.query(
-      `SELECT id, title, inquiry_reference, status
-       FROM properties
-       WHERE id = $1
-         AND status IN ('approved','sold')
+      `SELECT
+         p.id,
+         p.title,
+         p.inquiry_reference,
+         p.status,
+         p.lister_name,
+         p.lister_phone,
+         p.lister_email,
+         a.full_name AS agent_name,
+         a.phone AS agent_phone,
+         a.whatsapp AS agent_whatsapp,
+         a.email AS agent_email
+       FROM properties p
+       LEFT JOIN agents a ON a.id = p.agent_id
+       WHERE p.id = $1
+         AND p.status IN ('approved','sold')
        LIMIT 1`,
       [propertyId]
     );
     if (!exists.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
+
+    const listingContact = exists.rows[0];
+    const resolvedTargetPhone = targetPhone || listingContact.agent_whatsapp || listingContact.agent_phone || listingContact.lister_phone || null;
+    const resolvedTargetEmail = listingContact.agent_email || listingContact.lister_email || null;
+    const resolvedTargetName = listingContact.agent_name || listingContact.lister_name || null;
 
     const inserted = await db.query(
       `INSERT INTO property_inquiries (
@@ -2034,14 +2051,15 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
       activityType: 'whatsapp_contact_initiated',
       metadata: {
         cta_location: ctaLocation,
-        target_phone_present: Boolean(targetPhone),
+        target_phone_present: Boolean(resolvedTargetPhone),
         property_reference: exists.rows[0].inquiry_reference || null,
         property_inquiry_id: inserted.rows[0].id
       }
     });
 
     await logNotification(db, {
-      recipientPhone: targetPhone || null,
+      recipientPhone: resolvedTargetPhone || null,
+      recipientEmail: resolvedTargetEmail || null,
       channel: 'in_app',
       type: 'whatsapp_contact_initiated',
       status: 'logged',
@@ -2051,7 +2069,8 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
         language,
         property_title: exists.rows[0].title,
         inquiry_reference: exists.rows[0].inquiry_reference,
-        inquiry_id: inserted.rows[0].id
+        inquiry_id: inserted.rows[0].id,
+        target_contact_name: resolvedTargetName
       },
       relatedListingId: propertyId,
       relatedLeadId: lead?.id || null
@@ -2081,10 +2100,32 @@ router.post('/:id/inquiries', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
-    const exists = await db.query('SELECT id FROM properties WHERE id = $1 AND status = $2', [propertyId, 'approved']);
+    const exists = await db.query(
+      `SELECT
+         p.id,
+         p.title,
+         p.inquiry_reference,
+         p.lister_name,
+         p.lister_phone,
+         p.lister_email,
+         a.full_name AS agent_name,
+         a.phone AS agent_phone,
+         a.whatsapp AS agent_whatsapp,
+         a.email AS agent_email
+       FROM properties p
+       LEFT JOIN agents a ON a.id = p.agent_id
+       WHERE p.id = $1
+         AND p.status = $2`,
+      [propertyId, 'approved']
+    );
     if (!exists.rows.length) {
       return res.status(404).json({ ok: false, error: 'Property not found' });
     }
+
+    const listingContact = exists.rows[0];
+    const targetPhone = listingContact.agent_whatsapp || listingContact.agent_phone || listingContact.lister_phone || null;
+    const targetEmail = listingContact.agent_email || listingContact.lister_email || null;
+    const targetName = listingContact.agent_name || listingContact.lister_name || null;
 
     const inserted = await db.query(
       `INSERT INTO property_inquiries (
@@ -2120,17 +2161,25 @@ router.post('/:id/inquiries', async (req, res, next) => {
       message: message || 'Property enquiry submitted from makaug.',
       activityType: 'property_enquiry_created',
       metadata: {
-        property_inquiry_id: inserted.rows[0].id
+        property_inquiry_id: inserted.rows[0].id,
+        target_contact_name: targetName,
+        property_reference: listingContact.inquiry_reference || null,
+        property_title: listingContact.title || null
       }
     });
 
     await logNotification(db, {
-      recipientPhone: contactPhone || null,
-      recipientEmail: contactEmail || null,
+      recipientPhone: targetPhone || null,
+      recipientEmail: targetEmail || null,
       channel: 'in_app',
-      type: 'enquiry_sent',
+      type: 'property_enquiry_for_lister',
       status: 'logged',
-      payloadSummary: { inquiry_id: inserted.rows[0].id },
+      payloadSummary: {
+        inquiry_id: inserted.rows[0].id,
+        property_title: listingContact.title,
+        inquiry_reference: listingContact.inquiry_reference,
+        target_contact_name: targetName
+      },
       relatedListingId: propertyId,
       relatedLeadId: lead?.id || null
     });

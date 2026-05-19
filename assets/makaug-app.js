@@ -23015,7 +23015,7 @@ function getNearbyAmenitySuggestions(params = {}) {
   if (hasCoords) {
     enriched.sort((a, b) => (a.distanceKm || 999) - (b.distanceKm || 999));
   }
-  return enriched.slice(0, 5);
+  return enriched.slice(0, 8);
 }
 
 function normalizeNearbyPlaceForUi(item) {
@@ -23042,6 +23042,18 @@ function normalizeNearbyPlacesForUi(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item) => normalizeNearbyPlaceForUi(item))
     .filter(Boolean);
+}
+
+function mergeNearbyPlacesForUi(...groups) {
+  const merged = [];
+  const seen = new Set();
+  groups.flatMap((group) => normalizeNearbyPlacesForUi(group)).forEach((item) => {
+    const key = String(item.name || item.label || "").trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(item);
+  });
+  return merged;
 }
 
 function buildLocationHighlightsText(params = {}) {
@@ -26405,6 +26417,13 @@ const UG_AMENITY_POINTS = [
   { name: "Entebbe International Airport", kind: "Airport", district: "Wakiso", lat: 0.042, lng: 32.443 },
   { name: "Victoria Mall Entebbe", kind: "Shopping", district: "Wakiso", lat: 0.061, lng: 32.469 },
   { name: "St Mary’s College Kisubi", kind: "School", district: "Wakiso", lat: 0.114, lng: 32.535 },
+  { name: "Kira Health Centre III", kind: "Hospital", district: "Wakiso", lat: 0.397, lng: 32.642 },
+  { name: "Lifelink Hospital Namugongo Road", kind: "Hospital", district: "Wakiso", lat: 0.390, lng: 32.657 },
+  { name: "Kira Secondary School Namugongo", kind: "Secondary School", district: "Wakiso", lat: 0.402, lng: 32.652 },
+  { name: "Vienna College Namugongo Road", kind: "School", district: "Wakiso", lat: 0.408, lng: 32.660 },
+  { name: "Kira Municipal Council offices", kind: "Public services", district: "Wakiso", lat: 0.398, lng: 32.641 },
+  { name: "NIRA Kira offices", kind: "Public services", district: "Wakiso", lat: 0.399, lng: 32.642 },
+  { name: "Kira town centre shops", kind: "Shopping", district: "Wakiso", lat: 0.397, lng: 32.644 },
   { name: "UCU Main Campus", kind: "University", district: "Mukono", lat: 0.355, lng: 32.753 },
   { name: "Mukono Kings High School", kind: "School", district: "Mukono", lat: 0.357, lng: 32.75 },
   { name: "Jinja Main Market", kind: "Market", district: "Jinja", lat: 0.427, lng: 33.203 },
@@ -28028,6 +28047,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Email (si ya buwaze)",
     "Message": "Obubaka",
     "I am interested in {title}.": "Nnina obwagazi mu {title}.",
+    "Your enquiry will go to {name}.": "Okubuuza kwo kujja kutuuka eri {name}.",
     "Save Property": "Tereka Property",
     "Saved to Profile": "Eterekeddwa ku Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
@@ -28070,6 +28090,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Barua pepe si lazima",
     "Message": "Ujumbe",
     "I am interested in {title}.": "Ninavutiwa na {title}.",
+    "Your enquiry will go to {name}.": "Swali lako litaenda kwa {name}.",
     "Save Property": "Hifadhi Mali",
     "Saved to Profile": "Imehifadhiwa kwenye Profaili",
     "Sign in or create an account to keep it in your profile.": "Ingia au fungua akaunti ili uiweke kwenye profaili yako.",
@@ -28111,6 +28132,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Email pe obedo gin me tic",
     "Message": "Coc",
     "I am interested in {title}.": "Amito {title}.",
+    "Your enquiry will go to {name}.": "Penyo mamegi bicwalo bot {name}.",
     "Save Property": "Gwok Property",
     "Saved to Profile": "Kigwoke i Profile",
     "Sign in or create an account to keep it in your profile.": "Dony onyo ket account me gwoko i profile mamegi.",
@@ -28147,6 +28169,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Email si ya buwaze",
     "Message": "Obutumwa",
     "I am interested in {title}.": "Ninyenda {title}.",
+    "Your enquiry will go to {name}.": "Okubuuza kwawe nikwija kugya ahari {name}.",
     "Save Property": "Tereka Property",
     "Saved to Profile": "Etairwe omu Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
@@ -28183,6 +28206,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Email si ya buwaze",
     "Message": "Obutumwa",
     "I am interested in {title}.": "Ninyenda {title}.",
+    "Your enquiry will go to {name}.": "Okubuuza kwawe nikwija kugya ahari {name}.",
     "Save Property": "Tereka Property",
     "Saved to Profile": "Etairwe omu Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
@@ -28219,6 +28243,7 @@ const PROPERTY_UI_I18N = {
     "Email optional": "Email (si ya buwaze)",
     "Message": "Obubaka",
     "I am interested in {title}.": "Nnina obwagazi mu {title}.",
+    "Your enquiry will go to {name}.": "Okubuuza kwo kujja kutuuka eri {name}.",
     "Save Property": "Tereka Property",
     "Saved to Profile": "Eterekeddwa ku Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
@@ -29868,10 +29893,9 @@ async function openDetail(id, options = {}) {
   const similar = getSimilarProperties(p, 3);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
-  const detailNearbyRaw = Array.isArray(p.nearby_places) && p.nearby_places.length
-    ? p.nearby_places
-    : getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
-  const detailNearby = normalizeNearbyPlacesForUi(detailNearbyRaw);
+  const savedNearbyRaw = Array.isArray(p.nearby_places) ? p.nearby_places : [];
+  const suggestedNearbyRaw = getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
+  const detailNearby = mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw);
   const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
@@ -29903,9 +29927,11 @@ async function openDetail(id, options = {}) {
   const directionsUrl = propertyDirectionsUrl(p);
   const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
-  const inquiryNameDefault = authState?.user ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
-  const inquiryPhoneDefault = authState?.user?.phone || "";
-  const inquiryEmailDefault = authState?.user?.email || "";
+  const inquiryRecipientName = broker?.name || ownerDisplayName || translatePropertyUi("Public listing contact");
+  const canPrefillInquiryFromUser = !!authState?.user && !isAdminViewer;
+  const inquiryNameDefault = canPrefillInquiryFromUser ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
+  const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
+  const inquiryEmailDefault = canPrefillInquiryFromUser ? (authState?.user?.email || "") : "";
   document.getElementById("detail-content").innerHTML = `
     <div class="grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
@@ -29974,11 +30000,15 @@ async function openDetail(id, options = {}) {
             <div class="mt-3">
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translateListingLabel("Nearby Amenities")}</div>
               <div class="flex flex-wrap gap-2">
-                ${detailNearby.slice(0, 6).map((item) => {
+                ${detailNearby.slice(0, 8).map((item) => {
                   const d = Number.isFinite(item.distanceKm) ? item.distanceKm : (Number.isFinite(item.distance_km) ? item.distance_km : null);
                   const dist = Number.isFinite(d) ? ` · ${Number(d).toFixed(1)} km` : "";
                   const label = translateListingLabel(item.name || item.label || "Nearby");
-                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${adminEscape(label)}${dist}</span>`;
+                  const typeLabel = item.type || item.kind || "";
+                  const display = typeLabel && !String(label).toLowerCase().includes(String(typeLabel).toLowerCase())
+                    ? `${typeLabel}: ${label}`
+                    : label;
+                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${adminEscape(display)}${dist}</span>`;
                 }).join("")}
               </div>
             </div>
@@ -30024,6 +30054,7 @@ async function openDetail(id, options = {}) {
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
           <div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
+            <p class="text-xs text-gray-500 mb-2">${adminEscape(translatePropertyUi("Your enquiry will go to {name}.", { name: inquiryRecipientName }))}</p>
             <div class="space-y-2">
               <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
               <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">

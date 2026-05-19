@@ -81,6 +81,16 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(htmlSource, /admin-clean-live-tests-btn/);
 });
 
+test('property detail enquiries are routed to the listing contact, not the signed-in admin viewer', () => {
+  const routeSource = fs.readFileSync('routes/properties.js', 'utf8');
+  assert.match(routeSource, /LEFT JOIN agents a ON a\.id = p\.agent_id/);
+  assert.match(routeSource, /const targetPhone = listingContact\.agent_whatsapp \|\| listingContact\.agent_phone \|\| listingContact\.lister_phone/);
+  assert.match(routeSource, /type: 'property_enquiry_for_lister'/);
+  assert.doesNotMatch(routeSource, /type: 'enquiry_sent'[\s\S]{0,160}recipientPhone: contactPhone/);
+  assert.match(appSource, /const canPrefillInquiryFromUser = !!authState\?\.user && !isAdminViewer/);
+  assert.match(appSource, /Your enquiry will go to \{name\}\./);
+});
+
 test('WhatsApp property search uses the same public inventory guardrails', () => {
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
@@ -95,4 +105,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /controlled-public-inventory-20260514/);
   assert.match(htmlSource, /admin-live-control-parity-20260515/);
   assert.match(htmlSource, /live-featured-cleanup-20260519/);
+  assert.match(htmlSource, /agent-inquiry-nearby-20260519/);
 });
