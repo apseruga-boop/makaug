@@ -91,6 +91,15 @@ function addPublicLaunchSeedFilter(filters, values) {
   LAUNCH_DUMMY_LISTING_TITLES.forEach((title) => {
     addFilter(filters, values, 'LOWER(TRIM(COALESCE(p.title, \'\'))) <> ?', title);
   });
+  filters.push("COALESCE(p.source, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
+  filters.push("COALESCE(p.listed_via, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
+  filters.push("COALESCE(p.lister_name, '') !~* '(qa test delete|qa owner|dummy|sample)'");
+  filters.push("COALESCE(p.inquiry_reference, '') !~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'");
+  filters.push("COALESCE(p.extra_fields->>'qa_test_delete', '') !~* '^(true|1|yes)$'");
+  filters.push("COALESCE(p.extra_fields->>'soft_launch_test', '') !~* '^(true|1|yes)$'");
+  filters.push("COALESCE(p.extra_fields->>'is_test', '') !~* '^(true|1|yes)$'");
+  filters.push("COALESCE(p.extra_fields->>'launch_proof', '') !~* '^(true|1|yes)$'");
+  filters.push("COALESCE(p.extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'");
 }
 
 function normalizeListingType(type) {

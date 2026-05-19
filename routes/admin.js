@@ -107,6 +107,30 @@ const FIELD_AGENT_UPLOAD_MAX_BYTES = 2 * 1024 * 1024;
 const FIELD_AGENT_DIRECTORY_LIMIT = 10000;
 const ADMIN_LISTING_IMAGE_MAX_BYTES = 6 * 1024 * 1024;
 const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
+const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
+const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
+
+function adminLaunchTestListingCondition(alias = 'p') {
+  const a = alias;
+  return `(
+    ${LAUNCH_TEST_LISTING_MARKERS.map((marker) => `(COALESCE(${a}.title, '') ILIKE '%${marker}%' OR COALESCE(${a}.description, '') ILIKE '%${marker}%')`).join(' OR ')}
+    OR LOWER(TRIM(COALESCE(${a}.title, ''))) IN (${LAUNCH_TEST_DUMMY_TITLES.map((title) => `'${title}'`).join(', ')})
+    OR COALESCE(${a}.source, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${a}.listed_via, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${a}.lister_name, '') ~* '(qa test delete|qa owner|dummy|sample)'
+    OR COALESCE(${a}.lister_email, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    OR COALESCE(${a}.inquiry_reference, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    OR COALESCE(${a}.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${a}.extra_fields->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${a}.extra_fields->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${a}.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${a}.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+  )`;
+}
+
+function adminPublicLiveListingCondition(alias = 'p') {
+  return `(NOT ${adminLaunchTestListingCondition(alias)})`;
+}
 
 function numberOrZero(value) {
   const n = Number(value || 0);
@@ -1964,11 +1988,14 @@ router.get('/properties/live', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
     const values = [limit, offset];
+    const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
+    const publicLiveCondition = includeTestLike ? 'TRUE' : adminPublicLiveListingCondition('p');
 
     const countResult = await db.query(
       `SELECT COUNT(*)::int AS total
        FROM properties p
-       WHERE p.status IN ('approved','sold')`
+       WHERE p.status IN ('approved','sold')
+         AND ${publicLiveCondition}`
     );
     const total = countResult.rows[0]?.total || 0;
 
@@ -2008,6 +2035,7 @@ router.get('/properties/live', async (req, res, next) => {
          LIMIT 1
        ) img ON true
        WHERE p.status IN ('approved','sold')
+         AND ${publicLiveCondition}
        ORDER BY live_at DESC
        LIMIT $1
        OFFSET $2`,
@@ -2187,6 +2215,129 @@ router.post('/test-listings/cleanup-april-29', async (req, res, next) => {
     }
 
     await writeAudit('april_29_test_batch_cleanup', {
+      matched: ids.length,
+      deleted: updated.rows.length,
+      listings: updated.rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        inquiry_reference: row.inquiry_reference
+      }))
+    }, actorId);
+
+    return res.json({
+      ok: true,
+      data: {
+        matched: ids.length,
+        deleted: updated.rows.length,
+        listings: updated.rows
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/test-listings/cleanup-live', async (req, res, next) => {
+  try {
+    const actorId = adminActorId(req);
+    const reason = 'Removed launch/test listings from live and featured controls';
+    const testCondition = adminLaunchTestListingCondition('p');
+    const targetRows = await db.query(
+      `SELECT
+         p.id::text AS id,
+         p.title,
+         p.status,
+         p.created_at,
+         p.approved_at,
+         p.inquiry_reference,
+         p.source,
+         p.listed_via,
+         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured
+       FROM properties p
+       WHERE COALESCE(p.status, '') <> 'deleted'
+         AND (
+           p.status IN ('approved','sold','hidden')
+           OR COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')
+         )
+         AND ${testCondition}
+       ORDER BY COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) DESC
+       LIMIT 1000`
+    );
+
+    const ids = targetRows.rows.map((row) => row.id).filter(Boolean);
+    if (!ids.length) {
+      await writeAudit('live_test_listing_cleanup_checked', {
+        matched: 0,
+        action: 'none'
+      }, actorId);
+      return res.json({
+        ok: true,
+        data: {
+          matched: 0,
+          deleted: 0,
+          listings: []
+        }
+      });
+    }
+
+    const cleanupMeta = {
+      cleaned_at: new Date().toISOString(),
+      actor_id: actorId,
+      reason,
+      scope: 'test-like approved, sold, hidden, or featured properties only'
+    };
+    const updated = await db.query(
+      `UPDATE properties
+       SET
+         status = 'deleted',
+         moderation_stage = 'deleted',
+         moderation_reason = $2,
+         updated_at = NOW(),
+         extra_fields = COALESCE(extra_fields, '{}'::jsonb)
+           || jsonb_build_object(
+             'featured', false,
+             'featured_removed_at', NOW()::text,
+             'live_test_listing_cleanup', $3::jsonb
+           )
+       WHERE id::text = ANY($1::text[])
+       RETURNING id::text AS id, title, status, created_at, approved_at, inquiry_reference`,
+      [ids, reason, JSON.stringify(cleanupMeta)]
+    );
+
+    for (const row of updated.rows) {
+      try {
+        const previous = targetRows.rows.find((item) => item.id === row.id);
+        await db.query(
+          `INSERT INTO property_moderation_events (
+            property_id,
+            actor_id,
+            action,
+            status_from,
+            status_to,
+            reason,
+            notes,
+            delivery
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
+          [
+            row.id,
+            actorId,
+            'live_test_listing_cleanup',
+            previous?.status || null,
+            'deleted',
+            reason,
+            'Soft-deleted because the record matched launch/test markers and should not appear in Live & Featured controls.',
+            JSON.stringify({
+              ...cleanupMeta,
+              was_featured: previous?.featured === true
+            })
+          ]
+        );
+      } catch (_error) {
+        // The cleanup should still succeed if moderation event logging is temporarily unavailable.
+      }
+    }
+
+    await writeAudit('live_test_listing_cleanup', {
       matched: ids.length,
       deleted: updated.rows.length,
       listings: updated.rows.map((row) => ({

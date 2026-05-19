@@ -8532,9 +8532,12 @@ function adminCleanModeEnabled() {
 
 function adminRecordLooksLikeTest(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
-  if (extra.is_test === true || extra.launch_proof === true || extra.non_public_test === true) return true;
+  if (extra.is_test === true || extra.qa_test_delete === true || extra.soft_launch_test === true || extra.launch_proof === true || extra.non_public_test === true) return true;
   const hay = [
     row.title,
+    row.description,
+    row.source,
+    row.listed_via,
     row.full_name,
     row.name,
     row.first_name,
@@ -8548,7 +8551,7 @@ function adminRecordLooksLikeTest(row = {}) {
     row.inquiry_reference,
     row.reference
   ].filter(Boolean).join(" ").toLowerCase();
-  return /(^|\s)(qa|dummy|sample)(\s|$)|qa-test|delete|makaug\.invalid|launch proof|non_public_test|xcv|fgfgf|hssjjk|dkskdk|akdk|fsbf|bxb/.test(hay);
+  return /soft launch test - delete|qa test - delete|(^|\s)(qa|dummy|sample)(\s|$)|qa-test|qa production|slt-\d|delete|makaug\.invalid|launch proof|non_public_test|xcv|fgfgf|hssjjk|dkskdk|akdk|fsbf|bxb/.test(hay);
 }
 
 function adminApplyLaunchCleanFilter(rows = []) {
@@ -9092,7 +9095,7 @@ function buildAdminFollowUpWhatsAppMessage(p = {}) {
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
-  const live = (Array.isArray(listings) ? listings : [])
+  const live = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : [])
     .filter((p) => normalizeModerationStatus(p.status) === "approved")
     .sort((a, b) => {
       const af = isFeaturedListing(a) ? 1 : 0;
@@ -9133,7 +9136,7 @@ function renderAdminFeaturedRows(listings) {
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
-  const view = (Array.isArray(listings) ? listings : []).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
+  const view = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : []).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
     return;
@@ -9264,6 +9267,44 @@ async function adminCleanupApril29TestBatch() {
   } catch (e) {
     if (statusEl) statusEl.textContent = "Cleanup failed. Check admin API access and logs.";
     toast(`Cleanup failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminCleanupLiveTestListings() {
+  if (!canUseLiveAdminApi()) {
+    toast("Admin API key is required for live cleanup.");
+    return;
+  }
+  const ok = window.confirm("Soft-delete test-like records from Live & Featured? This only targets records marked as QA/soft-launch/test/delete.");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-live-cleanup-status");
+  const button = document.getElementById("admin-clean-live-tests-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) statusEl.textContent = "Cleaning test-like live records...";
+  try {
+    const response = await apiRequest("/api/admin/test-listings/cleanup-live", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    const data = response?.data || {};
+    const deleted = Number(data.deleted || 0);
+    const matched = Number(data.matched || 0);
+    if (statusEl) statusEl.textContent = `Removed ${deleted} of ${matched} matched test-like live records.`;
+    toast(`Live cleanup done: ${deleted} listing${deleted === 1 ? "" : "s"} removed.`);
+    await renderAdminDashboard();
+    setAdminWorkflowTab("live");
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "Live cleanup failed. Check admin API access and logs.";
+    toast(`Live cleanup failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
   }
 }
 

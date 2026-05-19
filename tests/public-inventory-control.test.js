@@ -8,6 +8,7 @@ const appSource = fs.readFileSync('assets/makaug-app.js', 'utf8');
 const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.js', 'utf8');
 const htmlSource = fs.readFileSync('index.html', 'utf8');
 const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
+const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -38,12 +39,15 @@ test('remove and status actions can target listings loaded only through the live
   assert.match(appSource, /if \(liveIdx >= 0\) adminLiveListings\[liveIdx\]/);
 });
 
-test('admin public action surfaces do not clean-filter live backend listings', () => {
+test('admin live and featured surfaces clean-filter test-like backend listings', () => {
   assert.match(appSource, /function adminPublicControlVisibilityBadge\(row = \{\}\)/);
   assert.match(appSource, /Test-like public listing/);
-  for (const name of ['renderAdminLiveListingsRows', 'renderAdminFeaturedRows', 'renderAdminAllListingsRows']) {
+  for (const name of ['renderAdminLiveListingsRows', 'renderAdminFeaturedRows']) {
     const source = functionSource(name);
-    assert.doesNotMatch(source, /adminApplyLaunchCleanFilter/);
+    assert.match(source, /adminApplyLaunchCleanFilter/);
+  }
+  for (const name of ['renderAdminAllListingsRows']) {
+    const source = functionSource(name);
     assert.match(source, /adminPublicControlVisibilityBadge/);
   }
 });
@@ -61,7 +65,20 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /function addPublicLaunchSeedFilter/);
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
   assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
+  assert.match(routeSource, /COALESCE\(p\.extra_fields->>'soft_launch_test', ''\) !~\*/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('admin live endpoint mirrors public visibility and exposes cleanup action', () => {
+  assert.match(adminRouteSource, /function adminLaunchTestListingCondition/);
+  assert.match(adminRouteSource, /function adminPublicLiveListingCondition/);
+  assert.match(adminRouteSource, /router\.get\('\/properties\/live'/);
+  assert.match(adminRouteSource, /AND \$\{publicLiveCondition\}/);
+  assert.match(adminRouteSource, /router\.post\('\/test-listings\/cleanup-live'/);
+  assert.match(adminRouteSource, /live_test_listing_cleanup/);
+  assert.match(appSource, /adminCleanupLiveTestListings/);
+  assert.match(appSource, /\/api\/admin\/test-listings\/cleanup-live/);
+  assert.match(htmlSource, /admin-clean-live-tests-btn/);
 });
 
 test('WhatsApp property search uses the same public inventory guardrails', () => {
@@ -77,4 +94,5 @@ test('WhatsApp property search uses the same public inventory guardrails', () =>
 test('public app cache version is bumped for controlled inventory rollout', () => {
   assert.match(htmlSource, /controlled-public-inventory-20260514/);
   assert.match(htmlSource, /admin-live-control-parity-20260515/);
+  assert.match(htmlSource, /live-featured-cleanup-20260519/);
 });
