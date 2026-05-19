@@ -9,6 +9,7 @@ const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.
 const htmlSource = fs.readFileSync('index.html', 'utf8');
 const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
+const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -80,6 +81,14 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /apiRequest\("\/api\/properties\?status=approved&limit=1000&public_only=1", \{ skipAuth: true \}\)/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('anonymous public agent APIs suppress QA broker records', () => {
+  assert.match(agentsRouteSource, /PUBLIC_AGENT_SUPPRESSED_MARKERS = \['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'\]/);
+  assert.match(agentsRouteSource, /function addPublicAgentLaunchTestFilter/);
+  assert.match(agentsRouteSource, /addPublicAgentLaunchTestFilter\(filters, values\)/);
+  assert(agentsRouteSource.includes("COALESCE(a.email, '') !~* '(qa-test|makaug\\\\.invalid|dummy|sample)'"));
+  assert(agentsRouteSource.includes("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'"));
 });
 
 test('admin live endpoint mirrors public visibility and exposes cleanup action', () => {

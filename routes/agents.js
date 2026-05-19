@@ -13,6 +13,7 @@ const CARNELIAN_AGENT_EMAIL = 'carnelianproperties4@gmail.com';
 const CARNELIAN_AGENT_LICENCE = 'CARNELIAN-YOUTUBE-20260519';
 const CARNELIAN_YOUTUBE_URL = 'https://www.youtube.com/@CarnelianPropertiesuganda';
 const CARNELIAN_TIKTOK_URL = 'https://www.tiktok.com/@carnelian.propert';
+const PUBLIC_AGENT_SUPPRESSED_MARKERS = ['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'];
 
 function knownAgentSocialSelect(alias = 'a') {
   const safeAlias = alias === 'a' ? 'a' : alias;
@@ -21,6 +22,22 @@ function knownAgentSocialSelect(alias = 'a') {
         CASE WHEN ${carnelianMatch} THEN '${CARNELIAN_YOUTUBE_URL}' ELSE NULL END AS youtube_url,
         CASE WHEN ${carnelianMatch} THEN '${CARNELIAN_TIKTOK_URL}' ELSE NULL END AS tiktok_url,
         CASE WHEN ${carnelianMatch} THEN 'https://www.youtube.com/@CarnelianPropertiesuganda' ELSE NULL END AS website_url`;
+}
+
+function addPublicAgentLaunchTestFilter(filters, values) {
+  PUBLIC_AGENT_SUPPRESSED_MARKERS.forEach((marker) => {
+    values.push(`%${marker}%`);
+    const idx = values.length;
+    filters.push(`(
+      COALESCE(a.full_name, '') NOT ILIKE $${idx}
+      AND COALESCE(a.company_name, '') NOT ILIKE $${idx}
+      AND COALESCE(a.bio, '') NOT ILIKE $${idx}
+      AND COALESCE(a.verification_reason, '') NOT ILIKE $${idx}
+    )`);
+  });
+  filters.push("COALESCE(a.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'");
+  filters.push("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'");
+  filters.push("COALESCE(a.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample)'");
 }
 
 function verifyListingSubmitToken(token) {
@@ -329,6 +346,7 @@ router.get('/', async (req, res, next) => {
       values.push(status);
       filters.push(`a.status = $${values.length}`);
     }
+    addPublicAgentLaunchTestFilter(filters, values);
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
@@ -402,7 +420,16 @@ router.get('/:id', async (req, res, next) => {
         FROM properties p
         WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
-      WHERE a.id = $1`,
+      WHERE a.id = $1
+        AND COALESCE(a.full_name, '') NOT ILIKE '%QA TEST - DELETE%'
+        AND COALESCE(a.full_name, '') NOT ILIKE '%SOFT LAUNCH TEST - DELETE%'
+        AND COALESCE(a.company_name, '') NOT ILIKE '%QA TEST - DELETE%'
+        AND COALESCE(a.company_name, '') NOT ILIKE '%SOFT LAUNCH TEST - DELETE%'
+        AND COALESCE(a.bio, '') NOT ILIKE '%QA TEST - DELETE%'
+        AND COALESCE(a.bio, '') NOT ILIKE '%SOFT LAUNCH TEST - DELETE%'
+        AND COALESCE(a.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'
+        AND COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'
+        AND COALESCE(a.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample)'`,
       [req.params.id]
     );
 
