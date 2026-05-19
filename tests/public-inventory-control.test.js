@@ -113,6 +113,36 @@ test('property detail enquiries are routed to the listing contact, not the signe
   assert.match(appSource, /Your enquiry will go to \{name\}\./);
 });
 
+test('property share icons render real social links with javascript fallbacks', () => {
+  assert.match(appSource, /function getPropertyShareHref\(property = \{\}, channel = "copy"\)/);
+  assert.match(appSource, /function renderPropertyShareActions\(property, idArg, options = \{\}\)/);
+  assert.match(appSource, /function sharePropertyListingFromEvent\(event, id, channel = "copy"\)/);
+  assert.match(appSource, /data-property-share-channel="\$\{adminAttr\(item\.channel\)\}"/);
+  assert.match(appSource, /https:\/\/wa\.me\/\?text=/);
+  assert.match(appSource, /facebook\.com\/sharer\/sharer\.php/);
+  assert.match(appSource, /linkedin\.com\/sharing\/share-offsite/);
+  assert.match(appSource, /twitter\.com\/intent\/tweet/);
+  assert.match(appSource, /www\.tiktok\.com\/upload/);
+  assert.match(appSource, /renderPropertyShareActions\(p, idArg, \{ stopPropagation: true \}\)/);
+  assert.match(appSource, /renderPropertyShareActions\(p, detailIdArg\)/);
+});
+
+test('broker profiles recover when public route fragments removed the profile page shell', () => {
+  const source = asyncFunctionSource('openBrokerProfile');
+  assert.match(appSource, /function openBrokerProfileLink\(event, id\)/);
+  assert.match(appSource, /function ensureBrokerProfilePageShell\(\)/);
+  assert.match(appSource, /function setCanonicalBrokerProfileUrl\(brokerOrId, source = "broker_profile"\)/);
+  assert.match(appSource, /href="\$\{adminAttr\(getBrokerProfilePath\(b\)\)\}"/);
+  assert.match(appSource, /onclick="return openBrokerProfileLink\(event, \$\{adminListingIdArg\(b\.id\)\}\)"/);
+  assert.match(appSource, /page\.id = "page-broker-profile"/);
+  assert.match(appSource, /id="broker-profile-content"/);
+  assert.match(source, /const content = ensureBrokerProfilePageShell\(\)/);
+  assert.match(source, /showPage\("broker-profile", \{ history: false, source: "broker_profile_open" \}\)/);
+  assert.match(source, /setCanonicalBrokerProfileUrl\(b, "broker_profile_open"\)/);
+  assert.match(source, /content\.innerHTML =/);
+  assert.doesNotMatch(source, /document\.getElementById\("broker-profile-content"\)\.innerHTML/);
+});
+
 test('approval WhatsApp notification opens before heavy admin dashboard refresh', () => {
   const source = asyncFunctionSource('adminSetListingStatus');
   const modalIndex = source.indexOf('openAdminWhatsAppMessageModal({');
@@ -139,4 +169,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /live-featured-cleanup-20260519/);
   assert.match(htmlSource, /agent-inquiry-nearby-20260519/);
   assert.match(htmlSource, /approval-profile-sync-20260519/);
+  assert.match(htmlSource, /broker-profile-share-links-20260519/);
 });

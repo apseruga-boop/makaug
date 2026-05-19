@@ -23675,6 +23675,58 @@ function getPropertyShareUrl(property) {
   return `${origin}${getPropertyDetailPath(property)}`;
 }
 
+function buildPropertyShareTitle(property = {}) {
+  return String(property?.title || translatePropertyUi("Property listing") || "Property listing").trim();
+}
+
+function buildPropertyShareText(property = {}) {
+  const shareUrl = getPropertyShareUrl(property);
+  const title = buildPropertyShareTitle(property);
+  const location = [property?.area, property?.district].filter(Boolean).join(", ");
+  const price = Number(property?.price) ? fmtP(property.price, property.period) : "";
+  const headline = [title, location, price].filter(Boolean).join(" • ");
+  return [headline, shareUrl].filter(Boolean).join("\n");
+}
+
+function getPropertyShareHref(property = {}, channel = "copy") {
+  const shareUrl = getPropertyShareUrl(property);
+  const shareText = buildPropertyShareText(property);
+  const title = buildPropertyShareTitle(property);
+  if (channel === "whatsapp") return `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+  if (channel === "facebook") return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+  if (channel === "linkedin") return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+  if (channel === "twitter") return `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${title}${Number(property?.price) ? ` • ${fmtP(property.price, property.period)}` : ""}`)}&url=${encodeURIComponent(shareUrl)}`;
+  if (channel === "tiktok") return "https://www.tiktok.com/upload?lang=en";
+  return shareUrl;
+}
+
+const PROPERTY_SHARE_CHANNELS = Object.freeze([
+  { channel: "whatsapp", title: "Share on WhatsApp", icon: "fab fa-whatsapp" },
+  { channel: "facebook", title: "Share on Facebook", icon: "fab fa-facebook-f" },
+  { channel: "linkedin", title: "Share on LinkedIn", icon: "fab fa-linkedin-in" },
+  { channel: "twitter", title: "Share on X", icon: "fab fa-x-twitter" },
+  { channel: "tiktok", title: "Share on TikTok", icon: "fab fa-tiktok" },
+  { channel: "copy", title: "Copy link", icon: "fas fa-link" }
+]);
+
+function renderPropertyShareActions(property, idArg, options = {}) {
+  const stopPropagation = options.stopPropagation === true ? "event.stopPropagation(); " : "";
+  return PROPERTY_SHARE_CHANNELS.map((item) => `
+    <a href="${adminAttr(getPropertyShareHref(property, item.channel))}" target="_blank" rel="noopener noreferrer" onclick="${stopPropagation}return sharePropertyListingFromEvent(event, ${idArg}, '${item.channel}')" class="share-chip" title="${adminAttr(item.title)}" aria-label="${adminAttr(item.title)}" data-property-share-channel="${adminAttr(item.channel)}">
+      <i class="${item.icon}"></i>
+    </a>
+  `).join("");
+}
+
+function sharePropertyListingFromEvent(event, id, channel = "copy") {
+  if (event) {
+    event.preventDefault();
+    if (event.stopPropagation) event.stopPropagation();
+  }
+  sharePropertyListing(id, channel);
+  return false;
+}
+
 function getBrokerShareUrl(broker) {
   if (!broker?.id) return window.location.href;
   const origin = window.location.origin || "https://makaug.com";
@@ -23708,32 +23760,21 @@ async function sharePropertyListing(id, channel = "native") {
   const property = findPropertyForUi(id);
   if (!property) return;
   const shareUrl = getPropertyShareUrl(property);
-  const shareText = `${property.title} • ${property.area}, ${property.district} • ${fmtP(property.price, property.period)}\n${shareUrl}`;
+  const shareText = buildPropertyShareText(property);
+  const shareTitle = buildPropertyShareTitle(property);
   try {
     if (channel === "native" && navigator.share) {
-      await navigator.share({ title: property.title, text: shareText, url: shareUrl });
-      return;
-    }
-    if (channel === "whatsapp") {
-      window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (channel === "facebook") {
-      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (channel === "linkedin") {
-      window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
-      return;
-    }
-    if (channel === "twitter") {
-      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${property.title} • ${fmtP(property.price, property.period)}`)}&url=${encodeURIComponent(shareUrl)}`, "_blank", "noopener,noreferrer");
+      await navigator.share({ title: shareTitle, text: shareText, url: shareUrl });
       return;
     }
     if (channel === "tiktok") {
       const copied = await copyTextToClipboard(shareUrl);
-      window.open("https://www.tiktok.com/upload?lang=en", "_blank", "noopener,noreferrer");
+      window.open(getPropertyShareHref(property, channel), "_blank", "noopener,noreferrer");
       toast(copied ? translateListingLabel("Listing link copied.") : translateListingLabel("Unable to copy link right now."));
+      return;
+    }
+    if (["whatsapp", "facebook", "linkedin", "twitter"].includes(channel)) {
+      window.open(getPropertyShareHref(property, channel), "_blank", "noopener,noreferrer");
       return;
     }
     const copied = await copyTextToClipboard(shareUrl);
@@ -23945,6 +23986,47 @@ function openMapBrokerProfile(event, id) {
     }
   } catch (error) {}
   return false;
+}
+
+function openBrokerProfileLink(event, id) {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  openBrokerProfile(id);
+  return false;
+}
+
+function ensureBrokerProfilePageShell() {
+  let page = document.getElementById("page-broker-profile");
+  let content = document.getElementById("broker-profile-content");
+  if (page && content) return content;
+
+  if (!page) {
+    page = document.createElement("main");
+    page.id = "page-broker-profile";
+    page.className = "page";
+  }
+  page.innerHTML = `<div class="max-w-5xl mx-auto px-4 py-8" id="broker-profile-content"></div>`;
+  if (!page.parentElement) {
+    const footer = document.querySelector("footer");
+    document.body.insertBefore(page, footer || document.body.lastElementChild);
+  }
+  return document.getElementById("broker-profile-content");
+}
+
+function setCanonicalBrokerProfileUrl(brokerOrId, source = "broker_profile") {
+  const path = getBrokerProfilePath(brokerOrId);
+  if (!path || path === "/brokers") return;
+  try {
+    if (window.location.pathname !== path) {
+      window.history.pushState({
+        page: "broker-profile",
+        brokerId: String(typeof brokerOrId === "object" ? (brokerOrId?.id || "") : brokerOrId || ""),
+        source
+      }, "", path);
+    }
+  } catch (error) {}
 }
 
 function getAmenityDisplayLabel(value, listingType = "sale") {
@@ -24169,12 +24251,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
         <div class="mt-3 flex items-center justify-between gap-2 text-xs text-gray-500">
           <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
           <div class="flex items-center gap-1">
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+            ${renderPropertyShareActions(p, idArg, { stopPropagation: true })}
           </div>
         </div>
       </div>
@@ -24321,12 +24398,7 @@ function studentCard(p) {
         <div class="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
           <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>
           <div class="flex items-center gap-1">
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-            <button type="button" onclick="event.stopPropagation(); sharePropertyListing(${idArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+            ${renderPropertyShareActions(p, idArg, { stopPropagation: true })}
           </div>
         </div>
       </div>
@@ -24399,7 +24471,7 @@ function renderBrokers(id, list) {
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>${translateListingLabel("Share WA")}</span></button>
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>${translateListingLabel("Share X")}</span></button>
         </div>
-        <button type="button" onclick="event.stopPropagation(); openBrokerProfile(${adminListingIdArg(b.id)})" class="w-full mt-2 rounded-xl border border-green-700 py-2 text-sm font-bold text-green-800 hover:bg-green-50">View Profile</button>
+        <a href="${adminAttr(getBrokerProfilePath(b))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="w-full mt-2 rounded-xl border border-green-700 py-2 text-sm font-bold text-green-800 hover:bg-green-50 inline-flex items-center justify-center">View Profile</a>
       </div>
     `).join("");
     setBrokerMapMarkers(list);
@@ -24422,7 +24494,7 @@ function renderBrokers(id, list) {
         <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
       </div>
       <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
-      <button type="button" onclick="event.stopPropagation(); openBrokerProfile(${adminListingIdArg(b.id)})" class="w-full mt-2 border border-green-700 text-green-800 text-center rounded-lg py-2 text-sm font-bold hover:bg-green-50">View Profile</button>
+      <a href="${adminAttr(getBrokerProfilePath(b))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(b.id)})" class="w-full mt-2 border border-green-700 text-green-800 text-center rounded-lg py-2 text-sm font-bold hover:bg-green-50 inline-flex items-center justify-center">View Profile</a>
     </div>`).join("");
 }
 
@@ -30059,12 +30131,7 @@ async function openDetail(id, options = {}) {
               </div>
             </div>
             <div class="mt-3 flex items-center gap-2">
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'whatsapp')" class="share-chip" title="Share on WhatsApp"><i class="fab fa-whatsapp"></i></button>
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'facebook')" class="share-chip" title="Share on Facebook"><i class="fab fa-facebook-f"></i></button>
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'linkedin')" class="share-chip" title="Share on LinkedIn"><i class="fab fa-linkedin-in"></i></button>
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'twitter')" class="share-chip" title="Share on X"><i class="fab fa-x-twitter"></i></button>
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'tiktok')" class="share-chip" title="Share on TikTok"><i class="fab fa-tiktok"></i></button>
-              <button type="button" onclick="sharePropertyListing(${detailIdArg}, 'copy')" class="share-chip" title="Copy link"><i class="fas fa-link"></i></button>
+              ${renderPropertyShareActions(p, detailIdArg)}
             </div>
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
@@ -30128,7 +30195,7 @@ async function openDetail(id, options = {}) {
             <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>
             <a href="${adminAttr(buildWhatsAppUrl(broker.whatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
-            <button onclick="openBrokerProfile(${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold">${translatePropertyUi("View Broker")}</button>
+            <a href="${adminAttr(getBrokerProfilePath(broker))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
             <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
@@ -30184,6 +30251,21 @@ async function openDetail(id, options = {}) {
 }
 
 async function openBrokerProfile(id) {
+  const content = ensureBrokerProfilePageShell();
+  if (!content) {
+    toast("Broker profile is not available yet.");
+    return;
+  }
+  showPage("broker-profile", { history: false, source: "broker_profile_open" });
+  content.innerHTML = `
+    <div class="bg-white border border-green-100 rounded-3xl p-6 md:p-8 shadow-sm">
+      <div class="animate-pulse space-y-4">
+        <div class="h-5 w-32 rounded-full bg-green-100"></div>
+        <div class="h-8 w-2/3 rounded bg-gray-100"></div>
+        <div class="h-4 w-full rounded bg-gray-100"></div>
+        <div class="h-4 w-5/6 rounded bg-gray-100"></div>
+      </div>
+    </div>`;
   let b = findBrokerById(id);
   if (!b || !b.remote_profile_loaded) {
     try {
@@ -30194,15 +30276,23 @@ async function openBrokerProfile(id) {
     }
   }
   if (!b) {
+    content.innerHTML = `
+      <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
+      <div class="bg-white border border-amber-200 rounded-3xl p-6 md:p-8 shadow-sm">
+        <h1 class="text-2xl font-black text-gray-900">Broker profile is not available yet.</h1>
+        <p class="mt-2 text-gray-600">Please refresh the brokers page or try the profile again.</p>
+        <button type="button" onclick="showPage('brokers')" class="mt-4 inline-flex items-center justify-center rounded-xl bg-green-700 px-4 py-2 font-semibold text-white">Back to brokers</button>
+      </div>`;
     toast("Broker profile is not available yet.");
     return;
   }
   activeBrokerProfileId = String(b.id || id || "");
   recordBrokerProfileView(id);
+  setCanonicalBrokerProfileUrl(b, "broker_profile_open");
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
-  document.getElementById("broker-profile-content").innerHTML = `
+  content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
     <div class="bg-white border border-green-100 rounded-3xl p-6 md:p-8 mb-6 shadow-sm">
@@ -30268,7 +30358,7 @@ async function openBrokerProfile(id) {
       </div>
       ${list.length ? `<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${list.map(propCard).join("")}</div>` : `<div class="bg-gray-50 border border-gray-200 rounded-xl p-6 text-center text-gray-500">No active listings yet.</div>`}
     </div>`;
-  showPage("broker-profile");
+  showPage("broker-profile", { history: false, source: "broker_profile_loaded", scroll: false });
 }
 
 function applyBrokerFilters() {
