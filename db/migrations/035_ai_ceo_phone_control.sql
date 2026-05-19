@@ -68,7 +68,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_ceo_commands_status_created
 INSERT INTO ai_agents (code, name, description, enabled, run_mode, config)
 VALUES (
   'managing_director_ceo',
-  'MakaUg AI CEO',
+  'makaug AI CEO',
   'Founder-controlled AI assistant for reports, phone commands, communications, leads, site health, WhatsApp health, and approval-only operational recommendations.',
   TRUE,
   'recommend',

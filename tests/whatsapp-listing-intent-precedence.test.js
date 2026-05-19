@@ -29,7 +29,7 @@ assert(whatsappRoute.includes('listing_start_text'), 'Listing starts must leave 
 assert(aiService.includes('Property listing must win'), 'AI prompt must tell the model listing intent beats sale/rent search wording');
 
 (async () => {
-  const screenshotMessage = 'Hi MakaUg, I want to list a property. Type: For Sale. Please help me create the listing.';
+  const screenshotMessage = 'Hi makaug, I want to list a property. Type: For Sale. Please help me create the listing.';
   const result = await classifyWhatsappIntent({
     text: screenshotMessage,
     language: 'en',

@@ -48,7 +48,7 @@ type PhraseKey =
 
 const ENGLISH: Record<PhraseKey, string> = {
   choose_language:
-    'Welcome to MakaUg WhatsApp Assistant. Choose your language:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    'Welcome to makaug WhatsApp Assistant. Choose your language:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
   language_set: 'Language saved. You can type "change language" any time.',
   main_menu: `What would you like to do?\n${TOP_LEVEL_MENU.join('\n')}`,
   unknown: 'I did not fully understand that. I can still help. Please choose from the menu below.',
@@ -128,7 +128,7 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<PhraseKey, string>> = {
     support_intro: 'Support: +256 770 646 879 or info@makaug.com'
   }),
   rn: pack({
-    language_set: 'Rukiga translation is not fully available yet, so MakaUg will use English fallback rather than guessing another language.',
+    language_set: 'Rukiga translation is not fully available yet, so makaug will use English fallback rather than guessing another language.',
     main_menu: ENGLISH.main_menu,
     unknown: ENGLISH.unknown,
     support_intro: ENGLISH.support_intro

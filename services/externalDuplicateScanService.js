@@ -162,7 +162,7 @@ async function fetchJson(url, options = {}) {
       ...options,
       signal: controller.signal,
       headers: {
-        'user-agent': 'MakaUgDuplicateScanner/1.0',
+        'user-agent': 'makaugDuplicateScanner/1.0',
         ...(options.headers || {})
       }
     });
@@ -182,7 +182,7 @@ async function fetchText(url, options = {}) {
       ...options,
       signal: controller.signal,
       headers: {
-        'user-agent': 'MakaUgDuplicateScanner/1.0',
+        'user-agent': 'makaugDuplicateScanner/1.0',
         ...(options.headers || {})
       }
     });

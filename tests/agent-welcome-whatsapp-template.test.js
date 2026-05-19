@@ -4,6 +4,7 @@ const path = require('path');
 
 const {
   AGENT_WELCOME_CARD_PATH,
+  AGENT_WELCOME_CARD_PREVIEW_VERSION,
   AGENT_WELCOME_CARD_URL,
   AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY,
   buildAgentWelcomeWhatsappMessage
@@ -22,16 +23,20 @@ const message = buildAgentWelcomeWhatsappMessage({
 });
 
 assert.strictEqual(AGENT_WELCOME_WHATSAPP_TEMPLATE_KEY, 'lead_outreach_agent_welcome_free_card');
+assert.strictEqual(AGENT_WELCOME_CARD_PREVIEW_VERSION, 'agent3');
 assert(message.startsWith(AGENT_WELCOME_CARD_URL), 'WhatsApp preview card link should be first for rich preview unfurling');
+assert(AGENT_WELCOME_CARD_URL.includes('?v=agent3'), 'WhatsApp card link should include a preview cache-buster');
 assert(message.includes('hope you are well'), 'Agent welcome message must use a warm opening');
-assert(message.includes('free to list property'), 'Agent welcome message must call out free listing');
+assert(message.includes('team in Uganda'), 'Agent welcome message must sound Uganda-first');
+assert(message.includes('respectfully'), 'Agent welcome message must sound respectful, not arrogant');
+assert(message.includes('Free to list property'), 'Agent welcome message must call out free listing');
 assert(message.includes('No listing charge'), 'Agent welcome message must make the no-charge promise explicit');
-assert(message.includes('English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, and Lusoga'), 'Agent welcome message must name the seven website languages');
+assert(message.includes('English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, or Lusoga'), 'Agent welcome message must name the seven website languages');
 assert(message.includes('reply LANG to change language'), 'Agent welcome message must explain language switching');
-assert(message.includes('short welcome guide for agents'), 'Agent welcome message must explain the click-through guide');
+assert(message.includes('Guide: the link above'), 'Agent welcome message must explain the click-through guide');
 assert(message.includes('WhatsApp'), 'Agent welcome message must mention WhatsApp listing help');
 assert(message.includes('Broker registration:'), 'Agent welcome message must include broker registration path');
-assert(message.includes('guide your first listing on WhatsApp'), 'Agent welcome message must offer onboarding help');
+assert(message.includes('guide your first listing through WhatsApp'), 'Agent welcome message must offer onboarding help');
 assert(message.includes('makaug.com'), 'Agent welcome message must include makaug.com');
 assert(message.includes('Reply STOP'), 'Agent welcome message must include STOP opt-out wording');
 assert(!message.includes('during launch'), 'Agent welcome message must not use temporary launch wording');
@@ -39,7 +44,7 @@ assert(!message.includes('free today'), 'Agent welcome message must not say free
 assert(message.length <= 1200, 'Agent welcome WhatsApp message must fit outreach send limit');
 
 assert(cardHtml.includes('og:image'), 'Welcome page must expose an Open Graph image for WhatsApp preview cards');
-assert(cardHtml.includes('makaug-agent-welcome-card-free.png'), 'Welcome page must point WhatsApp previews to the cache-busted free PNG card');
+assert(cardHtml.includes('makaug-agent-welcome-card-agent-kind.png'), 'Welcome page must point WhatsApp previews to the cache-busted kind PNG card');
 assert(cardHtml.includes('Welcome to makaug.com'), 'Welcome page must open with warm makaug.com wording');
 assert(cardHtml.includes('No listing charge'), 'Welcome page must make free listing explicit');
 assert(cardHtml.includes('List free on makaug.com'), 'Welcome page must include a visible website listing CTA');
@@ -56,12 +61,13 @@ assert(cardHtml.includes('Register as a broker'), 'Welcome page must include bro
 assert(cardHtml.includes('List with WhatsApp help'), 'Welcome page must include WhatsApp help CTA');
 assert(cardHtml.includes('href="/broker-signup"'), 'Welcome page broker CTA must route to broker signup');
 assert(cardHtml.includes('aria-label="makaug.com agent welcome guide"'), 'Welcome page deck must be accessible');
-assert(!cardHtml.includes('MakaUg is live for Uganda agents'), 'Welcome page must not use the old announcement-style headline');
+assert(!cardHtml.includes('makaug is live for Uganda agents'), 'Welcome page must not use the old announcement-style headline');
 assert(!cardHtml.includes('during launch'), 'Welcome page must not use temporary launch wording');
 assert(!cardHtml.includes('free today'), 'Welcome page must not say free today');
 
-assert(cardSvg.includes('Hello Uganda agents'), 'Welcome card must use a warmer welcome headline');
-assert(cardSvg.includes('list property for free'), 'Welcome card must include the free-listing promise');
+assert(cardSvg.includes('Uganda agents,'), 'Welcome card must use a Uganda agent headline');
+assert(cardSvg.includes('list property') && cardSvg.includes('for free'), 'Welcome card must include the grammatically correct free-listing promise');
+assert(cardSvg.includes('Built in Uganda'), 'Welcome card must sound Uganda-first');
 assert(cardSvg.includes('Free to list'), 'Welcome card must use free-list wording');
 assert(cardSvg.includes('7 languages'), 'Welcome card must include seven-language callout');
 assert(cardSvg.includes('WhatsApp help'), 'Welcome card must include WhatsApp help callout');

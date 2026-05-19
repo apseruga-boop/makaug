@@ -1,4 +1,4 @@
-# MakaUg Launch Command Pack (Copy/Paste)
+# makaug Launch Command Pack (Copy/Paste)
 
 Use this in order.
 

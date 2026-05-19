@@ -1,6 +1,6 @@
-# MakaUg Codex Operating Rules
+# makaug Codex Operating Rules
 
-MakaUg is a live Uganda-first property marketplace. Treat this repo as production.
+makaug is a live Uganda-first property marketplace. Treat this repo as production.
 
 ## Completion Rule
 

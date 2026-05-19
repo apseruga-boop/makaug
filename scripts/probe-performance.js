@@ -224,7 +224,7 @@ function markdown(results) {
   const now = new Date().toISOString();
   const slowest = [...results].sort((a, b) => b.visibleMs - a.visibleMs)[0];
   const rows = results.map((r) => `| \`${r.route}\` | ${r.viewport} | ${r.status} | ${r.visibleMs} | ${r.domContentLoadedMs ?? '-'} | ${r.loadMs ?? '-'} | ${r.resourceCount} | ${r.jsCount} | ${r.cssCount} | ${r.googleMapsLoaded ? 'yes' : 'no'} | ${r.consoleErrors.length} | ${r.failures.length ? r.failures.join('<br>') : 'pass'} |`).join('\n');
-  return `# MakaUg Performance Audit
+  return `# makaug Performance Audit
 
 Generated: ${now}
 

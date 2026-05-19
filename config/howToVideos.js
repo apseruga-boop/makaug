@@ -3,7 +3,7 @@
 const HOW_TO_VIDEO_SLOTS = [
   {
     key: 'what-is-makaug',
-    title: 'What is MakaUg?',
+    title: 'What is makaug?',
     description: 'A one-minute introduction to the Uganda-first property platform.',
     audience: 'all',
     category: 'about',
@@ -12,7 +12,7 @@ const HOW_TO_VIDEO_SLOTS = [
     youtubeVideoId: '',
     thumbnailUrl: '',
     durationSeconds: 60,
-    ctaLabel: 'Explore MakaUg',
+    ctaLabel: 'Explore makaug',
     ctaUrl: '/about',
     status: 'slot_ready',
     sortOrder: 1
@@ -108,8 +108,8 @@ const HOW_TO_VIDEO_SLOTS = [
     youtubeVideoId: '',
     thumbnailUrl: '',
     durationSeconds: 60,
-    ctaLabel: 'Ask MakaUg',
-    ctaUrl: 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help',
+    ctaLabel: 'Ask makaug',
+    ctaUrl: 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help',
     status: 'slot_ready',
     sortOrder: 7
   },
@@ -163,7 +163,7 @@ const HOW_TO_VIDEO_SLOTS = [
   },
   {
     key: 'ai-can-help',
-    title: 'What MakaUg AI can help with',
+    title: 'What makaug AI can help with',
     description: 'Search, list, create alerts, request help, and understand next steps.',
     audience: 'all',
     category: 'ai',

@@ -850,7 +850,7 @@ export class ConversationStateMachine {
             },
             {
               text:
-                'Create your MakaUg account to track views, saves, enquiries, get alerts, and manage listings faster.\n' +
+                'Create your makaug account to track views, saves, enquiries, get alerts, and manage listings faster.\n' +
                 `${this.urls.account()}`
             },
             { text: await this.language.t(session.language, 'main_menu') }

@@ -134,7 +134,7 @@ function dataImage(label, seed, fill = '#0f766e', kind = 'house', slot = 'front'
     `<rect x="90" y="180" width="340" height="54" rx="16" fill="${accent}"/>`,
     `<text x="116" y="218" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#fff">${slotLabel}</text>`,
     `<text x="110" y="795" font-family="Arial, sans-serif" font-size="30" font-weight="700" fill="#064e3b">${safe}</text>`,
-    `<text x="110" y="842" font-family="Arial, sans-serif" font-size="24" fill="#065f46">Generated image for MakaUg chatbot and portal QA - Seed ${seed}</text>`,
+    `<text x="110" y="842" font-family="Arial, sans-serif" font-size="24" fill="#065f46">Generated image for makaug chatbot and portal QA - Seed ${seed}</text>`,
     `</svg>`
   ].join('');
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
@@ -284,7 +284,7 @@ function buildPayload(config, indexWithinType, globalIndex) {
   return {
     listing_type: config.type,
     title,
-    description: `SOFT LAUNCH TEST - DELETE listing ${globalIndex}. This generated ${config.type} listing in ${loc.area}, ${loc.district} is for MakaUg portal and WhatsApp chatbot testing only. It should stay pending for admin review and be removed after QA.`,
+    description: `SOFT LAUNCH TEST - DELETE listing ${globalIndex}. This generated ${config.type} listing in ${loc.area}, ${loc.district} is for makaug portal and WhatsApp chatbot testing only. It should stay pending for admin review and be removed after QA.`,
     district: loc.district,
     area: `${loc.area} Test Zone ${indexWithinType}`,
     address: `${loc.area} Soft Launch Test Road ${indexWithinType}`,

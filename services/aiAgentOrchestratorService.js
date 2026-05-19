@@ -289,7 +289,7 @@ async function runListingQualityGuard({ agent, limit = 40 }) {
               action_type: 'send_support_email',
               action_payload: {
                 to: row.lister_email,
-                subject: 'Please improve your MakaUg listing description',
+                subject: 'Please improve your makaug listing description',
                 text: 'Your listing description is too short. Please add key details (features, road access, nearby amenities, and condition) before approval.'
               }
             }
@@ -309,7 +309,7 @@ async function runListingQualityGuard({ agent, limit = 40 }) {
               action_type: 'send_support_email',
               action_payload: {
                 to: row.lister_email,
-                subject: 'Add required photos to your MakaUg listing',
+                subject: 'Add required photos to your makaug listing',
                 text: 'Your listing needs at least 5 clear photos (front, living area, bedroom, kitchen, bathroom) before approval.'
               }
             }
@@ -367,7 +367,7 @@ async function runIdMatchGuard({ agent, limit = 40 }) {
               action_type: 'send_support_email',
               action_payload: {
                 to: row.lister_email,
-                subject: 'NIN verification needed for your MakaUg listing',
+                subject: 'NIN verification needed for your makaug listing',
                 text: 'Please provide a valid Uganda NIN format (for example starting with CM/CF) so we can continue review.'
               }
             }
@@ -756,7 +756,7 @@ function buildCeoApprovalsRequired(metrics) {
 function summarizeCeoReport(metrics, priorities) {
   const topPriority = priorities[0]?.title || 'No urgent blocker found';
   return [
-    `MakaUg AI CEO morning report: ${metrics.engagement.today_visitors} visitor(s) today, ${metrics.engagement.last_48h_property_views} property view(s) in the last 48h.`,
+    `makaug AI CEO morning report: ${metrics.engagement.today_visitors} visitor(s) today, ${metrics.engagement.last_48h_property_views} property view(s) in the last 48h.`,
     `${metrics.listings.pending} listing(s) need review, ${metrics.brokers_and_field_agents.pending_brokers} broker application(s) need review, ${metrics.leads.open} lead(s) are open.`,
     `Advertising shows UGX ${metrics.advertising.paid_revenue_ugx} paid and UGX ${metrics.advertising.quoted_pipeline_ugx} quoted pipeline.`,
     `Top intervention: ${topPriority}.`
@@ -1391,7 +1391,7 @@ async function executeAction({ actionId, actorId = 'super_admin_key' }) {
     } else if (action.action_type === 'send_support_email') {
       const emailResult = await sendSupportEmail({
         to: payload.to || process.env.SUPPORT_EMAIL || 'info@makaug.com',
-        subject: safeText(payload.subject, 200) || 'MakaUg follow-up',
+        subject: safeText(payload.subject, 200) || 'makaug follow-up',
         text: safeText(payload.text, 5000) || 'No message body provided.'
       });
 

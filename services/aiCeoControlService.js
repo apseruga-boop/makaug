@@ -193,7 +193,7 @@ async function getCeoAgent() {
     {
       id: null,
       code: AI_CEO_AGENT_CODE,
-      name: 'MakaUg AI CEO',
+      name: 'makaug AI CEO',
       description: 'Founder-controlled AI assistant.',
       enabled: false,
       run_mode: 'recommend',
@@ -425,7 +425,7 @@ function formatMoney(value) {
 function buildFounderReportText(metrics, priorities = [], reportType = 'morning') {
   const p = priorities.map((item, idx) => `${idx + 1}. ${item.message}`).join('\n');
   return [
-    `MakaUg AI CEO ${reportType} report`,
+    `makaug AI CEO ${reportType} report`,
     '',
     `Today: ${metrics.engagement.today_visitors} visitors, ${metrics.engagement.today_events} events.`,
     `Last 48h: ${metrics.engagement.last_48h_visitors} visitors, ${metrics.engagement.last_48h_property_views} property views, ${metrics.engagement.last_48h_searches} searches.`,
@@ -504,7 +504,7 @@ function extractEmailDraftFromCommand(commandText = '') {
   const to = (raw.match(/\bto\s+([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) || [])[1] || '';
   const subjectMatch = raw.match(/\bsubject\s*:\s*([\s\S]*?)(?:\bmessage\s*:|\bbody\s*:|$)/i);
   const messageMatch = raw.match(/\b(?:message|body)\s*:\s*([\s\S]+)$/i);
-  const subject = safeText(subjectMatch?.[1] || 'MakaUg follow-up', 180);
+  const subject = safeText(subjectMatch?.[1] || 'makaug follow-up', 180);
   const text = safeText(messageMatch?.[1] || '', 5000);
   return { to: to.toLowerCase(), subject, text };
 }
@@ -566,7 +566,7 @@ async function handleEmailCommand({ commandText, channel, requestedBy, requester
       'I can handle that, but I need the email address and message in one command.',
       '',
       'Use:',
-      'CEO send email to client@example.com subject: MakaUg update message: Hello, thanks for contacting MakaUg...'
+      'CEO send email to client@example.com subject: makaug update message: Hello, thanks for contacting makaug...'
     ].join('\n');
     const command = await saveCommandLog({
       channel,
@@ -643,7 +643,7 @@ async function handleCeoCommand({
 } = {}) {
   const cleanCommand = safeText(commandText, 4000);
   if (!cleanCommand) {
-    const response = 'Tell me what you want the MakaUg AI CEO to check or do.';
+    const response = 'Tell me what you want the makaug AI CEO to check or do.';
     return { response, status: 'blocked', intent: 'empty' };
   }
 
@@ -658,7 +658,7 @@ async function handleCeoCommand({
 
   if (intent === 'listing_report') {
     response = [
-      'MakaUg AI CEO listing report',
+      'makaug AI CEO listing report',
       '',
       `${reportData.metrics.listings.pending} listings need review.`,
       `${reportData.metrics.listings.approved} listings are approved/live.`,
@@ -669,7 +669,7 @@ async function handleCeoCommand({
     ].join('\n');
   } else if (intent === 'lead_report') {
     response = [
-      'MakaUg AI CEO lead report',
+      'makaug AI CEO lead report',
       '',
       `${reportData.metrics.leads.open} open leads.`,
       `${reportData.metrics.leads.hot} hot/high-priority leads.`,
@@ -678,7 +678,7 @@ async function handleCeoCommand({
     ].join('\n');
   } else if (intent === 'whatsapp_health') {
     response = [
-      'MakaUg AI CEO WhatsApp health',
+      'makaug AI CEO WhatsApp health',
       '',
       `${reportData.metrics.communications.whatsapp_inbound_24h} inbound WhatsApp messages in 24h.`,
       `${reportData.metrics.communications.whatsapp_outbound_24h} outbound WhatsApp messages in 24h.`,
@@ -687,7 +687,7 @@ async function handleCeoCommand({
     ].join('\n');
   } else if (intent === 'revenue_report') {
     response = [
-      'MakaUg AI CEO revenue report',
+      'makaug AI CEO revenue report',
       '',
       `${reportData.metrics.revenue.ad_open_leads} advertiser leads are open.`,
       `${reportData.metrics.revenue.live_ads} ads are live.`,
@@ -697,7 +697,7 @@ async function handleCeoCommand({
     ].join('\n');
   } else if (intent === 'agent_report') {
     response = [
-      'MakaUg AI CEO broker and field-agent report',
+      'makaug AI CEO broker and field-agent report',
       '',
       `${reportData.metrics.accounts.pending_brokers} broker reviews pending.`,
       `${reportData.metrics.accounts.approved_brokers} approved brokers.`,
@@ -845,8 +845,8 @@ async function handleInboundEmailForCeo({ from, subject, text, messageId = '', c
     actionType: 'send_support_email',
     payload: {
       to: sender,
-      subject: `Re: ${safeText(subject || 'MakaUg message', 180)}`,
-      text: `Thanks for contacting MakaUg.\n\n[AI CEO draft reply needed]\n\nOriginal message:\n${body}`
+      subject: `Re: ${safeText(subject || 'makaug message', 180)}`,
+      text: `Thanks for contacting makaug.\n\n[AI CEO draft reply needed]\n\nOriginal message:\n${body}`
     },
     reason: 'Inbound email received for AI CEO drafting. Founder approval required before reply is sent.',
     riskLevel: 'medium'

@@ -1,4 +1,4 @@
-# WhatsApp Bot Architecture (MakaUg)
+# WhatsApp Bot Architecture (makaug)
 
 ## Request Flow
 
@@ -58,7 +58,7 @@ Stored per phone in `whatsapp_sessions`:
 ## Agent Runtime Improvements
 
 The SSD download `claw-code-rust-main` is an MIT-licensed Rust agent runtime,
-not a WhatsApp integration. The useful parts for MakaUg are runtime patterns,
+not a WhatsApp integration. The useful parts for makaug are runtime patterns,
 so we adapted the ideas instead of copying Rust into Node:
 
 - Fast message loop: deterministic WhatsApp flow steps now use heuristic intent

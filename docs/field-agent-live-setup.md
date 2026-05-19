@@ -109,4 +109,4 @@ Admin can:
 
 ## Provider notes
 
-WhatsApp/email/SMS delivery still depends on live provider credentials. If a provider is missing, MakaUg should keep a safe notification log rather than pretending a message was sent.
+WhatsApp/email/SMS delivery still depends on live provider credentials. If a provider is missing, makaug should keep a safe notification log rather than pretending a message was sent.

@@ -71,7 +71,7 @@ async function handleReportListing(req, res, next) {
     try {
       adminDelivery = await sendSupportEmail({
         to: supportEmail,
-        subject: `[MakaUg] Listing report received • ${reason}`,
+        subject: `[makaug] Listing report received • ${reason}`,
         text: [
           'A listing report was submitted on makaug.com.',
           '',
@@ -89,9 +89,9 @@ async function handleReportListing(req, res, next) {
       if (reporterContact && isValidEmail(reporterContact)) {
         userDelivery = await sendSupportEmail({
           to: reporterContact,
-          subject: 'We received your MakaUg listing report',
+          subject: 'We received your makaug listing report',
           text: [
-            'Thank you for reporting this issue to MakaUg.',
+            'Thank you for reporting this issue to makaug.',
             '',
             'Our team will investigate the listing and take the right action. We may contact you if we need more information.',
             '',
@@ -117,7 +117,7 @@ async function handleReportListing(req, res, next) {
         recipientEmail: reporterContact && isValidEmail(reporterContact) ? reporterContact : null,
         recipientRole: 'reporter',
         templateKey: 'fraud_report_received',
-        subject: 'We received your MakaUg listing report',
+        subject: 'We received your makaug listing report',
         status: notificationStatusFromDelivery(userDelivery),
         relatedLeadId: lead?.id || null,
         failureReason: userDelivery?.error || userDelivery?.reason || null,
@@ -128,7 +128,7 @@ async function handleReportListing(req, res, next) {
         recipientEmail: supportEmail,
         recipientRole: 'admin',
         templateKey: 'admin_alert',
-        subject: `[MakaUg] Listing report received • ${reason}`,
+        subject: `[makaug] Listing report received • ${reason}`,
         status: notificationStatusFromDelivery(adminDelivery),
         relatedLeadId: lead?.id || null,
         failureReason: adminDelivery?.error || adminDelivery?.reason || null,
@@ -229,7 +229,7 @@ async function handleLookingForProperty(req, res, next) {
       sessionId: `property_request:${request.id}`,
       externalUserId: phone || email || fullName,
       inputText: requirements,
-      responseText: 'Property request saved for MakaUg follow-up.',
+      responseText: 'Property request saved for makaug follow-up.',
       payload: {
         id: request.id,
         full_name: fullName,
@@ -309,8 +309,8 @@ async function handleHelpRequest(req, res, next) {
 
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
-    const userSubject = 'We received your MakaUg help request';
-    const adminSubject = `[MakaUg] Help request received • ${topic}`;
+    const userSubject = 'We received your makaug help request';
+    const adminSubject = `[makaug] Help request received • ${topic}`;
     let userDelivery = { sent: false, reason: 'no_email_provider_configured' };
     let adminDelivery = { sent: false, reason: 'no_email_provider_configured' };
 
@@ -321,21 +321,21 @@ async function handleHelpRequest(req, res, next) {
         text: [
           `Hello ${name},`,
           '',
-          'Thank you for contacting the MakaUg Help Centre.',
+          'Thank you for contacting the makaug Help Centre.',
           `Topic: ${topic}`,
           `Reference: ${lead?.id || 'logged'}`,
           '',
           'Our team will review your message and contact you using your preferred channel.',
           `WhatsApp support: ${whatsappUrl}`,
           '',
-          'MakaUg'
+          'makaug'
         ].join('\n')
       });
       adminDelivery = await sendSupportEmail({
         to: supportEmail,
         subject: adminSubject,
         text: [
-          'A MakaUg Help Centre request was submitted.',
+          'A makaug Help Centre request was submitted.',
           '',
           `Reference: ${lead?.id || 'logged'}`,
           `Name: ${name}`,
@@ -447,8 +447,8 @@ async function handleCareerInterest(req, res, next) {
       }
     });
 
-    const userSubject = 'We received your MakaUg career interest';
-    const adminSubject = `[MakaUg] Career interest received • ${roleInterest}`;
+    const userSubject = 'We received your makaug career interest';
+    const adminSubject = `[makaug] Career interest received • ${roleInterest}`;
     let userDelivery = { sent: false, reason: 'no_email_provider_configured' };
     let adminDelivery = { sent: false, reason: 'no_email_provider_configured' };
 
@@ -459,14 +459,14 @@ async function handleCareerInterest(req, res, next) {
         text: [
           `Hello ${name},`,
           '',
-          'Thank you for sharing your career interest with MakaUg.',
+          'Thank you for sharing your career interest with makaug.',
           `Role interest: ${roleInterest}`,
           `Reference: ${lead?.id || 'logged'}`,
           '',
           'Our team will review your details and contact you if there is a suitable next step.',
-          `For updates or corrections, WhatsApp MakaUg: ${whatsappUrl}`,
+          `For updates or corrections, WhatsApp makaug: ${whatsappUrl}`,
           '',
-          'MakaUg'
+          'makaug'
         ].join('\n')
       });
       adminDelivery = await sendSupportEmail({

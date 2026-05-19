@@ -545,7 +545,7 @@ async function sendPropertySubmissionNotification({ propertyId, payload = {}, im
   const price = payload.price || '-';
   const period = payload.price_period ? ` (${payload.price_period})` : '';
 
-  const subject = `[MakaUg] New ${listingType || 'property'} submission • ${title}`;
+  const subject = `[makaug] New ${listingType || 'property'} submission • ${title}`;
   const text = [
     'New property listing submission received via website.',
     '',
@@ -602,11 +602,11 @@ async function sendListingModerationNotification({ to, listing = {}, status, rea
             : 'Updated';
 
   const supportEmail = getSupportEmail();
-  const subject = `[MakaUg] Listing ${statusLabel} • ${listingTitle}`;
+  const subject = `[makaug] Listing ${statusLabel} • ${listingTitle}`;
   const text = [
     `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
     '',
-    `Your MakaUg listing has been updated.`,
+    `Your makaug listing has been updated.`,
     `Status: ${statusLabel}`,
     `Title: ${listingTitle}`,
     `Type: ${listingType}`,
@@ -614,7 +614,7 @@ async function sendListingModerationNotification({ to, listing = {}, status, rea
     reason ? `Reason: ${reason}` : '',
     '',
     `If you need help, contact ${supportEmail}.`,
-    'Thank you for using MakaUg.'
+    'Thank you for using makaug.'
   ].filter(Boolean).join('\n');
 
   return sendSupportEmail({
@@ -916,9 +916,9 @@ async function sendBrokerApprovalEmail({ to, firstName = 'there', agent = {}, te
       : 'You can now sign in and manage your broker dashboard.',
     'Your dashboard lets you manage property listings, view leads, track listing performance, update your profile, and request boosts/advertising review.',
     '',
-    `Need help? WhatsApp MakaUg: ${supportUrl}`,
+    `Need help? WhatsApp makaug: ${supportUrl}`,
     '',
-    'Welcome to MakaUg.'
+    'Welcome to makaug.'
   ].join('\n');
   const html = buildWelcomeEmailHtml({
     firstName: safeFirstName,

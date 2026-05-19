@@ -111,7 +111,7 @@ router.get('/model-card', (req, res) => {
   return res.json({
     ok: true,
     data: {
-      name: 'MakaUg Property AI Model',
+      name: 'makaug property AI model',
       version: process.env.AI_MODEL_VERSION || '2026.03.27',
       focus: 'Uganda property search, listing quality, multilingual WhatsApp assistance, and campaign optimization',
       languages: SUPPORTED_AI_LANGUAGES,

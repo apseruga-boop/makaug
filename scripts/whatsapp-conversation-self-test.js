@@ -42,14 +42,14 @@ const scenarios = [
     name: 'Luganda greeting keeps language',
     messages: ['Oli otya'],
     expect: [
-      { step: 'main_menu', includes: ['MakaUg assistant'] }
+      { step: 'main_menu', includes: ['makaug assistant'] }
     ]
   },
   {
     name: 'Kiswahili greeting keeps language',
     messages: ['Habari'],
     expect: [
-      { step: 'main_menu', includes: ['MakaUg', 'Tafuta'] }
+      { step: 'main_menu', includes: ['makaug', 'Tafuta'] }
     ]
   },
   {
@@ -74,8 +74,8 @@ const scenarios = [
     name: 'User can switch back to English mid-conversation',
     messages: ['Oli otya', 'speak English', '2'],
     expect: [
-      { step: 'main_menu', includes: ['MakaUg assistant'] },
-      { step: 'main_menu', includes: ['property assistant', 'Browse MakaUg'] },
+      { step: 'main_menu', includes: ['makaug assistant'] },
+      { step: 'main_menu', includes: ['property assistant', 'Browse makaug'] },
       {
         step: 'search_type',
         includes: ['What are you looking for?', 'For sale'],
@@ -98,14 +98,14 @@ const scenarios = [
     name: 'Commercial properties in Kampala are handled',
     messages: ['I am looking for commercial properties in Kampala'],
     expect: [
-      { step: 'main_menu', includesAny: ['Commercial', 'Kampala', 'listings', 'request', 'MakaUg'], excludes: ['Wandiika', 'Onoonya'] }
+      { step: 'main_menu', includesAny: ['Commercial', 'Kampala', 'listings', 'request', 'makaug'], excludes: ['Wandiika', 'Onoonya'] }
     ]
   },
   {
     name: 'Student accommodation in Kampala searches like the website',
     messages: ['I need student accommodation in Kampala'],
     expect: [
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'student', 'Kampala'], excludes: ['Wandiika', 'Onoonya', 'data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live makaug listings', 'student', 'Kampala'], excludes: ['Wandiika', 'Onoonya', 'data:image'] }
     ]
   },
   {
@@ -113,7 +113,7 @@ const scenarios = [
     messages: ['Do you have any student accommodation', 'Any area'],
     expect: [
       { step: 'search_area', includesAny: ['area', 'district'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'saved this request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live makaug listings', 'saved this request'], excludes: ['data:image'] }
     ]
   },
   {
@@ -123,7 +123,7 @@ const scenarios = [
       {
         step: 'main_menu',
         includes: ['exact match for', 'Land', 'Kampala'],
-        includesAny: ['similar live MakaUg', 'live MakaUg listings', 'MakaUg Matchboard'],
+        includesAny: ['similar live makaug', 'live makaug listings', 'makaug Matchboard'],
         excludes: ['Filters applied: For Sale', '🎯 Filter: For Sale', 'data:image']
       }
     ]
@@ -156,7 +156,7 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includesAny: ['Greater Kampala', 'MakaUg Matchboard', 'live MakaUg listings', 'saved this request'],
+        includesAny: ['Greater Kampala', 'makaug Matchboard', 'live makaug listings', 'saved this request'],
         excludes: ['data:image']
       }
     ]
@@ -167,14 +167,14 @@ const scenarios = [
     expect: [
       { step: 'search_type', includes: ['What are you looking for?', 'Student accommodation'] },
       { step: 'search_area', includesAny: ['area', 'district'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live MakaUg listings', 'saved this request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live makaug listings', 'saved this request'], excludes: ['data:image'] }
     ]
   },
   {
     name: 'User challenges a no-match result without becoming a fake area',
     messages: ['I need student accommodation in Kampala', 'Yes you do I looked at the website'],
     expect: [
-      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request', 'student', 'Kampala'] },
+      { step: 'main_menu', includesAny: ['makaug', 'listings', 'request', 'student', 'Kampala'] },
       { step: 'main_menu', includesAny: ['filtered too narrowly', 'admin', 'live website', 'listings'] }
     ]
   },
@@ -217,7 +217,7 @@ const scenarios = [
       '1',
       '1',
       { body: 'Hello', metadata: { force_idle_minutes: 3 } },
-      "Hi MakaUg, I'm on makaug.com and need property help. Please guide me with the best next step.\nPage: makaug.com/broker-signup"
+      "Hi makaug, I'm on makaug.com and need property help. Please guide me with the best next step.\nPage: makaug.com/broker-signup"
     ],
     expect: [
       { step: 'listing_type' },
@@ -248,7 +248,7 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'search_type', includesAny: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
     ]
   },
   {
@@ -257,9 +257,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Luganda'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Onoonya', 'looking for'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ma rwate', 'request'], excludes: ['data:image', 'Best matching properties'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Properties ma rwate', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -268,9 +268,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Kiswahili'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Tafuta', 'looking for'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
     ]
   },
   {
@@ -279,9 +279,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Acholi'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Itye kayenyo', 'Me acata'], excludes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
     ]
   },
   {
@@ -290,9 +290,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Runyankole'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Noshaka', 'Ebyokugurisha'], excludes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ezirikukwatagana', 'request'], excludes: ['data:image', 'Best matching properties'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Properties ezirikukwatagana', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -301,9 +301,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Rukiga'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['What are you looking for?', 'Rukiga'], excludes: ['Urashaka', 'Kugurisha'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Best matching properties', 'request'], excludes: ['data:image', 'Properties zihuye'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Best matching properties', 'request'], excludes: ['data:image', 'Properties zihuye'] }
     ]
   },
   {
@@ -312,9 +312,9 @@ const scenarios = [
     expect: [
       { step: 'main_menu', includes: ['property assistant'] },
       { step: 'choose_language', includesAny: ['English', 'Lusoga'] },
-      { step: 'main_menu', includes: ['MakaUg'] },
+      { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Onoonya', 'Ebitundibwa'], excludes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Properties ezisinga', 'request'], excludes: ['data:image', 'Best matching properties'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Properties ezisinga', 'request'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -322,7 +322,7 @@ const scenarios = [
     messages: ['2', 'Muyenga'],
     expect: [
       { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg', 'listings', 'request'] }
+      { step: 'main_menu', includesAny: ['makaug', 'listings', 'request'] }
     ]
   },
   {
@@ -330,7 +330,7 @@ const scenarios = [
     messages: ['2', 'Kampala'],
     expect: [
       { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
-      { step: 'main_menu', includesAny: ['MakaUg Matchboard', 'Browse live listings', 'request', 'property/'], excludes: ['What are you looking for?'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Browse live listings', 'request', 'property/'], excludes: ['What are you looking for?'] }
     ]
   },
   {
@@ -366,7 +366,7 @@ const scenarios = [
     expect: [
       { step: 'search_type' },
       { step: 'search_area' },
-      { step: 'main_menu', includesAny: ['km away', 'listings', 'request', 'MakaUg'] }
+      { step: 'main_menu', includesAny: ['km away', 'listings', 'request', 'makaug'] }
     ]
   },
   {
@@ -382,7 +382,7 @@ const scenarios = [
       {
         step: 'main_menu',
         includes: ['outside Uganda', 'Ugandan area'],
-        excludes: ['MakaUg Matchboard', 'km away', 'I am searching within 10 miles']
+        excludes: ['makaug Matchboard', 'km away', 'I am searching within 10 miles']
       }
     ]
   },

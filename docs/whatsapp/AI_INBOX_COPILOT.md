@@ -1,6 +1,6 @@
 # WhatsApp AI Inbox Copilot
 
-This is the operational guide for the MakaUg WhatsApp support copilot.
+This is the operational guide for the makaug WhatsApp support copilot.
 
 ## What is now built
 
@@ -46,7 +46,7 @@ For real production use, the recommended path is:
 1. Use the official Meta WhatsApp Cloud API as the main channel.
 2. Point the webhook to:
    - `POST /api/whatsapp/webhook`
-3. Use the admin WhatsApp Inbox in the MakaUg dashboard as the control center.
+3. Use the admin WhatsApp Inbox in the makaug dashboard as the control center.
 
 This is better than browser automation because:
 
@@ -62,7 +62,7 @@ If you want to start with WhatsApp Web first, use:
 
 - [WhatsApp Web Copilot Setup](/Users/arthurseruga/Documents/New project/docs/whatsapp/WEB_COPILOT_SETUP.md)
 
-That mode keeps Chrome + WhatsApp Web open on a dedicated machine and lets the MakaUg inbox queue replies for the local browser bridge to send.
+That mode keeps Chrome + WhatsApp Web open on a dedicated machine and lets the makaug inbox queue replies for the local browser bridge to send.
 
 ## Required env vars
 
@@ -106,7 +106,7 @@ AI features:
 
 ## Important limitation
 
-If the team replies directly in WhatsApp Web outside the official provider flow, those manual actions are not guaranteed to be written back into the MakaUg dashboard automatically.
+If the team replies directly in WhatsApp Web outside the official provider flow, those manual actions are not guaranteed to be written back into the makaug dashboard automatically.
 
 That means:
 
@@ -116,7 +116,7 @@ That means:
 So the reliable production model is:
 
 - WhatsApp number connected through Meta Cloud API
-- MakaUg admin inbox used as the main response console
+- makaug admin inbox used as the main response console
 
 ## What this enables next
 

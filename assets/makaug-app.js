@@ -1,7 +1,7 @@
 const BrandConfig = Object.freeze({
   productDisplayName: "makaug.com",
   domain: "makaug.com",
-  legalOrInternalName: "MakaUg",
+  legalOrInternalName: "makaug",
   tagline: "Uganda Property"
 });
 const publicBrand = () => BrandConfig.productDisplayName;
@@ -172,8 +172,8 @@ function mapRemoteAgentForUi(agent = {}) {
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
   return {
     id: String(agent.id || ""),
-    name: agent.full_name || agent.name || "MakaUg Agent",
-    company: agent.company_name || agent.company || "MakaUg",
+    name: agent.full_name || agent.name || "makaug Agent",
+    company: agent.company_name || agent.company || "makaug",
     phone: agent.phone || "",
     email: agent.email || "",
     whatsapp: String(agent.whatsapp || agent.phone || "").replace(/\D/g, ""),
@@ -193,7 +193,7 @@ function mapRemoteAgentForUi(agent = {}) {
     licence: agent.licence_number || agent.licence || "",
     languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
     specialties: specializations,
-    bio: agent.bio || "Professional MakaUg agent profile.",
+    bio: agent.bio || "Professional makaug agent profile.",
     featured_homepage: agent.featured_homepage === true,
     featured_at: agent.featured_at || null,
     status: agent.status || "approved",
@@ -415,21 +415,21 @@ let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
 let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 
 const HOW_TO_VIDEO_SLOTS = [
-  { key: "what-is-makaug", title: "What is MakaUg?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore MakaUg", ctaUrl: "/about" },
+  { key: "what-is-makaug", title: "What is makaug?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore makaug", ctaUrl: "/about" },
   { key: "search-property", title: "How to search for property", description: "Find homes, rentals, land, commercial spaces, and student rooms faster.", category: "search", youtubeVideoId: "", ctaLabel: "Start searching", ctaUrl: "/for-sale" },
   { key: "use-filters", title: "How to use filters", description: "Narrow results by area, price, type, beds, campus, and safety needs.", category: "search", youtubeVideoId: "", ctaLabel: "Try filters", ctaUrl: "/to-rent" },
   { key: "student-accommodation", title: "How to find student accommodation", description: "Search by campus, budget, room type, Wi-Fi, security, and move-in timing.", category: "student", youtubeVideoId: "", ctaLabel: "Find student rooms", ctaUrl: "/student-accommodation" },
   { key: "list-property", title: "How to list property", description: "Create a listing, add key details, verify contact information, and submit.", category: "listing", youtubeVideoId: "", ctaLabel: "List Property", ctaUrl: "/list-property" },
   { key: "location-and-photos", title: "How to add property location and photos", description: "Use Find address or place, confirm the map pin, and upload useful photos.", category: "listing", youtubeVideoId: "", ctaLabel: "Open listing form", ctaUrl: "/list-property" },
   { key: "broker-dashboard", title: "How brokers use the dashboard", description: "Update your broker card, submit listings for review, track leads, and manage account settings.", category: "broker", youtubeVideoId: "", ctaLabel: "Open broker dashboard", ctaUrl: "/broker-dashboard" },
-  { key: "broker-boost-property", title: "How to boost a broker listing", description: "Preview sponsored placement, choose reach or days live, and prepare payment before a campaign goes live.", category: "broker", youtubeVideoId: "", ctaLabel: "Advertise with MakaUg", ctaUrl: "/advertise" },
-  { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask MakaUg", ctaUrl: "https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20property%20help" },
+  { key: "broker-boost-property", title: "How to boost a broker listing", description: "Preview sponsored placement, choose reach or days live, and prepare payment before a campaign goes live.", category: "broker", youtubeVideoId: "", ctaLabel: "Advertise with makaug", ctaUrl: "/advertise" },
+  { key: "whatsapp-contact", title: "How to contact an owner or broker on WhatsApp", description: "Send property context, reference, location, and your viewing question safely.", category: "whatsapp", youtubeVideoId: "", ctaLabel: "Ask makaug", ctaUrl: "https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" },
   { key: "save-searches-alerts", title: "How to save searches and create alerts", description: "Keep track of demand and get notified when matching listings appear.", category: "alerts", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
   { key: "book-viewing-callback", title: "How to book a viewing or request callback", description: "Understand viewing buttons, callback requests, and follow-up tracking.", category: "viewings", youtubeVideoId: "", ctaLabel: "Find properties", ctaUrl: "/for-sale" },
   { key: "stay-safe-report", title: "How to stay safe and report suspicious listings", description: "Learn red flags, title checks, payment safety, and fraud-report steps.", category: "safety", youtubeVideoId: "", ctaLabel: "Read safety tips", ctaUrl: "/safety" },
   { key: "safe-viewings", title: "How to view property safely", description: "Plan viewings, bring trusted support, confirm the address, and keep payment pressure away from the visit.", category: "safety", youtubeVideoId: "", ctaLabel: "Read viewing safety", ctaUrl: "/safety" },
   { key: "land-title-safety", title: "How to check land and title safety", description: "Check title details, seller authority, boundaries, access, and written records before paying.", category: "safety", youtubeVideoId: "", ctaLabel: "Read land safety", ctaUrl: "/safety" },
-  { key: "ai-can-help", title: "What MakaUg AI can help with", description: "Search, list, create alerts, request help, and understand next steps.", category: "ai", youtubeVideoId: "", ctaLabel: "Try AI", ctaUrl: "/discover-ai-chatbot" },
+  { key: "ai-can-help", title: "What makaug AI can help with", description: "Search, list, create alerts, request help, and understand next steps.", category: "ai", youtubeVideoId: "", ctaLabel: "Try AI", ctaUrl: "/discover-ai-chatbot" },
   { key: "ai-search-whatsapp", title: "How to search property using WhatsApp/AI", description: "Ask naturally by area, budget, category, campus, or land need.", category: "ai", youtubeVideoId: "", ctaLabel: "Open AI chatbot", ctaUrl: "/discover-ai-chatbot" },
   { key: "ai-list-property", title: "How to list property with AI help", description: "Use the guided online form or WhatsApp listing path with safe prompts.", category: "ai", youtubeVideoId: "", ctaLabel: "List Property", ctaUrl: "/list-property" },
   { key: "ai-alerts-recommendations", title: "How to create alerts and recommendations", description: "Turn searches into alerts and recommendation signals for better follow-up.", category: "ai", youtubeVideoId: "", ctaLabel: "Save a search", ctaUrl: "/to-rent" },
@@ -911,11 +911,11 @@ const I18N_UI = {
     pageMortgage: "Mortgage Finder",
     pageAI: "Discover our AI Chatbot",
     pageList: "List Property",
-    pageAbout: "About MakaUg",
+    pageAbout: "About makaug",
     pageSaved: "Saved Properties",
     pageAccount: "My Account",
     langLabel: "Language",
-    langBanner: "Use MakaUg in 7 Ugandan languages",
+    langBanner: "Use makaug in 7 Ugandan languages",
     areaOnly: "This area only",
     withinLabel: "Within",
     mileUnitSingular: "mile",
@@ -1062,11 +1062,11 @@ const I18N_UI = {
     pageMortgage: "Noonya Mortgage",
     pageAI: "Noonya AI Chatbot yaffe",
     pageList: "Teka Property",
-    pageAbout: "Ebikwata ku MakaUg",
+    pageAbout: "Ebikwata ku makaug",
     pageSaved: "Property Zo Ezaterekedwa",
     pageAccount: "Akaawunti Yange",
     langLabel: "Olulimi",
-    langBanner: "Kozesa MakaUg mu nnimi 7 ez'e Uganda",
+    langBanner: "Kozesa makaug mu nnimi 7 ez'e Uganda",
     areaOnly: "Ekitundu kino kyokka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu oba landmark",
@@ -1083,7 +1083,7 @@ const I18N_UI = {
     listingPrivate: "Eteekeddwako Nnyiniyo",
     listingRegistered: "Akwatiddwa",
     listingNotRegistered: "",
-    footerGrowth: "Ebifo bya MakaUg eby'obulango ne SEO bitegekeddwa okuyamba okukula.",
+    footerGrowth: "Ebifo bya makaug eby'obulango ne SEO bitegekeddwa okuyamba okukula.",
     languageSet: "Olulimi lulondeddwa"
   },
   sw: {
@@ -1190,11 +1190,11 @@ const I18N_UI = {
     pageMortgage: "Tafuta Rehani",
     pageAI: "Gundua AI Chatbot Yetu",
     pageList: "Orodhesha Mali",
-    pageAbout: "Kuhusu MakaUg",
+    pageAbout: "Kuhusu makaug",
     pageSaved: "Mali Zilizohifadhiwa",
     pageAccount: "Akaunti Yangu",
     langLabel: "Lugha",
-    langBanner: "Tumia MakaUg kwa lugha 7 za Uganda",
+    langBanner: "Tumia makaug kwa lugha 7 za Uganda",
     areaOnly: "Eneo hili tu",
     anyUniversity: "Chuo chochote",
     phSale: "Jiji, eneo au alama maarufu",
@@ -1211,7 +1211,7 @@ const I18N_UI = {
     listingPrivate: "Imeorodheshwa na Mmiliki",
     listingRegistered: "Amesajiliwa",
     listingNotRegistered: "",
-    footerGrowth: "Matangazo ya ndani ya MakaUg na SEO vimewezeshwa kwa ukuaji.",
+    footerGrowth: "Matangazo ya ndani ya makaug na SEO vimewezeshwa kwa ukuaji.",
     languageSet: "Lugha imewekwa"
   },
   ac: {
@@ -1232,7 +1232,7 @@ const I18N_UI = {
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Ka i cako nongo gang ma imito ka.",
     heroSearch: "Yeny",
-    langBanner: "Tii ki MakaUg i lok 7 me Uganda",
+    langBanner: "Tii ki makaug i lok 7 me Uganda",
     areaOnly: "Kabedo manok",
     anyUniversity: "Yunivasiti weng",
     phSale: "Kibuga, kabedo",
@@ -1264,7 +1264,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Aha niho otondikirira kunoonya enju y'oyenda.",
     heroSearch: "Shanga",
-    langBanner: "Kozesa MakaUg omu ndimi 7 za Uganda",
+    langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
     areaOnly: "Aho honyine",
     anyUniversity: "Yunivasite yona",
     phSale: "Ekibuga, ekitundu",
@@ -1296,7 +1296,7 @@ const I18N_UI = {
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Okuhondera enju yawe kutandikira hanu.",
     heroSearch: "Shaka",
-    langBanner: "Koresa MakaUg omu ndimi 7 ez'omuri Uganda",
+    langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
     areaOnly: "Akarere aka gusa",
     anyUniversity: "Kaminuza yose",
     phSale: "Omujyi, akarere",
@@ -1328,7 +1328,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Wano niwo otandikira okunoonia enyumba gy'oyagala.",
     heroSearch: "Noonia",
-    langBanner: "Kozesa MakaUg mu nnimi 7 eza Uganda",
+    langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
     areaOnly: "Ekitundu kino kyonka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu",
@@ -1415,7 +1415,7 @@ const I18N_UI_HARDENING = {
     pageCommercial: "Gang me curu",
     pageLand: "Lobo me cato onyo gero",
     pageList: "Ket Gang",
-    pageAbout: "Lok ikom MakaUg",
+    pageAbout: "Lok ikom makaug",
     pageSaved: "Gangi ma iketo",
     pageAccount: "Akaunti na",
     langLabel: "Dhok",
@@ -1472,7 +1472,7 @@ const I18N_UI_HARDENING = {
     heroAmenityElectricityNearby: "Electricity nearby",
     heroAmenityWaterNearby: "Water nearby",
     heroAmenityBoundaryMarkers: "Boundary markers",
-    footerGrowth: "Kabedo me sponsorship pa MakaUg ki SEO indexing tye ayera me yubo dong."
+    footerGrowth: "Kabedo me sponsorship pa makaug ki SEO indexing tye ayera me yubo dong."
   },
   ny: {
     siteTitle: "makaug.com | Pulatifoomu ya Property omu Uganda",
@@ -1494,7 +1494,7 @@ const I18N_UI_HARDENING = {
     pageCommercial: "Property z’obusuubuzi",
     pageLand: "Eitaka ery’okutunda nari kupangisa",
     pageList: "Teka Property",
-    pageAbout: "Ebikwata aha MakaUg",
+    pageAbout: "Ebikwata aha makaug",
     pageSaved: "Property eziwatirweho",
     pageAccount: "Akaunti yange",
     langLabel: "Orurimi",
@@ -1551,7 +1551,7 @@ const I18N_UI_HARDENING = {
     heroAmenityElectricityNearby: "Electricity nearby",
     heroAmenityWaterNearby: "Water nearby",
     heroAmenityBoundaryMarkers: "Boundary markers",
-    footerGrowth: "Ebitundu by'oburango bya MakaUg na SEO byetegire kukuzya omutindo."
+    footerGrowth: "Ebitundu by'oburango bya makaug na SEO byetegire kukuzya omutindo."
   },
   rn: {
     siteTitle: "makaug.com | Omukutu gwa Property omuri Uganda",
@@ -1573,7 +1573,7 @@ const I18N_UI_HARDENING = {
     pageCommercial: "Property z’obushuubuzi",
     pageLand: "Eitaka ery’okugurishwa nari okupangisibwa",
     pageList: "Taho Property",
-    pageAbout: "Aha MakaUg",
+    pageAbout: "Aha makaug",
     pageSaved: "Property eziwabikiirwe",
     pageAccount: "Akaunti yangye",
     langLabel: "Orurimi",
@@ -1630,7 +1630,7 @@ const I18N_UI_HARDENING = {
     heroAmenityElectricityNearby: "Electricity nearby",
     heroAmenityWaterNearby: "Water nearby",
     heroAmenityBoundaryMarkers: "Boundary markers",
-    footerGrowth: "Ebitundu by'oburango bya MakaUg hamwe na SEO bitegire kukuzya omutindo."
+    footerGrowth: "Ebitundu by'oburango bya makaug hamwe na SEO bitegire kukuzya omutindo."
   },
   sm: {
     siteTitle: "makaug.com | Pulatifoomu ya Property mu Uganda",
@@ -1652,7 +1652,7 @@ const I18N_UI_HARDENING = {
     pageCommercial: "Property z’obusuubuzi",
     pageLand: "Itaka ery’okutunda oba okukodesa",
     pageList: "Teka Property",
-    pageAbout: "Ebifa ku MakaUg",
+    pageAbout: "Ebifa ku makaug",
     pageSaved: "Property ezikukuumiddwa",
     pageAccount: "Akaunti yange",
     langLabel: "Olulimi",
@@ -1709,7 +1709,7 @@ const I18N_UI_HARDENING = {
     heroAmenityElectricityNearby: "Electricity nearby",
     heroAmenityWaterNearby: "Water nearby",
     heroAmenityBoundaryMarkers: "Boundary markers",
-    footerGrowth: "Eifo ly'obulango bwa MakaUg ne SEO bitezeddwa okukuza omutindo."
+    footerGrowth: "Eifo ly'obulango bwa makaug ne SEO bitezeddwa okukuza omutindo."
   }
 };
 
@@ -1730,20 +1730,20 @@ const LANG_FALLBACK = {
 if (I18N_UI.rn) {
   I18N_UI.rn = Object.assign({}, I18N_UI.en, {
     languageSet: "Language set",
-    langBanner: "Rukiga translation is not fully available yet, so MakaUg uses English fallback instead of guessing another language.",
-    pageAbout: "About MakaUg"
+    langBanner: "Rukiga translation is not fully available yet, so makaug uses English fallback instead of guessing another language.",
+    pageAbout: "About makaug"
   });
 }
 
 const CONTENT_I18N = {
   en: {
     "about.heroLabel": "About Us",
-    "about.title": "About MakaUg",
+    "about.title": "About makaug",
     "about.heroStatement": "Property in Uganda should be easier to find, easier to list, and safer to trust.",
-    "about.subtitle": "MakaUg is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.",
+    "about.subtitle": "makaug is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.",
     "about.ctaSearch": "Search property",
     "about.ctaList": "List Property",
-    "about.ctaWhatsapp": "Ask MakaUg on WhatsApp",
+    "about.ctaWhatsapp": "Ask makaug on WhatsApp",
     "about.valueUgandaTitle": "Uganda-first",
     "about.valueUgandaText": "Built around local places, local language needs, WhatsApp habits, and real listing workflows.",
     "about.valueFreeTitle": "Free listing",
@@ -1751,11 +1751,11 @@ const CONTENT_I18N = {
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.",
     "about.whoTitle": "Who we are",
-    "about.whoText": "MakaUg is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
+    "about.whoText": "makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
     "about.missionTitle": "Our mission",
     "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
-    "about.whyTitle": "Why MakaUg exists",
-    "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. MakaUg brings structure, search, safety, and communication together.",
+    "about.whyTitle": "Why makaug exists",
+    "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.",
     "about.helpLabel": "Who we help",
     "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
@@ -1816,12 +1816,12 @@ const CONTENT_I18N = {
   },
   lg: {
     "about.heroLabel": "Ebitukwatako",
-    "about.title": "Ebitukwatako ku MakaUg",
+    "about.title": "Ebitukwatako ku makaug",
     "about.heroStatement": "Property mu Uganda erina okuba nnyangu okunoonya, okulistinga, era erina okuba ey'obwesige.",
-    "about.subtitle": "MakaUg ezimbibwa nga platform ya property eya Uganda eyamba abapangisa, abagula, abayizi, abanoonya ettaka, bannannyini property, brokers, n'abasuubuzi.",
+    "about.subtitle": "makaug ezimbibwa nga platform ya property eya Uganda eyamba abapangisa, abagula, abayizi, abanoonya ettaka, bannannyini property, brokers, n'abasuubuzi.",
     "about.ctaSearch": "Noonya property",
     "about.ctaList": "List Property",
-    "about.ctaWhatsapp": "Buuza MakaUg ku WhatsApp",
+    "about.ctaWhatsapp": "Buuza makaug ku WhatsApp",
     "about.valueUgandaTitle": "Uganda ku mwanjo",
     "about.valueUgandaText": "Tuzimbiddwa ku bifo bya wano, ennimi za wano, enkozesa ya WhatsApp, n'engeri listing gye zikolebwamu mu ddala.",
     "about.valueFreeTitle": "Listing ya bwereere",
@@ -1829,11 +1829,11 @@ const CONTENT_I18N = {
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Ekoleddwa ku mobile web, WhatsApp contact, dashboard follow-up, n'okuyamba abantu okusalawo mu ngeri ey'obukuumi.",
     "about.whoTitle": "Ffe baani",
-    "about.whoText": "MakaUg ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, ne guided free listings. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
+    "about.whoText": "makaug ye platform ya property eya Uganda esangibwa ku web, mobile, WhatsApp, support mu nnimi eziwerako, ne guided free listings. Tuzimbiddwa ku byetaago by'akatale ka property mu Uganda: amawulire agasaasaanye, listings ezitajjudde, enkozesa ya WhatsApp, n'obwesige nga abantu tebannalaba oba okusasula.",
     "about.missionTitle": "Omulamwa gwaffe",
     "about.missionText": "Omulamwa gwaffe kwe kufuula property ennyangu okuzuula, okukendeeza okutabulwa, okulongoosa omutindo gwa listings, n'okuyamba abantu okuva ku search okutuuka ku viewing n'okusalaawo.",
-    "about.whyTitle": "Lwaki MakaUg eriwo",
-    "about.whyText": "Okunoonya property mu Uganda kusobola okuba mu WhatsApp, brokers, social posts, n'amawulire agava mu bantu. MakaUg egatta search, safety, n'empuliziganya mu kifo kimu.",
+    "about.whyTitle": "Lwaki makaug eriwo",
+    "about.whyText": "Okunoonya property mu Uganda kusobola okuba mu WhatsApp, brokers, social posts, n'amawulire agava mu bantu. makaug egatta search, safety, n'empuliziganya mu kifo kimu.",
     "about.helpLabel": "Be tuyamba",
     "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
@@ -1894,12 +1894,12 @@ const CONTENT_I18N = {
   },
   sw: {
     "about.heroLabel": "Kuhusu Sisi",
-    "about.title": "Kuhusu MakaUg",
+    "about.title": "Kuhusu makaug",
     "about.heroStatement": "Mali nchini Uganda inapaswa kuwa rahisi kutafuta, rahisi kuorodhesha, na salama kuamini.",
-    "about.subtitle": "MakaUg inajenga jukwaa la mali la Uganda kwa wapangaji, wanunuzi, wanafunzi, watafuta ardhi, wamiliki, brokers, na biashara.",
+    "about.subtitle": "makaug inajenga jukwaa la mali la Uganda kwa wapangaji, wanunuzi, wanafunzi, watafuta ardhi, wamiliki, brokers, na biashara.",
     "about.ctaSearch": "Tafuta mali",
     "about.ctaList": "List Property",
-    "about.ctaWhatsapp": "Uliza MakaUg kwa WhatsApp",
+    "about.ctaWhatsapp": "Uliza makaug kwa WhatsApp",
     "about.valueUgandaTitle": "Uganda kwanza",
     "about.valueUgandaText": "Imejengwa kuzunguka maeneo ya ndani, mahitaji ya lugha, matumizi ya WhatsApp, na mtiririko halisi wa listings.",
     "about.valueFreeTitle": "Listing bure",
@@ -1907,11 +1907,11 @@ const CONTENT_I18N = {
     "about.valueWhatsappTitle": "Web + WhatsApp",
     "about.valueWhatsappText": "Imetengenezwa kwa mobile web, mawasiliano ya WhatsApp, dashboard follow-up, na maamuzi salama.",
     "about.whoTitle": "Sisi ni nani",
-    "about.whoText": "MakaUg ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na listings za bure zilizoongozwa. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
+    "about.whoText": "makaug ni jukwaa la mali la Uganda kwa utafutaji wa web, mobile, mawasiliano ya WhatsApp, msaada wa lugha nyingi, na listings za bure zilizoongozwa. Tumejengwa kuzunguka hali halisi ya soko la mali Uganda.",
     "about.missionTitle": "Dhamira yetu",
     "about.missionText": "Dhamira yetu ni kurahisisha ugunduzi wa mali, kupunguza mkanganyiko, kuboresha ubora wa listings, na kusaidia watu kutoka search hadi viewing na uamuzi.",
-    "about.whyTitle": "Kwa nini MakaUg ipo",
-    "about.whyText": "Utafutaji wa mali Uganda unaweza kutawanyika kwenye WhatsApp, brokers, social posts, na maneno ya watu. MakaUg huleta muundo, search, safety, na mawasiliano pamoja.",
+    "about.whyTitle": "Kwa nini makaug ipo",
+    "about.whyText": "Utafutaji wa mali Uganda unaweza kutawanyika kwenye WhatsApp, brokers, social posts, na maneno ya watu. makaug huleta muundo, search, safety, na mawasiliano pamoja.",
     "about.helpLabel": "Tunasaidia nani",
     "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
@@ -3029,7 +3029,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Find a Verified Broker",
     card3Sub: "Ask for broker contacts by district, speciality, or language and get options instantly.",
     flowTitle: "How the chatbot conversation flows",
-    flow1: "Welcome to MakaUg. Reply 1 to list, 2 to search, 3 to find a broker.",
+    flow1: "Welcome to makaug. Reply 1 to list, 2 to search, 3 to find a broker.",
     flow2: "2 - Search near my location",
     flow3: "Share location and budget. I will send matching listings with links.",
     flow4: "Location shared + budget USh 1.5M rent",
@@ -3051,7 +3051,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Noonya Broker Akakasiddwa",
     card3Sub: "Saba contacts za broker okusinziira ku district, speciality oba lulimi.",
     flowTitle: "Engeri emboozi ya chatbot gy’etambula",
-    flow1: "Tukwaniriza ku MakaUg. Ddamu 1 okuteka, 2 okunoonya, 3 okunoonya broker.",
+    flow1: "Tukwaniriza ku makaug. Ddamu 1 okuteka, 2 okunoonya, 3 okunoonya broker.",
     flow2: "2 - Noonya okumpi ne location yange",
     flow3: "Gabana location ne budget. Nja kukuweereza links za property ezikukwatako.",
     flow4: "Location eweereddwa + budget USh 1.5M rent",
@@ -3073,7 +3073,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Pata Wakala Aliyethibitishwa",
     card3Sub: "Omba mawasiliano ya wakala kwa wilaya, taaluma, au lugha na upate majibu haraka.",
     flowTitle: "Jinsi mazungumzo ya chatbot yanavyokwenda",
-    flow1: "Karibu MakaUg. Jibu 1 kuorodhesha, 2 kutafuta, 3 kupata wakala.",
+    flow1: "Karibu makaug. Jibu 1 kuorodhesha, 2 kutafuta, 3 kupata wakala.",
     flow2: "2 - Tafuta karibu na location yangu",
     flow3: "Shiriki location na budget. Nitakutumia links za mali zinazolingana.",
     flow4: "Location imeshirikishwa + budget USh 1.5M rent",
@@ -3095,7 +3095,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Nong broker ma okac",
     card3Sub: "Kwero namba pa broker i district, kit ber onyo dhok; inongo lagam mapiyo.",
     flowTitle: "Yoo me lok ki chatbot",
-    flow1: "Wot maber i MakaUg. Dwo 1 me listing, 2 me yenyo, 3 me nongo broker.",
+    flow1: "Wot maber i makaug. Dwo 1 me listing, 2 me yenyo, 3 me nongo broker.",
     flow2: "2 - Yenyo ka i akina ki ka anongo",
     flow3: "Pee location ki budget. Abicwalo links pa listing ma rwatte.",
     flow4: "Location opee + budget USh 1.5M rent",
@@ -3117,7 +3117,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Shanga Broker akakasiibwe",
     card3Sub: "Saba contacts za broker okuruga omu district, specialization, oba rurimi kandi ofune amagarukiro mangu.",
     flowTitle: "Engeri emboozi ya chatbot etambura",
-    flow1: "Tukushemererwa ahari MakaUg. Garuka 1 kuteka, 2 kunoonya, 3 kushanga broker.",
+    flow1: "Tukushemererwa ahari makaug. Garuka 1 kuteka, 2 kunoonya, 3 kushanga broker.",
     flow2: "2 - Noonya ahafi na location yangye",
     flow3: "Tukwase location na budget. Ninyija kukuweereza links za properties ezikuhika.",
     flow4: "Location erikushangwa + budget USh 1.5M rent",
@@ -3139,7 +3139,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Shaka broker waakasibwa",
     card3Sub: "Saba contacts za broker kuruga omu district, obushoboorozi oba rurimi; obone eby'okugarukamu bwangu.",
     flowTitle: "Engeri omurongo gwa chatbot gutambura",
-    flow1: "Murakaza kurungi kuri MakaUg. Garuka 1 kutera, 2 kushaka, 3 kubona broker.",
+    flow1: "Murakaza kurungi kuri makaug. Garuka 1 kutera, 2 kushaka, 3 kubona broker.",
     flow2: "2 - Shaka hafi na location yangye",
     flow3: "Ha location na budget. Nza kukohereza links za listing ezihika.",
     flow4: "Location yahairwe + budget USh 1.5M rent",
@@ -3161,7 +3161,7 @@ const AI_CHATBOT_I18N = {
     card3Title: "Noonia Broker akakasiddwa",
     card3Sub: "Saba contacts za broker nga osinzira ku district, specialisation oba lulimi, ofune eby'okuddamu mangu.",
     flowTitle: "Engeri emboozi ya chatbot gy'etambula",
-    flow1: "Tukwaniriza ku MakaUg. Damu 1 kuteka, 2 kunoonia, 3 kunoonia broker.",
+    flow1: "Tukwaniriza ku makaug. Damu 1 kuteka, 2 kunoonia, 3 kunoonia broker.",
     flow2: "2 - Noonia kumpi ne location yange",
     flow3: "Wana location ne budget. Nja kukuweereza links za listings ezikukwataku.",
     flow4: "Location eweereddwa + budget USh 1.5M rent",
@@ -3187,7 +3187,7 @@ function aiTr(key) {
 const FRAUD_I18N = {
   en: {
     title: "Fraud Prevention",
-    sub: "We use layered verification, AI-powered fraud detection, and manual moderation to keep MakaUg safer for buyers, renters, brokers, and property listers.",
+    sub: "We use layered verification, AI-powered fraud detection, and manual moderation to keep makaug safer for buyers, renters, brokers, and property listers.",
     card1Title: "Identity Verification",
     card1Sub: "OTP + National ID checks before listing submission and publishing review.",
     card2Title: "AI Fraud Signals",
@@ -3218,7 +3218,7 @@ const FRAUD_I18N = {
     snapshotCheck3Title: "Image + location quality",
     snapshotCheck3Sub: "Minimum photo count, usable uploads, and map pin / location consistency are verified.",
     snapshotCheck4Title: "Decision + outreach",
-    snapshotCheck4Sub: "If checks fail, the lister receives a reason. If approved, MakaUg sends live and sharing links.",
+    snapshotCheck4Sub: "If checks fail, the lister receives a reason. If approved, makaug sends live and sharing links.",
     snapshotScreenTitle: "Moderation console preview",
     monitorTitle: "What we monitor continuously",
     monitor1Title: "Listing quality",
@@ -3232,7 +3232,7 @@ const FRAUD_I18N = {
   },
   lg: {
     title: "Okulwanyisa Obubbaanyi",
-    sub: "Tukozesa okukakasa mu bitundu, AI checks, n’okwekeneenya okw’omuntu okusobola okukuuma MakaUg nga tekirimu bubbaanyi eri abagula, abapangisa, brokers n’abateeka listings.",
+    sub: "Tukozesa okukakasa mu bitundu, AI checks, n’okwekeneenya okw’omuntu okusobola okukuuma makaug nga tekirimu bubbaanyi eri abagula, abapangisa, brokers n’abateeka listings.",
     card1Title: "Okukakasa Obumanyirivu",
     card1Sub: "Okukakasa OTP + National ID nga listing tennatwalibwa mu kwekenneenya okw’okufulumya.",
     card2Title: "AI Etegeeza Obubbaanyi",
@@ -3264,7 +3264,7 @@ const FRAUD_I18N = {
   },
   sw: {
     title: "Kuzuia Ulaghai",
-    sub: "Tunatumia uthibitishaji wa hatua nyingi, ukaguzi wa AI, na mapitio ya binadamu kufanya MakaUg kuwa salama kwa wanunuzi, wapangaji, brokers, na waorodheshaji wa mali.",
+    sub: "Tunatumia uthibitishaji wa hatua nyingi, ukaguzi wa AI, na mapitio ya binadamu kufanya makaug kuwa salama kwa wanunuzi, wapangaji, brokers, na waorodheshaji wa mali.",
     card1Title: "Uthibitishaji wa Utambulisho",
     card1Sub: "Ukaguzi wa OTP + Kitambulisho cha Taifa kabla ya kuwasilisha listing na mapitio ya uchapishaji.",
     card2Title: "Ishara za Ulaghai za AI",
@@ -3296,7 +3296,7 @@ const FRAUD_I18N = {
   },
   ac: {
     title: "Gwokke me Fraud",
-    sub: "Watiyo ki kubeero me nying, AI checks, ki ngec pa dano me kelo MakaUg bedo ma ber pi jo mugudo, jo gero, brokers, ki jo ma keto listings.",
+    sub: "Watiyo ki kubeero me nying, AI checks, ki ngec pa dano me kelo makaug bedo ma ber pi jo mugudo, jo gero, brokers, ki jo ma keto listings.",
     card1Title: "Kubeero me Nying",
     card1Sub: "OTP + National ID checks pud pe i keto listing i review me bedo live.",
     card2Title: "AI Fraud Signals",
@@ -3328,7 +3328,7 @@ const FRAUD_I18N = {
   },
   ny: {
     title: "Okutangira Obufura",
-    sub: "Nitukozesa okwehamya kwa mitendera, AI checks hamwe n'okwetegyereza kw'abantu kugira MakaUg ebe ey'obusinge eri abagura, abapangisa, brokers n'abateeka eby'ebyapa.",
+    sub: "Nitukozesa okwehamya kwa mitendera, AI checks hamwe n'okwetegyereza kw'abantu kugira makaug ebe ey'obusinge eri abagura, abapangisa, brokers n'abateeka eby'ebyapa.",
     card1Title: "Okwehamya Obumanya",
     card1Sub: "OTP + National ID checks embere y'okutuma listing kandi embere y'okugishyira live.",
     card2Title: "AI Etebera Obufura",
@@ -3360,7 +3360,7 @@ const FRAUD_I18N = {
   },
   rn: {
     title: "Okuhangana n'Obufura",
-    sub: "Tukozesa okuhamya okw'emitendera, AI checks, n'okureeba kw'abantu kugira MakaUg ebe enungi kandi etekaine obufura eri abagura, abapangisa, brokers n'abashyiraho listings.",
+    sub: "Tukozesa okuhamya okw'emitendera, AI checks, n'okureeba kw'abantu kugira makaug ebe enungi kandi etekaine obufura eri abagura, abapangisa, brokers n'abashyiraho listings.",
     card1Title: "Okuhamya Obumanyiso",
     card1Sub: "OTP + National ID checks bibanza okukorwa mbere y'okutuma listing kandi mbere y'okugihindura live.",
     card2Title: "AI Emenya Obufura",
@@ -3392,7 +3392,7 @@ const FRAUD_I18N = {
   },
   sm: {
     title: "Okulwanyisa Obubeyi",
-    sub: "Tukozesa okukakasa okw'emitendera, AI checks, n'okukebera kw'abantu okusobola okukuuma MakaUg eri abagula, abakodesa, brokers n'abateeka listings.",
+    sub: "Tukozesa okukakasa okw'emitendera, AI checks, n'okukebera kw'abantu okusobola okukuuma makaug eri abagula, abakodesa, brokers n'abateeka listings.",
     card1Title: "Okukakasa Obumanyirivu",
     card1Sub: "OTP + National ID checks zikolebwa listing etannatwalibwa mu review era etannaba live.",
     card2Title: "AI Etegeera Obubeyi",
@@ -3426,11 +3426,11 @@ const FRAUD_I18N = {
 
 const FRAUD_EXTRA_I18N = {
   en: {
-    safetyPill: "MakaUg Safety Desk",
+    safetyPill: "makaug Safety Desk",
     urgentTitle: "Fraud reports are treated as urgent cases, not ordinary support tickets.",
     urgentSub: "Screenshots, payment references, chat history, duplicate listings, and location mismatches are grouped into one AI-assisted review record so the team can act quickly.",
     examplesKicker: "Verification examples",
-    examplesTitle: "How MakaUg reduces risk before users meet or pay",
+    examplesTitle: "How makaug reduces risk before users meet or pay",
     examplesReportBtn: "Report Suspicion",
     example1Title: "Account and contact consistency",
     example1Sub: "We compare account details, OTP verification, listed contact method, and repeated phone or email patterns.",
@@ -3442,11 +3442,11 @@ const FRAUD_EXTRA_I18N = {
     example4Sub: "Admins can hold listings, request more proof, block accounts, or escalate repeat suspicious behavior."
   },
   lg: {
-    safetyPill: "MakaUg Safety Desk",
+    safetyPill: "makaug Safety Desk",
     urgentTitle: "Reports z'obubbaanyi tuzikolako nga cases ez'amangu, si support tickets eza bulijjo.",
     urgentSub: "Screenshots, payment references, chat history, duplicate listings, n'ebifo ebitalaga bulungi bigattibwa mu record emu eyambibwako AI team esobole okukola mangu.",
     examplesKicker: "Ebyokulabirako by'okukakasa",
-    examplesTitle: "Engeri MakaUg ekendeezaamu obulabe abantu nga tebannasisinkana oba okusasula",
+    examplesTitle: "Engeri makaug ekendeezaamu obulabe abantu nga tebannasisinkana oba okusasula",
     examplesReportBtn: "Loopa Ekiteeberezebwa",
     example1Title: "Account ne contact bikwatagana",
     example1Sub: "Tugeraageranya account details, OTP verification, contact method, n'emisono gya phone oba email egiddibwamu.",
@@ -3458,11 +3458,11 @@ const FRAUD_EXTRA_I18N = {
     example4Sub: "Admins basobola okukwata listings, okusaba proof endala, okublockinga accounts, oba okulinnyisa suspicious behavior."
   },
   sw: {
-    safetyPill: "Dawati ya Usalama MakaUg",
+    safetyPill: "Dawati ya Usalama makaug",
     urgentTitle: "Ripoti za ulaghai hushughulikiwa kama kesi za dharura, si tiketi za kawaida za msaada.",
     urgentSub: "Screenshots, rejea za malipo, historia ya chat, listings zilizorudiwa, na tofauti za eneo huwekwa kwenye rekodi moja inayosaidiwa na AI ili timu ichukue hatua haraka.",
     examplesKicker: "Mifano ya uthibitishaji",
-    examplesTitle: "Jinsi MakaUg hupunguza hatari kabla ya watu kukutana au kulipa",
+    examplesTitle: "Jinsi makaug hupunguza hatari kabla ya watu kukutana au kulipa",
     examplesReportBtn: "Ripoti Shaka",
     example1Title: "Ulinganifu wa akaunti na mawasiliano",
     example1Sub: "Tunalinganisha maelezo ya akaunti, OTP, njia ya mawasiliano iliyowekwa, na mifumo ya simu au barua pepe inayojirudia.",
@@ -3564,7 +3564,7 @@ function applyListingWizardLanguageUI() {
     ["list-choice-online-title", "List Online"],
     ["list-choice-online-copy", "Open the guided website form."],
     ["list-choice-wa-title", "Via WhatsApp AI"],
-    ["list-choice-wa-copy", "Chat with the MakaUg AI listing assistant."],
+    ["list-choice-wa-copy", "Chat with the makaug AI listing assistant."],
     ["list-choice-free-title", "Always 100% Free."],
     ["list-choice-free-copy", "Your listing goes live within 24 hours after identity verification."]
   ];
@@ -3621,7 +3621,7 @@ function applyListingWizardLanguageUI() {
   const mainPhotoHelp = document.getElementById("lp-main-photo-help");
   if (mainPhotoHelp) mainPhotoHelp.innerHTML = `${translateListingLabel("Choose one image as the")} <strong>${translateListingLabel("main photo")}</strong>. ${translateListingLabel("This will appear first in search results.")}`;
   setTextById("lp-field-agent-assisted-label", translateListingLabel("Field Agent assisted?"));
-  setTextById("lp-field-agent-assisted-help", translateListingLabel("A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you."));
+  setTextById("lp-field-agent-assisted-help", translateListingLabel("A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you."));
   setTextById("lp-field-agent-id-label", translateListingLabel("Field Agent ID"));
   setTextById("lp-field-agent-id-help", translateListingLabel("Only fill this if a Field Agent assisted you."));
   const langTip = document.querySelector("#lp-language-tip span");
@@ -3631,7 +3631,7 @@ function applyListingWizardLanguageUI() {
   setTextById("lp-success-contact", translateListingLabel("We will contact you by WhatsApp or email once this listing is approved."));
   setTextById("lp-success-ref-label", translateListingLabel("Reference:"));
   setTextById("lp-success-support-label", translateListingLabel("Support:"));
-  setTextById("lp-success-account-title", translateListingLabel("Create your free MakaUg account to:"));
+  setTextById("lp-success-account-title", translateListingLabel("Create your free makaug account to:"));
   setTextById("lp-success-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("lp-success-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("lp-success-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
@@ -3639,12 +3639,12 @@ function applyListingWizardLanguageUI() {
   setTextById("lp-success-account-btn", translateListingLabel("Create Free Account"));
   setTextById("listing-submit-pill", translateListingLabel("Submission Received"));
   setTextById("listing-submit-title", translateListingLabel("Your property has been submitted"));
-  setTextById("listing-submit-sub", translateListingLabel("Thank you. Your property listing has been submitted to MakaUg for review. Our team will check the details and contact you if we need anything else."));
+  setTextById("listing-submit-sub", translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else."));
   setTextById("listing-submit-contact", translateListingLabel("We will WhatsApp you once it's approved, and we can also follow up by email."));
   setTextById("listing-submit-ref-label", translateListingLabel("Reference:"));
   setTextById("listing-submit-status-label", translateListingLabel("Status"));
   setTextById("listing-submit-status", translateListingLabel("Pending Review"));
-  setTextById("listing-submit-benefits-title", translateListingLabel("Create your free MakaUg account to:"));
+  setTextById("listing-submit-benefits-title", translateListingLabel("Create your free makaug account to:"));
   setTextById("listing-submit-benefit-1", translateListingLabel("Track listing views, saves, and enquiries in real time."));
   setTextById("listing-submit-benefit-2", translateListingLabel("Edit your listing faster and update photos any time."));
   setTextById("listing-submit-benefit-3", translateListingLabel("Receive weekly property tips and market updates."));
@@ -3709,11 +3709,11 @@ function applyListingWizardLanguageUI() {
     },
     {
       el: consentLabel,
-      text: "You agree that MakaUg can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval."
+      text: "You agree that makaug can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval."
     },
     {
       el: legalCopy,
-      text: "MakaUg runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities."
+      text: "makaug runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities."
     }
   ];
   legalHints.forEach((item) => {
@@ -4078,8 +4078,8 @@ function applyMapAssistLanguageUI() {
       const copy = card.querySelector("p");
       const btn = card.querySelector("button");
       if (title) title.textContent = translateListingLabel(kind === "brokers" ? "Need help finding a broker?" : "Can't find what you're looking for?");
-      if (copy) copy.textContent = translateListingLabel(kind === "brokers" ? "Tell us the district, property type, and how to reach you. MakaUg will help match you." : "Tell MakaUg what you need and we will follow up with matching homes or agents.");
-      if (btn) btn.textContent = translateListingLabel("Ask MakaUg to help");
+      if (copy) copy.textContent = translateListingLabel(kind === "brokers" ? "Tell us the district, property type, and how to reach you. makaug will help match you." : "Tell makaug what you need and we will follow up with matching homes or agents.");
+      if (btn) btn.textContent = translateListingLabel("Ask makaug to help");
     }
     const setPlaceholder = (selector, text) => {
       const el = document.querySelector(selector);
@@ -5438,7 +5438,7 @@ function applySavePropertyLanguageUI() {
   const property = findPropertyForUi(modal.dataset.propertyId || "");
   const title = property?.title ? `"${property.title}"` : translatePropertyUi("this property");
   setTextById("save-property-modal-pill-text", translatePropertyUi("Save to your profile"));
-  setTextById("save-property-modal-title", translatePropertyUi("Keep this property in your MakaUg account"));
+  setTextById("save-property-modal-title", translatePropertyUi("Keep this property in your makaug account"));
   setTextById("save-property-modal-sub", translatePropertyUi("Create your free account or sign in to save {title}, track updates, and come back to it later.", { title }));
   setTextById("save-property-next-title", translatePropertyUi("What happens next?"));
   setTextById("save-property-next-1", translatePropertyUi("The property will be saved straight to your personal profile after you sign in."));
@@ -5720,7 +5720,7 @@ function updateAuthSignUpUi() {
     fieldNote.classList.add("hidden");
     if (agentRegWrap) agentRegWrap.classList.add("hidden");
   } else if (authSignUpAudience === "field_agent") {
-    help.textContent = "Field Agent: submit an application for MakaUg operations review after OTP verification.";
+    help.textContent = "Field Agent: submit an application for makaug operations review after OTP verification.";
     roleInput.value = "Field Agent";
     formWrap.classList.remove("hidden");
     fieldNote.classList.remove("hidden");
@@ -5760,28 +5760,28 @@ function syncAuthProfileSignupForm() {
   const timeline = document.getElementById("auth-profile-moving-timeline");
   if (authSignUpAudience === "agent") {
     if (title) title.textContent = "Tell us about your agency";
-    if (subtitle) subtitle.textContent = "This helps MakaUg route quality enquiries and verification follow-up to the right agents.";
+    if (subtitle) subtitle.textContent = "This helps makaug route quality enquiries and verification follow-up to the right agents.";
     if (goal) goal.placeholder = "Main goal, e.g. get leads, manage listings";
     if (areas) areas.placeholder = "Primary areas / districts";
     if (budget) budget.placeholder = "Typical property price/rent range";
     if (timeline) timeline.placeholder = "How quickly can you respond to leads?";
   } else if (authSignUpAudience === "field_agent") {
     if (title) title.textContent = "Field Agent application";
-    if (subtitle) subtitle.textContent = "Tell MakaUg where you can work and what experience you bring. Operations will review before activation.";
+    if (subtitle) subtitle.textContent = "Tell makaug where you can work and what experience you bring. Operations will review before activation.";
     if (goal) goal.placeholder = "Main goal, e.g. submit verified listings";
     if (areas) areas.placeholder = "Primary operation areas";
     if (budget) budget.placeholder = "Transport / coverage notes";
     if (timeline) timeline.placeholder = "When can you start?";
   } else if (authSignUpAudience === "advertiser") {
     if (title) title.textContent = "Tell us about your advertising goals";
-    if (subtitle) subtitle.textContent = "This helps MakaUg prepare the right campaign package, placement, and payment follow-up.";
+    if (subtitle) subtitle.textContent = "This helps makaug prepare the right campaign package, placement, and payment follow-up.";
     if (goal) goal.placeholder = "Campaign goal, e.g. promote listings, broker spotlight";
     if (areas) areas.placeholder = "Target areas or audiences";
     if (budget) budget.placeholder = "Monthly or campaign budget";
     if (timeline) timeline.placeholder = "Campaign timing";
   } else {
     if (title) title.textContent = accountKind === "student" ? "Tell us about your student search" : "Help us personalise your account";
-    if (subtitle) subtitle.textContent = accountKind === "student" ? "This helps MakaUg match you to safer accommodation near your campus." : "A few optional details help MakaUg send better property matches and WhatsApp updates.";
+    if (subtitle) subtitle.textContent = accountKind === "student" ? "This helps makaug match you to safer accommodation near your campus." : "A few optional details help makaug send better property matches and WhatsApp updates.";
     if (goal) goal.placeholder = accountKind === "student" ? "Hostel, studio, shared room, apartment..." : "Buying, renting, land, commercial...";
     if (areas) areas.placeholder = "Preferred areas or districts";
     if (budget) budget.placeholder = accountKind === "student" ? "Budget per semester / month" : "Budget range";
@@ -6545,7 +6545,7 @@ async function renderStudentDashboard() {
   if (grid) {
     grid.innerHTML = recommendations.length
       ? recommendations.map(renderDashboardCard).join("")
-      : `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No student accommodation matches yet. Tell MakaUg what you need and we will help source options.</div>`;
+      : `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No student accommodation matches yet. Tell makaug what you need and we will help source options.</div>`;
   }
 
   const recentGrid = document.getElementById("student-dashboard-recent-grid");
@@ -6573,7 +6573,7 @@ function renderBrokerDashboardBadges(broker = {}, stats = {}) {
   const status = String(broker.status || "pending").toLowerCase();
   const reg = String(broker.registration_status || "not_registered").toLowerCase();
   const badges = [
-    status === "approved" ? "Approved broker" : "Awaiting MakaUg review",
+    status === "approved" ? "Approved broker" : "Awaiting makaug review",
     reg === "registered" ? "Registered" : "Review before public listing",
     broker.identity_document_url ? "National ID uploaded" : "ID check pending",
     `${Number(stats.pending_listings || broker.pending_listings || 0)} listings in review`
@@ -6617,9 +6617,9 @@ function brokerListingStatusMeta(status = "") {
     return { label: "Live", className: "bg-green-50 border-green-100 text-green-800", next: "Visible on makaug.com" };
   }
   if (normalized === "rejected" || normalized === "declined") {
-    return { label: "Needs changes", className: "bg-red-50 border-red-100 text-red-800", next: "Fix and resubmit for MakaUg review" };
+    return { label: "Needs changes", className: "bg-red-50 border-red-100 text-red-800", next: "Fix and resubmit for makaug review" };
   }
-  return { label: "In review", className: "bg-amber-50 border-amber-100 text-amber-800", next: "Waiting for MakaUg admin approval" };
+  return { label: "In review", className: "bg-amber-50 border-amber-100 text-amber-800", next: "Waiting for makaug admin approval" };
 }
 
 function brokerListingLeadCount(p = {}) {
@@ -6651,7 +6651,7 @@ function buildBrokerDashboardShareText(broker = {}, stats = {}) {
     : (broker.area || "Uganda");
   const url = brokerDashboardProfileUrl(broker);
   return [
-    `makaug.com broker card: ${broker.name || "MakaUg broker"}`,
+    `makaug.com broker card: ${broker.name || "makaug broker"}`,
     broker.company || "Independent broker",
     `Areas: ${areas}`,
     `Active listings: ${brokerMetric(stats.active_listings || broker.live_listings || 0)}`,
@@ -6672,7 +6672,7 @@ async function shareBrokerCard(channel = "native") {
   const shareText = buildBrokerDashboardShareText(broker, stats);
   try {
     if (channel === "native" && navigator.share) {
-      await navigator.share({ title: `${broker.name || "MakaUg broker"} on makaug.com`, text: shareText, url: shareUrl });
+      await navigator.share({ title: `${broker.name || "makaug broker"} on makaug.com`, text: shareText, url: shareUrl });
       return;
     }
     if (channel === "whatsapp") {
@@ -6719,7 +6719,7 @@ function renderBrokerDashboardListingCard(p) {
         </button>
         <div class="min-w-0">
           <div class="flex items-start justify-between gap-2">
-            <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="text-left font-black text-gray-900 line-clamp-2 hover:text-green-700">${adminEscape(p.title || "MakaUg listing")}</button>
+            <button onclick="openPropertyCardDetail(event, ${propertyIdArg(p.id)})" class="text-left font-black text-gray-900 line-clamp-2 hover:text-green-700">${adminEscape(p.title || "makaug listing")}</button>
             <span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-bold ${statusMeta.className}">${adminEscape(statusMeta.label)}</span>
           </div>
           <p class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(p.subtype || p.type || "Property")}</p>
@@ -6763,7 +6763,7 @@ function renderBrokerProfilePreview(broker = {}, listings = [], stats = {}) {
       <div class="grid sm:grid-cols-[120px_1fr] gap-4">
         <div>${brokerAvatarHtml(avatarBroker, "w-28 h-28 border-4")}</div>
         <div class="min-w-0">
-          <h3 class="text-2xl font-black text-gray-900 leading-tight">${adminEscape(broker.name || "MakaUg broker")}</h3>
+          <h3 class="text-2xl font-black text-gray-900 leading-tight">${adminEscape(broker.name || "makaug broker")}</h3>
           <p class="text-sm text-gray-500">${adminEscape(broker.company || "Independent broker")}</p>
           <p class="text-sm text-gray-600 mt-2">${adminEscape(broker.bio || "Add a short broker bio so clients know where you work and what you handle.")}</p>
           <div class="grid sm:grid-cols-3 gap-2 mt-4 text-center">
@@ -6813,7 +6813,7 @@ function renderBrokerSettingsLivePreview(broker = {}, listings = [], stats = {})
     <div class="mt-3 flex items-start gap-3">
       ${brokerAvatarHtml(liveBroker, "w-20 h-20 border-4")}
       <div>
-        <h3 class="text-xl font-black text-gray-900">${adminEscape(liveBroker.name || "MakaUg broker")}</h3>
+        <h3 class="text-xl font-black text-gray-900">${adminEscape(liveBroker.name || "makaug broker")}</h3>
         <p class="text-sm text-gray-600">${adminEscape(liveBroker.company || "Independent broker")}</p>
         <p class="text-sm text-gray-700 mt-2">${adminEscape(liveBroker.bio || "Add a broker bio to build trust.")}</p>
       </div>
@@ -6846,7 +6846,7 @@ function renderBrokerQuickstartPanel() {
     <div class="grid gap-2 mt-4">
       <button onclick="startBrokerOnlineListing()" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
         <div class="font-black text-green-950">1. Add properties online</div>
-        <div class="text-xs text-green-800">Your broker account skips repeated OTP and ID checks. MakaUg still reviews before public listing.</div>
+        <div class="text-xs text-green-800">Your broker account skips repeated OTP and ID checks. makaug still reviews before public listing.</div>
       </button>
       <button onclick="document.getElementById('broker-leads-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })" class="text-left rounded-xl bg-white border border-green-100 p-3 hover:border-green-400">
         <div class="font-black text-green-950">2. Work the lead queue</div>
@@ -6914,20 +6914,20 @@ function renderBrokerQuickListPanel(broker = {}) {
       <div>
         <div class="text-xs font-black uppercase tracking-wide text-green-700">Fast-track upload</div>
         <h2 class="text-xl font-black text-green-950 mt-1">List faster as a broker</h2>
-        <p class="text-sm text-green-900 mt-1">Your email, WhatsApp, broker ID, and National ID verification are already linked. Upload the property online and MakaUg reviews it before publication.</p>
+        <p class="text-sm text-green-900 mt-1">Your email, WhatsApp, broker ID, and National ID verification are already linked. Upload the property online and makaug reviews it before publication.</p>
       </div>
       <span class="rounded-full bg-white border border-green-100 px-3 py-1 text-xs font-black text-green-800">Broker only</span>
     </div>
     <div class="grid gap-2 mt-4 text-sm">
       <div class="rounded-xl bg-white border border-green-100 p-3"><strong>1.</strong> Property name, price, location, and type.</div>
       <div class="rounded-xl bg-white border border-green-100 p-3"><strong>2.</strong> Photos, features, and contact preference.</div>
-      <div class="rounded-xl bg-white border border-green-100 p-3"><strong>3.</strong> Submit to MakaUg review. No repeated OTP or ID upload.</div>
+      <div class="rounded-xl bg-white border border-green-100 p-3"><strong>3.</strong> Submit to makaug review. No repeated OTP or ID upload.</div>
     </div>
     <div class="grid sm:grid-cols-2 gap-2 mt-4">
       <button onclick="startBrokerOnlineListing()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 font-black">Upload property</button>
       <button onclick="shareBrokerCard('whatsapp')" class="bg-white border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 font-black">Share broker card</button>
     </div>
-    <p class="text-xs text-green-800 mt-3">Signed in as ${adminEscape(broker.email || brokerDisplayPhone(broker) || "broker account")}. If you use WhatsApp with the same phone or email, MakaUg links it to this broker profile.</p>`;
+    <p class="text-xs text-green-800 mt-3">Signed in as ${adminEscape(broker.email || brokerDisplayPhone(broker) || "broker account")}. If you use WhatsApp with the same phone or email, makaug links it to this broker profile.</p>`;
 }
 
 function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
@@ -6950,7 +6950,7 @@ function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
         <h2 class="text-xl font-black text-gray-900 mt-1">Enquiries, WhatsApp, and callback follow-up</h2>
         <p class="text-sm text-gray-600 mt-1">Website enquiries are counted from the backend by listing. WhatsApp AI and missed-call escalations feed the lead-generation workflow and owner notifications.</p>
       </div>
-      <a href="mailto:info@makaug.com?subject=Broker%20lead%20support" class="border border-blue-200 text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Email MakaUg</a>
+      <a href="mailto:info@makaug.com?subject=Broker%20lead%20support" class="border border-blue-200 text-blue-800 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Email makaug</a>
     </div>
     <div class="grid md:grid-cols-3 gap-3 mt-4">
       <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
@@ -6979,7 +6979,7 @@ function renderBrokerLeadPanel(broker = {}, listings = [], stats = {}) {
         <tbody>
           ${leadRows.length ? leadRows.map(({ listing, leads, views }) => `
             <tr class="border-b last:border-b-0">
-              <td class="py-3 pr-3 font-bold text-gray-900">${adminEscape(listing.title || "MakaUg listing")}<div class="text-xs font-normal text-gray-500">${adminEscape([listing.area, listing.district].filter(Boolean).join(", ") || "Location pending")}</div></td>
+              <td class="py-3 pr-3 font-bold text-gray-900">${adminEscape(listing.title || "makaug listing")}<div class="text-xs font-normal text-gray-500">${adminEscape([listing.area, listing.district].filter(Boolean).join(", ") || "Location pending")}</div></td>
               <td class="py-3 pr-3">${brokerMetric(leads)}</td>
               <td class="py-3 pr-3">${brokerMetric(views)}</td>
               <td class="py-3 pr-3"><button onclick="openPropertyCardDetail(event, ${propertyIdArg(listing.id)})" class="border border-green-200 text-green-700 rounded-lg px-3 py-1.5 text-xs font-bold hover:bg-green-50">Open listing</button></td>
@@ -6996,7 +6996,7 @@ function renderBrokerWhatsAppCard(broker = {}, stats = {}) {
   panel.innerHTML = `
     <div class="text-xs font-black uppercase tracking-wide text-green-700">WhatsApp agent card</div>
     <h2 class="text-xl font-black text-gray-900 mt-1">Ready-to-send broker card</h2>
-    <p class="text-sm text-gray-600 mt-1">Use this for WhatsApp, Facebook, LinkedIn, and direct referrals. It keeps your MakaUg profile, phone, areas, and live listing count together.</p>
+    <p class="text-sm text-gray-600 mt-1">Use this for WhatsApp, Facebook, LinkedIn, and direct referrals. It keeps your makaug profile, phone, areas, and live listing count together.</p>
     <div id="broker-dashboard-whatsapp-share-card" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm whitespace-pre-line text-green-950">${adminEscape(shareText)}</div>
     <div class="grid sm:grid-cols-2 gap-2 mt-4">
       <button onclick="shareBrokerCard('whatsapp')" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-2 font-bold">Send on WhatsApp</button>
@@ -7018,7 +7018,7 @@ function renderBrokerBoostPanel(listingId = "") {
       <div>
         <div class="text-xs font-black uppercase tracking-wide text-amber-700">Advertising desk</div>
         <h2 class="text-xl font-black text-gray-900 mt-1">Boost a broker listing</h2>
-        <p class="text-sm text-gray-600 mt-1">Plan sponsored placement, preview where the ad sits, and prepare payments. Campaigns go live after payment and MakaUg approval.</p>
+        <p class="text-sm text-gray-600 mt-1">Plan sponsored placement, preview where the ad sits, and prepare payments. Campaigns go live after payment and makaug approval.</p>
       </div>
       <button onclick="handleAdvertisePropertyCta(event)" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Open public ad options</button>
     </div>
@@ -7026,7 +7026,7 @@ function renderBrokerBoostPanel(listingId = "") {
       <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
         <label class="block text-xs font-black text-gray-600 mb-2">Property to boost</label>
         <select id="broker-boost-listing-select" onchange="openBrokerBoostPlanner(this.value)" class="w-full min-h-[46px] rounded-xl border border-gray-200 px-3">
-          ${listings.length ? listings.map((item) => `<option value="${adminAttr(item.id)}" ${selected && String(item.id) === String(selected.id) ? "selected" : ""}>${adminEscape(item.title || "MakaUg listing")} - ${adminEscape(brokerListingStatusMeta(item.status).label)}</option>`).join("") : `<option>No listings yet</option>`}
+          ${listings.length ? listings.map((item) => `<option value="${adminAttr(item.id)}" ${selected && String(item.id) === String(selected.id) ? "selected" : ""}>${adminEscape(item.title || "makaug listing")} - ${adminEscape(brokerListingStatusMeta(item.status).label)}</option>`).join("") : `<option>No listings yet</option>`}
         </select>
         <div class="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div class="rounded-xl bg-white border border-gray-100 p-3"><strong>${selected ? brokerMetric(views) : "0"}</strong><br><span class="text-xs text-gray-500">Views</span></div>
@@ -7054,7 +7054,7 @@ function renderBrokerBoostPanel(listingId = "") {
           <div class="mt-2 flex items-center gap-3">
             <div class="w-24 h-20 rounded-xl bg-gray-100 overflow-hidden">${selected ? `<img src="${adminAttr(selected.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=500&q=80")}" alt="${adminAttr(selected.title || "Listing")}" class="w-full h-full object-cover">` : ""}</div>
             <div>
-              <div class="text-[11px] font-black text-amber-700 uppercase">Sponsored MakaUg broker listing</div>
+              <div class="text-[11px] font-black text-amber-700 uppercase">Sponsored makaug broker listing</div>
               <h3 class="font-black text-gray-900">${adminEscape(selected?.title || "Choose a listing")}</h3>
               <p class="text-sm text-gray-600">${adminEscape(selected ? [selected.area, selected.district].filter(Boolean).join(", ") : "Approved listing required")}</p>
             </div>
@@ -7062,7 +7062,7 @@ function renderBrokerBoostPanel(listingId = "") {
         </div>
         <div class="flex gap-2 flex-wrap mt-4">
           <button onclick="toast('Payment checkout will connect here after the advertising payment provider is enabled.')" class="bg-amber-600 hover:bg-amber-500 text-white rounded-xl px-4 py-2 text-sm font-black">Prepare campaign</button>
-          <a href="mailto:info@makaug.com?subject=Broker%20boost%20campaign" class="border border-amber-300 text-amber-800 hover:bg-white rounded-xl px-4 py-2 text-sm font-black">Ask MakaUg ads team</a>
+          <a href="mailto:info@makaug.com?subject=Broker%20boost%20campaign" class="border border-amber-300 text-amber-800 hover:bg-white rounded-xl px-4 py-2 text-sm font-black">Ask makaug ads team</a>
         </div>
       </div>
     </div>`;
@@ -7074,7 +7074,7 @@ function renderBrokerResourceGrid() {
   const resources = [
     { title: "How to list properties online", text: "Step-by-step video guide for fast-track broker uploads.", action: "openHowToVideo('broker-dashboard')" },
     { title: "Photos and location quality", text: "Checklist for clean images, correct district, and fraud-safe details.", action: "openHowToVideo('property-location')" },
-    { title: "Broker terms and privacy", text: "How MakaUg protects ID data, broker profiles, and property seeker information.", action: "showPage('privacy-policy')" },
+    { title: "Broker terms and privacy", text: "How makaug protects ID data, broker profiles, and property seeker information.", action: "showPage('privacy-policy')" },
     { title: "Support and PDF guides", text: "Request broker guides, training files, or onboarding help.", action: "window.open('mailto:info@makaug.com?subject=Broker%20training%20guides', '_self')" }
   ];
   grid.innerHTML = resources.map((item) => `
@@ -7095,10 +7095,10 @@ async function shareBrokerListing(id) {
     toast("Listing not found.");
     return;
   }
-  const text = `${listing.title || "MakaUg property"}\n${[listing.area, listing.district].filter(Boolean).join(", ")}\n${fmtP(listing.price || 0, listing.period || listing.price_period || "")}\n${getPropertyShareUrl(listing)}`;
+  const text = `${listing.title || "makaug property"}\n${[listing.area, listing.district].filter(Boolean).join(", ")}\n${fmtP(listing.price || 0, listing.period || listing.price_period || "")}\n${getPropertyShareUrl(listing)}`;
   try {
     if (navigator.share) {
-      await navigator.share({ title: listing.title || "MakaUg property", text, url: getPropertyShareUrl(listing) });
+      await navigator.share({ title: listing.title || "makaug property", text, url: getPropertyShareUrl(listing) });
       return;
     }
     const copied = await copyTextToClipboard(text);
@@ -7111,13 +7111,13 @@ async function shareBrokerListing(id) {
 function editBrokerListing(id) {
   const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
   startBrokerOnlineListing();
-  toast(listing ? `Opening broker upload for edits to ${listing.title || "this listing"}. MakaUg review still applies.` : "Opening broker upload. MakaUg review still applies.");
+  toast(listing ? `Opening broker upload for edits to ${listing.title || "this listing"}. makaug review still applies.` : "Opening broker upload. makaug review still applies.");
 }
 
 function requestBrokerListingRemoval(id) {
   const listing = (brokerDashboardCache?.listings || []).find((item) => String(item.id) === String(id));
   const title = listing?.title || "this listing";
-  toast(`Removal request noted for ${title}. MakaUg admin approval is required before public changes.`);
+  toast(`Removal request noted for ${title}. makaug admin approval is required before public changes.`);
 }
 
 function polishBrokerBioDraft() {
@@ -7125,7 +7125,7 @@ function polishBrokerBioDraft() {
   const company = (document.getElementById("broker-settings-company")?.value || "independent broker").trim();
   const areas = (document.getElementById("broker-settings-areas")?.value || "Uganda").trim();
   const specs = (document.getElementById("broker-settings-specializations")?.value || "rentals, sales, and verified property support").trim();
-  const draft = `${name} is a ${company} on makaug.com, helping property seekers across ${areas}. I specialise in ${specs}, respond quickly on WhatsApp, and keep listings clear, current, and ready for MakaUg review.`;
+  const draft = `${name} is a ${company} on makaug.com, helping property seekers across ${areas}. I specialise in ${specs}, respond quickly on WhatsApp, and keep listings clear, current, and ready for makaug review.`;
   const bio = document.getElementById("broker-settings-bio");
   if (bio) bio.value = draft;
   renderBrokerSettingsLivePreview(brokerDashboardCache?.broker || {}, brokerDashboardCache?.listings || [], brokerDashboardCache?.payload?.stats || {});
@@ -7193,7 +7193,7 @@ async function saveBrokerProfileSettings() {
     brokerDashboardCache = { ...(brokerDashboardCache || {}), broker: updated };
     if (statusEl) {
       statusEl.className = "rounded-xl border border-green-100 bg-green-50 px-3 py-2 text-sm text-green-900";
-      statusEl.textContent = "Broker profile saved. Public card updates after MakaUg review rules are applied.";
+      statusEl.textContent = "Broker profile saved. Public card updates after makaug review rules are applied.";
     }
     await renderAgentDashboard();
   } catch (error) {
@@ -7296,9 +7296,9 @@ async function renderAgentDashboard() {
   const activeCount = Number(stats.active_listings ?? myListings.filter((item) => item.status === "approved").length);
   const leadCount = Number(stats.lead_enquiries ?? myListings.reduce((sum, p) => sum + brokerListingLeadCount(p), 0));
 
-  if (nameEl) nameEl.textContent = broker.name || "MakaUg broker";
+  if (nameEl) nameEl.textContent = broker.name || "makaug broker";
   if (statusEl) {
-    const regLabel = broker.status === "approved" ? "Approved" : "Under MakaUg review";
+    const regLabel = broker.status === "approved" ? "Approved" : "Under makaug review";
     statusEl.textContent = `${regLabel} broker • ${broker.company || "Independent broker"}`;
   }
   if (summaryEl) summaryEl.textContent = broker.bio || "Add your broker bio, areas covered, specialisations, and profile photo so clients understand who they are contacting.";
@@ -7331,7 +7331,7 @@ async function renderAgentDashboard() {
 
   if (gridEl) {
     if (!myListings.length) {
-      gridEl.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No broker listings yet. Use “List Property” to submit online. Broker listings go to MakaUg review first and only go live after approval.</div>`;
+      gridEl.innerHTML = `<div class="col-span-full text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No broker listings yet. Use “List Property” to submit online. Broker listings go to makaug review first and only go live after approval.</div>`;
     } else {
       gridEl.innerHTML = myListings.map(renderBrokerDashboardListingCard).join("");
     }
@@ -7731,7 +7731,7 @@ async function hydrateAdvertiserDashboardPlacements() {
     const res = await apiRequest("/api/advertising/placements");
     const rows = Array.isArray(res?.data) ? res.data : [];
     if (!rows.length) {
-      wrap.innerHTML = `<div class="sm:col-span-2 text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live placement catalogue is available yet. MakaUg will confirm package availability after inquiry.</div>`;
+      wrap.innerHTML = `<div class="sm:col-span-2 text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live placement catalogue is available yet. makaug will confirm package availability after inquiry.</div>`;
       return;
     }
     wrap.innerHTML = rows.slice(0, 8).map((slot) => `
@@ -7762,7 +7762,7 @@ async function renderAdvertiserDashboard() {
   body.classList.remove("hidden");
   const user = authState.user || {};
   setTextById("advertiser-dashboard-name", `${user.first_name || "Advertiser"} ${user.last_name || ""}`.trim() || "Advertiser Account");
-  setTextById("advertiser-dashboard-status", "Campaign requests are reviewed by MakaUg before payment links, invoices, and live placement approval.");
+  setTextById("advertiser-dashboard-status", "Campaign requests are reviewed by makaug before payment links, invoices, and live placement approval.");
   try {
     const res = await apiRequest("/api/advertising/dashboard");
     const data = res?.data || {};
@@ -7811,7 +7811,7 @@ async function submitAdvertiserDashboardCampaign(event) {
     source: "advertiser_dashboard"
   };
   if (!payload.email && !payload.phone) {
-    toast("Add an email or WhatsApp number so MakaUg can reply.");
+    toast("Add an email or WhatsApp number so makaug can reply.");
     return;
   }
   try {
@@ -7824,7 +7824,7 @@ async function submitAdvertiserDashboardCampaign(event) {
       method: "POST",
       body: {
         ...payload,
-        campaign_name: `${payload.business_name || payload.full_name || "Advertiser"} MakaUg campaign`,
+        campaign_name: `${payload.business_name || payload.full_name || "Advertiser"} makaug campaign`,
         package_key: goal,
         creative_brief: payload.message
       }
@@ -7841,14 +7841,14 @@ async function submitAdvertiserDashboardCampaign(event) {
           ? "<br>Payment: provider not configured yet, manual invoice logged for admin."
           : `<br>Payment link: <a class="underline font-bold" href="${adminAttr(payment?.data?.paymentLink?.checkout_url || "#")}" target="_blank" rel="noopener noreferrer">Open payment</a>`;
         const payments = document.getElementById("advertiser-dashboard-payments");
-        if (payments) payments.innerHTML = payment?.data?.providerMissing ? "Manual invoice logged. MakaUg will confirm payment instructions." : "Payment link generated.";
+        if (payments) payments.innerHTML = payment?.data?.providerMissing ? "Manual invoice logged. makaug will confirm payment instructions." : "Payment link generated.";
       }
     } catch (paymentError) {
-      paymentState = "<br>Payment: request logged; MakaUg will confirm payment details.";
+      paymentState = "<br>Payment: request logged; makaug will confirm payment details.";
     }
     if (status) {
       status.classList.remove("hidden");
-      status.innerHTML = `Campaign request received.<br>Reference: <strong>${adminEscape(result?.data?.campaign?.id || result?.data?.inquiry?.id || "pending")}</strong>${paymentState}<br>MakaUg will review the creative before any placement goes live.`;
+      status.innerHTML = `Campaign request received.<br>Reference: <strong>${adminEscape(result?.data?.campaign?.id || result?.data?.inquiry?.id || "pending")}</strong>${paymentState}<br>makaug will review the creative before any placement goes live.`;
     }
     setTextById("advertiser-stat-campaigns", "1");
     setTextById("advertiser-stat-payment", "Pending review");
@@ -8298,7 +8298,7 @@ async function runManagingDirectorAgent() {
     if (target) target.innerHTML = "Sign in as admin or save ADMIN_API_KEY first.";
     return;
   }
-  if (target) target.innerHTML = "Running the MakaUg Managing Director now...";
+  if (target) target.innerHTML = "Running the makaug Managing Director now...";
   try {
     const response = await apiRequest("/api/admin/ai-agents/run", {
       method: "POST",
@@ -9001,10 +9001,10 @@ function adminFollowUpText(p) {
 function buildAdminFollowUpWhatsAppMessage(p = {}) {
   const name = p.lister_name || "there";
   const ref = p.inquiry_reference || p.id || "-";
-  const title = p.title || "your MakaUg property listing";
+  const title = p.title || "your makaug property listing";
   const liveAt = adminLiveAtText(p);
   return [
-    `Hello ${name}, this is MakaUg.`,
+    `Hello ${name}, this is makaug.`,
     `Your listing is live: ${title}`,
     `Reference: ${ref}`,
     `Live since: ${liveAt}`,
@@ -9737,7 +9737,7 @@ function renderAdminQualitySignals(review) {
       <div class="border border-gray-200 rounded-xl p-3">
         <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Possible Duplicates</div>
         <div class="text-2xl font-black ${duplicateRows.length ? "text-amber-600" : "text-gray-900"} mt-1">${signals.likely_duplicate_count || 0}</div>
-        <div class="mt-2 space-y-2 max-h-40 overflow-auto">${duplicateRows.length ? duplicateRows.map(rowHtml).join("") : `<div class="text-xs text-gray-500">No likely MakaUg duplicates found.</div>`}</div>
+        <div class="mt-2 space-y-2 max-h-40 overflow-auto">${duplicateRows.length ? duplicateRows.map(rowHtml).join("") : `<div class="text-xs text-gray-500">No likely makaug duplicates found.</div>`}</div>
       </div>
       <div class="border border-gray-200 rounded-xl p-3">
         <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Reused Images</div>
@@ -9999,25 +9999,25 @@ function buildWhatsAppUrl(phone, message) {
 
 const MAKAUG_SUPPORT_WHATSAPP = "256760112587";
 const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
-  home: "Hi MakaUg, I'm on makaug.com and need property help. Please guide me with the best next step.",
-  sale: "Hi MakaUg, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
-  rent: "Hi MakaUg, I'm on the To Rent page and I'm looking for a rental. Please help me with area, budget, bedrooms, availability, and viewing options.",
-  students: "Hi MakaUg, I'm looking for student accommodation. Please help me find safe rooms near campus, with price, distance, rules, and availability.",
-  commercial: "Hi MakaUg, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
-  land: "Hi MakaUg, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps.",
-  brokers: "Hi MakaUg, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
-  mortgage: "Hi MakaUg, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
-  "ai-chatbot": "Hi MakaUg, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
-  about: "Hi MakaUg, I'm learning about makaug.com and would like property help. Please guide me on the best next step.",
-  advertise: "Hi MakaUg, I want to advertise or boost a property or brand campaign on makaug.com. Please share the options and next steps.",
-  "how-it-works": "Hi MakaUg, I'm reading how makaug.com works. Please guide me through the right property journey.",
-  careers: "Hi MakaUg, I'm interested in careers or field operations. Please tell me the next step.",
-  help: "Hi MakaUg, I need help on makaug.com. Please connect me to support and guide me through the next step.",
-  safety: "Hi MakaUg, I need safety guidance before I continue with a property conversation. Please help me check the next step safely.",
-  fraud: "Hi MakaUg, I want to report or check a suspicious property issue. Please help me review it safely.",
-  "list-property": "Hi MakaUg, I want to list a property on makaug.com. Please help me choose the right listing path and prepare the details and photos.",
-  "broker-profile": "Hi MakaUg, I'm viewing a broker profile on makaug.com. Please help me confirm the best way to contact this broker safely.",
-  detail: "Hi MakaUg, I'm viewing a property on makaug.com. Please help me confirm availability and the next safe step."
+  home: "Hi makaug, I'm on makaug.com and need property help. Please guide me with the best next step.",
+  sale: "Hi makaug, I'm on the For Sale page and I'm looking for a home or investment property. Please help me find suitable options, confirm availability, and connect me with a trusted owner or broker.",
+  rent: "Hi makaug, I'm on the To Rent page and I'm looking for a rental. Please help me with area, budget, bedrooms, availability, and viewing options.",
+  students: "Hi makaug, I'm looking for student accommodation. Please help me find safe rooms near campus, with price, distance, rules, and availability.",
+  commercial: "Hi makaug, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
+  land: "Hi makaug, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps.",
+  brokers: "Hi makaug, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
+  mortgage: "Hi makaug, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
+  "ai-chatbot": "Hi makaug, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
+  about: "Hi makaug, I'm learning about makaug.com and would like property help. Please guide me on the best next step.",
+  advertise: "Hi makaug, I want to advertise or boost a property or brand campaign on makaug.com. Please share the options and next steps.",
+  "how-it-works": "Hi makaug, I'm reading how makaug.com works. Please guide me through the right property journey.",
+  careers: "Hi makaug, I'm interested in careers or field operations. Please tell me the next step.",
+  help: "Hi makaug, I need help on makaug.com. Please connect me to support and guide me through the next step.",
+  safety: "Hi makaug, I need safety guidance before I continue with a property conversation. Please help me check the next step safely.",
+  fraud: "Hi makaug, I want to report or check a suspicious property issue. Please help me review it safely.",
+  "list-property": "Hi makaug, I want to list a property on makaug.com. Please help me choose the right listing path and prepare the details and photos.",
+  "broker-profile": "Hi makaug, I'm viewing a broker profile on makaug.com. Please help me confirm the best way to contact this broker safely.",
+  detail: "Hi makaug, I'm viewing a property on makaug.com. Please help me confirm availability and the next safe step."
 });
 
 function inferWhatsappContextFromText(text = "") {
@@ -10061,7 +10061,7 @@ function buildDetailSupportWhatsappMessage() {
   const ref = getListingWhatsappRef(p);
   const url = getPropertyShareUrl(p);
   return [
-    `Hi MakaUg, I'm viewing this listing on makaug.com: ${title} in ${location}.`,
+    `Hi makaug, I'm viewing this listing on makaug.com: ${title} in ${location}.`,
     "Please help me confirm availability and the next safe step.",
     ref ? `Ref: ${ref}` : "",
     url
@@ -10076,7 +10076,7 @@ function buildBrokerProfileSupportWhatsappMessage() {
   const company = cleanWhatsappValue(broker.company);
   const area = cleanWhatsappValue(broker.area);
   return [
-    `Hi MakaUg, I'm viewing the broker profile for ${name}${company ? ` at ${company}` : ""}.`,
+    `Hi makaug, I'm viewing the broker profile for ${name}${company ? ` at ${company}` : ""}.`,
     area ? `They appear to cover ${area}.` : "",
     "Please help me confirm the best way to contact them safely.",
     getBrokerShareUrl(broker)
@@ -10431,7 +10431,7 @@ function openAdminRejectedListingWhatsApp(listingId) {
 
 function buildAdminWeeklyTipsMessage(user) {
   const firstName = user?.first_name || "there";
-  return `Hi ${firstName}, this is MakaUg. Thanks for creating your account. We are sharing weekly Uganda property tips, saved-listing updates, and safety reminders to help you buy, rent, or list with confidence.`;
+  return `Hi ${firstName}, this is makaug. Thanks for creating your account. We are sharing weekly Uganda property tips, saved-listing updates, and safety reminders to help you buy, rent, or list with confidence.`;
 }
 
 function openAdminUserTipsWhatsApp(userId) {
@@ -10737,7 +10737,7 @@ function renderAdminAdvertisingCampaigns(campaigns) {
           <div class="mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
             ${campaign.creative_preview_url ? `<img src="${adminAttr(campaign.creative_preview_url)}" alt="${adminAttr(campaign.campaign_name || "Campaign creative")}" class="w-full h-24 object-cover rounded-lg border border-white mb-2">` : ""}
             <div class="text-[11px] uppercase tracking-wide text-green-700 font-bold">Creative preview</div>
-            <div class="font-black text-gray-900">${adminEscape(campaign.ai_copy?.headline || campaign.campaign_name || "MakaUg sponsored placement")}</div>
+            <div class="font-black text-gray-900">${adminEscape(campaign.ai_copy?.headline || campaign.campaign_name || "makaug sponsored placement")}</div>
             <div class="text-xs text-gray-600">${adminEscape(campaign.ai_copy?.body || campaign.creative_brief || "")}</div>
           </div>
         ` : ""}
@@ -10785,7 +10785,7 @@ async function adminCreateAdCampaignFromInquiry(inquiryId) {
         inquiry_id: inquiry.id,
         package_key: packageKey,
         advertiser_name: inquiry.business_name || inquiry.full_name,
-        campaign_name: `${inquiry.business_name || inquiry.full_name} - MakaUg ad`,
+        campaign_name: `${inquiry.business_name || inquiry.full_name} - makaug ad`,
         target_locations: inquiry.target_locations || [],
         target_listing_types: inquiry.target_listing_types || []
       }
@@ -10823,8 +10823,8 @@ async function adminCreateAdCampaignFromBuilder() {
         target_pages: selectedPlacements.map((key) => (adminAdvertisingPlacements.find((slot) => slot.key === key)?.page_key || "all")),
         quoted_amount_ugx: quote || undefined,
         creative_headline: headline || campaign,
-        creative_body: body || "Sponsored MakaUg campaign created in the admin control room.",
-        creative_cta: cta || "View on MakaUg",
+        creative_body: body || "Sponsored makaug campaign created in the admin control room.",
+        creative_cta: cta || "View on makaug",
         creative_cta_url: url || "https://makaug.com",
         creative_preview_url: image || "",
         report_cadence: report,
@@ -11166,7 +11166,7 @@ function renderAdminUsersRows(users) {
     const marketing = user.marketing_opt_in !== false;
     const social = user.oauth_provider ? `${user.oauth_provider} linked` : "Password/OTP";
     const language = languageDisplayName(user.preferred_language || "en");
-    const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is MakaUg. We are following up on your account and property journey.`) : "";
+    const whatsappUrl = user.phone ? buildWhatsAppUrl(user.phone, `Hello ${user.first_name || "there"}, this is makaug. We are following up on your account and property journey.`) : "";
     const nextStatus = String(user.status || "active").toLowerCase() === "suspended" ? "active" : "suspended";
     const interestSummary = deriveUserInterestSummary(user);
     return `
@@ -11193,7 +11193,7 @@ function renderAdminUsersRows(users) {
         <div class="mt-3 flex gap-2 flex-wrap">
           <button onclick="openAdminUserTipsWhatsApp(${userIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Tips</button>
 	              ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Contact</a>` : ""}
-	              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+	              ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("makaug weekly property tips")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
 	              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Block Account"}</button>` : ""}
 	              ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, 'deleted')" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Account</button>` : ""}
 	            </div>
@@ -11221,7 +11221,7 @@ function renderAdminBrokerRows(agents) {
           ? { cls: "bg-yellow-100 text-yellow-700", label: "Suspended" }
           : { cls: "bg-amber-100 text-amber-700", label: "Pending" };
     const contact = [agent.phone, agent.email].filter(Boolean).join(" • ") || "-";
-    const whatsappUrl = agent.phone ? buildWhatsAppUrl(agent.phone, `Hello ${agent.name || "there"}, this is MakaUg. We are following up on your broker account.`) : "";
+    const whatsappUrl = agent.phone ? buildWhatsAppUrl(agent.phone, `Hello ${agent.name || "there"}, this is makaug. We are following up on your broker account.`) : "";
     const idDocumentUploaded = Boolean(agent.identity_document_url);
     const hasPrivacyConsent = agent.privacy_consent_accepted === true && agent.data_retention_notice_accepted === true;
     const approveLabel = status === "approved" ? "Move to Pending" : "Approve & send access";
@@ -11230,7 +11230,7 @@ function renderAdminBrokerRows(agents) {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div class="font-bold text-gray-900">${adminEscape(agent.name || "Broker")}</div>
-            <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "MakaUg")} • ${adminEscape(contact)}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "makaug")} • ${adminEscape(contact)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.area || "Uganda")} • ${adminEscape(agent.licence || "No licence recorded")}</div>
             <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}${agent.user_id ? ` • User linked: ${adminEscape(agent.user_id)}` : ""}</div>
           </div>
@@ -11250,7 +11250,7 @@ function renderAdminBrokerRows(agents) {
           <button onclick="openBrokerProfile(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Profile</button>
           ${idDocumentUploaded ? `<a href="${adminAttr(agent.identity_document_url)}" target="_blank" rel="noopener noreferrer" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review ID</a>` : ""}
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Broker</a>` : ""}
-          ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("MakaUg broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+          ${agent.email ? `<a href="mailto:${adminAttr(agent.email)}?subject=${encodeURIComponent("makaug broker follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetAgentStatus(${idArg}, '${status === "approved" ? "pending" : "approved"}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${approveLabel}</button>` : ""}
         </div>
       </div>`;
@@ -11285,7 +11285,7 @@ function renderAdminFeaturedAgentsRows(agents) {
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
             <div class="font-bold text-gray-900">${adminEscape(agent.name || "Agent")}</div>
-            <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "MakaUg")} • ${adminEscape(agent.area || "Uganda")}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "makaug")} • ${adminEscape(agent.area || "Uganda")}</div>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
               <span class="inline-flex items-center px-2 py-1 rounded-full ${registration.cls} font-semibold">${registration.label}</span>
               <span class="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-semibold">⭐ ${adminEscape(agent.rating || 0)}</span>
@@ -11314,7 +11314,7 @@ function renderAdminPropertyRequestRows(requests) {
   }
   wrap.innerHTML = rows.map((request) => {
     const digits = String(request.phone || "").replace(/\D/g, "");
-    const whatsappUrl = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hello ${request.full_name || ""}, this is MakaUg. We received your request and can help you find a property that matches your brief.`)}` : "";
+    const whatsappUrl = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hello ${request.full_name || ""}, this is makaug. We received your request and can help you find a property that matches your brief.`)}` : "";
     const budget = request.max_budget ? fmtP(request.max_budget, "") : "Budget not set";
     const heading = [request.listing_type || "Any type", request.preferred_locations || "Any location"].filter(Boolean).join(" • ");
     return `
@@ -11330,7 +11330,7 @@ function renderAdminPropertyRequestRows(requests) {
         <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">${adminEscape(request.requirements || "No extra requirements recorded.")}</div>
         <div class="mt-3 flex flex-wrap gap-2">
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp</a>` : ""}
-          ${request.email ? `<a href="mailto:${adminAttr(request.email)}?subject=${encodeURIComponent("MakaUg property request follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+          ${request.email ? `<a href="mailto:${adminAttr(request.email)}?subject=${encodeURIComponent("makaug property request follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -12349,7 +12349,7 @@ function renderAdminFieldAgentRows(users) {
           <button type="button" onclick="adminFieldAgentDetailPanel(${userIdArg}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">View rejected (${adminEscape(rejectedCount)})</button>
           <button type="button" onclick="adminOpenFieldAgentPayment(${userIdArg})" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Record Payment</button>
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Contact Agent</a>` : ""}
-          ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("MakaUg field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
+          ${user.email ? `<a href="mailto:${adminAttr(user.email)}?subject=${encodeURIComponent("makaug field team follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminSetUserStatus(${userIdArg}, '${nextStatus}')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">${nextStatus === "active" ? "Restore Access" : "Pause Access"}</button>` : ""}
           ${canUseLiveAdminApi() ? `<button onclick="adminDeleteFieldAgent(${userIdArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Delete Agent</button>` : ""}
         </div>
@@ -12558,7 +12558,7 @@ function renderAdminWhatsappDetail(detail = null) {
                 <div class="flex ${inbound ? "justify-start" : "justify-end"}">
                   <div class="max-w-[92%] rounded-2xl px-4 py-3 border ${inbound ? "bg-gray-50 border-gray-200 text-gray-800" : "bg-green-50 border-green-200 text-gray-900"}">
                     <div class="flex items-center gap-2 text-[11px] text-gray-500 mb-1">
-                      <span>${inbound ? "Customer" : "MakaUg"}</span>
+                      <span>${inbound ? "Customer" : "makaug"}</span>
                       <span>•</span>
                       <span>${adminEscape(adminWhatsappMessageIcon(message.message_type))}</span>
                       <span>${adminEscape(message.message_type || "text")}</span>
@@ -13054,7 +13054,7 @@ function buildAdminGeneratedDecisionReason(review = adminActiveReview) {
     return `${label}: ${message}`;
   });
   const more = checks.length > reasons.length ? ` Plus ${checks.length - reasons.length} more review item${checks.length - reasons.length === 1 ? "" : "s"}.` : "";
-  return `We could not approve this listing yet because ${reasons.join("; ")}.${more} Please correct these items and resubmit, or contact the MakaUg team if you need help.`;
+  return `We could not approve this listing yet because ${reasons.join("; ")}.${more} Please correct these items and resubmit, or contact the makaug team if you need help.`;
 }
 
 function useAdminGeneratedDecisionReason() {
@@ -13072,16 +13072,16 @@ function useAdminGeneratedDecisionReason() {
 function buildAdminRejectionWhatsAppMessage(listing = {}, reason = "") {
   const name = listing.lister_name || "there";
   const ref = listing.inquiry_reference || listing.id || "-";
-  const title = listing.title || "your MakaUg property listing";
+  const title = listing.title || "your makaug property listing";
   const body = String(reason || buildAdminGeneratedDecisionReason(adminActiveReview) || "the listing needs more information before it can go live").trim();
   return [
-    `Hello ${name}, this is MakaUg.`,
+    `Hello ${name}, this is makaug.`,
     `We reviewed your listing: ${title}`,
     `Reference: ${ref}`,
     "",
     `It has not been approved yet because: ${body}`,
     "",
-    "Please update the listing or contact the MakaUg team on WhatsApp if you need help."
+    "Please update the listing or contact the makaug team on WhatsApp if you need help."
   ].join("\n");
 }
 
@@ -13242,7 +13242,7 @@ function renderAdminReviewPanel(review) {
               <div>
                 <div class="text-xs uppercase tracking-wide text-green-800 font-semibold">Owner Verification</div>
                 <div class="mt-1 inline-flex items-center px-2 py-1 rounded ${listerVerification.cls} text-xs font-semibold">${listerVerification.label}</div>
-                <p class="text-xs text-green-900 mt-2">${ownerVerificationRequested ? "Lister requested MakaUg ownership registration review." : "No owner registration request from the lister yet."}</p>
+                <p class="text-xs text-green-900 mt-2">${ownerVerificationRequested ? "Lister requested makaug ownership registration review." : "No owner registration request from the lister yet."}</p>
               </div>
               <div class="flex gap-2 flex-wrap">
                 <button onclick="adminSetPropertyRegistrationStatus(${reviewIdArg}, 'registered')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Verified</button>
@@ -13611,7 +13611,7 @@ async function adminApproveSourcedCandidateOverride(listingId) {
   const sourceLinks = adminSourcedCandidateSourceLinks(review);
   const message = sourceLinks.length
     ? "Approve this sourced candidate under special dispensation? This confirms consent, image rights, and the stored source/photo links have been checked."
-    : "Approve this sourced candidate under special dispensation? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside MakaUg.";
+    : "Approve this sourced candidate under special dispensation? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside makaug.";
   const ok = window.confirm(message);
   if (!ok) return;
   await adminSetListingStatus(listingId, "approved", listingId, {
@@ -16788,7 +16788,7 @@ function brokerListingContactDetails() {
   const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
   return {
     broker,
-    name: broker.name || fullName || "MakaUg broker",
+    name: broker.name || fullName || "makaug broker",
     phone: normalizePhoneInput(user.phone || broker.phone || broker.whatsapp || ""),
     email: String(user.email || broker.email || "").toLowerCase(),
     nin: normalizeNinInput(broker.nin || user.profile_data?.broker_national_id_number || "")
@@ -17346,9 +17346,9 @@ function showListSubmissionSuccess(reference, payload, options = {}) {
   }
   if (modalPillEl) modalPillEl.textContent = translateListingLabel("Submission Received");
   if (modalTitleEl) modalTitleEl.textContent = translateListingLabel("Your property has been submitted");
-  if (modalSubEl) modalSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to MakaUg for review. Our team will check the details and contact you if we need anything else.");
+  if (modalSubEl) modalSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to makaug for review. Our team will check the details and contact you if we need anything else.");
   if (successTitleEl) successTitleEl.textContent = translateListingLabel("Your property has been submitted");
-  if (successSubEl) successSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to MakaUg for review.");
+  if (successSubEl) successSubEl.textContent = translateListingLabel("Thank you. Your property listing has been submitted to makaug for review.");
   if (successRefLabelEl) successRefLabelEl.textContent = translateListingLabel("Reference:");
   if (modalRefLabelEl) modalRefLabelEl.textContent = translateListingLabel("Reference");
   const resolvedReference = reference || payload?.inquiry_reference || generateListingInquiryRef();
@@ -17542,9 +17542,9 @@ async function submitHelpRequest(event) {
     const res = await apiRequest("/api/contact/help-request", { method: "POST", body: payload });
     if (status) {
       status.classList.remove("hidden");
-      status.textContent = `Help request received. Reference: ${res?.data?.id || "logged"}. MakaUg will contact you by ${payload.preferred_contact}.`;
+      status.textContent = `Help request received. Reference: ${res?.data?.id || "logged"}. makaug will contact you by ${payload.preferred_contact}.`;
     }
-    toast("Help request sent to MakaUg.");
+    toast("Help request sent to makaug.");
     form.reset();
   } catch (error) {
     if (status) {
@@ -17592,9 +17592,9 @@ async function submitCareerInterest(event) {
     if (status) {
       status.classList.remove("hidden");
       status.className = "rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800";
-      status.textContent = `Career interest received. Reference: ${res?.data?.id || "logged"}. MakaUg will contact you if there is a fit.`;
+      status.textContent = `Career interest received. Reference: ${res?.data?.id || "logged"}. makaug will contact you if there is a fit.`;
     }
-    toast("Career interest sent to MakaUg.");
+    toast("Career interest sent to makaug.");
     form.reset();
   } catch (error) {
     if (status) {
@@ -17668,7 +17668,7 @@ function toggleLookingWhatsappAlt() {
 	        });
 	        await trackEvent("map_assist_request_submit", { type: listingType, need, preferred_location: locationValue || "", budget: budget || null });
 	        document.querySelectorAll(`[data-map-assist-name="${normalized}"],[data-map-assist-phone="${normalized}"],[data-map-assist-email="${normalized}"],[data-map-assist-location="${normalized}"],[data-map-assist-budget="${normalized}"],[data-map-assist-details="${normalized}"]`).forEach((el) => { el.value = ""; });
-	        toast(translateListingLabel("Request saved. MakaUg will follow up with matching options."));
+	        toast(translateListingLabel("Request saved. makaug will follow up with matching options."));
 	      } catch (error) {
 	        toast(error.message || "Could not submit request.");
   }
@@ -18189,13 +18189,13 @@ function listChoiceMeta(type = getListChoiceType()) {
       gateCopy: "For sale listings use ownership, price, photos, Find address or place, and review checks.",
       onlineCopy: "Open the sale listing form for address, price, photos, ownership, and review.",
       whatsappCopy: "Open WhatsApp AI with sale-listing context for guided capture.",
-      modalSub: "Sale listings use the green MakaUg owner flow."
+      modalSub: "Sale listings use the green makaug owner flow."
     },
     rent: {
       gateTitle: "List a rental property",
       gateCopy: "Rental listings use availability, rent period, amenities, Find address or place, and viewing setup.",
       onlineCopy: "Open the rental form for rent period, availability, amenities, address, and verification.",
-      whatsappCopy: "Open WhatsApp AI with rental context so MakaUg can help capture the right details.",
+      whatsappCopy: "Open WhatsApp AI with rental context so makaug can help capture the right details.",
       modalSub: "Rental listings use the warm amber rent flow."
     },
     student: {
@@ -18456,7 +18456,7 @@ function buildListPropertyWhatsAppMessage() {
   }[selectedType] || "";
   const title = (document.getElementById("lp-title")?.value || document.getElementById("listing-title")?.value || "").trim();
   const location = (document.getElementById("lp-place-search")?.value || document.getElementById("lp-address-search")?.value || document.getElementById("lp-manual-landmark")?.value || "").trim();
-  const parts = [`Hi MakaUg, I would like to list a property${typePhrase ? ` ${typePhrase}` : ""} on makaug.com.`];
+  const parts = [`Hi makaug, I would like to list a property${typePhrase ? ` ${typePhrase}` : ""} on makaug.com.`];
   if (title) parts.push(`The property is called ${title}.`);
   if (location) parts.push(`It is in ${location}.`);
   parts.push("Please guide me through the WhatsApp listing process.");
@@ -19928,7 +19928,7 @@ function ensureAccountAccessDrawer() {
             <div id="account-access-create-broker-id-step" data-auth-create-step="broker_id" class="hidden space-y-3">
               <div class="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
                 <div class="font-black text-sm text-amber-950">Broker security check</div>
-                <p class="mt-1">Upload a clear photo of your National ID and enter the ID number/NIN. This protects property seekers and helps MakaUg review broker accounts before listings go live.</p>
+                <p class="mt-1">Upload a clear photo of your National ID and enter the ID number/NIN. This protects property seekers and helps makaug review broker accounts before listings go live.</p>
               </div>
               <div class="grid sm:grid-cols-2 gap-3">
                 <label class="block">
@@ -19943,8 +19943,8 @@ function ensureAccountAccessDrawer() {
               <div id="account-access-broker-id-preview" class="hidden rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-900"></div>
               <div class="rounded-2xl border border-green-100 bg-green-50 p-3 text-xs text-green-950 space-y-1">
                 <p><strong>Your data is protected:</strong> we use this ID check only for broker review, safety, fraud prevention, and legal compliance.</p>
-                <p>You can request access, correction, export, or deletion. If your account is deleted, MakaUg deletes or anonymises broker ID data unless a legal retention duty applies.</p>
-                <p>Your broker listings still require MakaUg admin approval before they appear publicly.</p>
+                <p>You can request access, correction, export, or deletion. If your account is deleted, makaug deletes or anonymises broker ID data unless a legal retention duty applies.</p>
+                <p>Your broker listings still require makaug admin approval before they appear publicly.</p>
               </div>
             </div>
             <div id="account-access-create-password-step" data-auth-create-step="password" class="hidden space-y-3">
@@ -20964,7 +20964,7 @@ function howToVideosForContext(context = "all") {
 }
 
 function renderHowToVideoCard(video) {
-  const title = video.title || "MakaUg how-to video";
+  const title = video.title || "makaug how-to video";
   const thumbnail = video.thumbnailUrl || (video.youtubeVideoId
     ? `https://img.youtube.com/vi/${video.youtubeVideoId}/hqdefault.jpg`
     : "");
@@ -21007,14 +21007,14 @@ async function submitAiChatbotPrompt(event) {
   if (event) event.preventDefault();
   const intent = (document.getElementById("ai-chatbot-intent")?.value || "search_property").trim();
   const message = (document.getElementById("ai-chatbot-message")?.value || "").trim()
-    || `Please help me with ${intent.replace(/_/g, " ")} on MakaUg.`;
+    || `Please help me with ${intent.replace(/_/g, " ")} on makaug.`;
   const responseBox = document.getElementById("ai-chatbot-response");
   const button = document.getElementById("ai-chatbot-submit-btn");
   if (button) {
     button.disabled = true;
     button.textContent = "Asking...";
   }
-  if (responseBox) responseBox.textContent = "Checking MakaUg AI...";
+  if (responseBox) responseBox.textContent = "Checking makaug AI...";
   try {
     const response = await apiRequest("/api/ai/assistant-reply", {
       method: "POST",
@@ -21032,17 +21032,17 @@ async function submitAiChatbotPrompt(event) {
         }
       }
     });
-    const text = response?.data?.reply || response?.data?.message || response?.reply || "MakaUg AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
+    const text = response?.data?.reply || response?.data?.message || response?.reply || "makaug AI is connected. If provider output is unavailable, use WhatsApp or Help Centre for human follow-up.";
     if (responseBox) responseBox.textContent = text;
     trackEvent("ai_chatbot_prompt_submitted", { intent, source_page: currentPage, language: currentLang || "en" });
   } catch (error) {
     const fallback = {
       search_property: "I can help you search by category, area, budget, bedrooms, campus, land/title needs, or commercial use. Try For Sale, To Rent, Land, Student Accommodation, or Commercial.",
       list_property: "You can list online from /list-property or use the WhatsApp listing option on that page.",
-      list_property_whatsapp: "Use the List via WhatsApp button on /list-property so MakaUg receives listing context safely.",
-      report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. MakaUg treats fraud reports as urgent support cases.",
+      list_property_whatsapp: "Use the List via WhatsApp button on /list-property so makaug receives listing context safely.",
+      report_fraud: "Use /report-fraud or /anti-fraud to report suspicious listings. makaug treats fraud reports as urgent support cases.",
       human_handoff: "Human handoff is available through the Help Centre or WhatsApp support."
-    }[intent] || "AI provider output is unavailable right now. MakaUg logged this safely and you can continue by WhatsApp or Help Centre.";
+    }[intent] || "AI provider output is unavailable right now. makaug logged this safely and you can continue by WhatsApp or Help Centre.";
     if (responseBox) responseBox.textContent = fallback;
     trackEvent("ai_chatbot_provider_missing_or_failed", { intent, source_page: currentPage, error: error.message || "request_failed" });
   } finally {
@@ -21060,7 +21060,7 @@ function openHowToVideo(key) {
   const wrap = document.getElementById("howto-video-frame-wrap");
   const cta = document.getElementById("howto-video-cta");
   const youtube = document.getElementById("howto-video-youtube-link");
-  if (title) title.textContent = video.title || "MakaUg how-to video";
+  if (title) title.textContent = video.title || "makaug how-to video";
   if (description) description.textContent = video.description || "";
   if (cta) {
     cta.textContent = video.ctaLabel || "Continue";
@@ -21093,11 +21093,11 @@ const PAGE_CONTENT = {
   "how-it-works": `
     <div class="rounded-3xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-6 mb-6">
       <p class="text-green-200 text-xs font-black uppercase tracking-wide">How It Works</p>
-      <h2 class="text-3xl font-black serif mt-1">How MakaUg Works</h2>
+      <h2 class="text-3xl font-black serif mt-1">How makaug Works</h2>
       <p class="text-green-50 mt-2 max-w-2xl">A visual step-by-step guide for searching, saving, contacting, viewing, listing, dashboard follow-up, and reporting suspicious listings.</p>
     </div>
     <div class="grid md:grid-cols-2 gap-3 mb-6">
-      ${["Search property","Use filters","Save properties/searches","Create alerts","Contact on WhatsApp","Book viewing/request callback","List Property","Review and safety checks","Use dashboard","Report suspicious listings"].map((step, idx) => `<div class="rounded-2xl border border-green-100 bg-white p-4 flex gap-3"><span class="w-9 h-9 shrink-0 rounded-full bg-green-700 text-white grid place-items-center font-black">${idx + 1}</span><div><h3 class="font-black text-gray-900">${step}</h3><p class="text-sm text-gray-600 mt-1">MakaUg keeps the journey clear, logged, and connected to support where needed.</p></div></div>`).join("")}
+      ${["Search property","Use filters","Save properties/searches","Create alerts","Contact on WhatsApp","Book viewing/request callback","List Property","Review and safety checks","Use dashboard","Report suspicious listings"].map((step, idx) => `<div class="rounded-2xl border border-green-100 bg-white p-4 flex gap-3"><span class="w-9 h-9 shrink-0 rounded-full bg-green-700 text-white grid place-items-center font-black">${idx + 1}</span><div><h3 class="font-black text-gray-900">${step}</h3><p class="text-sm text-gray-600 mt-1">makaug keeps the journey clear, logged, and connected to support where needed.</p></div></div>`).join("")}
     </div>
     <div class="rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
   terms: `
@@ -21259,14 +21259,14 @@ const PAGE_CONTENT = {
   help: `
     <div class="rounded-3xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-6 mb-6">
       <p class="text-green-200 text-xs font-black uppercase tracking-wide">Support</p>
-      <h2 class="text-3xl font-black serif mt-1">MakaUg Help Centre</h2>
+      <h2 class="text-3xl font-black serif mt-1">makaug Help Centre</h2>
       <p class="text-green-50 mt-2 max-w-2xl">Find quick help for searching, listing, saving, viewing, safety, accounts, and WhatsApp support.</p>
     </div>
     <div class="grid md:grid-cols-2 gap-3 mb-6">
-      ${["Finding property","Listing property","Student accommodation","Saved searches and alerts","Book viewings and callbacks","Brokers and agents","Land and title safety","Fraud and suspicious listings","Account and login","Advertising with MakaUg"].map((topic) => `<div class="rounded-2xl border border-green-100 bg-white p-4"><h3 class="font-black text-gray-900">${topic}</h3><p class="text-sm text-gray-600 mt-1">Get practical steps, related video guidance, and WhatsApp support.</p><a class="inline-flex mt-3 text-sm font-bold text-green-700" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help%20with%20${encodeURIComponent(topic)}" target="_blank" rel="noopener">WhatsApp support</a></div>`).join("")}
+      ${["Finding property","Listing property","Student accommodation","Saved searches and alerts","Book viewings and callbacks","Brokers and agents","Land and title safety","Fraud and suspicious listings","Account and login","Advertising with makaug"].map((topic) => `<div class="rounded-2xl border border-green-100 bg-white p-4"><h3 class="font-black text-gray-900">${topic}</h3><p class="text-sm text-gray-600 mt-1">Get practical steps, related video guidance, and WhatsApp support.</p><a class="inline-flex mt-3 text-sm font-bold text-green-700" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help%20with%20${encodeURIComponent(topic)}" target="_blank" rel="noopener">WhatsApp support</a></div>`).join("")}
     </div>
     <div class="grid md:grid-cols-3 gap-3 mb-6">
-      <a class="rounded-2xl bg-green-700 text-white p-4 font-black" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help" target="_blank" rel="noopener">Ask MakaUg on WhatsApp</a>
+      <a class="rounded-2xl bg-green-700 text-white p-4 font-black" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help" target="_blank" rel="noopener">Ask makaug on WhatsApp</a>
       <a class="rounded-2xl bg-red-50 text-red-700 p-4 font-black" href="/report-fraud">Report a listing</a>
       <a class="rounded-2xl bg-amber-50 text-amber-900 p-4 font-black" href="/list-property">List Property</a>
     </div>
@@ -21277,10 +21277,10 @@ const PAGE_CONTENT = {
         <input name="email" type="email" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Email">
         <input name="phone" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Phone / WhatsApp">
         <select name="topic" class="border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
-          <option>Finding property</option><option>Listing property</option><option>Student accommodation</option><option>Saved searches and alerts</option><option>Viewings and callbacks</option><option>Fraud or safety</option><option>Account and login</option><option>Advertising with MakaUg</option>
+          <option>Finding property</option><option>Listing property</option><option>Student accommodation</option><option>Saved searches and alerts</option><option>Viewings and callbacks</option><option>Fraud or safety</option><option>Account and login</option><option>Advertising with makaug</option>
         </select>
       </div>
-      <textarea name="message" required rows="4" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="How can MakaUg help?"></textarea>
+      <textarea name="message" required rows="4" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="How can makaug help?"></textarea>
       <select name="preferred_contact" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white"><option>WhatsApp</option><option>Phone call</option><option>Email</option></select>
       <div id="help-request-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
       <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Send help request</button>
@@ -21371,17 +21371,17 @@ const PAGE_CONTENT = {
     </section>`,
   advertise: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
-    <p class="text-xs text-gray-500 mb-4">Grow through MakaUg search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
+    <p class="text-xs text-gray-500 mb-4">Grow through makaug search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
     <div class="grid md:grid-cols-4 gap-3 mb-5">
       <div class="rounded-xl border border-green-100 bg-green-50 p-3 text-sm"><strong>1. Send inquiry</strong><br><span class="text-gray-600">Tell us your audience, area, product, and campaign goal.</span></div>
       <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm"><strong>2. Pay & brief</strong><br><span class="text-gray-600">Send a logo, offer, images, or a property/profile to boost.</span></div>
-      <div class="rounded-xl border border-green-100 bg-white p-3 text-sm"><strong>3. Preview</strong><br><span class="text-gray-600">MakaUg creates the ad and shares a preview for approval.</span></div>
+      <div class="rounded-xl border border-green-100 bg-white p-3 text-sm"><strong>3. Preview</strong><br><span class="text-gray-600">makaug creates the ad and shares a preview for approval.</span></div>
       <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm"><strong>4. Go live</strong><br><span class="text-gray-600">Approved ads go live with daily, weekly, and post-campaign reporting options.</span></div>
     </div>
     <div class="rounded-2xl border border-green-100 bg-white p-4 mb-5">
       <div class="flex items-center justify-between gap-3 mb-3">
         <h3 class="font-black text-gray-800">Ad placement previews</h3>
-        <span class="text-[11px] uppercase tracking-wide bg-green-700 text-white rounded-full px-2 py-1">Creative by MakaUg</span>
+        <span class="text-[11px] uppercase tracking-wide bg-green-700 text-white rounded-full px-2 py-1">Creative by makaug</span>
       </div>
       <div class="grid md:grid-cols-2 gap-3">
         <div class="rounded-xl border border-gray-200 overflow-hidden bg-gray-950 text-white">
@@ -21422,12 +21422,12 @@ const PAGE_CONTENT = {
           <p class="text-xs text-gray-500 mt-2">Paid dashboard access gives real-time graphs, campaign exports, and performance history.</p>
         </div>
       </div>
-      <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. MakaUg prepares the creative, shares the preview, and publishes only after approval.</p>
+      <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. makaug prepares the creative, shares the preview, and publishes only after approval.</p>
     </div>
     <form id="advertising-inquiry-form" onsubmit="submitAdvertisingInquiry(event)" class="space-y-4">
       <div id="advertising-live-rate-card" class="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm">
         <div class="font-bold text-gray-800">Live placement menu</div>
-        <div class="text-xs text-gray-500 mt-1">Loading current MakaUg placement options...</div>
+        <div class="text-xs text-gray-500 mt-1">Loading current makaug placement options...</div>
       </div>
       <div class="grid md:grid-cols-2 gap-3">
         <input name="full_name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Your name" required>
@@ -21476,7 +21476,7 @@ const PAGE_CONTENT = {
       <textarea name="message" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Tell us the offer, audience, logo/creative needs, and any property or agent profile to boost."></textarea>
       <div id="advertising-inquiry-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
       <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Send advertising inquiry</button>
-      <p class="text-xs text-gray-500">MakaUg will review the request, prepare a preview, confirm payment details, then switch the ad live from the admin advertising desk.</p>
+      <p class="text-xs text-gray-500">makaug will review the request, prepare a preview, confirm payment details, then switch the ad live from the admin advertising desk.</p>
     </form>`,
   careers: `
     <div class="rounded-2xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-5 mb-5">
@@ -21524,7 +21524,7 @@ const PAGE_CONTENT = {
         <div id="career-interest-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
         <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold">Send career interest</button>
       </form>
-      <a class="mt-3 block border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
+      <a class="mt-3 block border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-center font-bold" href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20would%20like%20to%20share%20my%20CV%20and%20career%20interest." target="_blank" rel="noopener">Message on WhatsApp</a>
     </div>
     <p class="text-sm mt-4 text-gray-600">
       makaug.com is committed to fair hiring and equal opportunity based on merit, role requirements, and practical impact.
@@ -21581,7 +21581,7 @@ async function hydrateAdvertisePricingPreview() {
     const res = await apiRequest("/api/advertising/placements");
     const rows = Array.isArray(res?.data) ? res.data : [];
     if (!rows.length) {
-      wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Ask MakaUg for current placement availability and pricing.</div>`;
+      wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Ask makaug for current placement availability and pricing.</div>`;
       return;
     }
     wrap.innerHTML = `
@@ -21596,7 +21596,7 @@ async function hydrateAdvertisePricingPreview() {
         `).join("")}
       </div>`;
   } catch (error) {
-    wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Current prices can be confirmed by MakaUg after inquiry.</div>`;
+    wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Current prices can be confirmed by makaug after inquiry.</div>`;
   }
 }
 
@@ -21633,7 +21633,7 @@ async function submitAdvertisingInquiry(event) {
     source: "website_advertise_with_us"
   };
   if (!payload.email && !payload.phone) {
-    toast("Add an email or phone number so MakaUg can reply.");
+    toast("Add an email or phone number so makaug can reply.");
     return;
   }
   try {
@@ -21648,7 +21648,7 @@ async function submitAdvertisingInquiry(event) {
     });
     if (status) {
       status.classList.remove("hidden");
-      status.innerHTML = `Thanks. Your advertising inquiry was received.<br>Reference: <strong>${adminEscape(result?.data?.id || "-")}</strong><br>MakaUg will prepare the package, creative preview, and payment step.`;
+      status.innerHTML = `Thanks. Your advertising inquiry was received.<br>Reference: <strong>${adminEscape(result?.data?.id || "-")}</strong><br>makaug will prepare the package, creative preview, and payment step.`;
     }
     form.reset();
     toast("Advertising inquiry sent.");
@@ -21671,7 +21671,7 @@ function addAdUnits() {
     const adSlot = String(GOOGLE_ADSENSE_SLOTS[page.id] || GOOGLE_ADSENSE_SLOTS.default || "").trim();
     const hasLiveAds = GOOGLE_ADSENSE_CLIENT && adSlot;
     const sponsoredLabel = translateListingLabel("Sponsored");
-    const placementLabel = translateListingLabel("Sponsored MakaUg placement");
+    const placementLabel = translateListingLabel("Sponsored makaug placement");
     const reachLabel = translateListingLabel("Reach active property seekers on");
     const bookSlotLabel = translateListingLabel("Book this slot");
     const wrap = document.createElement("div");
@@ -21800,7 +21800,7 @@ const INHOUSE_AD_SAMPLES = {
   },
   default: {
     image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=900&q=80",
-    label: "MakaUg sponsored placement",
+    label: "makaug sponsored placement",
     headline: "Book this ad slot",
     body: "A live in-house placement ready for campaigns and boosts."
   }
@@ -24691,7 +24691,7 @@ async function loadPublicRouteFragment(nextUrl, page, options = {}) {
   try {
     const response = await fetch(nextUrl, {
       method: "GET",
-      headers: { Accept: "text/html", "X-MakaUg-Route-Fragment": "1" },
+      headers: { Accept: "text/html", "X-makaug-Route-Fragment": "1" },
       credentials: "same-origin"
     });
     if (!response.ok) throw new Error(`Route fetch failed (${response.status})`);
@@ -26346,8 +26346,8 @@ const LISTING_LABEL_I18N = {
     "Location pinned": "Pin y'ekifo etekeddwa",
     "You confirm you have legal authority to list this property, and that your submitted details are accurate and lawful.": "Okakasa nti olina obuyinza obw'amateeka okuteka property eno, era nti amawulire gonna geoweereza gatufu era ga mateeka.",
     "False listings, forged ownership claims, and identity fraud may be reported under Uganda criminal and cybercrime laws.": "Listing ez'obulimba, eby'obwannannyini ebikyamu, n'obubbi bw'endagamuntu bisobola okutegeezebwa ng'amatteeka ga Uganda bwegalagira ku buzzi bw'emisango n'eby'ebyuma.",
-    "You agree that MakaUg can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval.": "Okiriza nti MakaUg esobola okukukwatako ku simu, SMS, WhatsApp, oba email ku kukakasa, okugoberera amateeka, n'okukkiriza listing.",
-    "MakaUg runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities.": "MakaUg ekola okukakasa ku bulimba omuli ID, OTP y'essimu, n'okulaba oba listing etambula bulungi. Obulimba obuteeberezebwa busobola okutwalibwa eri abakulu.",
+    "You agree that makaug can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval.": "Okiriza nti makaug esobola okukukwatako ku simu, SMS, WhatsApp, oba email ku kukakasa, okugoberera amateeka, n'okukkiriza listing.",
+    "makaug runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities.": "makaug ekola okukakasa ku bulimba omuli ID, OTP y'essimu, n'okulaba oba listing etambula bulungi. Obulimba obuteeberezebwa busobola okutwalibwa eri abakulu.",
     "Your listing title will appear here": "Omutwe gwa listing gwo gujja kulabika wano",
     "Area": "Ekitundu",
     "District": "Disitulikiti",
@@ -26604,7 +26604,7 @@ const LISTING_LABEL_I18N = {
     "Describe the property — key features, condition, neighbourhood highlights...": "Nnyonnyola property — ebyayo ebikulu, embeera, n'ebikulu ku kitundu...",
     "📍 Kampala, Uganda": "📍 Kampala, Uganda",
     "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Pulatifoomu ya property ey'olubereberye mu Uganda ey'obwereere ddala. Teka listing, noonyereza, era okwatanagane okuyita ku website oba WhatsApp. Ebikka ku disitulikiti zonna 146.",
-    "© 2026 MakaUg. All rights reserved.": "© 2026 MakaUg. Eddembe lyonna likuumiddwa.",
+    "© 2026 makaug. All rights reserved.": "© 2026 makaug. Eddembe lyonna likuumiddwa.",
     "quality flag(s)": "obubaka bw'omutindo",
     "No quality flags": "Tewali buzibu bwa mutindo",
     "Accepted": "Kikkiriziddwa",
@@ -26633,7 +26633,7 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba y'Okutunuulira:",
     "Status": "Embeera",
     "Support:": "Obuyambi:",
-    "Create your free MakaUg account to:": "Kola account yo eya MakaUg ey'obwereere okusobola:",
+    "Create your free makaug account to:": "Kola account yo eya makaug ey'obwereere okusobola:",
     "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
     "Track listing views, saves, and enquiries in real time.": "Kulondoola abalabye listing, abagiterekedde n'ababuuzizza mu kiseera kyennyini.",
     "Edit your listing faster and update photos any time.": "Okulongoosa listing yo amangu n'okukyusa bifaananyi buli kiseera.",
@@ -26742,8 +26742,8 @@ const LISTING_LABEL_I18N = {
     "Location pinned": "Pin ya eneo imewekwa",
     "You confirm you have legal authority to list this property, and that your submitted details are accurate and lawful.": "Unathibitisha kuwa una mamlaka ya kisheria kuorodhesha mali hii, na kuwa taarifa ulizowasilisha ni sahihi na halali.",
     "False listings, forged ownership claims, and identity fraud may be reported under Uganda criminal and cybercrime laws.": "Orodha za uongo, madai bandia ya umiliki, na udanganyifu wa utambulisho zinaweza kuripotiwa chini ya sheria za jinai na uhalifu wa mtandao za Uganda.",
-    "You agree that MakaUg can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval.": "Unakubali MakaUg ikuwasiliane kwa simu, SMS, WhatsApp, au barua pepe kwa uthibitisho, ufuataji wa kanuni, na idhini ya orodha.",
-    "MakaUg runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities.": "MakaUg hufanya ukaguzi wa kupinga udanganyifu ikiwemo ID, OTP ya simu, na ukaguzi wa ulinganifu wa orodha. Udanganyifu unaoshukiwa unaweza kupelekwa kwa mamlaka.",
+    "You agree that makaug can contact you by phone, SMS, WhatsApp, or email for verification, compliance, and listing approval.": "Unakubali makaug ikuwasiliane kwa simu, SMS, WhatsApp, au barua pepe kwa uthibitisho, ufuataji wa kanuni, na idhini ya orodha.",
+    "makaug runs anti-fraud checks including ID, phone OTP, and listing consistency checks. Suspected fraud may be escalated to authorities.": "makaug hufanya ukaguzi wa kupinga udanganyifu ikiwemo ID, OTP ya simu, na ukaguzi wa ulinganifu wa orodha. Udanganyifu unaoshukiwa unaweza kupelekwa kwa mamlaka.",
     "Your listing title will appear here": "Kichwa cha orodha yako kitaonekana hapa",
     "Area": "Eneo",
     "District": "Wilaya",
@@ -27000,7 +27000,7 @@ const LISTING_LABEL_I18N = {
     "Describe the property — key features, condition, neighbourhood highlights...": "Elezea mali — vipengele muhimu, hali yake, na vivutio vya eneo...",
     "📍 Kampala, Uganda": "📍 Kampala, Uganda",
     "Uganda's first completely free property platform. List, search, and connect via website or WhatsApp. Covering all 146 districts.": "Jukwaa la kwanza kabisa la mali nchini Uganda lisilo na malipo. Tangaza, tafuta, na ungana kupitia tovuti au WhatsApp. Linafikia wilaya zote 146.",
-    "© 2026 MakaUg. All rights reserved.": "© 2026 MakaUg. Haki zote zimehifadhiwa.",
+    "© 2026 makaug. All rights reserved.": "© 2026 makaug. Haki zote zimehifadhiwa.",
     "quality flag(s)": "alama za ubora",
     "No quality flags": "Hakuna alama za ubora",
     "Accepted": "Imekubaliwa",
@@ -27029,7 +27029,7 @@ const LISTING_LABEL_I18N = {
     "Reference:": "Namba ya Rufaa:",
     "Status": "Hali",
     "Support:": "Msaada:",
-    "Create your free MakaUg account to:": "Fungua akaunti yako ya bure ya MakaUg ili:",
+    "Create your free makaug account to:": "Fungua akaunti yako ya bure ya makaug ili:",
     "Summary reset to auto-generated.": "Muhtasari umerudishwa wa kiotomatiki.",
     "Track listing views, saves, and enquiries in real time.": "Kufuatilia miangalo, hifadhi na maulizo ya tangazo lako kwa wakati halisi.",
     "Edit your listing faster and update photos any time.": "Kuhariri tangazo haraka na kusasisha picha muda wowote.",
@@ -27375,7 +27375,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Teeka link ya YouTube walkthrough okulaga preview wano.",
     "Field Agent assisted?": "Field Agent yakuyambye?",
     "Field Agent ID": "ID ya Field Agent",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa MakaUg oba assistant wa broker yakuyambye.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa makaug oba assistant wa broker yakuyambye.",
     "Only fill this if a Field Agent assisted you.": "Jjuza kino singa Field Agent yakuyambye yokka."
     ,"Confirm this location": "Kakasa ekifo kino",
     "Location confirmed": "Ekifo kikakasiddwa"
@@ -27401,7 +27401,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Ongeza kiungo cha YouTube ili kuonyesha muonekano hapa.",
     "Field Agent assisted?": "Umesaidiwa na wakala wa eneo?",
     "Field Agent ID": "Kitambulisho cha wakala wa eneo",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Wakala wa eneo ni mtu aliyekusaidia kujaza fomu hii. Chagua ndiyo tu kama MakaUg au msaidizi wa broker alikusaidia.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Wakala wa eneo ni mtu aliyekusaidia kujaza fomu hii. Chagua ndiyo tu kama makaug au msaidizi wa broker alikusaidia.",
     "Only fill this if a Field Agent assisted you.": "Jaza hii tu kama ulisaidiwa na wakala wa eneo.",
     "Confirm this location": "Thibitisha eneo hili",
     "Location confirmed": "Eneo limethibitishwa"
@@ -27427,7 +27427,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Med link pa YouTube me nyuto video kany.",
     "Field Agent assisted?": "Field Agent okonyi?",
     "Field Agent ID": "ID pa Field Agent",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent obedo dano ma okonyi pongo form man. Yer ee ka MakaUg onyo lakony broker okonyi.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent obedo dano ma okonyi pongo form man. Yer ee ka makaug onyo lakony broker okonyi.",
     "Only fill this if a Field Agent assisted you.": "Pong man ka Field Agent okonyi keken.",
     "Confirm this location": "Mok kabedo man",
     "Location confirmed": "Kimoko kabedo"
@@ -27453,7 +27453,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Taamu link ya YouTube walkthrough kworeka preview aha.",
     "Field Agent assisted?": "Field Agent yaakuyambiire?",
     "Field Agent ID": "ID ya Field Agent",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku MakaUg nari omuyambi wa broker yaakuyambiire.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku makaug nari omuyambi wa broker yaakuyambiire.",
     "Only fill this if a Field Agent assisted you.": "Kijwuzemu ku Field Agent yaakuyambiire.",
     "Confirm this location": "Hamya omwanya ogu",
     "Location confirmed": "Omwanya guhamizibwe"
@@ -27479,7 +27479,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Taamu link ya YouTube walkthrough kworeka preview aha.",
     "Field Agent assisted?": "Field Agent yaakuyambiire?",
     "Field Agent ID": "ID ya Field Agent",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku MakaUg nari omuyambi wa broker yaakuyambiire.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent ni omuntu owaakuyambiire kujwuzamu foomu egi. Toorana eego ku makaug nari omuyambi wa broker yaakuyambiire.",
     "Only fill this if a Field Agent assisted you.": "Kijwuzemu ku Field Agent yaakuyambiire.",
     "Confirm this location": "Hamya ahantu aha",
     "Location confirmed": "Ahantu hahamizibwa"
@@ -27505,7 +27505,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
     "Add a YouTube walkthrough link to show an embedded preview here.": "Teeka link ya YouTube walkthrough okulaga preview wano.",
     "Field Agent assisted?": "Field Agent yakuyambye?",
     "Field Agent ID": "ID ya Field Agent",
-    "A Field Agent is someone who helped you fill this form. Only select yes if MakaUg or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa MakaUg oba assistant wa broker yakuyambye.",
+    "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent ye muntu akuyambye okujjuza ffoomu eno. Londa yee singa makaug oba assistant wa broker yakuyambye.",
     "Only fill this if a Field Agent assisted you.": "Jjuza kino singa Field Agent yakuyambye yokka.",
     "Confirm this location": "Kakasa ekifo kino",
     "Location confirmed": "Ekifo kikakasiddwa"
@@ -27673,14 +27673,14 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Please add your name, phone or email, and what you are looking for.": "Teekamu erinnya lyo, essimu oba email, n'ekyo ky'oyagala.",
       "Please add the WhatsApp number you want us to use.": "Teekamu nnamba ya WhatsApp gy'oyagala tukozese.",
       "Sponsored": "Sponsored",
-      "Sponsored MakaUg placement": "Ekifo kya MakaUg ekyasasuliddwa",
+      "Sponsored makaug placement": "Ekifo kya makaug ekyasasuliddwa",
       "Reach active property seekers on": "Tuuka ku bantu abanoonya property ku",
       "Book this slot": "Bookinga ekifo kino",
       "Can't find what you're looking for?": "Tosobodde kufuna ky'onoonya?",
-      "Tell MakaUg what you need and we will follow up with matching homes or agents.": "Tegeeza MakaUg ky'oyagala, tujja kukuddamu n'amayumba oba agents ebikwatagana.",
+      "Tell makaug what you need and we will follow up with matching homes or agents.": "Tegeeza makaug ky'oyagala, tujja kukuddamu n'amayumba oba agents ebikwatagana.",
       "Need help finding a broker?": "Weetaaga okuyambibwa okufuna broker?",
-      "Tell us the district, property type, and how to reach you. MakaUg will help match you.": "Tubuulire district, ekika kya property, n'engeri gye tukutuukirira. MakaUg ejja kukuyamba okukufuna akukwatagana.",
-      "Ask MakaUg to help": "Saba MakaUg ekuyambe",
+      "Tell us the district, property type, and how to reach you. makaug will help match you.": "Tubuulire district, ekika kya property, n'engeri gye tukutuukirira. makaug ejja kukuyamba okukufuna akukwatagana.",
+      "Ask makaug to help": "Saba makaug ekuyambe",
       "WhatsApp / phone": "WhatsApp / essimu",
       "Location, district or street": "Ekifo, district oba oluguudo",
       "District or area": "District oba area",
@@ -27699,7 +27699,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Help Centre": "Aw'okufuna obuyambi",
       "Safety Tips": "Amagezi g'obukuumi",
       "Careers": "Emirimu",
-      "Email CV to MakaUg": "Weereza CV ku MakaUg",
+      "Email CV to makaug": "Weereza CV ku makaug",
       "Message on WhatsApp": "Wandiika ku WhatsApp"
     },
     sw: {
@@ -27766,14 +27766,14 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Please add your name, phone or email, and what you are looking for.": "Weka jina lako, simu au barua pepe, na unachotafuta.",
       "Please add the WhatsApp number you want us to use.": "Weka namba ya WhatsApp unayotaka tutumie.",
       "Sponsored": "Imedhaminiwa",
-      "Sponsored MakaUg placement": "Nafasi ya MakaUg iliyodhaminiwa",
+      "Sponsored makaug placement": "Nafasi ya makaug iliyodhaminiwa",
       "Reach active property seekers on": "Fikia watafutaji mali kwenye",
       "Book this slot": "Hifadhi nafasi hii",
       "Can't find what you're looking for?": "Hupati unachotafuta?",
-      "Tell MakaUg what you need and we will follow up with matching homes or agents.": "Iambie MakaUg unachohitaji na tutafuatilia kwa nyumba au mawakala wanaofaa.",
+      "Tell makaug what you need and we will follow up with matching homes or agents.": "Iambie makaug unachohitaji na tutafuatilia kwa nyumba au mawakala wanaofaa.",
       "Need help finding a broker?": "Unahitaji msaada kupata broker?",
-      "Tell us the district, property type, and how to reach you. MakaUg will help match you.": "Tuambie wilaya, aina ya mali, na jinsi ya kukufikia. MakaUg itakusaidia kupata anayefaa.",
-      "Ask MakaUg to help": "Omba MakaUg ikusaidie",
+      "Tell us the district, property type, and how to reach you. makaug will help match you.": "Tuambie wilaya, aina ya mali, na jinsi ya kukufikia. makaug itakusaidia kupata anayefaa.",
+      "Ask makaug to help": "Omba makaug ikusaidie",
       "WhatsApp / phone": "WhatsApp / simu",
       "Location, district or street": "Eneo, wilaya au barabara",
       "District or area": "Wilaya au eneo",
@@ -27792,7 +27792,7 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Help Centre": "Kituo cha Msaada",
       "Safety Tips": "Vidokezo vya Usalama",
       "Careers": "Ajira",
-      "Email CV to MakaUg": "Tuma CV kwa MakaUg",
+      "Email CV to makaug": "Tuma CV kwa makaug",
       "Message on WhatsApp": "Tuma ujumbe WhatsApp"
     }
   };
@@ -27852,7 +27852,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Eterekeddwa ku Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
     "Save to your profile": "Tereka ku profile yo",
-    "Keep this property in your MakaUg account": "Kuuma property eno mu account yo eya MakaUg",
+    "Keep this property in your makaug account": "Kuuma property eno mu account yo eya makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yo eya bwereere oba yingira okutereka {title}, okulondoola updates, n'okudda gy'eri oluvannyuma.",
     "What happens next?": "Ekiddako kiba ki?",
     "The property will be saved straight to your personal profile after you sign in.": "Property eno ejja kuterekebwa butereevu ku profile yo gy'oyingira.",
@@ -27894,7 +27894,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Imehifadhiwa kwenye Profaili",
     "Sign in or create an account to keep it in your profile.": "Ingia au fungua akaunti ili uiweke kwenye profaili yako.",
     "Save to your profile": "Hifadhi kwenye profaili yako",
-    "Keep this property in your MakaUg account": "Weka mali hii ndani ya akaunti yako ya MakaUg",
+    "Keep this property in your makaug account": "Weka mali hii ndani ya akaunti yako ya makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Fungua akaunti yako ya bure au ingia ili kuhifadhi {title}, kufuatilia masasisho, na kuirudia baadaye.",
     "What happens next?": "Nini kinafuata?",
     "The property will be saved straight to your personal profile after you sign in.": "Mali hii itahifadhiwa moja kwa moja kwenye profaili yako binafsi baada ya kuingia.",
@@ -27935,7 +27935,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Kigwoke i Profile",
     "Sign in or create an account to keep it in your profile.": "Dony onyo ket account me gwoko i profile mamegi.",
     "Save to your profile": "Gwok i profile mamegi",
-    "Keep this property in your MakaUg account": "Gwok property man i account mamegi pa MakaUg",
+    "Keep this property in your makaug account": "Gwok property man i account mamegi pa makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Ket account mamegi me nono onyo dony me gwoko {title}, lub updates, ka dok i iye lacen.",
     "What happens next?": "Gin ango matye anyim?",
     "The property will be saved straight to your personal profile after you sign in.": "Property man bigwoke atir i profile mamegi ka idonyo.",
@@ -27971,7 +27971,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Etairwe omu Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
     "Save to your profile": "Tereka omu profile yawe",
-    "Keep this property in your MakaUg account": "Kuuma property enu omu account yawe eya MakaUg",
+    "Keep this property in your makaug account": "Kuuma property enu omu account yawe eya makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yawe ey'obwereere nari yingira okutereka {title}, okulondoola updates, kandi ogigarukemu bwanyima.",
     "What happens next?": "Ekirikwija kukurataho niki?",
     "The property will be saved straight to your personal profile after you sign in.": "Property enu neija kuterekwa butunu omu profile yawe bw'omaara kwingira.",
@@ -28007,7 +28007,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Etairwe omu Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira nari kola account okugiteraka omu profile yawe.",
     "Save to your profile": "Tereka omu profile yawe",
-    "Keep this property in your MakaUg account": "Kuuma property enu omu account yawe eya MakaUg",
+    "Keep this property in your makaug account": "Kuuma property enu omu account yawe eya makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yawe ey'obwereere nari yingira okutereka {title}, okulondoola updates, kandi ogigarukemu bwanyima.",
     "What happens next?": "Ekirikwija kukurataho niki?",
     "The property will be saved straight to your personal profile after you sign in.": "Property enu neija kuterekwa butunu omu profile yawe bw'omaara kwingira.",
@@ -28043,7 +28043,7 @@ const PROPERTY_UI_I18N = {
     "Saved to Profile": "Eterekeddwa ku Profile",
     "Sign in or create an account to keep it in your profile.": "Yingira oba kola account okugitereka ku profile yo.",
     "Save to your profile": "Tereka ku profile yo",
-    "Keep this property in your MakaUg account": "Kuuma property eno mu account yo eya MakaUg",
+    "Keep this property in your makaug account": "Kuuma property eno mu account yo eya makaug",
     "Create your free account or sign in to save {title}, track updates, and come back to it later.": "Kola account yo eya bwereere oba yingira okutereka {title}, okulondoola updates, n'okudda gy'eri oluvannyuma.",
     "What happens next?": "Ekiddako kiba ki?",
     "The property will be saved straight to your personal profile after you sign in.": "Property eno ejja kuterekebwa butereevu ku profile yo gy'oyingira.",
@@ -28214,7 +28214,7 @@ const LP_CONFIG = {
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
-      { key: "land_verification_help", label: "Need MakaUg help with owner/title verification?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - contact me about verification" }] },
+      { key: "land_verification_help", label: "Need makaug help with owner/title verification?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - contact me about verification" }] },
       { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
     ],
     previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }],
@@ -29531,7 +29531,7 @@ function renderMortgageFinder() {
       </div>
       <div class="mt-5 grid gap-2">
         <a href="#mortgage-lead-title" class="bg-green-700 text-white hover:bg-green-600 rounded-xl px-4 py-3 text-sm font-black text-center shadow-lg shadow-green-700/20">Request Mortgage Help</a>
-        ${authState?.user ? '<button type="button" onclick="toast(\'Calculation saved to your MakaUg dashboard.\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Save Calculation</button>' : '<button type="button" onclick="openAuthSignIn(\'finder\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Sign in to save</button>'}
+        ${authState?.user ? '<button type="button" onclick="toast(\'Calculation saved to your makaug dashboard.\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Save Calculation</button>' : '<button type="button" onclick="openAuthSignIn(\'finder\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Sign in to save</button>'}
       </div>
       <p class="text-[11px] text-gray-600 mt-4">This is an estimate only. Actual rates, fees, repayments, and approvals depend on the lender.</p>`;
   }
@@ -29713,7 +29713,7 @@ async function openDetail(id, options = {}) {
   const allowEmail = !!ownerEmail && contactPref === "email";
   const contactMessage = buildListingWhatsappMessageForUi(p);
   const ownerWhatsAppUrl = allowWhatsApp ? buildWhatsAppUrl(ownerPhone, contactMessage) : "";
-  const ownerEmailUrl = allowEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`MakaUg enquiry: ${p.title || "Property"}`)}&body=${encodeURIComponent(contactMessage)}` : "";
+  const ownerEmailUrl = allowEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`makaug enquiry: ${p.title || "Property"}`)}&body=${encodeURIComponent(contactMessage)}` : "";
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
   const brokerWhatsAppArg = adminAttr(JSON.stringify(broker?.whatsapp || ""));
@@ -30218,7 +30218,7 @@ function addGoogleMarkers(mapId, list) {
     const marker = new google.maps.Marker({
       position: { lat: point.lat, lng: point.lng },
       map,
-      title: p.title || "MakaUg listing"
+      title: p.title || "makaug listing"
     });
     const content = buildMapListingPopupHtml(p);
     marker.addListener("mouseover", () => {
@@ -30273,7 +30273,7 @@ function setBrokerMapMarkers(list) {
       const marker = new google.maps.Marker({
         position: { lat: point.lat, lng: point.lng },
         map,
-        title: broker.name || "MakaUg broker"
+        title: broker.name || "makaug broker"
       });
       const openBrokerInfo = () => {
         infoWindow.setContent(`
@@ -30624,7 +30624,7 @@ async function initDetailMap(p) {
     const marker = new google.maps.Marker({
       position: { lat, lng },
       map,
-      title: p.title || "MakaUg listing"
+      title: p.title || "makaug listing"
     });
     const info = new google.maps.InfoWindow({ content: `<strong>${adminEscape(p.title || "Property")}</strong>` });
     info.open(map, marker);

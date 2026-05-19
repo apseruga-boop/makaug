@@ -1,6 +1,6 @@
 # AI CEO phone test
 
-Use this when you want to prove that the founder phone can control the MakaUg AI CEO through WhatsApp and that non-owner phones cannot.
+Use this when you want to prove that the founder phone can control the makaug AI CEO through WhatsApp and that non-owner phones cannot.
 
 ## Environment
 
@@ -51,8 +51,8 @@ If you see `ECONNREFUSED`, the test cannot reach the configured Postgres databas
 ## Run the real phone test
 
 1. Deploy the environment variables.
-2. Restart the MakaUg web service and WhatsApp bridge.
-3. From the authorized founder phone, send this to the MakaUg WhatsApp number:
+2. Restart the makaug web service and WhatsApp bridge.
+3. From the authorized founder phone, send this to the makaug WhatsApp number:
 
 ```text
 CEO report

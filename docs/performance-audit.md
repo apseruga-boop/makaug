@@ -1,4 +1,4 @@
-# MakaUg Performance Audit
+# makaug Performance Audit
 
 Generated: 2026-05-18T02:14:52.593Z
 

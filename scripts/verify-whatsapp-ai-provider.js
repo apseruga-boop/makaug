@@ -55,7 +55,7 @@ async function main() {
     context: {
       assistantRole: 'friendly property assistant in the user pocket',
       preferredLink: 'https://makaug.com/#page-students',
-      supportedActions: ['search approved listings', 'save the request for follow-up', 'drive users back to MakaUg']
+      supportedActions: ['search approved listings', 'save the request for follow-up', 'drive users back to makaug']
     }
   });
   console.log('\nAssistant reply sample:', reply);

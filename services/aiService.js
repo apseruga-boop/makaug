@@ -757,7 +757,7 @@ async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step 
       messages: [
         {
           role: 'system',
-          content: `You detect the user's language for MakaUg WhatsApp.
+          content: `You detect the user's language for makaug WhatsApp.
 Supported languages: ${JSON.stringify(SUPPORTED_AI_LANGUAGES)}.
 Return strict JSON only:
 {
@@ -848,7 +848,7 @@ async function extractNaturalPropertyQuery({ text = '', language = 'en', session
       messages: [
         {
           role: 'system',
-          content: `Extract structured real-estate search filters for MakaUg WhatsApp assistant.
+          content: `Extract structured real-estate search filters for makaug WhatsApp assistant.
 Return strict JSON only:
 {
   "searchType": "sale|rent|student|commercial|land|any",
@@ -1256,7 +1256,7 @@ async function generateListingIntelligence({
       messages: [
         {
           role: 'system',
-          content: `You are MakaUg's elite Uganda property intelligence model.
+          content: `You are makaug's elite Uganda property intelligence model.
 You write premium, trustworthy, plain-language property content for Uganda and East Africa audiences.
 Return strict JSON with this schema:
 {
@@ -1456,7 +1456,7 @@ Requirements:
 - Keep under 420 characters.
 - Be practical and action-oriented.
 - Include exactly one relevant makaug.com link.
-- Use MakaUg WhatsApp card style when it helps: start with "🟩🟨 *makaug.com* | *Short title*", then 2-4 compact lines with useful emoji labels and bold commands.
+- Use makaug WhatsApp card style when it helps: start with "🟩🟨 *makaug.com* | *Short title*", then 2-4 compact lines with useful emoji labels and bold commands.
 - Use the green/yellow brand cue through emoji only; WhatsApp cannot apply custom bubble colors.
 - Do not repeat the same instruction, menu, greeting, or link twice.
 - Avoid long paragraphs. Make every sentence earn its place.
@@ -1538,7 +1538,7 @@ async function generateCampaignCopy({
   language = 'English',
   channel = 'whatsapp'
 }) {
-  const fallback = `MakaUg update: ${objective || 'New property opportunities available'}.\nReply with your preferred area and budget, and we will share matching listings.\n${PUBLIC_BASE_URL}`;
+  const fallback = `makaug update: ${objective || 'New property opportunities available'}.\nReply with your preferred area and budget, and we will share matching listings.\n${PUBLIC_BASE_URL}`;
   const client = getClient();
   if (!client) {
     return {
@@ -1556,7 +1556,7 @@ async function generateCampaignCopy({
       messages: [
         {
           role: 'system',
-          content: 'Write a short, compliant marketing message for MakaUg. Keep it human, clear, and under 500 chars. Mention opt-out by replying STOP.'
+          content: 'Write a short, compliant marketing message for makaug. Keep it human, clear, and under 500 chars. Mention opt-out by replying STOP.'
         },
         {
           role: 'user',

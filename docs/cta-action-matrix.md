@@ -1,4 +1,4 @@
-# MakaUg CTA Action Matrix
+# makaug CTA Action Matrix
 
 Generated for Task 10 go-live UX polish.
 
@@ -6,12 +6,12 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 
 | Area | Label | Selector / Route | Expected action | Logged-out behaviour | Logged-in / role behaviour | Event / lead | Coverage | Status | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| Header | WhatsApp number | topbar `wa.me` | Opens official WhatsApp | Opens WhatsApp | Opens WhatsApp | source context via URL where supported | click probe href audit | working | Uses official MakaUg number. |
+| Header | WhatsApp number | topbar `wa.me` | Opens official WhatsApp | Opens WhatsApp | Opens WhatsApp | source context via URL where supported | click probe href audit | working | Uses official makaug number. |
 | Header | Email | `mailto:info@makaug.com` | Opens email client | Opens mail | Opens mail | none | href audit | working | Public support channel. |
 | Header | Language | `#lang-sel` | Changes visible language labels | Saves preference locally | Saves preference locally | `language_changed` where analytics enabled | go-live/i18n checks | working | Full translations remain tracked separately in content audit. |
 | Header | Currency | `#cur-sel` | Changes display currency | Saves preference locally | Saves preference locally | currency preference | static checks | working | Existing currency logic preserved. |
-| Header | Saved | `#top-saved-link` | Saved page/dashboard saved tab | Opens MakaUg auth drawer with saved-property context | `/dashboard?tab=saved` | `saved_auth_required_clicked` | click probe | working | No stripped modal dependency. |
-| Header | Sign In | `#top-signin-link` | Opens MakaUg auth drawer | Opens drawer; `/login` remains clean fallback | Dashboard redirect after auth | `auth_drawer_opened`, `auth_success` | click probe | working | Fixed Task 9: no messy all-in-one `/login`. |
+| Header | Saved | `#top-saved-link` | Saved page/dashboard saved tab | Opens makaug auth drawer with saved-property context | `/dashboard?tab=saved` | `saved_auth_required_clicked` | click probe | working | No stripped modal dependency. |
+| Header | Sign In | `#top-signin-link` | Opens makaug auth drawer | Opens drawer; `/login` remains clean fallback | Dashboard redirect after auth | `auth_drawer_opened`, `auth_success` | click probe | working | Fixed Task 9: no messy all-in-one `/login`. |
 | Header | For Sale | `#nav-sale` | `/for-sale` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | To Rent | `#nav-rent` | `/to-rent` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
 | Header | Students | `#nav-students` | `/student-accommodation` | Public route | Public route | `page_view` | click + route probes | working | Has real `href`. |
@@ -30,8 +30,8 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | Homepage | Floating WhatsApp | fixed `wa.me` button | Opens WhatsApp | Opens WhatsApp | Opens WhatsApp | source URL where present | href audit | working | No native-app language. |
 | Category | Save Search | no-results copy / dashboard action | Save search where signed in | Sign-in/WhatsApp prompt | Saves to dashboard where API available | `saved_search_created` | go-live tests | partial | Minimal engine exists; full category button expansion remains product work. |
 | Category | Create Alert | no-results copy / dashboard action | Alert preference | Sign-in/WhatsApp prompt | Stores alert preference where API available | alert events | go-live tests | partial | External delivery depends on configured providers. |
-| Category | Ask MakaUg on WhatsApp | map assist / WhatsApp links | WhatsApp/support request | Opens WhatsApp or lead form | Same | lead/contact event | click audit | working | Map assist forms create requests. |
-| Category | Tell MakaUg what you need | map assist forms | POST `/api/contact/looking-for-property` | Form submit | Form submit | CRM/property request | existing API tests | working | Has success/error toast. |
+| Category | Ask makaug on WhatsApp | map assist / WhatsApp links | WhatsApp/support request | Opens WhatsApp or lead form | Same | lead/contact event | click audit | working | Map assist forms create requests. |
+| Category | Tell makaug what you need | map assist forms | POST `/api/contact/looking-for-property` | Form submit | Form submit | CRM/property request | existing API tests | working | Has success/error toast. |
 | Category | Search / filters | category filter controls | Filter current grid | Public | Public | `property_search` | go-live tests | working | Debounced typeahead still product follow-up. |
 | Category | Listing card click | `.property-card` | Opens detail | Public | Public | `property_open` | existing tests | working | Depends on listing data. |
 | Category | WhatsApp listing CTA | share/contact buttons | Opens WhatsApp with listing context | Public | Public | WhatsApp click lead | go-live tests | working | No undefined/null guard covered. |
@@ -43,8 +43,8 @@ Status terms: **working** means the CTA has a route, click handler, API submit, 
 | List property | Find address or place | `#lp-address-search-btn` | Address lookup/fallback | Public | Public | location event | go-live tests | working | Provider fallback documented. |
 | List property | Send/Verify OTP | `#lp-send-otp-btn`, verify buttons | OTP provider or safe dev path | Public | Public | OTP events | go-live tests | working | Provider credentials may be required live. |
 | List property | List via WhatsApp AI | `#lp-whatsapp-option-btn`, `#lp-wa-link` | Logs listing intent, then opens official WhatsApp with listing type/title/location context | `POST /api/properties/listing-intent` + public WhatsApp flow | Same | `list_property_path_selected`, `list_property_whatsapp_clicked` | click probe + go-live tests | working | Backend lead/log is created before external WhatsApp handoff where possible; message strips undefined/null. |
-| AI Chatbot | Try a MakaUg AI task | `#ai-chatbot-test-form` | Calls `/api/ai/assistant-reply` or shows safe provider fallback | Public AI route | Same | `ai_chatbot_prompt_submitted` | click probe + go-live tests | working | Covers search, listing, alerts, viewings, fraud, mortgage, help, advertiser, language, and handoff intents. |
-| Advertise | Advertise with MakaUg | `/advertise` synthetic CTA | Paid advertising route/signup/contact | Public paid campaign route | Advertiser dashboard/admin by role | advertiser inquiry/click | click probe | working | Kept separate from free property listing. |
+| AI Chatbot | Try a makaug AI task | `#ai-chatbot-test-form` | Calls `/api/ai/assistant-reply` or shows safe provider fallback | Public AI route | Same | `ai_chatbot_prompt_submitted` | click probe + go-live tests | working | Covers search, listing, alerts, viewings, fraud, mortgage, help, advertiser, language, and handoff intents. |
+| Advertise | Advertise with makaug | `/advertise` synthetic CTA | Paid advertising route/signup/contact | Public paid campaign route | Advertiser dashboard/admin by role | advertiser inquiry/click | click probe | working | Kept separate from free property listing. |
 | Mortgage | Request mortgage help | `#mortgage-lead-submit` | POST mortgage lead | Submits/logs lead where provider/API exists | Same plus dashboard history where available | `mortgage_lead_submit` | go-live tests/perf probe | working | Calculator redesigned around professional repayment results. |
 | Advertise | Start advertising / signup | `/advertiser-signup` | Advertiser signup | Signup route | Dashboard if advertiser | advertiser_signup | click probe route | working | Provider-independent. |
 | Advertise | Generate payment link | advertiser dashboard | Payment link or provider-missing state | Requires auth | Advertiser/admin | payment events | go-live tests | partial | Real provider depends on env. |

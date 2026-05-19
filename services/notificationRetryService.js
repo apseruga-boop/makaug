@@ -43,13 +43,13 @@ async function retryNotification(db, { id, adminUserId = null, req = null } = {}
   if (channel === 'email') {
     delivery = await sendSupportEmail({
       to: item.recipient_email,
-      subject: `MakaUg notification retry: ${item.type || 'update'}`,
-      text: `MakaUg retry for ${item.type || 'notification'}.\n\nReference: ${id}`
+      subject: `makaug notification retry: ${item.type || 'update'}`,
+      text: `makaug retry for ${item.type || 'notification'}.\n\nReference: ${id}`
     });
   } else if (channel === 'whatsapp') {
     delivery = await sendWhatsAppText({
       to: item.recipient_phone,
-      body: `MakaUg update: retrying ${item.type || 'notification'}.\nRef: ${id}`
+      body: `makaug update: retrying ${item.type || 'notification'}.\nRef: ${id}`
     });
   } else if (channel === 'in_app') {
     delivery = { sent: true, provider: 'in_app' };
@@ -79,8 +79,8 @@ async function retryEmailLog(db, { id, adminUserId = null, req = null } = {}) {
   const item = found.rows[0];
   const delivery = await sendSupportEmail({
     to: item.recipient_email_masked && item.recipient_email_masked.includes('***') ? null : item.recipient_email_masked,
-    subject: item.subject || `MakaUg email retry: ${item.template_key || item.event_type || 'notification'}`,
-    text: `MakaUg email retry for ${item.event_type || item.template_key || 'notification'}.\n\nLog: ${id}`
+    subject: item.subject || `makaug email retry: ${item.template_key || item.event_type || 'notification'}`,
+    text: `makaug email retry for ${item.event_type || item.template_key || 'notification'}.\n\nLog: ${id}`
   });
   const retryStatus = isProviderMissing(delivery) ? 'failed' : notificationStatusFromDelivery(delivery);
   const failureReason = delivery.error || delivery.reason || (isProviderMissing(delivery) ? 'email_provider_missing_or_recipient_masked' : null);

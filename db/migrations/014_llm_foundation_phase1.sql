@@ -162,14 +162,14 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 INSERT INTO ai_tenants (code, name, status, metadata)
 VALUES (
   'makaug',
-  'MakaUg',
+  'makaug',
   'active',
   '{"country":"UG","platform":"property"}'::jsonb
 )
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO ai_sites (tenant_id, code, name, domain, status, metadata)
-SELECT t.id, 'makaug-main', 'MakaUg Main Site', 'makaug.com', 'active', '{"channel":"web+whatsapp"}'::jsonb
+SELECT t.id, 'makaug-main', 'makaug Main Site', 'makaug.com', 'active', '{"channel":"web+whatsapp"}'::jsonb
 FROM ai_tenants t
 WHERE t.code = 'makaug'
 ON CONFLICT (tenant_id, code) DO NOTHING;

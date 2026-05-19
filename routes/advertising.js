@@ -207,7 +207,7 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
     const budgetUgx = toNullableInt(req.body.budget_ugx || req.body.budget);
     const pkg = summarizeAdvertisingPackageKeys(productInterests).at(0) || null;
     const quotedAmount = Math.max(0, budgetUgx || Number(pkg?.price_ugx || estimateAdvertisingQuote(productInterests)) || 0);
-    const campaignName = cleanText(req.body.campaign_name || req.body.name || `${businessName} MakaUg campaign`);
+    const campaignName = cleanText(req.body.campaign_name || req.body.name || `${businessName} makaug campaign`);
 
     if (!email && !phone) return res.status(400).json({ ok: false, error: 'email or phone is required' });
     if (email && !isValidEmail(email)) return res.status(400).json({ ok: false, error: 'email is invalid' });
@@ -262,8 +262,8 @@ router.post('/campaigns', requireAdvertiserAuth, async (req, res, next) => {
         cleanText(req.body.creative_brief || req.body.message) || null,
         JSON.stringify({
           headline: cleanText(req.body.creative_headline || campaignName),
-          body: cleanText(req.body.creative_body || req.body.message || 'Sponsored MakaUg campaign submitted for review.'),
-          call_to_action: cleanText(req.body.creative_cta || 'View on MakaUg')
+          body: cleanText(req.body.creative_body || req.body.message || 'Sponsored makaug campaign submitted for review.'),
+          call_to_action: cleanText(req.body.creative_cta || 'View on makaug')
         }),
         JSON.stringify(normalizeList(req.body.target_pages || [])),
         pkg?.pricing_model || 'fixed_days',
@@ -373,7 +373,7 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         providerMissing: !link.rows[0].checkout_url,
         message: link.rows[0].checkout_url
           ? 'Payment link created.'
-          : 'Payment provider is not configured. MakaUg has logged the invoice and admin can mark manual payment.'
+          : 'Payment provider is not configured. makaug has logged the invoice and admin can mark manual payment.'
       }
     });
   } catch (error) {
@@ -485,7 +485,7 @@ router.post('/inquiries', async (req, res, next) => {
       sessionId: `advertising_inquiry:${inquiry.id}`,
       externalUserId: phone || email || fullName,
       inputText: message || `${businessName || fullName} wants advertising: ${productInterests.join(', ')}`,
-      responseText: 'Advertising inquiry saved for MakaUg proposal and creative preview.',
+      responseText: 'Advertising inquiry saved for makaug proposal and creative preview.',
       payload: {
         id: inquiry.id,
         full_name: fullName,
@@ -513,7 +513,7 @@ router.post('/inquiries', async (req, res, next) => {
     try {
       await sendSupportEmail({
         to: supportEmail,
-        subject: `[MakaUg Ads] New advertising inquiry - ${businessName || fullName}`,
+        subject: `[makaug Ads] New advertising inquiry - ${businessName || fullName}`,
         text: [
           'New advertising inquiry received on makaug.com.',
           '',
@@ -542,11 +542,11 @@ router.post('/inquiries', async (req, res, next) => {
       if (email) {
         await sendSupportEmail({
           to: email,
-          subject: 'MakaUg received your advertising inquiry',
+          subject: 'makaug received your advertising inquiry',
           text: [
             `Hello ${fullName},`,
             '',
-            'Thank you for asking about advertising with MakaUg.',
+            'Thank you for asking about advertising with makaug.',
             'We have received your inquiry and will help you choose the best placement for your goal.',
             '',
             `Inquiry ID: ${inquiry.id}`,
@@ -556,7 +556,7 @@ router.post('/inquiries', async (req, res, next) => {
             '',
             'Next step: our team will confirm the package, prepare a preview, and send payment details before the ad goes live.',
             '',
-            `WhatsApp MakaUg: ${whatsappUrl}`,
+            `WhatsApp makaug: ${whatsappUrl}`,
             `Email: ${supportEmail}`
           ].filter(Boolean).join('\n')
         });

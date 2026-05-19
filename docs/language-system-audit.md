@@ -1,4 +1,4 @@
-# MakaUg Language System Audit
+# makaug Language System Audit
 
 Status: partial, guarded, and honest for launch. English is complete enough for go-live. Luganda and Kiswahili have meaningful public-page coverage. Acholi, Runyankole, Rukiga, and Lusoga still require human editorial review before they can be called complete.
 
@@ -20,7 +20,7 @@ The canonical registry lives in `config/languageRegistry.js` and is now shared b
 
 - Rukiga is never mapped to Kinyarwanda.
 - Runyankole is never mapped to Kinyarwanda.
-- Kinyarwanda is not a supported MakaUg language.
+- Kinyarwanda is not a supported makaug language.
 - If a Rukiga or Runyankole translation is missing or low confidence, the system uses English fallback instead of inventing a nearby language.
 - AI/WhatsApp prompts include: “Do not use Kinyarwanda for Rukiga or Runyankole.”
 - `services/translationProviderService.js` follows `human_table_then_provider_then_english`.

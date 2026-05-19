@@ -32,7 +32,7 @@ async function main() {
     const to = process.env.AI_CEO_OWNER_EMAIL || process.env.FOUNDER_EMAIL || getSupportEmail();
     deliveries.email = await sendSupportEmail({
       to,
-      subject: 'MakaUg AI CEO morning report',
+      subject: 'makaug AI CEO morning report',
       text: report.summary
     });
   }

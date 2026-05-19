@@ -36,7 +36,7 @@ async function sendDailyAdvertisingReports({ dryRun = false, limit = 50 } = {}) 
     const text = [
       `Hello ${campaign.advertiser_name || 'there'},`,
       '',
-      'Here is your MakaUg advertising performance update.',
+      'Here is your makaug advertising performance update.',
       '',
       `Campaign: ${campaign.campaign_name || '-'}`,
       `Package: ${campaign.package_label || campaign.package_key || '-'}`,
@@ -48,7 +48,7 @@ async function sendDailyAdvertisingReports({ dryRun = false, limit = 50 } = {}) 
       `Click rate: ${pct(campaign.clicks, campaign.impressions)}`,
       campaign.ends_at ? `Campaign ends: ${new Date(campaign.ends_at).toLocaleDateString('en-GB')}` : '',
       '',
-      'MakaUg will keep optimizing placement while the campaign is active.',
+      'makaug will keep optimizing placement while the campaign is active.',
       `Questions? WhatsApp: ${whatsappUrl}`,
       `Email: ${supportEmail}`
     ].filter(Boolean).join('\n');
@@ -56,7 +56,7 @@ async function sendDailyAdvertisingReports({ dryRun = false, limit = 50 } = {}) 
     if (!dryRun && campaign.advertiser_email) {
       await sendSupportEmail({
         to: campaign.advertiser_email,
-        subject: `[MakaUg Ads] Daily report - ${campaign.campaign_name || 'Campaign'}`,
+        subject: `[makaug Ads] Daily report - ${campaign.campaign_name || 'Campaign'}`,
         text
       });
     }
@@ -65,7 +65,7 @@ async function sendDailyAdvertisingReports({ dryRun = false, limit = 50 } = {}) 
       await sendWhatsAppText({
         to: campaign.advertiser_phone,
         body: [
-          `MakaUg ad report: ${campaign.campaign_name || 'Campaign'}`,
+          `makaug ad report: ${campaign.campaign_name || 'Campaign'}`,
           `Impressions: ${Number(campaign.impressions || 0).toLocaleString('en-UG')}`,
           `Clicks: ${Number(campaign.clicks || 0).toLocaleString('en-UG')}`,
           `Leads: ${Number(campaign.leads || 0).toLocaleString('en-UG')}`,

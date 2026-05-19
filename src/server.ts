@@ -7,7 +7,7 @@ const queue = new OutboundQueueService();
 
 app.listen(env.port, () => {
   // eslint-disable-next-line no-console
-  console.log(`MakaUg WhatsApp backend listening on :${env.port}`);
+  console.log(`makaug WhatsApp backend listening on :${env.port}`);
 });
 
 setInterval(async () => {

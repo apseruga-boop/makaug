@@ -1,13 +1,13 @@
-# MakaUg Postman QA Pack
+# makaug Postman QA Pack
 
 ## Files
-- `MakaUg_GoLive_QA.postman_collection.json`
-- `MakaUg_GoLive_QA.postman_environment.json`
+- `makaug_GoLive_QA.postman_collection.json`
+- `makaug_GoLive_QA.postman_environment.json`
 
 ## Import
 1. Open Postman.
 2. Import both files.
-3. Select environment: **MakaUg - Go Live QA Environment**.
+3. Select environment: **makaug - Go Live QA Environment**.
 4. Fill environment variables:
    - `admin_api_key`
    - `super_admin_key`

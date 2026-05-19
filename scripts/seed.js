@@ -286,7 +286,7 @@ async function seedProperties() {
       'House',
       'Freehold',
       '["Parking","Security"]'::jsonb,
-      'MakaUg Demo',
+      'makaug Demo',
       '+256770646879',
       'agent',
       'approved',

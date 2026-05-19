@@ -24,7 +24,7 @@ export class OtpService {
       await this.twilioClient.messages.create({
         to: phone,
         from: env.twilioFrom,
-        body: `MakaUg verification code: ${code}. Valid for 10 minutes.`
+        body: `makaug verification code: ${code}. Valid for 10 minutes.`
       });
       return;
     }

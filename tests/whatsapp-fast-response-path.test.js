@@ -25,7 +25,7 @@ const whatsappWebBridgeServiceSource = fs.readFileSync(
 );
 
 async function run() {
-  const listingMessage = 'Hi MakaUg, I want to list a property. Type: For Sale. Please help me create the listing.';
+  const listingMessage = 'Hi makaug, I want to list a property. Type: For Sale. Please help me create the listing.';
   const hints = fastWhatsappRuntimeHints({ text: listingMessage, sessionLang: 'en' });
   assert(hints, 'Contextual listing messages should use the fast WhatsApp runtime path');
   assert.strictEqual(hints.intent.intent, 'property_listing', 'Fast path must route listing messages to listing flow');

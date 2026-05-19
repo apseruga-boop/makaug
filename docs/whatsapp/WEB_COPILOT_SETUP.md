@@ -1,14 +1,14 @@
 # WhatsApp Web Copilot Setup
 
-This is the low-cost first version of the MakaUg WhatsApp assistant.
+This is the low-cost first version of the makaug WhatsApp assistant.
 
-Instead of paying for every reply through the official WhatsApp API from day one, this mode keeps **WhatsApp Web open on a dedicated machine** and lets the MakaUg admin inbox act as the control center.
+Instead of paying for every reply through the official WhatsApp API from day one, this mode keeps **WhatsApp Web open on a dedicated machine** and lets the makaug admin inbox act as the control center.
 
 ## How it works
 
 1. A team machine keeps **Google Chrome + WhatsApp Web** open all day.
 2. The local bridge script watches unread chats.
-3. New messages are pushed into MakaUg:
+3. New messages are pushed into makaug:
    - saved in the database
    - categorized
    - shown in `Admin -> WhatsApp Inbox`
@@ -65,7 +65,7 @@ environment should still be set to `500` or left unset.
 
 ## Start sequence
 
-1. Start MakaUg backend:
+1. Start makaug backend:
    - `npm run dev`
 2. Run migrations:
    - `npm run migrate`

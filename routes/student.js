@@ -405,7 +405,7 @@ async function studentDashboardPayload(user) {
     recentlyViewed: recent.rows.map((row) => propertyToCard(row, `Viewed ${new Date(row.viewed_at).toLocaleDateString('en-GB')}`)),
     needRequests: needs.rows,
     nextActions: [
-      preference.campus ? 'Review the newest rooms around your campus.' : 'Add your campus so MakaUg can prioritise closer rooms.',
+      preference.campus ? 'Review the newest rooms around your campus.' : 'Add your campus so makaug can prioritise closer rooms.',
       searches.rows.length ? 'Check whether your student alert frequency still suits you.' : 'Create a student accommodation alert.',
       saved.rows.length ? 'Compare your saved student options before booking a viewing.' : 'Save your favourite student rooms to build a shortlist.'
     ]

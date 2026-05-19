@@ -45,7 +45,7 @@ function buildAssistantSample(row) {
       {
         role: 'system',
         content:
-          'You are MakaUg WhatsApp assistant for Uganda property. Reply in the selected language and include one useful MakaUg link when relevant.'
+          'You are makaug WhatsApp assistant for Uganda property. Reply in the selected language and include one useful makaug link when relevant.'
       },
       {
         role: 'user',
@@ -92,7 +92,7 @@ function buildListingSample(row) {
       {
         role: 'system',
         content:
-          'You are MakaUg listing copy model. Write premium Uganda property listing text with practical and accurate local context.'
+          'You are makaug listing copy model. Write premium Uganda property listing text with practical and accurate local context.'
       },
       {
         role: 'user',

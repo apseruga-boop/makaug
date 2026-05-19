@@ -41,7 +41,7 @@ async function fetchText(url, options = {}) {
     ...options,
     headers: {
       'content-type': 'application/json',
-      'user-agent': 'MakaUg backend-connection-probe',
+      'user-agent': 'makaug backend-connection-probe',
       'x-forwarded-for': localProbeIp,
       ...(options.headers || {})
     }
@@ -55,7 +55,7 @@ async function probePublicBackend() {
   const endpoints = [
     { path: '/api/health', expect: 200, marker: '"ok":true' },
     { path: '/api/health/migrations', expect: 200, marker: '034_task4_super_admin_alerts_payments.sql' },
-    { path: '/api/ai/model-card', expect: 200, marker: 'MakaUg Property AI Model' },
+    { path: '/api/ai/model-card', expect: 200, marker: 'makaug property AI model' },
     { path: '/api/advertising/packages', expect: 200, marker: 'featured_property_boost' },
     { path: '/api/mortgage-rates', expect: 200, marker: 'providers' }
   ];

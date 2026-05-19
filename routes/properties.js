@@ -185,32 +185,32 @@ function getListingOtpCopy(language = 'en', { otp, expiresMinutes, audience = 'l
   const lang = normalizePreferredLanguage(language);
   const catalog = {
     en: {
-      listing: `MakaUg listing verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue publishing your property.`,
-      agent: `MakaUg agent verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue your agent application.`
+      listing: `makaug listing verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue publishing your property.`,
+      agent: `makaug agent verification: your one-time code is ${otp}. It expires in ${expiresMinutes} minutes. Enter it on makaug.com to continue your agent application.`
     },
     lg: {
-      listing: `MakaUg okukakasa listing: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okutangaza property yo.`,
-      agent: `MakaUg okukakasa agent application: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okusaba okuba agent.`
+      listing: `makaug okukakasa listing: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okutangaza property yo.`,
+      agent: `makaug okukakasa agent application: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com okutwaliza mu maaso okusaba okuba agent.`
     },
     sw: {
-      listing: `Uthibitishaji wa listing ya MakaUg: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee kuchapisha mali yako.`,
-      agent: `Uthibitishaji wa ombi la agent la MakaUg: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee na ombi lako la agent.`
+      listing: `Uthibitishaji wa listing ya makaug: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee kuchapisha mali yako.`,
+      agent: `Uthibitishaji wa ombi la agent la makaug: msimbo wako wa mara moja ni ${otp}. Unaisha baada ya dakika ${expiresMinutes}. Uweke kwenye makaug.com ili uendelee na ombi lako la agent.`
     },
     ac: {
-      listing: `MakaUg kubeero me listing: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki keto property ni live.`,
-      agent: `MakaUg kubeero me agent application: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki application me agent.`
+      listing: `makaug kubeero me listing: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki keto property ni live.`,
+      agent: `makaug kubeero me agent application: code mamegi acel acel tye ${otp}. Bi toyo i dakika ${expiresMinutes}. Ket i makaug.com me mede ki application me agent.`
     },
     ny: {
-      listing: `Okwehamya listing ya MakaUg: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n'okutangaza property yawe.`,
-      agent: `Okwehamya okusaba kwa agent kwa MakaUg: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n’okusaba kwawe kwa agent.`
+      listing: `Okwehamya listing ya makaug: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n'okutangaza property yawe.`,
+      agent: `Okwehamya okusaba kwa agent kwa makaug: koodi yawe y’omurundi gumwe ni ${otp}. Egiherwaaho omu dakikha ${expiresMinutes}. Gigyandike aha makaug.com kugira ogume n’okusaba kwawe kwa agent.`
     },
     rn: {
-      listing: `Okuhamya listing ya MakaUg: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okutangaza property yawe.`,
-      agent: `Okuhamya application ya agent ya MakaUg: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okusaba kwawe kwa agent.`
+      listing: `Okuhamya listing ya makaug: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okutangaza property yawe.`,
+      agent: `Okuhamya application ya agent ya makaug: code yawe y’omulundi gumwe ni ${otp}. Erahwa mu dakikha ${expiresMinutes}. Gishyire ku makaug.com kugira ogume n’okusaba kwawe kwa agent.`
     },
     sm: {
-      listing: `Okukakasa listing ya MakaUg: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okutangaza property yo.`,
-      agent: `Okukakasa okusaba kwa agent ku MakaUg: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okusaba kwa agent.`
+      listing: `Okukakasa listing ya makaug: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okutangaza property yo.`,
+      agent: `Okukakasa okusaba kwa agent ku makaug: code yo ey’omulundi gumu ye ${otp}. Eggwaako mu ddakiika ${expiresMinutes}. Giyingize ku makaug.com osobole okutwala mu maaso okusaba kwa agent.`
     }
   };
   return catalog[lang]?.[audience] || catalog.en[audience] || catalog.en.listing;
@@ -470,13 +470,13 @@ async function issueListingSubmitOtp({ channel = 'phone', phone = '', email = ''
     try {
       delivery = await sendOtpEmail({
         to: identifier,
-        subject: audience === 'agent' ? 'MakaUg agent verification code' : 'MakaUg listing verification code',
+        subject: audience === 'agent' ? 'makaug agent verification code' : 'makaug listing verification code',
         otp,
         expiresMinutes,
         purpose: audience === 'agent' ? 'agent' : 'listing',
         intro: audience === 'agent'
-          ? 'Welcome to MakaUg broker verification. Use this code to continue your broker application.'
-          : 'Use this code to continue publishing your property on MakaUg.',
+          ? 'Welcome to makaug broker verification. Use this code to continue your broker application.'
+          : 'Use this code to continue publishing your property on makaug.',
         footer: otpCopy
       });
     } catch (error) {
@@ -1469,7 +1469,7 @@ router.post('/', async (req, res, next) => {
 
     const brokerFullName = cleanText([authUser?.first_name, authUser?.last_name].filter(Boolean).join(' '));
     const listerName = brokerCanSkipOwnerIdentity
-      ? (brokerAgent.full_name || brokerFullName || 'MakaUg broker')
+      ? (brokerAgent.full_name || brokerFullName || 'makaug broker')
       : cleanText(body.lister_name);
     const listerEmail = brokerCanSkipOwnerIdentity
       ? cleanText(authUser?.email || brokerAgent?.email || body.lister_email)
@@ -1726,7 +1726,7 @@ router.post('/', async (req, res, next) => {
       sessionId: `property_listing:${propertyId}`,
       externalUserId: listerPhone || listerEmailNormalized || listerName || propertyId,
       inputText: [title, description, district, area].filter(Boolean).join(' | '),
-      responseText: 'Listing submitted for MakaUg admin review.',
+      responseText: 'Listing submitted for makaug admin review.',
       payload: {
         id: propertyId,
         listing_type: listingType,
@@ -1851,7 +1851,7 @@ router.post('/', async (req, res, next) => {
         recipientEmail: listerEmailNormalized || null,
         recipientRole: resolvedListerType || 'owner',
         templateKey: 'property_submitted',
-        subject: 'Your MakaUg property listing has been submitted',
+        subject: 'Your makaug property listing has been submitted',
         language: normalizePreferredLanguage(body.preferred_language),
         status: notificationStatusFromDelivery(ownerNotification.email),
         provider: ownerNotification.email?.provider || null,
@@ -1970,7 +1970,7 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
     const propertyId = req.params.id;
     const source = cleanText(req.body.source) || 'listing_detail_whatsapp';
     const ctaLocation = cleanText(req.body.cta_location) || source;
-    const message = cleanText(req.body.message) || 'WhatsApp contact initiated from MakaUg';
+    const message = cleanText(req.body.message) || 'WhatsApp contact initiated from makaug';
     const contactName = cleanText(req.body.contact_name) || 'WhatsApp contact initiated';
     const contactPhone = cleanText(req.body.contact_phone);
     const contactEmail = cleanText(req.body.contact_email);
@@ -2108,7 +2108,7 @@ router.post('/:id/inquiries', async (req, res, next) => {
       },
       source: cleanText(req.body.channel) || 'web',
       leadType: 'enquiry',
-      message: message || 'Property enquiry submitted from MakaUg.',
+      message: message || 'Property enquiry submitted from makaug.',
       activityType: 'property_enquiry_created',
       metadata: {
         property_inquiry_id: inserted.rows[0].id
@@ -2183,7 +2183,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         error: 'Consent and image rights confirmation are required for sourced candidate override',
         details: [
           'Set consent_confirmed=true after verifying permission to publish the listing.',
-          'Set image_rights_confirmed=true after verifying the attached photos are authorised for MakaUg use.'
+          'Set image_rights_confirmed=true after verifying the attached photos are authorised for makaug use.'
         ]
       });
     }

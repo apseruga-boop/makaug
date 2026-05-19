@@ -127,26 +127,26 @@ const AUTH_ROUTE_PREFIXES = [
 
 const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/advertise': {
-    title: 'Advertise with MakaUg',
+    title: 'Advertise with makaug',
     eyebrow: 'Paid advertising campaigns',
     body: 'Run paid sponsored listings, broker spotlights, student accommodation campaigns, mortgage partner placements, and WhatsApp-first lead campaigns. Free property listing lives on List Property; this page is for campaign packages, review, payment links, and advertiser dashboard access.',
-    ctas: ['Start advertising', 'Create advertiser account', 'Ask MakaUg about advertising on WhatsApp'],
-    links: ['/advertiser-signup', '/advertiser-dashboard', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20want%20to%20advertise']
+    ctas: ['Start advertising', 'Create advertiser account', 'Ask makaug about advertising on WhatsApp'],
+    links: ['/advertiser-signup', '/advertiser-dashboard', 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20want%20to%20advertise']
   },
   '/how-it-works': {
-    title: 'How MakaUg Works',
+    title: 'How makaug Works',
     eyebrow: 'Step-by-step property journeys',
     body: 'Search property, use filters, save properties and searches, create alerts, contact on WhatsApp, book viewings or callbacks, list property, pass review and safety checks, use dashboards, and report suspicious listings.',
     extraHtml: `
       <div class="grid md:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>1. Search property</strong><span class="block text-sm text-gray-600 mt-1">Start with sale, rent, land, student rooms, commercial, or brokers.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>2. Use filters</strong><span class="block text-sm text-gray-600 mt-1">Narrow by budget, location, beds, amenities, and purpose.</span></div>
-        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>3. Save options</strong><span class="block text-sm text-gray-600 mt-1">Save properties and searches into your MakaUg account.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>3. Save options</strong><span class="block text-sm text-gray-600 mt-1">Save properties and searches into your makaug account.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>4. Create alerts</strong><span class="block text-sm text-gray-600 mt-1">Get notified when matching listings go live.</span></div>
-        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>5. WhatsApp contact</strong><span class="block text-sm text-gray-600 mt-1">Contact owners, brokers, or MakaUg with listing context.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>5. WhatsApp contact</strong><span class="block text-sm text-gray-600 mt-1">Contact owners, brokers, or makaug with listing context.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>6. Book viewing</strong><span class="block text-sm text-gray-600 mt-1">Request a viewing or callback when the lister allows it.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>7. List property</strong><span class="block text-sm text-gray-600 mt-1">Use the guided free listing form with address, photos, and verification.</span></div>
-        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>8. Review checks</strong><span class="block text-sm text-gray-600 mt-1">MakaUg checks details before publishing listings.</span></div>
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>8. Review checks</strong><span class="block text-sm text-gray-600 mt-1">makaug checks details before publishing listings.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>9. Use dashboards</strong><span class="block text-sm text-gray-600 mt-1">Track saved items, leads, bookings, campaigns, and follow-ups.</span></div>
         <div class="rounded-2xl border border-green-100 bg-green-50 p-4"><strong>10. Report suspicious</strong><span class="block text-sm text-gray-600 mt-1">Flag risky listings quickly so admin can review.</span></div>
       </div>
@@ -155,13 +155,13 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     links: ['/for-sale', '/list-property', '/help']
   },
   '/careers': {
-    title: 'Careers at MakaUg',
+    title: 'Careers at makaug',
     eyebrow: 'Build Uganda-first property technology',
-    body: 'MakaUg works with people who care about trust, field operations, student accommodation, advertising, data quality, and safer property discovery.',
+    body: 'makaug works with people who care about trust, field operations, student accommodation, advertising, data quality, and safer property discovery.',
     extraHtml: `
       <form id="career-interest-form" onsubmit="submitCareerInterest(event)" class="mt-8 rounded-3xl bg-white border border-green-100 p-5 space-y-3">
         <h2 class="text-xl font-black text-gray-900">Send career interest</h2>
-        <p class="text-sm text-gray-600">Share your role interest, contact details, and an optional CV link. MakaUg logs this for admin follow-up.</p>
+        <p class="text-sm text-gray-600">Share your role interest, contact details, and an optional CV link. makaug logs this for admin follow-up.</p>
         <div class="grid md:grid-cols-2 gap-3">
           <input name="name" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Full name" required>
           <input name="email" type="email" class="border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Email address" required>
@@ -187,11 +187,11 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-center font-bold">Send career interest</button>
       </form>
     `,
-    ctas: ['Send career interest', 'Contact MakaUg', 'Field agent signup'],
-    links: ['/careers#career-interest-form', 'https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
+    ctas: ['Send career interest', 'Contact makaug', 'Field agent signup'],
+    links: ['/careers#career-interest-form', 'https://wa.me/256760112587?text=Hello%20makaug,%20I%20am%20interested%20in%20careers', '/field-agent-signup']
   },
   '/help': {
-    title: 'MakaUg Help Centre',
+    title: 'makaug Help Centre',
     eyebrow: 'Help and WhatsApp support',
     body: 'Find quick help for searching, listing, student accommodation, saved searches and alerts, viewings and callbacks, brokers and agents, land and title safety, fraud reports, account access, and paid advertising.',
     extraHtml: `
@@ -205,24 +205,24 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
         <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/safety"><strong>Land and title safety</strong><span class="block text-sm text-gray-600 mt-1">Verify title, seller authority, and payment safety.</span></a>
         <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/anti-fraud"><strong>Fraud and suspicious listings</strong><span class="block text-sm text-gray-600 mt-1">Report risky listings and get safety help.</span></a>
         <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/login"><strong>Account and login</strong><span class="block text-sm text-gray-600 mt-1">Sign in, create account, roles, and OTP.</span></a>
-        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/advertise"><strong>Advertising with MakaUg</strong><span class="block text-sm text-gray-600 mt-1">Campaign packages, payment, and performance.</span></a>
+        <a class="rounded-2xl border border-green-100 bg-green-50 p-4 hover:border-green-300" href="/advertise"><strong>Advertising with makaug</strong><span class="block text-sm text-gray-600 mt-1">Campaign packages, payment, and performance.</span></a>
       </div>
       <form id="help-request-form" onsubmit="submitHelpRequest(event)" class="mt-8 rounded-3xl bg-white border border-green-100 p-5 space-y-3">
-        <h3 class="text-xl font-black text-gray-900">Contact MakaUg support</h3>
+        <h3 class="text-xl font-black text-gray-900">Contact makaug support</h3>
         <div class="grid md:grid-cols-2 gap-3">
           <input name="name" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Your name">
           <input name="email" type="email" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Email address">
           <input name="phone" required class="border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="Phone / WhatsApp">
-          <select name="topic" class="border border-green-100 rounded-xl px-4 py-3 text-sm"><option>Finding property</option><option>Listing property</option><option>Student accommodation</option><option>Fraud report</option><option>Advertising with MakaUg</option><option>Account and login</option></select>
+          <select name="topic" class="border border-green-100 rounded-xl px-4 py-3 text-sm"><option>Finding property</option><option>Listing property</option><option>Student accommodation</option><option>Fraud report</option><option>Advertising with makaug</option><option>Account and login</option></select>
         </div>
-        <textarea name="message" required class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" rows="4" placeholder="How can MakaUg help?"></textarea>
+        <textarea name="message" required class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" rows="4" placeholder="How can makaug help?"></textarea>
         <select name="preferredContactMethod" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm"><option value="whatsapp">WhatsApp</option><option value="phone">Phone call</option><option value="email">Email</option></select>
         <button type="submit" class="rounded-xl bg-green-700 px-5 py-3 text-white font-bold">Send help request</button>
         <div data-help-request-status class="text-sm text-gray-600"></div>
       </form>
     `,
-    ctas: ['WhatsApp support', 'Report an issue', 'Tell MakaUg what you need'],
-    links: ['https://wa.me/256760112587?text=Hello%20MakaUg,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
+    ctas: ['WhatsApp support', 'Report an issue', 'Tell makaug what you need'],
+    links: ['https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20help', '/report-fraud', '/dashboard?intent=property-need']
   },
   '/safety': {
     i18nPrefix: 'safety',
@@ -267,23 +267,23 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
     links: ['/report-fraud', 'https://wa.me/256760112587?text=Hello%20makaug.com,%20I%20need%20safety%20help', '/anti-fraud']
   },
   '/terms': {
-    title: 'MakaUg Terms and Conditions',
+    title: 'makaug Terms and Conditions',
     eyebrow: 'Legal review required',
     body: 'These terms explain acceptable use, listing responsibilities, moderation, advertising, payments, user content, account access, and platform limitations. Final legal review is still required before formal publication.',
     ctas: ['Contact support', 'Privacy policy', 'Cookie policy'],
     links: ['/help', '/privacy-policy', '/cookie-policy']
   },
   '/privacy-policy': {
-    title: 'MakaUg Privacy Policy',
+    title: 'makaug Privacy Policy',
     eyebrow: 'Data protection',
-    body: 'MakaUg uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, and consent-aware analytics.',
+    body: 'makaug uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, and consent-aware analytics.',
     ctas: ['Data request', 'Update preferences', 'Contact privacy support'],
     links: ['/help', '/login?next=%2Faccount%3Ftab%3Dpreferences', 'mailto:info@makaug.com?subject=Privacy%20request']
   },
   '/cookie-policy': {
-    title: 'MakaUg Cookie Policy',
+    title: 'makaug Cookie Policy',
     eyebrow: 'Cookies and preferences',
-    body: 'MakaUg uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
+    body: 'makaug uses necessary cookies for security and sessions, plus preference, analytics, and advertising cookies where configured and lawful.',
     ctas: ['Manage preferences', 'Privacy policy', 'Contact support'],
     links: ['/login?next=%2Faccount%3Ftab%3Dpreferences', '/privacy-policy', '/help']
   }
@@ -584,15 +584,15 @@ function renderProtectedLoginShell(pathname = '/', options = {}) {
   const next = normalizePath(pathname);
   const safeNext = /moderation/i.test(next) ? '/admin' : next;
   const loginUrl = `/login?next=${encodeURIComponent(safeNext)}`;
-  const title = String(options.title || 'Private MakaUg area');
-  const message = String(options.message || 'This MakaUg workspace is private. Sign in with the right account to continue.');
+  const title = String(options.title || 'Private makaug area');
+  const message = String(options.message || 'This makaug workspace is private. Sign in with the right account to continue.');
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex,noarchive">
-  <title>Sign in | MakaUg</title>
+  <title>Sign in | makaug</title>
   <style>
     body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7faf7;color:#152033;min-height:100vh;display:grid;place-items:center}
     main{width:min(92vw,420px);background:white;border:1px solid #dcefe0;border-radius:22px;padding:28px;box-shadow:0 18px 44px rgba(15,72,35,.10)}

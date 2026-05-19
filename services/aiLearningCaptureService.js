@@ -21,7 +21,7 @@ async function ensureDefaultSite() {
       DO UPDATE SET status = 'active', updated_at = NOW()
       RETURNING id, code, name
     `,
-    [tenantCode, 'MakaUg', JSON.stringify({ source: 'auto_capture' })]
+    [tenantCode, 'makaug', JSON.stringify({ source: 'auto_capture' })]
   );
 
   const site = await db.query(
@@ -35,7 +35,7 @@ async function ensureDefaultSite() {
     [
       tenant.rows[0].id,
       siteCode,
-      'MakaUg Website',
+      'makaug Website',
       (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/^https?:\/\//, ''),
       JSON.stringify({ source: 'auto_capture' })
     ]

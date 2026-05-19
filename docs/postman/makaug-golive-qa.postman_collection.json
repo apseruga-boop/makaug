@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "b41f3d8e-8d2f-4588-a8f2-0ad6b4e41f66",
-    "name": "MakaUg - Go Live QA",
-    "description": "End-to-end smoke tests for MakaUg production APIs.\n\nBefore running:\n1) Import the environment file in this same folder.\n2) Set admin_api_key + super_admin_key.\n3) Set listing_otp_code with the real OTP you receive.\n\nRun order recommendation: 01 -> 10.",
+    "name": "makaug - Go Live QA",
+    "description": "End-to-end smoke tests for makaug production APIs.\n\nBefore running:\n1) Import the environment file in this same folder.\n2) Set admin_api_key + super_admin_key.\n3) Set listing_otp_code with the real OTP you receive.\n\nRun order recommendation: 01 -> 10.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [

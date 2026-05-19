@@ -2,7 +2,7 @@
   "name": "makaug-platform",
   "version": "1.0.0",
   "private": true,
-  "description": "MakaUg property platform backend and static frontend",
+  "description": "makaug property platform backend and static frontend",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

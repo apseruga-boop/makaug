@@ -13,7 +13,7 @@ assert.strictEqual(typeof menuRouteReply, 'function', 'WhatsApp route must expos
 
 async function run() {
   assert.strictEqual(
-    contextualPageRouteFromMessage("Hi MakaUg, I'm on makaug.com and need property help.\nPage: makaug.com/broker-signup"),
+    contextualPageRouteFromMessage("Hi makaug, I'm on makaug.com and need property help.\nPage: makaug.com/broker-signup"),
     'agent_registration',
     'Broker signup page context must route to broker registration help'
   );

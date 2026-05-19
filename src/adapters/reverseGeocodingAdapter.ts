@@ -13,7 +13,7 @@ export class ReverseGeocodingAdapter {
     try {
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'MakaUgWhatsAppBot/1.0 (+https://makaug.com)'
+          'User-Agent': 'makaugWhatsAppBot/1.0 (+https://makaug.com)'
         }
       });
 

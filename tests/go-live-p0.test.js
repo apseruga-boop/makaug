@@ -77,9 +77,9 @@ const PUBLIC_ROUTE_MARKERS = {
   '/brokers': ['Brokers', 'Find your perfect broker', 'Broker directory'],
   '/mortgage': ['Mortgage Finder', 'Repayment calculator', 'Gross Monthly Income Required'],
   '/advertise': ['Advertise', 'Campaign', 'Sponsored'],
-  '/about': ['About', 'MakaUg', 'Our Mission'],
-  '/how-it-works': ['How MakaUg Works', 'List property'],
-  '/careers': ['Careers at MakaUg', 'Field agent signup'],
+  '/about': ['About', 'makaug', 'Our Mission'],
+  '/how-it-works': ['How makaug Works', 'List property'],
+  '/careers': ['Careers at makaug', 'Field agent signup'],
   '/help': ['Help Centre', 'WhatsApp support'],
   '/safety': ['Safety Tips', 'Verify before paying'],
   '/anti-fraud': ['Fraud', 'Report suspicious'],
@@ -249,19 +249,20 @@ function run() {
   assert(frontendSource.includes('? "Admin"'), 'super admin/admin should see Admin in logged-in header');
   assert(homeText.includes('© 2026 makaug.com. All rights reserved.'), 'homepage footer should use lowercase public brand copyright');
   assert(!homeText.includes('© 2026 Uganda Property'), 'old Uganda Property footer should be gone');
+  const oldBrand = 'Maka' + 'Ug';
   for (const badBrandText of [
-    'Use makaug in 7 Ugandan languages',
-    'Welcome to makaug',
-    'Create your free makaug account to:',
-    'You authorize makaug',
-    'makaug may contact',
-    'keep makaug safer',
-    'Hello+makaug+',
-    'Hello%20makaug%20',
+    `Use ${oldBrand} in 7 Ugandan languages`,
+    `Welcome to ${oldBrand}`,
+    `Create your free ${oldBrand} account to:`,
+    `You authorize ${oldBrand}`,
+    `${oldBrand} may contact`,
+    `keep ${oldBrand} safer`,
+    `Hello+${oldBrand}+`,
+    `Hello%20${oldBrand}%20`,
     'MakarUG',
     'Makar'
   ]) {
-    assert(!homeText.includes(badBrandText), `public-facing homepage text should use makaug.com display: ${badBrandText}`);
+    assert(!homeText.includes(badBrandText), `public-facing homepage text should use lowercase brand display: ${badBrandText}`);
   }
   assert(frontendSource.includes('BrandConfig') && frontendSource.includes('productDisplayName: "makaug.com"'), 'public brand display should be controlled by BrandConfig');
   assert(frontendSource.includes('function navigatePublicRoute'), 'frontend should have a SPA route navigator to prevent full-page public route reloads');
@@ -304,7 +305,7 @@ function run() {
   assert(/id="listing-submit-modal"[^>]*class="modal-overlay"/.test(listPropertyHtml), 'listing submit modal should be hidden by default');
   assert(!/id="listing-submit-modal"[^>]*class="[^"]*\bopen\b/i.test(listPropertyHtml), 'listing submit modal should not be open before submission');
   assert(listPropertyText.includes('List Property'), '/list-property should use short page title');
-  assert(listPropertyText.includes('List your property on MakaUg for free.'), '/list-property should explain free listing in supporting copy');
+  assert(listPropertyText.includes('List your property on makaug for free.'), '/list-property should explain free listing in supporting copy');
   assert(!listPropertyText.includes('List Your Property - Free'), '/list-property should not use old long free title');
   assert(listPropertyText.includes('Find address or place'), '/list-property should show address-first location flow');
   assert(listPropertyHtml.includes('id="lp-current-location-btn"'), '/list-property should include share current location button');
@@ -356,7 +357,7 @@ function run() {
   assert(propertiesRoutes.includes("leadType: 'listing_owner'"), 'property submission should create listing-owner CRM lead');
   assert(propertiesRoutes.includes("activityType: 'whatsapp_contact_initiated'"), 'WhatsApp listing click should create CRM lead activity');
   assert(propertiesRoutes.includes("activityType: 'property_enquiry_created'"), 'property enquiry should create CRM lead activity');
-  assert(listingModerationService.includes('Your MakaUg property listing has been submitted'), 'property submitted email subject should be MakaUg branded');
+  assert(listingModerationService.includes('Your makaug property listing has been submitted'), 'property submitted email subject should be makaug branded');
   assert(listingModerationService.includes('Status: Pending Review'), 'property submitted email should include pending-review status');
   assert(listingModerationService.includes('WhatsApp support'), 'property submitted email should include WhatsApp support');
   assert(emailLogService.includes('INSERT INTO email_logs'), 'email log service should persist email logs when table exists');
@@ -376,12 +377,12 @@ function run() {
   const helpText = normalizeText(helpHtml);
   const howItWorksText = normalizeText(howItWorksHtml);
   assert(aboutHtml.includes('id="page-about"'), '/about should render the about route');
-  assert(aboutText.includes('About MakaUg'), '/about should show About MakaUg');
+  assert(aboutText.includes('About makaug'), '/about should show About makaug');
   for (const expected of [
     'Property in Uganda should be easier to find, easier to list, and safer to trust.',
     'Who we are',
     'Our mission',
-    'Why MakaUg exists',
+    'Why makaug exists',
     'Renters',
     'Buyers',
     'Students and parents',
@@ -394,7 +395,7 @@ function run() {
   }
   const pageAboutBlock = sourceHtml.slice(sourceHtml.indexOf('<div id="page-about"'), sourceHtml.indexOf('<div id="page-saved"'));
   assert(!/<h[12][^>]*>[^<]*Mortgage/i.test(pageAboutBlock), '/about should not make mortgage a major section');
-  assert(helpText.includes('MakaUg Help Centre'), '/help should show Help Centre heading');
+  assert(helpText.includes('makaug Help Centre'), '/help should show Help Centre heading');
   for (const expected of [
     'Finding property',
     'Listing property',
@@ -405,8 +406,8 @@ function run() {
     'Land and title safety',
     'Fraud and suspicious listings',
     'Account and login',
-    'Advertising with MakaUg',
-    'Contact MakaUg support'
+    'Advertising with makaug',
+    'Contact makaug support'
   ]) {
     assert(helpText.includes(expected), `/help missing category or support form content: ${expected}`);
   }
@@ -415,11 +416,11 @@ function run() {
   assert(contactRoutes.includes('help_request_submitted'), 'help request should log an email/notification event');
   assert(contactRoutes.includes('career_interest_submitted'), 'career interest should log an email/notification event');
   assert(contactRoutes.includes('fraud_report_received'), 'fraud reports should create notification/email coverage');
-  assert(contactRoutes.includes('property_need_request_created'), 'tell-MakaUg property need requests should create CRM/log events');
+  assert(contactRoutes.includes('property_need_request_created'), 'tell-makaug property need requests should create CRM/log events');
   assert(contactRoutes.includes('createLead'), 'help/fraud/careers/property need contact routes should create CRM leads');
   assert(frontendSource.includes('id="career-interest-form"'), '/careers should include a real lead capture form');
   assert(frontendSource.includes('submitCareerInterest'), '/careers form should submit to the backend');
-  assert(howItWorksText.includes('How MakaUg Works'), '/how-it-works should show route heading');
+  assert(howItWorksText.includes('How makaug Works'), '/how-it-works should show route heading');
   for (const expected of ['Search property', 'Use filters', 'Save options', 'Create alerts', 'WhatsApp contact', 'Book viewing', 'List property', 'Review checks', 'Use dashboards', 'Report suspicious']) {
     assert(howItWorksText.includes(expected), `/how-it-works missing step: ${expected}`);
   }
@@ -669,7 +670,7 @@ function run() {
   assert(emailServiceSource.includes('Your makaug.com account is ready'), 'welcome email should use lowercase public brand display');
   assert(emailServiceSource.includes('sendOtpEmail') && emailServiceSource.includes('Welcome broker, verify your application'), 'OTP email should use a branded, broker-aware template');
   assert(emailServiceSource.includes('sendBrokerApprovalEmail') && emailServiceSource.includes('Temporary password'), 'broker approval email should support temporary password onboarding');
-  assert(propertiesRoutes.includes('sendOtpEmail') && propertiesRoutes.includes('Welcome to MakaUg broker verification'), 'broker listing OTP route should send branded email OTP copy');
+  assert(propertiesRoutes.includes('sendOtpEmail') && propertiesRoutes.includes('Welcome to makaug broker verification'), 'broker listing OTP route should send branded email OTP copy');
   assert(agentsRoutes.includes('identity_document_url') && agentsRoutes.includes('privacy_consent_accepted') && agentsRoutes.includes('data_retention_notice_accepted'), 'broker application backend should require National ID upload and privacy/data-retention consent');
   assert(adminRoutes.includes('provisionApprovedBrokerAccount') && adminRoutes.includes('broker_account_approved') && adminRoutes.includes('force_password_change'), 'admin broker approval should provision dashboard access, email the broker, and force first password change');
   assert(frontendSource.includes('id="agent-id-photo-file"') && frontendSource.includes('agent-privacy-consent') && frontendSource.includes('agent-retention-consent'), 'broker signup form should collect National ID upload and privacy/data deletion notices');
@@ -786,7 +787,7 @@ function run() {
   assert(frontendSource.includes('Create payment fallback test'), 'setup status should include payment fallback proof action');
   assert(frontendSource.includes('renderAdminSetupStatus'), 'setup status should be wired to live admin API rendering');
   assert(frontendSource.includes('/api/admin/setup-status'), 'setup status should call protected admin setup status API');
-  assert(frontendSource.includes('MakaUg Go-Live Documentation'), 'admin docs should show launch documentation');
+  assert(frontendSource.includes('makaug Go-Live Documentation'), 'admin docs should show launch documentation');
   assert(frontendSource.includes('Backend Traceability Matrix'), 'admin docs should link backend traceability matrix');
   assert(frontendSource.includes('docs/backend-readiness-report.md'), 'admin docs should link backend readiness report');
   assert(fs.existsSync(path.join(__dirname, '..', 'docs', 'backend-traceability-matrix.md')), 'backend traceability matrix doc should exist');
@@ -1130,7 +1131,7 @@ function run() {
   assert(adminRoutes.includes("router.post('/setup-status/viewing-callback-test'"), 'admin setup status should run viewing/callback proof');
   assert(adminRoutes.includes("router.post('/setup-status/advertising-payment-test'"), 'admin setup status should run advertising/payment proof');
   assert(adminRoutes.includes("router.post('/setup-status/support-flow-test'"), 'admin setup status should run mortgage/help/careers/fraud proof');
-  assert(adminRoutes.includes('buildListingReference'), 'admin safe submission proof should generate real MakaUg references');
+  assert(adminRoutes.includes('buildListingReference'), 'admin safe submission proof should generate real makaug references');
   assert(adminRoutes.includes('logEmailEvent'), 'admin proof actions should create EmailLog records');
   assert(adminRoutes.includes('logWhatsAppMessage'), 'admin proof actions should create WhatsAppMessageLog records');
   assert(adminRoutes.includes('matchListingToSavedSearches'), 'admin proof actions should run real alert matcher service');

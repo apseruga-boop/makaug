@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-COLLECTION="$ROOT_DIR/docs/postman/MakaUg_GoLive_QA.postman_collection.json"
-ENV_FILE="$ROOT_DIR/docs/postman/MakaUg_GoLive_QA.postman_environment.json"
+COLLECTION="$ROOT_DIR/docs/postman/makaug_GoLive_QA.postman_collection.json"
+ENV_FILE="$ROOT_DIR/docs/postman/makaug_GoLive_QA.postman_environment.json"
 REPORT_DIR="$ROOT_DIR/reports/postman"
 
 BASE_URL="${BASE_URL:-https://makaug.com}"

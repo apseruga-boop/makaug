@@ -1,4 +1,4 @@
-# MakaUg Backend Readiness Report
+# makaug Backend Readiness Report
 
 Date: 2026-05-03
 
@@ -13,7 +13,7 @@ This addendum records the focused Task 15 backend audit. It intentionally separa
 | Production backend health | Passed | `GET https://makaug.com/api/health` returned `200` with `ok: true`, `env: production`, and database `ok: true`. |
 | Migration `033_task3_engagement_crm.sql` | Passed | `GET /api/health/migrations` reported `applied: true`, `appliedAt: 2026-05-03T00:06:14.457Z`. |
 | Migration `034_task4_super_admin_alerts_payments.sql` | Passed | `GET /api/health/migrations` reported `applied: true`, `appliedAt: 2026-05-03T01:29:10.365Z`. |
-| Public AI model-card endpoint | Passed | `GET /api/ai/model-card` returned `200` and the MakaUg AI model card. |
+| Public AI model-card endpoint | Passed | `GET /api/ai/model-card` returned `200` and the makaug AI model card. |
 | Public advertising packages endpoint | Passed | `GET /api/advertising/packages` returned `200` and package data. |
 | Public mortgage rates endpoint | Passed with fallback source | `GET /api/mortgage-rates` returned `200`, `source: fallback`; rates must remain labelled indicative unless a verified source is configured. |
 | Anonymous admin APIs blocked | Passed | `/api/admin/summary`, `/api/admin/crm/summary`, `/api/admin/leads`, `/api/admin/emails`, `/api/admin/notifications`, and `/api/admin/alerts` returned `401`. |
@@ -100,7 +100,7 @@ This report is the Task 14 backend gate. It only marks a feature as **working** 
 | Help request | `/help` | Help form | `POST /api/contact/help-request` | contact route, `leadService`, email/log services | leads, email logs, notifications | `help_request_submitted`, admin alert | support lead/activity | admin leads/emails/notifications | go-live tests | Live request not created | Partial | Submit preview help request. |
 | Careers request | `/careers` | Career interest form | `POST /api/contact/career-interest` | contact route, `leadService`, email/log services | leads, email logs, notifications; no dedicated CareerSubmission table | `career_interest_submitted`, `new_career_interest` | career lead/activity | admin leads/emails/notifications | go-live tests added | Live request not created | Partial | Submit preview career interest; add CV upload storage later if needed. |
 | Fraud report | `/report-fraud`, `/anti-fraud` | Report suspicious | `POST /api/contact/report-listing` | contact route, `leadService`, email/log services | `report_listings`, leads, email logs, notifications | `fraud_report_received`, admin alert | fraud lead/activity | admin fraud/leads/logs | go-live tests | Live report not created | Partial | Submit preview fraud report and verify admin. |
-| Property need/no-results | category pages | Tell MakaUg what you need | `POST /api/contact/looking-for-property` | contact route, `leadService` | `property_requests`, leads, notifications | property need logged notification | demand lead/activity | admin leads/property requests | go-live tests | Live not created | Partial | Submit preview no-results need request. |
+| Property need/no-results | category pages | Tell makaug what you need | `POST /api/contact/looking-for-property` | contact route, `leadService` | `property_requests`, leads, notifications | property need logged notification | demand lead/activity | admin leads/property requests | go-live tests | Live not created | Partial | Submit preview no-results need request. |
 | Public route probes | public pages | navigation | public HTML/sanitizer | `publicHtmlSanitizer` | none | none | none | none | public route/browser probes | Latest live probes to be rerun | Partial | Rerun before launch. |
 | Click probes | public pages | CTA/link/button | frontend/API links | probe script | none | varies | varies | docs/launch control | click probe | Latest live probes to be rerun | Partial | Rerun before launch. |
 | Performance probe | public pages | route visibility | static/server/probe | server/static config | docs audit | none | none | launch control/performance docs | performance probe | One homepage threshold miss previously reported | Partial | Fix or report exact remaining miss. |

@@ -71,7 +71,7 @@ function buildTrainingSample(row) {
       {
         role: 'system',
         content:
-          'You are MakaUg multilingual property assistant. Respond with accurate Uganda property guidance and include useful MakaUg links when relevant.'
+          'You are makaug multilingual property assistant. Respond with accurate Uganda property guidance and include useful makaug links when relevant.'
       },
       {
         role: 'user',

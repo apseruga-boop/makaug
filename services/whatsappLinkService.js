@@ -69,15 +69,15 @@ function buildListingWhatsappMessage(listing = {}, options = {}) {
 
   let message = '';
   if (category === 'rent') {
-    message = `Hi, I'm contacting you about this rental property on MakaUg: ${title} in ${location}. Is it still available for rent?`;
+    message = `Hi, I'm contacting you about this rental property on makaug.com: ${title} in ${location}. Is it still available for rent?`;
   } else if (category === 'land') {
-    message = `Hi, I'm contacting you about this land listing on MakaUg: ${title} in ${location}. Is it still available, and what is the title/tenure status?`;
+    message = `Hi, I'm contacting you about this land listing on makaug.com: ${title} in ${location}. Is it still available, and what is the title/tenure status?`;
   } else if (category === 'student') {
-    message = `Hi, I'm contacting you about this student accommodation on MakaUg: ${title} near ${location}. Is it still available?`;
+    message = `Hi, I'm contacting you about this student accommodation on makaug.com: ${title} near ${location}. Is it still available?`;
   } else if (category === 'commercial') {
-    message = `Hi, I'm contacting you about this commercial property on MakaUg: ${title} in ${location}. Is it still available?`;
+    message = `Hi, I'm contacting you about this commercial property on makaug.com: ${title} in ${location}. Is it still available?`;
   } else {
-    message = `Hi, I'm contacting you about this property for sale on MakaUg: ${title} in ${location}. Is it still available?`;
+    message = `Hi, I'm contacting you about this property for sale on makaug.com: ${title} in ${location}. Is it still available?`;
   }
 
   const parts = [message];

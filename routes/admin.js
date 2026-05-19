@@ -946,7 +946,7 @@ async function createSafeLaunchProperty(req, overrides = {}) {
           locationPrivacy: 'admin_only'
         }
       }),
-      overrides.lister_name || 'MakaUg Launch Proof',
+      overrides.lister_name || 'makaug Launch Proof',
       overrides.lister_phone || adminTestPhone(),
       overrides.lister_email || adminTestEmail(),
       'owner',
@@ -977,7 +977,7 @@ async function createSafeLaunchProperty(req, overrides = {}) {
     recipientEmail: listing.lister_email,
     recipientRole: 'property_owner',
     templateKey: 'listing_submitted_confirmation',
-    subject: 'Your MakaUg property listing has been submitted',
+    subject: 'Your makaug property listing has been submitted',
     status: providerConfigured('email') ? 'queued' : 'provider_missing',
     provider: providerConfigured('email') ? 'configured' : null,
     relatedListingId: listing.id,
@@ -3215,8 +3215,8 @@ async function notifyAdvertisingCampaignChange(campaign = {}, previous = {}) {
     `Hello ${campaign.advertiser_name || 'there'},`,
     '',
     becameLive
-      ? 'Your MakaUg advertising campaign is now live.'
-      : 'MakaUg has recorded your advertising payment.',
+      ? 'Your makaug advertising campaign is now live.'
+      : 'makaug has recorded your advertising payment.',
     '',
     `Campaign: ${campaign.campaign_name || '-'}`,
     `Package: ${campaign.package_label || campaign.package_key || '-'}`,
@@ -3228,7 +3228,7 @@ async function notifyAdvertisingCampaignChange(campaign = {}, previous = {}) {
     campaign.ends_at ? `Ends: ${campaign.ends_at}` : '',
     campaign.creative_preview_url ? `Creative Preview: ${campaign.creative_preview_url}` : '',
     '',
-    'MakaUg will track impressions, clicks, and leads while the campaign is active.',
+    'makaug will track impressions, clicks, and leads while the campaign is active.',
     `Need help? WhatsApp: ${whatsappUrl}`,
     `Email: ${supportEmail}`
   ].filter(Boolean).join('\n');
@@ -3237,8 +3237,8 @@ async function notifyAdvertisingCampaignChange(campaign = {}, previous = {}) {
     await sendSupportEmail({
       to: email,
       subject: becameLive
-        ? `[MakaUg Ads] Campaign live - ${campaign.campaign_name || 'Your ad'}`
-        : `[MakaUg Ads] Payment received - ${campaign.campaign_name || 'Your ad'}`,
+        ? `[makaug Ads] Campaign live - ${campaign.campaign_name || 'Your ad'}`
+        : `[makaug Ads] Payment received - ${campaign.campaign_name || 'Your ad'}`,
       text: lines
     });
   }
@@ -3247,7 +3247,7 @@ async function notifyAdvertisingCampaignChange(campaign = {}, previous = {}) {
     await sendWhatsAppText({
       to: phone,
       body: [
-        becameLive ? 'Your MakaUg ad is live.' : 'MakaUg has recorded your ad payment.',
+        becameLive ? 'Your makaug ad is live.' : 'makaug has recorded your ad payment.',
         `Campaign: ${campaign.campaign_name || '-'}`,
         `Status: ${campaign.status || '-'}`,
         campaign.ends_at ? `Runs until: ${new Date(campaign.ends_at).toLocaleDateString('en-GB')}` : '',
@@ -3503,7 +3503,7 @@ router.post('/advertising/campaigns', async (req, res, next) => {
       : 'draft';
     const headline = String(req.body.creative_headline || '').trim();
     const body = String(req.body.creative_body || '').trim();
-    const cta = String(req.body.creative_cta || 'View on MakaUg').trim();
+    const cta = String(req.body.creative_cta || 'View on makaug').trim();
     const ctaUrl = String(req.body.creative_cta_url || '').trim();
 
     const inserted = await db.query(
@@ -3551,9 +3551,9 @@ router.post('/advertising/campaigns', async (req, res, next) => {
         String(req.body.logo_url || '').trim() || null,
         String(req.body.creative_preview_url || '').trim() || null,
         JSON.stringify({
-          headline: headline || `${pkg?.label || 'MakaUg advertising'} for ${targetLocations.join(', ') || 'Uganda'}`,
-          body: body || pkg?.description || 'Reach active property seekers on MakaUg.',
-          call_to_action: cta || 'View on MakaUg',
+          headline: headline || `${pkg?.label || 'makaug advertising'} for ${targetLocations.join(', ') || 'Uganda'}`,
+          body: body || pkg?.description || 'Reach active property seekers on makaug.',
+          call_to_action: cta || 'View on makaug',
           cta_url: ctaUrl || null
         }),
         approvalStatus,
@@ -3657,7 +3657,7 @@ router.patch('/advertising/campaigns/:id', async (req, res, next) => {
         ...previousAiCopy,
         headline: Object.prototype.hasOwnProperty.call(req.body, 'creative_headline') ? String(req.body.creative_headline || '').trim() : previousAiCopy.headline,
         body: Object.prototype.hasOwnProperty.call(req.body, 'creative_body') ? String(req.body.creative_body || '').trim() : previousAiCopy.body,
-        call_to_action: Object.prototype.hasOwnProperty.call(req.body, 'creative_cta') ? String(req.body.creative_cta || 'View on MakaUg').trim() : (previousAiCopy.call_to_action || 'View on MakaUg'),
+        call_to_action: Object.prototype.hasOwnProperty.call(req.body, 'creative_cta') ? String(req.body.creative_cta || 'View on makaug').trim() : (previousAiCopy.call_to_action || 'View on makaug'),
         cta_url: Object.prototype.hasOwnProperty.call(req.body, 'creative_cta_url') ? String(req.body.creative_cta_url || '').trim() || null : (previousAiCopy.cta_url || null)
       }), '::jsonb');
     }
@@ -3963,7 +3963,7 @@ router.post('/field-agents/provision', async (req, res, next) => {
       type: 'field_agent_account_provisioned',
       status: 'logged',
       payloadSummary: {
-        message: 'Field Agent account provisioned by MakaUg admin',
+        message: 'Field Agent account provisioned by makaug admin',
         field_agent_code: generatedCode,
         employee_number: generatedCode,
         login_identifier_hint: 'Use Field Agent ID and the admin-issued 4-digit PIN'
@@ -6733,7 +6733,7 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
         recipientEmail: adminTestEmail(),
         recipientRole: 'admin',
         templateKey: 'provider_test_email',
-        subject: 'MakaUg email provider test',
+        subject: 'makaug email provider test',
         status: configured ? 'queued' : 'provider_missing',
         provider: configured ? 'configured' : null,
         failureReason: configured ? null : 'email_provider_missing'
@@ -6749,7 +6749,7 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
     } else if (provider === 'sms') {
       const deliveryResult = await sendPhoneOtp({
         to: adminTestPhone(),
-        message: 'MakaUg SMS provider test. No action needed.'
+        message: 'makaug SMS provider test. No action needed.'
       });
       const deliveryStatus = deliveryResult.ok
         ? notificationStatusFromDelivery(deliveryResult.delivery)
@@ -6827,7 +6827,7 @@ router.post('/setup-status/ai-smoke-test', async (req, res, next) => {
       ['list_property_whatsapp', 'I want to list property on WhatsApp.'],
       ['report_fraud', 'I think this listing is fraud.'],
       ['ask_mortgage', 'Can I get mortgage help?'],
-      ['advertiser_interest', 'I want to advertise on MakaUg.'],
+      ['advertiser_interest', 'I want to advertise on makaug.'],
       ['language_change', 'Use Luganda.'],
       ['human_handoff', 'I need a human.']
     ];
@@ -6841,7 +6841,7 @@ router.post('/setup-status/ai-smoke-test', async (req, res, next) => {
           leadType: intent,
           category: 'ai_chatbot',
           contact: {
-            name: 'MakaUg AI Smoke Test',
+            name: 'makaug AI Smoke Test',
             email: adminTestEmail(),
             phone: adminTestPhone(),
             roleType: 'admin_test'
@@ -7015,7 +7015,7 @@ router.post('/setup-status/advertising-payment-test', async (req, res, next) => 
        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15)
        RETURNING *`,
       [
-        'MakaUg Launch Proof Advertiser',
+        'makaug Launch Proof Advertiser',
         adminTestEmail(),
         adminTestPhone(),
         `Launch proof campaign ${stamp}`,
@@ -7148,7 +7148,7 @@ router.post('/setup-status/support-flow-test', async (req, res, next) => {
         recipientEmail: adminTestEmail(),
         recipientRole: 'admin',
         templateKey: eventType,
-        subject: `MakaUg ${eventType.replace(/_/g, ' ')}`,
+        subject: `makaug ${eventType.replace(/_/g, ' ')}`,
         status: providerConfigured('email') ? 'queued' : 'provider_missing',
         provider: providerConfigured('email') ? 'configured' : null,
         relatedLeadId: lead?.id || null,

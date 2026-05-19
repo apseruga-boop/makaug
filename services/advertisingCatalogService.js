@@ -27,7 +27,7 @@ const ADVERTISING_PACKAGES = [
     duration_days: 7,
     pricing_model: 'fixed_days',
     placements: ['homepage_top', 'homepage_mid'],
-    description: 'Premium brand visibility on the MakaUg homepage.'
+    description: 'Premium brand visibility on the makaug homepage.'
   },
   {
     key: 'agent_spotlight',
@@ -77,7 +77,7 @@ const ADVERTISING_PACKAGES = [
     duration_days: 1,
     pricing_model: 'one_off',
     placements: ['email', 'whatsapp_broadcast'],
-    description: 'Send an approved offer to an opted-in MakaUg audience segment.'
+    description: 'Send an approved offer to an opted-in makaug audience segment.'
   },
   {
     key: 'haymaker_all_platform',
@@ -97,7 +97,7 @@ const ADVERTISING_PACKAGES = [
     duration_days: 0,
     pricing_model: 'one_off',
     placements: ['creative_service'],
-    description: 'MakaUg prepares banner copy and size-ready creative from the advertiser logo and offer.'
+    description: 'makaug prepares banner copy and size-ready creative from the advertiser logo and offer.'
   }
 ];
 

@@ -111,7 +111,7 @@ function titleFor(type, area, index) {
 }
 
 function descriptionFor({ type, title, area, district, highlights, university }) {
-  const base = `${title.replace(/^Sourced candidate -\s*/i, '')} around ${area}, ${district}. This is a MakaUg sourced inventory candidate prepared from market signals and internal sourcing notes.`;
+  const base = `${title.replace(/^Sourced candidate -\s*/i, '')} around ${area}, ${district}. This is a makaug sourced inventory candidate prepared from market signals and internal sourcing notes.`;
   if (type === 'student') {
     return `${base} Draft positioning: ${highlights.join(', ')}. Campus context: ${university}. Verify availability, exact room rules, photos, and owner or agent permission before publishing.`;
   }
@@ -188,7 +188,7 @@ function buildExtraFields({ type, area, district, region, index, university }) {
       'Run external duplicate scan before approval'
     ],
     public_display_blocker: 'Consent and ownership verification required before public approval.',
-    public_display_name: 'MakaUg Sourcing Desk',
+    public_display_name: 'makaug Sourcing Desk',
     preferred_contact_method: 'internal_review',
     city: district,
     region,
@@ -269,7 +269,7 @@ function buildListing(sequence, type) {
       pick(['Nearby transport', 'Schools nearby', 'Shopping nearby', 'Quiet area'], sequence + 1)
     ]),
     extra_fields: JSON.stringify(extraFields),
-    lister_name: 'MakaUg Sourcing Desk',
+    lister_name: 'makaug Sourcing Desk',
     lister_phone: SUPPORT_PHONE,
     lister_email: SUPPORT_EMAIL,
     lister_type: 'owner',

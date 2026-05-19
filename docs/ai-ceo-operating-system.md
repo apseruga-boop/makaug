@@ -1,6 +1,6 @@
-# MakaUg AI CEO Operating System
+# makaug AI CEO Operating System
 
-The MakaUg AI CEO is a founder-controlled operations assistant. It can inspect live backend data, build morning reports, answer founder commands, draft follow-up actions, and route issues to the right dashboard area.
+The makaug AI CEO is a founder-controlled operations assistant. It can inspect live backend data, build morning reports, answer founder commands, draft follow-up actions, and route issues to the right dashboard area.
 
 ## Daily Job
 

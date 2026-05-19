@@ -1,8 +1,8 @@
-# MakaUg WhatsApp Property Assistant Backend
+# makaug WhatsApp Property Assistant Backend
 
-Production-ready WhatsApp chatbot backend for [MakaUg.com](https://makaug.com) built with Node.js, TypeScript, Express, WhatsApp Business Cloud API, PostgreSQL, and a pluggable LLM provider layer (self-hosted OpenAI-compatible, OpenAI, or disabled mode).
+Production-ready WhatsApp chatbot backend for [makaug.com](https://makaug.com) built with Node.js, TypeScript, Express, WhatsApp Business Cloud API, PostgreSQL, and a pluggable LLM provider layer (self-hosted OpenAI-compatible, OpenAI, or disabled mode).
 
-This backend is **MakaUg-specific** and supports the core journeys:
+This backend is **makaug-specific** and supports the core journeys:
 
 - Property search (sale, rent, students, commercial, land)
 - Property listing submissions (draft -> verification -> pending review)
@@ -13,7 +13,7 @@ This backend is **MakaUg-specific** and supports the core journeys:
 - Listing reporting/fraud support
 - Human support fallback
 
-It drives users back to MakaUg using direct listing, area, broker, mortgage, and account links.
+It drives users back to makaug using direct listing, area, broker, mortgage, and account links.
 
 ## Architecture Summary
 
@@ -168,7 +168,7 @@ Notes:
 - The same route still accepts Twilio webhook payloads as fallback.
 - Voice note transcription uses the configured provider via the same LLM abstraction layer.
 
-## AI Endpoints (MakaUg AI Brain)
+## AI Endpoints (makaug AI Brain)
 
 - `GET /api/ai/model-card`
 - `POST /api/ai/listing-intelligence`
@@ -178,7 +178,7 @@ Notes:
 
 ## LLM Foundation Phase 1 (New)
 
-These endpoints power your data foundation for training and improving MakaUg AI models.
+These endpoints power your data foundation for training and improving makaug AI models.
 
 - `GET /api/ai-core/event-schema`
 - `POST /api/ai-core/ingest/events`
@@ -377,7 +377,7 @@ Use one of these paths:
    - `MS_GRAPH_CLIENT_ID`
    - `MS_GRAPH_CLIENT_SECRET`
    - `MS_GRAPH_SENDER_EMAIL=info@makaug.com`
-   - `EMAIL_FROM=MakaUg <info@makaug.com>`
+   - `EMAIL_FROM=makaug <info@makaug.com>`
 6. Redeploy service.
 7. Test OTP from UI:
    - choose `Receive OTP via = Email`
@@ -399,7 +399,7 @@ Use one of these paths:
 
 ## Running Fully Without ChatGPT/OpenAI (Your Own LLM)
 
-Use this when you want MakaUg AI to run only on your own model infrastructure.
+Use this when you want makaug AI to run only on your own model infrastructure.
 
 1. Host an OpenAI-compatible endpoint (examples: vLLM, LM Studio server mode, Ollama OpenAI bridge, custom gateway).
 2. Set:
@@ -435,7 +435,7 @@ The bot will continue with heuristics and deterministic flows.
 7. OTP must pass before final submission.
 8. Submission is saved as `pending_review` (not auto-live).
 9. Team reviews and approves/rejects.
-10. Approved records are shown on MakaUg.
+10. Approved records are shown on makaug.
 11. AI events + feedback are logged for continuous improvement and model training data exports.
 
 ## Daily AI Agent Run
@@ -471,7 +471,7 @@ AI operations guide:
 - `/Users/arthurseruga/Documents/New project/docs/whatsapp/AI_MODEL_GUIDE.md`
 - `/Users/arthurseruga/Documents/New project/docs/LAUNCH_COMMAND_PACK.md`
 
-## Connecting Live MakaUg Data Later
+## Connecting Live makaug Data Later
 
 The bot already uses an adapter pattern:
 

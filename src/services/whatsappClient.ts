@@ -68,7 +68,7 @@ export class WhatsAppClient {
             button: payload.buttonText,
             sections: [
               {
-                title: 'MakaUg options',
+                title: 'makaug options',
                 rows: payload.rows
               }
             ]

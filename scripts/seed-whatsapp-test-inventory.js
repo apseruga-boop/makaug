@@ -100,7 +100,7 @@ const AGENTS = [
   ['Daniel Kato', 'Victoria Homes Uganda', ['Wakiso', 'Entebbe', 'Mpigi'], ['Residential', 'Land']],
   ['Grace Akello', 'Northern Key Properties', ['Gulu', 'Lira', 'Kitgum'], ['Residential', 'Commercial']],
   ['Brian Mutebi', 'Kampala Lettings Co.', ['Kampala', 'Wakiso'], ['Rentals', 'Student']],
-  ['Sarah Nambi', 'MakaUg Eastern Homes', ['Jinja', 'Mbale', 'Tororo'], ['Land', 'Commercial']],
+  ['Sarah Nambi', 'makaug Eastern Homes', ['Jinja', 'Mbale', 'Tororo'], ['Land', 'Commercial']],
   ['Peter Ochieng', 'Lakeside Realty', ['Jinja', 'Busia', 'Iganga'], ['Residential', 'Land']],
   ['Ruth Asiimwe', 'Western Estates', ['Mbarara', 'Kabale', 'Bushenyi'], ['Residential', 'Student']],
   ['Moses Okello', 'Arua Property Desk', ['Arua', 'Nebbi', 'Moyo'], ['Land', 'Commercial']],
@@ -156,7 +156,7 @@ function propertyTypeFor(type, index) {
 }
 
 function makeDescription({ type, district, area, title, bedrooms, bathrooms, university }) {
-  const base = `${title} in ${area}, ${district}. TEST LISTING for MakaUg WhatsApp chatbot, search, map, agent and approval-flow QA.`;
+  const base = `${title} in ${area}, ${district}. TEST LISTING for makaug WhatsApp chatbot, search, map, agent and approval-flow QA.`;
   if (type === 'student') {
     return `${base} Close to ${university}, with secure access, study-friendly rooms, water, power and nearby transport.`;
   }
@@ -243,7 +243,7 @@ async function upsertAgents(client) {
         districts,
         specializations,
         `https://images.unsplash.com/photo-${i % 2 ? '1494790108377-be9c29b29330' : '1500648767791-00dcc994a43e'}?w=600&q=80&auto=format&fit=crop&sig=${n}`,
-        `Approved MakaUg WhatsApp QA agent covering ${districts.join(', ')}. Seed source: ${SOURCE}.`,
+        `Approved makaug WhatsApp QA agent covering ${districts.join(', ')}. Seed source: ${SOURCE}.`,
         (4.2 + ((i % 8) / 10)).toFixed(1),
         18 + (i * 7),
         i < 6

@@ -1,6 +1,6 @@
 # Outlook AI Email Agent
 
-The Outlook AI Email Agent connects MakaUg support email to Microsoft Graph. It is built to read inbound Outlook messages, classify the enquiry, write a safe reply draft, expose the draft in the King dashboard, and only send when the configured guardrails allow it.
+The Outlook AI Email Agent connects makaug support email to Microsoft Graph. It is built to read inbound Outlook messages, classify the enquiry, write a safe reply draft, expose the draft in the King dashboard, and only send when the configured guardrails allow it.
 
 ## Safety Model
 
@@ -30,7 +30,7 @@ The agent also falls back to the existing `MS_GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT
 
 ## Microsoft Graph Setup
 
-1. Create a Microsoft Entra app registration for the MakaUg support mailbox.
+1. Create a Microsoft Entra app registration for the makaug support mailbox.
 2. Add Graph permissions needed for the agent:
    - `Mail.Read`
    - `Mail.ReadWrite`

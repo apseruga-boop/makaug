@@ -150,7 +150,7 @@ async function ensurePostVerificationRecords(db, user = {}) {
   }
 
   if (audience === 'agent') {
-    const fullName = cleanText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'MakaUg broker';
+    const fullName = cleanText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'makaug broker';
     const email = cleanText(user.email || '');
     const phone = cleanText(user.phone || '');
     const phoneDigits = normalizePhoneDigits(phone);
@@ -170,7 +170,7 @@ async function ensurePostVerificationRecords(db, user = {}) {
     const profilePhotoUrl = cleanText(profile.broker_profile_photo_url) || null;
     const bio = cleanText(profile.broker_bio)
       || (specializations.length
-        ? `MakaUg broker covering ${districtsCovered.slice(0, 3).join(', ') || 'Uganda'} properties.`
+        ? `makaug broker covering ${districtsCovered.slice(0, 3).join(', ') || 'Uganda'} properties.`
         : null);
 
     const existing = await db.query(

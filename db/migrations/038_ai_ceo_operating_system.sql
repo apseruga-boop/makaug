@@ -65,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_ceo_commands_status_created
 
 UPDATE ai_agents
 SET
-  name = 'MakaUg AI CEO',
+  name = 'makaug AI CEO',
   description = 'Founder-controlled AI chief of staff for daily reports, site health, communications, leads, field agents, advertising, WhatsApp health, learning capture, and review-only operational recommendations.',
   enabled = TRUE,
   run_mode = 'recommend',
@@ -114,7 +114,7 @@ WHERE code = 'managing_director_ceo';
 INSERT INTO ai_agents (code, name, description, enabled, run_mode, config)
 VALUES (
   'managing_director_ceo',
-  'MakaUg AI CEO',
+  'makaug AI CEO',
   'Founder-controlled AI chief of staff for daily reports, site health, communications, leads, field agents, advertising, WhatsApp health, learning capture, and review-only operational recommendations.',
   TRUE,
   'recommend',

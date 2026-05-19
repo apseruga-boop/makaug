@@ -337,10 +337,10 @@ function buildOutlookReplyDraft(input = {}) {
     'Please send:',
     ...checklist.map((item) => `- ${item}`),
     '',
-    'A MakaUg team member will review the details and reply with the right next step.',
+    'A makaug team member will review the details and reply with the right next step.',
     '',
     'Regards,',
-    'MakaUg'
+    'makaug'
   ].join('\n');
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#111827;line-height:1.6;">
     ${text.split('\n').map((line) => {

@@ -93,7 +93,7 @@ async function main() {
   }), timeoutMs, 'WhatsApp runtime intercept');
   assert(runtime && runtime.message, 'WhatsApp runtime did not return a CEO reply.');
   assert(
-    /MakaUg AI CEO|listing report|lead report|WhatsApp health|revenue report/i.test(runtime.message),
+    /makaug AI CEO|listing report|lead report|WhatsApp health|revenue report/i.test(runtime.message),
     'WhatsApp runtime reply did not look like an AI CEO response.'
   );
 

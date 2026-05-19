@@ -64,7 +64,7 @@ async function main() {
         status, marketing_opt_in, weekly_tips_opt_in, preferred_contact_channel,
         preferred_language, profile_data
       ) VALUES (
-        'MakaUg', 'Super Admin', $1, $2, 'super_admin', $3, TRUE,
+        'makaug', 'Super Admin', $1, $2, 'super_admin', $3, TRUE,
         'active', FALSE, FALSE, 'email', 'en',
         jsonb_build_object('audience', 'super_admin', 'account_kind', 'super_admin')
       )

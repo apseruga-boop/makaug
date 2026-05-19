@@ -1,6 +1,6 @@
-# MakaUg AI Model Guide (Very Simple)
+# makaug AI Model Guide (Very Simple)
 
-This guide explains the MakaUg AI system like a simple checklist.
+This guide explains the makaug AI system like a simple checklist.
 
 ## 1) What this AI does
 

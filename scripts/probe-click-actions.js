@@ -40,7 +40,7 @@ const PRIMARY_ACTIONS = [
   { route: '/student-accommodation', selector: '#student-login-cta', label: 'Student Login opens student drawer', expectDrawer: '#account-access-drawer', marker: 'Students can save campus searches' },
   { route: '/list-property', selector: '#list-choice-online-btn', label: 'List Property online choice opens form', expectSamePageAction: true, marker: 'Property Details' },
   { route: '/list-property', selector: '#lp-whatsapp-option-btn', label: 'List Property WhatsApp option', expectPopup: true, marker: 'List via WhatsApp' },
-  { route: '/discover-ai-chatbot', selector: '#ai-chatbot-submit-btn', label: 'AI chatbot prompt action', expectSamePageAction: true, marker: 'MakaUg AI', fill: { selector: '#ai-chatbot-message', value: 'Help me search for a rental in Kampala' } },
+  { route: '/discover-ai-chatbot', selector: '#ai-chatbot-submit-btn', label: 'AI chatbot prompt action', expectSamePageAction: true, marker: 'makaug AI', fill: { selector: '#ai-chatbot-message', value: 'Help me search for a rental in Kampala' } },
   { route: '/', selector: '#footer-link-list-free', label: 'Footer List Property', expectUrl: '/list-property', marker: 'List Property' },
   { route: '/', selector: '#footer-link-advertise', label: 'Footer Advertise', expectUrl: '/advertise', marker: 'Advertise' },
   { route: '/', selector: '#footer-link-help', label: 'Footer Help', expectUrl: '/help', marker: 'Help' },

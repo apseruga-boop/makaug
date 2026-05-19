@@ -38,7 +38,7 @@ Live proof after deployment:
 
 ## Remaining Issues To Work Through
 
-1. Public brand copy still contains legacy `MakaUg` in some public strings and docs/tests. The requested public rule is `makaug.com`.
+1. Public brand copy still contains legacy `makaug` in some public strings and docs/tests. The requested public rule is `makaug.com`.
 2. Language switching is still partial in some public body/search labels. The router fix did not attempt a full translation rewrite.
 3. Provider credentials are not fully verified live:
    - Email provider envs missing.
@@ -92,4 +92,4 @@ Local after fix:
 ## Rollback Notes
 
 - Revert the public-route token guard in `assets/makaug-app.js` to return to the old router behavior.
-- Revert the click probe marker in `scripts/probe-click-actions.js` if public About copy returns to the old exact `About MakaUg` wording.
+- Revert the click probe marker in `scripts/probe-click-actions.js` if public About copy returns to the old exact `About makaug` wording.

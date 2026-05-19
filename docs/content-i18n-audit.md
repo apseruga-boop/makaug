@@ -1,4 +1,4 @@
-# MakaUg Content and i18n Audit
+# makaug Content and i18n Audit
 
 Status: partial. Public routes are English-safe, About has launch-level Luganda/Kiswahili body coverage, and unsupported or unreviewed strings fall back to English instead of a wrong nearby language.
 

@@ -308,23 +308,23 @@ router.post('/enquiry', async (req, res, next) => {
       if (email) {
         userDelivery = await sendSupportEmail({
           to: email,
-          subject: 'We received your MakaUg mortgage request',
+          subject: 'We received your makaug mortgage request',
           text: [
             `Hello ${name},`,
             '',
-            'Thank you for requesting mortgage help on MakaUg.',
+            'Thank you for requesting mortgage help on makaug.',
             `Reference: ${reference}`,
             `Amount to borrow: UGX ${Number(amountToBorrow).toLocaleString('en-UG')}`,
             'Our team will contact you using your preferred channel.',
             `WhatsApp support: ${whatsappUrl}`,
             '',
-            'MakaUg'
+            'makaug'
           ].join('\n')
         });
       }
       adminDelivery = await sendSupportEmail({
         to: supportEmail,
-        subject: `[MakaUg] Mortgage lead received • ${reference}`,
+        subject: `[makaug] Mortgage lead received • ${reference}`,
         text: [
           'A mortgage help request was submitted.',
           '',
@@ -345,7 +345,7 @@ router.post('/enquiry', async (req, res, next) => {
         recipientEmail: email || null,
         recipientRole: 'user',
         templateKey: 'mortgage_lead_received',
-        subject: 'We received your MakaUg mortgage request',
+        subject: 'We received your makaug mortgage request',
         status: notificationStatusFromDelivery(userDelivery),
         relatedLeadId: lead?.id || null,
         relatedMortgageLeadId: id || null,
@@ -357,7 +357,7 @@ router.post('/enquiry', async (req, res, next) => {
         recipientEmail: supportEmail,
         recipientRole: 'admin',
         templateKey: 'admin_alert',
-        subject: `[MakaUg] Mortgage lead received • ${reference}`,
+        subject: `[makaug] Mortgage lead received • ${reference}`,
         status: notificationStatusFromDelivery(adminDelivery),
         relatedLeadId: lead?.id || null,
         relatedMortgageLeadId: id || null,

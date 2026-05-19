@@ -1,4 +1,4 @@
-# MakaUg Super Admin Environment Setup
+# makaug Super Admin Environment Setup
 
 Use this checklist to create the owner/super_admin account without hardcoded credentials or a universal password.
 

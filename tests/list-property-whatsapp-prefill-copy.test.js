@@ -5,7 +5,7 @@ const path = require('path');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'assets', 'makaug-app.js'), 'utf8');
 
 assert(appSource.includes('function buildListPropertyWhatsAppMessage()'), 'List-property WhatsApp prefill builder must exist');
-assert(appSource.includes('Hi MakaUg, I would like to list a property'), 'Prefill should start with a natural listing request');
+assert(appSource.includes('Hi makaug, I would like to list a property'), 'Prefill should start with a natural listing request');
 assert(appSource.includes('on makaug.com.'), 'Prefill should mention makaug.com naturally');
 assert(appSource.includes('sale: "for sale"'), 'Sale prefill should say "list a property for sale"');
 assert(appSource.includes('rent: "for rent"'), 'Rent prefill should say "list a property for rent"');

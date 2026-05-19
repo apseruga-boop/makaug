@@ -1,7 +1,7 @@
 INSERT INTO ai_agents (code, name, description, enabled, run_mode, config)
 VALUES (
   'managing_director_ceo',
-  'MakaUg Managing Director',
+  'makaug Managing Director',
   'Monitors launch-critical operations: broker approvals, listing review backlog, failed notifications, leads, advertising revenue, and provider readiness.',
   TRUE,
   'recommend',

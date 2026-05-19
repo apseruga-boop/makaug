@@ -800,7 +800,7 @@ router.post('/onboarding', requireAuth, async (req, res, next) => {
           req.userAuth.id,
           category,
           JSON.stringify({ categories: preferences.categories, locations: preferences.preferred_locations }),
-          [category, location].filter(Boolean).join(' in ') || 'MakaUg saved search',
+          [category, location].filter(Boolean).join(' in ') || 'makaug saved search',
           location,
           preferences.min_budget,
           preferences.max_budget,
@@ -1017,7 +1017,7 @@ router.get('/insights', requireAuth, async (req, res, next) => {
       data: {
         location,
         rows: result.rows,
-        note: 'Insights are based on available MakaUg listings and user demand.'
+        note: 'Insights are based on available makaug listings and user demand.'
       }
     });
   } catch (error) {
@@ -1396,7 +1396,7 @@ router.post('/saved-searches', requireAuth, async (req, res, next) => {
         asText(req.body.phone || req.userAuth.phone) || null,
         category,
         JSON.stringify(filters),
-        asText(req.body.label || req.body.title) || [category, locationLabel(locationObject)].filter(Boolean).join(' in ') || 'MakaUg saved search',
+        asText(req.body.label || req.body.title) || [category, locationLabel(locationObject)].filter(Boolean).join(' in ') || 'makaug saved search',
         locationLabel(locationObject),
         asBigIntNumber(req.body.min_price || req.body.minPrice || req.body.minBudget),
         asBigIntNumber(req.body.max_price || req.body.maxPrice || req.body.maxBudget || req.body.budget),
@@ -1901,7 +1901,7 @@ router.post('/viewings', optionalAuth, async (req, res, next) => {
     if (viewingConfig && (viewingConfig.accepts_viewings === false || viewingConfig.booking_mode === 'disabled' || viewingConfig.booking_mode === 'callback_only')) {
       return res.status(409).json({ ok: false, error: 'This listing is not accepting viewing bookings. Request a callback instead.' });
     }
-    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'MakaUg user');
+    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'makaug user');
     const phone = asText(req.body.phone || req.userAuth?.phone) || null;
     const email = asText(req.body.email || req.userAuth?.email) || null;
     if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
@@ -1919,7 +1919,7 @@ router.post('/viewings', optionalAuth, async (req, res, next) => {
       },
       source: req.body.source || 'viewing_booking',
       leadType: 'viewing',
-      message: req.body.message || 'Viewing requested from MakaUg dashboard/web.',
+      message: req.body.message || 'Viewing requested from makaug dashboard/web.',
       metadata: { preferred_date: req.body.preferred_date || req.body.preferredDate, preferred_time: req.body.preferred_time || req.body.preferredTime }
     });
     const result = await db.query(
@@ -1982,7 +1982,7 @@ router.get('/callbacks', requireAuth, async (req, res, next) => {
 router.post('/callbacks', optionalAuth, async (req, res, next) => {
   try {
     const listingId = isUuid(req.body.listing_id || req.body.listingId) ? (req.body.listing_id || req.body.listingId) : null;
-    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'MakaUg user');
+    const name = asText(req.body.name || [req.userAuth?.first_name, req.userAuth?.last_name].filter(Boolean).join(' '), 'makaug user');
     const phone = asText(req.body.phone || req.userAuth?.phone) || null;
     const email = asText(req.body.email || req.userAuth?.email) || null;
     if (!phone && !email) return res.status(400).json({ ok: false, error: 'phone or email is required' });
@@ -2000,7 +2000,7 @@ router.post('/callbacks', optionalAuth, async (req, res, next) => {
       },
       source: req.body.source || 'callback_request',
       leadType: 'callback',
-      message: req.body.message || 'Callback requested from MakaUg dashboard/web.',
+      message: req.body.message || 'Callback requested from makaug dashboard/web.',
       metadata: { preferred_callback_time: req.body.preferred_callback_time || req.body.preferredCallbackTime }
     });
     const result = await db.query(

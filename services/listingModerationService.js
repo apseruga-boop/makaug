@@ -11,7 +11,7 @@ const REVIEW_CHECKS = [
   { key: 'identity_document_available', label: 'National ID photo preview available' },
   { key: 'identity_number_not_reused', label: 'ID number not reused by another contact', overrideable: true },
   { key: 'previous_lister_checked', label: 'Previous lister history checked', overrideable: true },
-  { key: 'makaug_duplicate_checked', label: 'Not duplicated on MakaUg', overrideable: true },
+  { key: 'makaug_duplicate_checked', label: 'Not duplicated on makaug', overrideable: true },
   { key: 'image_count_checked', label: 'Required property photos present' },
   { key: 'image_quality_checked', label: 'Photo manifest and URLs look usable' },
   { key: 'location_verified', label: 'Location details and map pin present' },
@@ -73,7 +73,7 @@ function getOwnerPreviewUrl(listing = {}, token = '') {
 
 function getWhatsAppShareUrl(listing = {}) {
   const text = [
-    `${listing.title || 'MakaUg property listing'}`,
+    `${listing.title || 'makaug property listing'}`,
     getPublicListingUrl(listing)
   ].filter(Boolean).join('\n');
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
@@ -81,7 +81,7 @@ function getWhatsAppShareUrl(listing = {}) {
 
 function getSocialShareLinks(listing = {}) {
   const publicUrl = getPublicListingUrl(listing);
-  const title = listing.title || 'MakaUg property listing';
+  const title = listing.title || 'makaug property listing';
   const text = `${title}\n${publicUrl}`;
   return {
     live: publicUrl,
@@ -265,7 +265,7 @@ function buildAutomatedListingReview({
     checkResult(
       'makaug_duplicate_checked',
       likelyDuplicates.length ? 'fail' : 'pass',
-      likelyDuplicates.length ? 'Possible duplicate listing found on MakaUg.' : 'No likely MakaUg duplicate found.',
+      likelyDuplicates.length ? 'Possible duplicate listing found on makaug.' : 'No likely makaug duplicate found.',
       { count: likelyDuplicates.length, rows: likelyDuplicates.slice(0, 5) }
     ),
     checkResult(
@@ -381,11 +381,11 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
     const publicUrl = getPublicListingUrl(listing);
     const shareLinks = getSocialShareLinks(listing);
     return {
-      subject: `[MakaUg] Listing approved • ${title}`,
+      subject: `[makaug] Listing approved • ${title}`,
       text: [
         `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
         '',
-        'Good news, your MakaUg property listing is now approved and live.',
+        'Good news, your makaug property listing is now approved and live.',
         `Listing reference: ${reference}`,
         `Title: ${title}`,
         `Live link: ${publicUrl}`,
@@ -399,10 +399,10 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
         `YouTube description/caption: ${shareLinks.youtube_caption}`,
         '',
         `If you need help, contact ${supportEmail}.`,
-        'Thank you for using MakaUg.'
+        'Thank you for using makaug.'
       ].join('\n'),
       whatsapp: [
-        `MakaUg: your listing is approved and live.`,
+        `makaug: your listing is approved and live.`,
         `Ref: ${reference}`,
         `Title: ${title}`,
         `View/share: ${publicUrl}`,
@@ -415,21 +415,21 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
 
   if (String(status || '').toLowerCase() === 'rejected') {
     return {
-      subject: `[MakaUg] Listing rejected • ${title}`,
+      subject: `[makaug] Listing rejected • ${title}`,
       text: [
         `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
         '',
-        'Thank you for submitting your MakaUg listing.',
+        'Thank you for submitting your makaug listing.',
         `Listing reference: ${reference}`,
         `Title: ${title}`,
         'The listing has been rejected during review.',
         reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
         '',
         `Please resend the correct information or contact ${supportEmail} for help.`,
-        'Thank you for using MakaUg.'
+        'Thank you for using makaug.'
       ].filter(Boolean).join('\n'),
       whatsapp: [
-        `MakaUg: your listing was rejected during review.`,
+        `makaug: your listing was rejected during review.`,
         `Ref: ${reference}`,
         `Title: ${title}`,
         reason ? `Reason: ${reason}` : 'Reason: It did not pass our current quality checks.',
@@ -439,11 +439,11 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
   }
 
   return {
-    subject: `[MakaUg] Listing ${label} • ${title}`,
+    subject: `[makaug] Listing ${label} • ${title}`,
     text: [
       `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
       '',
-      `Your MakaUg listing status is now: ${label}.`,
+      `Your makaug listing status is now: ${label}.`,
       `Listing reference: ${reference}`,
       `Title: ${title}`,
       reason ? `Reason: ${reason}` : '',
@@ -451,7 +451,7 @@ function buildOwnerStatusMessage({ listing = {}, status, reason }) {
       `If you need help, contact ${supportEmail}.`
     ].filter(Boolean).join('\n'),
     whatsapp: [
-      `MakaUg listing update: ${label}`,
+      `makaug listing update: ${label}`,
       `Ref: ${reference}`,
       `Title: ${title}`,
       reason ? `Reason: ${reason}` : ''
@@ -469,11 +469,11 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
   const whatsappUrl = `https://wa.me/${String(getSupportPhone()).replace(/\D/g, '') || '256760112587'}`;
 
   return {
-    subject: 'Your MakaUg property listing has been submitted',
+    subject: 'Your makaug property listing has been submitted',
     text: [
       `Hello${listing?.lister_name ? ` ${listing.lister_name}` : ''},`,
       '',
-      'Your MakaUg property listing has been submitted.',
+      'Your makaug property listing has been submitted.',
       `Title: ${title}`,
       `Listing reference: ${reference}`,
       'Status: Pending Review',
@@ -487,13 +487,13 @@ function buildOwnerSubmissionMessage({ listing = {}, token = '' }) {
       `Dashboard: ${dashboardUrl}`,
       `WhatsApp support: ${whatsappUrl}`,
       `If you need help, contact ${supportEmail}.`,
-      `Open MakaUg: ${siteUrl}`,
+      `Open makaug: ${siteUrl}`,
       '',
-      'MakaUg',
-      'Thank you for using MakaUg.'
+      'makaug',
+      'Thank you for using makaug.'
     ].join('\n'),
     whatsapp: [
-      'MakaUg Listing Received',
+      'makaug Listing Received',
       '',
       'Your property listing has been submitted for review.',
       `Title: ${title}`,

@@ -20,4 +20,4 @@ Bot: Loan term years?
 User: 20
 Bot: Household income optional
 User: 8000000
-Bot: Estimated monthly repayment + disclaimer + MakaUg mortgage link
+Bot: Estimated monthly repayment + disclaimer + makaug mortgage link

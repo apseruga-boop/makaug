@@ -1,4 +1,4 @@
-# MakaUg Go-Live Today (Simple Steps)
+# makaug Go-Live Today (Simple Steps)
 
 Use this exact order.
 
@@ -8,7 +8,7 @@ Use this exact order.
 cd "/Users/arthurseruga/Documents/New project"
 git init
 git add .
-git commit -m "MakaUg launch"
+git commit -m "makaug launch"
 git branch -M main
 git remote add origin https://github.com/<your-username>/<your-repo>.git
 git push -u origin main

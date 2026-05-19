@@ -1,4 +1,4 @@
-# MakaUg Go-Live Manual QA Checklist
+# makaug Go-Live Manual QA Checklist
 
 Use this checklist against the running preview/live app after deploy.
 
@@ -7,10 +7,10 @@ Use this checklist against the running preview/live app after deploy.
 - Open `/` logged out. Header shows `Saved` and `Sign In`; it does not show `Dashboard` or `Sign Out`.
 - Open `/for-sale`, `/to-rent`, `/student-accommodation`, `/students`, `/land`, `/commercial`, `/brokers`, `/mortgage`, `/advertise`, `/list-property`, `/about`, `/help`, `/safety`, and `/anti-fraud`.
 - Confirm every public route shows route-specific body content, not only header/footer.
-- On empty category routes, confirm no-results content shows Save Search, Create Alert, Ask MakaUg on WhatsApp, and Tell MakaUg what you need.
+- On empty category routes, confirm no-results content shows Save Search, Create Alert, Ask makaug on WhatsApp, and Tell makaug what you need.
 - Search from the homepage. Confirm location scope appears only once.
 - Switch language. Confirm visible labels change where translations exist.
-- Confirm footer says `© 2026 MakaUg. All rights reserved.`
+- Confirm footer says `© 2026 makaug. All rights reserved.`
 - Confirm public HTML does not include dashboard, admin, CRM, account, or listing submission internals.
 - Run `BASE_URL=https://makaug.com npm run probe:public-routes`.
 

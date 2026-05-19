@@ -56,8 +56,8 @@ app.use(
   cors({
     origin(origin, callback) {
       const isLocalOrigin = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(String(origin || ''));
-      const isMakaUgOrigin = /^https?:\/\/([^/]+\.)?makaug\.com$/i.test(String(origin || ''));
-      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isMakaUgOrigin) {
+      const isMakaugOrigin = /^https?:\/\/([^/]+\.)?makaug\.com$/i.test(String(origin || ''));
+      if (!origin || !corsOrigins.length || corsOrigins.includes(origin) || isLocalOrigin || isMakaugOrigin) {
         return callback(null, true);
       }
       return callback(new Error('CORS origin not allowed'));
@@ -173,14 +173,14 @@ function sendPublicIndex(req, res, next) {
   if (isProtectedPath(req.path)) {
     const auth = authFromCookie(req);
     res.set('X-Robots-Tag', 'noindex, noarchive');
-    res.set('X-MakaUg-Protected-Route', '1');
+    res.set('X-makaug-Protected-Route', '1');
     if (!auth) {
       return res.redirect(302, `/login?next=${encodeURIComponent(req.originalUrl || req.path)}`);
     }
     if (!roleCanAccessProtectedPath(auth, req.path)) {
       return res.status(403).send(renderProtectedLoginShell('/login?access=denied', {
         title: 'Access denied',
-        message: 'This MakaUg area belongs to a different account type. Sign in with the right account to continue.'
+        message: 'This makaug area belongs to a different account type. Sign in with the right account to continue.'
       }));
     }
     try {
@@ -195,7 +195,7 @@ function sendPublicIndex(req, res, next) {
   try {
     res.type('html');
     res.set('Cache-Control', 'no-store');
-    res.set('X-MakaUg-Public-Sanitized', '1');
+    res.set('X-makaug-Public-Sanitized', '1');
     return res.send(renderPublicHtml(req.path));
   } catch (error) {
     return next(error);
@@ -244,7 +244,7 @@ async function start() {
   }
 
   app.listen(port, () => {
-    logger.info(`MakaUg backend running on http://localhost:${port}`);
+    logger.info(`makaug backend running on http://localhost:${port}`);
   });
 }
 
