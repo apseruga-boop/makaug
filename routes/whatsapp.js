@@ -1816,6 +1816,9 @@ const AREA_ALIASES = {
   lubaga: 'Rubaga'
 };
 
+const WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
+const WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
+
 const REGION_DISTRICTS = {
   central: [
     'Buikwe', 'Bukomansimbi', 'Buvuma', 'Gomba', 'Kalangala', 'Kalungu',
@@ -2536,7 +2539,41 @@ function listingMatchesPropertyType(row, propertyType) {
   ].map((v) => normalizeInput(v).toLowerCase()).some((v) => v.includes(q));
 }
 
+function addWhatsappPublicListingFilter(values, alias = 'p') {
+  const safeAlias = /^[a-z_][a-z0-9_]*$/i.test(String(alias || '')) ? alias : 'p';
+  const filters = [];
+
+  WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS.forEach((marker) => {
+    values.push(`%${marker}%`);
+    const titleIdx = values.length;
+    values.push(`%${marker}%`);
+    const descriptionIdx = values.length;
+    filters.push(`(COALESCE(${safeAlias}.title, '') NOT ILIKE $${titleIdx} AND COALESCE(${safeAlias}.description, '') NOT ILIKE $${descriptionIdx})`);
+  });
+
+  WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES.forEach((title) => {
+    values.push(title);
+    filters.push(`LOWER(TRIM(COALESCE(${safeAlias}.title, ''))) <> $${values.length}`);
+  });
+
+  filters.push(`COALESCE(${safeAlias}.source, '') !~* '(qa|test|seed|demo|soft_launch|launch_proof)'`);
+  filters.push(`COALESCE(${safeAlias}.listed_via, '') !~* '(qa|test|seed|demo|soft_launch|launch_proof)'`);
+  filters.push(`COALESCE(${safeAlias}.extra_fields->>'is_test', '') !~* '^(true|1|yes)$'`);
+  filters.push(`COALESCE(${safeAlias}.extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'`);
+  filters.push(`COALESCE(${safeAlias}.extra_fields->>'qa_test_delete', '') !~* '^(true|1|yes)$'`);
+  filters.push(`COALESCE(${safeAlias}.extra_fields->>'soft_launch_test', '') !~* '^(true|1|yes)$'`);
+  filters.push(`COALESCE(${safeAlias}.extra_fields->>'test_inventory', '') !~* '^(true|1|yes)$'`);
+
+  return filters.length ? ` AND ${filters.join(' AND ')}` : '';
+}
+
 function findWebsitePublicListings(filters = {}, limit = 5) {
+  void filters;
+  void limit;
+  return [];
+}
+
+function findLegacyWebsitePublicListings(filters = {}, limit = 5) {
   const searchType = normalizeListingType(filters.searchType || 'any');
   const area = canonicalAreaText(filters.area || filters.preferredArea || '');
   const propertyType = normalizeInput(filters.propertyType || '');
@@ -2567,7 +2604,8 @@ function mergeSearchRows(primaryRows = [], websiteRows = [], limit = 5) {
 
 async function findPropertiesByNaturalFilters(filters = {}) {
   const values = ['approved'];
-  let where = 'WHERE status = $1';
+  let where = 'WHERE p.status = $1';
+  where += addWhatsappPublicListingFilter(values, 'p');
 
   const listingType = normalizeListingType(filters.searchType || 'any');
   if (listingType !== 'any') {
@@ -3702,7 +3740,8 @@ async function handleMissedCallResolutionReply({ phone, lang, cleanBody, session
 
 async function findPropertiesForWhatsapp(searchType, location) {
   const values = ['approved'];
-  let where = 'WHERE status = $1';
+  let where = 'WHERE p.status = $1';
+  where += addWhatsappPublicListingFilter(values, 'p');
 
   if (searchType && searchType !== 'any') {
     if (searchType === 'student') {
@@ -3778,7 +3817,8 @@ async function findPropertiesForWhatsapp(searchType, location) {
 
 async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMiles = DEFAULT_SEARCH_RADIUS_MILES) {
   const values = ['approved'];
-  let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
+  let where = 'WHERE p.status = $1 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL';
+  where += addWhatsappPublicListingFilter(values, 'p');
 
   if (searchType && searchType !== 'any') {
     values.push(searchType);
@@ -3828,7 +3868,8 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
 async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocation, filters = null, radiusMiles = DEFAULT_SEARCH_RADIUS_MILES) {
   const f = filters && typeof filters === 'object' ? filters : {};
   const values = ['approved'];
-  let where = 'WHERE status = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL';
+  let where = 'WHERE p.status = $1 AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL';
+  where += addWhatsappPublicListingFilter(values, 'p');
 
   const listingType = normalizeListingType(f.searchType || baseSearchType || 'any');
   if (listingType && listingType !== 'any') {

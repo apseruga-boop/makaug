@@ -7,6 +7,7 @@ const test = require('node:test');
 const appSource = fs.readFileSync('assets/makaug-app.js', 'utf8');
 const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.js', 'utf8');
 const htmlSource = fs.readFileSync('index.html', 'utf8');
+const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -61,6 +62,16 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
   assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('WhatsApp property search uses the same public inventory guardrails', () => {
+  assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
+  assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
+  assert.match(whatsappRouteSource, /function addWhatsappPublicListingFilter/);
+  assert.match(whatsappRouteSource, /COALESCE\(\$\{safeAlias\}\.title, ''\) NOT ILIKE/);
+  assert.match(whatsappRouteSource, /COALESCE\(\$\{safeAlias\}\.source, ''\) !~\* '\(qa\|test\|seed\|demo\|soft_launch\|launch_proof\)'/);
+  assert.match(whatsappRouteSource, /where \+= addWhatsappPublicListingFilter\(values, 'p'\)/);
+  assert.match(whatsappRouteSource, /function findWebsitePublicListings\(filters = \{\}, limit = 5\) \{\s*void filters;\s*void limit;\s*return \[\];/);
 });
 
 test('public app cache version is bumped for controlled inventory rollout', () => {
