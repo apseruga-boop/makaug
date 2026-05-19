@@ -8846,6 +8846,25 @@ function ensureAdminSourcedCandidateControls() {
   if (header) header.appendChild(actions);
 }
 
+function adminSeededListingSummaryHtml(item = {}) {
+  const id = String(item.id || item.property_id || "").trim();
+  const idArg = id ? adminListingIdArg(id) : "''";
+  const publicUrl = String(item.property_url || "").trim();
+  const previewUrl = String(item.owner_preview_url || "").trim();
+  const videoUrl = String(item.youtube_url || item.video_url || "").trim();
+  return `
+    <div class="rounded-lg border border-blue-100 bg-white p-2">
+      <div class="font-bold text-blue-950">${adminEscape(item.title || "Listing")}</div>
+      <div class="mt-1 flex gap-2 flex-wrap">
+        ${id ? `<button type="button" onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-bold">Open Review</button>` : ""}
+        ${id ? `<button type="button" onclick="openAdminListingLivePreview(${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[11px] font-bold">Live-style Preview</button>` : ""}
+        ${previewUrl ? `<a href="${adminAttr(previewUrl)}" target="_blank" rel="noopener" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-bold">Private Preview Link</a>` : ""}
+        ${publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-1 rounded text-[11px] font-bold">Public Link After Approval</a>` : ""}
+        ${videoUrl ? `<a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">YouTube Source</a>` : ""}
+      </div>
+    </div>`;
+}
+
 async function adminSeedBakaimaAuthorisedListings() {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
@@ -8926,7 +8945,7 @@ async function adminSeedCarnelianAuthorisedListings() {
         <div class="font-black">Carnelian listings created</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} pending Carnelian house-tour records are now in the King review queue.</div>
         <div class="mt-1">Agent profile loaded: Carnelian Properties Uganda • +256700294005 / +256785599477 • carnelianproperties4@gmail.com</div>
-        ${samples.length ? `<div class="mt-2">${samples.map((item) => `<div>${adminEscape(item.title || "Listing")} • ${adminEscape(item.property_url || "")}</div>`).join("")}</div>` : ""}`;
+        ${samples.length ? `<div class="mt-2 space-y-2">${samples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
     }
     toast("Carnelian listings are ready for King review.");
     await renderAdminDashboard();
@@ -13433,6 +13452,7 @@ function renderAdminReviewPanel(review) {
           ` : ""}
           <div class="flex flex-wrap gap-2 mt-3">
             <button onclick="openAdminListingLivePreview(${reviewIdArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-semibold">Open Live-style Preview</button>
+            <button onclick="adminCreateShareablePreviewLink(${reviewIdArg})" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Copy Private Preview Link</button>
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
@@ -13541,6 +13561,28 @@ async function openAdminListingLivePreview(listingId) {
     toast("Live-style preview loaded.");
   } catch (e) {
     toast(`Preview failed: ${e.message || "error"}`);
+  }
+}
+
+async function adminCreateShareablePreviewLink(listingId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
+  try {
+    const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(listingId)}/review-token`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    const previewUrl = String(response?.data?.owner_preview_url || "").trim();
+    if (!previewUrl) throw new Error("Preview URL was not returned");
+    const copied = await copyTextToClipboard(previewUrl);
+    toast(copied ? "Private preview link copied." : "Private preview link created.");
+    window.prompt("Private preview link for this pending listing", previewUrl);
+    await openAdminListingReview(listingId);
+  } catch (e) {
+    toast(`Preview link failed: ${e.message || "error"}`);
   }
 }
 

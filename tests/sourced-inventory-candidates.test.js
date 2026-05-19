@@ -227,6 +227,9 @@ test('Carnelian authorised batch creates two pending sale listings with YouTube 
     assert.strictEqual(extra.image_rights_confirmed, true);
     assert.strictEqual(extra.image_rights_status, 'authorised_youtube_stills_from_agent_channel');
     assert.strictEqual(extra.map_pin_confirmed, false);
+    assert.strictEqual(extra.property_url_status, 'public_after_approval');
+    assert(extra.map_pin_label && /Kira/i.test(extra.map_pin_label), `${listing.title} should carry a close Kira-area map label`);
+    assert(extra.map_pin_accuracy_note && /confirm the exact/i.test(extra.map_pin_accuracy_note), `${listing.title} should keep exact-gate confirmation in review metadata`);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the YouTube source`);
     assert(!/before public approval/i.test(listing.description), `${listing.title} should not expose admin approval copy publicly`);
     assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate copy publicly`);
@@ -242,12 +245,20 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(html.includes('admin-seed-carnelian-listings-btn'), 'review queue should include Carnelian creation button');
   assert(frontend.includes('async function adminSeedCarnelianAuthorisedListings'), 'frontend should implement Carnelian seed action');
   assert(frontend.includes('/api/admin/carnelian-authorised-listings/seed'), 'frontend should call protected Carnelian endpoint');
+  assert(frontend.includes('adminSeededListingSummaryHtml'), 'seed status should expose review and preview actions instead of raw pending public URLs only');
+  assert(frontend.includes('adminCreateShareablePreviewLink'), 'review panel should expose shareable private preview link creation');
+  assert(frontend.includes('/review-token'), 'review panel should call the protected preview-token route');
 });
 
 test('Carnelian WhatsApp share card carries listing URL, video and agent contact', () => {
   const listing = plannedCarnelianListings('00000000-0000-4000-8000-000000000000')[0];
-  const card = carnelianWhatsappShareMessage(listing.source_item, 'https://makaug.com/property/example-id');
+  const card = carnelianWhatsappShareMessage(
+    listing.source_item,
+    'https://makaug.com/property/example-id',
+    'https://makaug.com/?listing_preview=1&listing=example-id&token=example-token'
+  );
   assert(card.includes('https://makaug.com/property/example-id'), 'share card should include live listing URL');
+  assert(card.includes('https://makaug.com/?listing_preview=1'), 'share card should include working private preview URL while pending');
   assert(card.includes(listing.source_item.youtubeUrl), 'share card should include the source video tour');
   assert(card.includes(CARNELIAN_CONTACT.phone), 'share card should include primary Carnelian phone');
   assert(card.includes(CARNELIAN_CONTACT.phoneAlt), 'share card should include alternate Carnelian phone');

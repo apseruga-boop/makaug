@@ -1,6 +1,12 @@
 const path = require('path');
 
 const { buildListingReference } = require('./listingReferenceService');
+const {
+  createOwnerEditToken,
+  getOwnerPreviewUrl,
+  hashOwnerEditToken,
+  ownerEditTokenExpiry,
+} = require('./listingModerationService');
 const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
 
 const CARNELIAN_BATCH_ID = 'carnelian_youtube_authorised_20260519';
@@ -58,8 +64,12 @@ const CARNELIAN_PROPERTIES = [
     propertyType: 'Standalone House',
     landSizeValue: 14,
     landSizeUnit: 'decimals',
-    latitude: 0.397,
-    longitude: 32.639,
+    latitude: 0.397237,
+    longitude: 32.640557,
+    mapPinLabel: 'Kira Town / Kira Roundabout, Wakiso',
+    mapPinAccuracyNote: 'Closest responsible public pin from the video title/description and Kira town evidence; confirm the exact house gate with Carnelian before public approval.',
+    mapPinSource: 'manual_kira_roundabout_area_pin_from_public_map_evidence',
+    mapPinConfidence: 'area_level_close',
     amenities: ['Video tour available', 'Tiled compound', 'Fitted kitchen', 'Modern finishes', 'Gated access'],
     areaHighlights: 'Kira is a fast-growing Greater Kampala residential area with family homes, road connections, schools, shops, and quick access toward Najjera, Namugongo, Ntinda, and central Kampala routes.',
     photos: [
@@ -87,8 +97,12 @@ const CARNELIAN_PROPERTIES = [
     propertyType: 'Standalone House',
     landSizeValue: 12,
     landSizeUnit: 'decimals',
-    latitude: 0.404,
-    longitude: 32.642,
+    latitude: 0.420556,
+    longitude: 32.634722,
+    mapPinLabel: 'Kira-Shimon / Kitikifumba corridor, Wakiso',
+    mapPinAccuracyNote: 'Closest responsible corridor pin from the Kira-Shimon Road description; confirm the exact house gate with Carnelian before public approval.',
+    mapPinSource: 'manual_kira_shimon_corridor_pin_from_public_map_evidence',
+    mapPinConfidence: 'corridor_level',
     amenities: ['Video tour available', 'Brand new home', 'Balcony space', 'Modern glazing', 'Gated access'],
     areaHighlights: 'Kira-Shimon sits in the wider Kira residential corridor, useful for buyers who want a Kampala-accessible home with suburban space and links toward Kira, Najjera, Ntinda, and Namugongo.',
     photos: [
@@ -118,16 +132,17 @@ function brokerBio() {
   return 'Carnelian Properties Uganda helps buyers, sellers, investors, and home seekers explore Uganda property through house tours, market insight, and practical real estate guidance. Their makaug profile is prepared from founder-confirmed onboarding details and their public Carnelian Properties Uganda channel.';
 }
 
-function whatsappShareMessage(item, propertyUrl) {
+function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
   return [
     `Hi, this is ${CARNELIAN_CONTACT.name}.`,
     `${item.title} is prepared on makaug.com for King review.`,
     `Location: ${item.address}`,
     `Price: ${money(item.price)}.`,
     `Video tour: ${item.youtubeUrl}`,
-    `View listing: ${propertyUrl}`,
+    ownerPreviewUrl ? `Private preview: ${ownerPreviewUrl}` : '',
+    `Public link after approval: ${propertyUrl}`,
     `Call/WhatsApp: ${CARNELIAN_CONTACT.phone} or ${CARNELIAN_CONTACT.phoneAlt}`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function imageRowsFor(item) {
@@ -140,11 +155,12 @@ function imageRowsFor(item) {
   }));
 }
 
-function extraFieldsFor(item, agentId = null, propertyUrl = '') {
+function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl = '') {
   const source = VIDEO_STORYBOARD_SOURCES[item.youtubeId] || {};
   return {
     sourced_inventory_candidate: true,
     source_batch: CARNELIAN_BATCH_ID,
+    source_listing_key: item.key,
     source: CARNELIAN_SOURCE,
     agent_permission_reported: true,
     permission_status: 'founder_reported_agent_authorised_upload',
@@ -167,17 +183,23 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '') {
     youtube_source_title: item.sourceTitle,
     youtube_source_published_label: item.sourcePublishedLabel,
     resolved_location_label: item.address,
-    map_pin_status: 'approximate_from_youtube_area_description_needs_final_confirmation',
+    map_pin_label: item.mapPinLabel,
+    map_pin_accuracy_note: item.mapPinAccuracyNote,
+    map_pin_confidence: item.mapPinConfidence,
+    map_pin_status: 'close_area_pin_from_youtube_description_needs_exact_gate_confirmation',
     map_pin_confirmed: false,
-    latitude_source: 'manual_kira_area_pin_from_video_description',
-    longitude_source: 'manual_kira_area_pin_from_video_description',
+    latitude_source: item.mapPinSource,
+    longitude_source: item.mapPinSource,
     area_highlights: item.areaHighlights,
     nearby_facilities: ['Kira town access', 'Najjera route', 'Namugongo route', 'Kampala commuter routes'],
     source_labels: ['founder confirmed agent permission', 'Carnelian Properties Uganda YouTube channel', 'public video tour'],
     source_urls: [CARNELIAN_CONTACT.youtube, item.youtubeUrl],
     photo_source_urls: [source.main, ...(source.stills || [])].filter(Boolean),
     authorised_photo_urls: imageRowsFor(item).map((image) => image.url),
-    whatsapp_share_card: propertyUrl ? whatsappShareMessage(item, propertyUrl) : '',
+    property_url_status: 'public_after_approval',
+    property_url: propertyUrl || '',
+    owner_preview_url: ownerPreviewUrl || '',
+    whatsapp_share_card: propertyUrl ? whatsappShareMessage(item, propertyUrl, ownerPreviewUrl) : '',
     review_required_steps: [
       'Confirm current availability and viewing contact with Carnelian',
       'Confirm exact road/pin before public approval',
@@ -332,6 +354,9 @@ async function cleanupCarnelianBatch(client) {
 }
 
 async function insertListing(client, listing, agentId) {
+  const ownerPreviewToken = createOwnerEditToken();
+  const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
+  const ownerPreviewExpiresAt = ownerEditTokenExpiry();
   const inserted = await client.query(
     `INSERT INTO properties (
       listing_type, title, description, district, area, address, price, price_period,
@@ -343,13 +368,14 @@ async function insertListing(client, listing, agentId) {
       inquiry_reference, id_number, id_document_name, id_document_url, new_until,
       amenities, extra_fields, lister_name, lister_phone, lister_email,
       lister_type, agent_id, source, listed_via, status, moderation_stage,
-      reviewed_at, moderation_notes, moderation_reason
+      reviewed_at, moderation_notes, moderation_reason,
+      owner_edit_token_hash, owner_edit_token_expires_at
     ) VALUES (
       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
       $11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
       $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,
       $31,$32,$33,$34,$35,$36::jsonb,$37::jsonb,$38,$39,$40,
-      $41,$42,$43,$44,$45,$46,$47,$48,$49
+      $41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51
     ) RETURNING id::text AS id`,
     [
       listing.listing_type, listing.title, listing.description, listing.district,
@@ -367,10 +393,12 @@ async function insertListing(client, listing, agentId) {
       listing.lister_email, listing.lister_type, agentId, listing.source,
       listing.listed_via, listing.status, listing.moderation_stage, listing.reviewed_at,
       listing.moderation_notes, listing.moderation_reason,
+      ownerPreviewTokenHash, ownerPreviewExpiresAt,
     ]
   );
   const propertyId = inserted.rows[0].id;
   const propertyUrl = `${publicBaseUrl()}/property/${propertyId}`;
+  const ownerPreviewUrl = getOwnerPreviewUrl({ id: propertyId }, ownerPreviewToken);
 
   for (const image of listing.images) {
     await client.query(
@@ -385,7 +413,7 @@ async function insertListing(client, listing, agentId) {
      SET extra_fields = COALESCE(extra_fields, '{}'::jsonb)
        || $2::jsonb
      WHERE id = $1`,
-    [propertyId, JSON.stringify(extraFieldsFor(listing.source_item, agentId, propertyUrl))]
+    [propertyId, JSON.stringify(extraFieldsFor(listing.source_item, agentId, propertyUrl, ownerPreviewUrl))]
   );
 
   await client.query(
@@ -408,8 +436,10 @@ async function insertListing(client, listing, agentId) {
       JSON.stringify({
         batch_id: CARNELIAN_BATCH_ID,
         property_url: propertyUrl,
+        owner_preview_url: ownerPreviewUrl,
+        owner_preview_expires_at: ownerPreviewExpiresAt,
         agent_id: agentId,
-        whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl),
+        whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl, ownerPreviewUrl),
       }),
     ]
   );
@@ -419,8 +449,10 @@ async function insertListing(client, listing, agentId) {
     title: listing.title,
     inquiry_reference: listing.inquiry_reference,
     property_url: propertyUrl,
+    owner_preview_url: ownerPreviewUrl,
+    owner_preview_expires_at: ownerPreviewExpiresAt,
     youtube_url: listing.source_item.youtubeUrl,
-    whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl),
+    whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl, ownerPreviewUrl),
   };
 }
 
