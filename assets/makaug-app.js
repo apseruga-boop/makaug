@@ -22977,6 +22977,32 @@ function getNearbyAmenitySuggestions(params = {}) {
   return enriched.slice(0, 5);
 }
 
+function normalizeNearbyPlaceForUi(item) {
+  if (!item) return null;
+  if (typeof item === "string") {
+    const label = item.trim();
+    return label ? { name: label, label } : null;
+  }
+  const label = String(item.name || item.label || item.title || item.place || "").trim();
+  const type = String(item.type || item.category || item.kind || "").trim();
+  const rawDistance = item.distanceKm ?? item.distance_km ?? item.dist_km ?? item.dist ?? item.distance;
+  const distanceKm = Number(rawDistance);
+  const name = label || type || translateListingLabel("Nearby");
+  return {
+    ...item,
+    name,
+    label: item.label || name,
+    type,
+    distanceKm: Number.isFinite(distanceKm) ? distanceKm : null
+  };
+}
+
+function normalizeNearbyPlacesForUi(items = []) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => normalizeNearbyPlaceForUi(item))
+    .filter(Boolean);
+}
+
 function buildLocationHighlightsText(params = {}) {
   const type = normalizeType(params.type || "sale");
   const area = params.area || params.neighborhood || params.city || params.district || translateListingLabel("Area");
@@ -22990,7 +23016,7 @@ function buildLocationHighlightsText(params = {}) {
     commercial: translateListingLabel("business use")
   };
   const purpose = typeLabelMap[type] || translateListingLabel("property use");
-  const nearby = Array.isArray(params.nearby) ? params.nearby : [];
+  const nearby = normalizeNearbyPlacesForUi(params.nearby);
   const topThree = nearby.slice(0, 3)
     .map((x) => {
       if (!x?.name) return "";
@@ -23020,11 +23046,13 @@ function getPropertySearchText(property = {}) {
   const extra = property?.extra_fields || {};
   const nearby = Array.isArray(property.nearby)
     ? property.nearby
-    : (Array.isArray(extra.nearby_amenities) ? extra.nearby_amenities : []);
-  const nearbyText = nearby.map((item) => {
-    if (!item) return "";
-    if (typeof item === "string") return item;
-    return `${item.name || ""} ${item.dist || ""}`.trim();
+    : (Array.isArray(property.nearby_places)
+      ? property.nearby_places
+      : (Array.isArray(extra.nearby_facilities)
+        ? extra.nearby_facilities
+        : (Array.isArray(extra.nearby_amenities) ? extra.nearby_amenities : [])));
+  const nearbyText = normalizeNearbyPlacesForUi(nearby).map((item) => {
+    return `${item.name || ""} ${item.label || ""} ${item.type || ""} ${item.distanceKm || ""}`.trim();
   }).join(" ");
   const pieces = [
     property.title,
@@ -24974,7 +25002,9 @@ function mapRemotePropertyForUi(p, options = {}) {
     video_url: p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.youtube_url || "",
     youtube_url: p?.youtube_url || p?.extra_fields?.youtube_url || "",
     resolved_location_label: p?.resolved_location_label || p?.extra_fields?.resolved_location_label || "",
-    nearby_places: Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : []),
+    nearby_places: normalizeNearbyPlacesForUi(
+      Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
+    ),
     images: imageItems,
     detail_loaded: options.detailLoaded === true || images.length > 0,
     owner_preview_visible: options.ownerPreview === true,
@@ -27895,6 +27925,16 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Message on WhatsApp": "Tuma ujumbe WhatsApp"
     }
   };
+  Object.entries({
+    lg: "Okumpi",
+    sw: "Karibu",
+    ac: "I cok",
+    ny: "Haihi",
+    rn: "Haihi",
+    sm: "Okumpi"
+  }).forEach(([lang, label]) => {
+    Object.assign(extraListingLabels[lang] ||= {}, { Nearby: label });
+  });
   ["ac", "ny", "rn", "sm"].forEach((lang) => {
     sharedLabels[lang] = { ...(sharedLabels[lang] || {}), ...sharedLabels.lg };
   });
@@ -29787,9 +29827,10 @@ async function openDetail(id, options = {}) {
   const similar = getSimilarProperties(p, 3);
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
-  const detailNearby = Array.isArray(p.nearby_places) && p.nearby_places.length
+  const detailNearbyRaw = Array.isArray(p.nearby_places) && p.nearby_places.length
     ? p.nearby_places
     : getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
+  const detailNearby = normalizeNearbyPlacesForUi(detailNearbyRaw);
   const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
@@ -29895,7 +29936,8 @@ async function openDetail(id, options = {}) {
                 ${detailNearby.slice(0, 6).map((item) => {
                   const d = Number.isFinite(item.distanceKm) ? item.distanceKm : (Number.isFinite(item.distance_km) ? item.distance_km : null);
                   const dist = Number.isFinite(d) ? ` · ${Number(d).toFixed(1)} km` : "";
-                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${item.name || item.label || "Nearby"}${dist}</span>`;
+                  const label = translateListingLabel(item.name || item.label || "Nearby");
+                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${adminEscape(label)}${dist}</span>`;
                 }).join("")}
               </div>
             </div>
