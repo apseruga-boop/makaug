@@ -23,6 +23,14 @@ const {
   summarizeBakaimaListings,
   whatsappShareMessage,
 } = require('../services/bakaimaSourcedListingsService');
+const {
+  CARNELIAN_BATCH_ID,
+  CARNELIAN_CONTACT,
+  CARNELIAN_SOURCE,
+  plannedCarnelianListings,
+  summarizeCarnelianListings,
+  whatsappShareMessage: carnelianWhatsappShareMessage,
+} = require('../services/carnelianSourcedListingsService');
 
 function test(name, fn) {
   try {
@@ -103,6 +111,11 @@ test('package script exposes the safe inventory intake command', () => {
     pkg.scripts['inventory:seed-bakaima'],
     'node scripts/seed-bakaima-authorised-land-listings.js',
     'package.json should expose Bakaima authorised listing seed command'
+  );
+  assert.strictEqual(
+    pkg.scripts['inventory:seed-carnelian'],
+    'node scripts/seed-carnelian-authorised-listings.js',
+    'package.json should expose Carnelian authorised listing seed command'
   );
 });
 
@@ -191,6 +204,53 @@ test('Bakaima admin path and dashboard action are protected and auditable', () =
   assert(frontend.includes('/api/admin/bakaima-authorised-land-listings/seed'), 'frontend should call protected Bakaima endpoint');
   assert(frontend.includes('function adminOpenReviewShareWhatsApp'), 'review panel should expose stored WhatsApp share card');
   assert(frontend.includes('WhatsApp share card'), 'review panel should label the WhatsApp share copy clearly');
+});
+
+test('Carnelian authorised batch creates two pending sale listings with YouTube evidence', () => {
+  const summary = summarizeCarnelianListings();
+  const listings = plannedCarnelianListings('00000000-0000-4000-8000-000000000000');
+  assert.strictEqual(CARNELIAN_BATCH_ID, 'carnelian_youtube_authorised_20260519');
+  assert.strictEqual(summary.count, 2, 'Carnelian batch should contain the two recent YouTube tours');
+  assert.strictEqual(summary.by_type.sale, 2, 'Carnelian batch should be sale listings only');
+  for (const listing of listings) {
+    const extra = JSON.parse(listing.extra_fields);
+    assert.strictEqual(listing.listing_type, 'sale');
+    assert.strictEqual(listing.status, 'pending');
+    assert.strictEqual(listing.moderation_stage, 'submitted');
+    assert.strictEqual(listing.source, CARNELIAN_SOURCE);
+    assert.strictEqual(listing.listed_via, 'sourced_inventory');
+    assert.strictEqual(listing.lister_name, CARNELIAN_CONTACT.name);
+    assert.strictEqual(listing.lister_phone, CARNELIAN_CONTACT.phone);
+    assert.strictEqual(listing.lister_email, CARNELIAN_CONTACT.email);
+    assert.strictEqual(extra.source_batch, CARNELIAN_BATCH_ID);
+    assert.strictEqual(extra.consent_confirmed, true);
+    assert.strictEqual(extra.image_rights_confirmed, true);
+    assert.strictEqual(extra.image_rights_status, 'authorised_youtube_stills_from_agent_channel');
+    assert.strictEqual(extra.map_pin_confirmed, false);
+    assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the YouTube source`);
+    assert(!/before public approval/i.test(listing.description), `${listing.title} should not expose admin approval copy publicly`);
+    assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate copy publicly`);
+    assert(listing.images.length === 5, `${listing.title} should include one main image and four video stills`);
+    assert(listing.images.every((image) => image.url.includes('/assets/sourced/carnelian/')), `${listing.title} should use Carnelian authorised assets`);
+  }
+});
+
+test('Carnelian admin path and dashboard action are protected and auditable', () => {
+  assert(adminRoute.includes("router.post('/carnelian-authorised-listings/seed'"), 'admin Carnelian seed endpoint should exist');
+  assert(adminRoute.includes('seedCarnelianAuthorisedListings'), 'admin endpoint should use Carnelian seed service');
+  assert(adminRoute.includes('admin_carnelian_authorised_listings_seeded'), 'admin endpoint should write Carnelian audit trail');
+  assert(html.includes('admin-seed-carnelian-listings-btn'), 'review queue should include Carnelian creation button');
+  assert(frontend.includes('async function adminSeedCarnelianAuthorisedListings'), 'frontend should implement Carnelian seed action');
+  assert(frontend.includes('/api/admin/carnelian-authorised-listings/seed'), 'frontend should call protected Carnelian endpoint');
+});
+
+test('Carnelian WhatsApp share card carries listing URL, video and agent contact', () => {
+  const listing = plannedCarnelianListings('00000000-0000-4000-8000-000000000000')[0];
+  const card = carnelianWhatsappShareMessage(listing.source_item, 'https://makaug.com/property/example-id');
+  assert(card.includes('https://makaug.com/property/example-id'), 'share card should include live listing URL');
+  assert(card.includes(listing.source_item.youtubeUrl), 'share card should include the source video tour');
+  assert(card.includes(CARNELIAN_CONTACT.phone), 'share card should include primary Carnelian phone');
+  assert(card.includes(CARNELIAN_CONTACT.phoneAlt), 'share card should include alternate Carnelian phone');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {

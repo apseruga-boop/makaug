@@ -1,0 +1,40 @@
+{
+  "source": "Carnelian Properties Uganda YouTube channel",
+  "channel_url": "https://www.youtube.com/@CarnelianPropertiesuganda",
+  "contact": {
+    "name": "Carnelian Properties Uganda",
+    "phone": "+256700294005",
+    "phone_alt": "+256785599477",
+    "email": "carnelianproperties4@gmail.com"
+  },
+  "captured_for": "makaug King dashboard pending review",
+  "captured_at": "2026-05-19",
+  "videos": [
+    {
+      "id": "ocK_JJEB9yA",
+      "url": "https://www.youtube.com/watch?v=ocK_JJEB9yA",
+      "title": "Full House Tour: Modern Home in Kira, Kampala Uganda",
+      "source_description": "4-bedrooms House for sale in Kira, Kampala Uganda sited on 14 decimals. Asking price: 750,000,000/= or $200,715 negotiable. call / Whatsapp; (+256) 700 294 005",
+      "files": [
+        { "file": "kira-modern-4bed-01-main.jpg", "label": "Exterior/front view", "source_url": "https://i.ytimg.com/vi/ocK_JJEB9yA/maxresdefault.jpg" },
+        { "file": "kira-modern-4bed-02-still.jpg", "label": "Living area still", "source_url": "https://i.ytimg.com/sb/ocK_JJEB9yA/storyboard3_L3/M2.jpg" },
+        { "file": "kira-modern-4bed-03-still.jpg", "label": "Kitchen/dining still", "source_url": "https://i.ytimg.com/sb/ocK_JJEB9yA/storyboard3_L3/M5.jpg" },
+        { "file": "kira-modern-4bed-04-still.jpg", "label": "Bedroom still", "source_url": "https://i.ytimg.com/sb/ocK_JJEB9yA/storyboard3_L3/M8.jpg" },
+        { "file": "kira-modern-4bed-05-still.jpg", "label": "Bathroom/interior still", "source_url": "https://i.ytimg.com/sb/ocK_JJEB9yA/storyboard3_L3/M11.jpg" }
+      ]
+    },
+    {
+      "id": "NkF46IX5DrA",
+      "url": "https://www.youtube.com/watch?v=NkF46IX5DrA",
+      "title": "BRAND NEW HOUSE FOR SALE IN KIRA UGANDA | Full House Tour!",
+      "source_description": "5-bedrooms House for sale in Kira-Shimon Road, Kampala Uganda sited on 12 decimals. Asking price: 650,000,000/= or $172,845. call / Whatsapp; (+256) 700 294 005",
+      "files": [
+        { "file": "kira-shimon-5bed-01-main.jpg", "label": "Exterior/front view", "source_url": "https://i.ytimg.com/vi/NkF46IX5DrA/maxresdefault.jpg" },
+        { "file": "kira-shimon-5bed-02-still.jpg", "label": "Living area still", "source_url": "https://i.ytimg.com/sb/NkF46IX5DrA/storyboard3_L3/M2.jpg" },
+        { "file": "kira-shimon-5bed-03-still.jpg", "label": "Kitchen/dining still", "source_url": "https://i.ytimg.com/sb/NkF46IX5DrA/storyboard3_L3/M5.jpg" },
+        { "file": "kira-shimon-5bed-04-still.jpg", "label": "Bedroom still", "source_url": "https://i.ytimg.com/sb/NkF46IX5DrA/storyboard3_L3/M8.jpg" },
+        { "file": "kira-shimon-5bed-05-still.jpg", "label": "Bathroom/interior still", "source_url": "https://i.ytimg.com/sb/NkF46IX5DrA/storyboard3_L3/M11.jpg" }
+      ]
+    }
+  ]
+}

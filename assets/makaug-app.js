@@ -8823,13 +8823,20 @@ function ensureAdminSourcedCandidateControls() {
     status.className = "hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900";
     table.parentNode.insertBefore(status, table);
   }
-  if (document.getElementById("admin-seed-sourced-candidates-btn") && document.getElementById("admin-seed-bakaima-listings-btn")) return;
+  if (
+    document.getElementById("admin-seed-sourced-candidates-btn")
+    && document.getElementById("admin-seed-bakaima-listings-btn")
+    && document.getElementById("admin-seed-carnelian-listings-btn")
+  ) return;
   const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
   const actions = document.createElement("div");
   actions.className = "flex items-center gap-2 flex-wrap";
   const missingButtons = [];
   if (!document.getElementById("admin-seed-bakaima-listings-btn")) {
     missingButtons.push(`<button id="admin-seed-bakaima-listings-btn" type="button" onclick="adminSeedBakaimaAuthorisedListings()" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-2 rounded-lg text-xs font-bold">Create Bakaima Listings</button>`);
+  }
+  if (!document.getElementById("admin-seed-carnelian-listings-btn")) {
+    missingButtons.push(`<button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>`);
   }
   if (!document.getElementById("admin-seed-sourced-candidates-btn")) {
     missingButtons.push(`<button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>`);
@@ -8881,6 +8888,56 @@ async function adminSeedBakaimaAuthorisedListings() {
       statusEl.innerHTML = `Could not create Bakaima listings: ${adminEscape(e.message || "Unknown error")}`;
     }
     toast(`Bakaima seed failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function adminSeedCarnelianAuthorisedListings() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const ok = window.confirm("Create/rebuild the two authorised Carnelian YouTube house-tour listings in the King review queue?");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const button = document.getElementById("admin-seed-carnelian-listings-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Creating Carnelian authorised YouTube listings now...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/carnelian-authorised-listings/seed", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { replace: true }
+    });
+    const data = response?.data || {};
+    const samples = Array.isArray(data.listings) ? data.listings : [];
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">Carnelian listings created</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending Carnelian house-tour records are now in the King review queue.</div>
+        <div class="mt-1">Agent profile loaded: Carnelian Properties Uganda • +256700294005 / +256785599477 • carnelianproperties4@gmail.com</div>
+        ${samples.length ? `<div class="mt-2">${samples.map((item) => `<div>${adminEscape(item.title || "Listing")} • ${adminEscape(item.property_url || "")}</div>`).join("")}</div>` : ""}`;
+    }
+    toast("Carnelian listings are ready for King review.");
+    await renderAdminDashboard();
+    setAdminWorkflowTab("review");
+    adminScrollTo("#admin-review-queue-control");
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Could not create Carnelian listings: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Carnelian seed failed: ${e.message || "error"}`);
   } finally {
     if (button) {
       button.disabled = false;
