@@ -30,27 +30,29 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 100);
-const POLL_MS = Math.min(150, Math.max(75, Number.isFinite(configuredPollMs) ? configuredPollMs : 100));
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 75);
+const POLL_MS = Math.min(150, Math.max(40, Number.isFinite(configuredPollMs) ? configuredPollMs : 75));
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 200);
-const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(100, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 200));
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 120);
+const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
-const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 1800);
-const SEND_CONFIRM_MS = Math.min(4000, Math.max(900, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 1800));
-const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 900);
+const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 550);
+const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 550));
+const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 220);
+const SEND_COMPOSER_CLEAR_MS = Math.min(1200, Math.max(80, Number.isFinite(configuredComposerClearMs) ? configuredComposerClearMs : 220));
+const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 125);
 const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
-  3000,
-  Math.max(400, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 900)
+  1200,
+  Math.max(50, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 125)
 );
-const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 1400);
+const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 750);
 const SEND_RETRY_CONFIRM_MS = Math.min(
-  3000,
-  Math.max(900, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 1400)
+  2000,
+  Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
 );
 const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
@@ -1244,7 +1246,7 @@ async function findReplyComposer(page, timeoutMs = 15000) {
         if (visible) return locator;
       }
     }
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(25);
   }
   return null;
 }
@@ -1348,7 +1350,7 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
     }
     if (matchedText) return true;
 
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(25);
   }
 
   return false;
@@ -1369,7 +1371,7 @@ async function waitForPostSendConfirmation(page, text, beforeState, timeoutMs = 
     return true;
   }
 
-  const composerCleared = await waitForReplyComposerCleared(page, 500);
+  const composerCleared = await waitForReplyComposerCleared(page, SEND_COMPOSER_CLEAR_MS);
   if (!composerCleared) return false;
 
   // Composer-cleared alone is not enough: WhatsApp Web can clear the input
@@ -1397,7 +1399,7 @@ async function replaceComposerText(page, text, timeoutMs = 1200) {
     await page.keyboard.press('Backspace');
     await page.keyboard.type(String(text || ''), { delay: 1 });
   });
-  await page.waitForTimeout(30);
+  await page.waitForTimeout(10);
   return true;
 }
 

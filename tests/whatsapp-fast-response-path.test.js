@@ -68,6 +68,22 @@ async function run() {
     'WhatsApp Web sender must keep send-confirmation timing configurable for fast replies'
   );
   assert(
+    whatsappWebCopilotSource.includes('POLL_MS = Math.min(150, Math.max(40'),
+    'WhatsApp Web sender must poll the active chat on a sub-100ms default path'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60'),
+    'WhatsApp Web sender must sweep recent chats several times per second'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS'),
+    'WhatsApp Web sender must expose a fast composer-clear confirmation timeout'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('waitForReplyComposerCleared(page, SEND_COMPOSER_CLEAR_MS)'),
+    'WhatsApp Web sender must use the fast composer-clear timeout after sending'
+  );
+  assert(
     whatsappWebCopilotSource.includes('SEND_CONFIRM_AFTER_CLEAR_MS'),
     'WhatsApp Web sender must avoid long post-clear waits after the composer clears'
   );
