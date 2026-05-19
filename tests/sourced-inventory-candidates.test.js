@@ -13,6 +13,7 @@ const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
+const agentsRoute = read('routes/agents.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -255,6 +256,20 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('normalizeNearbyPlaceForUi'), 'frontend should normalize old string amenities and new amenity objects');
   assert(frontend.includes('mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw)'), 'detail page should enrich saved amenities with nearby hospitals and schools');
   assert(frontend.includes('extra.nearby_facilities'), 'property search should include persisted nearby facility names');
+});
+
+test('Carnelian broker profile is click-through with social links and live listings', () => {
+  assert.strictEqual(CARNELIAN_CONTACT.tiktok, 'https://www.tiktok.com/@carnelian.propert');
+  assert(agentsRoute.includes('CARNELIAN-YOUTUBE-20260519'), 'agent API should identify the Carnelian sourced profile');
+  assert(agentsRoute.includes('youtube_url'), 'agent API should expose YouTube social link fields');
+  assert(agentsRoute.includes('tiktok_url'), 'agent API should expose TikTok social link fields');
+  assert(agentsRoute.includes("WHERE p.agent_id = $1 AND p.status = 'approved'"), 'agent detail should only publish approved profile listings');
+  assert(agentsRoute.includes('img.url AS primary_image_url'), 'agent profile listings should carry primary images');
+  assert(frontend.includes('async function loadRemoteBrokerProfileForUi'), 'frontend should fetch broker detail before opening profile');
+  assert(frontend.includes('async function openBrokerProfile'), 'broker profile open should wait for the remote profile when needed');
+  assert(frontend.includes('renderBrokerSocialLinks(b)'), 'broker profile should render socials');
+  assert(frontend.includes('remote_listings'), 'broker profile should use live listings returned by the agent API');
+  assert(frontend.includes('View Profile'), 'broker cards should expose a visible profile action');
 });
 
 test('Carnelian WhatsApp share card carries listing URL, video and agent contact', () => {

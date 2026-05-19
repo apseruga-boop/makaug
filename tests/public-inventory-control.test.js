@@ -17,10 +17,20 @@ function functionSource(name) {
   return appSource.slice(start, next === -1 ? appSource.length : next);
 }
 
+function asyncFunctionSource(name) {
+  const start = appSource.indexOf(`async function ${name}(`);
+  assert.notEqual(start, -1, `Expected async ${name} to exist`);
+  const nextFunction = appSource.indexOf('\nfunction ', start + 1);
+  const nextAsync = appSource.indexOf('\nasync function ', start + 1);
+  const next = [nextFunction, nextAsync].filter((idx) => idx !== -1).sort((a, b) => a - b)[0];
+  return appSource.slice(start, next === undefined ? appSource.length : next);
+}
+
 test('public listings are backend-controlled, not frontend seed inventory', () => {
   assert.match(appSource, /function publicSampleListingsEnabled\(\)/);
   assert.match(appSource, /window\.MAKAUG_ALLOW_SAMPLE_LISTINGS === true/);
   assert.match(appSource, /function isBackendControlledListing\(property\)/);
+  assert.match(appSource, /function isListingPublicVisible\(property\) \{\s*if \(adminRecordLooksLikeTest\(property\)\) return false;/);
   assert.match(appSource, /function getPublicListings\(\) \{\s*return PROPERTIES\.filter\(\(p\) => \(\s*isListingPublicVisible\(p\)[\s\S]*isBackendControlledListing\(p\)[\s\S]*publicSampleListingsEnabled\(\)/);
   assert.doesNotMatch(appSource, /function getPublicListings\(\) \{\s*return PROPERTIES\.filter\(\(p\) => isListingPublicVisible\(p\)\);\s*\}/);
 });
@@ -66,6 +76,9 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
   assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
   assert.match(routeSource, /COALESCE\(p\.extra_fields->>'soft_launch_test', ''\) !~\*/);
+  assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
+  assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
+  assert.match(appSource, /apiRequest\("\/api\/properties\?status=approved&limit=1000&public_only=1", \{ skipAuth: true \}\)/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
 });
 
@@ -91,6 +104,16 @@ test('property detail enquiries are routed to the listing contact, not the signe
   assert.match(appSource, /Your enquiry will go to \{name\}\./);
 });
 
+test('approval WhatsApp notification opens before heavy admin dashboard refresh', () => {
+  const source = asyncFunctionSource('adminSetListingStatus');
+  const modalIndex = source.indexOf('openAdminWhatsAppMessageModal({');
+  const refreshIndex = source.indexOf('void renderAdminDashboard().catch');
+  assert(modalIndex > -1, 'status flow should still open the owner WhatsApp modal');
+  assert(refreshIndex > -1, 'dashboard refresh should be non-blocking after status update');
+  assert(modalIndex < refreshIndex, 'approval WhatsApp modal should open before dashboard refresh starts');
+  assert.doesNotMatch(source, /await renderAdminDashboard\(\);/);
+});
+
 test('WhatsApp property search uses the same public inventory guardrails', () => {
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
@@ -106,4 +129,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /admin-live-control-parity-20260515/);
   assert.match(htmlSource, /live-featured-cleanup-20260519/);
   assert.match(htmlSource, /agent-inquiry-nearby-20260519/);
+  assert.match(htmlSource, /approval-profile-sync-20260519/);
 });

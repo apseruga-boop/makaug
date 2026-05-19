@@ -669,6 +669,7 @@ async function listPropertiesHandler(req, res, next) {
     const language = cleanText(req.query.language || req.query.lang || 'en').toLowerCase();
     const sessionId = cleanText(req.query.session || req.query.session_id || req.query.guest_session_id);
     const locationSource = cleanText(req.query.locationSource || req.query.location_source);
+    const publicOnly = parseBooleanLike(req.query.public_only || req.query.publicOnly, false);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -680,7 +681,7 @@ async function listPropertiesHandler(req, res, next) {
     let distanceSql = 'NULL::numeric';
 
     let adminAccess = false;
-    if (requestingModerationData) {
+    if (requestingModerationData && !publicOnly) {
       adminAccess = await hasAdminAccess(req);
       if (!adminAccess) {
         return res.status(403).json({
@@ -688,11 +689,11 @@ async function listPropertiesHandler(req, res, next) {
           error: 'Admin access is required to list non-public properties'
         });
       }
-    } else if (hasAdminCredentialHint(req)) {
+    } else if (!publicOnly && hasAdminCredentialHint(req)) {
       adminAccess = await hasAdminAccess(req);
     }
 
-    if (!adminAccess) {
+    if (publicOnly || !adminAccess) {
       addPublicLaunchSeedFilter(filters, values);
     }
 

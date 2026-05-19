@@ -9,6 +9,19 @@ const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride'
 const { parsePagination, toPagination } = require('../utils/pagination');
 
 const router = express.Router();
+const CARNELIAN_AGENT_EMAIL = 'carnelianproperties4@gmail.com';
+const CARNELIAN_AGENT_LICENCE = 'CARNELIAN-YOUTUBE-20260519';
+const CARNELIAN_YOUTUBE_URL = 'https://www.youtube.com/@CarnelianPropertiesuganda';
+const CARNELIAN_TIKTOK_URL = 'https://www.tiktok.com/@carnelian.propert';
+
+function knownAgentSocialSelect(alias = 'a') {
+  const safeAlias = alias === 'a' ? 'a' : alias;
+  const carnelianMatch = `(LOWER(COALESCE(${safeAlias}.email, '')) = '${CARNELIAN_AGENT_EMAIL}' OR COALESCE(${safeAlias}.licence_number, '') = '${CARNELIAN_AGENT_LICENCE}')`;
+  return `
+        CASE WHEN ${carnelianMatch} THEN '${CARNELIAN_YOUTUBE_URL}' ELSE NULL END AS youtube_url,
+        CASE WHEN ${carnelianMatch} THEN '${CARNELIAN_TIKTOK_URL}' ELSE NULL END AS tiktok_url,
+        CASE WHEN ${carnelianMatch} THEN 'https://www.youtube.com/@CarnelianPropertiesuganda' ELSE NULL END AS website_url`;
+}
 
 function verifyListingSubmitToken(token) {
   const secret = process.env.LISTING_OTP_JWT_SECRET
@@ -351,6 +364,7 @@ router.get('/', async (req, res, next) => {
         a.sales_count,
         a.districts_covered,
         a.specializations,
+        ${knownAgentSocialSelect('a')},
         COALESCE(p.active_listings, 0) AS listings_count
       FROM agents a
       LEFT JOIN LATERAL (
@@ -380,12 +394,13 @@ router.get('/:id', async (req, res, next) => {
     const agent = await db.query(
       `SELECT
         a.*,
+        ${knownAgentSocialSelect('a')},
         COALESCE(p.active_listings, 0) AS listings_count
       FROM agents a
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS active_listings
         FROM properties p
-        WHERE p.agent_id = a.id
+        WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
       WHERE a.id = $1`,
       [req.params.id]
@@ -396,10 +411,36 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const listings = await db.query(
-      `SELECT id, title, listing_type, district, area, price, price_period, status, created_at
-       FROM properties
-       WHERE agent_id = $1
-       ORDER BY created_at DESC
+      `SELECT
+         p.id,
+         p.title,
+         p.description,
+         p.listing_type,
+         p.district,
+         p.area,
+         p.address,
+         p.price,
+         p.price_period,
+         p.bedrooms,
+         p.bathrooms,
+         p.property_type,
+         p.status,
+         p.created_at,
+         p.latitude,
+         p.longitude,
+         p.agent_id,
+         p.extra_fields,
+         img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT i.url
+         FROM property_images i
+         WHERE i.property_id = p.id
+         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+         LIMIT 1
+       ) img ON true
+       WHERE p.agent_id = $1 AND p.status = 'approved'
+       ORDER BY COALESCE(p.approved_at, p.updated_at, p.created_at) DESC
        LIMIT 100`,
       [req.params.id]
     );

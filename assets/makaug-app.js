@@ -170,9 +170,10 @@ function mapRemoteAgentForUi(agent = {}) {
   const covered = Array.isArray(agent.districts_covered) ? agent.districts_covered.filter(Boolean) : [];
   const area = covered.length ? covered.slice(0, 3).join(" • ") : (agent.area || "Uganda");
   const specializations = Array.isArray(agent.specializations) ? agent.specializations.filter(Boolean) : [];
+  const socials = normalizeBrokerSocialLinks(agent);
   return {
     id: String(agent.id || ""),
-    name: agent.full_name || agent.name || "makaug Agent",
+    name: agent.full_name || agent.name || "makaug agent",
     company: agent.company_name || agent.company || "makaug",
     phone: agent.phone || "",
     email: agent.email || "",
@@ -199,6 +200,12 @@ function mapRemoteAgentForUi(agent = {}) {
     status: agent.status || "approved",
     districts_covered: covered,
     specializations,
+    socials,
+    youtube_url: agent.youtube_url || socials.find((item) => item.key === "youtube")?.url || "",
+    tiktok_url: agent.tiktok_url || socials.find((item) => item.key === "tiktok")?.url || "",
+    website_url: agent.website_url || socials.find((item) => item.key === "website")?.url || "",
+    instagram_url: agent.instagram_url || socials.find((item) => item.key === "instagram")?.url || "",
+    facebook_url: agent.facebook_url || socials.find((item) => item.key === "facebook")?.url || "",
     user_id: agent.user_id || "",
     nin: agent.nin || "",
     identity_document_name: agent.identity_document_name || "",
@@ -212,6 +219,37 @@ function mapRemoteAgentForUi(agent = {}) {
     data_retention_notice_at: agent.data_retention_notice_at || "",
     approved_at: agent.approved_at || ""
   };
+}
+
+function normalizeBrokerSocialUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^[\w.-]+\.[a-z]{2,}/i.test(raw)) return `https://${raw}`;
+  return "";
+}
+
+function normalizeBrokerSocialLinks(agent = {}) {
+  const links = [
+    { key: "website", label: "Website", icon: "fas fa-globe", url: agent.website_url || agent.website || agent.url },
+    { key: "youtube", label: "YouTube", icon: "fab fa-youtube", url: agent.youtube_url || agent.youtube || agent.youtube_channel_url },
+    { key: "tiktok", label: "TikTok", icon: "fab fa-tiktok", url: agent.tiktok_url || agent.tiktok },
+    { key: "instagram", label: "Instagram", icon: "fab fa-instagram", url: agent.instagram_url || agent.instagram },
+    { key: "facebook", label: "Facebook", icon: "fab fa-facebook", url: agent.facebook_url || agent.facebook },
+    { key: "x", label: "X", icon: "fab fa-x-twitter", url: agent.x_url || agent.twitter_url || agent.twitter }
+  ];
+  return links
+    .map((item) => ({ ...item, url: normalizeBrokerSocialUrl(item.url) }))
+    .filter((item, index, arr) => item.url && arr.findIndex((other) => other.url === item.url) === index);
+}
+
+function renderBrokerSocialLinks(broker = {}) {
+  const socials = Array.isArray(broker.socials) ? broker.socials : normalizeBrokerSocialLinks(broker);
+  if (!socials.length) return "";
+  return `
+    <div class="mt-4 flex flex-wrap gap-2">
+      ${socials.map((item) => `<a href="${adminAttr(item.url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-full border border-green-100 bg-white px-3 py-1.5 text-xs font-bold text-green-800 hover:bg-green-50"><i class="${adminAttr(item.icon)}"></i>${adminEscape(item.label)}</a>`).join("")}
+    </div>`;
 }
 
 function getBrokerDirectory() {
@@ -239,9 +277,13 @@ function getFeaturedBrokers(list = getBrokerDirectory()) {
 
 async function refreshBrokersFromApi({ silent = true } = {}) {
   try {
-    const response = await apiRequest("/api/agents?status=approved&limit=100");
+    const response = await apiRequest("/api/agents?status=approved&limit=100", { skipAuth: true });
     const rows = Array.isArray(response?.data) ? response.data : [];
-    REMOTE_BROKERS = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id);
+    const existingById = new Map(REMOTE_BROKERS.map((broker) => [String(broker.id || ""), broker]));
+    REMOTE_BROKERS = rows.map(mapRemoteAgentForUi).filter((broker) => broker.id).map((broker) => {
+      const existing = existingById.get(String(broker.id || ""));
+      return existing?.remote_profile_loaded ? { ...broker, ...existing, listings: broker.listings || existing.listings } : broker;
+    });
     remoteBrokersLoaded = true;
     populateBrokerFilterOptions();
     renderAll();
@@ -251,6 +293,26 @@ async function refreshBrokersFromApi({ silent = true } = {}) {
     if (!silent) toast(`Agent refresh failed: ${error.message || "error"}`);
     return false;
   }
+}
+
+async function loadRemoteBrokerProfileForUi(id) {
+  const brokerId = String(id || "").trim();
+  if (!brokerId) return null;
+  const response = await apiRequest(`/api/agents/${encodeURIComponent(brokerId)}`, { skipAuth: true });
+  const agent = response?.data || {};
+  const broker = mapRemoteAgentForUi(agent);
+  broker.remote_profile_loaded = true;
+  broker.remote_listings = Array.isArray(agent.listings)
+    ? agent.listings.map((row) => mapRemotePropertyForUi(row)).filter((listing) => listing.id)
+    : [];
+  const idx = REMOTE_BROKERS.findIndex((item) => String(item.id || "") === String(broker.id || brokerId));
+  if (idx >= 0) {
+    REMOTE_BROKERS[idx] = { ...REMOTE_BROKERS[idx], ...broker };
+  } else if (broker.id) {
+    REMOTE_BROKERS.push(broker);
+  }
+  remoteBrokersLoaded = true;
+  return broker;
 }
 
 function getHierarchyPointForArea(district, area) {
@@ -4208,11 +4270,12 @@ async function apiRequest(path, options = {}) {
   const method = options.method || "GET";
   const headers = { ...(options.headers || {}) };
   const body = options.body;
+  const skipAuth = options.skipAuth === true;
 
   if (body !== undefined && !headers["Content-Type"]) {
     headers["Content-Type"] = "application/json";
   }
-  if (authState?.token && !headers.Authorization) {
+  if (!skipAuth && authState?.token && !headers.Authorization) {
     headers.Authorization = `Bearer ${authState.token}`;
   }
 
@@ -7877,6 +7940,7 @@ function normalizeModerationStatus(status) {
 }
 
 function isListingPublicVisible(property) {
+  if (adminRecordLooksLikeTest(property)) return false;
   const status = normalizeModerationStatus(property?.status);
   return status === "approved" || status === "sold";
 }
@@ -13881,18 +13945,11 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     }
   }
 
-  renderAll();
-  resetMaps();
-  await renderAdminDashboard();
-  if (normalizedStatus === "approved") {
-    setAdminWorkflowTab("live");
-  } else if (["rejected", "hidden", "deleted"].includes(normalizedStatus)) {
-    setAdminWorkflowTab("actioned");
-  } else if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
-    await openAdminListingReview(backendId);
-  }
-  const waPayload = statusResponse?.notification?.whatsapp || {};
-  if (["approved", "rejected"].includes(normalizedStatus) && (waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) {
+  let ownerNotificationOpened = false;
+  const maybeOpenOwnerNotification = () => {
+    const waPayload = statusResponse?.notification?.whatsapp || {};
+    if (!["approved", "rejected"].includes(normalizedStatus)) return false;
+    if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
     const fallbackMessage = normalizedStatus === "rejected"
       ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
       : "";
@@ -13903,8 +13960,23 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       message: waPayload.message || fallbackMessage,
       manualUrl: waPayload.manual_url || ""
     });
+    return true;
+  };
+  ownerNotificationOpened = maybeOpenOwnerNotification();
+
+  renderAll();
+  resetMaps();
+  void renderAdminDashboard().catch((error) => {
+    toast(`Dashboard refresh failed: ${error.message || "error"}`);
+  });
+  if (normalizedStatus === "approved") {
+    setAdminWorkflowTab("live");
+  } else if (["rejected", "hidden", "deleted"].includes(normalizedStatus)) {
+    setAdminWorkflowTab("actioned");
+  } else if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+    await openAdminListingReview(backendId);
   }
-  toast(normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`);
+  toast(ownerNotificationOpened && normalizedStatus === "approved" ? "Listing approved. WhatsApp message is ready." : (normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`));
 }
 
 async function adminSetListingFeatured(propertyId, featured) {
@@ -24327,6 +24399,7 @@ function renderBrokers(id, list) {
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="broker-action-btn border border-green-200 text-green-700 rounded-xl hover:bg-green-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fas fa-share-nodes text-[11px]"></i><span>${translateListingLabel("Share WA")}</span></button>
           <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'twitter')" class="broker-action-btn border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 inline-flex items-center justify-center gap-1.5 font-semibold px-2"><i class="fab fa-x-twitter text-[11px]"></i><span>${translateListingLabel("Share X")}</span></button>
         </div>
+        <button type="button" onclick="event.stopPropagation(); openBrokerProfile(${adminListingIdArg(b.id)})" class="w-full mt-2 rounded-xl border border-green-700 py-2 text-sm font-bold text-green-800 hover:bg-green-50">View Profile</button>
       </div>
     `).join("");
     setBrokerMapMarkers(list);
@@ -24349,6 +24422,7 @@ function renderBrokers(id, list) {
         <a href="${adminAttr(buildWhatsAppUrl(b.whatsapp, buildBrokerContactWhatsappMessage(b)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" class="bg-green-500 text-white text-center rounded-lg py-2 text-sm font-semibold">${translateListingLabel("WhatsApp")}</a>
       </div>
       <button type="button" onclick="event.stopPropagation(); shareBrokerBusinessCard(${adminListingIdArg(b.id)}, 'whatsapp')" class="w-full mt-2 border border-green-200 text-green-700 text-center rounded-lg py-2 text-sm font-semibold hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
+      <button type="button" onclick="event.stopPropagation(); openBrokerProfile(${adminListingIdArg(b.id)})" class="w-full mt-2 border border-green-700 text-green-800 text-center rounded-lg py-2 text-sm font-bold hover:bg-green-50">View Profile</button>
     </div>`).join("");
 }
 
@@ -25098,7 +25172,7 @@ function upsertPropertyForUi(property) {
 async function loadRemotePropertyDetailForUi(id, options = {}) {
   const listingId = String(id || "").trim();
   if (!listingId) return null;
-  const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}`);
+  const response = await apiRequest(`/api/properties/${encodeURIComponent(listingId)}`, { skipAuth: options.skipAuth !== false });
   const mapped = mapRemotePropertyForUi(response?.data || {}, { ...options, detailLoaded: true });
   mapped.remote_source = "api";
   return upsertPropertyForUi(mapped) || mapped;
@@ -25121,8 +25195,8 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-  const response = await apiRequest("/api/properties?status=approved&limit=1000");
-    const rows = Array.isArray(response?.data) ? response.data : [];
+    const response = await apiRequest("/api/properties?status=approved&limit=1000&public_only=1", { skipAuth: true });
+    const rows = Array.isArray(response?.data) ? response.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
     const remoteIds = new Set(rows.map((p) => String(p.id || "")).filter(Boolean));
     for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
       const p = PROPERTIES[i];
@@ -25255,11 +25329,22 @@ async function parseInitialDeepLink() {
 
   if (agentFromPath || brokerFromQuery) {
     const bid = agentFromPath || brokerFromQuery;
+    if (!remoteBrokersLoaded) await refreshBrokersFromApi({ silent: true });
     const found = findBrokerById(bid);
     if (found) {
       showPage("brokers", { history: false, source: "deep_link" });
-      openBrokerProfile(found.id);
+      await openBrokerProfile(found.id);
       return true;
+    }
+    try {
+      const loaded = await loadRemoteBrokerProfileForUi(bid);
+      if (loaded) {
+        showPage("brokers", { history: false, source: "deep_link" });
+        await openBrokerProfile(loaded.id);
+        return true;
+      }
+    } catch (error) {
+      console.warn("Unable to open linked broker", error);
     }
   }
 
@@ -30098,12 +30183,24 @@ async function openDetail(id, options = {}) {
   return true;
 }
 
-function openBrokerProfile(id) {
-  const b = findBrokerById(id);
-  if (!b) return;
+async function openBrokerProfile(id) {
+  let b = findBrokerById(id);
+  if (!b || !b.remote_profile_loaded) {
+    try {
+      const loaded = await loadRemoteBrokerProfileForUi(id);
+      if (loaded) b = loaded;
+    } catch (error) {
+      console.warn("Unable to load broker profile detail", error);
+    }
+  }
+  if (!b) {
+    toast("Broker profile is not available yet.");
+    return;
+  }
   activeBrokerProfileId = String(b.id || id || "");
   recordBrokerProfileView(id);
-  const list = getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
+  const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
+  const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
   const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
   document.getElementById("broker-profile-content").innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
@@ -30135,6 +30232,7 @@ function openBrokerProfile(id) {
           </div>
 
           <p class="text-gray-700 mt-4 leading-relaxed">${b.bio || "Professional real estate broker helping clients buy, rent, and invest with confidence."}</p>
+          ${renderBrokerSocialLinks(b)}
 
 	          <div class="grid sm:grid-cols-2 gap-3 mt-5">
             <div class="bg-green-50 rounded-xl p-3 text-center">

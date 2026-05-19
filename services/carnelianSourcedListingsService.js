@@ -19,7 +19,7 @@ const CARNELIAN_CONTACT = {
   phoneAlt: '+256785599477',
   email: 'carnelianproperties4@gmail.com',
   youtube: CARNELIAN_CHANNEL_URL,
-  tiktok: null,
+  tiktok: 'https://www.tiktok.com/@carnelian.propert',
 };
 
 const ASSET_DIR = path.join(__dirname, '..', 'assets', 'sourced', 'carnelian');
