@@ -1361,7 +1361,7 @@ async function waitForReplyComposerCleared(page, timeoutMs = 700) {
   while (Date.now() < deadline) {
     const state = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
     if (state.found && !normalizeReplyText(state.text || '')) return true;
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(25);
   }
   return false;
 }
