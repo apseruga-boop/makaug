@@ -9115,11 +9115,13 @@ async function adminSeedSocialSearchAuthorisedListings() {
     const data = response?.data || {};
     const samples = Array.isArray(data.listings) ? data.listings.slice(0, 8) : [];
     const agentCount = Array.isArray(data.agents) ? data.agents.length : 0;
+    const skipped = Array.isArray(data.skipped_listings) ? data.skipped_listings : [];
     if (statusEl) {
       statusEl.innerHTML = `
         <div class="font-black">Found-online listings created</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} pending social-search records are now in the King review queue.</div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
+        ${skipped.length ? `<div class="mt-1 text-amber-800">${adminEscape(skipped.length)} source records were kept for source review because no public phone/email/website is stored yet.</div>` : ""}
         ${samples.length ? `<div class="mt-2 space-y-2">${samples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
     }
     toast("Found-online listings are ready for King review.");
@@ -9162,6 +9164,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public/authorised source records available for daily found-online discovery.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
+        ${sources.length > 40 ? `<div class="mt-1 text-[11px] text-emerald-700">Showing the first 40 records here. The full database is stored for the daily source sweep.</div>` : ""}
       </div>
       <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-bold">Refresh Sources</button>
     </div>
@@ -9184,7 +9187,7 @@ async function adminLoadPropertySourceRegistry() {
     panel.innerHTML = "Loading source database...";
   }
   try {
-    const response = await apiRequest("/api/admin/property-source-registry?limit=250", {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=600", {
       method: "GET",
       headers: adminAuthHeaders()
     });

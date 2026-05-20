@@ -498,6 +498,10 @@ function agentByKey(key) {
   return SOCIAL_SEARCH_AGENTS.find((agent) => agent.key === key);
 }
 
+function agentHasPublicContact(agent = {}) {
+  return Boolean(String(agent.phone || agent.email || agent.website || '').trim());
+}
+
 function youtubeUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
 }
@@ -880,12 +884,31 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
   try {
     await client.query('BEGIN');
     const agentIdsByKey = {};
+    const skippedAgents = [];
     for (const agent of SOCIAL_SEARCH_AGENTS) {
+      if (!agentHasPublicContact(agent)) {
+        skippedAgents.push({
+          key: agent.key,
+          name: agent.name,
+          reason: 'missing_public_phone_email_or_website',
+        });
+        continue;
+      }
       agentIdsByKey[agent.key] = await upsertSocialAgent(client, agent);
     }
     const cleanup = replace ? await cleanupSocialSearchBatch(client) : null;
     const created = [];
+    const skippedListings = [];
     for (const item of SOCIAL_SEARCH_LISTINGS) {
+      if (!agentIdsByKey[item.agentKey]) {
+        skippedListings.push({
+          key: item.key,
+          title: item.title,
+          agent_key: item.agentKey,
+          reason: 'agent_missing_public_contact',
+        });
+        continue;
+      }
       const listing = buildSocialSearchListing(item, agentIdsByKey[item.agentKey]);
       created.push(await insertListing(client, listing, agentIdsByKey[item.agentKey]));
     }
@@ -896,7 +919,9 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       batch_id: SOCIAL_SEARCH_BATCH_ID,
       replace,
       cleanup,
-      agents: SOCIAL_SEARCH_AGENTS.map((agent) => ({
+      agents: SOCIAL_SEARCH_AGENTS
+        .filter((agent) => agentIdsByKey[agent.key])
+        .map((agent) => ({
         id: agentIdsByKey[agent.key],
         name: agent.name,
         company: agent.company,
@@ -905,6 +930,8 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         email: agent.email || '',
         channelUrl: agent.channelUrl,
       })),
+      skipped_agents: skippedAgents,
+      skipped_listings: skippedListings,
       created_properties: created.length,
       by_type: created.reduce((acc, item) => {
         const original = SOCIAL_SEARCH_LISTINGS.find((listing) => listing.youtubeId === item.youtube_url.split('v=')[1]);
@@ -924,6 +951,8 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
 
 function summarizeSocialSearchListings() {
   const listings = plannedSocialSearchListings();
+  const eligibleAgentKeys = new Set(SOCIAL_SEARCH_AGENTS.filter(agentHasPublicContact).map((agent) => agent.key));
+  const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => eligibleAgentKeys.has(item.agentKey));
   const byAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
     const agent = agentByKey(item.agentKey)?.name || item.agentKey;
     acc[agent] = (acc[agent] || 0) + 1;
@@ -937,6 +966,8 @@ function summarizeSocialSearchListings() {
   return {
     count: listings.length,
     agents_count: SOCIAL_SEARCH_AGENTS.length,
+    seed_eligible_count: seedEligibleListings.length,
+    skipped_until_public_contact_count: SOCIAL_SEARCH_LISTINGS.length - seedEligibleListings.length,
     by_agent: byAgent,
     by_type: byType,
     batch_id: SOCIAL_SEARCH_BATCH_ID,

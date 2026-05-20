@@ -356,6 +356,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(adminRoute.includes("router.post('/social-search-authorised-listings/seed'"), 'admin found-online seed endpoint should exist');
   assert(adminRoute.includes('seedSocialSearchAuthorisedListings'), 'admin endpoint should use the social search seed service');
   assert(adminRoute.includes('admin_social_search_authorised_listings_seeded'), 'admin endpoint should write found-online audit trail');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete-contact sources instead of crashing the whole batch');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
   assert(frontend.includes('Create Found Online Listings'), 'dashboard should label the found-online creation action');
   const listing = plannedSocialSearchListings()[0];

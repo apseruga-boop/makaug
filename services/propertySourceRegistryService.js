@@ -71,7 +71,7 @@ function source({
   };
 }
 
-const PROPERTY_SOURCE_REGISTRY = [
+const BASE_PROPERTY_SOURCE_REGISTRY = [
   source({
     key: 'carnelian-properties-uganda',
     name: 'Carnelian Properties Uganda',
@@ -463,6 +463,123 @@ const PROPERTY_SOURCE_REGISTRY = [
   }),
 ];
 
+const DISCOVERY_AREAS = [
+  ['Kampala', 'Kampala Central'], ['Kampala', 'Kololo'], ['Kampala', 'Nakasero'], ['Kampala', 'Naguru'],
+  ['Kampala', 'Ntinda'], ['Kampala', 'Bukoto'], ['Kampala', 'Kisaasi'], ['Kampala', 'Muyenga'],
+  ['Kampala', 'Munyonyo'], ['Kampala', 'Makindye'], ['Kampala', 'Lubowa'], ['Kampala', 'Seguku'],
+  ['Wakiso', 'Kira'], ['Wakiso', 'Namugongo'], ['Wakiso', 'Naalya'], ['Wakiso', 'Najjera'],
+  ['Wakiso', 'Kyanja'], ['Wakiso', 'Komamboga'], ['Wakiso', 'Kasangati'], ['Wakiso', 'Gayaza'],
+  ['Wakiso', 'Matugga'], ['Wakiso', 'Bwebajja'], ['Wakiso', 'Kitende'], ['Wakiso', 'Kajjansi'],
+  ['Wakiso', 'Entebbe'], ['Wakiso', 'Garuga'], ['Wakiso', 'Wakiso Town'], ['Wakiso', 'Nansana'],
+  ['Wakiso', 'Kira-Kasangati Road'], ['Mukono', 'Mukono Town'], ['Mukono', 'Seeta'], ['Mukono', 'Namanve'],
+  ['Mukono', 'Namugongo-Mukono'], ['Mukono', 'Buvuma corridor'], ['Jinja', 'Jinja City'], ['Jinja', 'Njeru'],
+  ['Mbale', 'Mbale Town'], ['Mbarara', 'Mbarara City'], ['Masaka', 'Masaka City'], ['Gulu', 'Gulu City'],
+  ['Arua', 'Arua City'], ['Fort Portal', 'Fort Portal'], ['Hoima', 'Hoima City'], ['Lira', 'Lira City'],
+  ['Soroti', 'Soroti City'], ['Mityana', 'Mityana Town'], ['Mpigi', 'Mpigi Town'], ['Kayunga', 'Kayunga Town'],
+  ['Wakiso', 'Bweyogerere'], ['Wakiso', 'Bulindo'],
+];
+
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function compactTag(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+}
+
+function listingTypesForIntent(intent) {
+  if (/rent|rental|hostel|student/i.test(intent)) return ['rent', 'students'];
+  if (/land|plot/i.test(intent)) return ['land'];
+  if (/commercial|shop|office/i.test(intent)) return ['commercial', 'rent'];
+  return ['sale'];
+}
+
+function discoverySource({ platform, sourceType, area, district, intent, url, index }) {
+  const label = `${area} ${intent}`;
+  const slug = slugify(`${platform}-${sourceType}-${label}-${index}`);
+  return source({
+    key: `discovery-${slug}`,
+    name: `${platform[0].toUpperCase()}${platform.slice(1)} discovery: ${label}`,
+    platform,
+    sourceType,
+    url,
+    districts: [district],
+    listingTypes: listingTypesForIntent(intent),
+    hashtags: [
+      'UgandaRealEstate',
+      'PropertyUganda',
+      compactTag(label),
+    ].filter(Boolean),
+    status: 'candidate',
+    trustLevel: 'source_discovery_needed',
+    consentStatus: 'public_source_review_needed',
+    scrapePolicy: 'public_search_manual_review_only',
+    canContactDirectly: false,
+    notes: 'Generated source-discovery feed. Promote specific public agents/pages/posts into verified source records only after manual review.',
+    metadata: {
+      generated_source_discovery: true,
+      query: label,
+      review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
+      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates.',
+    },
+  });
+}
+
+function expandedDiscoverySources() {
+  const sources = [];
+  const tikTokIntents = ['houses for sale Uganda', 'rentals Uganda', 'land plots for sale Uganda', 'student hostels Uganda'];
+  const instagramIntents = ['real estate agents Uganda', 'houses for sale Uganda'];
+  const facebookIntents = ['property pages Uganda', 'real estate groups Uganda', 'land for sale Uganda', 'rentals Uganda'];
+  DISCOVERY_AREAS.forEach(([district, area], areaIndex) => {
+    tikTokIntents.forEach((intent, intentIndex) => {
+      const query = `${area} ${intent}`;
+      sources.push(discoverySource({
+        platform: 'tiktok',
+        sourceType: 'public_search_feed',
+        area,
+        district,
+        intent,
+        index: `${areaIndex}-${intentIndex}`,
+        url: `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`,
+      }));
+    });
+    instagramIntents.forEach((intent, intentIndex) => {
+      const query = `${area} ${intent}`;
+      sources.push(discoverySource({
+        platform: 'instagram',
+        sourceType: 'public_search_feed',
+        area,
+        district,
+        intent,
+        index: `${areaIndex}-${intentIndex}`,
+        url: `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(query)}`,
+      }));
+    });
+    facebookIntents.forEach((intent, intentIndex) => {
+      const query = `${area} ${intent}`;
+      const searchType = /group/i.test(intent) ? 'groups' : (/pages/i.test(intent) ? 'pages' : 'posts');
+      sources.push(discoverySource({
+        platform: 'facebook',
+        sourceType: `public_${searchType}_search_feed`,
+        area,
+        district,
+        intent,
+        index: `${areaIndex}-${intentIndex}`,
+        url: `https://www.facebook.com/search/${searchType}/?q=${encodeURIComponent(query)}`,
+      }));
+    });
+  });
+  return sources;
+}
+
+const PROPERTY_SOURCE_REGISTRY = [
+  ...BASE_PROPERTY_SOURCE_REGISTRY,
+  ...expandedDiscoverySources(),
+];
+
 function byPlatformSummary(sources = PROPERTY_SOURCE_REGISTRY) {
   return sources.reduce((acc, item) => {
     acc[item.platform] = (acc[item.platform] || 0) + 1;
@@ -625,7 +742,8 @@ async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGIST
 async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
   if (!db?.query) throw new Error('db.query is required');
   const cappedLimit = Math.max(1, Math.min(Number(limit) || 250, 1000));
-  const result = await db.query(
+  const [result, totalResult, platformResult] = await Promise.all([
+    db.query(
     `SELECT
        id::text AS id,
        source_key,
@@ -659,12 +777,20 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
        source_name
      LIMIT $1`,
     [cappedLimit]
-  );
+    ),
+    db.query('SELECT COUNT(*)::int AS count FROM property_source_registry'),
+    db.query('SELECT platform, COUNT(*)::int AS count FROM property_source_registry GROUP BY platform ORDER BY platform')
+  ]);
+  const byPlatform = platformResult.rows.reduce((acc, row) => {
+    acc[row.platform] = row.count;
+    return acc;
+  }, {});
   return {
     ok: true,
     batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
-    count: result.rows.length,
-    by_platform: byPlatformSummary(result.rows.map((row) => ({ platform: row.platform }))),
+    count: totalResult.rows[0]?.count || result.rows.length,
+    returned_count: result.rows.length,
+    by_platform: byPlatform,
     sources: result.rows,
   };
 }

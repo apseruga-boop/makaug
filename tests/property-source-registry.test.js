@@ -36,10 +36,12 @@ function test(name, fn) {
 
 test('source registry service defines a multi-platform Uganda property source database', () => {
   const summary = summarizePropertySourceRegistry();
-  assert(summary.count >= 18, 'starter database should include at least 18 source/feed records');
-  ['youtube', 'tiktok', 'instagram', 'facebook', 'website'].forEach((platform) => {
-    assert(summary.by_platform[platform] >= 1, `missing platform ${platform}`);
-  });
+  assert(summary.count >= 533, 'expanded database should include the launch source-discovery grid');
+  assert(summary.by_platform.tiktok >= 200, 'source database should include at least 200 TikTok discovery records');
+  assert(summary.by_platform.instagram >= 100, 'source database should include at least 100 Instagram discovery records');
+  assert(summary.by_platform.facebook >= 200, 'source database should include at least 200 Facebook discovery records');
+  assert(summary.by_platform.youtube >= 10, 'source database should keep YouTube creator/search sources');
+  assert(summary.by_platform.website >= 10, 'source database should keep website/portal sources');
   ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
   });
@@ -67,7 +69,7 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('async function adminSeedPropertySourceRegistry'), 'frontend should seed source database');
   assert(frontend.includes('async function adminLoadPropertySourceRegistry'), 'frontend should load source database');
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
-  assert(frontend.includes('/api/admin/property-source-registry?limit=250'), 'frontend should call protected list API');
+  assert(frontend.includes('/api/admin/property-source-registry?limit=600'), 'frontend should call protected list API');
   assert.strictEqual(pkg.scripts['inventory:seed-source-registry'], 'node scripts/seed-property-source-registry.js');
 });
 
@@ -95,4 +97,3 @@ test('WhatsApp search results disclose found-online source without losing makaug
   assert(whatsappRoute.includes('source_name'), 'WhatsApp source line should read source name');
   assert(whatsappRoute.includes('Every result opens on makaug'), 'WhatsApp results should still drive to makaug listing pages');
 });
-
