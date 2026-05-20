@@ -143,6 +143,17 @@ test('broker profiles recover when public route fragments removed the profile pa
   assert.doesNotMatch(source, /document\.getElementById\("broker-profile-content"\)\.innerHTML/);
 });
 
+test('agent deep links open the broker profile route directly', () => {
+  const source = asyncFunctionSource('parseInitialDeepLink');
+  const start = source.indexOf('if (agentFromPath || brokerFromQuery)');
+  const end = source.indexOf('const adminControl', start);
+  assert(start > -1 && end > start, 'Expected agent deep-link branch to exist');
+  const agentBranch = source.slice(start, end);
+  assert.match(agentBranch, /await openBrokerProfile\(found\.id\)/);
+  assert.match(agentBranch, /await openBrokerProfile\(loaded\.id\)/);
+  assert.doesNotMatch(agentBranch, /showPage\("brokers", \{ history: false, source: "deep_link" \}\)/);
+});
+
 test('approval WhatsApp notification opens before heavy admin dashboard refresh', () => {
   const source = asyncFunctionSource('adminSetListingStatus');
   const modalIndex = source.indexOf('openAdminWhatsAppMessageModal({');

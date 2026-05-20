@@ -25404,14 +25404,12 @@ async function parseInitialDeepLink() {
     if (!remoteBrokersLoaded) await refreshBrokersFromApi({ silent: true });
     const found = findBrokerById(bid);
     if (found) {
-      showPage("brokers", { history: false, source: "deep_link" });
       await openBrokerProfile(found.id);
       return true;
     }
     try {
       const loaded = await loadRemoteBrokerProfileForUi(bid);
       if (loaded) {
-        showPage("brokers", { history: false, source: "deep_link" });
         await openBrokerProfile(loaded.id);
         return true;
       }
