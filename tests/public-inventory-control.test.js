@@ -181,4 +181,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /agent-inquiry-nearby-20260519/);
   assert.match(htmlSource, /approval-profile-sync-20260519/);
   assert.match(htmlSource, /broker-profile-share-links-20260519/);
+  assert.match(htmlSource, /direct-agent-profile-20260519/);
 });
