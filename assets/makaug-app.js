@@ -8639,6 +8639,15 @@ function adminIsSourcedInventoryCandidate(row = {}) {
     || listedVia === "sourced_inventory";
 }
 
+function adminIsFoundOnlineSourcedListing(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const badge = String(extra.source_badge || extra.source_discovery_label || "").toLowerCase();
+  return extra.found_online === true
+    || extra.social_search_candidate === true
+    || badge === "found_online"
+    || badge === "found online";
+}
+
 function adminSourcedCandidateSourceLinks(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
   const images = Array.isArray(row.images) ? row.images : [];
@@ -8663,6 +8672,9 @@ function adminSourcedCandidateSourceLinks(row = {}) {
 
 function adminSourcedInventoryCandidateBadge(row = {}) {
   if (!adminIsSourcedInventoryCandidate(row)) return "";
+  if (adminIsFoundOnlineSourcedListing(row)) {
+    return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Found online</span>`;
+  }
   return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Sourced candidate</span>`;
 }
 
@@ -8894,6 +8906,7 @@ function ensureAdminSourcedCandidateControls() {
     document.getElementById("admin-seed-sourced-candidates-btn")
     && document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
+    && document.getElementById("admin-seed-social-search-listings-btn")
   ) return;
   const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
   const actions = document.createElement("div");
@@ -8904,6 +8917,9 @@ function ensureAdminSourcedCandidateControls() {
   }
   if (!document.getElementById("admin-seed-carnelian-listings-btn")) {
     missingButtons.push(`<button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>`);
+  }
+  if (!document.getElementById("admin-seed-social-search-listings-btn")) {
+    missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Create Found Online Listings</button>`);
   }
   if (!document.getElementById("admin-seed-sourced-candidates-btn")) {
     missingButtons.push(`<button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>`);
@@ -9024,6 +9040,57 @@ async function adminSeedCarnelianAuthorisedListings() {
       statusEl.innerHTML = `Could not create Carnelian listings: ${adminEscape(e.message || "Unknown error")}`;
     }
     toast(`Carnelian seed failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function adminSeedSocialSearchAuthorisedListings() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const ok = window.confirm("Create/rebuild the found-online social-search listings and agent profiles in the King review queue?");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const button = document.getElementById("admin-seed-social-search-listings-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Creating found-online social-search listings now...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: { replace: true }
+    });
+    const data = response?.data || {};
+    const samples = Array.isArray(data.listings) ? data.listings.slice(0, 8) : [];
+    const agentCount = Array.isArray(data.agents) ? data.agents.length : 0;
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">Found-online listings created</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending social-search records are now in the King review queue.</div>
+        <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
+        ${samples.length ? `<div class="mt-2 space-y-2">${samples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
+    }
+    toast("Found-online listings are ready for King review.");
+    await renderAdminDashboard();
+    setAdminWorkflowTab("review");
+    adminScrollTo("#admin-review-queue-control");
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Could not create found-online listings: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Found-online seed failed: ${e.message || "error"}`);
   } finally {
     if (button) {
       button.disabled = false;
@@ -23622,6 +23689,32 @@ function isListingNew(p) {
   return !!p.new;
 }
 
+function isFoundOnlineListing(p = {}) {
+  let extra = {};
+  if (p?.extra_fields && typeof p.extra_fields === "object") {
+    extra = p.extra_fields;
+  } else if (typeof p?.extra_fields === "string") {
+    try { extra = JSON.parse(p.extra_fields) || {}; } catch (error) {}
+  }
+  const badge = String(extra.source_badge || extra.source_discovery_label || "").toLowerCase();
+  const sourceBatch = String(extra.source_batch || "").toLowerCase();
+  return extra.found_online === true
+    || extra.social_search_candidate === true
+    || badge === "found_online"
+    || badge === "found online"
+    || sourceBatch === "social_search_authorised_20260520";
+}
+
+function listingFreshnessBadgeHtml(p = {}) {
+  if (isFoundOnlineListing(p)) {
+    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-magnifying-glass-location text-[10px]"></i> ${translateListingLabel("Found online")}</div>`;
+  }
+  if (isListingNew(p)) {
+    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>`;
+  }
+  return "";
+}
+
 function formatListingDate(dateValue) {
   const date = parseDateSafe(dateValue);
   if (!date) return "";
@@ -24214,7 +24307,6 @@ async function shareBrokerBusinessCard(id, channel = "native") {
   const broker = findBrokerById(p.agent);
   const source = listingSourceMeta(p);
 	      const registration = listingRegistrationMeta(p);
-	      const showNew = isListingNew(p);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
@@ -24224,7 +24316,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
         <img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}" alt="${p.title}" class="w-full h-full object-cover">
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
-          ${showNew ? `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>` : ""}
+          ${listingFreshnessBadgeHtml(p)}
           <div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${source.icon} text-[10px]"></i> ${source.label}
           </div>
@@ -26728,6 +26820,7 @@ const LISTING_LABEL_I18N = {
     "Public contact name": "Erinnya ery'olukale ery'okukwatibwako",
     "Map synced to selected region/district/neighbourhood.": "Maapu etereezeddwa ku region/district/neighbourhood olondedde.",
     "NEW": "KIPYA",
+    "Found online": "Kizuuliddwa ku mutimbagano",
     "bed": "ekisenge",
     "beds": "ebisenge",
     "bath": "ekinaabiro",
@@ -27124,6 +27217,7 @@ const LISTING_LABEL_I18N = {
     "Public contact name": "Jina la Mawasiliano la Umma",
     "Map synced to selected region/district/neighbourhood.": "Ramani imesawazishwa na kanda/wilaya/mtaa uliochagua.",
     "NEW": "MPYA",
+    "Found online": "Imepatikana mtandaoni",
     "bed": "chumba",
     "beds": "vyumba",
     "bath": "bafu",
@@ -27471,6 +27565,7 @@ const LISTING_LABEL_I18N = {
     "Added": "Kimedo",
     "Added today": "Kimedo tin",
     "Added recently": "Kimedo nono",
+    "Found online": "Kinonge i intanet",
     "Summary reset to auto-generated.": "Summary odok i auto-generated.",
     "Listing link copied.": "Link pa listing kikopi.",
     "Unable to copy link right now.": "Pe twero kopi link kombedi.",
@@ -27545,6 +27640,7 @@ const LISTING_LABEL_I18N = {
     "Added": "Kyatairweho",
     "Added today": "Kyatairweho eriizooba",
     "Added recently": "Kyatairweho obwire bukehingire",
+    "Found online": "Kizoirwe aha mutimbagano",
     "Summary reset to auto-generated.": "Summary eigarurwe aha auto-generated.",
     "Listing link copied.": "Link ya listing ekopibwe.",
     "Unable to copy link right now.": "Titwabaasa kukopa link hati.",
@@ -27619,6 +27715,7 @@ const LISTING_LABEL_I18N = {
     "Added": "Kyatairweho",
     "Added today": "Kyatairweho eriizooba",
     "Added recently": "Kyatairweho obwire bukehingire",
+    "Found online": "Kizoirwe aha mutimbagano",
     "Summary reset to auto-generated.": "Summary eigarurwe aha auto-generated.",
     "Listing link copied.": "Link ya listing ekopibwe.",
     "Unable to copy link right now.": "Titwabaasa kukopa link hati.",
@@ -27693,6 +27790,7 @@ const LISTING_LABEL_I18N = {
     "Added": "Kyataddwako",
     "Added today": "Kyataddwako leero",
     "Added recently": "Kyataddwako mu biseera eby'okumpi",
+    "Found online": "Kizuuliddwa ku mutimbagano",
     "Summary reset to auto-generated.": "Summary ezze ku ebyekolebwa yokka.",
     "Listing link copied.": "Link ya listing ekopeddwa.",
     "Unable to copy link right now.": "Tetusobodde kukoppa link kati.",

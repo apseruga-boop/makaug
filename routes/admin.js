@@ -87,6 +87,10 @@ const {
   CARNELIAN_BATCH_ID,
   seedCarnelianAuthorisedListings
 } = require('../services/carnelianSourcedListingsService');
+const {
+  SOCIAL_SEARCH_BATCH_ID,
+  seedSocialSearchAuthorisedListings
+} = require('../services/socialSearchSourcedListingsService');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -2108,6 +2112,26 @@ router.post('/carnelian-authorised-listings/seed', async (req, res, next) => {
       replace,
       created_properties: result.created_properties,
       agent: result.agent
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/social-search-authorised-listings/seed', async (req, res, next) => {
+  try {
+    const replace = req.body?.replace !== false;
+    const result = await seedSocialSearchAuthorisedListings({
+      db,
+      replace
+    });
+    await writeAudit('admin_social_search_authorised_listings_seeded', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: SOCIAL_SEARCH_BATCH_ID,
+      replace,
+      created_properties: result.created_properties,
+      agents: result.agents
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

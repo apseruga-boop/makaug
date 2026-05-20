@@ -32,6 +32,15 @@ const {
   summarizeCarnelianListings,
   whatsappShareMessage: carnelianWhatsappShareMessage,
 } = require('../services/carnelianSourcedListingsService');
+const {
+  SOCIAL_SEARCH_BATCH_ID,
+  SOCIAL_SEARCH_AGENTS,
+  SOCIAL_SEARCH_LISTINGS,
+  SOCIAL_SEARCH_SOURCE,
+  plannedSocialSearchListings,
+  summarizeSocialSearchListings,
+  whatsappShareMessage: socialSearchWhatsappShareMessage,
+} = require('../services/socialSearchSourcedListingsService');
 
 function test(name, fn) {
   try {
@@ -88,6 +97,8 @@ test('King dashboard visibly separates sourced candidates from ordinary reviews'
   assert(frontend.includes('function adminEvidenceDownloadFilename'), 'evidence downloads should use a filename matching the actual mime type');
   assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
   assert(frontend.includes('Placeholder images are attached'), 'dashboard should warn when images are placeholders');
+  assert(frontend.includes('function adminIsFoundOnlineSourcedListing'), 'dashboard should detect found-online sourced records');
+  assert(frontend.includes('Found online'), 'dashboard should display found-online copy');
 });
 
 test('admin listing API exposes sourcing metadata only behind admin access', () => {
@@ -117,6 +128,11 @@ test('package script exposes the safe inventory intake command', () => {
     pkg.scripts['inventory:seed-carnelian'],
     'node scripts/seed-carnelian-authorised-listings.js',
     'package.json should expose Carnelian authorised listing seed command'
+  );
+  assert.strictEqual(
+    pkg.scripts['inventory:seed-social-search'],
+    'node scripts/seed-social-search-authorised-listings.js',
+    'package.json should expose found-online social search seed command'
   );
 });
 
@@ -152,10 +168,23 @@ test('admin has a guarded April 29 test-batch cleanup path', () => {
 test('King review queue has one-click sourced candidate creation', () => {
   assert(html.includes('admin-seed-sourced-candidates-btn'), 'review queue should expose sourced candidate button');
   assert(html.includes('admin-sourced-candidates-status'), 'review queue should expose seed status output');
+  assert(html.includes('admin-seed-social-search-listings-btn'), 'review queue should expose found-online listing button');
   assert(frontend.includes('function ensureAdminSourcedCandidateControls'), 'frontend should inject seed controls when cached HTML is stale');
   assert(frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should implement seed action');
+  assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'frontend should implement found-online seed action');
   assert(frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should call protected admin seed endpoint');
+  assert(frontend.includes('/api/admin/social-search-authorised-listings/seed'), 'frontend should call protected found-online endpoint');
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
+});
+
+test('public property cards show found-online badge instead of generic new badge for social search records', () => {
+  assert(frontend.includes('function isFoundOnlineListing'), 'public UI should detect found-online listing records');
+  assert(frontend.includes('function listingFreshnessBadgeHtml'), 'public UI should render listing freshness through a shared helper');
+  assert(frontend.includes('translateListingLabel("Found online")'), 'public UI should translate the found-online badge');
+  assert(frontend.includes('sourceBatch === "social_search_authorised_20260520"'), 'public UI should recognise the social-search batch');
+  assert(frontend.includes('listingFreshnessBadgeHtml(p)'), 'property cards should render the found-online badge helper');
+  assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
+  assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
 });
 
 test('Bakaima authorised batch creates 33 pending land listings with evidence photos', () => {
@@ -284,6 +313,61 @@ test('Carnelian WhatsApp share card carries listing URL, video and agent contact
   assert(card.includes(listing.source_item.youtubeUrl), 'share card should include the source video tour');
   assert(card.includes(CARNELIAN_CONTACT.phone), 'share card should include primary Carnelian phone');
   assert(card.includes(CARNELIAN_CONTACT.phoneAlt), 'share card should include alternate Carnelian phone');
+});
+
+test('found-online social search batch creates pending listings with agent profiles and evidence', () => {
+  const summary = summarizeSocialSearchListings();
+  const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
+  assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
+  assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public property records');
+  assert.strictEqual(summary.agents_count, 7, 'social search batch should prepare the seven permitted agent profiles');
+  assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
+  assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
+  assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
+  for (const listing of listings) {
+    const extra = JSON.parse(listing.extra_fields);
+    assert.strictEqual(listing.status, 'pending');
+    assert.strictEqual(listing.moderation_stage, 'submitted');
+    assert.strictEqual(listing.source, SOCIAL_SEARCH_SOURCE);
+    assert.strictEqual(listing.listed_via, 'sourced_inventory');
+    assert.strictEqual(extra.source_batch, SOCIAL_SEARCH_BATCH_ID);
+    assert.strictEqual(extra.found_online, true);
+    assert.strictEqual(extra.social_search_candidate, true);
+    assert.strictEqual(extra.source_badge, 'found_online');
+    assert.strictEqual(extra.consent_confirmed, true);
+    assert.strictEqual(extra.image_rights_confirmed, true);
+    assert.strictEqual(extra.image_rights_status, 'authorised_public_social_video_thumbnail_from_agent_channel');
+    assert.strictEqual(extra.map_pin_confirmed, false);
+    assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
+    assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
+    assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length === 5, `${listing.title} should keep source image URLs`);
+    assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 5, `${listing.title} should include nearby places`);
+    assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include health facilities`);
+    assert(extra.nearby_facilities.some((item) => /school|college|secondary/i.test(`${item.type} ${item.name}`)), `${listing.title} should include schools or secondary schools`);
+    assert(Array.isArray(extra.review_required_steps) && extra.review_required_steps.length >= 5, `${listing.title} should keep approval checks in King review metadata`);
+    assert(!/before (public )?approval/i.test(listing.description), `${listing.title} should not expose approval warnings in public copy`);
+    assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate wording publicly`);
+    assert.strictEqual(listing.images.length, 5, `${listing.title} should include the standard five source images`);
+    assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`)), `${listing.title} should use the matching YouTube image source`);
+  }
+});
+
+test('found-online social search admin path and share cards are protected and auditable', () => {
+  assert(adminRoute.includes("router.post('/social-search-authorised-listings/seed'"), 'admin found-online seed endpoint should exist');
+  assert(adminRoute.includes('seedSocialSearchAuthorisedListings'), 'admin endpoint should use the social search seed service');
+  assert(adminRoute.includes('admin_social_search_authorised_listings_seeded'), 'admin endpoint should write found-online audit trail');
+  assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
+  assert(frontend.includes('Create Found Online Listings'), 'dashboard should label the found-online creation action');
+  const listing = plannedSocialSearchListings()[0];
+  const card = socialSearchWhatsappShareMessage(
+    listing.source_item,
+    'https://makaug.com/property/example-id',
+    'https://makaug.com/?listing_preview=1&listing=example-id&token=example-token'
+  );
+  assert(card.includes('https://makaug.com/property/example-id'), 'share card should include the future public listing URL');
+  assert(card.includes('https://makaug.com/?listing_preview=1'), 'share card should include the private preview URL');
+  assert(card.includes(`https://www.youtube.com/watch?v=${listing.source_item.youtubeId}`), 'share card should include the source video');
+  assert(card.includes('Call/WhatsApp'), 'share card should include contact wording when a phone exists');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {
