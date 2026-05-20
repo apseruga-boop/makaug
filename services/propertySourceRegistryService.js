@@ -2,6 +2,7 @@
 
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
+const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 10000;
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
@@ -809,6 +810,19 @@ const DISCOVERY_AREAS = [
   ['Arua', 'Arua City'], ['Fort Portal', 'Fort Portal'], ['Hoima', 'Hoima City'], ['Lira', 'Lira City'],
   ['Soroti', 'Soroti City'], ['Mityana', 'Mityana Town'], ['Mpigi', 'Mpigi Town'], ['Kayunga', 'Kayunga Town'],
   ['Wakiso', 'Bweyogerere'], ['Wakiso', 'Bulindo'],
+  ['Wakiso', 'Kiwatule'], ['Wakiso', 'Kungu'], ['Wakiso', 'Najjeera 2'], ['Wakiso', 'Kiwenda'],
+  ['Wakiso', 'Nakwero'], ['Wakiso', 'Sonde'], ['Wakiso', 'Kyaliwajjala'], ['Wakiso', 'Kirinya'],
+  ['Wakiso', 'Namugongo Shrine area'], ['Wakiso', 'Kira-Mulawa'], ['Wakiso', 'Kira-Nsasa'], ['Wakiso', 'Kasokoso'],
+  ['Kampala', 'Kyebando'], ['Kampala', 'Kawempe'], ['Kampala', 'Buziga'], ['Kampala', 'Kansanga'],
+  ['Kampala', 'Kabalagala'], ['Kampala', 'Bunga'], ['Kampala', 'Bugolobi'], ['Kampala', 'Mbuya'],
+  ['Kampala', 'Luzira'], ['Kampala', 'Naalya'], ['Kampala', 'Kireka'], ['Kampala', 'Rubaga'],
+  ['Kampala', 'Mengo'], ['Kampala', 'Old Kampala'], ['Kampala', 'Makerere'], ['Kampala', 'Wandegeya'],
+  ['Kampala', 'Kikoni'], ['Kampala', 'Kamwokya'], ['Kampala', 'Mutungo'], ['Kampala', 'Namuwongo'],
+  ['Mukono', 'Kyetume'], ['Mukono', 'Namawojjolo'], ['Mukono', 'Katosi Road'], ['Mukono', 'Namilyango'],
+  ['Entebbe', 'Kitoro'], ['Entebbe', 'Bugonga'], ['Entebbe', 'Nkumba'], ['Entebbe', 'Lunyo'],
+  ['Wakiso', 'Kigo'], ['Wakiso', 'Maya'], ['Wakiso', 'Nsangi'], ['Wakiso', 'Buloba'],
+  ['Wakiso', 'Kakiri'], ['Wakiso', 'Namayumba'], ['Wakiso', 'Kakungulu Estate'], ['Wakiso', 'Zana'],
+  ['Wakiso', 'Bunamwaya'], ['Wakiso', 'Ndejje'], ['Wakiso', 'Namasuba'], ['Wakiso', 'Katale'],
 ];
 
 function slugify(value) {
@@ -851,6 +865,10 @@ const DISCOVERY_INTENTS = [
   'broker listings Uganda',
   'gated community Uganda',
   'airbnb investment property Uganda',
+  'maisonettes for sale Uganda',
+  'duplexes for sale Uganda',
+  'new apartments Uganda',
+  'houses with title Uganda',
 ];
 
 function discoverySource({ platform, sourceType, area, district, intent, url, index }) {
@@ -929,9 +947,12 @@ function expandedDiscoverySources() {
   return sources;
 }
 
+const DISCOVERY_SOURCE_TARGET_COUNT = Math.max(0, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT - BASE_PROPERTY_SOURCE_REGISTRY.length);
+const GENERATED_DISCOVERY_SOURCES = expandedDiscoverySources().slice(0, DISCOVERY_SOURCE_TARGET_COUNT);
+
 const PROPERTY_SOURCE_REGISTRY = [
   ...BASE_PROPERTY_SOURCE_REGISTRY,
-  ...expandedDiscoverySources(),
+  ...GENERATED_DISCOVERY_SOURCES,
 ];
 
 function byPlatformSummary(sources = PROPERTY_SOURCE_REGISTRY) {
@@ -951,6 +972,7 @@ function byStatusSummary(sources = PROPERTY_SOURCE_REGISTRY) {
 function summarizePropertySourceRegistry() {
   return {
     batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+    target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
     count: PROPERTY_SOURCE_REGISTRY.length,
     by_platform: byPlatformSummary(),
     by_status: byStatusSummary(),
@@ -1097,7 +1119,7 @@ async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGIST
 
 async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
   if (!db?.query) throw new Error('db.query is required');
-  const cappedLimit = Math.max(1, Math.min(Number(limit) || 250, 5000));
+  const cappedLimit = Math.max(1, Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT));
   const [result, totalResult, platformResult] = await Promise.all([
     db.query(
     `SELECT
@@ -1153,6 +1175,7 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
 
 module.exports = {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   PROPERTY_SOURCE_REGISTRY,
   normalizeSourceForDb,
   summarizePropertySourceRegistry,

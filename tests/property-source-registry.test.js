@@ -10,6 +10,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const service = read('services/propertySourceRegistryService.js');
 const migration = read('db/migrations/042_property_source_registry.sql');
 const script = read('scripts/seed-property-source-registry.js');
+const dailySweepScript = read('scripts/run-daily-found-online-source-sweep.js');
 const adminRoute = read('routes/admin.js');
 const frontend = read('assets/makaug-app.js');
 const html = read('index.html');
@@ -36,11 +37,12 @@ function test(name, fn) {
 
 test('source registry service defines a multi-platform Uganda property source database', () => {
   const summary = summarizePropertySourceRegistry();
-  assert(summary.count >= 4200, 'expanded database should include the scaled source-discovery grid');
-  assert(summary.by_platform.tiktok >= 1000, 'source database should include at least 1,000 TikTok discovery records');
-  assert(summary.by_platform.instagram >= 1000, 'source database should include at least 1,000 Instagram discovery records');
-  assert(summary.by_platform.facebook >= 1000, 'source database should include at least 1,000 Facebook discovery records');
-  assert(summary.by_platform.youtube >= 1000, 'source database should include at least 1,000 YouTube creator/search sources');
+  assert.strictEqual(summary.target_count, 10000, 'source database should have a 10,000-record operating target');
+  assert(summary.count >= 9900 && summary.count <= 10000, 'expanded database should sit at the 10,000 source-discovery ceiling');
+  assert(summary.by_platform.tiktok >= 2000, 'source database should include at least 2,000 TikTok discovery records');
+  assert(summary.by_platform.instagram >= 2000, 'source database should include at least 2,000 Instagram discovery records');
+  assert(summary.by_platform.facebook >= 2000, 'source database should include at least 2,000 Facebook discovery records');
+  assert(summary.by_platform.youtube >= 2000, 'source database should include at least 2,000 YouTube creator/search sources');
   assert(summary.by_platform.website >= 10, 'source database should keep website/portal sources');
   ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
@@ -48,6 +50,7 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.direct_contact_sources >= 2, 'authorised/direct-contact sources should be explicit');
   assert(summary.hashtags.includes('UgandaRealEstate'), 'source watchlist should include core hashtags');
   assert(service.includes('freshness_window_days: 90'), 'source records should carry a 90-day freshness window');
+  assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 10000'), 'source registry should enforce the 10,000 ceiling');
 });
 
 test('source registry has production table, indexes, and safe upsert logic', () => {
@@ -70,10 +73,19 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('async function adminSeedPropertySourceRegistry'), 'frontend should seed source database');
   assert(frontend.includes('async function adminLoadPropertySourceRegistry'), 'frontend should load source database');
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
-  assert(frontend.includes('/api/admin/property-source-registry?limit=5000'), 'frontend should call protected list API with full source-registry scale');
-  assert(service.includes('Math.min(Number(limit) || 250, 5000)'), 'source registry list API should allow the full expanded registry');
+  assert(frontend.includes('/api/admin/property-source-registry?limit=10000'), 'frontend should call protected list API with the 10,000 source-registry ceiling');
+  assert(service.includes('Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT)'), 'source registry list API should allow the full expanded registry');
   assert(frontend.includes('these are source feeds/pages, not property listings'), 'King should explain source feeds are not listing records');
   assert.strictEqual(pkg.scripts['inventory:seed-source-registry'], 'node scripts/seed-property-source-registry.js');
+});
+
+test('daily source sweep is scriptable and keeps King queue guardrails', () => {
+  assert.strictEqual(pkg.scripts['inventory:daily-source-sweep'], 'node scripts/run-daily-found-online-source-sweep.js');
+  assert(dailySweepScript.includes('source_window_days: 90'), 'daily sweep should enforce the three-month source window');
+  assert(dailySweepScript.includes('King dashboard pending review'), 'daily sweep should queue into King review');
+  assert(dailySweepScript.includes('seedPropertySourceRegistry'), 'daily sweep should refresh the 10k source registry');
+  assert(dailySweepScript.includes('seedSocialSearchAuthorisedListings'), 'daily sweep should queue eligible found-online listings');
+  assert(dailySweepScript.includes('Refusing to write without --confirm'), 'daily sweep should require explicit write confirmation');
 });
 
 test('public pages explain the search-engine model and expose found-online source metadata', () => {

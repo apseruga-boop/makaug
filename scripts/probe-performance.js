@@ -161,26 +161,7 @@ async function probeRoute(page, route, viewportName = 'desktop') {
   await page.waitForLoadState('load', { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(800);
 
-  const metrics = await page.evaluate(() => {
-    const nav = performance.getEntriesByType('navigation')[0];
-    const resources = performance.getEntriesByType('resource');
-    const js = resources.filter((entry) => /\.js(\?|$)/i.test(entry.name));
-    const css = resources.filter((entry) => /\.css(\?|$)/i.test(entry.name));
-    const transferred = resources.reduce((sum, entry) => sum + (entry.transferSize || 0), 0);
-    return {
-      domContentLoadedMs: nav ? Math.round(nav.domContentLoadedEventEnd) : null,
-      loadMs: nav ? Math.round(nav.loadEventEnd) : null,
-      ttfbMs: nav ? Math.round(nav.responseStart) : null,
-      htmlTransferBytes: nav ? Math.round(nav.transferSize || 0) : 0,
-      resourceCount: resources.length,
-      jsCount: js.length,
-      cssCount: css.length,
-      transferredBytes: Math.round(transferred),
-      googleMapsLoaded: resources.some((entry) => entry.name.includes('maps.googleapis.com')) || !!window.google?.maps,
-      chatbotLoaded: resources.some((entry) => /whatsapp|chatbot|ai/i.test(entry.name)),
-      activeHeight: Math.round(document.querySelector('.page.active')?.getBoundingClientRect().height || 0)
-    };
-  });
+  const metrics = await evaluatePageMetrics(page);
 
   page.off('console', onConsole);
   page.off('pageerror', onPageError);
@@ -206,6 +187,37 @@ async function probeRoute(page, route, viewportName = 'desktop') {
     failures,
     ...metrics
   };
+}
+
+async function evaluatePageMetrics(page) {
+  const collect = () => page.evaluate(() => {
+    const nav = performance.getEntriesByType('navigation')[0];
+    const resources = performance.getEntriesByType('resource');
+    const js = resources.filter((entry) => /\.js(\?|$)/i.test(entry.name));
+    const css = resources.filter((entry) => /\.css(\?|$)/i.test(entry.name));
+    const transferred = resources.reduce((sum, entry) => sum + (entry.transferSize || 0), 0);
+    return {
+      domContentLoadedMs: nav ? Math.round(nav.domContentLoadedEventEnd) : null,
+      loadMs: nav ? Math.round(nav.loadEventEnd) : null,
+      ttfbMs: nav ? Math.round(nav.responseStart) : null,
+      htmlTransferBytes: nav ? Math.round(nav.transferSize || 0) : 0,
+      resourceCount: resources.length,
+      jsCount: js.length,
+      cssCount: css.length,
+      transferredBytes: Math.round(transferred),
+      googleMapsLoaded: resources.some((entry) => entry.name.includes('maps.googleapis.com')) || !!window.google?.maps,
+      chatbotLoaded: resources.some((entry) => /whatsapp|chatbot|ai/i.test(entry.name)),
+      activeHeight: Math.round(document.querySelector('.page.active')?.getBoundingClientRect().height || 0)
+    };
+  });
+  try {
+    return await collect();
+  } catch (error) {
+    if (!/Execution context was destroyed|navigation/i.test(error.message || '')) throw error;
+    await page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    return collect();
+  }
 }
 
 async function gotoRouteWithRetry(page, route, waitUntil) {

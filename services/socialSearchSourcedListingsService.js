@@ -778,6 +778,19 @@ async function cleanupSocialSearchBatch(client) {
   return { properties: deleted.rowCount };
 }
 
+async function existingSocialSearchListingKeys(client) {
+  const result = await client.query(
+    `SELECT extra_fields->>'source_listing_key' AS source_listing_key
+     FROM properties
+     WHERE source = $1
+       AND extra_fields->>'source_batch' = $2
+       AND COALESCE(extra_fields->>'source_listing_key', '') <> ''
+       AND COALESCE(status, '') <> 'deleted'`,
+    [SOCIAL_SEARCH_SOURCE, SOCIAL_SEARCH_BATCH_ID]
+  );
+  return new Set(result.rows.map((row) => row.source_listing_key).filter(Boolean));
+}
+
 async function insertListing(client, listing, agentId) {
   const ownerPreviewToken = createOwnerEditToken();
   const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
@@ -903,9 +916,19 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       agentIdsByKey[agent.key] = await upsertSocialAgent(client, agent);
     }
     const cleanup = replace ? await cleanupSocialSearchBatch(client) : null;
+    const existingListingKeys = replace ? new Set() : await existingSocialSearchListingKeys(client);
     const created = [];
     const skippedListings = [];
     for (const item of SOCIAL_SEARCH_LISTINGS) {
+      if (existingListingKeys.has(item.key)) {
+        skippedListings.push({
+          key: item.key,
+          title: item.title,
+          agent_key: item.agentKey,
+          reason: 'already_queued',
+        });
+        continue;
+      }
       if (!agentIdsByKey[item.agentKey]) {
         skippedListings.push({
           key: item.key,

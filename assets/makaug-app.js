@@ -9192,7 +9192,7 @@ async function adminLoadPropertySourceRegistry() {
     panel.innerHTML = "Loading source database...";
   }
   try {
-    const response = await apiRequest("/api/admin/property-source-registry?limit=5000", {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=10000", {
       method: "GET",
       headers: adminAuthHeaders()
     });
