@@ -95,6 +95,35 @@ async function run() {
     whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1'),
     'WhatsApp Web bridge retry delay should default to one second after a send failure'
   );
+  assert(
+    whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_REPLY_DEDUPE_SECONDS || 15'),
+    'WhatsApp Web bridge reply dedupe must not hold repeat replies for minutes'
+  );
+  assert(
+    whatsappWebBridgeServiceSource.includes('Math.min(\n    30,\n    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_REPLY_DEDUPE_SECONDS || 15))'),
+    'WhatsApp Web bridge reply dedupe must be capped to seconds even if the environment is misconfigured'
+  );
+  assert(
+    whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8'),
+    'WhatsApp Web bridge claim lease must recover quickly if the browser send path stalls'
+  );
+  assert(
+    whatsappWebBridgeServiceSource.includes('Math.min(\n    20,\n    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))'),
+    'WhatsApp Web bridge claim lease must be capped below one minute'
+  );
+  assert(
+    whatsappWebBridgeServiceSource.includes('duplicate_refreshed_at')
+      && whatsappWebBridgeServiceSource.includes('same_reply_new_inbound'),
+    'WhatsApp Web bridge must wake an existing pending duplicate reply instead of leaving it delayed'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_RECENTLY_SENT_REPLY_TTL_MS || 15000'),
+    'WhatsApp Web copilot duplicate suppression should be seconds, not minutes'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('const RECENTLY_SENT_REPLY_TTL_MS = Math.min(\n  30000,'),
+    'WhatsApp Web copilot duplicate suppression must be capped below one minute'
+  );
 
   console.log('WhatsApp fast response path tests passed');
 }

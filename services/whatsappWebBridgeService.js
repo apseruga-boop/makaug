@@ -48,8 +48,15 @@ function createBridgeReplyDedupeKey({ userPhone, body, source, metadata = {} }) 
 
 function getReplyDedupeWindowSeconds() {
   return Math.min(
-    900,
-    Math.max(30, Number(process.env.WHATSAPP_WEB_BRIDGE_REPLY_DEDUPE_SECONDS || 180))
+    30,
+    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_REPLY_DEDUPE_SECONDS || 15))
+  );
+}
+
+function getBridgeClaimWindowSeconds() {
+  return Math.min(
+    20,
+    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))
   );
 }
 
@@ -176,8 +183,37 @@ async function queueWhatsappWebBridgeMessage({
     [userPhone, meta.reply_dedupe_key, String(meta.reply_dedupe_window_seconds)]
   );
   if (existing.rows[0]) {
+    const existingReply = existing.rows[0];
+    const existingStatus = String(existingReply.status || '').trim().toLowerCase();
+    if (['pending', 'retry'].includes(existingStatus)) {
+      const refreshed = await db.query(
+        `UPDATE outbound_message_queue
+         SET
+           status = 'pending',
+           next_attempt_at = NOW(),
+           metadata = COALESCE(metadata, '{}'::jsonb)
+             || jsonb_build_object(
+               'duplicate_refreshed_at', NOW()::text,
+               'duplicate_refresh_reason', 'same_reply_new_inbound'
+             ),
+           updated_at = NOW()
+         WHERE id = $1
+           AND status IN ('pending', 'retry')
+           AND (
+             next_attempt_at <= NOW()
+             OR next_attempt_at > NOW() + INTERVAL '30 seconds'
+           )
+         RETURNING *`,
+        [existingReply.id]
+      );
+      return {
+        ...(refreshed.rows[0] || existingReply),
+        duplicate_suppressed: true,
+        duplicate_refreshed: Boolean(refreshed.rows[0])
+      };
+    }
     return {
-      ...existing.rows[0],
+      ...existingReply,
       duplicate_suppressed: true
     };
   }
@@ -218,7 +254,7 @@ async function queueWhatsappWebBridgeMessage({
 
 async function claimWhatsappWebBridgeMessages({ clientId, limit = 10, recipient = '' } = {}) {
   const safeLimit = Math.min(25, Math.max(1, Number(limit) || 10));
-  const claimWindow = Math.min(300, Math.max(30, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 45)));
+  const claimWindow = getBridgeClaimWindowSeconds();
   const normalizedClientId = String(clientId || '').trim() || 'web_bridge';
   const recipientDigits = String(recipient || '').replace(/\D/g, '');
 

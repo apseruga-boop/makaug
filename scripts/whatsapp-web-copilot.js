@@ -57,6 +57,11 @@ const SEND_RETRY_CONFIRM_MS = Math.min(
 const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
 );
+const configuredRecentlySentReplyTtlMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENTLY_SENT_REPLY_TTL_MS || 15000);
+const RECENTLY_SENT_REPLY_TTL_MS = Math.min(
+  30000,
+  Math.max(5000, Number.isFinite(configuredRecentlySentReplyTtlMs) ? configuredRecentlySentReplyTtlMs : 15000)
+);
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
@@ -157,7 +162,7 @@ function outboxReplyDedupeKey(item = {}) {
   return `${recipient}:${key || text}`;
 }
 
-function hasRecentlySentReply(item = {}, ttlMs = 2 * 60 * 1000) {
+function hasRecentlySentReply(item = {}, ttlMs = RECENTLY_SENT_REPLY_TTL_MS) {
   const key = outboxReplyDedupeKey(item);
   if (!key.trim()) return false;
   const now = Date.now();
