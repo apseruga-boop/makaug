@@ -583,6 +583,216 @@ const BASE_PROPERTY_SOURCE_REGISTRY = [
     canContactDirectly: false,
     metadata: { portal_type: 'public real estate advertising platform' },
   }),
+  source({
+    key: 'musbon-real-estate',
+    name: 'Musbon Real Estate',
+    platform: 'website',
+    sourceType: 'agency_portal',
+    url: 'https://www.musbonrealestate.com/listings/houses/',
+    website: 'https://www.musbonrealestate.com/',
+    listingTypes: ['sale', 'rent', 'land'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings' },
+  }),
+  source({
+    key: 'propertypro-uganda',
+    name: 'PropertyPro Uganda',
+    platform: 'website',
+    sourceType: 'property_portal',
+    url: 'https://www.propertypro.co.ug/',
+    website: 'https://www.propertypro.co.ug/',
+    listingTypes: ['sale', 'rent', 'land', 'commercial'],
+    districts: ['Kampala', 'Wakiso', 'Entebbe', 'Mukono'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public property listings' },
+  }),
+  source({
+    key: 'walisa-property',
+    name: 'Walisa Property',
+    platform: 'website',
+    sourceType: 'agency_portal',
+    url: 'https://walisaproperty.com/',
+    website: 'https://walisaproperty.com/',
+    listingTypes: ['sale', 'rent', 'land'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings' },
+  }),
+  source({
+    key: 'get-housed-uganda',
+    name: 'Get Housed',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://gethoused.net/',
+    website: 'https://gethoused.net/',
+    listingTypes: ['sale', 'rent'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings' },
+  }),
+  source({
+    key: 'threalty-services',
+    name: 'Threalty Services Limited',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://www.threalty.site/',
+    website: 'https://www.threalty.site/',
+    listingTypes: ['sale', 'rent', 'property_management'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency website with YouTube insights' },
+  }),
+  source({
+    key: 'twentyfirst-real-estate-uganda',
+    name: 'Twentyfirst Real Estate Uganda',
+    platform: 'website',
+    sourceType: 'agency_portal',
+    url: 'https://ug.twentyfirst.re/',
+    website: 'https://ug.twentyfirst.re/',
+    listingTypes: ['sale', 'rent'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings' },
+  }),
+  source({
+    key: 'zigoti-properties',
+    name: 'Zigoti Properties',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://www.zigotiproperties.com/virtual-tour.html',
+    phone: '+256707346556',
+    email: 'zigotiproperties2023@gmail.com',
+    website: 'https://www.zigotiproperties.com/',
+    listingTypes: ['sale', 'land'],
+    districts: ['Mityana', 'Wakiso', 'Kampala'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    trustLevel: 'public_contact_review_needed',
+    canContactDirectly: true,
+    metadata: { portal_type: 'public agency virtual tours and land listings' },
+  }),
+  source({
+    key: 'royale-property-consultants',
+    name: 'Royale Property Consultants',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://royaleproperty.co.ug/',
+    phone: '+256700588614',
+    website: 'https://royaleproperty.co.ug/',
+    listingTypes: ['sale', 'land'],
+    districts: ['Kampala', 'Wakiso', 'Mukono', 'Masaka'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    trustLevel: 'public_contact_review_needed',
+    canContactDirectly: true,
+    metadata: { portal_type: 'public agency listings and land estates' },
+  }),
+  source({
+    key: 'vaniland-property-consultants',
+    name: 'Vaniland Property Consultants',
+    platform: 'website',
+    sourceType: 'agency_portal',
+    url: 'https://vanilandproperty.com/',
+    phone: '+256758589258',
+    email: 'info@VanilandProperty.com',
+    website: 'https://vanilandproperty.com/',
+    listingTypes: ['sale', 'rent', 'land', 'commercial'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    trustLevel: 'public_contact_review_needed',
+    canContactDirectly: true,
+    metadata: { portal_type: 'public agency listings with WhatsApp/contact details' },
+  }),
+  source({
+    key: 'linev-properties',
+    name: 'Linev Properties',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://www.linev.ug/',
+    website: 'https://www.linev.ug/',
+    listingTypes: ['sale', 'rent', 'apartments'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public luxury listings and rentals' },
+  }),
+  source({
+    key: 'clam-properties',
+    name: 'Clam Properties',
+    platform: 'website',
+    sourceType: 'agency_portal',
+    url: 'https://clamproperty.com/',
+    website: 'https://clamproperty.com/',
+    listingTypes: ['sale', 'rent', 'land'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings and virtual tours' },
+  }),
+  source({
+    key: 'intuit-holdings',
+    name: 'Intuit Holdings Limited',
+    platform: 'website',
+    sourceType: 'developer_website',
+    url: 'https://intuitholdings.com/',
+    phone: '+256761015251',
+    email: 'info@intuitholdings.com',
+    website: 'https://intuitholdings.com/',
+    listingTypes: ['sale'],
+    districts: ['Kampala'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    trustLevel: 'public_contact_review_needed',
+    canContactDirectly: true,
+    metadata: { portal_type: 'public luxury development listings' },
+  }),
+  source({
+    key: 'kayo-properties',
+    name: 'Kayo Properties',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://kayoproperties.com/contact-us/',
+    phone: '+256772955899',
+    phoneAlt: '+2563923236089',
+    email: 'sales@kayoproperties.com',
+    website: 'https://kayoproperties.com/',
+    listingTypes: ['sale', 'rent', 'land'],
+    districts: ['Kampala', 'Wakiso'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    trustLevel: 'public_contact_review_needed',
+    canContactDirectly: true,
+    metadata: { portal_type: 'public agency contact and listing site' },
+  }),
+  source({
+    key: 'abundant-properties-ug',
+    name: 'Abundant Properties Ug Ltd',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://abundantpropertiesug.com/',
+    website: 'https://abundantpropertiesug.com/',
+    listingTypes: ['sale', 'land'],
+    districts: ['Kampala', 'Wakiso', 'Entebbe'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public property site with latest property videos' },
+  }),
+  source({
+    key: 'savoy-real-estates',
+    name: 'Savoy Real Estates (UG) Ltd',
+    platform: 'website',
+    sourceType: 'agency_website',
+    url: 'https://www.savoyrealestates.com/',
+    website: 'https://www.savoyrealestates.com/',
+    listingTypes: ['sale', 'rent', 'property_management'],
+    districts: ['Wakiso', 'Kampala'],
+    scrapePolicy: 'respect_site_terms_manual_review_only',
+    canContactDirectly: false,
+    metadata: { portal_type: 'public agency listings and property management' },
+  }),
 ];
 
 const DISCOVERY_AREAS = [
@@ -619,6 +829,30 @@ function listingTypesForIntent(intent) {
   return ['sale'];
 }
 
+const DISCOVERY_INTENTS = [
+  'houses for sale Uganda',
+  'homes for sale Uganda',
+  'new house tour Uganda',
+  'affordable houses Uganda',
+  'luxury homes Uganda',
+  'bungalows for sale Uganda',
+  'standalone houses Uganda',
+  'apartments for sale Uganda',
+  'apartments for rent Uganda',
+  'rentals Uganda',
+  'student hostels Uganda',
+  'land plots for sale Uganda',
+  'estate plots Uganda',
+  'commercial property Uganda',
+  'shops for rent Uganda',
+  'offices for rent Uganda',
+  'real estate agents Uganda',
+  'property agents Uganda',
+  'broker listings Uganda',
+  'gated community Uganda',
+  'airbnb investment property Uganda',
+];
+
 function discoverySource({ platform, sourceType, area, district, intent, url, index }) {
   const label = `${area} ${intent}`;
   const slug = slugify(`${platform}-${sourceType}-${label}-${index}`);
@@ -644,54 +878,52 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
     metadata: {
       generated_source_discovery: true,
       query: label,
+      freshness_window_days: 90,
+      target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed in the last 90 days.',
       review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
-      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates.',
+      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, price/location, and usable images are clear.',
     },
   });
 }
 
+function discoveryUrlFor({ platform, area, intent }) {
+  const query = `${area} ${intent}`;
+  if (platform === 'youtube') {
+    return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  }
+  if (platform === 'tiktok') {
+    return `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`;
+  }
+  if (platform === 'instagram') {
+    return `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(query)}`;
+  }
+  const searchType = /group/i.test(intent) ? 'groups' : (/agents|broker|property pages/i.test(intent) ? 'pages' : 'posts');
+  return `https://www.facebook.com/search/${searchType}/?q=${encodeURIComponent(query)}`;
+}
+
+function discoverySourceTypeFor({ platform, intent }) {
+  if (platform === 'youtube') return 'public_video_search_feed';
+  if (platform === 'tiktok') return 'public_video_search_feed';
+  if (platform === 'instagram') return 'public_reel_search_feed';
+  const searchType = /group/i.test(intent) ? 'groups' : (/agents|broker|property pages/i.test(intent) ? 'pages' : 'posts');
+  return `public_${searchType}_search_feed`;
+}
+
 function expandedDiscoverySources() {
   const sources = [];
-  const tikTokIntents = ['houses for sale Uganda', 'rentals Uganda', 'land plots for sale Uganda', 'student hostels Uganda'];
-  const instagramIntents = ['real estate agents Uganda', 'houses for sale Uganda'];
-  const facebookIntents = ['property pages Uganda', 'real estate groups Uganda', 'land for sale Uganda', 'rentals Uganda'];
   DISCOVERY_AREAS.forEach(([district, area], areaIndex) => {
-    tikTokIntents.forEach((intent, intentIndex) => {
-      const query = `${area} ${intent}`;
-      sources.push(discoverySource({
-        platform: 'tiktok',
-        sourceType: 'public_search_feed',
-        area,
-        district,
-        intent,
-        index: `${areaIndex}-${intentIndex}`,
-        url: `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`,
-      }));
-    });
-    instagramIntents.forEach((intent, intentIndex) => {
-      const query = `${area} ${intent}`;
-      sources.push(discoverySource({
-        platform: 'instagram',
-        sourceType: 'public_search_feed',
-        area,
-        district,
-        intent,
-        index: `${areaIndex}-${intentIndex}`,
-        url: `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(query)}`,
-      }));
-    });
-    facebookIntents.forEach((intent, intentIndex) => {
-      const query = `${area} ${intent}`;
-      const searchType = /group/i.test(intent) ? 'groups' : (/pages/i.test(intent) ? 'pages' : 'posts');
-      sources.push(discoverySource({
-        platform: 'facebook',
-        sourceType: `public_${searchType}_search_feed`,
-        area,
-        district,
-        intent,
-        index: `${areaIndex}-${intentIndex}`,
-        url: `https://www.facebook.com/search/${searchType}/?q=${encodeURIComponent(query)}`,
-      }));
+    ['youtube', 'tiktok', 'instagram', 'facebook'].forEach((platform) => {
+      DISCOVERY_INTENTS.forEach((intent, intentIndex) => {
+        sources.push(discoverySource({
+          platform,
+          sourceType: discoverySourceTypeFor({ platform, intent }),
+          area,
+          district,
+          intent,
+          index: `${areaIndex}-${intentIndex}`,
+          url: discoveryUrlFor({ platform, area, intent }),
+        }));
+      });
     });
   });
   return sources;
@@ -865,7 +1097,7 @@ async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGIST
 
 async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
   if (!db?.query) throw new Error('db.query is required');
-  const cappedLimit = Math.max(1, Math.min(Number(limit) || 250, 1000));
+  const cappedLimit = Math.max(1, Math.min(Number(limit) || 250, 5000));
   const [result, totalResult, platformResult] = await Promise.all([
     db.query(
     `SELECT

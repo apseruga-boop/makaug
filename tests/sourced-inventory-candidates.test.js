@@ -9,6 +9,7 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const script = read('scripts/seed-sourced-inventory-candidates.js');
 const imageImportScript = read('scripts/import-sourced-candidate-images.js');
+const videoStillScript = read('scripts/prepare-found-online-video-stills.js');
 const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
 const html = read('index.html');
@@ -84,6 +85,15 @@ test('sourced candidate image import requires authorised photos and only updates
   assert(imageImportScript.includes('sourced_candidate_authorised_images_imported'), 'image import should write moderation event history');
   assert(imageImportScript.includes('Refusing to write in production without --confirm'), 'production writes should require explicit confirmation');
   assert(imageImportScript.includes('source_urls'), 'image import should retain source URLs for King review');
+});
+
+test('found-online video still preparation requires deliberate timestamps and rights', () => {
+  assert.strictEqual(pkg.scripts['inventory:prepare-video-stills'], 'node scripts/prepare-found-online-video-stills.js');
+  assert(videoStillScript.includes('yt-dlp'), 'video still workflow should use yt-dlp to fetch authorised source videos');
+  assert(videoStillScript.includes('ffmpeg'), 'video still workflow should use ffmpeg to extract exact frames');
+  assert(videoStillScript.includes('timestamps: exterior=00:00:05'), 'video still workflow should require labelled timestamps');
+  assert(videoStillScript.includes('Refusing to extract/import-ready frames without --confirm-rights'), 'video still extraction should require rights confirmation');
+  assert(videoStillScript.includes('found-online-image-import.csv'), 'video still workflow should produce importer-compatible CSV');
 });
 
 test('King dashboard visibly separates sourced candidates from ordinary reviews', () => {
