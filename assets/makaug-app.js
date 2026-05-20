@@ -8957,7 +8957,7 @@ function ensureAdminSourcedCandidateControls() {
     missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>`);
   }
   if (!document.getElementById("admin-seed-source-registry-btn")) {
-    missingButtons.push(`<button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Build 15,000 Source Pages</button>`);
+    missingButtons.push(`<button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Build 20,000 Source Pages</button>`);
   }
   if (!document.getElementById("admin-load-source-registry-btn")) {
     missingButtons.push(`<button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>`);
@@ -9127,7 +9127,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
       statusEl.innerHTML = `
         <div class="font-black">Found-online property candidates created</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(alreadyQueuedCount || 0)} matching property records already exist in the King review queue or on the live site.</div>
-        <div class="mt-1">The 15,000 source database is pages, channels, accounts, and discovery feeds. The Review Queue only receives actual properties after a specific recent post has source evidence, contact path, location, price, and usable images.</div>
+        <div class="mt-1">The 20,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds. The Review Queue only receives actual properties after a specific recent post has source evidence, contact path, location, price, and usable images.</div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
         ${skipped.length ? `<div class="mt-1 text-amber-800">${adminEscape(skipped.length)} source records were kept for source review because no public phone/email/website is stored yet.</div>` : ""}
         ${visibleSamples.length ? `<div class="mt-2 space-y-2">${visibleSamples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
@@ -9222,7 +9222,7 @@ async function adminLoadPropertySourceRegistry() {
     panel.innerHTML = "Loading source database...";
   }
   try {
-    const response = await apiRequest("/api/admin/property-source-registry?limit=15000", {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=20000", {
       method: "GET",
       headers: adminAuthHeaders()
     });
@@ -9247,7 +9247,7 @@ async function adminSeedPropertySourceRegistry() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Create/update the 15,000-record public source database? This stores pages, channels, accounts, and discovery feeds; it does not create property approvals by itself.");
+  const ok = window.confirm("Create/update the 20,000-record public source database? This stores pages, channels, accounts, hashtag searches, and discovery feeds; it does not create property approvals by itself.");
   if (!ok) return;
   const panel = document.getElementById("admin-source-registry-panel");
   const button = document.getElementById("admin-seed-source-registry-btn");
@@ -9257,7 +9257,7 @@ async function adminSeedPropertySourceRegistry() {
   }
   if (panel) {
     panel.classList.remove("hidden");
-    panel.innerHTML = "Building the 15,000-record source page/feed database now...";
+    panel.innerHTML = "Building the 20,000-record source page/feed database now...";
   }
   try {
     const response = await apiRequest("/api/admin/property-source-registry/seed", {

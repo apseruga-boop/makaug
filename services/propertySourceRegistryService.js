@@ -2,16 +2,74 @@
 
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
-const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 15000;
+const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 20000;
+const X_HASHTAG_DISCOVERY_TARGET_COUNT = 5000;
+const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 2000;
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
   'UgandaRealEstate',
+  'RealEstateUganda',
   'KampalaRealEstate',
+  'KampalaProperties',
   'HousesForSaleUganda',
   'PropertyUganda',
+  'UgandaProperty',
   'KampalaHomes',
   'LandForSaleUganda',
+  'PlotsForSaleUganda',
+];
+
+const PROPERTY_HASHTAG_WATCHLIST = [
+  'UgandaRealEstate',
+  'RealEstateUganda',
+  'KampalaRealEstate',
+  'KampalaProperties',
+  'UgandaProperty',
+  'PropertyUganda',
+  'UgandaHomes',
+  'KampalaProperty',
+  'KampalaHomes',
+  'HousesForSaleUganda',
+  'HomesForSaleUganda',
+  'PropertyForSaleUganda',
+  'PropertyForSale',
+  'HomesForSale',
+  'LandForSaleUganda',
+  'PlotsForSaleUganda',
+  'UgandaLand',
+  'UgandaPlots',
+  'KampalaRentals',
+  'UgandaRentals',
+  'ApartmentsForRentKampala',
+  'HousesForRentUganda',
+  'StudentAccommodationUganda',
+  'KampalaHostels',
+  'MakerereHostels',
+  'KyambogoHostels',
+  'MUBSHostels',
+  'CommercialPropertyUganda',
+  'OfficeSpaceKampala',
+  'ShopSpaceKampala',
+  'WarehouseForRentUganda',
+  'NamanveWarehouse',
+  'KiraHomes',
+  'NamugongoHomes',
+  'MuyengaHomes',
+  'EntebbeHomes',
+  'WakisoLand',
+  'MukonoLand',
+  'JinjaProperty',
+  'MbararaProperty',
+  'MbaleProperty',
+  'GuluProperty',
+  'AruaProperty',
+  'HoimaProperty',
+  'FortPortalProperty',
+  'MasakaProperty',
+  'PropertyInvestmentUganda',
+  'RealEstateInvesting',
+  'PropertyNetwork',
 ];
 
 function source({
@@ -380,6 +438,27 @@ const BASE_PROPERTY_SOURCE_REGISTRY = [
     scrapePolicy: 'public_or_member_group_manual_review_only',
     canContactDirectly: false,
     metadata: { query: 'Uganda land for sale', login_may_be_required: true },
+  }),
+  source({
+    key: 'x-uganda-real-estate-hashtag',
+    name: 'X hashtag: Uganda real estate',
+    platform: 'x',
+    sourceType: 'hashtag_feed',
+    url: 'https://x.com/search?q=%23UgandaRealEstate%20Uganda%20property&src=typed_query&f=live',
+    handle: '#UgandaRealEstate',
+    listingTypes: ['sale', 'rent', 'land', 'commercial', 'students'],
+    districts: ['Kampala', 'Wakiso', 'Mukono', 'Jinja', 'Mbarara'],
+    scrapePolicy: 'public_hashtag_manual_review_only',
+    trustLevel: 'source_discovery_needed',
+    status: 'candidate',
+    canContactDirectly: false,
+    hashtags: ['UgandaRealEstate', 'RealEstateUganda', 'KampalaProperties', 'PropertyUganda'],
+    notes: 'X public hashtag feed. Use only to discover public agents/pages/posts; promote a property candidate only after source URL, contact path, price, location and usable images are clear.',
+    metadata: {
+      hashtag: '#UgandaRealEstate',
+      platform_aliases: ['twitter', 'x'],
+      public_search_url: true,
+    },
   }),
   source({
     key: 'uganda-property-centre',
@@ -869,6 +948,22 @@ function listingTypesForIntent(intent) {
   return ['sale'];
 }
 
+function hashtagWatchlistForIntent(intent, area = '') {
+  const tags = ['UgandaRealEstate', 'PropertyUganda', compactTag(area)];
+  if (/student|hostel|campus|university|makerere|kyambogo|mubs|ucu|accommodation|room/i.test(intent)) {
+    tags.push('StudentAccommodationUganda', 'KampalaHostels', 'MakerereHostels', 'KyambogoHostels');
+  } else if (/rent|rental|letting|lease|to let/i.test(intent)) {
+    tags.push('KampalaRentals', 'UgandaRentals', 'ApartmentsForRentKampala', 'HousesForRentUganda');
+  } else if (/land|plot/i.test(intent)) {
+    tags.push('LandForSaleUganda', 'PlotsForSaleUganda', 'UgandaLand', 'UgandaPlots');
+  } else if (/commercial|shop|office|warehouse|showroom|retail|restaurant|arcade|factory|industrial/i.test(intent)) {
+    tags.push('CommercialPropertyUganda', 'OfficeSpaceKampala', 'ShopSpaceKampala', 'WarehouseForRentUganda');
+  } else {
+    tags.push('HousesForSaleUganda', 'HomesForSaleUganda', 'KampalaProperties', 'RealEstateUganda');
+  }
+  return [...new Set(tags.filter(Boolean))];
+}
+
 const DISCOVERY_INTENTS = [
   'houses for sale Uganda',
   'homes for sale Uganda',
@@ -934,6 +1029,7 @@ const DISCOVERY_INTENTS = [
 function discoverySource({ platform, sourceType, area, district, intent, url, index }) {
   const label = `${area} ${intent}`;
   const slug = slugify(`${platform}-${sourceType}-${label}-${index}`);
+  const hashtagWatchlist = hashtagWatchlistForIntent(intent, area);
   return source({
     key: `discovery-${slug}`,
     name: `${platform[0].toUpperCase()}${platform.slice(1)} discovery: ${label}`,
@@ -942,11 +1038,10 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
     url,
     districts: [district],
     listingTypes: listingTypesForIntent(intent),
-    hashtags: [
-      'UgandaRealEstate',
-      'PropertyUganda',
+    hashtags: [...new Set([
+      ...hashtagWatchlist,
       compactTag(label),
-    ].filter(Boolean),
+    ].filter(Boolean))],
     status: 'candidate',
     trustLevel: 'source_discovery_needed',
     consentStatus: 'public_source_review_needed',
@@ -956,6 +1051,7 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
     metadata: {
       generated_source_discovery: true,
       query: label,
+      hashtag_watchlist: hashtagWatchlist.map((tag) => `#${tag}`),
       freshness_window_days: 90,
       target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed in the last 90 days.',
       review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
@@ -964,10 +1060,56 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
   });
 }
 
+function hashtagDiscoveryUrlFor({ platform, tag, area, intent }) {
+  const query = `#${tag} ${area} ${intent}`;
+  if (platform === 'x') {
+    return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`;
+  }
+  if (platform === 'instagram') {
+    return `https://www.instagram.com/explore/tags/${String(tag).toLowerCase()}/`;
+  }
+  if (platform === 'facebook') {
+    return `https://www.facebook.com/hashtag/${encodeURIComponent(String(tag).toLowerCase())}`;
+  }
+  return discoveryUrlFor({ platform, area, intent });
+}
+
+function hashtagDiscoverySource({ platform, tag, area, district, intent, index }) {
+  const label = `${area} #${tag} ${intent}`;
+  const slug = slugify(`${platform}-hashtag-${tag}-${area}-${intent}-${index}`);
+  return source({
+    key: `hashtag-${slug}`,
+    name: `${platform === 'x' ? 'X' : `${platform[0].toUpperCase()}${platform.slice(1)}`} hashtag: #${tag} • ${area}`,
+    platform,
+    sourceType: 'hashtag_search_feed',
+    url: hashtagDiscoveryUrlFor({ platform, tag, area, intent }),
+    districts: [district],
+    listingTypes: listingTypesForIntent(intent),
+    hashtags: [...new Set([tag, ...hashtagWatchlistForIntent(intent, area), compactTag(area)].filter(Boolean))],
+    status: 'candidate',
+    trustLevel: 'source_discovery_needed',
+    consentStatus: 'public_source_review_needed',
+    scrapePolicy: 'public_hashtag_manual_review_only',
+    canContactDirectly: false,
+    notes: 'Generated hashtag-discovery feed. Use to find active public property pages/posts, then create a King candidate only when source evidence, contact path, location, price and usable images are clear.',
+    metadata: {
+      generated_hashtag_discovery: true,
+      hashtag: `#${tag}`,
+      query: label,
+      freshness_window_days: 90,
+      platform_aliases: platform === 'x' ? ['twitter', 'x'] : undefined,
+      expected_action: 'Promote source pages/accounts first; queue a property only when a specific recent listing has enough evidence.',
+    },
+  });
+}
+
 function discoveryUrlFor({ platform, area, intent }) {
   const query = `${area} ${intent}`;
   if (platform === 'youtube') {
     return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+  }
+  if (platform === 'x') {
+    return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`;
   }
   if (platform === 'tiktok') {
     return `https://www.tiktok.com/search?q=${encodeURIComponent(query)}`;
@@ -981,6 +1123,7 @@ function discoveryUrlFor({ platform, area, intent }) {
 
 function discoverySourceTypeFor({ platform, intent }) {
   if (platform === 'youtube') return 'public_video_search_feed';
+  if (platform === 'x') return 'public_post_search_feed';
   if (platform === 'tiktok') return 'public_video_search_feed';
   if (platform === 'instagram') return 'public_reel_search_feed';
   const searchType = /group/i.test(intent) ? 'groups' : 'pages';
@@ -1007,11 +1150,42 @@ function expandedDiscoverySources() {
   return sources;
 }
 
-const DISCOVERY_SOURCE_TARGET_COUNT = Math.max(0, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT - BASE_PROPERTY_SOURCE_REGISTRY.length);
+function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'facebook']) {
+  const sources = [];
+  DISCOVERY_AREAS.forEach(([district, area], areaIndex) => {
+    DISCOVERY_INTENTS.forEach((intent, intentIndex) => {
+      PROPERTY_HASHTAG_WATCHLIST.forEach((tag, tagIndex) => {
+        platforms.forEach((platform) => {
+          sources.push(hashtagDiscoverySource({
+            platform,
+            tag,
+            area,
+            district,
+            intent,
+            index: `${areaIndex}-${intentIndex}-${tagIndex}`,
+          }));
+        });
+      });
+    });
+  });
+  return sources;
+}
+
+const GENERATED_X_HASHTAG_DISCOVERY_SOURCES = expandedHashtagDiscoverySources(['x']).slice(0, X_HASHTAG_DISCOVERY_TARGET_COUNT);
+const GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES = expandedHashtagDiscoverySources(['instagram', 'facebook']).slice(0, CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT);
+const DISCOVERY_SOURCE_TARGET_COUNT = Math.max(
+  0,
+  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
+    - BASE_PROPERTY_SOURCE_REGISTRY.length
+    - GENERATED_X_HASHTAG_DISCOVERY_SOURCES.length
+    - GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES.length
+);
 const GENERATED_DISCOVERY_SOURCES = expandedDiscoverySources().slice(0, DISCOVERY_SOURCE_TARGET_COUNT);
 
 const PROPERTY_SOURCE_REGISTRY = [
   ...BASE_PROPERTY_SOURCE_REGISTRY,
+  ...GENERATED_X_HASHTAG_DISCOVERY_SOURCES,
+  ...GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES,
   ...GENERATED_DISCOVERY_SOURCES,
 ];
 

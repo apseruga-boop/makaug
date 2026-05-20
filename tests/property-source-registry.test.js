@@ -39,8 +39,9 @@ function test(name, fn) {
 
 test('source registry service defines a multi-platform Uganda property source database', () => {
   const summary = summarizePropertySourceRegistry();
-  assert.strictEqual(summary.target_count, 15000, 'source database should have a 15,000-record operating target');
-  assert(summary.count >= 14900 && summary.count <= 15000, 'expanded database should sit at the 15,000 source-discovery ceiling');
+  assert.strictEqual(summary.target_count, 20000, 'source database should have a 20,000-record operating target after adding X hashtag search');
+  assert(summary.count >= 19900 && summary.count <= 20000, 'expanded database should sit at the 20,000 source-discovery ceiling');
+  assert(summary.by_platform.x >= 5000, 'source database should include at least 5,000 X/Twitter hashtag discovery records');
   assert(summary.by_platform.tiktok >= 3000, 'source database should include at least 3,000 TikTok discovery records');
   assert(summary.by_platform.instagram >= 3000, 'source database should include at least 3,000 Instagram discovery records');
   assert(summary.by_platform.facebook >= 3000, 'source database should include at least 3,000 Facebook discovery records');
@@ -49,16 +50,22 @@ test('source registry service defines a multi-platform Uganda property source da
   assert.strictEqual(PROPERTY_SOURCE_REGISTRY.length, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, 'source registry should load exactly the configured 15,000 records');
   assert(summary.reviewed_source_pages_count >= 10, 'source registry should separately count reviewed pages/channels/accounts');
   assert(summary.discovery_feed_count >= 10000, 'source registry should separately count broad discovery feeds');
-  ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
+  ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag', 'x-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
   });
   assert(summary.direct_contact_sources >= 2, 'authorised/direct-contact sources should be explicit');
   assert(summary.hashtags.includes('UgandaRealEstate'), 'source watchlist should include core hashtags');
+  assert(summary.hashtags.includes('RealEstateUganda'), 'source watchlist should include X-style real-estate hashtag variants');
   assert(service.includes('freshness_window_days: 90'), 'source records should carry a 90-day freshness window');
-  assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 15000'), 'source registry should enforce the 15,000 ceiling');
+  assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 20000'), 'source registry should enforce the 20,000 ceiling');
+  assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 5000'), 'source registry should reserve a 5,000-record X hashtag sweep');
+  assert(service.includes('PROPERTY_HASHTAG_WATCHLIST'), 'source registry should maintain a cross-platform property hashtag watchlist');
   assert(!PROPERTY_SOURCE_REGISTRY.some((item) => /(?:youtube\.com\/watch|youtu\.be\/|\/shorts\/|tiktok\.com\/@[^/]+\/video|instagram\.com\/(?:p|reel)\/|facebook\.com\/watch|facebook\.com\/.+\/(?:posts|videos)\/)/i.test(item.url || '')), 'source registry must not store individual post/video links as source records');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'source_page'), 'source registry should contain real page/channel/account records');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'discovery_feed'), 'source registry should contain discovery feeds that find new pages/posts');
+  assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'x' && item.sourceType === 'hashtag_search_feed' && /x\.com\/search/i.test(item.url || '')), 'source registry should include X hashtag search feeds');
+  assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'instagram' && item.sourceType === 'hashtag_search_feed' && /instagram\.com\/explore\/tags/i.test(item.url || '')), 'source registry should include Instagram hashtag search feeds');
+  assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'facebook' && item.sourceType === 'hashtag_search_feed' && /facebook\.com\/hashtag/i.test(item.url || '')), 'source registry should include Facebook hashtag search feeds');
 });
 
 test('source registry has production table, indexes, and safe upsert logic', () => {
@@ -83,7 +90,7 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('async function adminSeedPropertySourceRegistry'), 'frontend should seed source database');
   assert(frontend.includes('async function adminLoadPropertySourceRegistry'), 'frontend should load source database');
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
-  assert(frontend.includes('/api/admin/property-source-registry?limit=15000'), 'frontend should call protected list API with the 15,000 source-registry ceiling');
+  assert(frontend.includes('/api/admin/property-source-registry?limit=20000'), 'frontend should call protected list API with the 20,000 source-registry ceiling');
   assert(service.includes('Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT)'), 'source registry list API should allow the full expanded registry');
   assert(frontend.includes('fishing net, not the approval queue'), 'King should explain source records are not listing records');
   assert(frontend.includes('reviewed pages/channels/accounts'), 'King should separate reviewed source pages from broad feeds');
