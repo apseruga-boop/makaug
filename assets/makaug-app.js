@@ -9192,7 +9192,7 @@ async function adminLoadPropertySourceRegistry() {
     panel.innerHTML = "Loading source database...";
   }
   try {
-    const response = await apiRequest("/api/admin/property-source-registry?limit=10000", {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=15000", {
       method: "GET",
       headers: adminAuthHeaders()
     });
@@ -23726,6 +23726,13 @@ function listingSourceMeta(p) {
 }
 
 function listingRegistrationMeta(p) {
+  if (isFoundOnlineListing(p)) {
+    return {
+      label: translateListingLabel("Sourced online"),
+      cls: "bg-sky-700 text-white",
+      icon: "fas fa-magnifying-glass-location"
+    };
+  }
   const broker = findBrokerById(p?.agent);
   const status = String(
     p?.lister_registration_status ||
@@ -23858,11 +23865,11 @@ function isFoundOnlineListing(p = {}) {
 }
 
 function listingFreshnessBadgeHtml(p = {}) {
-  if (isFoundOnlineListing(p)) {
-    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-magnifying-glass-location text-[10px]"></i> ${translateListingLabel("Found online")}</div>`;
-  }
   if (isListingNew(p)) {
     return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>`;
+  }
+  if (isFoundOnlineListing(p)) {
+    return `<div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-magnifying-glass-location text-[10px]"></i> ${translateListingLabel("Found online")}</div>`;
   }
   return "";
 }
@@ -23878,12 +23885,21 @@ function foundOnlineSourceMeta(p = {}) {
   const sourceName = String(extra.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
   const platform = String(extra.source_platform || (extra.youtube_url || extra.video_url ? "YouTube" : "") || "").trim();
   const sourceUrl = String(extra.source_url || extra.youtube_url || extra.video_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
+  const firstPosted = formatListingDate(
+    extra.first_posted_online_at
+    || extra.source_published_at
+    || extra.original_posted_at
+    || extra.source_posted_at
+  );
+  const firstPostedLabel = String(extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || "").trim();
   const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
   return {
     sourceName,
     platform,
     sourceUrl: /^https?:\/\//i.test(sourceUrl) ? sourceUrl : "",
+    firstPosted,
+    firstPostedLabel,
     firstSeen,
     firstSeenLabel,
   };
@@ -23899,12 +23915,14 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
         <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
         <div>
           <div class="font-black">${translateListingLabel("Sourced online")}</div>
-          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source and reviewed before going live.")}</div>
+          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source and checked before publishing on makaug.")}</div>
           <div class="mt-2 flex flex-wrap gap-2 text-xs">
+            ${meta.firstPosted ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted)}</span>` : ""}
             ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First seen by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
             ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Open source")}</a>` : ""}
           </div>
+          ${meta.firstPostedLabel && !meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstPostedLabel)}</div>` : ""}
           ${meta.firstSeenLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstSeenLabel)}</div>` : ""}
         </div>
       </div>
@@ -28340,7 +28358,8 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Email CV to makaug": "Weereza CV ku makaug",
       "Message on WhatsApp": "Wandiika ku WhatsApp",
       "Sourced online": "Ezuuliddwa online",
-      "This listing was found through a public or authorised online property source and reviewed before going live.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennagenda live.",
+      "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
+      "First posted online": "Yasooka okuteekebwa online",
       "First seen by makaug": "makaug yasooka okugiraba",
       "Source": "Ensibuko",
       "Open source": "Ggulawo ensibuko"
@@ -28438,7 +28457,8 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Email CV to makaug": "Tuma CV kwa makaug",
       "Message on WhatsApp": "Tuma ujumbe WhatsApp",
       "Sourced online": "Imepatikana mtandaoni",
-      "This listing was found through a public or authorised online property source and reviewed before going live.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuwa live.",
+      "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
+      "First posted online": "Ilichapishwa kwanza mtandaoni",
       "First seen by makaug": "Ilionekana kwanza na makaug",
       "Source": "Chanzo",
       "Open source": "Fungua chanzo"
@@ -29662,6 +29682,31 @@ function renderDetailGalleryLightbox() {
   }).join("");
 }
 
+function selectDetailGalleryPhoto(index = 0) {
+  if (!detailGalleryPhotos.length) return;
+  const next = Number(index);
+  if (!Number.isFinite(next)) return;
+  detailGalleryPhotoIndex = Math.max(0, Math.min(detailGalleryPhotos.length - 1, next));
+  const property = findPropertyForUi(activeDetailPropertyId) || {};
+  const active = detailGalleryPhotos[detailGalleryPhotoIndex] || detailGalleryPhotos[0];
+  const hero = document.getElementById("detail-gallery-hero-img");
+  if (hero && active?.url) {
+    hero.src = active.url;
+    hero.alt = getDisplayPhotoLabel(active, detailGalleryPhotoIndex, property) || property.title || "Property photo";
+  }
+  const count = document.getElementById("detail-gallery-count-label");
+  if (count) {
+    const label = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
+    count.textContent = `${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} ${label}`;
+  }
+  document.querySelectorAll("[data-detail-gallery-thumb]").forEach((button) => {
+    const isActive = Number(button.getAttribute("data-detail-gallery-thumb")) === detailGalleryPhotoIndex;
+    button.classList.toggle("border-green-500", isActive);
+    button.classList.toggle("border-gray-200", !isActive);
+    button.setAttribute("aria-current", isActive ? "true" : "false");
+  });
+}
+
 function openDetailGalleryLightbox(index = 0) {
   if (!detailGalleryPhotos.length) {
     toast(translateListingLabel("No gallery photos available for this listing yet."));
@@ -30366,6 +30411,7 @@ async function openDetail(id, options = {}) {
   detailGalleryPhotos = detailPhotos.length ? detailPhotos : [primaryPhoto];
   detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
+  const selectedPhoto = detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto;
   const detailIdArg = JSON.stringify(String(p.id));
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
@@ -30391,21 +30437,22 @@ async function openDetail(id, options = {}) {
   const inquiryNameDefault = canPrefillInquiryFromUser ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
   const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
   const inquiryEmailDefault = canPrefillInquiryFromUser ? (authState?.user?.email || "") : "";
+  const brokerProfilePath = broker ? getBrokerProfilePath(broker) : "";
   document.getElementById("detail-content").innerHTML = `
     <div class="grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
         <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-	              <button type="button" onclick="openDetailGalleryLightbox(${detailGalleryPhotoIndex})" class="block w-full property-gallery-hero relative overflow-hidden group">
-            <img src="${primaryPhoto?.url || p.img}" alt="${p.title}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
+	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
+            <img id="detail-gallery-hero-img" src="${selectedPhoto?.url || p.img}" alt="${getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || p.title}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
             <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
-              <i class="fas fa-images"></i> ${detailGalleryPhotos.length} ${photoCountLabel}
+              <i class="fas fa-images"></i> <span id="detail-gallery-count-label">${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} ${photoCountLabel}</span>
             </div>
           </button>
           <div class="px-5 pt-4">
             <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translatePropertyUi("Gallery")}</div>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
               ${detailGalleryPhotos.map((photo, idx) => `
-                <button type="button" onclick="openDetailGalleryLightbox(${idx})" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
+                <button type="button" onclick="selectDetailGalleryPhoto(${idx})" data-detail-gallery-thumb="${idx}" aria-current="${idx === detailGalleryPhotoIndex ? "true" : "false"}" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
                   <img src="${photo.url}" alt="${photo.name || `Photo ${idx + 1}`}" class="w-full h-20 object-cover">
                   <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${getDisplayPhotoLabel(photo, idx, p)}</div>
                 </button>
@@ -30493,12 +30540,17 @@ async function openDetail(id, options = {}) {
         <div class="bg-white border border-gray-200 rounded-2xl p-5 sticky top-24">
           <h3 class="text-lg font-bold mb-3">${contactTitle}</h3>
           ${broker ? `
-            <p class="font-semibold text-gray-800">${broker.name}</p>
-            <p class="text-sm text-gray-500 mb-3">${broker.company}</p>
+            <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="detail-broker-profile-link flex items-center gap-3 rounded-xl border border-green-100 bg-green-50/60 p-3 mb-3 hover:border-green-300 hover:bg-green-50 transition">
+              ${brokerAvatarHtml({ ...broker, emoji: brokerInitials(broker.name) }, "w-12 h-12")}
+              <span class="min-w-0">
+                <span class="block font-semibold text-gray-800 truncate">${broker.name}</span>
+                <span class="block text-sm text-gray-500 truncate">${broker.company || broker.name}</span>
+              </span>
+            </a>
             <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>
             <a href="${adminAttr(buildWhatsAppUrl(broker.whatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
-            <a href="${adminAttr(getBrokerProfilePath(broker))}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
+            <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
             <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>

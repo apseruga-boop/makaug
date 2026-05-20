@@ -15,6 +15,7 @@ const adminRoute = read('routes/admin.js');
 const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
+const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -187,14 +188,20 @@ test('King review queue has one-click sourced candidate creation', () => {
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
 });
 
-test('public property cards show found-online badge instead of generic new badge for social search records', () => {
+test('public property cards keep NEW freshness and replace registered badge with sourced-online status', () => {
   assert(frontend.includes('function isFoundOnlineListing'), 'public UI should detect found-online listing records');
   assert(frontend.includes('function listingFreshnessBadgeHtml'), 'public UI should render listing freshness through a shared helper');
   assert(frontend.includes('translateListingLabel("Found online")'), 'public UI should translate the found-online badge');
+  const freshnessHelper = frontend.slice(frontend.indexOf('function listingFreshnessBadgeHtml'), frontend.indexOf('function foundOnlineSourceMeta'));
+  assert(freshnessHelper.indexOf('if (isListingNew(p))') < freshnessHelper.indexOf('if (isFoundOnlineListing(p))'), 'fresh found-online listings should still show NEW first');
+  assert(frontend.includes('if (isFoundOnlineListing(p))') && frontend.includes('translateListingLabel("Sourced online")'), 'found-online cards should show sourced-online instead of registered');
   assert(frontend.includes('sourceBatch === "social_search_authorised_20260520"'), 'public UI should recognise the social-search batch');
   assert(frontend.includes('listingFreshnessBadgeHtml(p)'), 'property cards should render the found-online badge helper');
   assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
   assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
+  assert(frontend.includes('"First posted online"'), 'source disclosure should translate first-posted metadata');
+  assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');
+  assert(frontend.includes('detail-broker-profile-link'), 'detail contact card should make broker logo/name click through to the profile');
 });
 
 test('Bakaima authorised batch creates 33 pending land listings with evidence photos', () => {
@@ -346,23 +353,30 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.source_badge, 'found_online');
     assert.strictEqual(extra.consent_confirmed, true);
     assert.strictEqual(extra.image_rights_confirmed, true);
-    assert.strictEqual(extra.image_rights_status, 'authorised_public_social_video_thumbnail_from_agent_channel');
+    assert.strictEqual(extra.image_rights_status, 'authorised_public_social_video_stills_from_agent_channel');
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
     assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length >= 3, `${listing.title} should keep source image URLs`);
     assert.strictEqual(extra.minimum_reliable_image_count, 3, `${listing.title} should allow evidence-based 3-image review`);
     assert(/Do not invent room labels/i.test(extra.image_evidence_policy), `${listing.title} should keep strict image evidence guidance`);
+    assert(/same fuzzy still/i.test(extra.image_evidence_policy), `${listing.title} should reject fuzzy duplicate stills`);
     assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 5, `${listing.title} should include nearby places`);
     assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include health facilities`);
     assert(extra.nearby_facilities.some((item) => /school|college|secondary/i.test(`${item.type} ${item.name}`)), `${listing.title} should include schools or secondary schools`);
     assert(Array.isArray(extra.review_required_steps) && extra.review_required_steps.length >= 5, `${listing.title} should keep approval checks in King review metadata`);
     assert(!/before (public )?approval/i.test(listing.description), `${listing.title} should not expose approval warnings in public copy`);
+    assert(!/founder-reported|prepared from|King review/i.test(listing.description), `${listing.title} should not expose internal sourcing language in public copy`);
     assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate wording publicly`);
     assert(listing.images.length >= 3 && listing.images.length <= 5, `${listing.title} should include 3-5 source images only when evidence-based`);
     assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`)), `${listing.title} should use the matching YouTube image source`);
     assert(!listing.images.some((image) => /bedroom|bathroom|kitchen/i.test(image.room_label)), `${listing.title} should not guess room labels from generic source stills`);
   }
+});
+
+test('found-online rebuild protects live approved social-search listings', () => {
+  assert(socialSearchServiceSource.includes("COALESCE(status, 'pending') NOT IN ('approved', 'live', 'published', 'sold')"), 'replace cleanup must not delete already-live found-online records');
+  assert(socialSearchServiceSource.includes('const existingListingKeys = await existingSocialSearchListingKeys(client);'), 'seed should skip preserved live records after cleanup');
 });
 
 test('found-online social search admin path and share cards are protected and auditable', () => {

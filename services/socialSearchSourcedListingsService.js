@@ -507,9 +507,9 @@ function youtubeUrl(id) {
 }
 
 const DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES = [
-  { file: 'hqdefault.jpg', label: 'Source video still - primary view', primary: true },
-  { file: '1.jpg', label: 'Source video still - supporting view', primary: false },
-  { file: '2.jpg', label: 'Source video still - additional view', primary: false },
+  { file: 'hqdefault.jpg', label: 'Source video cover still', primary: true },
+  { file: '1.jpg', label: 'Source video supporting still', primary: false },
+  { file: '2.jpg', label: 'Source video additional still', primary: false },
 ];
 
 function youtubeImageRowsFor(item) {
@@ -532,8 +532,33 @@ function money(value) {
 }
 
 function publicDescriptionFor(item = {}) {
-  return String(item.description || '')
-    .replace(/\s*Confirm[^.?!]*(?:before\s+(?:public\s+)?approval)\.?/gi, '')
+  const agent = agentByKey(item.agentKey) || {};
+  const listingType = item.listingType === 'land'
+    ? 'land listing'
+    : item.listingType === 'commercial'
+      ? 'commercial property'
+      : item.beds
+        ? `${item.beds}-bedroom home`
+        : 'property';
+  const area = item.address || [item.area, item.district].filter(Boolean).join(', ');
+  const priceText = item.price ? ` The guide price shown in the source is ${money(item.price)}${item.price_period && item.price_period !== 'once' ? `/${item.price_period}` : ''}.` : '';
+  const roomText = item.beds
+    ? ` It is presented as a ${item.beds}-bedroom ${item.subtype || 'property'}${item.baths ? ` with ${item.baths} bathrooms` : ''}.`
+    : item.landSizeValue
+      ? ` The source indicates a land size of ${item.landSizeValue}${item.landSizeUnit || ''}.`
+      : '';
+  const sourceTitle = item.sourceTitle ? ` The source post is titled "${item.sourceTitle}".` : '';
+  const raw = String(item.description || '')
+    .replace(/prepared from[^.?!]*\./gi, '')
+    .replace(/founder-reported permission/gi, '')
+    .replace(/\s*Confirm[^.?!]*(?:before\s+(?:public\s+)?approval|before approval)\.?/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const intro = `${item.title} is a ${listingType} around ${area}.`;
+  const agentLine = agent.name ? ` It is connected to ${agent.name}'s public property source, with contact details kept on the listing for direct enquiry.` : '';
+  const guidance = ' Viewers should use the gallery, video tour, map area and agent contact details to confirm availability and arrange a viewing.';
+  return [intro, roomText, priceText, raw && raw !== intro ? ` ${raw}` : '', sourceTitle, agentLine, guidance]
+    .join('')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -573,15 +598,17 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_url: sourceUrl,
     first_seen_online_at: '2026-05-20T00:00:00.000Z',
     first_seen_online_label: 'First seen by makaug source watch on 20 May 2026',
-    original_publish_date_status: 'King review should confirm the exact platform publish date before approval.',
+    first_posted_online_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
+    source_published_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
+    original_publish_date_status: 'Exact platform publish date needs confirmation from the public source or agent.',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: true,
     permission_status: 'founder_reported_agent_authorised_upload',
     consent_required: false,
     consent_confirmed: true,
     image_rights_confirmed: true,
-    image_rights_status: 'authorised_public_social_video_thumbnail_from_agent_channel',
-    image_evidence_policy: 'Use a minimum of 3 source images only when they are distinct enough to review. Do not invent room labels or duplicate uncertain stills; upload HD agent images when available.',
+    image_rights_status: 'authorised_public_social_video_stills_from_agent_channel',
+    image_evidence_policy: 'Use a minimum of 3 source images only when they are clear and distinct enough to review. Do not invent room labels, reuse the same fuzzy still, or duplicate uncertain images; upload HD agent images when available.',
     minimum_reliable_image_count: 3,
     owner_or_agent_name: agent.name,
     public_display_name: agent.name,
@@ -596,7 +623,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     youtube_url: sourceUrl,
     youtube_video_id: item.youtubeId,
     youtube_source_title: item.sourceTitle,
-    youtube_source_published_label: 'Latest public Shorts feed checked on 20 May 2026; King review should confirm exact publish date before approval.',
+    youtube_source_published_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
     resolved_location_label: item.address,
     map_pin_label: item.address,
     map_pin_accuracy_note: 'Closest responsible area-level pin from public source title/screenshot context; confirm exact gate or plot pin with the agent before public approval.',
@@ -772,6 +799,7 @@ async function cleanupSocialSearchBatch(client) {
     `DELETE FROM properties
      WHERE source = $1
        AND extra_fields->>'source_batch' = $2
+       AND COALESCE(status, 'pending') NOT IN ('approved', 'live', 'published', 'sold')
      RETURNING id`,
     [SOCIAL_SEARCH_SOURCE, SOCIAL_SEARCH_BATCH_ID]
   );
@@ -916,7 +944,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       agentIdsByKey[agent.key] = await upsertSocialAgent(client, agent);
     }
     const cleanup = replace ? await cleanupSocialSearchBatch(client) : null;
-    const existingListingKeys = replace ? new Set() : await existingSocialSearchListingKeys(client);
+    const existingListingKeys = await existingSocialSearchListingKeys(client);
     const created = [];
     const skippedListings = [];
     for (const item of SOCIAL_SEARCH_LISTINGS) {

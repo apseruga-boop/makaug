@@ -2,7 +2,7 @@
 
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
-const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 10000;
+const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 15000;
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
@@ -837,9 +837,10 @@ function compactTag(value) {
 }
 
 function listingTypesForIntent(intent) {
-  if (/rent|rental|hostel|student/i.test(intent)) return ['rent', 'students'];
+  if (/student|hostel|campus|university|makerere|kyambogo|mubs|ucu|accommodation|room/i.test(intent)) return ['students', 'rent'];
+  if (/rent|rental|letting|lease|to let/i.test(intent)) return ['rent'];
   if (/land|plot/i.test(intent)) return ['land'];
-  if (/commercial|shop|office/i.test(intent)) return ['commercial', 'rent'];
+  if (/commercial|shop|office|warehouse|showroom|retail|restaurant|arcade|factory|industrial/i.test(intent)) return ['commercial', 'rent'];
   return ['sale'];
 }
 
@@ -869,6 +870,40 @@ const DISCOVERY_INTENTS = [
   'duplexes for sale Uganda',
   'new apartments Uganda',
   'houses with title Uganda',
+  'homes for rent Kampala Uganda',
+  'apartments to let Uganda',
+  'rental apartments near Kampala Uganda',
+  'furnished apartments Kampala Uganda',
+  'standalone house for rent Uganda',
+  'land for sale Kampala Uganda',
+  'plots with title Uganda',
+  'cheap plots for sale Uganda',
+  'estate plots Wakiso Uganda',
+  'residential land Mukono Uganda',
+  'commercial land Uganda',
+  'agricultural land Uganda',
+  'student accommodation Makerere Uganda',
+  'student rooms near campus Uganda',
+  'hostel rooms Kyambogo Uganda',
+  'student housing MUBS Uganda',
+  'self contained student room Uganda',
+  'student hostel Kampala Uganda',
+  'office space Kampala Uganda',
+  'shop space for rent Kampala Uganda',
+  'warehouse for rent Namanve Uganda',
+  'showroom space Uganda',
+  'restaurant space for rent Uganda',
+  'commercial building for sale Uganda',
+  'arcade shops Kampala Uganda',
+  'industrial property Uganda',
+  'property video tour Uganda',
+  'house shorts Uganda real estate',
+  'Uganda property TikTok agent',
+  'Uganda real estate reels',
+  'Facebook property group Uganda',
+  'verified agent listing Uganda',
+  'new listing Uganda property',
+  'property with WhatsApp Uganda',
 ];
 
 function discoverySource({ platform, sourceType, area, district, intent, url, index }) {
