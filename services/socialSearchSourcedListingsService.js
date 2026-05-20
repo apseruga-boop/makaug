@@ -808,7 +808,14 @@ async function cleanupSocialSearchBatch(client) {
 
 async function existingSocialSearchListingKeys(client) {
   const result = await client.query(
-    `SELECT extra_fields->>'source_listing_key' AS source_listing_key
+    `SELECT
+       id::text AS id,
+       title,
+       status,
+       moderation_stage,
+       inquiry_reference,
+       lister_name,
+       extra_fields->>'source_listing_key' AS source_listing_key
      FROM properties
      WHERE source = $1
        AND extra_fields->>'source_batch' = $2
@@ -816,7 +823,12 @@ async function existingSocialSearchListingKeys(client) {
        AND COALESCE(status, '') <> 'deleted'`,
     [SOCIAL_SEARCH_SOURCE, SOCIAL_SEARCH_BATCH_ID]
   );
-  return new Set(result.rows.map((row) => row.source_listing_key).filter(Boolean));
+  return new Map(result.rows
+    .filter((row) => row.source_listing_key)
+    .map((row) => [row.source_listing_key, {
+      ...row,
+      property_url: `${publicBaseUrl()}/property/${row.id}`,
+    }]));
 }
 
 async function insertListing(client, listing, agentId) {
@@ -946,13 +958,31 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
     const cleanup = replace ? await cleanupSocialSearchBatch(client) : null;
     const existingListingKeys = await existingSocialSearchListingKeys(client);
     const created = [];
+    const alreadyPresent = [];
     const skippedListings = [];
     for (const item of SOCIAL_SEARCH_LISTINGS) {
       if (existingListingKeys.has(item.key)) {
+        const existing = existingListingKeys.get(item.key) || {};
+        alreadyPresent.push({
+          id: existing.id,
+          title: existing.title || item.title,
+          inquiry_reference: existing.inquiry_reference || '',
+          property_url: existing.property_url || `${publicBaseUrl()}/property/${existing.id}`,
+          agent_name: existing.lister_name || agentByKey(item.agentKey)?.name || '',
+          status: existing.status || '',
+          moderation_stage: existing.moderation_stage || '',
+          youtube_url: youtubeUrl(item.youtubeId),
+          source_listing_key: item.key,
+          already_present: true,
+        });
         skippedListings.push({
           key: item.key,
-          title: item.title,
+          id: existing.id,
+          title: existing.title || item.title,
           agent_key: item.agentKey,
+          status: existing.status || '',
+          moderation_stage: existing.moderation_stage || '',
+          property_url: existing.property_url || '',
           reason: 'already_queued',
         });
         continue;
@@ -990,6 +1020,13 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       skipped_agents: skippedAgents,
       skipped_listings: skippedListings,
       created_properties: created.length,
+      existing_properties: alreadyPresent.length,
+      review_queue_properties: [...created, ...alreadyPresent].filter((item) => {
+        const status = String(item.status || 'pending').toLowerCase();
+        return !['approved', 'live', 'published', 'sold'].includes(status);
+      }).length,
+      already_present_properties: alreadyPresent,
+      queued_listings: [...created, ...alreadyPresent],
       by_type: created.reduce((acc, item) => {
         const original = SOCIAL_SEARCH_LISTINGS.find((listing) => listing.youtubeId === item.youtube_url.split('v=')[1]);
         const type = original?.listingType || 'sale';

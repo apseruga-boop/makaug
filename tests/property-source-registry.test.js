@@ -18,6 +18,8 @@ const whatsappRoute = read('routes/whatsapp.js');
 const pkg = JSON.parse(read('package.json'));
 const {
   PROPERTY_SOURCE_REGISTRY,
+  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  sourceRecordKind,
   summarizePropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
 const {
@@ -44,6 +46,9 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.by_platform.facebook >= 3000, 'source database should include at least 3,000 Facebook discovery records');
   assert(summary.by_platform.youtube >= 3000, 'source database should include at least 3,000 YouTube creator/search sources');
   assert(summary.by_platform.website >= 10, 'source database should keep website/portal sources');
+  assert.strictEqual(PROPERTY_SOURCE_REGISTRY.length, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, 'source registry should load exactly the configured 15,000 records');
+  assert(summary.reviewed_source_pages_count >= 10, 'source registry should separately count reviewed pages/channels/accounts');
+  assert(summary.discovery_feed_count >= 10000, 'source registry should separately count broad discovery feeds');
   ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
   });
@@ -51,6 +56,9 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.hashtags.includes('UgandaRealEstate'), 'source watchlist should include core hashtags');
   assert(service.includes('freshness_window_days: 90'), 'source records should carry a 90-day freshness window');
   assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 15000'), 'source registry should enforce the 15,000 ceiling');
+  assert(!PROPERTY_SOURCE_REGISTRY.some((item) => /(?:youtube\.com\/watch|youtu\.be\/|\/shorts\/|tiktok\.com\/@[^/]+\/video|instagram\.com\/(?:p|reel)\/|facebook\.com\/watch|facebook\.com\/.+\/(?:posts|videos)\/)/i.test(item.url || '')), 'source registry must not store individual post/video links as source records');
+  assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'source_page'), 'source registry should contain real page/channel/account records');
+  assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'discovery_feed'), 'source registry should contain discovery feeds that find new pages/posts');
 });
 
 test('source registry has production table, indexes, and safe upsert logic', () => {
@@ -60,6 +68,8 @@ test('source registry has production table, indexes, and safe upsert logic', () 
   assert(migration.includes('scrape_policy TEXT NOT NULL'), 'scrape policy should be explicit');
   assert(migration.includes('USING GIN (hashtags)'), 'hashtag index should support discovery searches');
   assert(service.includes('ON CONFLICT (source_key) DO UPDATE'), 'seed should upsert without duplicating sources');
+  assert(service.includes('pruned_stale_sources'), 'seed should report stale source records pruned back to the configured ceiling');
+  assert(service.includes("metadata->>'launch_batch'"), 'seed should prune only generated records from the current launch batch');
   assert(service.includes('manual_review_only'), 'registry should default to manual review');
   assert(script.includes('Refusing to write without --confirm'), 'write script should require explicit confirmation');
 });
@@ -75,7 +85,9 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
   assert(frontend.includes('/api/admin/property-source-registry?limit=15000'), 'frontend should call protected list API with the 15,000 source-registry ceiling');
   assert(service.includes('Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT)'), 'source registry list API should allow the full expanded registry');
-  assert(frontend.includes('these are source feeds/pages, not property listings'), 'King should explain source feeds are not listing records');
+  assert(frontend.includes('fishing net, not the approval queue'), 'King should explain source records are not listing records');
+  assert(frontend.includes('reviewed pages/channels/accounts'), 'King should separate reviewed source pages from broad feeds');
+  assert(frontend.includes('Queue Found-Online Properties'), 'King should label candidate creation separately from source database creation');
   assert.strictEqual(pkg.scripts['inventory:seed-source-registry'], 'node scripts/seed-property-source-registry.js');
 });
 

@@ -39,7 +39,7 @@ function source({
   notes = '',
   metadata = {},
 }) {
-  return {
+  const record = {
     key,
     name,
     platform,
@@ -65,6 +65,7 @@ function source({
     notes,
     metadata: {
       launch_batch: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+      source_record_kind: sourceRecordKind({ sourceType }),
       review_required: true,
       freshness_window_days: 90,
       listing_candidate_rule: 'Do not create a property listing from this source unless a specific public post/video/listing has clear location, price or guide price, agent/contact path, source URL, and evidence-based images.',
@@ -72,6 +73,30 @@ function source({
       ...metadata,
     },
   };
+  record.metadata.source_record_kind = sourceRecordKind(record);
+  record.metadata.source_record_label = sourceRecordLabel(record);
+  return record;
+}
+
+function sourceRecordKind(item = {}) {
+  const sourceType = String(item.sourceType || item.source_type || '').toLowerCase();
+  if (
+    sourceType.includes('search_feed')
+    || sourceType.includes('hashtag_feed')
+    || sourceType.includes('marketplace_feed')
+    || sourceType.includes('group_search_feed')
+    || sourceType.includes('public_video_search_feed')
+    || sourceType.includes('public_reel_search_feed')
+  ) {
+    return 'discovery_feed';
+  }
+  return 'source_page';
+}
+
+function sourceRecordLabel(item = {}) {
+  return sourceRecordKind(item) === 'source_page'
+    ? 'Reviewed page/channel/account'
+    : 'Discovery feed/search term';
 }
 
 const BASE_PROPERTY_SOURCE_REGISTRY = [
@@ -950,7 +975,7 @@ function discoveryUrlFor({ platform, area, intent }) {
   if (platform === 'instagram') {
     return `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(query)}`;
   }
-  const searchType = /group/i.test(intent) ? 'groups' : (/agents|broker|property pages/i.test(intent) ? 'pages' : 'posts');
+  const searchType = /group/i.test(intent) ? 'groups' : 'pages';
   return `https://www.facebook.com/search/${searchType}/?q=${encodeURIComponent(query)}`;
 }
 
@@ -958,7 +983,7 @@ function discoverySourceTypeFor({ platform, intent }) {
   if (platform === 'youtube') return 'public_video_search_feed';
   if (platform === 'tiktok') return 'public_video_search_feed';
   if (platform === 'instagram') return 'public_reel_search_feed';
-  const searchType = /group/i.test(intent) ? 'groups' : (/agents|broker|property pages/i.test(intent) ? 'pages' : 'posts');
+  const searchType = /group/i.test(intent) ? 'groups' : 'pages';
   return `public_${searchType}_search_feed`;
 }
 
@@ -1005,12 +1030,21 @@ function byStatusSummary(sources = PROPERTY_SOURCE_REGISTRY) {
 }
 
 function summarizePropertySourceRegistry() {
+  const sourcePageCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'source_page').length;
+  const discoveryFeedCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'discovery_feed').length;
+  const reviewedSourcePagesCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'source_page' && item.status === 'active').length;
   return {
     batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
     target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
     count: PROPERTY_SOURCE_REGISTRY.length,
     by_platform: byPlatformSummary(),
     by_status: byStatusSummary(),
+    by_record_kind: {
+      source_page: sourcePageCount,
+      discovery_feed: discoveryFeedCount,
+    },
+    reviewed_source_pages_count: reviewedSourcePagesCount,
+    discovery_feed_count: discoveryFeedCount,
     direct_contact_sources: PROPERTY_SOURCE_REGISTRY.filter((item) => item.canContactDirectly).length,
     hashtags: [...new Set(PROPERTY_SOURCE_REGISTRY.flatMap((item) => item.hashtags || []))].slice(0, 18),
     samples: PROPERTY_SOURCE_REGISTRY.slice(0, 10).map((item) => ({
@@ -1018,6 +1052,7 @@ function summarizePropertySourceRegistry() {
       name: item.name,
       platform: item.platform,
       source_type: item.sourceType,
+      source_record_kind: sourceRecordKind(item),
       source_url: item.url,
       contact_phone: item.phone,
       can_contact_directly: item.canContactDirectly,
@@ -1135,11 +1170,19 @@ async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGIST
       );
       upserted.push(result.rows[0]);
     }
+    const activeSourceKeys = rows.map((row) => row.source_key);
+    const pruned = await client.query(
+      `DELETE FROM property_source_registry
+       WHERE metadata->>'launch_batch' = $1
+         AND NOT (source_key = ANY($2::text[]))`,
+      [PROPERTY_SOURCE_REGISTRY_BATCH_ID, activeSourceKeys]
+    );
     await client.query('COMMIT');
     return {
       ok: true,
       batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
       upserted_sources: upserted.length,
+      pruned_stale_sources: pruned.rowCount,
       by_platform: byPlatformSummary(sources),
       by_status: byStatusSummary(sources),
       sources: upserted,
@@ -1204,7 +1247,11 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
     count: totalResult.rows[0]?.count || result.rows.length,
     returned_count: result.rows.length,
     by_platform: byPlatform,
-    sources: result.rows,
+    sources: result.rows.map((row) => ({
+      ...row,
+      source_record_kind: row.metadata?.source_record_kind || sourceRecordKind(row),
+      source_record_label: row.metadata?.source_record_label || sourceRecordLabel(row),
+    })),
   };
 }
 
@@ -1213,6 +1260,8 @@ module.exports = {
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
   PROPERTY_SOURCE_REGISTRY,
   normalizeSourceForDb,
+  sourceRecordKind,
+  sourceRecordLabel,
   summarizePropertySourceRegistry,
   seedPropertySourceRegistry,
   listPropertySourceRegistry,

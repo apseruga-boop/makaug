@@ -23,8 +23,8 @@ const REPLACE_CANDIDATES = args.has('--replace-candidates');
 
 function policy() {
   return {
-    source_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
-    property_queue_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+    source_record_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+    property_queue_target: 'evidence-based only; do not auto-create 15,000 property candidates from source feeds',
     source_window_days: 90,
     candidate_rule: 'Queue a King review property only when a specific public post/video/listing has source URL, location, price or guide price, contact path, and usable evidence-based images.',
     image_rule: 'Use labelled video stills or actual listing photos only. Do not duplicate the same still, invent room labels, or use random generic property imagery.',
@@ -85,6 +85,9 @@ async function main() {
       listing_queue_result: {
         replace: listingResult.replace,
         created_properties: listingResult.created_properties,
+        existing_properties: listingResult.existing_properties,
+        review_queue_properties: listingResult.review_queue_properties,
+        queued_listings: listingResult.queued_listings,
         skipped_listings: listingResult.skipped_listings,
         agents: listingResult.agents,
       },

@@ -2137,6 +2137,8 @@ router.post('/social-search-authorised-listings/seed', async (req, res, next) =>
       batch_id: SOCIAL_SEARCH_BATCH_ID,
       replace,
       created_properties: result.created_properties,
+      existing_properties: result.existing_properties,
+      review_queue_properties: result.review_queue_properties,
       agents: result.agents
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
@@ -2152,6 +2154,7 @@ router.post('/property-source-registry/seed', async (req, res, next) => {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
       batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
       upserted_sources: result.upserted_sources,
+      pruned_stale_sources: result.pruned_stale_sources,
       by_platform: result.by_platform
     }, adminActorId(req));
     return res.json({

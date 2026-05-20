@@ -386,8 +386,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete-contact sources instead of crashing the whole batch');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes("reason: 'already_queued'"), 'daily found-online sweeps should report already queued records');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('already_present_properties'), 'daily found-online sweeps should return existing records with direct review/live links');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('queued_listings'), 'daily found-online sweeps should return a combined created/already-present list for King');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
-  assert(frontend.includes('Create Found Online Listings'), 'dashboard should label the found-online creation action');
+  assert(frontend.includes('Queue Found-Online Properties'), 'dashboard should label the found-online queue action');
+  assert(frontend.includes('already exist in the King review queue or on the live site'), 'dashboard should explain why zero newly-created candidates can still mean records exist');
   const listing = plannedSocialSearchListings()[0];
   const card = socialSearchWhatsappShareMessage(
     listing.source_item,

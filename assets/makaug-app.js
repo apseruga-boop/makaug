@@ -8954,10 +8954,10 @@ function ensureAdminSourcedCandidateControls() {
     missingButtons.push(`<button id="admin-seed-carnelian-listings-btn" type="button" onclick="adminSeedCarnelianAuthorisedListings()" class="border border-amber-200 text-amber-700 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Create Carnelian Listings</button>`);
   }
   if (!document.getElementById("admin-seed-social-search-listings-btn")) {
-    missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Create Found Online Listings</button>`);
+    missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>`);
   }
   if (!document.getElementById("admin-seed-source-registry-btn")) {
-    missingButtons.push(`<button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Create Source Database</button>`);
+    missingButtons.push(`<button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Build 15,000 Source Pages</button>`);
   }
   if (!document.getElementById("admin-load-source-registry-btn")) {
     missingButtons.push(`<button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>`);
@@ -8976,9 +8976,11 @@ function adminSeededListingSummaryHtml(item = {}) {
   const publicUrl = String(item.property_url || "").trim();
   const previewUrl = String(item.owner_preview_url || "").trim();
   const videoUrl = String(item.youtube_url || item.video_url || "").trim();
+  const status = String(item.status || item.moderation_stage || (item.already_present ? "already present" : "")).trim();
   return `
     <div class="rounded-lg border border-blue-100 bg-white p-2">
       <div class="font-bold text-blue-950">${adminEscape(item.title || "Listing")}</div>
+      ${status ? `<div class="text-[11px] text-blue-700 mt-0.5">Status: ${adminEscape(status)}</div>` : ""}
       <div class="mt-1 flex gap-2 flex-wrap">
         ${id ? `<button type="button" onclick="openAdminListingReview(${idArg})" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-bold">Open Review</button>` : ""}
         ${id ? `<button type="button" onclick="openAdminListingLivePreview(${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[11px] font-bold">Live-style Preview</button>` : ""}
@@ -9094,7 +9096,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Create/rebuild the found-online social-search listings and agent profiles in the King review queue?");
+  const ok = window.confirm("Queue reviewed found-online property candidates and refresh agent profiles? Source pages stay in the source database until a specific property post has enough evidence.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-sourced-candidates-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9104,7 +9106,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Creating found-online social-search listings now...";
+    statusEl.innerHTML = "Checking reviewed source pages and queuing eligible found-online property candidates now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9114,15 +9116,21 @@ async function adminSeedSocialSearchAuthorisedListings() {
     });
     const data = response?.data || {};
     const samples = Array.isArray(data.listings) ? data.listings : [];
+    const alreadyPresent = Array.isArray(data.already_present_properties) ? data.already_present_properties : [];
+    const visibleSamples = Array.isArray(data.queued_listings) && data.queued_listings.length
+      ? data.queued_listings
+      : [...samples, ...alreadyPresent];
     const agentCount = Array.isArray(data.agents) ? data.agents.length : 0;
     const skipped = Array.isArray(data.skipped_listings) ? data.skipped_listings : [];
+    const alreadyQueuedCount = alreadyPresent.length || skipped.filter((item) => item?.reason === "already_queued").length;
     if (statusEl) {
       statusEl.innerHTML = `
         <div class="font-black">Found-online property candidates created</div>
-        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending property candidates are now in the King review queue. Source feeds stay in the source database until a specific house/land/rental post has enough evidence.</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(alreadyQueuedCount || 0)} matching property records already exist in the King review queue or on the live site.</div>
+        <div class="mt-1">The 15,000 source database is pages, channels, accounts, and discovery feeds. The Review Queue only receives actual properties after a specific recent post has source evidence, contact path, location, price, and usable images.</div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
         ${skipped.length ? `<div class="mt-1 text-amber-800">${adminEscape(skipped.length)} source records were kept for source review because no public phone/email/website is stored yet.</div>` : ""}
-        ${samples.length ? `<div class="mt-2 space-y-2">${samples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
+        ${visibleSamples.length ? `<div class="mt-2 space-y-2">${visibleSamples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
     }
     toast("Found-online listings are ready for King review.");
     await renderAdminDashboard();
@@ -9142,6 +9150,27 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
 }
 
+function adminSourceRecordKind(item = {}) {
+  const kind = String(item.source_record_kind || item.metadata?.source_record_kind || "").trim();
+  if (kind) return kind;
+  const sourceType = String(item.source_type || item.sourceType || "").toLowerCase();
+  if (
+    sourceType.includes("search_feed")
+    || sourceType.includes("hashtag_feed")
+    || sourceType.includes("marketplace_feed")
+    || sourceType.includes("group_search_feed")
+    || sourceType.includes("public_video_search_feed")
+    || sourceType.includes("public_reel_search_feed")
+  ) return "discovery_feed";
+  return "source_page";
+}
+
+function adminSourceRecordLabel(item = {}) {
+  return adminSourceRecordKind(item) === "source_page"
+    ? "Page/channel/account"
+    : "Discovery feed";
+}
+
 function adminSourceRegistryHtml(data = {}) {
   const sources = Array.isArray(data.sources) ? data.sources : [];
   const summary = data.summary || {};
@@ -9149,31 +9178,32 @@ function adminSourceRegistryHtml(data = {}) {
   const platformText = Object.entries(byPlatform)
     .map(([platform, count]) => `${platform}: ${count}`)
     .join(" • ");
-  const activeCount = summary.by_status?.active || data.by_status?.active || sources.filter((item) => item.status === "active").length;
-  const candidateCount = summary.by_status?.candidate || data.by_status?.candidate || sources.filter((item) => item.status === "candidate").length;
+  const activeCount = summary.reviewed_source_pages_count || sources.filter((item) => item.status === "active" && adminSourceRecordKind(item) === "source_page").length;
+  const candidateCount = summary.discovery_feed_count || sources.filter((item) => adminSourceRecordKind(item) === "discovery_feed").length;
   const rows = sources.map((item) => `
     <tr class="border-t border-emerald-100">
       <td class="py-2 pr-3 font-bold text-emerald-950">${adminEscape(item.source_name || item.name || "-")}</td>
       <td class="py-2 pr-3 uppercase text-[10px] font-black text-emerald-700">${adminEscape(item.platform || "-")}</td>
+      <td class="py-2 pr-3">${adminEscape(adminSourceRecordLabel(item))}</td>
       <td class="py-2 pr-3">${adminEscape(item.source_type || "-")}</td>
       <td class="py-2 pr-3">${adminEscape(item.contact_phone || item.contact_phone_alt || "No public phone")}</td>
       <td class="py-2 pr-3">${item.can_contact_directly ? "Yes" : "Review first"}</td>
       <td class="py-2 pr-3">${adminEscape(item.status || "-")}</td>
-      <td class="py-2"><a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener" class="font-bold text-emerald-800 underline">Open source</a></td>
+      <td class="py-2"><a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener" class="font-bold text-emerald-800 underline">Open page/feed</a></td>
     </tr>`).join("");
   return `
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black text-emerald-950">Property source database</div>
-        <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public/authorised source records available for daily found-online discovery.</div>
-        <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed/active sources • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds to monitor.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: these are source feeds/pages, not property listings. King only creates house/land/rental candidates when a specific recent post has clear source evidence, contact path, location, price, and usable images.</div>
+        <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
+        <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, and search feeds; individual videos/posts are stored only on a property candidate after King finds a specific recent listing with evidence, contact path, location, price, and usable images.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>
       <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-bold">Refresh Sources</button>
     </div>
-    ${rows ? `<div class="mt-3 max-h-[560px] overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="sticky top-0 bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-2">Link</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
+    ${rows ? `<div class="mt-3 max-h-[560px] overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="sticky top-0 bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Record</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-2">Source page/feed</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
 }
 
 async function adminLoadPropertySourceRegistry() {
@@ -9217,7 +9247,7 @@ async function adminSeedPropertySourceRegistry() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Create/update the public source database for found-online property discovery?");
+  const ok = window.confirm("Create/update the 15,000-record public source database? This stores pages, channels, accounts, and discovery feeds; it does not create property approvals by itself.");
   if (!ok) return;
   const panel = document.getElementById("admin-source-registry-panel");
   const button = document.getElementById("admin-seed-source-registry-btn");
@@ -9227,7 +9257,7 @@ async function adminSeedPropertySourceRegistry() {
   }
   if (panel) {
     panel.classList.remove("hidden");
-    panel.innerHTML = "Creating source database now...";
+    panel.innerHTML = "Building the 15,000-record source page/feed database now...";
   }
   try {
     const response = await apiRequest("/api/admin/property-source-registry/seed", {
