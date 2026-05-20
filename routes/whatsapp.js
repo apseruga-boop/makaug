@@ -4246,6 +4246,34 @@ function getExtraField(row, key) {
   return extra[key];
 }
 
+function isFoundOnlineWhatsappRow(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const badge = String(extra.source_badge || extra.source_discovery_label || '').toLowerCase();
+  const sourceBatch = String(extra.source_batch || '').toLowerCase();
+  return extra.found_online === true
+    || extra.social_search_candidate === true
+    || badge === 'found_online'
+    || badge === 'found online'
+    || sourceBatch === 'social_search_authorised_20260520';
+}
+
+function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
+  if (!isFoundOnlineWhatsappRow(row)) return '';
+  const code = resolveLangCode(lang);
+  const labels = {
+    en: { found: 'Found online', first: 'first seen by makaug', source: 'source' },
+    lg: { found: 'Kizuuliddwa ku mutimbagano', first: 'makaug yasooka okugiraba', source: 'ensibuko' },
+    sw: { found: 'Imepatikana mtandaoni', first: 'ilionekana kwanza na makaug', source: 'chanzo' }
+  };
+  const copy = labels[code] || labels.en;
+  const sourceName = normalizeInput(getExtraField(row, 'source_name') || getExtraField(row, 'owner_or_agent_name') || row.lister_name);
+  const platform = normalizeInput(getExtraField(row, 'source_platform'));
+  const firstSeenRaw = getExtraField(row, 'first_seen_online_at') || getExtraField(row, 'last_checked_at') || row.created_at;
+  const firstSeen = firstSeenRaw ? String(firstSeenRaw).slice(0, 10) : '';
+  const sourceBits = [sourceName, platform].filter(Boolean).join(' • ');
+  return `   🧭 ${copy.found}${firstSeen ? ` • ${copy.first}: ${firstSeen}` : ''}${sourceBits ? ` • ${copy.source}: ${sourceBits}` : ''}`;
+}
+
 function isSponsoredWhatsappRow(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   return row.featured === true
@@ -4503,6 +4531,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     lines.push(`   💰 ${formatPrice(r.price, r.price_period)}`);
     const availability = normalizeInput(getExtraField(r, 'available_from') || getExtraField(r, 'availability'));
     if (availability) lines.push(`   📅 ${copy.available || cardCopy.en.available}: ${availability}`);
+    const sourceLine = formatFoundOnlineSourceLine(r, lang);
+    if (sourceLine) lines.push(sourceLine);
     if (Number.isFinite(Number(r.distance_km))) {
       lines.push(`   📏 ${Number(r.distance_km).toFixed(1)} ${t(lang, 'kmAway')}`);
     }

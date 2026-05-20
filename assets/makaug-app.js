@@ -884,7 +884,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "Your home search starts here. Find properties to rent, buy or invest.",
+    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, and reviewed online sources in one place.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1037,7 +1037,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
-    heroSubtitle: "Wano we watandikira okunoonya ennyumba y'oyagala.",
+    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, n'ensibuko eziri online ezikeberebwa mu kifo kimu.",
     heroRent: "Pangisa",
     heroBuy: "Gula",
     heroCommercial: "Busuubuzi",
@@ -1165,7 +1165,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Jukwaa la bure la mali Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
-    heroSubtitle: "Utafutaji wako wa nyumba unaanzia hapa.",
+    heroSubtitle: "Tafuta mali Uganda kama search engine: matangazo ya wamiliki, brokers, na vyanzo vya mtandaoni vilivyopitiwa sehemu moja.",
     heroRent: "Kupanga",
     heroBuy: "Nunua",
     heroCommercial: "Biashara",
@@ -1292,7 +1292,7 @@ const I18N_UI = {
     signIn: "Dony",
     heroBadge: "Uganda's #1 free property platform",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
-    heroSubtitle: "Ka i cako nongo gang ma imito ka.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
     heroSearch: "Yeny",
     langBanner: "Tii ki makaug i lok 7 me Uganda",
     areaOnly: "Kabedo manok",
@@ -1324,7 +1324,7 @@ const I18N_UI = {
     signIn: "Ingira",
     heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
-    heroSubtitle: "Aha niho otondikirira kunoonya enju y'oyenda.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
     heroSearch: "Shanga",
     langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
     areaOnly: "Aho honyine",
@@ -1356,7 +1356,7 @@ const I18N_UI = {
     signIn: "Injira",
     heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
-    heroSubtitle: "Okuhondera enju yawe kutandikira hanu.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
     heroSearch: "Shaka",
     langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
     areaOnly: "Akarere aka gusa",
@@ -1388,7 +1388,7 @@ const I18N_UI = {
     signIn: "Yingira",
     heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
-    heroSubtitle: "Wano niwo otandikira okunoonia enyumba gy'oyagala.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
     heroSearch: "Noonia",
     langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
     areaOnly: "Ekitundu kino kyonka",
@@ -1818,6 +1818,15 @@ const CONTENT_I18N = {
     "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
     "about.whyTitle": "Why makaug exists",
     "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.",
+    "about.searchEngineLabel": "Property search engine",
+    "about.searchEngineTitle": "How makaug finds property information",
+    "about.searchEngineText": "makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through King review before it can appear as a trusted live listing.",
+    "about.searchSourceTitle": "Source visibility",
+    "about.searchSourceText": "Found-online listings show when makaug first found them, where the source came from, and whether the source is an agent channel, website, marketplace, or social feed.",
+    "about.searchReviewTitle": "Human review",
+    "about.searchReviewText": "Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
+    "about.searchRemovalTitle": "Claim or remove",
+    "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
     "about.helpLabel": "Who we help",
     "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
@@ -1896,6 +1905,15 @@ const CONTENT_I18N = {
     "about.missionText": "Omulamwa gwaffe kwe kufuula property ennyangu okuzuula, okukendeeza okutabulwa, okulongoosa omutindo gwa listings, n'okuyamba abantu okuva ku search okutuuka ku viewing n'okusalaawo.",
     "about.whyTitle": "Lwaki makaug eriwo",
     "about.whyText": "Okunoonya property mu Uganda kusobola okuba mu WhatsApp, brokers, social posts, n'amawulire agava mu bantu. makaug egatta search, safety, n'empuliziganya mu kifo kimu.",
+    "about.searchEngineLabel": "Property search engine",
+    "about.searchEngineTitle": "Engeri makaug gy'ezulamu amawulire ga property",
+    "about.searchEngineText": "makaug efuuka search engine ya property mu Uganda. Tugatta listings okuva eri owners ne brokers n'ensibuko za online ezikeberebwa oba ezikkiriziddwa, ne tuziyisa mu King review nga tezinnaba listings eziri live.",
+    "about.searchSourceTitle": "Ensibuko eragibwa",
+    "about.searchSourceText": "Listings ezizuuliddwa online ziraga ddi makaug lwe yazisooka okulaba, ensibuko gy'ezivudde, n'obanga ziva ku agent channel, website, marketplace, oba social feed.",
+    "about.searchReviewTitle": "Okukebera kw'omuntu",
+    "about.searchReviewText": "Awo data eva mu source teteekebwa live butereevu. King dashboard ekebera location, photos, contact details, duplicates, ownership signals, n'okukkiriza kwa agent nga approval tennaba.",
+    "about.searchRemovalTitle": "Claim oba remove",
+    "about.searchRemovalText": "Owners ne agents basobola oku-claim, okulongoosa, okukyusa photos, okutereeza details, oba okusaba listing eggyibweko. makaug ekuuma attribution ne review trail.",
     "about.helpLabel": "Be tuyamba",
     "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
@@ -1974,6 +1992,15 @@ const CONTENT_I18N = {
     "about.missionText": "Dhamira yetu ni kurahisisha ugunduzi wa mali, kupunguza mkanganyiko, kuboresha ubora wa listings, na kusaidia watu kutoka search hadi viewing na uamuzi.",
     "about.whyTitle": "Kwa nini makaug ipo",
     "about.whyText": "Utafutaji wa mali Uganda unaweza kutawanyika kwenye WhatsApp, brokers, social posts, na maneno ya watu. makaug huleta muundo, search, safety, na mawasiliano pamoja.",
+    "about.searchEngineLabel": "Property search engine",
+    "about.searchEngineTitle": "Jinsi makaug hupata taarifa za mali",
+    "about.searchEngineText": "makaug inakuwa search engine ya mali Uganda. Tunachanganya listings kutoka kwa wamiliki na brokers pamoja na vyanzo vya mtandaoni vilivyopitiwa au kuidhinishwa, kisha kila candidate hupitia King review kabla ya kuwa live.",
+    "about.searchSourceTitle": "Chanzo kinaonekana",
+    "about.searchSourceText": "Listings zilizopatikana mtandaoni zinaonyesha lini makaug iliziona kwanza, chanzo kilikotoka, na kama ni agent channel, website, marketplace, au social feed.",
+    "about.searchReviewTitle": "Ukaguzi wa mtu",
+    "about.searchReviewText": "Data ya source haiwekwi live bila ukaguzi. King dashboard hukagua location, photos, contact details, duplicates, ownership signals, na ruhusa ya agent kabla ya approval.",
+    "about.searchRemovalTitle": "Claim au remove",
+    "about.searchRemovalText": "Wamiliki na agents wanaweza claim, update, kubadilisha photos, kusahihisha details, au kuomba removal. makaug huhifadhi attribution na review trail.",
     "about.helpLabel": "Tunasaidia nani",
     "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
@@ -8902,11 +8929,19 @@ function ensureAdminSourcedCandidateControls() {
     status.className = "hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900";
     table.parentNode.insertBefore(status, table);
   }
+  if (!document.getElementById("admin-source-registry-panel")) {
+    const sourcePanel = document.createElement("div");
+    sourcePanel.id = "admin-source-registry-panel";
+    sourcePanel.className = "hidden mb-4 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950";
+    table.parentNode.insertBefore(sourcePanel, table);
+  }
   if (
     document.getElementById("admin-seed-sourced-candidates-btn")
     && document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
     && document.getElementById("admin-seed-social-search-listings-btn")
+    && document.getElementById("admin-seed-source-registry-btn")
+    && document.getElementById("admin-load-source-registry-btn")
   ) return;
   const header = panel.querySelector(".flex.items-center.justify-between") || panel.firstElementChild;
   const actions = document.createElement("div");
@@ -8920,6 +8955,12 @@ function ensureAdminSourcedCandidateControls() {
   }
   if (!document.getElementById("admin-seed-social-search-listings-btn")) {
     missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Create Found Online Listings</button>`);
+  }
+  if (!document.getElementById("admin-seed-source-registry-btn")) {
+    missingButtons.push(`<button id="admin-seed-source-registry-btn" type="button" onclick="adminSeedPropertySourceRegistry()" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-bold">Create Source Database</button>`);
+  }
+  if (!document.getElementById("admin-load-source-registry-btn")) {
+    missingButtons.push(`<button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>`);
   }
   if (!document.getElementById("admin-seed-sourced-candidates-btn")) {
     missingButtons.push(`<button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>`);
@@ -9091,6 +9132,109 @@ async function adminSeedSocialSearchAuthorisedListings() {
       statusEl.innerHTML = `Could not create found-online listings: ${adminEscape(e.message || "Unknown error")}`;
     }
     toast(`Found-online seed failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+function adminSourceRegistryHtml(data = {}) {
+  const sources = Array.isArray(data.sources) ? data.sources : [];
+  const summary = data.summary || {};
+  const byPlatform = data.by_platform || summary.by_platform || {};
+  const platformText = Object.entries(byPlatform)
+    .map(([platform, count]) => `${platform}: ${count}`)
+    .join(" • ");
+  const rows = sources.slice(0, 40).map((item) => `
+    <tr class="border-t border-emerald-100">
+      <td class="py-2 pr-3 font-bold text-emerald-950">${adminEscape(item.source_name || item.name || "-")}</td>
+      <td class="py-2 pr-3 uppercase text-[10px] font-black text-emerald-700">${adminEscape(item.platform || "-")}</td>
+      <td class="py-2 pr-3">${adminEscape(item.source_type || "-")}</td>
+      <td class="py-2 pr-3">${adminEscape(item.contact_phone || item.contact_phone_alt || "No public phone")}</td>
+      <td class="py-2 pr-3">${item.can_contact_directly ? "Yes" : "Review first"}</td>
+      <td class="py-2"><a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener" class="font-bold text-emerald-800 underline">Open source</a></td>
+    </tr>`).join("");
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-black text-emerald-950">Property source database</div>
+        <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public/authorised source records available for daily found-online discovery.</div>
+        ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
+      </div>
+      <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-bold">Refresh Sources</button>
+    </div>
+    ${rows ? `<div class="mt-3 overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-2">Link</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
+}
+
+async function adminLoadPropertySourceRegistry() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const panel = document.getElementById("admin-source-registry-panel");
+  const button = document.getElementById("admin-load-source-registry-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (panel) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = "Loading source database...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=250", {
+      method: "GET",
+      headers: adminAuthHeaders()
+    });
+    if (panel) panel.innerHTML = adminSourceRegistryHtml(response?.data || {});
+    toast("Source database loaded.");
+  } catch (e) {
+    if (panel) {
+      panel.classList.remove("hidden");
+      panel.innerHTML = `Could not load source database: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Source database failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function adminSeedPropertySourceRegistry() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const ok = window.confirm("Create/update the public source database for found-online property discovery?");
+  if (!ok) return;
+  const panel = document.getElementById("admin-source-registry-panel");
+  const button = document.getElementById("admin-seed-source-registry-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (panel) {
+    panel.classList.remove("hidden");
+    panel.innerHTML = "Creating source database now...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/property-source-registry/seed", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    if (panel) panel.innerHTML = adminSourceRegistryHtml(response?.data || {});
+    toast("Source database is ready in King.");
+  } catch (e) {
+    if (panel) {
+      panel.classList.remove("hidden");
+      panel.innerHTML = `Could not create source database: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Source seed failed: ${e.message || "error"}`);
   } finally {
     if (button) {
       button.disabled = false;
@@ -23715,6 +23859,50 @@ function listingFreshnessBadgeHtml(p = {}) {
   return "";
 }
 
+function foundOnlineSourceMeta(p = {}) {
+  if (!isFoundOnlineListing(p)) return null;
+  let extra = {};
+  if (p?.extra_fields && typeof p.extra_fields === "object") {
+    extra = p.extra_fields;
+  } else if (typeof p?.extra_fields === "string") {
+    try { extra = JSON.parse(p.extra_fields) || {}; } catch (error) {}
+  }
+  const sourceName = String(extra.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
+  const platform = String(extra.source_platform || (extra.youtube_url || extra.video_url ? "YouTube" : "") || "").trim();
+  const sourceUrl = String(extra.source_url || extra.youtube_url || extra.video_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
+  const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
+  const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
+  return {
+    sourceName,
+    platform,
+    sourceUrl: /^https?:\/\//i.test(sourceUrl) ? sourceUrl : "",
+    firstSeen,
+    firstSeenLabel,
+  };
+}
+
+function listingOnlineSourceDisclosureHtml(p = {}) {
+  const meta = foundOnlineSourceMeta(p);
+  if (!meta) return "";
+  const sourceBits = [meta.sourceName, meta.platform].filter(Boolean).join(" • ");
+  return `
+    <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
+      <div class="flex items-start gap-2">
+        <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
+        <div>
+          <div class="font-black">${translateListingLabel("Sourced online")}</div>
+          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source and reviewed before going live.")}</div>
+          <div class="mt-2 flex flex-wrap gap-2 text-xs">
+            ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First seen by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
+            ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
+            ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Open source")}</a>` : ""}
+          </div>
+          ${meta.firstSeenLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstSeenLabel)}</div>` : ""}
+        </div>
+      </div>
+    </div>`;
+}
+
 function formatListingDate(dateValue) {
   const date = parseDateSafe(dateValue);
   if (!date) return "";
@@ -28142,7 +28330,12 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Safety Tips": "Amagezi g'obukuumi",
       "Careers": "Emirimu",
       "Email CV to makaug": "Weereza CV ku makaug",
-      "Message on WhatsApp": "Wandiika ku WhatsApp"
+      "Message on WhatsApp": "Wandiika ku WhatsApp",
+      "Sourced online": "Ezuuliddwa online",
+      "This listing was found through a public or authorised online property source and reviewed before going live.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennagenda live.",
+      "First seen by makaug": "makaug yasooka okugiraba",
+      "Source": "Ensibuko",
+      "Open source": "Ggulawo ensibuko"
     },
     sw: {
       "Listing mode": "Njia ya kutangaza",
@@ -28235,7 +28428,12 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Safety Tips": "Vidokezo vya Usalama",
       "Careers": "Ajira",
       "Email CV to makaug": "Tuma CV kwa makaug",
-      "Message on WhatsApp": "Tuma ujumbe WhatsApp"
+      "Message on WhatsApp": "Tuma ujumbe WhatsApp",
+      "Sourced online": "Imepatikana mtandaoni",
+      "This listing was found through a public or authorised online property source and reviewed before going live.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuwa live.",
+      "First seen by makaug": "Ilionekana kwanza na makaug",
+      "Source": "Chanzo",
+      "Open source": "Fungua chanzo"
     }
   };
   Object.entries({
@@ -30229,6 +30427,7 @@ async function openDetail(id, options = {}) {
             <div class="mt-3 flex items-center gap-2">
               ${renderPropertyShareActions(p, detailIdArg)}
             </div>
+            ${listingOnlineSourceDisclosureHtml(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">Private Preview</div>

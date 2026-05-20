@@ -35,6 +35,7 @@
     "inventory:seed-bakaima": "node scripts/seed-bakaima-authorised-land-listings.js",
     "inventory:seed-carnelian": "node scripts/seed-carnelian-authorised-listings.js",
     "inventory:seed-social-search": "node scripts/seed-social-search-authorised-listings.js",
+    "inventory:seed-source-registry": "node scripts/seed-property-source-registry.js",
     "inventory:import-sourced-images": "node scripts/import-sourced-candidate-images.js",
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
     "probe:public-routes": "node scripts/probe-public-routes.js",

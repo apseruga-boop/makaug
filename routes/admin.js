@@ -91,6 +91,12 @@ const {
   SOCIAL_SEARCH_BATCH_ID,
   seedSocialSearchAuthorisedListings
 } = require('../services/socialSearchSourcedListingsService');
+const {
+  PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+  listPropertySourceRegistry,
+  seedPropertySourceRegistry,
+  summarizePropertySourceRegistry
+} = require('../services/propertySourceRegistryService');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -2134,6 +2140,45 @@ router.post('/social-search-authorised-listings/seed', async (req, res, next) =>
       agents: result.agents
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/property-source-registry/seed', async (req, res, next) => {
+  try {
+    const result = await seedPropertySourceRegistry({ db });
+    await writeAudit('admin_property_source_registry_seeded', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+      upserted_sources: result.upserted_sources,
+      by_platform: result.by_platform
+    }, adminActorId(req));
+    return res.json({
+      ok: true,
+      data: {
+        ...result,
+        summary: summarizePropertySourceRegistry()
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/property-source-registry', async (req, res, next) => {
+  try {
+    const result = await listPropertySourceRegistry({
+      db,
+      limit: req.query.limit || 250
+    });
+    return res.json({
+      ok: true,
+      data: {
+        ...result,
+        summary: summarizePropertySourceRegistry()
+      }
+    });
   } catch (error) {
     return next(error);
   }
