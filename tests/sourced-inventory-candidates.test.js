@@ -340,15 +340,18 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
-    assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length === 5, `${listing.title} should keep source image URLs`);
+    assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length >= 3, `${listing.title} should keep source image URLs`);
+    assert.strictEqual(extra.minimum_reliable_image_count, 3, `${listing.title} should allow evidence-based 3-image review`);
+    assert(/Do not invent room labels/i.test(extra.image_evidence_policy), `${listing.title} should keep strict image evidence guidance`);
     assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 5, `${listing.title} should include nearby places`);
     assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include health facilities`);
     assert(extra.nearby_facilities.some((item) => /school|college|secondary/i.test(`${item.type} ${item.name}`)), `${listing.title} should include schools or secondary schools`);
     assert(Array.isArray(extra.review_required_steps) && extra.review_required_steps.length >= 5, `${listing.title} should keep approval checks in King review metadata`);
     assert(!/before (public )?approval/i.test(listing.description), `${listing.title} should not expose approval warnings in public copy`);
     assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate wording publicly`);
-    assert.strictEqual(listing.images.length, 5, `${listing.title} should include the standard five source images`);
+    assert(listing.images.length >= 3 && listing.images.length <= 5, `${listing.title} should include 3-5 source images only when evidence-based`);
     assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`)), `${listing.title} should use the matching YouTube image source`);
+    assert(!listing.images.some((image) => /bedroom|bathroom|kitchen/i.test(image.room_label)), `${listing.title} should not guess room labels from generic source stills`);
   }
 });
 

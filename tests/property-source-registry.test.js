@@ -42,11 +42,12 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.by_platform.facebook >= 200, 'source database should include at least 200 Facebook discovery records');
   assert(summary.by_platform.youtube >= 10, 'source database should keep YouTube creator/search sources');
   assert(summary.by_platform.website >= 10, 'source database should keep website/portal sources');
-  ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
+  ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
   });
   assert(summary.direct_contact_sources >= 2, 'authorised/direct-contact sources should be explicit');
   assert(summary.hashtags.includes('UgandaRealEstate'), 'source watchlist should include core hashtags');
+  assert(service.includes('freshness_window_days: 90'), 'source records should carry a 90-day freshness window');
 });
 
 test('source registry has production table, indexes, and safe upsert logic', () => {
@@ -70,6 +71,7 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('async function adminLoadPropertySourceRegistry'), 'frontend should load source database');
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
   assert(frontend.includes('/api/admin/property-source-registry?limit=600'), 'frontend should call protected list API');
+  assert(frontend.includes('these are source feeds/pages, not property listings'), 'King should explain source feeds are not listing records');
   assert.strictEqual(pkg.scripts['inventory:seed-source-registry'], 'node scripts/seed-property-source-registry.js');
 });
 

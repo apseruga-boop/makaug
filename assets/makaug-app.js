@@ -9113,13 +9113,13 @@ async function adminSeedSocialSearchAuthorisedListings() {
       body: { replace: true }
     });
     const data = response?.data || {};
-    const samples = Array.isArray(data.listings) ? data.listings.slice(0, 8) : [];
+    const samples = Array.isArray(data.listings) ? data.listings : [];
     const agentCount = Array.isArray(data.agents) ? data.agents.length : 0;
     const skipped = Array.isArray(data.skipped_listings) ? data.skipped_listings : [];
     if (statusEl) {
       statusEl.innerHTML = `
-        <div class="font-black">Found-online listings created</div>
-        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending social-search records are now in the King review queue.</div>
+        <div class="font-black">Found-online property candidates created</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} pending property candidates are now in the King review queue. Source feeds stay in the source database until a specific house/land/rental post has enough evidence.</div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
         ${skipped.length ? `<div class="mt-1 text-amber-800">${adminEscape(skipped.length)} source records were kept for source review because no public phone/email/website is stored yet.</div>` : ""}
         ${samples.length ? `<div class="mt-2 space-y-2">${samples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
@@ -9149,13 +9149,16 @@ function adminSourceRegistryHtml(data = {}) {
   const platformText = Object.entries(byPlatform)
     .map(([platform, count]) => `${platform}: ${count}`)
     .join(" • ");
-  const rows = sources.slice(0, 40).map((item) => `
+  const activeCount = summary.by_status?.active || data.by_status?.active || sources.filter((item) => item.status === "active").length;
+  const candidateCount = summary.by_status?.candidate || data.by_status?.candidate || sources.filter((item) => item.status === "candidate").length;
+  const rows = sources.map((item) => `
     <tr class="border-t border-emerald-100">
       <td class="py-2 pr-3 font-bold text-emerald-950">${adminEscape(item.source_name || item.name || "-")}</td>
       <td class="py-2 pr-3 uppercase text-[10px] font-black text-emerald-700">${adminEscape(item.platform || "-")}</td>
       <td class="py-2 pr-3">${adminEscape(item.source_type || "-")}</td>
       <td class="py-2 pr-3">${adminEscape(item.contact_phone || item.contact_phone_alt || "No public phone")}</td>
       <td class="py-2 pr-3">${item.can_contact_directly ? "Yes" : "Review first"}</td>
+      <td class="py-2 pr-3">${adminEscape(item.status || "-")}</td>
       <td class="py-2"><a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener" class="font-bold text-emerald-800 underline">Open source</a></td>
     </tr>`).join("");
   return `
@@ -9163,12 +9166,14 @@ function adminSourceRegistryHtml(data = {}) {
       <div>
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public/authorised source records available for daily found-online discovery.</div>
+        <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed/active sources • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds to monitor.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: these are source feeds/pages, not property listings. King only creates house/land/rental candidates when a specific recent post has clear source evidence, contact path, location, price, and usable images.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
-        ${sources.length > 40 ? `<div class="mt-1 text-[11px] text-emerald-700">Showing the first 40 records here. The full database is stored for the daily source sweep.</div>` : ""}
+        ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>
       <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-bold">Refresh Sources</button>
     </div>
-    ${rows ? `<div class="mt-3 overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-2">Link</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
+    ${rows ? `<div class="mt-3 max-h-[560px] overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="sticky top-0 bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-2">Link</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
 }
 
 async function adminLoadPropertySourceRegistry() {

@@ -506,19 +506,23 @@ function youtubeUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
 }
 
+const DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES = [
+  { file: 'hqdefault.jpg', label: 'Source video still - primary view', primary: true },
+  { file: '1.jpg', label: 'Source video still - supporting view', primary: false },
+  { file: '2.jpg', label: 'Source video still - additional view', primary: false },
+];
+
 function youtubeImageRowsFor(item) {
   const base = `https://i.ytimg.com/vi/${item.youtubeId}`;
-  return [
-    ['hqdefault.jpg', 'YouTube source image - primary', true],
-    ['mqdefault.jpg', 'YouTube source image - mid still', false],
-    ['default.jpg', 'YouTube source image - small still', false],
-    ['1.jpg', 'Video still frame 1', false],
-    ['2.jpg', 'Video still frame 2', false],
-  ].map(([file, label, primary], index) => ({
-    url: `${base}/${file}`,
-    slot_key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
-    room_label: label,
-    is_primary: Boolean(primary),
+  const configuredFrames = Array.isArray(item.imageFrames) ? item.imageFrames.filter(Boolean) : [];
+  const frames = (configuredFrames.length ? configuredFrames : DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES)
+    .filter((frame) => frame?.file && frame?.label)
+    .slice(0, 5);
+  return frames.map((frame, index) => ({
+    url: `${base}/${frame.file}`,
+    slot_key: frame.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
+    room_label: frame.label,
+    is_primary: Boolean(index === 0 || frame.primary),
     sort_order: index,
   }));
 }
@@ -540,7 +544,7 @@ function reviewSteps(item = {}) {
     'Confirm current availability and guide price before approval',
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
     'Confirm title/ownership evidence or broker authority before public approval',
-    'Replace YouTube thumbnail/still images with direct HD agent photos if supplied',
+    'Keep only differentiated, evidence-based source images; upload direct HD agent photos when supplied',
   ];
   if (item.listingType === 'land') {
     steps.push('Confirm plot size, boundaries, access road, and title tenure before approval');
@@ -577,6 +581,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     consent_confirmed: true,
     image_rights_confirmed: true,
     image_rights_status: 'authorised_public_social_video_thumbnail_from_agent_channel',
+    image_evidence_policy: 'Use a minimum of 3 source images only when they are distinct enough to review. Do not invent room labels or duplicate uncertain stills; upload HD agent images when available.',
+    minimum_reliable_image_count: 3,
     owner_or_agent_name: agent.name,
     public_display_name: agent.name,
     lister_registration_status: 'registered',
