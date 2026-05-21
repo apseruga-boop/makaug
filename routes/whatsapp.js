@@ -42,6 +42,7 @@ const {
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
+const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -4261,17 +4262,23 @@ function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
   if (!isFoundOnlineWhatsappRow(row)) return '';
   const code = resolveLangCode(lang);
   const labels = {
-    en: { found: 'Found online', first: 'first seen by makaug', source: 'source' },
-    lg: { found: 'Kizuuliddwa ku mutimbagano', first: 'makaug yasooka okugiraba', source: 'ensibuko' },
-    sw: { found: 'Imepatikana mtandaoni', first: 'ilionekana kwanza na makaug', source: 'chanzo' }
+    en: { found: 'Found online', posted: 'posted', first: 'first seen by makaug', added: 'added to makaug', source: 'source', audience: 'audience', contact: 'contact' },
+    lg: { found: 'Kizuuliddwa ku mutimbagano', posted: 'kyateekebwa', first: 'makaug yasooka okugiraba', added: 'kyayongerwa ku makaug', source: 'ensibuko', audience: 'abagoberera', contact: 'contact' },
+    sw: { found: 'Imepatikana mtandaoni', posted: 'ilichapishwa', first: 'ilionekana kwanza na makaug', added: 'imeongezwa kwenye makaug', source: 'chanzo', audience: 'wafuasi', contact: 'mawasiliano' }
   };
   const copy = labels[code] || labels.en;
   const sourceName = normalizeInput(getExtraField(row, 'source_name') || getExtraField(row, 'owner_or_agent_name') || row.lister_name);
   const platform = normalizeInput(getExtraField(row, 'source_platform'));
+  const audience = normalizeInput(getExtraField(row, 'source_followers_label') || getExtraField(row, 'source_audience_label'));
   const firstSeenRaw = getExtraField(row, 'first_seen_online_at') || getExtraField(row, 'last_checked_at') || row.created_at;
   const firstSeen = firstSeenRaw ? String(firstSeenRaw).slice(0, 10) : '';
+  const firstPostedRaw = getExtraField(row, 'first_posted_online_at') || getExtraField(row, 'source_published_at');
+  const firstPosted = firstPostedRaw ? String(firstPostedRaw).slice(0, 10) : '';
+  const addedRaw = getExtraField(row, 'added_to_makaug_at') || row.created_at;
+  const added = addedRaw ? String(addedRaw).slice(0, 10) : '';
+  const contactMethod = normalizeInput(getExtraField(row, 'source_contact_label') || getExtraField(row, 'source_contact_method'));
   const sourceBits = [sourceName, platform].filter(Boolean).join(' • ');
-  return `   🧭 ${copy.found}${firstSeen ? ` • ${copy.first}: ${firstSeen}` : ''}${sourceBits ? ` • ${copy.source}: ${sourceBits}` : ''}`;
+  return `   🧭 ${copy.found}${firstPosted ? ` • ${copy.posted}: ${firstPosted}` : ''}${firstSeen ? ` • ${copy.first}: ${firstSeen}` : ''}${added ? ` • ${copy.added}: ${added}` : ''}${sourceBits ? ` • ${copy.source}: ${sourceBits}` : ''}${audience ? ` • ${copy.audience}: ${audience}` : ''}${contactMethod ? ` • ${copy.contact}: ${contactMethod}` : ''}`;
 }
 
 function isSponsoredWhatsappRow(row = {}) {
@@ -4692,6 +4699,12 @@ function contextualPageRouteFromMessage(text = '') {
   return '';
 }
 
+function isUgNlisLandVerificationIntent(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return false;
+  return /\b(ugnlis|national land information system|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean);
+}
+
 // Step machine
 const STEPS = [
   'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
@@ -4784,6 +4797,14 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       optInSource: 'whatsapp_keyword_start'
     });
     return respond('✅ You are now subscribed for makaug updates. Reply MENU to continue.', 'main_menu');
+  }
+
+  if (isUgNlisLandVerificationIntent(cleanBody)) {
+    await patchSessionData(phone, {
+      land_verification_help_requested_at: new Date().toISOString(),
+      idle_resume_prompt: null
+    });
+    return respond(buildUgNlisAssistantReply({ language: lang, baseUrl: HOME_URL }), 'main_menu');
   }
 
   if (
@@ -4990,10 +5011,10 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && step !== 'main_menu'
     && !activeFlowOwnsNumericReply
     && globalRoute !== step
-    && !(globalRoute === 'search_type' && ['search_type', 'search_area'].includes(step))
+    && !(globalRoute === 'search_type' && ['search_type', 'search_area', 'agent_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
     && (
-      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
+      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract', 'ask_university', 'ask_distance', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
       && !['ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number', 'ask_selfie'].includes(step)
       || ['agent_area', 'support', 'account_help', 'report_listing', 'mortgage_help'].includes(globalRoute)
     )
@@ -6188,11 +6209,27 @@ async function processInboundRuntime({
   if (contactName) {
     deferWhatsappWork('WhatsApp contact-name session patch', () => patchSessionData(phone, { contact_name: contactName }));
   }
+  const sessionForMessage = contactName
+    ? {
+      ...session,
+      session_data: {
+        ...(session.session_data || {}),
+        contact_name: contactName
+      }
+    }
+    : session;
 
   let effectiveBody = normalizeInput(body);
   let transcriptRecord = null;
   let voiceTranscriptionUnavailable = false;
   const normalizedMediaType = String(mediaType || '').toLowerCase();
+  const inboundMediaCount = Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0));
+  const hasInlineImagePlaceholder = !mediaUrl
+    && (normalizedMediaType === 'image' || normalizedMediaType.startsWith('image/'))
+    && (inboundMediaCount > 0 || /^\s*\[image\]\s*$/i.test(String(body || '')));
+  const effectiveMediaUrl = hasInlineImagePlaceholder
+    ? `whatsapp-web://inline-image-${inboundMessageId || crypto.randomUUID()}`
+    : mediaUrl;
   const isAudioNote = mediaUrl && (
     normalizedMediaType.startsWith('audio/')
     || normalizedMediaType === 'voice'
@@ -6253,7 +6290,7 @@ async function processInboundRuntime({
 
   const messageType = sharedLocation
     ? 'location'
-    : (isAudioNote ? 'voice' : (mediaUrl ? 'media' : 'text'));
+    : (isAudioNote ? 'voice' : (effectiveMediaUrl ? 'media' : 'text'));
 
   await logWhatsappMessage({
     userPhone: phone,
@@ -6264,7 +6301,7 @@ async function processInboundRuntime({
       provider,
       body,
       effectiveBody,
-      mediaUrl,
+      mediaUrl: effectiveMediaUrl,
       mediaType: normalizedMediaType,
       sharedLocation,
       metadata: inboundMetadata
@@ -6341,7 +6378,7 @@ async function processInboundRuntime({
     : fastWhatsappRuntimeHints({
       text: effectiveBody,
       sessionLang,
-      mediaUrl,
+      mediaUrl: effectiveMediaUrl,
       sharedLocation
     });
 
@@ -6373,7 +6410,7 @@ async function processInboundRuntime({
     text: effectiveBody,
     language: classifierLanguage,
     step: sessionStep,
-    sessionData: session.session_data || {}
+    sessionData: sessionForMessage.session_data || {}
   });
   const baseDetectedLanguage = fastHints?.language || (transcriptRecord?.text
     ? resolveVoiceDetectedLanguage(transcriptRecord, effectiveBody, sessionLang)
@@ -6443,14 +6480,14 @@ async function processInboundRuntime({
   let { message, nextStep } = await processMessage(
     phone,
     effectiveBody,
-    mediaUrl,
+    effectiveMediaUrl,
     sharedLocation,
     {
       intent: intentResult,
       language: activeLang,
-      session,
+      session: sessionForMessage,
       mediaType: normalizedMediaType,
-      mediaCount: Math.max(0, Math.min(10, Number(inboundMetadata.media_count || inboundMetadata.mediaCount || 0) || 0)),
+      mediaCount: inboundMediaCount,
       transcript: transcriptRecord?.text || null
     }
   );

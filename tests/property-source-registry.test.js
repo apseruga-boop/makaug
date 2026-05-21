@@ -101,6 +101,9 @@ test('King dashboard exposes source database create and review controls', () => 
 test('daily source sweep is scriptable and keeps King queue guardrails', () => {
   assert.strictEqual(pkg.scripts['inventory:daily-source-sweep'], 'node scripts/run-daily-found-online-source-sweep.js');
   assert(dailySweepScript.includes('source_window_days: 90'), 'daily sweep should enforce the three-month source window');
+  assert(dailySweepScript.includes('daily_property_queue_minimum'), 'daily sweep should expose the 200/day property queue minimum');
+  assert(dailySweepScript.includes('hard_queue_rule'), 'daily sweep should report target gaps instead of padding weak records');
+  assert(dailySweepScript.includes('daily_target_status'), 'daily sweep should print evidence-ready target status');
   assert(dailySweepScript.includes('King dashboard pending review'), 'daily sweep should queue into King review');
   assert(dailySweepScript.includes('seedPropertySourceRegistry'), 'daily sweep should refresh the 15k source registry');
   assert(dailySweepScript.includes('seedSocialSearchAuthorisedListings'), 'daily sweep should queue eligible found-online listings');
@@ -113,6 +116,9 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(frontend.includes('How makaug finds property information'), 'about i18n should include source model copy');
   assert(frontend.includes('listingOnlineSourceDisclosureHtml'), 'property detail should render source disclosure');
   assert(frontend.includes('First seen by makaug'), 'source disclosure should show first-seen metadata');
+  assert(frontend.includes('Added to makaug'), 'source disclosure should show when makaug added the sourced record');
+  assert(frontend.includes('Audience'), 'source disclosure should show follower/subscriber metadata when available');
+  assert(frontend.includes('Contact via source'), 'source disclosure should support social/source contact fallback when no phone is published');
   assert(frontend.includes('Open source'), 'source disclosure should link to source evidence');
 });
 
@@ -123,11 +129,14 @@ test('social search candidate records carry source registry and first-seen field
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_registry_key'), 'social search listings should reference source registry keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes('first_seen_online_at'), 'social search listings should store first-seen online timestamp');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_platform'), 'social search listings should store source platform');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('source_audience_label'), 'social search listings should store source audience/follower metadata');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_method'), 'social search listings should store source contact fallback metadata');
 });
 
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {
   assert(whatsappRoute.includes('formatFoundOnlineSourceLine'), 'WhatsApp formatter should include found-online source line');
   assert(whatsappRoute.includes('first_seen_online_at'), 'WhatsApp source line should read first-seen metadata');
   assert(whatsappRoute.includes('source_name'), 'WhatsApp source line should read source name');
+  assert(whatsappRoute.includes('source_followers_label'), 'WhatsApp source line should include audience metadata when present');
   assert(whatsappRoute.includes('Every result opens on makaug'), 'WhatsApp results should still drive to makaug listing pages');
 });

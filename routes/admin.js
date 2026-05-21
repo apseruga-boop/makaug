@@ -101,6 +101,10 @@ const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
 const {
+  buildUgNlisLandVerificationPack,
+  sanitizeUgNlisLandVerificationFields
+} = require('../services/ugnlisLandVerificationService');
+const {
   retryEmailLog,
   retryNotification,
   retryWhatsAppLog
@@ -1367,6 +1371,7 @@ async function loadWhatsappConversationDetail(phone) {
 
 function publicPreviewExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const landVerification = buildUgNlisLandVerificationPack(extra);
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -1379,6 +1384,18 @@ function publicPreviewExtraFields(extraFields = {}) {
     youtube_url: extra.youtube_url || null,
     area_highlights: extra.area_highlights || '',
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
+    land_verification: landVerification,
+    ugnlis_title_volume: extra.ugnlis_title_volume || null,
+    ugnlis_title_folio: extra.ugnlis_title_folio || null,
+    ugnlis_county: extra.ugnlis_county || null,
+    ugnlis_block: extra.ugnlis_block || null,
+    ugnlis_plot: extra.ugnlis_plot || null,
+    ugnlis_transaction_number: extra.ugnlis_transaction_number || null,
+    ugnlis_search_reference: extra.ugnlis_search_reference || null,
+    ugnlis_search_date: extra.ugnlis_search_date || null,
+    ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
+    land_verification_status: landVerification.status,
+    land_verification_concierge_requested: landVerification.concierge_requested,
     translations: extra.translations && typeof extra.translations === 'object' ? extra.translations : {},
     size_raw: extra.size_raw || '',
     featured: extra.featured === true,
@@ -2139,6 +2156,9 @@ router.post('/social-search-authorised-listings/seed', async (req, res, next) =>
       created_properties: result.created_properties,
       existing_properties: result.existing_properties,
       review_queue_properties: result.review_queue_properties,
+      already_live_or_approved_properties: result.already_live_or_approved_properties?.length || 0,
+      source_review_count: result.source_review_count || 0,
+      daily_target_status: result.daily_target_status,
       agents: result.agents
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
@@ -2852,6 +2872,68 @@ router.patch('/properties/:id/review', async (req, res, next) => {
         details: error.details || undefined
       });
     }
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/land-verification', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      'SELECT id, listing_type, extra_fields FROM properties WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+
+    const patch = sanitizeUgNlisLandVerificationFields(req.body || {});
+    const notes = cleanText(req.body?.notes || req.body?.ugnlis_search_notes || '');
+    if (notes) patch.ugnlis_search_notes = notes;
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'No land verification fields supplied' });
+    }
+    patch.land_verification_updated_at = new Date().toISOString();
+
+    const updated = await db.query(
+      `UPDATE properties
+       SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, listing_type, status, extra_fields, updated_at`,
+      [req.params.id, JSON.stringify(patch)]
+    );
+
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, notes, delivery)
+       VALUES ($1, $2, $3, $4, $5::jsonb)`,
+      [
+        req.params.id,
+        adminActorId(req),
+        'land_verification_updated',
+        notes || null,
+        JSON.stringify({
+          provider: 'ugnlis',
+          status: patch.land_verification_status || null,
+          search_letter_url_present: !!patch.ugnlis_search_letter_url,
+          concierge_requested: patch.land_verification_concierge_requested === true
+        })
+      ]
+    );
+
+    await writeAudit('admin_land_verification_updated', {
+      property_id: req.params.id,
+      field_count: Object.keys(patch).length,
+      status: patch.land_verification_status || null
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        ...updated.rows[0],
+        land_verification: buildUgNlisLandVerificationPack(updated.rows[0])
+      }
+    });
+  } catch (error) {
     return next(error);
   }
 });

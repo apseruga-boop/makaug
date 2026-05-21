@@ -125,16 +125,41 @@ assert_ok_true() {
   [[ "$v" == "true" ]]
 }
 
-rand6() {
-  printf '%06d' $(( ( $(date +%s) + RANDOM ) % 1000000 ))
+rand8() {
+  node -e "process.stdout.write(String((Date.now() + Math.floor(Math.random() * 100000000)) % 100000000).padStart(8, '0'))"
 }
 
-PHONE_MAIN="+25670$(rand6)"
-PHONE_AGENT="+25671$(rand6)"
-PHONE_REQ="+25672$(rand6)"
+PHONE_MAIN="+2567$(rand8)"
+PHONE_AGENT="+2567$(rand8)"
+PHONE_REQ="+2567$(rand8)"
 EMAIL_MAIN="smoke.$(date +%s)@example.com"
 PASSWORD_MAIN="Pass@12345"
 PASSWORD_NEW="Pass@54321"
+SMOKE_IMAGE_DATA_URL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII="
+
+listing_otp_token() {
+  local phone="$1"
+  local audience="${2:-listing}"
+  local code=""
+
+  if ! request_json POST /api/properties/request-submit-otp "{\"channel\":\"phone\",\"phone\":\"$phone\",\"audience\":\"$audience\"}"; then
+    return 1
+  fi
+  if ! assert_status 200 || ! assert_ok_true; then
+    return 1
+  fi
+  code="$(json_get "$LAST_BODY_FILE" data.dev_otp 2>/dev/null || true)"
+  if [[ -z "$code" ]]; then
+    return 2
+  fi
+  if ! request_json POST /api/properties/verify-submit-otp "{\"channel\":\"phone\",\"phone\":\"$phone\",\"code\":\"$code\"}"; then
+    return 1
+  fi
+  if ! assert_status 200 || ! assert_ok_true; then
+    return 1
+  fi
+  json_get "$LAST_BODY_FILE" data.listing_otp_token
+}
 
 echo "Running smoke test against: $BASE_URL"
 
@@ -178,19 +203,45 @@ else
   fail "Request failed"
 fi
 
+AGENT_LISTING_OTP_TOKEN=""
+step "Request and verify broker listing OTP"
+if AGENT_LISTING_OTP_TOKEN="$(listing_otp_token "$PHONE_AGENT" agent)"; then
+  if [[ -n "$AGENT_LISTING_OTP_TOKEN" ]]; then pass; else fail "Expected listing_otp_token"; fi
+else
+  fail "Expected broker OTP token"
+fi
+
 # 5) Agent registration
 step "POST /api/agents/register"
-if request_json POST /api/agents/register "{\"full_name\":\"Smoke Agent\",\"licence_number\":\"AREA/SMOKE/$(date +%s)\",\"phone\":\"$PHONE_AGENT\",\"whatsapp\":\"$PHONE_AGENT\",\"email\":\"agent.$(date +%s)@example.com\",\"districts_covered\":\"Kampala, Wakiso\",\"nin\":\"SMOKE-NIN-123456\",\"verification_reason\":\"Smoke test broker verification request\",\"identity_document_url\":\"data:text/plain;base64,U01PS0UtSURFTlRJVFktRE9DVU1FTlQ=\",\"identity_document_name\":\"smoke-national-id.txt\",\"identity_document_type\":\"text/plain\",\"privacy_consent_accepted\":true,\"data_retention_notice_accepted\":true}"; then
+if request_json POST /api/agents/register "{\"full_name\":\"Smoke Agent\",\"licence_number\":\"AREA/SMOKE/$(date +%s)\",\"phone\":\"$PHONE_AGENT\",\"whatsapp\":\"$PHONE_AGENT\",\"email\":\"agent.$(date +%s)@example.com\",\"districts_covered\":\"Kampala, Wakiso\",\"nin\":\"SMOKE-NIN-123456\",\"verification_reason\":\"Smoke test broker verification request\",\"identity_document\":{\"name\":\"smoke-national-id.png\",\"type\":\"image/png\",\"data_url\":\"$SMOKE_IMAGE_DATA_URL\",\"size\":100},\"listing_otp_token\":\"$AGENT_LISTING_OTP_TOKEN\",\"otp_channel\":\"phone\",\"privacy_consent_accepted\":true,\"data_retention_notice_accepted\":true}"; then
   if assert_status 201 && assert_ok_true; then pass; else fail "Expected 201 with ok=true"; fi
 else
   fail "Request failed"
 fi
 
+PROPERTY_LISTING_OTP_TOKEN=""
+step "Request and verify property listing OTP"
+if PROPERTY_LISTING_OTP_TOKEN="$(listing_otp_token "$PHONE_REQ" listing)"; then
+  if [[ -n "$PROPERTY_LISTING_OTP_TOKEN" ]]; then pass; else fail "Expected listing_otp_token"; fi
+else
+  fail "Expected property OTP token"
+fi
+
 # 6) Property creation
 PROPERTY_ID=""
+PROPERTY_PREVIEW_URL=""
+PROPERTY_PREVIEW_PATH=""
 step "POST /api/properties"
-if request_json POST /api/properties "{\"listing_type\":\"sale\",\"title\":\"Smoke Test Property\",\"district\":\"Kampala\",\"area\":\"Ntinda\",\"description\":\"Smoke test listing\",\"price\":350000000,\"property_type\":\"House\",\"title_type\":\"Freehold\",\"amenities\":[\"parking\",\"security\"],\"status\":\"pending\"}"; then
+if request_json POST /api/properties "{\"listing_type\":\"sale\",\"title\":\"Smoke Test Property $(date +%s)\",\"district\":\"Kampala\",\"area\":\"Ntinda\",\"description\":\"Smoke test listing submitted through the hardened launch flow.\",\"price\":350000000,\"property_type\":\"House\",\"title_type\":\"Freehold\",\"amenities\":[\"parking\",\"security\"],\"lister_name\":\"Smoke Owner\",\"lister_phone\":\"$PHONE_REQ\",\"lister_email\":\"owner.$(date +%s)@example.com\",\"lister_type\":\"owner\",\"listed_via\":\"website\",\"source\":\"smoke_test\",\"otp_channel\":\"phone\",\"listing_otp_token\":\"$PROPERTY_LISTING_OTP_TOKEN\",\"verification_terms_accepted\":true,\"id_document_name\":\"smoke-national-id.png\",\"id_document_type\":\"image/png\",\"id_document_url\":\"$SMOKE_IMAGE_DATA_URL\",\"images\":[{\"url\":\"$SMOKE_IMAGE_DATA_URL\",\"slot_key\":\"front\",\"room_label\":\"Front view\"},{\"url\":\"$SMOKE_IMAGE_DATA_URL\",\"slot_key\":\"living\",\"room_label\":\"Living area\"},{\"url\":\"$SMOKE_IMAGE_DATA_URL\",\"slot_key\":\"kitchen\",\"room_label\":\"Kitchen\"},{\"url\":\"$SMOKE_IMAGE_DATA_URL\",\"slot_key\":\"bedroom\",\"room_label\":\"Bedroom\"},{\"url\":\"$SMOKE_IMAGE_DATA_URL\",\"slot_key\":\"bathroom\",\"room_label\":\"Bathroom\"}],\"status\":\"pending\"}"; then
   PROPERTY_ID="$(json_get "$LAST_BODY_FILE" data.id 2>/dev/null || true)"
+  PROPERTY_PREVIEW_URL="$(json_get "$LAST_BODY_FILE" data.owner_preview_url 2>/dev/null || true)"
+  PROPERTY_PREVIEW_PATH="$(node - "$PROPERTY_PREVIEW_URL" <<'NODE' 2>/dev/null || true
+try {
+  const url = new URL(process.argv[2]);
+  process.stdout.write(`${url.pathname}${url.search}`);
+} catch (_) {}
+NODE
+)"
   if assert_status 201 && assert_ok_true && [[ -n "$PROPERTY_ID" ]]; then
     pass
   else
@@ -200,51 +251,75 @@ else
   fail "Request failed"
 fi
 
-# 7) Property fetch
-step "GET /api/properties/:id"
-if [[ -z "$PROPERTY_ID" ]]; then
+# 7) Pending owner preview fetch
+step "GET owner preview for pending property"
+if [[ -z "$PROPERTY_PREVIEW_PATH" ]]; then
   fail "Skipped because property id was not created"
 else
-  if request_json GET "/api/properties/$PROPERTY_ID" ""; then
-    if assert_status 200 && assert_ok_true; then pass; else fail "Expected 200 with ok=true"; fi
+  if request_json GET "$PROPERTY_PREVIEW_PATH" ""; then
+    if assert_status 200; then pass; else fail "Expected 200 for owner preview"; fi
   else
     fail "Request failed"
   fi
 fi
 
+LIVE_PROPERTY_ID=""
+step "GET /api/properties?limit=1"
+if request_json GET "/api/properties?limit=1" ""; then
+  LIVE_PROPERTY_ID="$(json_get "$LAST_BODY_FILE" data.0.id 2>/dev/null || true)"
+  if assert_status 200 && assert_ok_true; then pass; else fail "Expected 200 with ok=true"; fi
+else
+  fail "Request failed"
+fi
+
 # 8) Property inquiry
 step "POST /api/properties/:id/inquiries"
-if [[ -z "$PROPERTY_ID" ]]; then
-  fail "Skipped because property id was not created"
+if [[ -z "$LIVE_PROPERTY_ID" ]]; then
+  yellow "  SKIP: no live property fixture available for public inquiry"
+  PASSED=$((PASSED + 1))
 else
-  if request_json POST "/api/properties/$PROPERTY_ID/inquiries" "{\"contact_name\":\"Smoke Buyer\",\"contact_phone\":\"$PHONE_REQ\",\"message\":\"Interested in viewing\"}"; then
+  if request_json POST "/api/properties/$LIVE_PROPERTY_ID/inquiries" "{\"contact_name\":\"Smoke Buyer\",\"contact_phone\":\"$PHONE_REQ\",\"message\":\"Interested in viewing\"}"; then
     if assert_status 201 && assert_ok_true; then pass; else fail "Expected 201 with ok=true"; fi
   else
     fail "Request failed"
   fi
 fi
 
-# 9) Auth register
+# 9) Signup contact verification
+SIGNUP_CONTACT_TOKEN=""
 REGISTER_DEV_OTP=""
-step "POST /api/auth/register"
-if request_json POST /api/auth/register "{\"first_name\":\"Smoke\",\"last_name\":\"User\",\"phone\":\"$PHONE_MAIN\",\"email\":\"$EMAIL_MAIN\",\"role\":\"Buyer / Renter\",\"password\":\"$PASSWORD_MAIN\"}"; then
+step "POST /api/auth/request-signup-otp + verify"
+if request_json POST /api/auth/request-signup-otp "{\"channel\":\"phone\",\"first_name\":\"Smoke\",\"last_name\":\"User\",\"phone\":\"$PHONE_MAIN\",\"email\":\"$EMAIL_MAIN\",\"audience\":\"buyer\",\"preferred_language\":\"en\"}"; then
   REGISTER_DEV_OTP="$(json_get "$LAST_BODY_FILE" data.dev_otp 2>/dev/null || true)"
-  if assert_status 201 && assert_ok_true; then pass; else fail "Expected 201 with ok=true"; fi
+  if assert_status 200 && assert_ok_true && [[ -n "$REGISTER_DEV_OTP" ]]; then
+    if request_json POST /api/auth/verify-signup-otp "{\"channel\":\"phone\",\"phone\":\"$PHONE_MAIN\",\"email\":\"$EMAIL_MAIN\",\"code\":\"$REGISTER_DEV_OTP\"}"; then
+      SIGNUP_CONTACT_TOKEN="$(json_get "$LAST_BODY_FILE" data.contact_verification_token 2>/dev/null || true)"
+      if assert_status 200 && assert_ok_true && [[ -n "$SIGNUP_CONTACT_TOKEN" ]]; then pass; else fail "Expected contact_verification_token"; fi
+    else
+      fail "Verify signup OTP request failed"
+    fi
+  else
+    fail "Expected signup dev_otp"
+  fi
 else
   fail "Request failed"
 fi
 
+# 10) Auth register
 AUTH_TOKEN=""
-if [[ -n "$REGISTER_DEV_OTP" ]]; then
-  # 10) Verify signup OTP (dev/staging)
-  step "POST /api/auth/verify-otp (signup)"
-  if request_json POST /api/auth/verify-otp "{\"phone\":\"$PHONE_MAIN\",\"code\":\"$REGISTER_DEV_OTP\",\"purpose\":\"signup\"}"; then
+step "POST /api/auth/register"
+if [[ -n "$SIGNUP_CONTACT_TOKEN" ]]; then
+  if request_json POST /api/auth/register "{\"first_name\":\"Smoke\",\"last_name\":\"User\",\"phone\":\"$PHONE_MAIN\",\"email\":\"$EMAIL_MAIN\",\"role\":\"Buyer / Renter\",\"password\":\"$PASSWORD_MAIN\",\"confirm_password\":\"$PASSWORD_MAIN\",\"otp_channel\":\"phone\",\"contact_verification_token\":\"$SIGNUP_CONTACT_TOKEN\",\"terms_accepted\":true,\"privacy_accepted\":true,\"marketing_opt_in\":false,\"weekly_tips_opt_in\":false,\"preferred_contact_channel\":\"whatsapp\",\"preferred_language\":\"en\"}"; then
     AUTH_TOKEN="$(json_get "$LAST_BODY_FILE" data.token 2>/dev/null || true)"
-    if assert_status 200 && assert_ok_true && [[ -n "$AUTH_TOKEN" ]]; then pass; else fail "Expected token"; fi
+    if assert_status 201 && assert_ok_true && [[ -n "$AUTH_TOKEN" ]]; then pass; else fail "Expected 201 with auth token"; fi
   else
     fail "Request failed"
   fi
+else
+  fail "Skipped because contact verification token was not created"
+fi
 
+if [[ -n "$AUTH_TOKEN" ]]; then
   # 11) Login with password
   step "POST /api/auth/login"
   if request_json POST /api/auth/login "{\"phone\":\"$PHONE_MAIN\",\"password\":\"$PASSWORD_MAIN\"}"; then

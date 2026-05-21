@@ -56,6 +56,10 @@ const {
   isPointInUganda,
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
+const {
+  buildUgNlisLandVerificationPack,
+  sanitizeUgNlisLandVerificationFields
+} = require('../services/ugnlisLandVerificationService');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -271,6 +275,10 @@ function canUseOwnerEditToken(property, token) {
 
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const landVerification = buildUgNlisLandVerificationPack(extra);
+  const safeSourceUrls = Array.isArray(extra.source_urls)
+    ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
+    : [];
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -281,9 +289,50 @@ function publicExtraFields(extraFields = {}) {
     preferred_contact_method: extra.preferred_contact_method || null,
     video_url: extra.video_url || null,
     youtube_url: extra.youtube_url || null,
+    found_online: extra.found_online === true,
+    social_search_candidate: extra.social_search_candidate === true,
+    source_badge: extra.source_badge || null,
+    source_batch: extra.source_batch || null,
+    source_registry_key: extra.source_registry_key || null,
+    source_listing_key: extra.source_listing_key || null,
+    source_platform: extra.source_platform || null,
+    source_type: extra.source_type || null,
+    source_name: extra.source_name || null,
+    source_agent_name: extra.source_agent_name || extra.source_name || null,
+    source_url: extra.source_url || null,
+    source_urls: safeSourceUrls,
+    first_seen_online_at: extra.first_seen_online_at || null,
+    first_seen_online_label: extra.first_seen_online_label || null,
+    first_posted_online_at: extra.first_posted_online_at || null,
+    first_posted_online_label: extra.first_posted_online_label || null,
+    source_published_at: extra.source_published_at || null,
+    source_published_label: extra.source_published_label || null,
+    original_publish_date_status: extra.original_publish_date_status || null,
+    added_to_makaug_at: extra.added_to_makaug_at || null,
+    added_to_makaug_label: extra.added_to_makaug_label || null,
+    source_followers_label: extra.source_followers_label || null,
+    source_audience_label: extra.source_audience_label || null,
+    source_contact_url: extra.source_contact_url || null,
+    source_contact_label: extra.source_contact_label || null,
+    source_contact_method: extra.source_contact_method || null,
+    source_contact_platform: extra.source_contact_platform || null,
+    source_channel_url: extra.source_channel_url || extra.youtube_channel_url || null,
+    youtube_channel_url: extra.youtube_channel_url || extra.source_channel_url || null,
     area_highlights: extra.area_highlights || '',
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
+    land_verification: landVerification,
+    ugnlis_title_volume: extra.ugnlis_title_volume || null,
+    ugnlis_title_folio: extra.ugnlis_title_folio || null,
+    ugnlis_county: extra.ugnlis_county || null,
+    ugnlis_block: extra.ugnlis_block || null,
+    ugnlis_plot: extra.ugnlis_plot || null,
+    ugnlis_transaction_number: extra.ugnlis_transaction_number || null,
+    ugnlis_search_reference: extra.ugnlis_search_reference || null,
+    ugnlis_search_date: extra.ugnlis_search_date || null,
+    ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
+    land_verification_status: landVerification.status,
+    land_verification_concierge_requested: landVerification.concierge_requested,
     featured: extra.featured === true,
     featured_at: extra.featured_at || null
   };
@@ -300,6 +349,7 @@ function publicPropertyRow(property, images = []) {
   return {
     ...safeProperty,
     extra_fields: publicExtraFields(property?.extra_fields),
+    land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),
     featured: safeProperty.featured === true || String(safeProperty.extra_fields?.featured || '').toLowerCase() === 'true',
     featured_at: safeProperty.featured_at || safeProperty.extra_fields?.featured_at || null,
     id_number_present: !!property?.id_number,
@@ -1024,7 +1074,8 @@ async function listPropertiesHandler(req, res, next) {
           distance_km: distanceKm,
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
-          distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2))
+          distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
+          extra_fields: publicExtraFields(adminExtraFields || {})
         };
         if (adminAccess) {
           responseRow.source = rowSource || null;
@@ -1586,6 +1637,13 @@ router.post('/', async (req, res, next) => {
     if (availableFrom) extraFields.available_from = availableFrom;
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
+    }
+    const landVerificationFields = sanitizeUgNlisLandVerificationFields({
+      ...extraFields,
+      ...body
+    });
+    if (listingType === 'land' || Object.keys(landVerificationFields).length) {
+      Object.assign(extraFields, landVerificationFields);
     }
     if (brokerCanSkipOwnerIdentity) {
       extraFields.broker_submission = true;

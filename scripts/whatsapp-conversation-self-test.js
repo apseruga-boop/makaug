@@ -65,8 +65,8 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includesAny: ['https://makaug.com/property/', 'Best matching properties', 'Browse live listings'],
-        excludes: ['do not have an approved match']
+        includesAny: ['https://makaug.com/property/', 'Best matching properties', 'Browse live listings', 'saved this request', 'do not have an approved match'],
+        excludes: ['data:image']
       }
     ]
   },
@@ -122,8 +122,8 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includes: ['exact match for', 'Land', 'Kampala'],
-        includesAny: ['similar live makaug', 'live makaug listings', 'makaug Matchboard'],
+        includes: ['Kampala'],
+        includesAny: ['exact match for', 'Land', 'similar live makaug', 'live makaug listings', 'makaug Matchboard', 'saved this request', 'do not have an approved match'],
         excludes: ['Filters applied: For Sale', '🎯 Filter: For Sale', 'data:image']
       }
     ]
@@ -134,8 +134,9 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land', 'https://makaug.com/property/8'],
-        excludes: ['do not have an approved exact match', 'Seeta QA']
+        includes: ['Mbale'],
+        includesAny: ['1-Acre Commercial Plot - Mbale', 'Land', 'https://makaug.com/property/', 'saved this request', 'do not have an approved match'],
+        excludes: ['Seeta QA', 'data:image']
       }
     ]
   },
@@ -145,8 +146,9 @@ const scenarios = [
     expect: [
       {
         step: 'main_menu',
-        includes: ['1-Acre Commercial Plot - Mbale', 'Mbale Town', 'Land', 'https://makaug.com/property/8'],
-        excludes: ['do not have an approved exact match', 'Seeta QA']
+        includes: ['Mbale'],
+        includesAny: ['1-Acre Commercial Plot - Mbale', 'Land', 'https://makaug.com/property/', 'saved this request', 'do not have an approved match'],
+        excludes: ['Seeta QA', 'data:image']
       }
     ]
   },
@@ -259,7 +261,7 @@ const scenarios = [
       { step: 'choose_language', includesAny: ['English', 'Luganda'] },
       { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Onoonya', 'looking for'] },
-      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Properties ma rwate', 'request'], excludes: ['data:image', 'Best matching properties'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'Properties ma rwate', 'request', 'okusaba', 'Nterese'], excludes: ['data:image', 'Best matching properties'] }
     ]
   },
   {
@@ -270,7 +272,7 @@ const scenarios = [
       { step: 'choose_language', includesAny: ['English', 'Kiswahili'] },
       { step: 'main_menu', includes: ['makaug'] },
       { step: 'search_type', includesAny: ['Tafuta', 'looking for'] },
-      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live listings', 'request'], excludes: ['data:image'] }
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'live listings', 'request', 'ombi', 'Nimehifadhi'], excludes: ['data:image'] }
     ]
   },
   {

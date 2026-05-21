@@ -884,7 +884,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, and reviewed online sources in one place.",
+    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land in one place.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1037,7 +1037,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
-    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, n'ensibuko eziri online ezikeberebwa mu kifo kimu.",
+    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, ensibuko za online ezikeberebwa, n'okulungamizibwa ku UgNLIS ku ttaka mu kifo kimu.",
     heroRent: "Pangisa",
     heroBuy: "Gula",
     heroCommercial: "Busuubuzi",
@@ -1165,7 +1165,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Jukwaa la bure la mali Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
-    heroSubtitle: "Tafuta mali Uganda kama search engine: matangazo ya wamiliki, brokers, na vyanzo vya mtandaoni vilivyopitiwa sehemu moja.",
+    heroSubtitle: "Tafuta mali Uganda kama search engine: listings za wamiliki, brokers, vyanzo vya mtandaoni vilivyopitiwa, na mwongozo wa UgNLIS kwa ardhi sehemu moja.",
     heroRent: "Kupanga",
     heroBuy: "Nunua",
     heroCommercial: "Biashara",
@@ -1292,7 +1292,7 @@ const I18N_UI = {
     signIn: "Dony",
     heroBadge: "Uganda's #1 free property platform",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
     heroSearch: "Yeny",
     langBanner: "Tii ki makaug i lok 7 me Uganda",
     areaOnly: "Kabedo manok",
@@ -1324,7 +1324,7 @@ const I18N_UI = {
     signIn: "Ingira",
     heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
     heroSearch: "Shanga",
     langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
     areaOnly: "Aho honyine",
@@ -1356,7 +1356,7 @@ const I18N_UI = {
     signIn: "Injira",
     heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
     heroSearch: "Shaka",
     langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
     areaOnly: "Akarere aka gusa",
@@ -1388,7 +1388,7 @@ const I18N_UI = {
     signIn: "Yingira",
     heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, and reviewed online sources.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
     heroSearch: "Noonia",
     langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
     areaOnly: "Ekitundu kino kyonka",
@@ -1827,6 +1827,17 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
     "about.searchRemovalTitle": "Claim or remove",
     "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
+    "about.landHubLabel": "Land verification support",
+    "about.landHubTitle": "UgNLIS guidance without duplicating government services",
+    "about.landHubText": "For land listings, makaug can guide buyers, owners, and brokers toward Uganda's official National Land Information System, store title-search evidence, and show whether a search letter or title reference has been supplied. Official title searches and transaction tracking remain on UgNLIS.",
+    "about.landHubPortal": "Open UgNLIS portal",
+    "about.landHubWhatsapp": "Ask on WhatsApp",
+    "about.landHubOfficialTitle": "Official source of truth",
+    "about.landHubOfficialText": "We link users to UgNLIS for official land search and transaction tracking instead of copying or replacing the Ministry system.",
+    "about.landHubEvidenceTitle": "Search-letter evidence",
+    "about.landHubEvidenceText": "King review can record title volume, folio, block, plot, search reference, and a search-letter link so the public listing shows clear evidence status.",
+    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
+    "about.landHubConciergeText": "When someone needs help, makaug can explain the steps, collect missing title details, and remind them to complete the official search on UgNLIS.",
     "about.helpLabel": "Who we help",
     "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
@@ -1914,6 +1925,17 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Awo data eva mu source teteekebwa live butereevu. King dashboard ekebera location, photos, contact details, duplicates, ownership signals, n'okukkiriza kwa agent nga approval tennaba.",
     "about.searchRemovalTitle": "Claim oba remove",
     "about.searchRemovalText": "Owners ne agents basobola oku-claim, okulongoosa, okukyusa photos, okutereeza details, oba okusaba listing eggyibweko. makaug ekuuma attribution ne review trail.",
+    "about.landHubLabel": "Obuyambi mu kukakasa ettaka",
+    "about.landHubTitle": "Okulungamizibwa ku UgNLIS nga tetuddiddemu mirimu gya gavumenti",
+    "about.landHubText": "Ku listings z'ettaka, makaug esobola okulungamya buyers, owners, ne brokers okugenda ku National Land Information System ya Uganda, okutereka obujulizi bwa title search, n'okulaga oba search letter oba title reference eweeredde. Okunoonyereza okutongole ku title n'okulondoola transactions bisigala ku UgNLIS.",
+    "about.landHubPortal": "Ggulawo portal ya UgNLIS",
+    "about.landHubWhatsapp": "Buuza ku WhatsApp",
+    "about.landHubOfficialTitle": "Ensibuko entongole",
+    "about.landHubOfficialText": "Tuyunga users ku UgNLIS okukola land search n'okulondoola transactions mu ngeri entongole, mu kifo ky'okukoppa oba okudda mu kifo kya system ya Ministry.",
+    "about.landHubEvidenceTitle": "Obujulizi bwa search letter",
+    "about.landHubEvidenceText": "King review esobola okutereka title volume, folio, block, plot, search reference, ne search-letter link listing ya public erage status y'obujulizi mu ngeri etegeerekeka.",
+    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
+    "about.landHubConciergeText": "Omuntu bw'aba yeetaaga obuyambi, makaug emunnyonnyola emitendera, ekuŋŋaanya title details ezibula, era emujjukiza okukola search entongole ku UgNLIS.",
     "about.helpLabel": "Be tuyamba",
     "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
@@ -2001,6 +2023,17 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Data ya source haiwekwi live bila ukaguzi. King dashboard hukagua location, photos, contact details, duplicates, ownership signals, na ruhusa ya agent kabla ya approval.",
     "about.searchRemovalTitle": "Claim au remove",
     "about.searchRemovalText": "Wamiliki na agents wanaweza claim, update, kubadilisha photos, kusahihisha details, au kuomba removal. makaug huhifadhi attribution na review trail.",
+    "about.landHubLabel": "Msaada wa uhakiki wa ardhi",
+    "about.landHubTitle": "Mwongozo wa UgNLIS bila kurudia huduma za serikali",
+    "about.landHubText": "Kwa listings za ardhi, makaug inaweza kuwaongoza wanunuzi, wamiliki, na brokers kuelekea National Land Information System rasmi ya Uganda, kuhifadhi ushahidi wa title search, na kuonyesha kama search letter au title reference imetolewa. Utafutaji rasmi wa hati na ufuatiliaji wa transactions hubaki kwenye UgNLIS.",
+    "about.landHubPortal": "Fungua portal ya UgNLIS",
+    "about.landHubWhatsapp": "Uliza WhatsApp",
+    "about.landHubOfficialTitle": "Chanzo rasmi cha ukweli",
+    "about.landHubOfficialText": "Tunawaelekeza users UgNLIS kwa land search rasmi na transaction tracking badala ya kunakili au kuchukua nafasi ya mfumo wa Ministry.",
+    "about.landHubEvidenceTitle": "Ushahidi wa search letter",
+    "about.landHubEvidenceText": "King review inaweza kuhifadhi title volume, folio, block, plot, search reference, na search-letter link ili public listing ionyeshe status ya ushahidi kwa uwazi.",
+    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
+    "about.landHubConciergeText": "Mtu akihitaji msaada, makaug inaweza kueleza hatua, kukusanya title details zilizokosekana, na kumkumbusha kukamilisha official search kwenye UgNLIS.",
     "about.helpLabel": "Tunasaidia nani",
     "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
@@ -8072,7 +8105,7 @@ function buildLocalAdminSnapshot() {
     return bd - ad;
   });
   const listings = allListings.filter((p) => p.moderation_status !== "deleted");
-  const pendingListings = listings.filter((p) => p.moderation_status === "pending").slice(0, 50);
+  const pendingListings = listings.filter(adminIsPendingReviewSeedItem).slice(0, 50);
   const approvedListings = listings.filter((p) => p.moderation_status === "approved");
   const rejectedListings = listings.filter((p) => p.moderation_status === "rejected");
   const hiddenListings = listings.filter((p) => p.moderation_status === "hidden");
@@ -8819,7 +8852,7 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }).catch(() => ({ data: [] })),
     apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
   ]);
-  const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing);
+  const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
   const allListings = (allRows || []).map(normalizeRemoteAdminListing);
   let liveListings = allListings.filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status)));
   try {
@@ -8885,7 +8918,8 @@ function renderAdminPendingRows(listings) {
   const wrap = document.getElementById("admin-pending-table");
   if (!wrap) return;
   ensureAdminSourcedCandidateControls();
-  const cleanListings = adminApplyLaunchCleanFilter(listings);
+  adminScrubPendingSeedStatusPanel();
+  const cleanListings = adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem);
   if (!cleanListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
     return;
@@ -8970,15 +9004,48 @@ function ensureAdminSourcedCandidateControls() {
   if (header) header.appendChild(actions);
 }
 
-function adminSeededListingSummaryHtml(item = {}) {
+function adminSeedItemStatuses(item = {}) {
+  return [
+    item.status,
+    item.moderation_status,
+    item.moderation_stage,
+    item.review_status,
+  ].map((value) => String(value || "").trim().toLowerCase()).filter(Boolean);
+}
+
+function adminIsFinalReviewSeedItem(item = {}) {
+  if (item.already_live_or_approved === true) return true;
+  const finalStatuses = new Set(["approved", "live", "published", "sold", "hidden", "deleted", "rejected", "archived"]);
+  return adminSeedItemStatuses(item).some((status) => finalStatuses.has(status));
+}
+
+function adminIsPendingReviewSeedItem(item = {}) {
+  if (adminIsFinalReviewSeedItem(item)) return false;
+  const status = adminSeedItemStatuses(item)[0] || "pending";
+  return Boolean(status && !["deleted", "archived", "rejected", "hidden"].includes(status));
+}
+
+function adminUniqueSeedItems(items = []) {
+  const seen = new Set();
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const key = String(item?.id || item?.property_id || item?.source_listing_key || item?.inquiry_reference || `${item?.title || ""}:${item?.property_url || ""}`).trim();
+    const stableKey = key || JSON.stringify(item || {});
+    if (seen.has(stableKey)) return false;
+    seen.add(stableKey);
+    return true;
+  });
+}
+
+function adminSeededListingSummaryHtml(item = {}, options = {}) {
+  if (options.pendingPanel && !adminIsPendingReviewSeedItem(item)) return "";
   const id = String(item.id || item.property_id || "").trim();
   const idArg = id ? adminListingIdArg(id) : "''";
   const publicUrl = String(item.property_url || "").trim();
   const previewUrl = String(item.owner_preview_url || "").trim();
   const videoUrl = String(item.youtube_url || item.video_url || "").trim();
-  const status = String(item.status || item.moderation_stage || (item.already_present ? "already present" : "")).trim();
+  const status = adminSeedItemStatuses(item)[0] || String(item.already_present ? "already present" : "").trim();
   return `
-    <div class="rounded-lg border border-blue-100 bg-white p-2">
+    <div class="rounded-lg border border-blue-100 bg-white p-2" data-admin-seed-status="${adminAttr(status || "")}" data-admin-seed-final="${adminIsFinalReviewSeedItem(item) ? "true" : "false"}">
       <div class="font-bold text-blue-950">${adminEscape(item.title || "Listing")}</div>
       ${status ? `<div class="text-[11px] text-blue-700 mt-0.5">Status: ${adminEscape(status)}</div>` : ""}
       <div class="mt-1 flex gap-2 flex-wrap">
@@ -8987,6 +9054,49 @@ function adminSeededListingSummaryHtml(item = {}) {
         ${previewUrl ? `<a href="${adminAttr(previewUrl)}" target="_blank" rel="noopener" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-bold">Private Preview Link</a>` : ""}
         ${publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-1 rounded text-[11px] font-bold">Public Link After Approval</a>` : ""}
         ${videoUrl ? `<a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">YouTube Source</a>` : ""}
+      </div>
+    </div>`;
+}
+
+function adminScrubPendingSeedStatusPanel(root) {
+  const container = root || document.getElementById("admin-sourced-candidates-status");
+  if (!container) return;
+  const finalStatuses = new Set(["approved", "live", "published", "sold", "hidden", "deleted", "rejected", "archived"]);
+  container.querySelectorAll("[data-admin-seed-final='true']").forEach((node) => node.remove());
+  container.querySelectorAll("[data-admin-seed-status]").forEach((node) => {
+    const status = String(node.getAttribute("data-admin-seed-status") || "").trim().toLowerCase();
+    if (finalStatuses.has(status)) node.remove();
+  });
+  container.querySelectorAll(".rounded-lg").forEach((node) => {
+    const statusMatch = String(node.textContent || "").match(/\bStatus:\s*([a-z _-]+)/i);
+    const status = statusMatch ? statusMatch[1].trim().toLowerCase() : "";
+    if (finalStatuses.has(status)) node.remove();
+  });
+}
+
+function adminSourceReviewReasonLabel(reason = "") {
+  const normalized = String(reason || "").toLowerCase();
+  if (normalized === "agent_missing_public_contact_path" || normalized === "missing_any_public_contact_path") {
+    return "Needs source/contact review";
+  }
+  if (normalized === "missing_property_evidence") return "Needs property evidence";
+  if (normalized === "image_quality_too_low") return "Needs clearer images";
+  return normalized ? normalized.replace(/_/g, " ") : "Source review needed";
+}
+
+function adminSourceReviewRecordSummaryHtml(item = {}) {
+  const sourceUrl = String(item.source_url || item.sourceContactUrl || item.source_contact_url || "").trim();
+  const sourceContactUrl = String(item.source_contact_url || item.sourceContactUrl || sourceUrl || "").trim();
+  const title = item.title || item.source_name || item.name || item.key || "Source record";
+  const reason = adminSourceReviewReasonLabel(item.reason);
+  return `
+    <div class="rounded-lg border border-amber-100 bg-white p-2">
+      <div class="font-bold text-amber-950">${adminEscape(title)}</div>
+      <div class="text-[11px] text-amber-800 mt-0.5">${adminEscape(reason)}</div>
+      <div class="mt-1 flex gap-2 flex-wrap">
+        ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-bold">Open source</a>` : ""}
+        ${sourceContactUrl && sourceContactUrl !== sourceUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener" class="border border-emerald-300 text-emerald-800 hover:bg-emerald-50 px-2 py-1 rounded text-[11px] font-bold">Open source contact</a>` : ""}
+        <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-2 py-1 rounded text-[11px] font-bold">View Source Database</button>
       </div>
     </div>`;
 }
@@ -9117,20 +9227,71 @@ async function adminSeedSocialSearchAuthorisedListings() {
     const data = response?.data || {};
     const samples = Array.isArray(data.listings) ? data.listings : [];
     const alreadyPresent = Array.isArray(data.already_present_properties) ? data.already_present_properties : [];
-    const visibleSamples = Array.isArray(data.queued_listings) && data.queued_listings.length
-      ? data.queued_listings
-      : [...samples, ...alreadyPresent];
+    const reviewQueueListings = Array.isArray(data.review_queue_listings)
+      ? data.review_queue_listings
+      : Array.isArray(data.queued_listings)
+        ? data.queued_listings
+        : samples;
+    const visibleSamples = adminUniqueSeedItems(reviewQueueListings.filter(adminIsPendingReviewSeedItem));
+    const leakedFinalQueueItems = reviewQueueListings.filter(adminIsFinalReviewSeedItem);
+    const alreadyLiveOrApproved = adminUniqueSeedItems([
+      ...(Array.isArray(data.already_live_or_approved_properties)
+        ? data.already_live_or_approved_properties
+        : alreadyPresent.filter(adminIsFinalReviewSeedItem)),
+      ...leakedFinalQueueItems,
+    ]);
+    const alreadyPendingReview = adminUniqueSeedItems(
+      (Array.isArray(data.already_present_review_queue_properties)
+        ? data.already_present_review_queue_properties
+        : alreadyPresent.filter(adminIsPendingReviewSeedItem)).filter(adminIsPendingReviewSeedItem)
+    );
+    const sourceReviewRecords = Array.isArray(data.source_review_records)
+      ? data.source_review_records
+      : [];
     const agentCount = Array.isArray(data.agents) ? data.agents.length : 0;
     const skipped = Array.isArray(data.skipped_listings) ? data.skipped_listings : [];
-    const alreadyQueuedCount = alreadyPresent.length || skipped.filter((item) => item?.reason === "already_queued").length;
+    const alreadyPresentAll = Array.isArray(data.already_present_all_properties)
+      ? data.already_present_all_properties
+      : [
+          ...alreadyPresent,
+          ...(Array.isArray(data.already_live_or_approved_properties) ? data.already_live_or_approved_properties : [])
+        ];
+    const alreadyQueuedCount = Number(data.existing_properties_total ?? data.existing_properties ?? 0)
+      || alreadyPresentAll.length
+      || skipped.filter((item) => item?.reason === "already_queued" || item?.reason === "already_live_or_approved").length;
+    const targetStatus = data.daily_target_status || {};
+    const targetHtml = targetStatus.target ? `
+        <div class="mt-2 rounded-xl border ${targetStatus.meets_daily_minimum ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"} p-3">
+          <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} evidence-ready properties</div>
+          <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with evidence-ready records.")}</div>
+          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue only specific public property posts with clear evidence.")}</div>
+        </div>` : "";
+    const visibleSampleHtml = visibleSamples
+      .map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true }))
+      .filter(Boolean)
+      .join("");
     if (statusEl) {
       statusEl.innerHTML = `
         <div class="font-black">Found-online property candidates created</div>
-        <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(alreadyQueuedCount || 0)} matching property records already exist in the King review queue or on the live site.</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending review records are shown below.</div>
+        <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-1">The 20,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds. The Review Queue only receives actual properties after a specific recent post has source evidence, contact path, location, price, and usable images.</div>
+        ${targetHtml}
+        <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
+          <div class="font-black">Land image rule</div>
+          <div class="mt-1">Use source/agent-authorised land photos only when they clearly belong to the listing. If no reliable photo exists, King adds a makaug land-size guide illustration so reviewers can see the plot scale without using fake room photos.</div>
+        </div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
-        ${skipped.length ? `<div class="mt-1 text-amber-800">${adminEscape(skipped.length)} source records were kept for source review because no public phone/email/website is stored yet.</div>` : ""}
-        ${visibleSamples.length ? `<div class="mt-2 space-y-2">${visibleSamples.map((item) => adminSeededListingSummaryHtml(item)).join("")}</div>` : ""}`;
+        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source records need source review before they can become listing candidates. Open the Source Database to inspect the page/channel/feed.</div>` : ""}
+        ${visibleSampleHtml ? `<div class="mt-2 space-y-2">${visibleSampleHtml}</div>` : `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-blue-900">No pending found-online records need review in this run. Approved or live records have been removed from this pending panel.</div>`}`;
+      if (sourceReviewRecords.length) {
+        statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
+          <div class="font-black text-amber-950">Source review records</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. They are source pages/posts that need a contact path, evidence, price, location, or usable images before King queues a listing.</div>
+          <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
+        </div>`;
+      }
+      adminScrubPendingSeedStatusPanel(statusEl);
     }
     toast("Found-online listings are ready for King review.");
     await renderAdminDashboard();
@@ -9186,8 +9347,8 @@ function adminSourceRegistryHtml(data = {}) {
       <td class="py-2 pr-3 uppercase text-[10px] font-black text-emerald-700">${adminEscape(item.platform || "-")}</td>
       <td class="py-2 pr-3">${adminEscape(adminSourceRecordLabel(item))}</td>
       <td class="py-2 pr-3">${adminEscape(item.source_type || "-")}</td>
-      <td class="py-2 pr-3">${adminEscape(item.contact_phone || item.contact_phone_alt || "No public phone")}</td>
-      <td class="py-2 pr-3">${item.can_contact_directly ? "Yes" : "Review first"}</td>
+      <td class="py-2 pr-3">${adminEscape(item.contact_phone || item.contact_phone_alt || item.contact_email || item.website || item.source_url || "Source review needed")}</td>
+      <td class="py-2 pr-3">${item.can_contact_directly ? "Yes" : item.source_url ? "Source/social" : "Review first"}</td>
       <td class="py-2 pr-3">${adminEscape(item.status || "-")}</td>
       <td class="py-2"><a href="${adminAttr(item.source_url || "#")}" target="_blank" rel="noopener" class="font-bold text-emerald-800 underline">Open page/feed</a></td>
     </tr>`).join("");
@@ -13545,6 +13706,121 @@ function adminOverrideWarningCheck(evidenceId, checkKey = "") {
   renderAdminReviewPanel(adminActiveReview);
 }
 
+function adminIsLandReviewListing(review = {}) {
+  const type = String(review.listing_type || review.type || review.category || "").toLowerCase();
+  const text = `${type} ${review.title || ""} ${review.property_type || ""} ${review.title_type || ""} ${review.extra_fields?.title_type || ""}`.toLowerCase();
+  return type === "land" || /\b(land|plot|mailo|freehold|leasehold|customary|acre|decimals?)\b/.test(text);
+}
+
+function adminUgNlisFieldValue(review, key) {
+  return review?.extra_fields?.[key] || "";
+}
+
+function renderAdminUgNlisReviewPanel(review = {}) {
+  if (!adminIsLandReviewListing(review)) return "";
+  const extra = review.extra_fields || {};
+  const status = extra.land_verification_status || "not_started";
+  const checked = extra.land_verification_concierge_requested === true || extra.land_verification_help_requested === true;
+  return `
+    <div class="mt-4 border border-emerald-100 rounded-xl p-3 bg-emerald-50" id="admin-ugnlis-review-panel">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-emerald-800 font-semibold">UgNLIS Land Verification</div>
+          <p class="mt-1 text-xs text-emerald-950">Store official search evidence here. Searches still happen on UgNLIS; makaug keeps the evidence trail and buyer guidance.</p>
+        </div>
+        <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener" class="text-xs font-bold text-emerald-800 underline">Open UgNLIS</a>
+      </div>
+      <div class="mt-3 grid sm:grid-cols-2 gap-2">
+        <label class="text-xs font-semibold text-emerald-950">Status
+          <select id="admin-ugnlis-status" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
+            ${["not_started", "details_collected", "search_letter_supplied", "official_verified", "issue_found"].map((item) => `<option value="${item}" ${item === status ? "selected" : ""}>${adminEscape(item.replaceAll("_", " "))}</option>`).join("")}
+          </select>
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Search letter URL
+          <input id="admin-ugnlis-search-letter-url" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_search_letter_url"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="https://...">
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Title volume
+          <input id="admin-ugnlis-title-volume" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_title_volume"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Title folio
+          <input id="admin-ugnlis-title-folio" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_title_folio"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">County
+          <input id="admin-ugnlis-county" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_county"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Block / Plot
+          <div class="mt-1 grid grid-cols-2 gap-2">
+            <input id="admin-ugnlis-block" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_block"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Block">
+            <input id="admin-ugnlis-plot" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_plot"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Plot">
+          </div>
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Transaction / search ref
+          <div class="mt-1 grid grid-cols-2 gap-2">
+            <input id="admin-ugnlis-transaction-number" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_transaction_number"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Transaction">
+            <input id="admin-ugnlis-search-reference" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_search_reference"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Search ref">
+          </div>
+        </label>
+        <label class="text-xs font-semibold text-emerald-950">Search date
+          <input id="admin-ugnlis-search-date" type="date" value="${adminAttr(String(adminUgNlisFieldValue(review, "ugnlis_search_date")).slice(0, 10))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
+        </label>
+      </div>
+      <label class="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-950">
+        <input id="admin-ugnlis-concierge" type="checkbox" ${checked ? "checked" : ""} class="rounded border-emerald-300 text-emerald-700">
+        Land Search Concierge requested
+      </label>
+      <label class="mt-2 block text-xs font-semibold text-emerald-950">Review notes
+        <textarea id="admin-ugnlis-notes" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" rows="3" placeholder="What was checked, what is still pending?">${adminEscape(adminUgNlisFieldValue(review, "ugnlis_search_notes"))}</textarea>
+      </label>
+      <div class="mt-3 flex gap-2 flex-wrap">
+        <button type="button" onclick="saveAdminLandVerificationReview()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save UgNLIS Evidence</button>
+        <button type="button" onclick="copyAdminText('https://ugnlis.mlhud.go.ug/')" class="border border-emerald-200 text-emerald-800 hover:bg-white px-3 py-2 rounded-lg text-xs font-bold">Copy Portal Link</button>
+      </div>
+    </div>`;
+}
+
+function collectAdminLandVerificationPayload() {
+  return {
+    land_verification_status: document.getElementById("admin-ugnlis-status")?.value || "not_started",
+    ugnlis_search_letter_url: document.getElementById("admin-ugnlis-search-letter-url")?.value || "",
+    ugnlis_title_volume: document.getElementById("admin-ugnlis-title-volume")?.value || "",
+    ugnlis_title_folio: document.getElementById("admin-ugnlis-title-folio")?.value || "",
+    ugnlis_county: document.getElementById("admin-ugnlis-county")?.value || "",
+    ugnlis_block: document.getElementById("admin-ugnlis-block")?.value || "",
+    ugnlis_plot: document.getElementById("admin-ugnlis-plot")?.value || "",
+    ugnlis_transaction_number: document.getElementById("admin-ugnlis-transaction-number")?.value || "",
+    ugnlis_search_reference: document.getElementById("admin-ugnlis-search-reference")?.value || "",
+    ugnlis_search_date: document.getElementById("admin-ugnlis-search-date")?.value || "",
+    land_verification_concierge_requested: !!document.getElementById("admin-ugnlis-concierge")?.checked,
+    ugnlis_search_notes: document.getElementById("admin-ugnlis-notes")?.value || ""
+  };
+}
+
+async function copyAdminText(value) {
+  try {
+    await navigator.clipboard.writeText(String(value || ""));
+    toast("Copied.");
+  } catch (error) {
+    toast("Copy failed.");
+  }
+}
+
+async function saveAdminLandVerificationReview() {
+  if (!adminActiveReview?.id) return;
+  try {
+    const response = await apiFetch(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/land-verification`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectAdminLandVerificationPayload())
+    });
+    const updated = response?.data || {};
+    adminActiveReview.extra_fields = updated.extra_fields || adminActiveReview.extra_fields || {};
+    toast("UgNLIS land evidence saved.");
+    renderAdminReviewPanel(adminActiveReview);
+  } catch (error) {
+    toast(error.message || "Could not save UgNLIS evidence.");
+  }
+}
+
 function renderAdminReviewPanel(review) {
   adminActiveReview = review;
   adminReviewEvidence = {};
@@ -13680,6 +13956,7 @@ function renderAdminReviewPanel(review) {
               </div>
             </div>
           </div>
+          ${renderAdminUgNlisReviewPanel(review)}
           <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
             <div class="flex items-center justify-between gap-2 mb-2">
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">National ID Document</div>
@@ -17618,6 +17895,14 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.land_size_unit = landParsed.unit;
     payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
     payload.extra_fields.land_verification_help_requested = extra.land_verification_help === "yes";
+    payload.extra_fields.land_verification_concierge_requested = extra.land_verification_help === "yes";
+    payload.extra_fields.land_verification_status = extra.ugnlis_transaction_number ? "details_collected" : "not_started";
+    payload.extra_fields.ugnlis_title_volume = extra.ugnlis_title_volume || null;
+    payload.extra_fields.ugnlis_title_folio = extra.ugnlis_title_folio || null;
+    payload.extra_fields.ugnlis_county = extra.ugnlis_county || null;
+    payload.extra_fields.ugnlis_block = extra.ugnlis_block || null;
+    payload.extra_fields.ugnlis_plot = extra.ugnlis_plot || null;
+    payload.extra_fields.ugnlis_transaction_number = extra.ugnlis_transaction_number || null;
     payload.extra_fields.land_boundary_notes = extra.boundary_notes || null;
     payload.extra_fields.ownership_verification_requested = ownerVerificationRequested || extra.land_verification_help === "yes";
   }
@@ -23915,6 +24200,11 @@ function foundOnlineSourceMeta(p = {}) {
   const sourceName = String(extra.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
   const platform = String(extra.source_platform || (extra.youtube_url || extra.video_url ? "YouTube" : "") || "").trim();
   const sourceUrl = String(extra.source_url || extra.youtube_url || extra.video_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
+  const sourceContactUrl = String(extra.source_contact_url || extra.source_channel_url || extra.youtube_channel_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
+  const sourceContactLabel = String(extra.source_contact_label || "").trim();
+  const sourceContactMethod = String(extra.source_contact_method || "").trim();
+  const sourceContactPlatform = String(extra.source_contact_platform || platform || "").trim();
+  const followersLabel = String(extra.source_followers_label || extra.source_audience_label || "").trim();
   const firstPosted = formatListingDate(
     extra.first_posted_online_at
     || extra.source_published_at
@@ -23924,14 +24214,23 @@ function foundOnlineSourceMeta(p = {}) {
   const firstPostedLabel = String(extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || "").trim();
   const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
+  const addedToMakaug = formatListingDate(extra.added_to_makaug_at || p.created_at || p.createdAt);
+  const addedToMakaugLabel = String(extra.added_to_makaug_label || "").trim();
   return {
     sourceName,
     platform,
     sourceUrl: /^https?:\/\//i.test(sourceUrl) ? sourceUrl : "",
+    sourceContactUrl: /^https?:\/\//i.test(sourceContactUrl) ? sourceContactUrl : "",
+    sourceContactLabel,
+    sourceContactMethod,
+    sourceContactPlatform,
+    followersLabel,
     firstPosted,
     firstPostedLabel,
     firstSeen,
     firstSeenLabel,
+    addedToMakaug,
+    addedToMakaugLabel,
   };
 }
 
@@ -23949,14 +24248,117 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
           <div class="mt-2 flex flex-wrap gap-2 text-xs">
             ${meta.firstPosted ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted)}</span>` : ""}
             ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First seen by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
+            ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
+            ${meta.followersLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(meta.followersLabel)}</span>` : ""}
             ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Open source")}</a>` : ""}
+            ${meta.sourceContactUrl && meta.sourceContactUrl !== meta.sourceUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Contact via source")}</a>` : ""}
           </div>
           ${meta.firstPostedLabel && !meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstPostedLabel)}</div>` : ""}
           ${meta.firstSeenLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstSeenLabel)}</div>` : ""}
+          ${meta.addedToMakaugLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.addedToMakaugLabel)}</div>` : ""}
+          ${meta.sourceContactMethod === "social" && meta.sourceContactUrl ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.sourceContactLabel || `No phone number is published. Contact the agent through ${meta.sourceContactPlatform || "the source platform"}.`)}</div>` : ""}
         </div>
       </div>
     </div>`;
+}
+
+const UGNLIS_PORTAL_URL = "https://ugnlis.mlhud.go.ug/";
+const UGNLIS_MINISTRY_PAGE_URL = "https://mlhud.go.ug/ugnlis/";
+const UGNLIS_SEARCH_FEE_UGX = 10000;
+const UGNLIS_SUPPORTED_ONLINE_SEARCH_DISTRICTS = ["Mukono", "Wakiso", "Kampala", "Moroto", "Arua", "Kabarole"];
+
+function getUgNlisVerificationPack(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const pack = p?.land_verification && typeof p.land_verification === "object" ? p.land_verification : extra.land_verification || {};
+  const titleRef = pack.title_reference
+    || [extra.ugnlis_title_volume && `Volume ${extra.ugnlis_title_volume}`, extra.ugnlis_title_folio && `Folio ${extra.ugnlis_title_folio}`].filter(Boolean).join(" / ");
+  const parcelRef = pack.parcel_reference
+    || [extra.ugnlis_county && `County ${extra.ugnlis_county}`, extra.ugnlis_block && `Block ${extra.ugnlis_block}`, extra.ugnlis_plot && `Plot ${extra.ugnlis_plot}`].filter(Boolean).join(" / ");
+  const status = pack.status || extra.land_verification_status || (extra.ugnlis_search_letter_url ? "search_letter_supplied" : "not_started");
+  const statusLabels = {
+    not_started: translatePropertyUi("Official search not supplied"),
+    details_collected: translatePropertyUi("Title details collected"),
+    search_letter_supplied: translatePropertyUi("Search letter supplied"),
+    official_verified: translatePropertyUi("Official search reviewed"),
+    issue_found: translatePropertyUi("Review needed")
+  };
+  return {
+    status,
+    status_label: pack.status_label || statusLabels[status] || statusLabels.not_started,
+    title_reference: titleRef || "",
+    parcel_reference: parcelRef || "",
+    search_letter_url: pack.search_letter_url || extra.ugnlis_search_letter_url || "",
+    transaction_number: pack.transaction_number || extra.ugnlis_transaction_number || "",
+    search_reference: pack.search_reference || extra.ugnlis_search_reference || "",
+    search_date: pack.search_date || extra.ugnlis_search_date || "",
+    concierge_requested: pack.concierge_requested === true || extra.land_verification_concierge_requested === true,
+    notes: pack.notes || extra.ugnlis_search_notes || "",
+    official_portal_url: pack.official_portal_url || UGNLIS_PORTAL_URL,
+    ministry_page_url: pack.ministry_page_url || UGNLIS_MINISTRY_PAGE_URL,
+    search_fee_ugx: pack.search_fee_ugx || UGNLIS_SEARCH_FEE_UGX
+  };
+}
+
+function isUgNlisLandListing(p = {}) {
+  const text = `${p.type || ""} ${p.listing_type || ""} ${p.category || ""} ${p.title || ""} ${p.property_type || ""} ${p.title_type || ""}`.toLowerCase();
+  return normalizeType(p.type || p.listing_type || p.category) === "land" || /\b(land|plot|mailo|freehold|leasehold|customary|acre|decimals?)\b/.test(text);
+}
+
+function buildUgNlisWhatsappMessageForUi(p = {}) {
+  const pack = getUgNlisVerificationPack(p);
+  const title = p.title || translatePropertyUi("this land listing");
+  const location = [p.area, p.district].filter(Boolean).join(", ");
+  return [
+    `Hi makaug, I need help with an official UgNLIS land search for ${title}.`,
+    location ? `Location: ${location}.` : "",
+    pack.title_reference ? `Title: ${pack.title_reference}.` : "",
+    pack.parcel_reference ? `Parcel: ${pack.parcel_reference}.` : "",
+    `Please guide me on the UgNLIS search and help store the evidence against this listing.`
+  ].filter(Boolean).join("\n");
+}
+
+function renderUgNlisVerificationCard(p = {}) {
+  if (!isUgNlisLandListing(p)) return "";
+  const pack = getUgNlisVerificationPack(p);
+  const evidence = [
+    pack.title_reference && [translatePropertyUi("Title details"), pack.title_reference],
+    pack.parcel_reference && [translatePropertyUi("Parcel details"), pack.parcel_reference],
+    pack.transaction_number && [translatePropertyUi("Transaction"), pack.transaction_number],
+    pack.search_reference && [translatePropertyUi("Search reference"), pack.search_reference],
+    pack.search_date && [translatePropertyUi("Search date"), formatListingDate(pack.search_date) || pack.search_date],
+  ].filter(Boolean);
+  const message = buildUgNlisWhatsappMessageForUi(p);
+  const whatsappUrl = buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, message);
+  return `
+    <section class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
+      <div class="flex items-start gap-3">
+        <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="text-xs uppercase tracking-wide font-black text-emerald-800">${translatePropertyUi("Official land verification")}</div>
+              <h3 class="mt-1 text-base font-black text-gray-900">${translatePropertyUi("Verify with UgNLIS")}</h3>
+            </div>
+            <span class="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">${adminEscape(pack.status_label)}</span>
+          </div>
+          <p class="mt-2 text-sm text-emerald-950">${translatePropertyUi("Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.")}</p>
+          ${evidence.length ? `<div class="mt-3 grid gap-2 sm:grid-cols-2">${evidence.map(([label, value]) => `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="text-[11px] uppercase tracking-wide text-emerald-700 font-bold">${adminEscape(label)}</div><div class="mt-0.5 text-sm font-semibold text-gray-800">${adminEscape(value)}</div></div>`).join("")}</div>` : ""}
+          <div class="mt-3 flex flex-wrap gap-2">
+            <a href="${UGNLIS_PORTAL_URL}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-600">
+              <i class="fas fa-arrow-up-right-from-square"></i>${translatePropertyUi("Open UgNLIS portal")}
+            </a>
+            <a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50">
+              <i class="fab fa-whatsapp"></i>${translatePropertyUi("Land Search Concierge")}
+            </a>
+            ${pack.search_letter_url ? `<a href="${adminAttr(pack.search_letter_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50"><i class="fas fa-file-shield"></i>${translatePropertyUi("Search letter")}</a>` : ""}
+          </div>
+          <p class="mt-3 text-xs text-emerald-800">${translatePropertyUi("User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.")}</p>
+        </div>
+      </div>
+    </section>`;
 }
 
 function formatListingDate(dateValue) {
@@ -28391,8 +28793,31 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
       "First posted online": "Yasooka okuteekebwa online",
       "First seen by makaug": "makaug yasooka okugiraba",
+      "Added to makaug": "Yayongerwa ku makaug",
+      "Audience": "Abagoberera",
       "Source": "Ensibuko",
-      "Open source": "Ggulawo ensibuko"
+      "Open source": "Ggulawo ensibuko",
+      "Contact via source": "Kwatagana okuyita ku nsibuko",
+      "Open source contact": "Ggulawo contact y'ensibuko",
+      "Open the public source page for contact details.": "Ggulawo omuko gw'ensibuko ey'olukale okulaba contact.",
+      "No phone number is published. Use the source page to contact the lister.": "Tewali nnamba ya ssimu eteereddwawo. Kozesa omuko gw'ensibuko okukwatagana n'omulisi.",
+      "Official land verification": "Okukakasa ettaka mu nkola entongole",
+      "Verify with UgNLIS": "Kakasa ku UgNLIS",
+      "Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.": "Okunoonyereza okutongole kukolebwa ku UgNLIS. makaug etereka obujulizi era ekulaga ekiddako, naye portal ya gavumenti y'esigala ensibuko entuufu.",
+      "Open UgNLIS portal": "Ggulawo portal ya UgNLIS",
+      "Land Search Concierge": "Obuyambi bw'okunoonyereza ku ttaka",
+      "Search letter": "Search letter",
+      "Title details": "Ebikwata ku title",
+      "Parcel details": "Ebikwata ku plot",
+      "Transaction": "Transaction",
+      "Search reference": "Search reference",
+      "Search date": "Olunaku lw'okunoonyereza",
+      "Official search not supplied": "Search entongole tennaleetebwa",
+      "Title details collected": "Ebikwata ku title bikuŋŋaanyiziddwa",
+      "Search letter supplied": "Search letter eleeteddwa",
+      "Official search reviewed": "Search entongole ekebereddwa",
+      "Review needed": "Okukebera kwetaagisa",
+      "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "Okumanyisa: okunoonyereza online kuyinza okubaawo ku Mukono, Wakiso, Kampala, Moroto, Arua, ne Kabarole ku UGX 10,000."
     },
     sw: {
       "Listing mode": "Njia ya kutangaza",
@@ -28490,8 +28915,31 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
       "First posted online": "Ilichapishwa kwanza mtandaoni",
       "First seen by makaug": "Ilionekana kwanza na makaug",
+      "Added to makaug": "Imeongezwa kwenye makaug",
+      "Audience": "Wafuasi",
       "Source": "Chanzo",
-      "Open source": "Fungua chanzo"
+      "Open source": "Fungua chanzo",
+      "Contact via source": "Wasiliana kupitia chanzo",
+      "Open source contact": "Fungua mawasiliano ya chanzo",
+      "Open the public source page for contact details.": "Fungua ukurasa wa chanzo cha umma kupata mawasiliano.",
+      "No phone number is published. Use the source page to contact the lister.": "Hakuna namba ya simu iliyochapishwa. Tumia ukurasa wa chanzo kuwasiliana na mtangazaji.",
+      "Official land verification": "Uthibitishaji rasmi wa ardhi",
+      "Verify with UgNLIS": "Thibitisha kupitia UgNLIS",
+      "Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.": "Utafutaji rasmi hufanyika kwenye UgNLIS. makaug huhifadhi ushahidi na kukuongoza, lakini portal ya serikali ndiyo chanzo rasmi.",
+      "Open UgNLIS portal": "Fungua portal ya UgNLIS",
+      "Land Search Concierge": "Msaada wa utafutaji wa ardhi",
+      "Search letter": "Search letter",
+      "Title details": "Maelezo ya hati",
+      "Parcel details": "Maelezo ya kiwanja",
+      "Transaction": "Muamala",
+      "Search reference": "Rejea ya utafutaji",
+      "Search date": "Tarehe ya utafutaji",
+      "Official search not supplied": "Utafutaji rasmi haujatolewa",
+      "Title details collected": "Maelezo ya hati yamekusanywa",
+      "Search letter supplied": "Search letter imetolewa",
+      "Official search reviewed": "Utafutaji rasmi umepitiwa",
+      "Review needed": "Mapitio yanahitajika",
+      "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "Taarifa: utafutaji online unaweza kupatikana kwa Mukono, Wakiso, Kampala, Moroto, Arua, na Kabarole kwa UGX 10,000."
     }
   };
   Object.entries({
@@ -28929,9 +29377,15 @@ const LP_CONFIG = {
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
       { key: "land_verification_help", label: "Need makaug help with owner/title verification?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - contact me about verification" }] },
+      { key: "ugnlis_title_volume", label: "UgNLIS Title Volume", type: "text", placeholder: "Optional, if known" },
+      { key: "ugnlis_title_folio", label: "UgNLIS Title Folio", type: "text", placeholder: "Optional, if known" },
+      { key: "ugnlis_county", label: "County", type: "text", placeholder: "Optional, if known" },
+      { key: "ugnlis_block", label: "Block", type: "text", placeholder: "Optional, if known" },
+      { key: "ugnlis_plot", label: "Plot", type: "text", placeholder: "Optional, if known" },
+      { key: "ugnlis_transaction_number", label: "UgNLIS Transaction Number", type: "text", placeholder: "Optional, after official search" },
       { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
     ],
-    previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }],
+    previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "ugnlis_plot", label: "UgNLIS Plot" }],
     amenities: [
       { value: "road", label: "🛣️ Road Access" },
       { value: "water", label: "🌊 Water Nearby" },
@@ -30447,6 +30901,13 @@ async function openDetail(id, options = {}) {
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
+  const foundOnlineMeta = foundOnlineSourceMeta(p);
+  const sourceContactUrl = foundOnlineMeta?.sourceContactUrl || "";
+  const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
+    || (sourceContactUrl ? translatePropertyUi("Open the public source page for contact details.") : "");
+  const brokerPhone = broker?.phone || "";
+  const brokerPhoneHref = brokerPhone ? `tel:${String(brokerPhone).replace(/\s+/g, "")}` : "";
+  const brokerWhatsapp = broker?.whatsapp || brokerPhone || "";
   const contactPref = String(p.preferred_contact_method || p.extra_fields?.preferred_contact_method || "both").toLowerCase();
   const allowCall = !!ownerPhoneHref && (contactPref === "phone" || contactPref === "both" || !contactPref);
   const allowWhatsApp = !!ownerPhone && (contactPref === "whatsapp" || contactPref === "both" || !contactPref);
@@ -30456,13 +30917,13 @@ async function openDetail(id, options = {}) {
   const ownerEmailUrl = allowEmail ? `mailto:${ownerEmail}?subject=${encodeURIComponent(`makaug enquiry: ${p.title || "Property"}`)}&body=${encodeURIComponent(contactMessage)}` : "";
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
-  const brokerWhatsAppArg = adminAttr(JSON.stringify(broker?.whatsapp || ""));
+  const brokerWhatsAppArg = adminAttr(JSON.stringify(brokerWhatsapp || ""));
   const videoUrl = String(p.video_url || p.youtube_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || "").trim();
   const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
   const directionsUrl = propertyDirectionsUrl(p);
   const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
-  const inquiryRecipientName = broker?.name || ownerDisplayName || translatePropertyUi("Public listing contact");
+  const inquiryRecipientName = broker?.name || foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Public listing contact");
   const canPrefillInquiryFromUser = !!authState?.user && !isAdminViewer;
   const inquiryNameDefault = canPrefillInquiryFromUser ? `${authState.user.first_name || ""} ${authState.user.last_name || ""}`.trim() : "";
   const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
@@ -30513,6 +30974,7 @@ async function openDetail(id, options = {}) {
               ${renderPropertyShareActions(p, detailIdArg)}
             </div>
             ${listingOnlineSourceDisclosureHtml(p)}
+            ${renderUgNlisVerificationCard(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">Private Preview</div>
@@ -30577,16 +31039,18 @@ async function openDetail(id, options = {}) {
                 <span class="block text-sm text-gray-500 truncate">${broker.company || broker.name}</span>
               </span>
             </a>
-            <a href="tel:${broker.phone}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>
-            <a href="${adminAttr(buildWhatsAppUrl(broker.whatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>
+            ${brokerPhoneHref ? `<a href="${adminAttr(brokerPhoneHref)}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Contact via source")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
+            ${brokerWhatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(brokerWhatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Open source contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+            ${sourceContactUrl && !brokerPhoneHref ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
             <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
             ${allowCall ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : ""}
-            ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+            ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Contact via source")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
             ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
+            ${sourceContactUrl && !ownerWhatsAppUrl ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
           <div class="mt-4 pt-4 border-t border-gray-100">

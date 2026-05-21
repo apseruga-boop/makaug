@@ -188,6 +188,25 @@ test('King review queue has one-click sourced candidate creation', () => {
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
 });
 
+test('found-online seed panel hides approved and live records from pending moderation', () => {
+  assert(frontend.includes('function adminSeedItemStatuses'), 'frontend should normalize seed result statuses before rendering');
+  assert(frontend.includes('function adminIsFinalReviewSeedItem'), 'frontend should detect final approved/live statuses');
+  assert(frontend.includes('function adminUniqueSeedItems'), 'frontend should dedupe seed result summaries');
+  assert(frontend.includes('function adminScrubPendingSeedStatusPanel'), 'frontend should defensively remove stale final-state cards from the pending panel');
+  assert(frontend.includes('adminSeededListingSummaryHtml(item, { pendingPanel: true })'), 'pending panel should render summaries through the pending-only guard');
+  assert(frontend.includes('ensureAdminSourcedCandidateControls();\n  adminScrubPendingSeedStatusPanel();'), 'dashboard refresh should scrub stale approved/live found-online cards from the pending panel');
+  assert(frontend.includes('No pending found-online records need review in this run'), 'pending panel should explain when only approved/live matches remain');
+  assert(frontend.includes('data-admin-seed-final'), 'seed summaries should expose final-state metadata for UI regression checks');
+  assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
+  assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
+  assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
+  assert(socialSearchServiceSource.includes('function normalizedStatusValue'), 'service should trim and normalize stored statuses');
+  assert(socialSearchServiceSource.includes('const reviewQueueVisible = isReviewQueueStatus(existing);'), 'service should evaluate existing records with status and moderation stage together');
+  assert(socialSearchServiceSource.includes('item.review_queue_visible && !item.already_live_or_approved && isReviewQueueStatus(item)'), 'service should exclude final records from review_queue_listings');
+  assert(socialSearchServiceSource.includes('already_present_properties: alreadyPresentReviewQueue'), 'legacy already_present_properties response should only include pending review records');
+  assert(socialSearchServiceSource.includes('already_present_all_properties: alreadyPresent'), 'service should keep full already-present records in a separate non-pending field');
+});
+
 test('public property cards keep NEW freshness and replace registered badge with sourced-online status', () => {
   assert(frontend.includes('function isFoundOnlineListing'), 'public UI should detect found-online listing records');
   assert(frontend.includes('function listingFreshnessBadgeHtml'), 'public UI should render listing freshness through a shared helper');
@@ -338,6 +357,11 @@ test('found-online social search batch creates pending listings with agent profi
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
   assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public property records');
   assert.strictEqual(summary.agents_count, 7, 'social search batch should prepare the seven permitted agent profiles');
+  assert.strictEqual(summary.daily_target_status.target, 200, 'morning sweep should expose the 200/day property queue target');
+  assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count only evidence-ready candidates with contact paths');
+  assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
+  assert.strictEqual(summary.daily_target_status.meets_daily_minimum, false, 'current curated list should not pretend it meets the 200/day minimum');
+  assert(/Do not fill the 200\/day target/i.test(summary.daily_target_status.evidence_policy), 'daily target status should protect against weak/fabricated queue padding');
   assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
   assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
@@ -351,6 +375,14 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.found_online, true);
     assert.strictEqual(extra.social_search_candidate, true);
     assert.strictEqual(extra.source_badge, 'found_online');
+    assert(extra.source_contact_url && /^https?:\/\//.test(extra.source_contact_url), `${listing.title} should expose a public source/social contact URL`);
+    assert(extra.source_contact_method, `${listing.title} should expose a contact method even when no phone is present`);
+    assert(extra.source_audience_label || extra.source_followers_label, `${listing.title} should show source audience/follower metadata`);
+    assert(extra.added_to_makaug_at, `${listing.title} should store when makaug added the sourced record`);
+    if (!listing.lister_phone) {
+      assert.strictEqual(extra.source_contact_method, 'social', `${listing.title} should fall back to social contact when no phone is published`);
+      assert(/source|social|channel/i.test(extra.source_contact_label), `${listing.title} should explain the social contact fallback`);
+    }
     assert.strictEqual(extra.consent_confirmed, true);
     assert.strictEqual(extra.image_rights_confirmed, true);
     assert.strictEqual(extra.image_rights_status, 'authorised_public_social_video_stills_from_agent_channel');
@@ -361,6 +393,11 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.minimum_reliable_image_count, 3, `${listing.title} should allow evidence-based 3-image review`);
     assert(/Do not invent room labels/i.test(extra.image_evidence_policy), `${listing.title} should keep strict image evidence guidance`);
     assert(/same fuzzy still/i.test(extra.image_evidence_policy), `${listing.title} should reject fuzzy duplicate stills`);
+    if (listing.source_item.listingType === 'land') {
+      assert(/land-size guide illustration/i.test(listing.images.map((image) => image.room_label).join(' ')), `${listing.title} should include a generated land-size guide image`);
+      assert.strictEqual(extra.generated_land_size_diagram, true, `${listing.title} should flag generated land-size support imagery`);
+      assert(/source\/agent-authorised land images/i.test(extra.land_visual_strategy), `${listing.title} should keep the land image strategy for reviewers`);
+    }
     assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 5, `${listing.title} should include nearby places`);
     assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include health facilities`);
     assert(extra.nearby_facilities.some((item) => /school|college|secondary/i.test(`${item.type} ${item.name}`)), `${listing.title} should include schools or secondary schools`);
@@ -369,7 +406,8 @@ test('found-online social search batch creates pending listings with agent profi
     assert(!/founder-reported|prepared from|King review/i.test(listing.description), `${listing.title} should not expose internal sourcing language in public copy`);
     assert(!/sourced candidate/i.test(listing.description), `${listing.title} should not expose sourced-candidate wording publicly`);
     assert(listing.images.length >= 3 && listing.images.length <= 5, `${listing.title} should include 3-5 source images only when evidence-based`);
-    assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`)), `${listing.title} should use the matching YouTube image source`);
+    assert(listing.images.some((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`)), `${listing.title} should use the matching YouTube image source`);
+    assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`) || image.url.startsWith('data:image/svg+xml')), `${listing.title} should use only matching source images or generated support diagrams`);
     assert(!listing.images.some((image) => /bedroom|bathroom|kitchen/i.test(image.room_label)), `${listing.title} should not guess room labels from generic source stills`);
   }
 });
@@ -383,14 +421,23 @@ test('found-online social search admin path and share cards are protected and au
   assert(adminRoute.includes("router.post('/social-search-authorised-listings/seed'"), 'admin found-online seed endpoint should exist');
   assert(adminRoute.includes('seedSocialSearchAuthorisedListings'), 'admin endpoint should use the social search seed service');
   assert(adminRoute.includes('admin_social_search_authorised_listings_seeded'), 'admin endpoint should write found-online audit trail');
-  assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete-contact sources instead of crashing the whole batch');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete evidence sources instead of crashing the whole batch');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');
-  assert(read('services/socialSearchSourcedListingsService.js').includes("reason: 'already_queued'"), 'daily found-online sweeps should report already queued records');
+  assert(read('services/socialSearchSourcedListingsService.js').includes("'already_queued'"), 'daily found-online sweeps should report already queued records');
+  assert(read('services/socialSearchSourcedListingsService.js').includes("'already_live_or_approved'"), 'daily found-online sweeps should report already-live records separately from queued records');
   assert(read('services/socialSearchSourcedListingsService.js').includes('already_present_properties'), 'daily found-online sweeps should return existing records with direct review/live links');
-  assert(read('services/socialSearchSourcedListingsService.js').includes('queued_listings'), 'daily found-online sweeps should return a combined created/already-present list for King');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('review_queue_listings'), 'daily found-online sweeps should return only pending review records for the King pending panel');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('already_live_or_approved_properties'), 'daily found-online sweeps should separate already-live records from the pending panel');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('source_review_records'), 'daily found-online sweeps should expose source-review records separately');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('daily_target_status'), 'daily found-online sweeps should return 200/day target status for King');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
   assert(frontend.includes('Queue Found-Online Properties'), 'dashboard should label the found-online queue action');
-  assert(frontend.includes('already exist in the King review queue or on the live site'), 'dashboard should explain why zero newly-created candidates can still mean records exist');
+  assert(frontend.includes('already live/approved records were hidden from this pending panel'), 'dashboard should hide approved/live records from pending moderation status cards');
+  assert(frontend.includes('adminSourceReviewRecordSummaryHtml'), 'dashboard should render source-review records with source/contact links');
+  assert(frontend.includes('Land image rule'), 'dashboard should explain the land-image fallback strategy');
+  assert(frontend.includes('Morning sweep target'), 'dashboard should show the daily evidence-ready target/gap after a sweep');
   const listing = plannedSocialSearchListings()[0];
   const card = socialSearchWhatsappShareMessage(
     listing.source_item,

@@ -11,6 +11,7 @@ const {
   summarizePropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
 const {
+  DAILY_FOUND_ONLINE_PROPERTY_TARGET,
   SOCIAL_SEARCH_BATCH_ID,
   seedSocialSearchAuthorisedListings,
   summarizeSocialSearchListings,
@@ -24,10 +25,12 @@ const REPLACE_CANDIDATES = args.has('--replace-candidates');
 function policy() {
   return {
     source_record_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+    daily_property_queue_minimum: DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     property_queue_target: `evidence-based only; do not auto-create ${PROPERTY_SOURCE_REGISTRY_TARGET_COUNT} property candidates from source feeds`,
     source_window_days: 90,
     candidate_rule: 'Queue a King review property only when a specific public post/video/listing has source URL, location, price or guide price, contact path, and usable evidence-based images.',
     image_rule: 'Use labelled video stills or actual listing photos only. Do not duplicate the same still, invent room labels, or use random generic property imagery.',
+    hard_queue_rule: 'If the evidence-ready count is below the 200/day minimum, report the gap instead of padding the queue with weak records.',
     review_destination: 'King dashboard pending review',
   };
 }
@@ -56,6 +59,7 @@ async function main() {
       by_type: candidateSummary.by_type,
       by_agent: candidateSummary.by_agent,
     },
+    daily_target_status: candidateSummary.daily_target_status,
   };
 
   if (DRY_RUN) {
@@ -87,7 +91,10 @@ async function main() {
         created_properties: listingResult.created_properties,
         existing_properties: listingResult.existing_properties,
         review_queue_properties: listingResult.review_queue_properties,
+        daily_target_status: listingResult.daily_target_status,
         queued_listings: listingResult.queued_listings,
+        already_live_or_approved_properties: listingResult.already_live_or_approved_properties,
+        source_review_records: listingResult.source_review_records,
         skipped_listings: listingResult.skipped_listings,
         agents: listingResult.agents,
       },
