@@ -52,7 +52,7 @@
     "prelaunch": "bash scripts/prelaunch-check.sh"
   },
   "engines": {
-    "node": ">=18.18.0"
+    "node": "20.x"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -64,7 +64,6 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.10.1",
     "openai": "^4.104.0",
-    "playwright-core": "^1.54.2",
     "pg": "^8.12.0",
     "playwright-core": "^1.59.1",
     "twilio": "^5.3.3",
