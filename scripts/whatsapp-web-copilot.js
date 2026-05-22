@@ -32,6 +32,11 @@ const PROFILE_DIR = path.resolve(
 );
 const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 75);
 const POLL_MS = Math.min(150, Math.max(40, Number.isFinite(configuredPollMs) ? configuredPollMs : 75));
+const configuredLoginPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_LOGIN_POLL_MS || 2500);
+const LOGIN_POLL_MS = Math.min(
+  10000,
+  Math.max(1000, Number.isFinite(configuredLoginPollMs) ? configuredLoginPollMs : 2500)
+);
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 120);
@@ -258,16 +263,23 @@ async function sendHeartbeat(extra = {}) {
 async function detectWhatsappReady(page) {
   return page.evaluate(() => {
     const bodyText = (document.body?.innerText || '').toLowerCase();
-    const waitingForLogin = bodyText.includes('scan the qr code')
+    const hasComposer = !!document.querySelector('footer div[role="textbox"][contenteditable="true"], footer div[contenteditable="true"]');
+    const hasChatList = !!document.querySelector('[aria-label*="Chat list"], [aria-label*="chat list"], [data-testid="chat-list"], div[role="grid"], div[role="list"]');
+    const hasLoggedInShell = bodyText.includes('search or start new chat')
+      || bodyText.includes('search or start a new chat')
+      || bodyText.includes('message notifications are off')
+      || bodyText.includes('archived');
+    const loginPrompt = bodyText.includes('scan the qr code')
+      || bodyText.includes('scan to log in')
+      || bodyText.includes('scan the qr')
       || bodyText.includes('use whatsapp on your phone to link a device')
-      || bodyText.includes('link with phone number');
-    const hasChatShell = !!document.querySelector('header') && !!document.querySelector('footer');
-    const hasChatList = !!document.querySelector('[aria-label*="Chat list"], [data-testid="chat-list"], div[role="grid"], div[role="list"]');
-    const hasLoggedInCopy = bodyText.includes('message notifications are off')
-      || bodyText.includes('end-to-end encrypted');
+      || bodyText.includes('link to your account')
+      || bodyText.includes('log in with phone number')
+      || bodyText.includes('stay logged in');
+    const waitingForLogin = loginPrompt && !(hasComposer || hasChatList || hasLoggedInShell);
     return {
       waitingForLogin,
-      ready: (hasChatShell || hasChatList || hasLoggedInCopy) && !waitingForLogin
+      ready: (hasComposer || hasChatList || hasLoggedInShell) && !waitingForLogin
     };
   });
 }
@@ -1665,7 +1677,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; login poll: ${LOGIN_POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -1707,7 +1719,7 @@ async function main() {
           });
           lastHeartbeat = now;
         }
-        await sleep(POLL_MS);
+        await sleep(readyState.waitingForLogin ? LOGIN_POLL_MS : Math.max(750, POLL_MS));
         continue;
       }
 
