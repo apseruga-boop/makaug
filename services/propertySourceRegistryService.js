@@ -2,9 +2,11 @@
 
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
-const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 20000;
-const X_HASHTAG_DISCOVERY_TARGET_COUNT = 5000;
-const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 2000;
+const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000;
+const X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000;
+const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000;
+const SOURCE_FRESHNESS_WINDOW_DAYS = 120;
+const TARGET_SOURCE_YEAR = 2026;
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
@@ -70,6 +72,58 @@ const PROPERTY_HASHTAG_WATCHLIST = [
   'PropertyInvestmentUganda',
   'RealEstateInvesting',
   'PropertyNetwork',
+  'UgandaHouseHunt',
+  'KampalaHouseHunt',
+  'UgandaRental',
+  'UgandaHomesForRent',
+  'UgandaPropertyAgent',
+  'KampalaPropertyAgent',
+  'UgandaRealtor',
+  'KampalaRealtor',
+  'KampalaApartments',
+  'KampalaApartmentForRent',
+  'ApartmentsForRentUganda',
+  'HouseForRentKampala',
+  'RentalHouseUganda',
+  'ToLetUganda',
+  'ToLetKampala',
+  'UgandaToLet',
+  'NtindaRentals',
+  'NaalyaRentals',
+  'KiraRentals',
+  'FurnishedApartmentsUganda',
+  'StudentHostelUganda',
+  'HostelsUganda',
+  'HostelRoomsUganda',
+  'MakerereHostel',
+  'KyambogoHostel',
+  'MUBSHostel',
+  'UCUHostel',
+  'StudentRoomsKampala',
+  'HostelNearCampus',
+  'StudentHousingUganda',
+  'CommercialSpaceUganda',
+  'CommercialRentUganda',
+  'OfficeForRentKampala',
+  'OfficeSpaceUganda',
+  'ShopForRentKampala',
+  'RetailSpaceUganda',
+  'WarehouseUganda',
+  'WarehouseSpaceKampala',
+  'NamanveIndustrial',
+  'FactorySpaceUganda',
+  'ArcadeShopsKampala',
+  'PlotForSaleUganda',
+  'LandForSaleKampala',
+  'LandForSaleWakiso',
+  'LandForSaleMukono',
+  'PlotsForSaleWakiso',
+  'PlotsForSaleMukono',
+  'EstatePlotsUganda',
+  'MailoLandUganda',
+  'LandTitleUganda',
+  '50x100Uganda',
+  '25DecimalsUganda',
 ];
 
 function source({
@@ -125,9 +179,12 @@ function source({
       launch_batch: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
       source_record_kind: sourceRecordKind({ sourceType }),
       review_required: true,
-      freshness_window_days: 90,
+      freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
+      target_source_year: TARGET_SOURCE_YEAR,
+      target_property_window: 'Prioritise public property posts, videos, reels, shorts, and listings first published in 2026, especially the last four months.',
       listing_candidate_rule: 'Do not create a property listing from this source unless a specific public post/video/listing has clear location, price or guide price, agent/contact path, source URL, and evidence-based images.',
       source_use: 'Find public property posts, prepare candidates for King review, attribute source, and request owner/agent confirmation before public approval.',
+      image_quality_rule: 'Queue only clear, differentiated source photos or video stills. Use at least three reliable images where possible; do not repeat fuzzy frames or invent room labels.',
       ...metadata,
     },
   };
@@ -951,15 +1008,91 @@ function listingTypesForIntent(intent) {
 function hashtagWatchlistForIntent(intent, area = '') {
   const tags = ['UgandaRealEstate', 'PropertyUganda', compactTag(area)];
   if (/student|hostel|campus|university|makerere|kyambogo|mubs|ucu|accommodation|room/i.test(intent)) {
-    tags.push('StudentAccommodationUganda', 'KampalaHostels', 'MakerereHostels', 'KyambogoHostels');
+    tags.push(
+      'StudentAccommodationUganda',
+      'StudentHostelUganda',
+      'HostelsUganda',
+      'HostelRoomsUganda',
+      'KampalaHostels',
+      'MakerereHostel',
+      'MakerereHostels',
+      'KyambogoHostel',
+      'KyambogoHostels',
+      'MUBSHostel',
+      'UCUHostel',
+      'StudentRoomsKampala',
+      'HostelNearCampus',
+      'StudentHousingUganda'
+    );
   } else if (/rent|rental|letting|lease|to let/i.test(intent)) {
-    tags.push('KampalaRentals', 'UgandaRentals', 'ApartmentsForRentKampala', 'HousesForRentUganda');
+    tags.push(
+      'KampalaRentals',
+      'UgandaRentals',
+      'UgandaHomesForRent',
+      'KampalaApartments',
+      'KampalaApartmentForRent',
+      'ApartmentsForRentKampala',
+      'ApartmentsForRentUganda',
+      'HousesForRentUganda',
+      'HouseForRentKampala',
+      'RentalHouseUganda',
+      'ToLetUganda',
+      'ToLetKampala',
+      'UgandaToLet',
+      'NtindaRentals',
+      'NaalyaRentals',
+      'KiraRentals',
+      'FurnishedApartmentsUganda'
+    );
   } else if (/land|plot/i.test(intent)) {
-    tags.push('LandForSaleUganda', 'PlotsForSaleUganda', 'UgandaLand', 'UgandaPlots');
+    tags.push(
+      'LandForSaleUganda',
+      'LandForSaleKampala',
+      'LandForSaleWakiso',
+      'LandForSaleMukono',
+      'PlotsForSaleUganda',
+      'PlotsForSaleWakiso',
+      'PlotsForSaleMukono',
+      'UgandaLand',
+      'UgandaPlots',
+      'EstatePlotsUganda',
+      'MailoLandUganda',
+      'LandTitleUganda',
+      '50x100Uganda',
+      '25DecimalsUganda'
+    );
   } else if (/commercial|shop|office|warehouse|showroom|retail|restaurant|arcade|factory|industrial/i.test(intent)) {
-    tags.push('CommercialPropertyUganda', 'OfficeSpaceKampala', 'ShopSpaceKampala', 'WarehouseForRentUganda');
+    tags.push(
+      'CommercialPropertyUganda',
+      'CommercialSpaceUganda',
+      'CommercialRentUganda',
+      'OfficeForRentKampala',
+      'OfficeSpaceKampala',
+      'OfficeSpaceUganda',
+      'ShopForRentKampala',
+      'ShopSpaceKampala',
+      'RetailSpaceUganda',
+      'WarehouseForRentUganda',
+      'WarehouseUganda',
+      'WarehouseSpaceKampala',
+      'NamanveIndustrial',
+      'FactorySpaceUganda',
+      'ArcadeShopsKampala'
+    );
   } else {
-    tags.push('HousesForSaleUganda', 'HomesForSaleUganda', 'KampalaProperties', 'RealEstateUganda');
+    tags.push(
+      'HousesForSaleUganda',
+      'HomesForSaleUganda',
+      'PropertyForSaleUganda',
+      'KampalaProperties',
+      'RealEstateUganda',
+      'UgandaHouseHunt',
+      'KampalaHouseHunt',
+      'UgandaPropertyAgent',
+      'KampalaPropertyAgent',
+      'UgandaRealtor',
+      'KampalaRealtor'
+    );
   }
   return [...new Set(tags.filter(Boolean))];
 }
@@ -1016,6 +1149,54 @@ const DISCOVERY_INTENTS = [
   'commercial building for sale Uganda',
   'arcade shops Kampala Uganda',
   'industrial property Uganda',
+  'house for rent Ntinda Uganda',
+  'apartment for rent Naalya Uganda',
+  'apartment for rent Kira Uganda',
+  'house for rent Kira Uganda',
+  'house for rent Namugongo Uganda',
+  '2 bedroom apartment Kampala rent',
+  '3 bedroom house Kampala rent',
+  'self contained room Kampala rent',
+  'single room self contained Kampala',
+  'furnished apartment Nakasero Kampala',
+  'furnished apartment Kololo Kampala',
+  'hostel near Makerere 2026',
+  'student room near Kyambogo',
+  'hostel rooms Makerere Kikoni',
+  'student accommodation near MUBS',
+  'student hostel UCU Mukono',
+  'student room near Nkumba University',
+  'student rooms near Kampala International University',
+  'student accommodation Nakawa Uganda',
+  'student hostel Mbarara University',
+  'shop to let Kampala',
+  'arcade shop for rent Kampala',
+  'office space Kololo rent',
+  'office space Nakasero rent',
+  'office space Ntinda rent',
+  'warehouse Namanve rent',
+  'warehouse Bweyogerere rent',
+  'commercial plot Kampala',
+  'retail space Uganda',
+  'restaurant space Kampala',
+  'showroom to let Kampala',
+  'factory space Namanve Uganda',
+  '50x100 plot Wakiso',
+  '25 decimals plot Kampala',
+  'land with title Mukono',
+  'mailo land for sale Uganda',
+  'residential plots Matugga Uganda',
+  'residential plots Gayaza Uganda',
+  'residential plots Namugongo Uganda',
+  'plots for sale Entebbe Road Uganda',
+  'plots for sale Jinja Road Uganda',
+  'plots for sale Mityana Road Uganda',
+  'commercial land Namanve Uganda',
+  '2026 Uganda house for sale',
+  '2026 Kampala property for sale',
+  '2026 Uganda property rent',
+  '2026 Uganda land for sale',
+  '2026 Kampala commercial property',
   'property video tour Uganda',
   'house shorts Uganda real estate',
   'Uganda property TikTok agent',
@@ -1052,9 +1233,11 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
       generated_source_discovery: true,
       query: label,
       hashtag_watchlist: hashtagWatchlist.map((tag) => `#${tag}`),
-      freshness_window_days: 90,
-      target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed in the last 90 days.',
+      freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
+      target_source_year: TARGET_SOURCE_YEAR,
+      target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed in 2026, especially the last four months.',
       review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
+      image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
       expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, price/location, and usable images are clear.',
     },
   });
@@ -1062,14 +1245,21 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
 
 function hashtagDiscoveryUrlFor({ platform, tag, area, intent }) {
   const query = `#${tag} ${area} ${intent}`;
+  const normalizedTag = String(tag || '').replace(/^#/, '').toLowerCase();
   if (platform === 'x') {
     return `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query&f=live`;
   }
   if (platform === 'instagram') {
-    return `https://www.instagram.com/explore/tags/${String(tag).toLowerCase()}/`;
+    return `https://www.instagram.com/explore/tags/${normalizedTag}/`;
   }
   if (platform === 'facebook') {
-    return `https://www.facebook.com/hashtag/${encodeURIComponent(String(tag).toLowerCase())}`;
+    return `https://www.facebook.com/hashtag/${encodeURIComponent(normalizedTag)}`;
+  }
+  if (platform === 'tiktok') {
+    return `https://www.tiktok.com/tag/${encodeURIComponent(normalizedTag)}`;
+  }
+  if (platform === 'youtube') {
+    return `https://www.youtube.com/hashtag/${encodeURIComponent(normalizedTag)}`;
   }
   return discoveryUrlFor({ platform, area, intent });
 }
@@ -1096,8 +1286,11 @@ function hashtagDiscoverySource({ platform, tag, area, district, intent, index }
       generated_hashtag_discovery: true,
       hashtag: `#${tag}`,
       query: label,
-      freshness_window_days: 90,
+      freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
+      target_source_year: TARGET_SOURCE_YEAR,
+      target_property_window: 'Prioritise hashtag results from 2026, especially the last four months.',
       platform_aliases: platform === 'x' ? ['twitter', 'x'] : undefined,
+      image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
       expected_action: 'Promote source pages/accounts first; queue a property only when a specific recent listing has enough evidence.',
     },
   });
@@ -1155,7 +1348,7 @@ function expandedDiscoverySources(limit = Infinity) {
   return sources;
 }
 
-function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'facebook'], limit = Infinity) {
+function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'facebook', 'tiktok', 'youtube'], limit = Infinity) {
   const sources = [];
   for (const [[district, area], areaIndex] of DISCOVERY_AREAS.map((item, index) => [item, index])) {
     for (const [intentIndex, intent] of DISCOVERY_INTENTS.entries()) {
@@ -1185,7 +1378,7 @@ function buildPropertySourceRegistry() {
     X_HASHTAG_DISCOVERY_TARGET_COUNT
   );
   const generatedCrossPlatformHashtagDiscoverySources = expandedHashtagDiscoverySources(
-    ['instagram', 'facebook'],
+    ['instagram', 'facebook', 'tiktok', 'youtube'],
     CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT
   );
   const discoverySourceTargetCount = Math.max(
@@ -1295,11 +1488,13 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
   if (!db?.pool) throw new Error('db.pool is required');
   const client = await db.pool.connect();
   const registrySources = sources || getPropertySourceRegistry();
-  const rows = registrySources.map(normalizeSourceForDb);
   try {
     await client.query('BEGIN');
     const upserted = [];
-    for (const row of rows) {
+    const activeSourceKeys = [];
+    for (const item of registrySources) {
+      const row = normalizeSourceForDb(item);
+      activeSourceKeys.push(row.source_key);
       const result = await client.query(
         `INSERT INTO property_source_registry (
           source_key, source_name, platform, source_type, source_url, handle,
@@ -1369,7 +1564,6 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
       );
       upserted.push(result.rows[0]);
     }
-    const activeSourceKeys = rows.map((row) => row.source_key);
     const pruned = await client.query(
       `DELETE FROM property_source_registry
        WHERE metadata->>'launch_batch' = $1
