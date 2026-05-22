@@ -1,13 +1,18 @@
-const twilio = require('twilio');
-
 const db = require('../config/database');
 const logger = require('../config/logger');
+
+let twilioPackage = null;
+
+function getTwilioPackage() {
+  if (!twilioPackage) twilioPackage = require('twilio');
+  return twilioPackage;
+}
 
 function getTwilioClient() {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!sid || !token) return null;
-  return twilio(sid, token);
+  return getTwilioPackage()(sid, token);
 }
 
 async function sendWhatsAppText({ to, body }) {

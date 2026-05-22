@@ -1171,32 +1171,44 @@ function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'faceboo
   return sources;
 }
 
-const GENERATED_X_HASHTAG_DISCOVERY_SOURCES = expandedHashtagDiscoverySources(['x']).slice(0, X_HASHTAG_DISCOVERY_TARGET_COUNT);
-const GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES = expandedHashtagDiscoverySources(['instagram', 'facebook']).slice(0, CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT);
-const DISCOVERY_SOURCE_TARGET_COUNT = Math.max(
-  0,
-  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
-    - BASE_PROPERTY_SOURCE_REGISTRY.length
-    - GENERATED_X_HASHTAG_DISCOVERY_SOURCES.length
-    - GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES.length
-);
-const GENERATED_DISCOVERY_SOURCES = expandedDiscoverySources().slice(0, DISCOVERY_SOURCE_TARGET_COUNT);
+let propertySourceRegistryCache = null;
 
-const PROPERTY_SOURCE_REGISTRY = [
-  ...BASE_PROPERTY_SOURCE_REGISTRY,
-  ...GENERATED_X_HASHTAG_DISCOVERY_SOURCES,
-  ...GENERATED_CROSS_PLATFORM_HASHTAG_DISCOVERY_SOURCES,
-  ...GENERATED_DISCOVERY_SOURCES,
-];
+function buildPropertySourceRegistry() {
+  const generatedXHashtagDiscoverySources = expandedHashtagDiscoverySources(['x']).slice(0, X_HASHTAG_DISCOVERY_TARGET_COUNT);
+  const generatedCrossPlatformHashtagDiscoverySources = expandedHashtagDiscoverySources(['instagram', 'facebook'])
+    .slice(0, CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT);
+  const discoverySourceTargetCount = Math.max(
+    0,
+    PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
+      - BASE_PROPERTY_SOURCE_REGISTRY.length
+      - generatedXHashtagDiscoverySources.length
+      - generatedCrossPlatformHashtagDiscoverySources.length
+  );
+  const generatedDiscoverySources = expandedDiscoverySources().slice(0, discoverySourceTargetCount);
 
-function byPlatformSummary(sources = PROPERTY_SOURCE_REGISTRY) {
+  return [
+    ...BASE_PROPERTY_SOURCE_REGISTRY,
+    ...generatedXHashtagDiscoverySources,
+    ...generatedCrossPlatformHashtagDiscoverySources,
+    ...generatedDiscoverySources,
+  ];
+}
+
+function getPropertySourceRegistry() {
+  if (!propertySourceRegistryCache) {
+    propertySourceRegistryCache = buildPropertySourceRegistry();
+  }
+  return propertySourceRegistryCache;
+}
+
+function byPlatformSummary(sources = getPropertySourceRegistry()) {
   return sources.reduce((acc, item) => {
     acc[item.platform] = (acc[item.platform] || 0) + 1;
     return acc;
   }, {});
 }
 
-function byStatusSummary(sources = PROPERTY_SOURCE_REGISTRY) {
+function byStatusSummary(sources = getPropertySourceRegistry()) {
   return sources.reduce((acc, item) => {
     acc[item.status] = (acc[item.status] || 0) + 1;
     return acc;
@@ -1204,24 +1216,25 @@ function byStatusSummary(sources = PROPERTY_SOURCE_REGISTRY) {
 }
 
 function summarizePropertySourceRegistry() {
-  const sourcePageCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'source_page').length;
-  const discoveryFeedCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'discovery_feed').length;
-  const reviewedSourcePagesCount = PROPERTY_SOURCE_REGISTRY.filter((item) => sourceRecordKind(item) === 'source_page' && item.status === 'active').length;
+  const registry = getPropertySourceRegistry();
+  const sourcePageCount = registry.filter((item) => sourceRecordKind(item) === 'source_page').length;
+  const discoveryFeedCount = registry.filter((item) => sourceRecordKind(item) === 'discovery_feed').length;
+  const reviewedSourcePagesCount = registry.filter((item) => sourceRecordKind(item) === 'source_page' && item.status === 'active').length;
   return {
     batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
     target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
-    count: PROPERTY_SOURCE_REGISTRY.length,
-    by_platform: byPlatformSummary(),
-    by_status: byStatusSummary(),
+    count: registry.length,
+    by_platform: byPlatformSummary(registry),
+    by_status: byStatusSummary(registry),
     by_record_kind: {
       source_page: sourcePageCount,
       discovery_feed: discoveryFeedCount,
     },
     reviewed_source_pages_count: reviewedSourcePagesCount,
     discovery_feed_count: discoveryFeedCount,
-    direct_contact_sources: PROPERTY_SOURCE_REGISTRY.filter((item) => item.canContactDirectly).length,
-    hashtags: [...new Set(PROPERTY_SOURCE_REGISTRY.flatMap((item) => item.hashtags || []))].slice(0, 18),
-    samples: PROPERTY_SOURCE_REGISTRY.slice(0, 10).map((item) => ({
+    direct_contact_sources: registry.filter((item) => item.canContactDirectly).length,
+    hashtags: [...new Set(registry.flatMap((item) => item.hashtags || []))].slice(0, 18),
+    samples: registry.slice(0, 10).map((item) => ({
       key: item.key,
       name: item.name,
       platform: item.platform,
@@ -1267,10 +1280,11 @@ function normalizeSourceForDb(item) {
   };
 }
 
-async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGISTRY } = {}) {
+async function seedPropertySourceRegistry({ db, sources } = {}) {
   if (!db?.pool) throw new Error('db.pool is required');
   const client = await db.pool.connect();
-  const rows = sources.map(normalizeSourceForDb);
+  const registrySources = sources || getPropertySourceRegistry();
+  const rows = registrySources.map(normalizeSourceForDb);
   try {
     await client.query('BEGIN');
     const upserted = [];
@@ -1357,8 +1371,8 @@ async function seedPropertySourceRegistry({ db, sources = PROPERTY_SOURCE_REGIST
       batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
       upserted_sources: upserted.length,
       pruned_stale_sources: pruned.rowCount,
-      by_platform: byPlatformSummary(sources),
-      by_status: byStatusSummary(sources),
+      by_platform: byPlatformSummary(registrySources),
+      by_status: byStatusSummary(registrySources),
       sources: upserted,
     };
   } catch (error) {
@@ -1429,10 +1443,10 @@ async function listPropertySourceRegistry({ db, limit = 250 } = {}) {
   };
 }
 
-module.exports = {
+const exported = {
   PROPERTY_SOURCE_REGISTRY_BATCH_ID,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
-  PROPERTY_SOURCE_REGISTRY,
+  getPropertySourceRegistry,
   normalizeSourceForDb,
   sourceRecordKind,
   sourceRecordLabel,
@@ -1440,3 +1454,10 @@ module.exports = {
   seedPropertySourceRegistry,
   listPropertySourceRegistry,
 };
+
+Object.defineProperty(exported, 'PROPERTY_SOURCE_REGISTRY', {
+  enumerable: true,
+  get: getPropertySourceRegistry,
+});
+
+module.exports = exported;
