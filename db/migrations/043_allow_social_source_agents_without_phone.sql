@@ -1,0 +1,2 @@
+ALTER TABLE agents
+  ALTER COLUMN phone DROP NOT NULL;
