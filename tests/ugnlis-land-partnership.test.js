@@ -58,13 +58,18 @@ function testRoutesAndUi() {
   const whatsappRoute = read('routes/whatsapp.js');
   assert(whatsappRoute.includes('buildUgNlisAssistantReply'));
   assert(whatsappRoute.includes('isUgNlisLandVerificationIntent'));
+  assert(whatsappRoute.includes('stripLinksAndIdsForNumericParsing'));
+  assert(whatsappRoute.includes('land search concierge'));
+  assert(whatsappRoute.includes('safe next steps'));
   assert(whatsappRoute.includes('land_verification_help_requested_at'));
 
   const frontend = read('assets/makaug-app.js');
+  assert(frontend.includes('shouldShowUgNlisAdvisory'));
   assert(frontend.includes('renderUgNlisVerificationCard'));
   assert(frontend.includes('saveAdminLandVerificationReview'));
   assert(frontend.includes('about.landHubTitle'));
   assert(frontend.includes('Official searches happen on UgNLIS'));
+  assert(frontend.includes('titleSensitiveTypes'));
   assert(frontend.includes('UgNLIS guidance for land'));
 
   const html = read('index.html');
@@ -77,6 +82,8 @@ function testWhatsappCopy() {
   assert(reply.includes('UgNLIS'));
   assert(reply.includes('https://ugnlis.mlhud.go.ug/'));
   assert(reply.includes('https://makaug.com/safety'));
+  assert(reply.includes('Next step: reply with the area or district'));
+  assert(reply.includes('title/tenure details'));
 }
 
 testServicePack();

@@ -129,6 +129,19 @@ const scenarios = [
     ]
   },
   {
+    name: 'Land Search Concierge property URL routes to UgNLIS help without UUID budget',
+    messages: [
+      "Hi makaug, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps. Page: makaug.com/property/a314682b-a329-4862-9343-2e73f5b81448"
+    ],
+    expect: [
+      {
+        step: 'main_menu',
+        includes: ['UgNLIS', 'Next step', 'title/tenure'],
+        excludes: ['max USh', '314682', 'Filters:', 'Send the area or district']
+      }
+    ]
+  },
+  {
     name: 'Land in Mbale mirrors the website land page',
     messages: ['Land in Mbale'],
     expect: [

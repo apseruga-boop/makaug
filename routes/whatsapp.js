@@ -2098,8 +2098,17 @@ function parseBedCount(text) {
   return null;
 }
 
+function stripLinksAndIdsForNumericParsing(text = '') {
+  return normalizeInput(text)
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?makaug\.com\/property\/[a-f0-9-]{8,}\b/gi, ' ')
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?makaug\.com\/[^\s]+/gi, ' ')
+    .replace(/\bhttps?:\/\/\S+/gi, ' ')
+    .replace(/\bwww\.\S+/gi, ' ')
+    .replace(/\b[a-f0-9]{8}-[a-f0-9-]{12,}\b/gi, ' ');
+}
+
 function parseBudget(text) {
-  const raw = normalizeInput(text);
+  const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return null;
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
   const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/gi;
@@ -4702,7 +4711,11 @@ function contextualPageRouteFromMessage(text = '') {
 function isUgNlisLandVerificationIntent(text = '') {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return false;
-  return /\b(ugnlis|national land information system|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean);
+  if (/\b(ugnlis|national land information system|land search concierge|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean)) {
+    return true;
+  }
+  return /\b(?:land|plot|property|listing)\b.{0,120}\b(?:title|tenure|ownership|official search|safe next steps|verification|verify|search steps|evidence)\b/i.test(clean)
+    || /\b(?:title|tenure|ownership|official search|safe next steps|verification|verify|search steps|evidence)\b.{0,120}\b(?:land|plot|property|listing)\b/i.test(clean);
 }
 
 // Step machine

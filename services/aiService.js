@@ -584,8 +584,17 @@ function parseAreaHeuristic(text) {
     .join(' ');
 }
 
+function stripLinksAndIdsForNumericParsing(text = '') {
+  return cleanText(text, 1200)
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?makaug\.com\/property\/[a-f0-9-]{8,}\b/gi, ' ')
+    .replace(/\b(?:https?:\/\/)?(?:www\.)?makaug\.com\/[^\s]+/gi, ' ')
+    .replace(/\bhttps?:\/\/\S+/gi, ' ')
+    .replace(/\bwww\.\S+/gi, ' ')
+    .replace(/\b[a-f0-9]{8}-[a-f0-9-]{12,}\b/gi, ' ');
+}
+
 function parseBudgetHeuristic(text) {
-  const raw = cleanText(text, 1200);
+  const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
 
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');

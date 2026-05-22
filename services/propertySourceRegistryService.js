@@ -1130,11 +1130,15 @@ function discoverySourceTypeFor({ platform, intent }) {
   return `public_${searchType}_search_feed`;
 }
 
-function expandedDiscoverySources() {
+function hasSourceLimit(sources, limit) {
+  return Number.isFinite(limit) && sources.length >= limit;
+}
+
+function expandedDiscoverySources(limit = Infinity) {
   const sources = [];
-  DISCOVERY_AREAS.forEach(([district, area], areaIndex) => {
-    ['youtube', 'tiktok', 'instagram', 'facebook'].forEach((platform) => {
-      DISCOVERY_INTENTS.forEach((intent, intentIndex) => {
+  for (const [[district, area], areaIndex] of DISCOVERY_AREAS.map((item, index) => [item, index])) {
+    for (const platform of ['youtube', 'tiktok', 'instagram', 'facebook']) {
+      for (const [intentIndex, intent] of DISCOVERY_INTENTS.entries()) {
         sources.push(discoverySource({
           platform,
           sourceType: discoverySourceTypeFor({ platform, intent }),
@@ -1144,18 +1148,19 @@ function expandedDiscoverySources() {
           index: `${areaIndex}-${intentIndex}`,
           url: discoveryUrlFor({ platform, area, intent }),
         }));
-      });
-    });
-  });
+        if (hasSourceLimit(sources, limit)) return sources;
+      }
+    }
+  }
   return sources;
 }
 
-function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'facebook']) {
+function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'facebook'], limit = Infinity) {
   const sources = [];
-  DISCOVERY_AREAS.forEach(([district, area], areaIndex) => {
-    DISCOVERY_INTENTS.forEach((intent, intentIndex) => {
-      PROPERTY_HASHTAG_WATCHLIST.forEach((tag, tagIndex) => {
-        platforms.forEach((platform) => {
+  for (const [[district, area], areaIndex] of DISCOVERY_AREAS.map((item, index) => [item, index])) {
+    for (const [intentIndex, intent] of DISCOVERY_INTENTS.entries()) {
+      for (const [tagIndex, tag] of PROPERTY_HASHTAG_WATCHLIST.entries()) {
+        for (const platform of platforms) {
           sources.push(hashtagDiscoverySource({
             platform,
             tag,
@@ -1164,19 +1169,25 @@ function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'faceboo
             intent,
             index: `${areaIndex}-${intentIndex}-${tagIndex}`,
           }));
-        });
-      });
-    });
-  });
+          if (hasSourceLimit(sources, limit)) return sources;
+        }
+      }
+    }
+  }
   return sources;
 }
 
 let propertySourceRegistryCache = null;
 
 function buildPropertySourceRegistry() {
-  const generatedXHashtagDiscoverySources = expandedHashtagDiscoverySources(['x']).slice(0, X_HASHTAG_DISCOVERY_TARGET_COUNT);
-  const generatedCrossPlatformHashtagDiscoverySources = expandedHashtagDiscoverySources(['instagram', 'facebook'])
-    .slice(0, CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT);
+  const generatedXHashtagDiscoverySources = expandedHashtagDiscoverySources(
+    ['x'],
+    X_HASHTAG_DISCOVERY_TARGET_COUNT
+  );
+  const generatedCrossPlatformHashtagDiscoverySources = expandedHashtagDiscoverySources(
+    ['instagram', 'facebook'],
+    CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT
+  );
   const discoverySourceTargetCount = Math.max(
     0,
     PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
@@ -1184,7 +1195,7 @@ function buildPropertySourceRegistry() {
       - generatedXHashtagDiscoverySources.length
       - generatedCrossPlatformHashtagDiscoverySources.length
   );
-  const generatedDiscoverySources = expandedDiscoverySources().slice(0, discoverySourceTargetCount);
+  const generatedDiscoverySources = expandedDiscoverySources(discoverySourceTargetCount);
 
   return [
     ...BASE_PROPERTY_SOURCE_REGISTRY,

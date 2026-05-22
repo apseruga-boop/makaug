@@ -24300,21 +24300,30 @@ function getUgNlisVerificationPack(p = {}) {
   };
 }
 
-function isUgNlisLandListing(p = {}) {
+function shouldShowUgNlisAdvisory(p = {}) {
   const text = `${p.type || ""} ${p.listing_type || ""} ${p.category || ""} ${p.title || ""} ${p.property_type || ""} ${p.title_type || ""}`.toLowerCase();
-  return normalizeType(p.type || p.listing_type || p.category) === "land" || /\b(land|plot|mailo|freehold|leasehold|customary|acre|decimals?)\b/.test(text);
+  const normalizedType = normalizeType(p.type || p.listing_type || p.category);
+  const titleSensitiveTypes = new Set(["land", "sale", "commercial"]);
+  return titleSensitiveTypes.has(normalizedType)
+    || /\b(land|plot|mailo|freehold|leasehold|customary|acre|acres|decimals?|title|tenure|commercial)\b/.test(text);
+}
+
+function isUgNlisLandListing(p = {}) {
+  return shouldShowUgNlisAdvisory(p);
 }
 
 function buildUgNlisWhatsappMessageForUi(p = {}) {
   const pack = getUgNlisVerificationPack(p);
-  const title = p.title || translatePropertyUi("this land listing");
+  const title = p.title || translatePropertyUi("this property listing");
   const location = [p.area, p.district].filter(Boolean).join(", ");
   return [
-    `Hi makaug, I need help with an official UgNLIS land search for ${title}.`,
+    `Hi makaug, I need land/title verification guidance for this listing.`,
+    `Listing: ${title}.`,
     location ? `Location: ${location}.` : "",
     pack.title_reference ? `Title: ${pack.title_reference}.` : "",
     pack.parcel_reference ? `Parcel: ${pack.parcel_reference}.` : "",
-    `Please guide me on the UgNLIS search and help store the evidence against this listing.`
+    `Please help me with location, size, price, title or tenure checks, the official UgNLIS search steps, and safe next steps.`,
+    p.id ? `Page: ${window.location.origin}/property/${p.id}` : ""
   ].filter(Boolean).join("\n");
 }
 
