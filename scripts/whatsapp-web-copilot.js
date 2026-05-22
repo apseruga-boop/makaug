@@ -1577,10 +1577,21 @@ async function processOutbox(page, { recipient = '', maxSends = OUTBOX_SENDS_PER
 }
 
 async function ensureWhatsappTab(page) {
-  if (!page.url() || page.url() === 'about:blank') {
-    await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
-  } else if (!page.url().includes('web.whatsapp.com')) {
-    await page.goto('https://web.whatsapp.com', { waitUntil: 'domcontentloaded' });
+  const needsWhatsapp = !page.url() || page.url() === 'about:blank' || !page.url().includes('web.whatsapp.com');
+  if (!needsWhatsapp) return;
+
+  try {
+    await page.goto('https://web.whatsapp.com', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000
+    });
+  } catch (error) {
+    const currentUrl = page.url();
+    if (currentUrl.includes('web.whatsapp.com')) {
+      log(`WhatsApp navigation is still loading; continuing with current tab (${error?.message || error}).`);
+      return;
+    }
+    throw error;
   }
 }
 
@@ -1618,14 +1629,28 @@ async function recoverWhatsappPage(context, previousPage) {
 async function main() {
   let browser = null;
   let context = null;
+  let connectedOverCdp = false;
 
   if (CDP_URL) {
-    browser = await chromium.connectOverCDP(CDP_URL);
-    context = browser.contexts()[0];
-    if (!context) {
-      throw new Error(`No browser context available via CDP at ${CDP_URL}`);
+    try {
+      browser = await chromium.connectOverCDP(CDP_URL);
+      context = browser.contexts()[0];
+      if (!context) {
+        throw new Error(`No browser context available via CDP at ${CDP_URL}`);
+      }
+      connectedOverCdp = true;
+    } catch (error) {
+      log(`CDP endpoint unavailable at ${CDP_URL}; launching persistent WhatsApp Web profile instead.`);
+      log(`CDP error: ${error?.message || error}`);
+      browser = null;
+      context = null;
     }
-  } else {
+  }
+
+  if (!context) {
+    if (!fs.existsSync(CHROME_PATH)) {
+      throw new Error(`Chrome executable not found at ${CHROME_PATH}`);
+    }
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       headless: false,
@@ -1641,7 +1666,7 @@ async function main() {
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
   log(`Poll interval: ${POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
-  if (CDP_URL) {
+  if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
     log(`Profile dir: ${PROFILE_DIR}`);
