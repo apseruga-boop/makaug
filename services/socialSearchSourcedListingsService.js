@@ -568,6 +568,38 @@ function sourceContactLabelForAgent(agent = {}) {
   return 'Open the public source page';
 }
 
+function sourcePlatformFor(agent = {}, item = {}) {
+  const explicit = String(item.sourcePlatform || item.platform || agent.platform || agent.sourcePlatform || '').trim();
+  if (explicit) return explicit;
+  const evidence = [
+    agent.channelUrl,
+    agent.website,
+    item.sourceUrl,
+    item.postUrl,
+    item.videoUrl,
+    item.youtubeId ? 'youtube' : '',
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (evidence.includes('tiktok')) return 'TikTok';
+  if (evidence.includes('instagram')) return 'Instagram';
+  if (evidence.includes('facebook')) return 'Facebook';
+  if (evidence.includes('twitter.com') || evidence.includes('x.com')) return 'X';
+  if (evidence.includes('youtube') || item.youtubeId) return 'YouTube';
+  if (evidence.includes('http')) return 'Website';
+  return 'Online source';
+}
+
+function sourcePlatformFeedLabel(platform = '') {
+  const normalized = String(platform || '').trim().toLowerCase();
+  if (normalized === 'x') return 'public X property feed';
+  if (normalized === 'twitter') return 'public X/Twitter property feed';
+  if (normalized === 'youtube') return 'public YouTube Shorts feed';
+  if (normalized === 'tiktok') return 'public TikTok property feed';
+  if (normalized === 'instagram') return 'public Instagram property feed';
+  if (normalized === 'facebook') return 'public Facebook property feed';
+  if (normalized === 'website') return 'public property website feed';
+  return 'public online property source';
+}
+
 const DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES = [
   { file: 'hqdefault.jpg', label: 'Source video cover still', primary: true },
   { file: '1.jpg', label: 'Source video supporting still', primary: false },
@@ -738,6 +770,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourceContactUrl = sourceContactUrlForAgent(agent, item);
   const sourceContactMethod = sourceContactMethodForAgent(agent);
   const sourceContactLabel = sourceContactLabelForAgent(agent);
+  const sourcePlatform = sourcePlatformFor(agent, item);
+  const hasDirectAgentPhone = Boolean(String(agent.phone || agent.phoneAlt || '').trim());
+  const sourceContactAvailableWithoutPhone = Boolean(!hasDirectAgentPhone && sourceContactUrl);
   const nearby = NEARBY[item.nearbyKey] || [];
   const sourceImageRows = youtubeImageRowsFor(item);
   const imageRows = listingImageRowsFor(item);
@@ -752,7 +787,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_batch: SOCIAL_SEARCH_BATCH_ID,
     source_listing_key: item.key,
     source_registry_key: agent.key || item.agentKey || '',
-    source_platform: 'YouTube',
+    source_platform: sourcePlatform,
     source_type: 'social_video_channel',
     source_name: agent.name || '',
     source_agent_name: agent.name || '',
@@ -775,7 +810,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_contact_url: sourceContactUrl,
     source_contact_label: sourceContactLabel,
     source_contact_method: sourceContactMethod,
-    source_contact_platform: 'YouTube',
+    source_contact_platform: sourcePlatform,
+    source_contact_available_without_phone: sourceContactAvailableWithoutPhone,
+    source_no_phone_policy: 'No phone number is not a listing blocker when a public social/source profile exists; makaug shows Contact via source.',
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: true,
@@ -813,7 +850,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     longitude_source: 'manual_public_source_area_pin',
     area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
-    source_labels: ['found online', 'public YouTube Shorts feed', 'founder reported agent permission', sourceContactLabel],
+    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), 'founder reported agent permission', sourceContactLabel],
     source_urls: [agent.channelUrl, sourceUrl].filter(Boolean),
     photo_source_urls: sourceImageRows.map((image) => image.url),
     authorised_photo_urls: imageRows.map((image) => image.url),
@@ -1280,6 +1317,10 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
       ? `Need ${targetGap} more recent property posts with clear source URL, usable images, location, price or guide price, and a contact path such as phone, email, website, or social source before the 200/day King queue target is met.`
       : '',
     evidence_policy: 'Do not fill the 200/day target with fabricated or low-confidence properties. Queue only specific posts/listings with evidence and clear images.',
+    no_phone_source_contact_policy:
+      'No public phone number is not a blocker when the source has a public social profile, website, or source page. makaug shows Contact via source until the agent adds a direct number.',
+    source_page_vs_property_policy:
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds. King queues only actual 2026 property posts with source URL, price, location, usable images, and a contact route.',
     next_required_inputs: [
       'Run the sweep with production admin credentials or a Render one-off job so it writes to the live King queue.',
       'Add platform/API access for YouTube, Meta/Facebook/Instagram, X, and TikTok or use an authenticated review workflow for those sources.',

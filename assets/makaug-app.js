@@ -9053,7 +9053,7 @@ function adminSeededListingSummaryHtml(item = {}, options = {}) {
         ${id ? `<button type="button" onclick="openAdminListingLivePreview(${idArg})" class="border border-green-300 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[11px] font-bold">Live-style Preview</button>` : ""}
         ${previewUrl ? `<a href="${adminAttr(previewUrl)}" target="_blank" rel="noopener" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-2 py-1 rounded text-[11px] font-bold">Private Preview Link</a>` : ""}
         ${publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-2 py-1 rounded text-[11px] font-bold">Public Link After Approval</a>` : ""}
-        ${videoUrl ? `<a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">YouTube Source</a>` : ""}
+        ${videoUrl ? `<a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open Source</a>` : ""}
       </div>
     </div>`;
 }
@@ -9265,6 +9265,8 @@ async function adminSeedSocialSearchAuthorisedListings() {
           <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} evidence-ready properties</div>
           <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with evidence-ready records.")}</div>
           <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue only specific public property posts with clear evidence.")}</div>
+          ${targetStatus.no_phone_source_contact_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.no_phone_source_contact_policy)}</div>` : ""}
+          ${targetStatus.source_page_vs_property_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.source_page_vs_property_policy)}</div>` : ""}
         </div>` : "";
     const visibleSampleHtml = visibleSamples
       .map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true }))
@@ -9275,19 +9277,19 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="font-black">Found-online property candidates created</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending review records are shown below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
-        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X, Instagram, TikTok, YouTube, Facebook, and websites. The Review Queue only receives actual properties after a specific 2026 post has source evidence, contact path, location, price, and usable images.</div>
+        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X, Instagram, TikTok, YouTube, Facebook, and websites. The Review Queue only receives actual properties after a specific 2026 post has source evidence, contact path, location, price, and usable images. A public social/source profile counts as the contact path when no phone is published.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
           <div class="mt-1">Use source/agent-authorised land photos only when they clearly belong to the listing. If no reliable photo exists, King adds a makaug land-size guide illustration so reviewers can see the plot scale without using fake room photos.</div>
         </div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
-        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source records need source review before they can become listing candidates. Open the Source Database to inspect the page/channel/feed.</div>` : ""}
+        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2026 property post before King queues it.</div>` : ""}
         ${visibleSampleHtml ? `<div class="mt-2 space-y-2">${visibleSampleHtml}</div>` : `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-blue-900">No pending found-online records need review in this run. Approved or live records have been removed from this pending panel.</div>`}`;
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. They are source pages/posts that need a contact path, evidence, price, location, or usable images before King queues a listing.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2026 property post, source URL, location, price, or usable images before King queues a listing.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9358,7 +9360,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, and search feeds; individual videos/posts are stored only on a property candidate after King finds a specific recent listing with evidence, contact path, location, price, and usable images.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, and search feeds; individual videos/posts are stored only on a property candidate after King finds a specific recent listing with evidence, contact path, location, price, and usable images. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>

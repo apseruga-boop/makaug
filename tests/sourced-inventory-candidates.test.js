@@ -200,6 +200,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
   assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
+  assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');
   assert(socialSearchServiceSource.includes('function normalizedStatusValue'), 'service should trim and normalize stored statuses');
   assert(socialSearchServiceSource.includes('const reviewQueueVisible = isReviewQueueStatus(existing);'), 'service should evaluate existing records with status and moderation stage together');
   assert(socialSearchServiceSource.includes('item.review_queue_visible && !item.already_live_or_approved && isReviewQueueStatus(item)'), 'service should exclude final records from review_queue_listings');
@@ -219,6 +220,9 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
   assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
   assert(frontend.includes('"First posted online"'), 'source disclosure should translate first-posted metadata');
+  assert(frontend.includes('"First picked up by makaug"'), 'source disclosure should translate first-picked-up metadata');
+  assert(frontend.includes('"Contact via source"'), 'source disclosure should translate contact-through-source action');
+  assert(frontend.includes('Original post date is being confirmed from the source platform'), 'source disclosure should explain when platform post date is not exposed');
   assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');
   assert(frontend.includes('detail-broker-profile-link'), 'detail contact card should make broker logo/name click through to the profile');
 });
@@ -362,6 +366,8 @@ test('found-online social search batch creates pending listings with agent profi
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
   assert.strictEqual(summary.daily_target_status.meets_daily_minimum, false, 'current curated list should not pretend it meets the 200/day minimum');
   assert(/Do not fill the 200\/day target/i.test(summary.daily_target_status.evidence_policy), 'daily target status should protect against weak/fabricated queue padding');
+  assert(/No public phone number is not a blocker/i.test(summary.daily_target_status.no_phone_source_contact_policy), 'daily target status should explain social/source contact fallback');
+  assert(/source pages, hashtags, accounts, and discovery feeds/i.test(summary.daily_target_status.source_page_vs_property_policy), 'daily target status should separate monitored sources from queued properties');
   assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
   assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
@@ -375,13 +381,19 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.found_online, true);
     assert.strictEqual(extra.social_search_candidate, true);
     assert.strictEqual(extra.source_badge, 'found_online');
+    assert(extra.source_platform, `${listing.title} should store the source platform`);
+    assert.strictEqual(extra.source_contact_platform, extra.source_platform, `${listing.title} should keep the contact platform aligned with the source platform`);
     assert(extra.source_contact_url && /^https?:\/\//.test(extra.source_contact_url), `${listing.title} should expose a public source/social contact URL`);
     assert(extra.source_contact_method, `${listing.title} should expose a contact method even when no phone is present`);
     assert(extra.source_audience_label || extra.source_followers_label, `${listing.title} should show source audience/follower metadata`);
     assert(extra.added_to_makaug_at, `${listing.title} should store when makaug added the sourced record`);
+    assert(/No phone number is not a listing blocker/i.test(extra.source_no_phone_policy), `${listing.title} should store the no-phone source contact policy`);
     if (!listing.lister_phone) {
       assert.strictEqual(extra.source_contact_method, 'social', `${listing.title} should fall back to social contact when no phone is published`);
       assert(/source|social|channel/i.test(extra.source_contact_label), `${listing.title} should explain the social contact fallback`);
+      assert.strictEqual(extra.source_contact_available_without_phone, true, `${listing.title} should mark source contact as available without a phone`);
+    } else {
+      assert.strictEqual(extra.source_contact_available_without_phone, false, `${listing.title} should not mark source-only contact when a phone is published`);
     }
     assert.strictEqual(extra.consent_confirmed, true);
     assert.strictEqual(extra.image_rights_confirmed, true);
@@ -432,10 +444,19 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('already_live_or_approved_properties'), 'daily found-online sweeps should separate already-live records from the pending panel');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_review_records'), 'daily found-online sweeps should expose source-review records separately');
   assert(read('services/socialSearchSourcedListingsService.js').includes('daily_target_status'), 'daily found-online sweeps should return 200/day target status for King');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('function sourcePlatformFor'), 'daily found-online sweeps should normalize source platform metadata');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePlatformFeedLabel'), 'daily found-online sweeps should label platform-specific feeds');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('source_page_vs_property_policy'), 'daily found-online sweeps should explain source pages versus queued properties');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
   assert(frontend.includes('Queue Found-Online Properties'), 'dashboard should label the found-online queue action');
   assert(frontend.includes('already live/approved records were hidden from this pending panel'), 'dashboard should hide approved/live records from pending moderation status cards');
   assert(frontend.includes('adminSourceReviewRecordSummaryHtml'), 'dashboard should render source-review records with source/contact links');
+  assert(frontend.includes('A public social/source profile counts as the contact path when no phone is published'), 'dashboard should make no-phone social contact acceptable');
+  assert(frontend.includes('source pages/feeds are parked for source review, not hidden properties'), 'dashboard should clarify source-review records are not pending properties');
+  assert(frontend.includes('No phone number is not a blocker if a social/source profile exists'), 'dashboard should explain source-review no-phone policy');
+  assert(frontend.includes('A page without a phone can still be usable'), 'source database should explain public social/source URLs can be contact paths');
+  assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');
   assert(frontend.includes('Land image rule'), 'dashboard should explain the land-image fallback strategy');
   assert(frontend.includes('Morning sweep target'), 'dashboard should show the daily evidence-ready target/gap after a sweep');
   const listing = plannedSocialSearchListings()[0];
