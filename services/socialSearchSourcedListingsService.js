@@ -709,6 +709,29 @@ function reviewSteps(item = {}) {
   return steps;
 }
 
+function sourcePublishedAtFor(item = {}) {
+  return item.firstPostedOnlineAt
+    || item.sourcePublishedAt
+    || item.videoPublishedAt
+    || item.youtubePublishedAt
+    || item.postPublishedAt
+    || item.platformPublishedAt
+    || item.publishedAt
+    || item.originalPostedAt
+    || item.sourcePostedAt
+    || item.postedAt
+    || null;
+}
+
+function sourcePublishedLabelFor(item = {}) {
+  const publishedAt = sourcePublishedAtFor(item);
+  if (!publishedAt) {
+    return 'Original post date is being confirmed from the source platform.';
+  }
+  const dateText = String(publishedAt).slice(0, 10);
+  return dateText ? `First posted online on ${dateText}` : 'Original post date is being confirmed from the source platform.';
+}
+
 function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl = '') {
   const agent = agentByKey(item.agentKey) || {};
   const sourceUrl = youtubeUrl(item.youtubeId);
@@ -719,6 +742,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourceImageRows = youtubeImageRowsFor(item);
   const imageRows = listingImageRowsFor(item);
   const generatedSupportImageRows = imageRows.filter((image) => /^data:image\//i.test(image.url));
+  const sourcePublishedAt = sourcePublishedAtFor(item);
+  const sourcePublishedLabel = sourcePublishedLabelFor(item);
   return {
     sourced_inventory_candidate: true,
     social_search_candidate: true,
@@ -733,10 +758,16 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_agent_name: agent.name || '',
     source_url: sourceUrl,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
-    first_seen_online_label: 'First seen by makaug source watch on 20 May 2026',
-    first_posted_online_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
-    source_published_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
-    original_publish_date_status: 'Exact platform publish date needs confirmation from the public source or agent.',
+    first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
+    first_posted_online_at: sourcePublishedAt || null,
+    source_published_at: sourcePublishedAt || null,
+    video_published_at: sourcePublishedAt || null,
+    youtube_source_published_at: sourcePublishedAt || null,
+    first_posted_online_label: sourcePublishedLabel,
+    source_published_label: sourcePublishedLabel,
+    original_publish_date_status: sourcePublishedAt
+      ? 'Source platform publish date captured from the stored source record.'
+      : 'Original post date is being confirmed from the source platform.',
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
     added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
@@ -771,7 +802,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     youtube_url: sourceUrl,
     youtube_video_id: item.youtubeId,
     youtube_source_title: item.sourceTitle,
-    youtube_source_published_label: 'Exact platform publish date was not exposed in the stored source record; makaug shows the first-seen date until the source date is confirmed.',
+    youtube_source_published_label: sourcePublishedLabel,
     resolved_location_label: item.address,
     map_pin_label: item.address,
     map_pin_accuracy_note: 'Closest responsible area-level pin from public source title/screenshot context; confirm exact gate or plot pin with the agent before public approval.',

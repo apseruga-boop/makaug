@@ -4260,20 +4260,46 @@ function isFoundOnlineWhatsappRow(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const badge = String(extra.source_badge || extra.source_discovery_label || '').toLowerCase();
   const sourceBatch = String(extra.source_batch || '').toLowerCase();
-  return extra.found_online === true
+  const sourceType = String(extra.source_type || extra.source_kind || '').toLowerCase();
+  const sourcePlatform = String(extra.source_platform || '').toLowerCase();
+  const listingSource = String(row.source || row.listing_source || extra.source || '').toLowerCase();
+  const hasSourceTrail = Boolean(
+    extra.source_listing_key
+    || extra.source_registry_key
+    || extra.source_url
+    || extra.source_contact_url
+    || extra.source_channel_url
+    || extra.youtube_channel_url
+  );
+  const looksSocial = /youtube|tiktok|instagram|facebook|twitter|x\b/.test(sourcePlatform);
+  return row.found_online === true
+    || row.social_search_candidate === true
+    || row.sourced_inventory_candidate === true
+    || extra.found_online === true
     || extra.social_search_candidate === true
+    || extra.sourced_inventory_candidate === true
     || badge === 'found_online'
     || badge === 'found online'
-    || sourceBatch === 'social_search_authorised_20260520';
+    || badge === 'sourced_online'
+    || badge === 'sourced online'
+    || badge.includes('found')
+    || badge.includes('sourced')
+    || sourceBatch === 'social_search_authorised_20260520'
+    || sourceBatch.startsWith('social_search')
+    || sourceBatch.includes('found_online')
+    || sourceBatch.includes('sourced')
+    || listingSource.includes('sourced')
+    || listingSource.includes('found_online')
+    || ((sourceType.includes('social') || sourceType.includes('online') || looksSocial) && hasSourceTrail);
 }
 
 function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
   if (!isFoundOnlineWhatsappRow(row)) return '';
   const code = resolveLangCode(lang);
   const labels = {
-    en: { found: 'Found online', posted: 'posted', first: 'first seen by makaug', added: 'added to makaug', source: 'source', audience: 'audience', contact: 'contact' },
-    lg: { found: 'Kizuuliddwa ku mutimbagano', posted: 'kyateekebwa', first: 'makaug yasooka okugiraba', added: 'kyayongerwa ku makaug', source: 'ensibuko', audience: 'abagoberera', contact: 'contact' },
-    sw: { found: 'Imepatikana mtandaoni', posted: 'ilichapishwa', first: 'ilionekana kwanza na makaug', added: 'imeongezwa kwenye makaug', source: 'chanzo', audience: 'wafuasi', contact: 'mawasiliano' }
+    en: { found: 'Sourced online', posted: 'posted online', first: 'first picked up by makaug', added: 'added to makaug', source: 'source', audience: 'audience', contact: 'contact', confirming: 'post date being confirmed' },
+    lg: { found: 'Ezuuliddwa online', posted: 'yasooka okuteekebwa online', first: 'makaug yasooka okugikima', added: 'kyayongerwa ku makaug', source: 'ensibuko', audience: 'abagoberera', contact: 'contact', confirming: 'olunaku lwa post lukakasibwa' },
+    sw: { found: 'Imepatikana mtandaoni', posted: 'ilichapishwa mtandaoni', first: 'ilichukuliwa kwanza na makaug', added: 'imeongezwa kwenye makaug', source: 'chanzo', audience: 'wafuasi', contact: 'mawasiliano', confirming: 'tarehe ya chapisho inathibitishwa' }
   };
   const copy = labels[code] || labels.en;
   const sourceName = normalizeInput(getExtraField(row, 'source_name') || getExtraField(row, 'owner_or_agent_name') || row.lister_name);
@@ -4281,13 +4307,27 @@ function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
   const audience = normalizeInput(getExtraField(row, 'source_followers_label') || getExtraField(row, 'source_audience_label'));
   const firstSeenRaw = getExtraField(row, 'first_seen_online_at') || getExtraField(row, 'last_checked_at') || row.created_at;
   const firstSeen = firstSeenRaw ? String(firstSeenRaw).slice(0, 10) : '';
-  const firstPostedRaw = getExtraField(row, 'first_posted_online_at') || getExtraField(row, 'source_published_at');
+  const firstPostedRaw = getExtraField(row, 'first_posted_online_at')
+    || getExtraField(row, 'source_published_at')
+    || getExtraField(row, 'video_published_at')
+    || getExtraField(row, 'video_posted_at')
+    || getExtraField(row, 'post_published_at')
+    || getExtraField(row, 'post_posted_at')
+    || getExtraField(row, 'platform_posted_at')
+    || getExtraField(row, 'youtube_published_at')
+    || getExtraField(row, 'youtube_source_published_at')
+    || getExtraField(row, 'published_at')
+    || getExtraField(row, 'publishedAt')
+    || getExtraField(row, 'original_posted_at')
+    || getExtraField(row, 'source_posted_at');
   const firstPosted = firstPostedRaw ? String(firstPostedRaw).slice(0, 10) : '';
   const addedRaw = getExtraField(row, 'added_to_makaug_at') || row.created_at;
   const added = addedRaw ? String(addedRaw).slice(0, 10) : '';
-  const contactMethod = normalizeInput(getExtraField(row, 'source_contact_label') || getExtraField(row, 'source_contact_method'));
+  const hasDirectContact = Boolean(row.lister_phone || row.contact_phone || row.phone || getExtraField(row, 'contact_phone') || getExtraField(row, 'phone') || getExtraField(row, 'contact_phone_alt'));
+  const hasSourceContact = Boolean(getExtraField(row, 'source_contact_url') || getExtraField(row, 'source_channel_url') || getExtraField(row, 'youtube_channel_url') || getExtraField(row, 'source_url'));
+  const contactMethod = normalizeInput(getExtraField(row, 'source_contact_label') || getExtraField(row, 'source_contact_method') || (!hasDirectContact && hasSourceContact ? 'public social source' : ''));
   const sourceBits = [sourceName, platform].filter(Boolean).join(' • ');
-  return `   🧭 ${copy.found}${firstPosted ? ` • ${copy.posted}: ${firstPosted}` : ''}${firstSeen ? ` • ${copy.first}: ${firstSeen}` : ''}${added ? ` • ${copy.added}: ${added}` : ''}${sourceBits ? ` • ${copy.source}: ${sourceBits}` : ''}${audience ? ` • ${copy.audience}: ${audience}` : ''}${contactMethod ? ` • ${copy.contact}: ${contactMethod}` : ''}`;
+  return `   🧭 ${copy.found} • ${copy.posted}: ${firstPosted || copy.confirming}${firstSeen ? ` • ${copy.first}: ${firstSeen}` : ''}${added ? ` • ${copy.added}: ${added}` : ''}${sourceBits ? ` • ${copy.source}: ${sourceBits}` : ''}${audience ? ` • ${copy.audience}: ${audience}` : ''}${contactMethod ? ` • ${copy.contact}: ${contactMethod}` : ''}`;
 }
 
 function isSponsoredWhatsappRow(row = {}) {

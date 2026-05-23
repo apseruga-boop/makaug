@@ -126,7 +126,9 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(html.includes('about.searchEngineTitle'), 'about page should include search-engine section');
   assert(frontend.includes('How makaug finds property information'), 'about i18n should include source model copy');
   assert(frontend.includes('listingOnlineSourceDisclosureHtml'), 'property detail should render source disclosure');
-  assert(frontend.includes('First seen by makaug'), 'source disclosure should show first-seen metadata');
+  assert(frontend.includes('First picked up by makaug'), 'source disclosure should show first-picked-up metadata');
+  assert(frontend.includes('First posted online'), 'source disclosure should show original source post metadata');
+  assert(frontend.includes('Being confirmed from source'), 'source disclosure should show a clear fallback while the original post date is being confirmed');
   assert(frontend.includes('Added to makaug'), 'source disclosure should show when makaug added the sourced record');
   assert(frontend.includes('Audience'), 'source disclosure should show follower/subscriber metadata when available');
   assert(frontend.includes('Contact via source'), 'source disclosure should support social/source contact fallback when no phone is published');
@@ -139,6 +141,7 @@ test('social search candidate records carry source registry and first-seen field
   assert(service.includes('realtor-mahad'), 'registry should include Realtor Mahad');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_registry_key'), 'social search listings should reference source registry keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes('first_seen_online_at'), 'social search listings should store first-seen online timestamp');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('first_posted_online_at'), 'social search listings should store source publish timestamp when available');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_platform'), 'social search listings should store source platform');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_audience_label'), 'social search listings should store source audience/follower metadata');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_method'), 'social search listings should store source contact fallback metadata');
@@ -147,6 +150,8 @@ test('social search candidate records carry source registry and first-seen field
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {
   assert(whatsappRoute.includes('formatFoundOnlineSourceLine'), 'WhatsApp formatter should include found-online source line');
   assert(whatsappRoute.includes('first_seen_online_at'), 'WhatsApp source line should read first-seen metadata');
+  assert(whatsappRoute.includes('first_posted_online_at'), 'WhatsApp source line should read first-posted metadata');
+  assert(whatsappRoute.includes('post date being confirmed'), 'WhatsApp source line should not invent missing source post dates');
   assert(whatsappRoute.includes('source_name'), 'WhatsApp source line should read source name');
   assert(whatsappRoute.includes('source_followers_label'), 'WhatsApp source line should include audience metadata when present');
   assert(whatsappRoute.includes('Every result opens on makaug'), 'WhatsApp results should still drive to makaug listing pages');

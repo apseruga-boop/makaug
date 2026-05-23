@@ -24172,11 +24172,37 @@ function isFoundOnlineListing(p = {}) {
   }
   const badge = String(extra.source_badge || extra.source_discovery_label || "").toLowerCase();
   const sourceBatch = String(extra.source_batch || "").toLowerCase();
-  return extra.found_online === true
+  const sourceType = String(extra.source_type || extra.source_kind || "").toLowerCase();
+  const sourcePlatform = String(extra.source_platform || "").toLowerCase();
+  const listingSource = String(p.source || p.listing_source || extra.source || "").toLowerCase();
+  const hasSourceTrail = Boolean(
+    extra.source_listing_key
+    || extra.source_registry_key
+    || extra.source_url
+    || extra.source_contact_url
+    || extra.source_channel_url
+    || extra.youtube_channel_url
+  );
+  const looksSocial = /youtube|tiktok|instagram|facebook|twitter|x\b/.test(sourcePlatform);
+  return p.found_online === true
+    || p.social_search_candidate === true
+    || p.sourced_inventory_candidate === true
+    || extra.found_online === true
     || extra.social_search_candidate === true
+    || extra.sourced_inventory_candidate === true
     || badge === "found_online"
     || badge === "found online"
-    || sourceBatch === "social_search_authorised_20260520";
+    || badge === "sourced_online"
+    || badge === "sourced online"
+    || badge.includes("found")
+    || badge.includes("sourced")
+    || sourceBatch === "social_search_authorised_20260520"
+    || sourceBatch.startsWith("social_search")
+    || sourceBatch.includes("found_online")
+    || sourceBatch.includes("sourced")
+    || listingSource.includes("sourced")
+    || listingSource.includes("found_online")
+    || ((sourceType.includes("social") || sourceType.includes("online") || looksSocial) && hasSourceTrail);
 }
 
 function listingFreshnessBadgeHtml(p = {}) {
@@ -24199,8 +24225,29 @@ function foundOnlineSourceMeta(p = {}) {
   }
   const sourceName = String(extra.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
   const platform = String(extra.source_platform || (extra.youtube_url || extra.video_url ? "YouTube" : "") || "").trim();
-  const sourceUrl = String(extra.source_url || extra.youtube_url || extra.video_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
-  const sourceContactUrl = String(extra.source_contact_url || extra.source_channel_url || extra.youtube_channel_url || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "") || "").trim();
+  const sourceUrl = String(
+    extra.source_url
+    || extra.source_evidence_url
+    || extra.original_url
+    || extra.post_url
+    || extra.platform_url
+    || extra.social_url
+    || extra.youtube_url
+    || extra.video_url
+    || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "")
+    || ""
+  ).trim();
+  const sourceContactUrl = String(
+    extra.source_contact_url
+    || extra.source_channel_url
+    || extra.youtube_channel_url
+    || extra.social_profile_url
+    || extra.channel_url
+    || extra.creator_url
+    || sourceUrl
+    || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "")
+    || ""
+  ).trim();
   const sourceContactLabel = String(extra.source_contact_label || "").trim();
   const sourceContactMethod = String(extra.source_contact_method || "").trim();
   const sourceContactPlatform = String(extra.source_contact_platform || platform || "").trim();
@@ -24208,14 +24255,31 @@ function foundOnlineSourceMeta(p = {}) {
   const firstPosted = formatListingDate(
     extra.first_posted_online_at
     || extra.source_published_at
+    || extra.video_published_at
+    || extra.video_posted_at
+    || extra.post_published_at
+    || extra.post_posted_at
+    || extra.platform_posted_at
+    || extra.youtube_published_at
+    || extra.youtube_source_published_at
+    || extra.published_at
+    || extra.publishedAt
     || extra.original_posted_at
     || extra.source_posted_at
   );
-  const firstPostedLabel = String(extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || "").trim();
+  const firstPostedLabel = String(extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || extra.original_publish_date_status || "").trim();
   const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
   const addedToMakaug = formatListingDate(extra.added_to_makaug_at || p.created_at || p.createdAt);
   const addedToMakaugLabel = String(extra.added_to_makaug_label || "").trim();
+  const hasDirectContact = Boolean(
+    p.lister_phone
+    || p.contact_phone
+    || p.phone
+    || extra.contact_phone
+    || extra.phone
+    || extra.contact_phone_alt
+  );
   return {
     sourceName,
     platform,
@@ -24231,6 +24295,7 @@ function foundOnlineSourceMeta(p = {}) {
     firstSeenLabel,
     addedToMakaug,
     addedToMakaugLabel,
+    hasDirectContact,
   };
 }
 
@@ -24238,26 +24303,29 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
   const meta = foundOnlineSourceMeta(p);
   if (!meta) return "";
   const sourceBits = [meta.sourceName, meta.platform].filter(Boolean).join(" • ");
+  const contactHref = meta.sourceContactUrl || meta.sourceUrl;
+  const contactCopy = meta.sourceContactLabel
+    || (meta.sourceContactMethod === "social" || !meta.hasDirectContact
+      ? translateListingLabel("Contact through the public social channel")
+      : translateListingLabel("Open the public source page for contact details."));
   return `
     <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
       <div class="flex items-start gap-2">
         <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
         <div>
           <div class="font-black">${translateListingLabel("Sourced online")}</div>
-          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source and checked before publishing on makaug.")}</div>
+          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.")}</div>
           <div class="mt-2 flex flex-wrap gap-2 text-xs">
-            ${meta.firstPosted ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted)}</span>` : ""}
-            ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First seen by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
+            <span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</span>
+            ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First picked up by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
             ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
             ${meta.followersLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(meta.followersLabel)}</span>` : ""}
             ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Open source")}</a>` : ""}
-            ${meta.sourceContactUrl && meta.sourceContactUrl !== meta.sourceUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Contact via source")}</a>` : ""}
+            ${contactHref ? `<a href="${adminAttr(contactHref)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Contact via source")}</a>` : ""}
           </div>
-          ${meta.firstPostedLabel && !meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstPostedLabel)}</div>` : ""}
-          ${meta.firstSeenLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.firstSeenLabel)}</div>` : ""}
-          ${meta.addedToMakaugLabel ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.addedToMakaugLabel)}</div>` : ""}
-          ${meta.sourceContactMethod === "social" && meta.sourceContactUrl ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(meta.sourceContactLabel || `No phone number is published. Contact the agent through ${meta.sourceContactPlatform || "the source platform"}.`)}</div>` : ""}
+          ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel("Original post date is being confirmed from the source platform."))}</div>` : ""}
+          ${contactHref && (!meta.hasDirectContact || meta.sourceContactMethod === "social") ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(contactCopy)}</div>` : ""}
         </div>
       </div>
     </div>`;
@@ -28800,13 +28868,18 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Message on WhatsApp": "Wandiika ku WhatsApp",
       "Sourced online": "Ezuuliddwa online",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
+      "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa. makaug eraga obujulizi bw'ensibuko abantu basobole okukakasa post eyasooka n'engeri y'okukwatagana.",
       "First posted online": "Yasooka okuteekebwa online",
       "First seen by makaug": "makaug yasooka okugiraba",
+      "First picked up by makaug": "makaug yasooka okugikima",
+      "Being confirmed from source": "Kikakasibwa okuva ku nsibuko",
+      "Original post date is being confirmed from the source platform.": "Olunaku lwa post eyasooka lukakasibwa okuva ku platform y'ensibuko.",
       "Added to makaug": "Yayongerwa ku makaug",
       "Audience": "Abagoberera",
       "Source": "Ensibuko",
       "Open source": "Ggulawo ensibuko",
       "Contact via source": "Kwatagana okuyita ku nsibuko",
+      "Contact through the public social channel": "Kwatagana okuyita ku mukutu gwa social ogw'olukale",
       "Open source contact": "Ggulawo contact y'ensibuko",
       "Open the public source page for contact details.": "Ggulawo omuko gw'ensibuko ey'olukale okulaba contact.",
       "No phone number is published. Use the source page to contact the lister.": "Tewali nnamba ya ssimu eteereddwawo. Kozesa omuko gw'ensibuko okukwatagana n'omulisi.",
@@ -28922,13 +28995,18 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Message on WhatsApp": "Tuma ujumbe WhatsApp",
       "Sourced online": "Imepatikana mtandaoni",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
+      "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni. makaug huonyesha njia ya chanzo ili wanunuzi wakague chapisho la awali na njia ya kuwasiliana.",
       "First posted online": "Ilichapishwa kwanza mtandaoni",
       "First seen by makaug": "Ilionekana kwanza na makaug",
+      "First picked up by makaug": "Ilichukuliwa kwanza na makaug",
+      "Being confirmed from source": "Inathibitishwa kutoka chanzo",
+      "Original post date is being confirmed from the source platform.": "Tarehe ya chapisho la awali inathibitishwa kutoka kwenye jukwaa la chanzo.",
       "Added to makaug": "Imeongezwa kwenye makaug",
       "Audience": "Wafuasi",
       "Source": "Chanzo",
       "Open source": "Fungua chanzo",
       "Contact via source": "Wasiliana kupitia chanzo",
+      "Contact through the public social channel": "Wasiliana kupitia chaneli ya kijamii ya umma",
       "Open source contact": "Fungua mawasiliano ya chanzo",
       "Open the public source page for contact details.": "Fungua ukurasa wa chanzo cha umma kupata mawasiliano.",
       "No phone number is published. Use the source page to contact the lister.": "Hakuna namba ya simu iliyochapishwa. Tumia ukurasa wa chanzo kuwasiliana na mtangazaji.",
