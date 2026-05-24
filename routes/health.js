@@ -33,7 +33,8 @@ router.get('/', async (req, res) => {
 router.get('/migrations', async (_req, res) => {
   const required = [
     '033_task3_engagement_crm.sql',
-    '034_task4_super_admin_alerts_payments.sql'
+    '034_task4_super_admin_alerts_payments.sql',
+    '044_clean_sourced_candidates_seed_found_online_2026.sql'
   ];
   try {
     const result = await db.query(
