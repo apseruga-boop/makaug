@@ -104,6 +104,8 @@ test('found-online video still preparation requires deliberate timestamps and ri
   assert.strictEqual(pkg.scripts['inventory:prepare-video-stills'], 'node scripts/prepare-found-online-video-stills.js');
   assert(videoStillScript.includes('yt-dlp'), 'video still workflow should use yt-dlp to fetch authorised source videos');
   assert(videoStillScript.includes('ffmpeg'), 'video still workflow should use ffmpeg to extract exact frames');
+  assert(videoStillScript.includes('tiktok_url'), 'video still workflow should accept exact TikTok video URLs');
+  assert(videoStillScript.includes('tiktok\\.com'), 'video still workflow should allow public TikTok URLs');
   assert(videoStillScript.includes('timestamps: exterior=00:00:05'), 'video still workflow should require labelled timestamps');
   assert(videoStillScript.includes('Refusing to extract/import-ready frames without --confirm-rights'), 'video still extraction should require rights confirmation');
   assert(videoStillScript.includes('found-online-image-import.csv'), 'video still workflow should produce importer-compatible CSV');
@@ -522,6 +524,28 @@ test('found-online source-post importer normalizes extracted posts for King revi
   assert.strictEqual(imported.sourceBatch, FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID, 'imported posts should use the source-post import batch');
   assert.strictEqual(imported.price, 350000000, 'importer should parse Uganda shorthand prices');
   assert.strictEqual(intake.eligible, true, 'imported no-phone posts with public source contact should be queueable');
+});
+
+test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
+  const imported = normalizeFoundOnlineSourcePost({
+    post_url: 'https://www.tiktok.com/@realtor_mahad/video/7330000000000000000',
+    source_page_url: 'https://www.tiktok.com/@realtor_mahad',
+    source_name: 'Realtor Mahad',
+    platform: 'TikTok',
+    title: 'Kira bungalow for sale',
+    caption: 'House tour of this bungalow in Kira, Uganda. Contact via profile.',
+    area: 'Kira',
+    district: 'Wakiso',
+    price_text: 'USh 450m',
+    listing_type: 'sale',
+  });
+  const intake = sourcePostMeetsLaunchIntakeRule(imported, imported.sourceAgent);
+  assert.strictEqual(imported.sourcePlatform, 'TikTok', 'TikTok post imports should keep the platform');
+  assert.strictEqual(imported.sourceAgent.tiktokUrl, 'https://www.tiktok.com/@realtor_mahad/video/7330000000000000000', 'exact TikTok URL should be usable as contact/source path');
+  assert.strictEqual(intake.date_status, 'needs_source_platform_date_confirmation', 'missing TikTok post dates should stay visible as confirmation-needed');
+  assert.strictEqual(intake.eligible, true, 'exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
+  assert.strictEqual(sourceImageRowsFor(imported).length, 0, 'TikTok posts without direct media URLs should not pretend to have copied images');
+  assert(socialSearchServiceSource.includes('sourceEvidenceCardDataUrl'), 'TikTok no-image imports should fall back to a labelled makaug evidence card');
 });
 
 test('found-online rebuild protects live approved social-search listings', () => {

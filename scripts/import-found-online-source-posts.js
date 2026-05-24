@@ -24,11 +24,17 @@ function usage() {
     'Usage:',
     '  node scripts/import-found-online-source-posts.js --input posts.json --dry-run',
     '  node scripts/import-found-online-source-posts.js --input posts.csv --confirm',
+    '  node scripts/import-found-online-source-posts.js --input tiktok-posts.csv --confirm',
     '',
     'Input fields accepted include:',
     '  post_url/source_url, source_page_url, source_key, source_name, platform, title, description,',
     '  first_posted_at/published_at/posted_at, district, area/location, price/price_text,',
     '  listing_type, bedrooms, bathrooms, image_urls, contact_phone, contact_email, source_contact_url',
+    '',
+    'TikTok minimum viable rows:',
+    '  source_url/post_url must be the exact public TikTok video URL when available.',
+    '  source_page_url can be the TikTok profile/contact path.',
+    '  first_posted_at and image_urls are optional; missing dates show as being confirmed and missing images use a labelled makaug evidence card.',
   ].join('\n'));
 }
 

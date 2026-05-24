@@ -27,7 +27,7 @@ function usage() {
     '',
     'CSV/JSON fields:',
     '  property_id OR inquiry_reference OR title',
-    '  youtube_url OR video_url OR source_url',
+    '  youtube_url OR tiktok_url OR video_url OR source_url',
     '  timestamps: exterior=00:00:05|living room=00:00:18|kitchen=00:00:39',
     '  or image_1_time,image_1_label ... image_8_time,image_8_label',
     '',
@@ -144,7 +144,7 @@ function framesFromRow(row) {
 }
 
 function videoUrlFromRow(row) {
-  return clean(row.youtube_url || row.video_url || row.source_url || row.original_url);
+  return clean(row.youtube_url || row.tiktok_url || row.video_url || row.source_url || row.original_url);
 }
 
 function commandExists(command) {
@@ -204,8 +204,8 @@ function writeCsv(rows, filePath) {
 
 function extractFrames(row, rowIndex) {
   const videoUrl = videoUrlFromRow(row);
-  if (!/^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(videoUrl)) {
-    throw new Error(`Row ${rowIndex}: youtube_url/video_url must be a YouTube URL`);
+  if (!/^https:\/\/(www\.)?(youtube\.com|youtu\.be|tiktok\.com)\//i.test(videoUrl)) {
+    throw new Error(`Row ${rowIndex}: youtube_url/tiktok_url/video_url must be a public YouTube or TikTok URL`);
   }
   const frames = framesFromRow(row);
   if (!frames.length) {
