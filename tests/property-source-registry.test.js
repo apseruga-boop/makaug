@@ -9,12 +9,16 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const service = read('services/propertySourceRegistryService.js');
 const migration = read('db/migrations/042_property_source_registry.sql');
+const tiktokDeepSweepMigration = read('db/migrations/046_tiktok_deep_sweep_source_profiles.sql');
+const tiktokVideoIndexMigration = read('db/migrations/047_tiktok_realtor_mahad_video_index.sql');
 const script = read('scripts/seed-property-source-registry.js');
 const dailySweepScript = read('scripts/run-daily-found-online-source-sweep.js');
 const adminRoute = read('routes/admin.js');
 const frontend = read('assets/makaug-app.js');
 const html = read('index.html');
 const whatsappRoute = read('routes/whatsapp.js');
+const agentsRoute = read('routes/agents.js');
+const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
   PROPERTY_SOURCE_REGISTRY,
@@ -147,6 +151,27 @@ test('social search candidate records carry source registry and first-seen field
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_platform'), 'social search listings should store source platform');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_audience_label'), 'social search listings should store source audience/follower metadata');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_method'), 'social search listings should store source contact fallback metadata');
+});
+
+test('TikTok deep sweep creates source profiles without fabricating hidden posts', () => {
+  assert(tiktokDeepSweepMigration.includes('tiktok_deep_sweep_20260524'), 'TikTok deep sweep migration should carry a traceable batch id');
+  assert(tiktokDeepSweepMigration.includes('tiktok-realtor-mahad-profile'), 'TikTok sweep should create the Realtor Mahad TikTok source profile');
+  assert(tiktokDeepSweepMigration.includes('tiktok-carnelian-properties-uganda-profile'), 'TikTok sweep should create the Carnelian TikTok source profile');
+  assert(tiktokDeepSweepMigration.includes('tiktok-deep-search-uganda-property-agent-2026'), 'TikTok sweep should add a 2026 property-agent search feed');
+  assert(tiktokDeepSweepMigration.includes('authenticated_tiktok_review_or_api_export_required_for_complete_item_list'), 'TikTok sweep should record the authenticated ingestion requirement');
+  assert(tiktokDeepSweepMigration.includes("WHERE platform = 'tiktok'"), 'TikTok sweep should refresh every existing TikTok source record');
+  assert(!tiktokDeepSweepMigration.includes('INSERT INTO properties'), 'TikTok sweep must not fabricate property rows from feed/search pages');
+  assert(agentsRoute.includes('REALTOR_MAHAD_TIKTOK_URL'), 'public broker profiles should expose Realtor Mahad TikTok');
+  assert(healthRoute.includes('046_tiktok_deep_sweep_source_profiles.sql'), 'migration health should expose the TikTok deep sweep status');
+});
+
+test('TikTok Realtor Mahad index stores recent video evidence for authenticated extraction', () => {
+  assert(tiktokVideoIndexMigration.includes('tiktok_realtor_mahad_video_index_20260524'), 'TikTok video index migration should carry a traceable batch id');
+  assert(tiktokVideoIndexMigration.includes('tiktok-realtor-mahad-urlebird-video-index'), 'TikTok video index should create a source profile for the public mirror/index');
+  assert(tiktokVideoIndexMigration.includes('public_2026_video_snippets'), 'TikTok video index should store reviewed 2026 video snippets');
+  assert(tiktokVideoIndexMigration.includes('needs exact TikTok post URL and stills before property import'), 'TikTok video evidence should block review-queue import until exact post media is extracted');
+  assert(!tiktokVideoIndexMigration.includes('INSERT INTO properties'), 'TikTok video index must not fabricate property rows from mirror snippets');
+  assert(healthRoute.includes('047_tiktok_realtor_mahad_video_index.sql'), 'migration health should expose the TikTok video index status');
 });
 
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {

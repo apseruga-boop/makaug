@@ -35,7 +35,9 @@ router.get('/migrations', async (_req, res) => {
     '033_task3_engagement_crm.sql',
     '034_task4_super_admin_alerts_payments.sql',
     '044_clean_sourced_candidates_seed_found_online_2026.sql',
-    '045_expand_found_online_sweep_images_and_sources.sql'
+    '045_expand_found_online_sweep_images_and_sources.sql',
+    '046_tiktok_deep_sweep_source_profiles.sql',
+    '047_tiktok_realtor_mahad_video_index.sql'
   ];
   try {
     const result = await db.query(
