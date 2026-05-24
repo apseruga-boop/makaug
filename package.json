@@ -37,6 +37,7 @@
     "inventory:seed-social-search": "node scripts/seed-social-search-authorised-listings.js",
     "inventory:seed-source-registry": "node scripts/seed-property-source-registry.js",
     "inventory:daily-source-sweep": "node scripts/run-daily-found-online-source-sweep.js",
+    "inventory:import-source-posts": "node scripts/import-found-online-source-posts.js",
     "inventory:prepare-video-stills": "node scripts/prepare-found-online-video-stills.js",
     "inventory:import-sourced-images": "node scripts/import-sourced-candidate-images.js",
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",

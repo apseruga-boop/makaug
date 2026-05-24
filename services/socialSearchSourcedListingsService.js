@@ -10,8 +10,19 @@ const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const SOCIAL_SEARCH_SOURCE = SOURCE;
 const DAILY_FOUND_ONLINE_PROPERTY_TARGET = 200;
+const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
+const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
+const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social/source profile, website, source page, or platform message route exists; makaug shows Contact via source until the agent adds a direct number.';
+const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
+  source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
+  target_source_year: 2026,
+  queue_rule: 'Queue every specific public 2026 property post/listing that has a source URL, location or area, price or guide price, usable listing evidence, and any contact path. Phone is optional when a public source/social/website route exists.',
+  image_rule: 'Use direct public listing images, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not invent property-room photos or bypass private platform restrictions.',
+  facebook_image_rule: 'For Facebook, store the public post URL as source evidence. Use a public direct media/og:image URL or authorised screenshot when available; otherwise use a labelled evidence card and ask the source/agent for HD images.',
+  platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter', 'websites', 'student accommodation sources'],
+};
 
 const SOCIAL_SEARCH_AGENTS = [
   {
@@ -508,12 +519,124 @@ function agentByKey(key) {
   return SOCIAL_SEARCH_AGENTS.find((agent) => agent.key === key);
 }
 
+function slugKey(value = '', fallback = 'source') {
+  const slug = String(value || '')
+    .toLowerCase()
+    .replace(/https?:\/\//g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return slug || fallback;
+}
+
+function asTextArray(value = []) {
+  if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
+  return String(value || '')
+    .split(/[,\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function itemBatchId(item = {}) {
+  return String(item.sourceBatch || item.source_batch || SOCIAL_SEARCH_BATCH_ID).trim() || SOCIAL_SEARCH_BATCH_ID;
+}
+
+function sourceAgentForItem(item = {}) {
+  const embeddedAgent = item.sourceAgent || item.agent || item.agentProfile;
+  if (embeddedAgent && typeof embeddedAgent === 'object') return embeddedAgent;
+  return agentByKey(item.agentKey) || {};
+}
+
 function agentHasPublicContact(agent = {}) {
-  return Boolean(String(agent.phone || agent.email || agent.website || agent.channelUrl || '').trim());
+  return hasAnyPublicContactPath(agent);
 }
 
 function youtubeUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
+}
+
+function safeUrl(value = '') {
+  const url = String(value || '').trim();
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
+function uniqueUrls(values = []) {
+  const seen = new Set();
+  return values
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map(safeUrl)
+    .filter(Boolean)
+    .filter((url) => {
+      const key = url.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function sourceUrlForItem(item = {}) {
+  return safeUrl(item.sourceUrl)
+    || safeUrl(item.postUrl)
+    || safeUrl(item.listingUrl)
+    || safeUrl(item.videoUrl)
+    || safeUrl(item.publicUrl)
+    || safeUrl(item.url)
+    || (item.youtubeId ? youtubeUrl(item.youtubeId) : '');
+}
+
+function sourceContactCandidateUrls(agent = {}, item = {}) {
+  return uniqueUrls([
+    agent.website,
+    agent.channelUrl,
+    agent.facebookUrl,
+    agent.instagramUrl,
+    agent.tiktokUrl,
+    agent.xUrl,
+    agent.twitterUrl,
+    item.sourceContactUrl,
+    item.contactUrl,
+    sourceUrlForItem(item),
+  ]);
+}
+
+function hasAnyPublicContactPath(agent = {}, item = {}) {
+  return Boolean(
+    String(agent.phone || agent.phoneAlt || agent.email || item.phone || item.phoneAlt || item.email || '').trim()
+      || sourceContactCandidateUrls(agent, item).length
+  );
+}
+
+function parseSourceDate(value = '') {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function sourceDateStatusFor(item = {}) {
+  const date = parseSourceDate(sourcePublishedAtFor(item));
+  if (!date) return 'needs_source_platform_date_confirmation';
+  return date >= new Date(LAUNCH_SOURCE_POST_WINDOW_START)
+    ? 'confirmed_2026_launch_window'
+    : 'before_2026_launch_window';
+}
+
+function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
+  const hasSource = Boolean(sourceUrlForItem(item));
+  const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim());
+  const hasPrice = item.price != null || Boolean(String(item.guidePrice || item.priceText || '').trim());
+  const hasContact = hasAnyPublicContactPath(agent, item);
+  const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
+  const dateStatus = sourceDateStatusFor(item);
+  return {
+    eligible: hasSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_launch_window',
+    has_source_url: hasSource,
+    has_location_or_area: hasLocation,
+    has_price_or_guide_price: hasPrice,
+    has_contact_path: hasContact,
+    has_image_or_source_evidence: hasImageOrEvidence,
+    date_status: dateStatus,
+    no_phone_ok_with_source_contact: Boolean(!String(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '').trim() && hasContact),
+  };
 }
 
 function normalizedStatusValue(status = '') {
@@ -546,16 +669,17 @@ function isReviewQueueStatus(statusOrRecord = '') {
 }
 
 function sourceContactUrlForAgent(agent = {}, item = {}) {
-  const direct = String(agent.website || agent.channelUrl || '').trim();
-  if (/^https?:\/\//i.test(direct)) return direct;
-  if (item.youtubeId) return youtubeUrl(item.youtubeId);
-  return '';
+  return sourceContactCandidateUrls(agent, item)[0] || '';
 }
 
 function sourceContactMethodForAgent(agent = {}) {
   if (agent.phone) return 'phone';
   if (agent.email) return 'email';
   if (agent.website) return 'website';
+  if (agent.facebookUrl) return 'facebook';
+  if (agent.instagramUrl) return 'instagram';
+  if (agent.tiktokUrl) return 'tiktok';
+  if (agent.xUrl || agent.twitterUrl) return 'x';
   if (agent.channelUrl) return 'social';
   return 'source';
 }
@@ -564,6 +688,10 @@ function sourceContactLabelForAgent(agent = {}) {
   if (agent.phone) return 'Call or WhatsApp the agent';
   if (agent.email) return 'Email the agent';
   if (agent.website) return 'Contact through the agent website';
+  if (agent.facebookUrl) return 'Contact through the public Facebook source';
+  if (agent.instagramUrl) return 'Contact through the public Instagram source';
+  if (agent.tiktokUrl) return 'Contact through the public TikTok source';
+  if (agent.xUrl || agent.twitterUrl) return 'Contact through the public X/Twitter source';
   if (agent.channelUrl) return 'Contact through the public social channel';
   return 'Open the public source page';
 }
@@ -574,8 +702,15 @@ function sourcePlatformFor(agent = {}, item = {}) {
   const evidence = [
     agent.channelUrl,
     agent.website,
+    agent.facebookUrl,
+    agent.instagramUrl,
+    agent.tiktokUrl,
+    agent.xUrl,
+    agent.twitterUrl,
     item.sourceUrl,
     item.postUrl,
+    item.listingUrl,
+    item.publicUrl,
     item.videoUrl,
     item.youtubeId ? 'youtube' : '',
   ].filter(Boolean).join(' ').toLowerCase();
@@ -607,6 +742,7 @@ const DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES = [
 ];
 
 function youtubeImageRowsFor(item) {
+  if (!item.youtubeId) return [];
   const base = `https://i.ytimg.com/vi/${item.youtubeId}`;
   const configuredFrames = Array.isArray(item.imageFrames) ? item.imageFrames.filter(Boolean) : [];
   const frames = (configuredFrames.length ? configuredFrames : DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES)
@@ -619,6 +755,56 @@ function youtubeImageRowsFor(item) {
     is_primary: Boolean(index === 0 || frame.primary),
     sort_order: index,
   }));
+}
+
+function sourceEvidenceCardDataUrl(item = {}, agent = {}) {
+  const sourceUrl = sourceUrlForItem(item) || sourceContactUrlForAgent(agent, item) || 'Source URL to verify';
+  const platform = sourcePlatformFor(agent, item);
+  const title = item.title || item.sourceTitle || 'Found-online property source';
+  const area = item.address || [item.area, item.district].filter(Boolean).join(', ') || 'Location/area to verify';
+  const priceText = item.price ? money(item.price) : 'Guide price to verify';
+  const posted = sourcePublishedLabelFor(item);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
+  <rect width="1280" height="820" fill="#f8fafc"/>
+  <rect x="0" y="0" width="1280" height="145" fill="#155e75"/>
+  <text x="82" y="90" font-family="Arial, sans-serif" font-size="43" font-weight="800" fill="#ffffff">makaug.com | found-online source evidence</text>
+  <rect x="84" y="205" width="1112" height="470" rx="24" fill="#ffffff" stroke="#bae6fd" stroke-width="5"/>
+  <text x="124" y="285" font-family="Arial, sans-serif" font-size="40" font-weight="800" fill="#0f172a">${escapeSvg(title)}</text>
+  <text x="124" y="355" font-family="Arial, sans-serif" font-size="31" fill="#334155">${escapeSvg(area)}</text>
+  <text x="124" y="425" font-family="Arial, sans-serif" font-size="32" font-weight="800" fill="#166534">${escapeSvg(priceText)}</text>
+  <text x="124" y="492" font-family="Arial, sans-serif" font-size="27" fill="#475569">Platform: ${escapeSvg(platform)} | ${escapeSvg(posted)}</text>
+  <text x="124" y="560" font-family="Arial, sans-serif" font-size="24" fill="#475569">Public source: ${escapeSvg(sourceUrl).slice(0, 110)}</text>
+  <text x="124" y="628" font-family="Arial, sans-serif" font-size="24" fill="#7c2d12">Evidence card only. Replace with direct public/authorised listing photos when available.</text>
+</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+}
+
+function sourceImageRowsFor(item = {}) {
+  const configured = uniqueUrls([
+    item.imageUrl,
+    item.thumbnailUrl,
+    item.ogImageUrl,
+    item.coverImageUrl,
+    item.facebookImageUrl,
+    item.instagramImageUrl,
+    item.tiktokImageUrl,
+    item.xImageUrl,
+    item.twitterImageUrl,
+    item.photoUrls,
+    item.imageUrls,
+    item.mediaUrls,
+    item.platformImageUrls,
+  ]).slice(0, 5);
+  if (configured.length) {
+    return configured.map((url, index) => ({
+      url,
+      slot_key: index === 0 ? 'source_primary_image' : `source_image_${index + 1}`,
+      room_label: index === 0 ? 'Source listing image' : 'Source supporting image',
+      is_primary: index === 0,
+      sort_order: index,
+    }));
+  }
+  return youtubeImageRowsFor(item);
 }
 
 function money(value) {
@@ -677,16 +863,24 @@ function landVisualStrategy(item = {}) {
 }
 
 function listingImageRowsFor(item = {}) {
-  const sourceRows = youtubeImageRowsFor(item);
-  if (item.listingType !== 'land') return sourceRows;
+  const agent = sourceAgentForItem(item);
+  const sourceRows = sourceImageRowsFor(item);
+  const evidenceRows = sourceRows.length ? sourceRows : [{
+    url: sourceEvidenceCardDataUrl(item, agent),
+    slot_key: 'source_evidence_card',
+    room_label: 'Source evidence card - image pending',
+    is_primary: true,
+    sort_order: 0,
+  }];
+  if (item.listingType !== 'land') return evidenceRows;
   const diagram = {
     url: landSizeDiagramDataUrl(item),
     slot_key: 'land_size_guide_illustration',
     room_label: 'Land-size guide illustration',
-    is_primary: sourceRows.length === 0,
-    sort_order: sourceRows.length,
+    is_primary: evidenceRows.length === 0,
+    sort_order: evidenceRows.length,
   };
-  return [...sourceRows, diagram].slice(0, 5).map((image, index) => ({
+  return [...evidenceRows, diagram].slice(0, 5).map((image, index) => ({
     ...image,
     sort_order: index,
     is_primary: index === 0,
@@ -694,7 +888,7 @@ function listingImageRowsFor(item = {}) {
 }
 
 function publicDescriptionFor(item = {}) {
-  const agent = agentByKey(item.agentKey) || {};
+  const agent = sourceAgentForItem(item);
   const listingType = item.listingType === 'land'
     ? 'land listing'
     : item.listingType === 'commercial'
@@ -710,6 +904,7 @@ function publicDescriptionFor(item = {}) {
       ? ` The source indicates a land size of ${item.landSizeValue}${item.landSizeUnit || ''}.`
       : '';
   const sourceTitle = item.sourceTitle ? ` The source post is titled "${item.sourceTitle}".` : '';
+  const firstPosted = sourcePublishedLabelFor(item);
   const raw = String(item.description || '')
     .replace(/prepared from[^.?!]*\./gi, '')
     .replace(/founder-reported permission/gi, '')
@@ -718,8 +913,8 @@ function publicDescriptionFor(item = {}) {
     .trim();
   const intro = `${item.title} is a ${listingType} around ${area}.`;
   const agentLine = agent.name ? ` It is connected to ${agent.name}'s public property source, with the available contact route shown on the listing for direct enquiry.` : '';
-  const guidance = ' Viewers should use the gallery, video tour, map area and agent contact details to confirm availability and arrange a viewing.';
-  return [intro, roomText, priceText, raw && raw !== intro ? ` ${raw}` : '', sourceTitle, agentLine, guidance]
+  const guidance = ' Viewers should use the gallery, source evidence, map area and contact route to confirm availability and arrange a viewing.';
+  return [intro, roomText, priceText, raw && raw !== intro ? ` ${raw}` : '', sourceTitle, ` ${firstPosted.replace(/\.*$/, '')}.`, agentLine, guidance]
     .join('')
     .replace(/\s+/g, ' ')
     .trim();
@@ -727,11 +922,12 @@ function publicDescriptionFor(item = {}) {
 
 function reviewSteps(item = {}) {
   const steps = [
-    'Confirm the agent still wants this exact listing live on makaug.com',
+    'Confirm the exact source post/listing was first published on or after 1 January 2026',
+    'Confirm the agent/source still wants this exact listing live on makaug.com',
     'Confirm current availability and guide price before approval',
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
     'Confirm title/ownership evidence or broker authority before public approval',
-    'Keep only differentiated, evidence-based source images; upload direct HD agent photos when supplied',
+    'Keep differentiated evidence-based source images, public platform thumbnails, authorised screenshots, or labelled evidence cards; upload direct HD agent photos when supplied',
   ];
   if (item.listingType === 'land') {
     steps.push('Confirm plot size, boundaries, access road, and title tenure before approval');
@@ -758,15 +954,15 @@ function sourcePublishedAtFor(item = {}) {
 function sourcePublishedLabelFor(item = {}) {
   const publishedAt = sourcePublishedAtFor(item);
   if (!publishedAt) {
-    return 'Original post date is being confirmed from the source platform.';
+    return 'Original post date is being confirmed from the source platform for the 2026 launch window.';
   }
   const dateText = String(publishedAt).slice(0, 10);
   return dateText ? `First posted online on ${dateText}` : 'Original post date is being confirmed from the source platform.';
 }
 
 function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl = '') {
-  const agent = agentByKey(item.agentKey) || {};
-  const sourceUrl = youtubeUrl(item.youtubeId);
+  const agent = sourceAgentForItem(item);
+  const sourceUrl = sourceUrlForItem(item);
   const sourceContactUrl = sourceContactUrlForAgent(agent, item);
   const sourceContactMethod = sourceContactMethodForAgent(agent);
   const sourceContactLabel = sourceContactLabelForAgent(agent);
@@ -774,24 +970,28 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const hasDirectAgentPhone = Boolean(String(agent.phone || agent.phoneAlt || '').trim());
   const sourceContactAvailableWithoutPhone = Boolean(!hasDirectAgentPhone && sourceContactUrl);
   const nearby = NEARBY[item.nearbyKey] || [];
-  const sourceImageRows = youtubeImageRowsFor(item);
+  const sourceImageRows = sourceImageRowsFor(item);
   const imageRows = listingImageRowsFor(item);
   const generatedSupportImageRows = imageRows.filter((image) => /^data:image\//i.test(image.url));
   const sourcePublishedAt = sourcePublishedAtFor(item);
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
+  const sourceDateStatus = sourceDateStatusFor(item);
   return {
     sourced_inventory_candidate: true,
     social_search_candidate: true,
     found_online: true,
     source_badge: 'found_online',
-    source_batch: SOCIAL_SEARCH_BATCH_ID,
+    source_batch: itemBatchId(item),
     source_listing_key: item.key,
     source_registry_key: agent.key || item.agentKey || '',
     source_platform: sourcePlatform,
-    source_type: 'social_video_channel',
+    source_type: item.sourceType || item.source_type || 'found_online_source_post',
     source_name: agent.name || '',
     source_agent_name: agent.name || '',
     source_url: sourceUrl,
+    source_post_url: sourceUrl,
+    source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
+    source_post_date_status: sourceDateStatus,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
     first_seen_online_label: 'First picked up by makaug source watch on 20 May 2026',
     first_posted_online_at: sourcePublishedAt || null,
@@ -812,7 +1012,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_contact_method: sourceContactMethod,
     source_contact_platform: sourcePlatform,
     source_contact_available_without_phone: sourceContactAvailableWithoutPhone,
-    source_no_phone_policy: 'No phone number is not a listing blocker when a public social/source profile exists; makaug shows Contact via source.',
+    public_contact_path_available: hasAnyPublicContactPath(agent, item),
+    source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: true,
@@ -820,23 +1021,26 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     consent_required: false,
     consent_confirmed: true,
     image_rights_confirmed: true,
-    image_rights_status: 'authorised_public_social_video_stills_from_agent_channel',
-    image_evidence_policy: 'Use a minimum of 3 source images only when they are clear and distinct enough to review. Do not invent room labels, reuse the same fuzzy still, or duplicate uncertain images; upload HD agent images when available.',
+    image_rights_status: 'authorised_public_source_images_or_evidence',
+    image_evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
+    facebook_image_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
+    launch_intake_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
     land_visual_strategy: landVisualStrategy(item),
     generated_land_size_diagram: item.listingType === 'land',
+    generated_source_evidence_card: imageRows.some((image) => image.slot_key === 'source_evidence_card'),
     generated_support_image_urls: generatedSupportImageRows.map((image) => image.url),
-    minimum_reliable_image_count: 3,
+    minimum_reliable_image_count: 1,
     owner_or_agent_name: agent.name,
     public_display_name: agent.name,
     lister_registration_status: 'registered',
     broker_agent_id: agentId,
     broker_submission: true,
-    contact_source_status: 'founder_confirmed_and_public_youtube_channel',
+    contact_source_status: 'public_source_contact_route_available',
     contact_phone_alt: agent.phoneAlt || '',
     website: agent.website || '',
     youtube_channel_url: agent.channelUrl || '',
-    video_url: sourceUrl,
-    youtube_url: sourceUrl,
+    video_url: item.videoUrl || item.youtubeId || item.tiktokUrl || item.instagramReelUrl ? sourceUrl : '',
+    youtube_url: item.youtubeId ? sourceUrl : '',
     youtube_video_id: item.youtubeId,
     youtube_source_title: item.sourceTitle,
     youtube_source_published_label: sourcePublishedLabel,
@@ -850,8 +1054,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     longitude_source: 'manual_public_source_area_pin',
     area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
-    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), 'founder reported agent permission', sourceContactLabel],
-    source_urls: [agent.channelUrl, sourceUrl].filter(Boolean),
+    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2026 launch intake', sourceContactLabel],
+    source_urls: uniqueUrls([agent.channelUrl, sourceUrl, sourceContactUrl, item.sourceUrls]),
     photo_source_urls: sourceImageRows.map((image) => image.url),
     authorised_photo_urls: imageRows.map((image) => image.url),
     property_url_status: 'public_after_approval',
@@ -863,14 +1067,16 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
 }
 
 function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
-  const agent = agentByKey(item.agentKey) || {};
+  const agent = sourceAgentForItem(item);
   const sourceContactUrl = sourceContactUrlForAgent(agent, item);
+  const sourceUrl = sourceUrlForItem(item);
   return [
     `Hi, this is ${agent.name || 'the listing agent'}.`,
     `${item.title} is prepared on makaug.com for King review as a found-online authorised listing.`,
     `Location: ${item.address}`,
     item.price ? `Guide price: ${money(item.price)}.` : '',
-    `Source video: ${youtubeUrl(item.youtubeId)}`,
+    `${item.youtubeId ? 'Source video' : 'Source post'}: ${sourceUrl}`,
+    sourcePublishedLabelFor(item),
     ownerPreviewUrl ? `Private preview: ${ownerPreviewUrl}` : '',
     `Public link after approval: ${propertyUrl}`,
     agent.phone ? `Call/WhatsApp: ${agent.phone}${agent.phoneAlt ? ` / ${agent.phoneAlt}` : ''}` : '',
@@ -879,6 +1085,7 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
 }
 
 function buildSocialSearchListing(item, agentId = null) {
+  const agent = sourceAgentForItem(item);
   const listingType = item.listingType || 'sale';
   return {
     listing_type: listingType,
@@ -918,11 +1125,11 @@ function buildSocialSearchListing(item, agentId = null) {
     new_until: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)),
     amenities: JSON.stringify(item.listingType === 'land'
       ? ['Found online', 'Road access to verify', 'Title to verify', 'Agent follow-up required']
-      : ['Found online', 'Video tour source', 'Agent follow-up required', 'HD photos to verify']),
+      : ['Found online', `${sourcePlatformFor(agent, item)} source evidence`, 'Agent follow-up required', 'HD photos to verify']),
     extra_fields: JSON.stringify(extraFieldsFor(item, agentId)),
-    lister_name: agentByKey(item.agentKey)?.name || 'Social Search Sourcing Desk',
-    lister_phone: agentByKey(item.agentKey)?.phone || null,
-    lister_email: agentByKey(item.agentKey)?.email || null,
+    lister_name: agent.name || 'Found-online Source Desk',
+    lister_phone: agent.phone || null,
+    lister_email: agent.email || null,
     lister_type: 'agent',
     agent_id: agentId,
     source: SOCIAL_SEARCH_SOURCE,
@@ -930,7 +1137,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: 'pending',
     moderation_stage: 'submitted',
     reviewed_at: null,
-    moderation_notes: `SOCIAL SEARCH AUTHORISED LISTING. Founder reported permission to load ${agentByKey(item.agentKey)?.name || 'agent'} public social inventory. Source video: ${youtubeUrl(item.youtubeId)}. Confirm exact publish date, availability, price, pin, and image rights before approval. Batch: ${SOCIAL_SEARCH_BATCH_ID}.`,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm availability, price, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
     moderation_reason: 'Pending King review of public social source, exact pin, latest availability, and sourced candidate approval override.',
     images: listingImageRowsFor(item),
     source_item: item,
@@ -1126,13 +1333,14 @@ async function insertListing(client, listing, agentId) {
         found_online: true,
         consent_confirmed: true,
         image_rights_confirmed: true,
-        source_batch: SOCIAL_SEARCH_BATCH_ID,
-        youtube_url: youtubeUrl(listing.source_item.youtubeId),
+        source_batch: itemBatchId(listing.source_item),
+        source_url: sourceUrlForItem(listing.source_item),
+        youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
       }),
       listing.moderation_reason,
       listing.moderation_notes,
       JSON.stringify({
-        batch_id: SOCIAL_SEARCH_BATCH_ID,
+        batch_id: itemBatchId(listing.source_item),
         property_url: propertyUrl,
         owner_preview_url: ownerPreviewUrl,
         owner_preview_expires_at: ownerPreviewExpiresAt,
@@ -1151,10 +1359,292 @@ async function insertListing(client, listing, agentId) {
     owner_preview_expires_at: ownerPreviewExpiresAt,
     status: listing.status,
     moderation_stage: listing.moderation_stage,
-    youtube_url: youtubeUrl(listing.source_item.youtubeId),
+    source_url: sourceUrlForItem(listing.source_item),
+    youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
     agent_name: listing.lister_name,
     whatsapp_share_card: whatsappShareMessage(listing.source_item, propertyUrl, ownerPreviewUrl),
   };
+}
+
+function parseMoneyValue(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  const raw = String(value || '').toLowerCase().replace(/,/g, '').trim();
+  const match = raw.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount)) return null;
+  if (/\d(?:\.\d+)?\s*(b|bn|billion)\b/.test(raw)) return Math.round(amount * 1000000000);
+  if (/\d(?:\.\d+)?\s*(m|mn|million)\b/.test(raw)) return Math.round(amount * 1000000);
+  if (/\d(?:\.\d+)?\s*(k|thousand)\b/.test(raw)) return Math.round(amount * 1000);
+  return Math.round(amount);
+}
+
+function numberOrNull(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeFoundOnlineListingType(value = '') {
+  const raw = String(value || '').toLowerCase();
+  if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
+  if (raw.includes('student') || raw.includes('hostel') || raw.includes('room')) return 'students';
+  if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
+  if (raw.includes('land') || raw.includes('plot')) return 'land';
+  return 'sale';
+}
+
+function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
+  const sourceUrl = sourceUrlForItem(raw)
+    || safeUrl(raw.post_url)
+    || safeUrl(raw.source_post_url)
+    || safeUrl(raw.permalink)
+    || safeUrl(raw.url);
+  const sourceName = String(raw.source_name || raw.agent_name || raw.lister_name || raw.page_name || raw.account_name || raw.sourceKey || raw.source_key || 'Found-online source').trim();
+  const sourceKey = slugKey(raw.source_key || raw.sourceRegistryKey || raw.source_registry_key || sourceName || sourceUrl, `source-${index + 1}`);
+  const postKey = slugKey(raw.source_listing_key || raw.key || raw.post_id || raw.id || sourceUrl || `${sourceKey}-${raw.title || index + 1}`, `source-post-${index + 1}`);
+  const platform = sourcePlatformFor({
+    platform: raw.platform,
+    sourcePlatform: raw.source_platform,
+    channelUrl: raw.source_page_url || raw.source_contact_url || raw.source_url,
+    website: raw.website_url || raw.website,
+    facebookUrl: raw.facebook_url,
+    instagramUrl: raw.instagram_url,
+    tiktokUrl: raw.tiktok_url,
+    xUrl: raw.x_url || raw.twitter_url,
+  }, {
+    ...raw,
+    sourceUrl,
+    sourcePlatform: raw.source_platform || raw.platform,
+  });
+  const sourceDistricts = asTextArray(raw.districts);
+  const district = String(raw.district || raw.city || raw.region || sourceDistricts[0] || '').trim();
+  const area = String(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || district || '').trim();
+  const address = String(raw.address || raw.location_label || raw.location || area || '').trim();
+  const listingType = normalizeFoundOnlineListingType(raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description);
+  const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
+  const sourceAgent = {
+    key: sourceKey,
+    name: sourceName,
+    company: raw.company_name || raw.company || sourceName,
+    licence: String(raw.licence || raw.license || `FOUND-ONLINE-${sourceKey.toUpperCase()}`).slice(0, 120),
+    phone: raw.phone || raw.contact_phone || raw.lister_phone || raw.whatsapp || null,
+    phoneAlt: raw.phone_alt || raw.contact_phone_alt || raw.lister_phone_alt || '',
+    email: raw.email || raw.contact_email || raw.lister_email || null,
+    channelUrl: raw.source_page_url || raw.source_contact_url || raw.channel_url || raw.profile_url || raw.account_url || raw.source_url || sourceUrl,
+    website: raw.website_url || raw.website || '',
+    facebookUrl: raw.facebook_url || (/facebook\.com/i.test(sourceUrl) ? sourceUrl : ''),
+    instagramUrl: raw.instagram_url || (/instagram\.com/i.test(sourceUrl) ? sourceUrl : ''),
+    tiktokUrl: raw.tiktok_url || (/tiktok\.com/i.test(sourceUrl) ? sourceUrl : ''),
+    xUrl: raw.x_url || raw.twitter_url || (/(^|\/\/)(x|twitter)\.com/i.test(sourceUrl) ? sourceUrl : ''),
+    platform,
+    sourcePlatform: platform,
+    districts: asTextArray(raw.districts || district || 'Uganda'),
+    specializations: asTextArray(raw.specializations || [listingType]),
+    profilePhotoUrl: raw.profile_photo_url || raw.avatar_url || null,
+    bio: raw.source_bio || `Public ${platform} source imported for makaug found-online launch intake.`,
+    audienceLabel: raw.audience_label || raw.followers_label || raw.source_followers_label || '',
+  };
+  return {
+    key: postKey,
+    agentKey: sourceKey,
+    sourceAgent,
+    sourceBatch: raw.source_batch || FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+    importedFromSourcePost: true,
+    title,
+    sourceTitle: raw.source_title || raw.caption || title,
+    description: raw.description || raw.caption || raw.summary || title,
+    sourceUrl,
+    postUrl: sourceUrl,
+    sourceContactUrl: raw.source_contact_url || raw.contact_url || sourceAgent.channelUrl || sourceUrl,
+    sourcePlatform: platform,
+    sourcePublishedAt: raw.first_posted_at || raw.published_at || raw.posted_at || raw.source_published_at || raw.created_at || null,
+    area,
+    district,
+    address,
+    price: parseMoneyValue(raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price),
+    priceText: raw.price_text || raw.price_label || '',
+    listingType,
+    subtype: raw.subtype || raw.property_type || null,
+    beds: numberOrNull(raw.bedrooms ?? raw.beds),
+    baths: numberOrNull(raw.bathrooms ?? raw.baths),
+    landSizeValue: numberOrNull(raw.land_size_value ?? raw.landSizeValue),
+    landSizeUnit: raw.land_size_unit || raw.landSizeUnit || null,
+    lat: numberOrNull(raw.latitude ?? raw.lat),
+    lng: numberOrNull(raw.longitude ?? raw.lng),
+    imageUrls: asTextArray(raw.image_urls || raw.images || raw.photo_urls || raw.media_urls),
+    photoUrls: asTextArray(raw.photo_urls),
+    mediaUrls: asTextArray(raw.media_urls),
+    sourceUrls: asTextArray(raw.source_urls),
+    raw_source_post: raw,
+  };
+}
+
+async function existingFoundOnlineSourcePostListings(client, items = []) {
+  const keys = items.map((item) => item.key).filter(Boolean);
+  const urls = uniqueUrls(items.map((item) => sourceUrlForItem(item)));
+  if (!keys.length && !urls.length) return new Map();
+  const result = await client.query(
+    `SELECT
+       id::text AS id,
+       title,
+       status,
+       moderation_stage,
+       inquiry_reference,
+       lister_name,
+       extra_fields->>'source_listing_key' AS source_listing_key,
+       extra_fields->>'source_post_url' AS source_post_url,
+       extra_fields->>'source_url' AS source_url
+     FROM properties
+     WHERE source = $1
+       AND COALESCE(status, '') <> 'deleted'
+       AND (
+         extra_fields->>'source_listing_key' = ANY($2::text[])
+         OR extra_fields->>'source_post_url' = ANY($3::text[])
+         OR extra_fields->>'source_url' = ANY($3::text[])
+       )`,
+    [SOCIAL_SEARCH_SOURCE, keys, urls]
+  );
+  const existing = new Map();
+  for (const row of result.rows) {
+    const payload = {
+      ...row,
+      property_url: `${publicBaseUrl()}/property/${row.id}`,
+    };
+    if (row.source_listing_key) existing.set(row.source_listing_key, payload);
+    if (row.source_post_url) existing.set(row.source_post_url, payload);
+    if (row.source_url) existing.set(row.source_url, payload);
+  }
+  return existing;
+}
+
+async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = false } = {}) {
+  const items = (Array.isArray(posts) ? posts : [])
+    .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
+    .filter((item) => item.sourceUrl || item.title);
+  const evaluated = items.map((item) => ({
+    item,
+    agent: sourceAgentForItem(item),
+    intake: sourcePostMeetsLaunchIntakeRule(item, sourceAgentForItem(item)),
+  }));
+  const sourceReviewRecords = evaluated
+    .filter(({ intake }) => !intake.eligible)
+    .map(({ item, agent, intake }) => ({
+      key: item.key,
+      title: item.title,
+      agent_key: item.agentKey,
+      agent_name: agent.name || item.agentKey,
+      source_url: sourceUrlForItem(item),
+      source_contact_url: sourceContactUrlForAgent(agent, item),
+      reason: 'missing_2026_launch_intake_evidence',
+      intake,
+    }));
+
+  if (dryRun) {
+    const eligible = evaluated.filter(({ intake }) => intake.eligible);
+    return {
+      ok: true,
+      dry_run: true,
+      received_posts: Array.isArray(posts) ? posts.length : 0,
+      normalized_posts: items.length,
+      eligible_to_queue_count: eligible.length,
+      source_review_count: sourceReviewRecords.length,
+      created_properties: 0,
+      existing_properties: 0,
+      review_queue_properties: eligible.length,
+      queued_listings: eligible.map(({ item, agent }) => ({
+        key: item.key,
+        title: item.title,
+        source_url: sourceUrlForItem(item),
+        source_contact_url: sourceContactUrlForAgent(agent, item),
+        agent_name: agent.name || item.agentKey,
+        dry_run: true,
+      })),
+      source_review_records: sourceReviewRecords,
+      daily_target_status: {
+        ...socialSearchDailyTargetStatus(),
+        imported_post_eligible_count: eligible.length,
+      },
+    };
+  }
+
+  if (!db?.pool) throw new Error('db.pool is required');
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const existing = await existingFoundOnlineSourcePostListings(client, items);
+    const agentIdsByKey = {};
+    const created = [];
+    const alreadyPresent = [];
+    const skippedListings = [...sourceReviewRecords];
+
+    for (const { item, agent, intake } of evaluated) {
+      const sourceUrl = sourceUrlForItem(item);
+      const existingRow = existing.get(item.key) || existing.get(sourceUrl);
+      if (existingRow) {
+        alreadyPresent.push({
+          key: item.key,
+          id: existingRow.id,
+          title: existingRow.title,
+          agent_key: item.agentKey,
+          agent_name: existingRow.lister_name || agent.name || item.agentKey,
+          status: existingRow.status || '',
+          moderation_stage: existingRow.moderation_stage || '',
+          property_url: existingRow.property_url || '',
+          source_url: sourceUrl,
+          reason: 'already_queued',
+          already_present: true,
+        });
+        continue;
+      }
+      if (!intake.eligible) continue;
+      if (!agentIdsByKey[item.agentKey]) {
+        agentIdsByKey[item.agentKey] = await upsertSocialAgent(client, agent);
+      }
+      const listing = buildSocialSearchListing(item, agentIdsByKey[item.agentKey]);
+      created.push(await insertListing(client, listing, agentIdsByKey[item.agentKey]));
+    }
+
+    await client.query('COMMIT');
+    const reviewQueueListings = [
+      ...created,
+      ...alreadyPresent.map((item) => ({
+        id: item.id,
+        title: item.title,
+        property_url: item.property_url,
+        agent_name: item.agent_name,
+        status: item.status,
+        moderation_stage: item.moderation_stage,
+        source_url: item.source_url,
+        source_listing_key: item.key,
+        already_present: true,
+        review_queue_visible: true,
+      })),
+    ];
+    return {
+      ok: true,
+      dry_run: false,
+      received_posts: Array.isArray(posts) ? posts.length : 0,
+      normalized_posts: items.length,
+      eligible_to_queue_count: evaluated.filter(({ intake }) => intake.eligible).length,
+      created_properties: created.length,
+      existing_properties: alreadyPresent.length,
+      review_queue_properties: reviewQueueListings.length,
+      queued_listings: reviewQueueListings,
+      already_present_properties: alreadyPresent,
+      source_review_count: skippedListings.length,
+      source_review_records: skippedListings,
+      daily_target_status: {
+        ...socialSearchDailyTargetStatus({ createdCount: created.length, alreadyPresentCount: alreadyPresent.length }),
+        imported_post_eligible_count: evaluated.filter(({ intake }) => intake.eligible).length,
+      },
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
@@ -1194,6 +1684,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           agent_name: existing.lister_name || agentByKey(item.agentKey)?.name || '',
           status: existing.status || '',
           moderation_stage: existing.moderation_stage || '',
+          source_url: sourceUrlForItem(item),
           youtube_url: youtubeUrl(item.youtubeId),
           source_listing_key: item.key,
           already_present: true,
@@ -1208,7 +1699,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           status: existing.status || '',
           moderation_stage: existing.moderation_stage || '',
           property_url: existing.property_url || '',
-          source_url: youtubeUrl(item.youtubeId),
+          source_url: sourceUrlForItem(item),
           reason: alreadyLiveOrApproved ? 'already_live_or_approved' : 'already_queued',
           already_live_or_approved: alreadyLiveOrApproved,
         });
@@ -1221,9 +1712,23 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           title: item.title,
           agent_key: item.agentKey,
           agent_name: agent.name || item.agentKey,
-          source_url: youtubeUrl(item.youtubeId),
+          source_url: sourceUrlForItem(item),
           source_contact_url: sourceContactUrlForAgent(agent, item),
           reason: 'agent_missing_public_contact_path',
+        });
+        continue;
+      }
+      const intake = sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey));
+      if (!intake.eligible) {
+        skippedListings.push({
+          key: item.key,
+          title: item.title,
+          agent_key: item.agentKey,
+          agent_name: agentByKey(item.agentKey)?.name || item.agentKey,
+          source_url: sourceUrlForItem(item),
+          source_contact_url: sourceContactUrlForAgent(agentByKey(item.agentKey), item),
+          reason: 'missing_2026_launch_intake_evidence',
+          intake,
         });
         continue;
       }
@@ -1266,6 +1771,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         channelUrl: agent.channelUrl,
         sourceContactUrl: sourceContactUrlForAgent(agent),
         sourceContactMethod: sourceContactMethodForAgent(agent),
+        noPhonePolicy: PUBLIC_SOURCE_CONTACT_POLICY,
         audienceLabel: agent.audienceLabel || '',
       })),
       skipped_agents: skippedAgents,
@@ -1284,7 +1790,10 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       review_queue_listings: reviewQueueListings,
       daily_target_status: dailyTargetStatus,
       by_type: created.reduce((acc, item) => {
-        const original = SOCIAL_SEARCH_LISTINGS.find((listing) => listing.youtubeId === item.youtube_url.split('v=')[1]);
+        const original = SOCIAL_SEARCH_LISTINGS.find((listing) => (
+          (item.youtube_url && listing.youtubeId === item.youtube_url.split('v=')[1])
+          || sourceUrlForItem(listing) === item.source_url
+        ));
         const type = original?.listingType || 'sale';
         acc[type] = (acc[type] || 0) + 1;
         return acc;
@@ -1300,8 +1809,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
 }
 
 function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount = 0 } = {}) {
-  const eligibleAgentKeys = new Set(SOCIAL_SEARCH_AGENTS.filter(agentHasPublicContact).map((agent) => agent.key));
-  const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => eligibleAgentKeys.has(item.agentKey));
+  const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible);
   const eligibleToQueueCount = seedEligibleListings.length;
   const targetGap = Math.max(0, DAILY_FOUND_ONLINE_PROPERTY_TARGET - eligibleToQueueCount);
   const queuedOrAlreadyPresentCount = Number(createdCount || 0) + Number(alreadyPresentCount || 0);
@@ -1314,25 +1822,24 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     target_gap: targetGap,
     meets_daily_minimum: eligibleToQueueCount >= DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     blocking_reason: targetGap
-      ? `Need ${targetGap} more recent property posts with clear source URL, usable images, location, price or guide price, and a contact path such as phone, email, website, or social source before the 200/day King queue target is met.`
+      ? `Need ${targetGap} more specific 2026 property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and any contact path such as phone, email, website, public source page, or social profile before the 200/day King queue target is met.`
       : '',
-    evidence_policy: 'Do not fill the 200/day target with fabricated or low-confidence properties. Queue only specific posts/listings with evidence and clear images.',
+    evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     no_phone_source_contact_policy:
-      'No public phone number is not a blocker when the source has a public social profile, website, or source page. makaug shows Contact via source until the agent adds a direct number.',
+      PUBLIC_SOURCE_CONTACT_POLICY,
     source_page_vs_property_policy:
-      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds. King queues only actual 2026 property posts with source URL, price, location, usable images, and a contact route.',
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. King queues every actual 2026 property post/listing that meets the launch intake rule; source pages without a matched post stay as source-review work.',
     next_required_inputs: [
-      'Run the sweep with production admin credentials or a Render one-off job so it writes to the live King queue.',
-      'Add platform/API access for YouTube, Meta/Facebook/Instagram, X, and TikTok or use an authenticated review workflow for those sources.',
-      'Promote discovery feeds into reviewed source pages/accounts, then queue only the posts that expose price, location, usable images, and either a direct number or public social contact route.',
+      'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026 post is queued.',
+      'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
+      'Promote discovery feeds into reviewed source pages/accounts, then import only posts that expose price, location, usable images/source evidence, and either a direct number or public social contact route.',
     ],
   };
 }
 
 function summarizeSocialSearchListings() {
   const listings = plannedSocialSearchListings();
-  const eligibleAgentKeys = new Set(SOCIAL_SEARCH_AGENTS.filter(agentHasPublicContact).map((agent) => agent.key));
-  const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => eligibleAgentKeys.has(item.agentKey));
+  const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible);
   const byAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
     const agent = agentByKey(item.agentKey)?.name || item.agentKey;
     acc[agent] = (acc[agent] || 0) + 1;
@@ -1357,7 +1864,7 @@ function summarizeSocialSearchListings() {
       area: listing.area,
       district: listing.district,
       price: listing.price,
-      source_url: youtubeUrl(listing.source_item.youtubeId),
+      source_url: sourceUrlForItem(listing.source_item),
       source_contact_url: sourceContactUrlForAgent(agentByKey(listing.source_item.agentKey), listing.source_item),
       source_audience_label: agentByKey(listing.source_item.agentKey)?.audienceLabel || '',
       images: listing.images.length,
@@ -1369,11 +1876,19 @@ module.exports = {
   SOCIAL_SEARCH_BATCH_ID,
   SOCIAL_SEARCH_SOURCE,
   DAILY_FOUND_ONLINE_PROPERTY_TARGET,
+  LAUNCH_SOURCE_POST_WINDOW_START,
+  FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+  FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
   SOCIAL_SEARCH_AGENTS,
   SOCIAL_SEARCH_LISTINGS,
   plannedSocialSearchListings,
   seedSocialSearchAuthorisedListings,
+  queueFoundOnlineSourcePostListings,
+  normalizeFoundOnlineSourcePost,
   summarizeSocialSearchListings,
   socialSearchDailyTargetStatus,
+  sourcePostMeetsLaunchIntakeRule,
+  sourceUrlForItem,
+  sourceImageRowsFor,
   whatsappShareMessage,
 };

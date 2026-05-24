@@ -13,10 +13,16 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'info@makaug.com';
 
 const args = new Set(process.argv.slice(2));
 const countArg = process.argv.find((arg) => arg.startsWith('--count='));
+const startArg = process.argv.find((arg) => arg.startsWith('--start='));
+const typeArg = process.argv.find((arg) => arg.startsWith('--type='));
 const requestedCount = countArg ? Number.parseInt(countArg.split('=')[1], 10) : DEFAULT_COUNT;
+const requestedStart = startArg ? Number.parseInt(startArg.split('=')[1], 10) : 1;
+const requestedType = typeArg ? String(typeArg.split('=')[1] || '').trim().toLowerCase() : '';
 const COUNT = Number.isFinite(requestedCount) && requestedCount > 0
   ? Math.min(requestedCount, MAX_COUNT)
   : DEFAULT_COUNT;
+const START = Number.isFinite(requestedStart) && requestedStart > 0 ? requestedStart : 1;
+const ONLY_TYPE = ['sale', 'rent', 'student', 'land', 'commercial'].includes(requestedType) ? requestedType : '';
 const DRY_RUN = args.has('--dry-run');
 const REPLACE = args.has('--replace');
 const CLEANUP = args.has('--cleanup');
@@ -285,9 +291,22 @@ function buildListing(sequence, type) {
   };
 }
 
-function plannedListings(count = COUNT) {
+function plannedListings(count = COUNT, options = {}) {
+  const start = Number.isFinite(Number(options.start)) && Number(options.start) > 0
+    ? Number.parseInt(options.start, 10)
+    : 1;
+  const onlyType = ['sale', 'rent', 'student', 'land', 'commercial'].includes(String(options.type || '').toLowerCase())
+    ? String(options.type || '').toLowerCase()
+    : '';
   const listings = [];
-  let sequence = 1;
+  let sequence = start;
+  if (onlyType) {
+    for (let i = 0; i < count; i += 1) {
+      listings.push(buildListing(sequence, onlyType));
+      sequence += 1;
+    }
+    return listings;
+  }
   for (const plan of PLAN) {
     const typeCount = Math.floor((plan.target / DEFAULT_COUNT) * count);
     for (let i = 0; i < typeCount; i += 1) {
@@ -387,6 +406,8 @@ async function insertListing(client, listing) {
 async function seedSourcedInventoryCandidates({
   db,
   count = DEFAULT_COUNT,
+  start = 1,
+  type = '',
   replace = false,
   cleanupOnly = false
 } = {}) {
@@ -394,7 +415,7 @@ async function seedSourcedInventoryCandidates({
   const safeCount = Number.isFinite(Number(count)) && Number(count) > 0
     ? Math.min(Number.parseInt(count, 10), MAX_COUNT)
     : DEFAULT_COUNT;
-  const listings = plannedListings(safeCount);
+  const listings = plannedListings(safeCount, { start, type });
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
@@ -435,6 +456,8 @@ async function seedSourcedInventoryCandidates({
       action: replace ? 'replace' : 'seed',
       source: SOURCE,
       run_id: RUN_ID,
+      start,
+      type: type || 'mixed',
       cleanup: cleanupResult,
       created_properties: created.length,
       by_type: summary.rows,
@@ -472,13 +495,15 @@ function summarize(listings) {
 }
 
 async function main() {
-  const listings = plannedListings(COUNT);
+  const listings = plannedListings(COUNT, { start: START, type: ONLY_TYPE });
   if (DRY_RUN) {
     console.log(JSON.stringify({
       ok: true,
       action: 'dry-run',
       source: SOURCE,
       run_id: RUN_ID,
+      start: START,
+      type: ONLY_TYPE || 'mixed',
       target_status: 'pending',
       approval_guardrail: 'verification_terms_accepted=false, no ID document, consent_required=true',
       ...summarize(listings)
@@ -496,6 +521,8 @@ async function main() {
     const result = await seedSourcedInventoryCandidates({
       db,
       count: COUNT,
+      start: START,
+      type: ONLY_TYPE,
       replace: REPLACE,
       cleanupOnly: CLEANUP
     });

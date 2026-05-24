@@ -88,7 +88,9 @@ const {
   seedCarnelianAuthorisedListings
 } = require('../services/carnelianSourcedListingsService');
 const {
+  FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
   SOCIAL_SEARCH_BATCH_ID,
+  queueFoundOnlineSourcePostListings,
   seedSocialSearchAuthorisedListings
 } = require('../services/socialSearchSourcedListingsService');
 const {
@@ -2082,16 +2084,24 @@ router.get('/properties/live', async (req, res, next) => {
 router.post('/sourced-inventory-candidates/seed', async (req, res, next) => {
   try {
     const count = Math.min(Math.max(parseInt(req.body?.count || '200', 10) || 200, 1), 1000);
+    const start = Math.max(parseInt(req.body?.start || '1', 10) || 1, 1);
+    const type = ['sale', 'rent', 'student', 'land', 'commercial'].includes(String(req.body?.type || '').toLowerCase())
+      ? String(req.body.type).toLowerCase()
+      : '';
     const replace = req.body?.replace !== false;
     const result = await seedSourcedInventoryCandidates({
       db,
       count,
+      start,
+      type,
       replace,
       cleanupOnly: false
     });
     await writeAudit('admin_sourced_inventory_candidates_seeded', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
       count,
+      start,
+      type: type || 'mixed',
       replace,
       created_properties: result.created_properties,
       guardrails: result.guardrails
@@ -2160,6 +2170,36 @@ router.post('/social-search-authorised-listings/seed', async (req, res, next) =>
       source_review_count: result.source_review_count || 0,
       daily_target_status: result.daily_target_status,
       agents: result.agents
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/found-online-source-posts/import', async (req, res, next) => {
+  try {
+    const posts = Array.isArray(req.body?.posts)
+      ? req.body.posts
+      : (Array.isArray(req.body) ? req.body : []);
+    const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
+    const result = await queueFoundOnlineSourcePostListings({
+      db,
+      posts,
+      dryRun
+    });
+    await writeAudit('admin_found_online_source_posts_imported', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+      dry_run: dryRun,
+      received_posts: result.received_posts,
+      normalized_posts: result.normalized_posts,
+      eligible_to_queue_count: result.eligible_to_queue_count,
+      created_properties: result.created_properties,
+      existing_properties: result.existing_properties,
+      review_queue_properties: result.review_queue_properties,
+      source_review_count: result.source_review_count,
+      daily_target_status: result.daily_target_status
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

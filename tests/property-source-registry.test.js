@@ -56,7 +56,8 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.direct_contact_sources >= 2, 'authorised/direct-contact sources should be explicit');
   assert(summary.hashtags.includes('UgandaRealEstate'), 'source watchlist should include core hashtags');
   assert(summary.hashtags.includes('RealEstateUganda'), 'source watchlist should include X-style real-estate hashtag variants');
-  assert(service.includes('SOURCE_FRESHNESS_WINDOW_DAYS = 120'), 'source records should carry a four-month freshness window');
+  assert(service.includes('SOURCE_FRESHNESS_WINDOW_DAYS = 120'), 'source records should keep freshness metadata for prioritisation');
+  assert(service.includes('first published from 1 January 2026 through today'), 'source records should scan from the 2026 launch window start');
   assert(service.includes('target_source_year: TARGET_SOURCE_YEAR'), 'source records should flag 2026 as the active target source year');
   assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000'), 'source registry should enforce the 30,000 ceiling');
   assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000'), 'source registry should reserve an 8,000-record X hashtag sweep');
@@ -111,6 +112,7 @@ test('King dashboard exposes source database create and review controls', () => 
 test('daily source sweep is scriptable and keeps King queue guardrails', () => {
   assert.strictEqual(pkg.scripts['inventory:daily-source-sweep'], 'node scripts/run-daily-found-online-source-sweep.js');
   assert(dailySweepScript.includes('source_window_days: 120'), 'daily sweep should enforce the four-month source window');
+  assert(dailySweepScript.includes('source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START'), 'daily sweep should expose the 1 January 2026 launch intake start');
   assert(dailySweepScript.includes('target_source_year: 2026'), 'daily sweep should prioritise 2026 source posts');
   assert(dailySweepScript.includes('daily_property_queue_minimum'), 'daily sweep should expose the 200/day property queue minimum');
   assert(dailySweepScript.includes('hard_queue_rule'), 'daily sweep should report target gaps instead of padding weak records');

@@ -12,6 +12,8 @@ const {
 } = require('../services/propertySourceRegistryService');
 const {
   DAILY_FOUND_ONLINE_PROPERTY_TARGET,
+  FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
+  LAUNCH_SOURCE_POST_WINDOW_START,
   SOCIAL_SEARCH_BATCH_ID,
   seedSocialSearchAuthorisedListings,
   summarizeSocialSearchListings,
@@ -26,12 +28,14 @@ function policy() {
   return {
     source_record_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
     daily_property_queue_minimum: DAILY_FOUND_ONLINE_PROPERTY_TARGET,
-    property_queue_target: `evidence-based only; do not auto-create ${PROPERTY_SOURCE_REGISTRY_TARGET_COUNT} property candidates from source feeds`,
+    property_queue_target: `scan all source pages/feeds, then queue every eligible specific 2026 property post; do not auto-create ${PROPERTY_SOURCE_REGISTRY_TARGET_COUNT} properties from source pages alone`,
     source_window_days: 120,
     target_source_year: 2026,
-    candidate_rule: 'Queue a King review property only when a specific public post/video/listing was first published or refreshed in 2026, preferably within the last four months, and has source URL, location, price or guide price, contact path, and usable evidence-based images.',
-    image_rule: 'Use labelled video stills or actual listing photos only. Do not duplicate the same still, invent room labels, or use random generic property imagery.',
-    hard_queue_rule: 'If the evidence-ready count is below the 200/day minimum, report the gap instead of padding the queue with weak records.',
+    source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
+    candidate_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
+    image_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
+    facebook_image_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
+    hard_queue_rule: 'If the intake count is below the 200/day minimum, report the gap and the missing evidence instead of padding with fabricated properties.',
     review_destination: 'King dashboard pending review',
   };
 }

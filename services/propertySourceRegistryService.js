@@ -181,10 +181,10 @@ function source({
       review_required: true,
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
-      target_property_window: 'Prioritise public property posts, videos, reels, shorts, and listings first published in 2026, especially the last four months.',
-      listing_candidate_rule: 'Do not create a property listing from this source unless a specific public post/video/listing has clear location, price or guide price, agent/contact path, source URL, and evidence-based images.',
+      target_property_window: 'Scan public property posts, videos, reels, shorts, and listings first published from 1 January 2026 through today, with priority on the newest posts.',
+      listing_candidate_rule: 'Create a King review property candidate for every specific 2026 public post/listing with source URL, location/area, price or guide price, usable image/source evidence, and any contact path. A public source/social page is a contact path when no phone is published.',
       source_use: 'Find public property posts, prepare candidates for King review, attribute source, and request owner/agent confirmation before public approval.',
-      image_quality_rule: 'Queue only clear, differentiated source photos or video stills. Use at least three reliable images where possible; do not repeat fuzzy frames or invent room labels.',
+      image_quality_rule: 'Use direct public listing photos, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not repeat fuzzy frames, invent room labels, or bypass private platform restrictions.',
       ...metadata,
     },
   };
