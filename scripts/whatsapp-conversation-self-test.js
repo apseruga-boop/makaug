@@ -226,6 +226,17 @@ const scenarios = [
     ]
   },
   {
+    name: 'Stale search-type menu answer continues the active menu',
+    messages: [
+      '2',
+      { body: '1', metadata: { force_idle_minutes: 3 } }
+    ],
+    expect: [
+      { step: 'search_type', includes: ['What are you looking for?', 'For sale'] },
+      { step: 'search_area', includesAny: ['area', 'district'], excludes: ['Welcome back', 'carry on where we left off', 'CONTINUE'] }
+    ]
+  },
+  {
     name: 'Stale broker signup page message resumes as broker help',
     messages: [
       '1',

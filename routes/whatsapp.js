@@ -4704,6 +4704,32 @@ function idleResumePrompt(lang, step) {
   return messages[code] || messages.en;
 }
 
+function isResumeControlReply(value = '') {
+  const clean = normalizeInput(value).toLowerCase();
+  const compact = normalizeOptKeyword(value).toLowerCase();
+  const controls = ['continue', 'menu', 'home', 'reset', 'restart', 'lang', 'language', 'stop', 'unsubscribe', 'optout', 'opt-out', 'start', 'optin', 'subscribe'];
+  return controls.includes(clean) || controls.includes(compact);
+}
+
+function isActionableStepReply(step, value = '') {
+  const currentStep = normalizeInput(step).toLowerCase();
+  const clean = normalizeInput(value).toLowerCase();
+  if (!currentStep || !clean || isResumeControlReply(clean)) return false;
+
+  if (currentStep === 'greeting') return ['1', '2', '3'].includes(clean);
+  if (currentStep === 'main_menu') return ['1', '2', '3', '9'].includes(clean);
+  if (currentStep === 'choose_language') return /^[1-7]$/.test(clean);
+  if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
+  if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
+  if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean);
+  if (currentStep === 'ask_contact_method') return ['1', '2', 'phone', 'whatsapp', 'sms', 'call', 'email', 'mail', 'e-mail'].includes(clean);
+  if (currentStep === 'search_type') return Boolean(mapSearchTypeInput(clean)) || isAnyAreaReply(clean);
+  if (currentStep === 'search_area') return isAnyAreaReply(clean) || clean.length >= 2;
+  if (currentStep === 'agent_area') return isAnyAreaReply(clean) || clean.length >= 2;
+
+  return false;
+}
+
 function intentMenuRoute(intent) {
   const key = normalizeInput(intent).toLowerCase();
   if (key === 'property_listing') return 'listing_type';
@@ -4905,33 +4931,46 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return routeExplicitListingStart();
   }
 
+  let actionableStepReply = isActionableStepReply(step, cleanBody);
   const idlePrompt = sessionData.idle_resume_prompt && typeof sessionData.idle_resume_prompt === 'object'
     ? sessionData.idle_resume_prompt
     : null;
   if (idlePrompt) {
-    if (isAffirmativeReply(cleanBody) || compactUpper === 'CONTINUE') {
+    const idlePromptStep = STEPS.includes(idlePrompt.step) ? idlePrompt.step : step;
+    if (isActionableStepReply(idlePromptStep, cleanBody)) {
+      step = idlePromptStep;
+      actionableStepReply = true;
+      await patchSessionData(phone, {
+        idle_resume_prompt: null,
+        idle_resume_resolved_as: 'step_reply',
+        idle_resume_resolved_at: new Date().toISOString(),
+        idle_resume_reply_step: idlePromptStep
+      });
+    } else if (isAffirmativeReply(cleanBody) || compactUpper === 'CONTINUE') {
       await patchSessionData(phone, { idle_resume_prompt: null });
-      return respond(stepReminderMessage(lang, idlePrompt.step || step), idlePrompt.step || step);
-    }
-    await patchSessionData(phone, {
-      idle_resume_prompt: null,
-      idle_resume_resolved_as: 'new_request',
-      idle_resume_resolved_at: new Date().toISOString(),
-      idle_resume_new_text: cleanBody
-    });
-    if (!isGreetingText(cleanBody)) {
-      await updateSession(phone, { current_step: 'main_menu' });
-      if (globalRoute) {
-        const next = menuRouteReply(lang, globalRoute);
-        return respond(`Got it. I will treat this as a new request.\n\n${next.message}`, next.nextStep);
+      return respond(stepReminderMessage(lang, idlePromptStep), idlePromptStep);
+    } else {
+      await patchSessionData(phone, {
+        idle_resume_prompt: null,
+        idle_resume_resolved_as: 'new_request',
+        idle_resume_resolved_at: new Date().toISOString(),
+        idle_resume_new_text: cleanBody
+      });
+      if (!isGreetingText(cleanBody)) {
+        await updateSession(phone, { current_step: 'main_menu' });
+        if (globalRoute) {
+          const next = menuRouteReply(lang, globalRoute);
+          return respond(`Got it. I will treat this as a new request.\n\n${next.message}`, next.nextStep);
+        }
+        return respond(`Got it. I will treat this as a new request.\n\n${friendlyGreetingReply(lang, sessionData)}`, 'main_menu');
       }
-      return respond(`Got it. I will treat this as a new request.\n\n${friendlyGreetingReply(lang, sessionData)}`, 'main_menu');
     }
   }
 
   if (
     isIdleResumeDue(session)
     && !['greeting', 'main_menu', 'submitted', 'choose_language'].includes(step)
+    && !actionableStepReply
     && !mediaUrl
     && !sharedLocation
     && cleanBody
