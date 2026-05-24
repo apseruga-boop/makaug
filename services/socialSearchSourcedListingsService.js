@@ -11,15 +11,15 @@ const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = SOURCE;
 const SOCIAL_SEARCH_SOURCE = 'found_online_property_source_v1';
 const DAILY_FOUND_ONLINE_PROPERTY_TARGET = 200;
-const LAUNCH_SOURCE_POST_WINDOW_START = '2022-01-01T00:00:00.000Z';
+const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social/source profile, website, source page, or platform message route exists; makaug shows Contact via source until the agent adds a direct number.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
-  target_source_year: 2022,
-  queue_rule: 'Queue every specific public property post/listing from 1 January 2022 onward that has a source URL, location or area, price or guide price, usable listing evidence, and any contact path. Phone is optional when a public source/social/website route exists.',
+  target_source_year: 2026,
+  queue_rule: 'Queue every specific public property post/listing from 1 January 2026 onward that has a source URL, location or area, price or guide price, usable listing evidence, and any contact path. Phone is optional when a public source/social/website route exists. There is no queue cap: every eligible post is added for King review.',
   image_rule: 'Use direct public listing images, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not invent property-room photos or bypass private platform restrictions.',
   facebook_image_rule: 'For Facebook, store the public post URL as source evidence. Use a public direct media/og:image URL or authorised screenshot when available; otherwise use a labelled evidence card and ask the source/agent for HD images.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter', 'websites', 'student accommodation sources'],
@@ -617,8 +617,8 @@ function sourceDateStatusFor(item = {}) {
   const date = parseSourceDate(sourcePublishedAtFor(item));
   if (!date) return 'needs_source_platform_date_confirmation';
   return date >= new Date(LAUNCH_SOURCE_POST_WINDOW_START)
-    ? 'confirmed_2022_plus_source_window'
-    : 'before_2022_source_window';
+    ? 'confirmed_2026_plus_source_window'
+    : 'before_2026_source_window';
 }
 
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
@@ -629,7 +629,7 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
   return {
-    eligible: hasSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2022_source_window',
+    eligible: hasSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window',
     has_source_url: hasSource,
     has_location_or_area: hasLocation,
     has_price_or_guide_price: hasPrice,
@@ -923,7 +923,7 @@ function publicDescriptionFor(item = {}) {
 
 function reviewSteps(item = {}) {
   const steps = [
-    'Confirm the exact source post/listing was first published on or after 1 January 2022',
+    'Confirm the exact source post/listing was first published on or after 1 January 2026',
     'Confirm the agent/source still wants this exact listing live on makaug.com',
     'Confirm current availability and guide price before approval',
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
@@ -955,7 +955,7 @@ function sourcePublishedAtFor(item = {}) {
 function sourcePublishedLabelFor(item = {}) {
   const publishedAt = sourcePublishedAtFor(item);
   if (!publishedAt) {
-    return 'Original post date is being confirmed from the source platform for the 2022+ found-online window.';
+    return 'Original post date is being confirmed from the source platform for the 2026+ found-online window.';
   }
   const dateText = String(publishedAt).slice(0, 10);
   return dateText ? `First posted online on ${dateText}` : 'Original post date is being confirmed from the source platform.';
@@ -977,6 +977,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedAt = sourcePublishedAtFor(item);
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
+  const importedSourcePost = item.importedFromSourcePost === true;
   return {
     found_online_candidate: true,
     social_search_candidate: true,
@@ -1017,12 +1018,16 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
-    agent_permission_reported: true,
-    permission_status: 'founder_reported_agent_authorised_upload',
+    agent_permission_reported: !importedSourcePost,
+    permission_status: importedSourcePost
+      ? 'public_source_evidence_pending_agent_authorisation'
+      : 'founder_reported_agent_authorised_upload',
     consent_required: false,
-    consent_confirmed: true,
-    image_rights_confirmed: true,
-    image_rights_status: 'authorised_public_source_images_or_evidence',
+    consent_confirmed: !importedSourcePost,
+    image_rights_confirmed: !importedSourcePost,
+    image_rights_status: importedSourcePost
+      ? 'public_source_evidence_pending_authorisation'
+      : 'authorised_public_source_images_or_evidence',
     image_evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
     facebook_image_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
     launch_intake_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
@@ -1055,7 +1060,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     longitude_source: 'manual_public_source_area_pin',
     area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
-    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2022+ found-online intake', sourceContactLabel],
+    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2026+ found-online intake', sourceContactLabel],
     source_urls: uniqueUrls([agent.channelUrl, sourceUrl, sourceContactUrl, item.sourceUrls]),
     photo_source_urls: sourceImageRows.map((image) => image.url),
     authorised_photo_urls: imageRows.map((image) => image.url),
@@ -1096,7 +1101,7 @@ function buildSocialSearchListing(item, agentId = null) {
     area: item.area,
     address: item.address,
     price: item.price,
-    price_period: 'once',
+    price_period: item.price_period || item.pricePeriod || 'once',
     bedrooms: item.beds,
     bathrooms: item.baths,
     property_type: item.subtype,
@@ -1138,7 +1143,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: 'pending',
     moderation_stage: 'submitted',
     reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2022, then confirm availability, price, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm availability, price, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
     moderation_reason: 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
     images: listingImageRowsFor(item),
     source_item: item,
@@ -1332,8 +1337,8 @@ async function insertListing(client, listing, agentId) {
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
-        consent_confirmed: true,
-        image_rights_confirmed: true,
+        consent_confirmed: listing.source_item.importedFromSourcePost === true ? false : true,
+        image_rights_confirmed: listing.source_item.importedFromSourcePost === true ? false : true,
         source_batch: itemBatchId(listing.source_item),
         source_url: sourceUrlForItem(listing.source_item),
         youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
@@ -1397,6 +1402,7 @@ function normalizeFoundOnlineListingType(value = '') {
 
 function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const sourceUrl = sourceUrlForItem(raw)
+    || safeUrl(raw.source_url)
     || safeUrl(raw.post_url)
     || safeUrl(raw.source_post_url)
     || safeUrl(raw.permalink)
@@ -1465,6 +1471,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     address,
     price: parseMoneyValue(raw.price ?? raw.guide_price ?? raw.price_text ?? raw.asking_price),
     priceText: raw.price_text || raw.price_label || '',
+    price_period: raw.price_period || raw.pricePeriod || raw.period || ((listingType === 'rent' || listingType === 'students' || listingType === 'commercial') ? 'month' : 'once'),
     listingType,
     subtype: raw.subtype || raw.property_type || null,
     beds: numberOrNull(raw.bedrooms ?? raw.beds),
@@ -1537,7 +1544,7 @@ async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = fal
       agent_name: agent.name || item.agentKey,
       source_url: sourceUrlForItem(item),
       source_contact_url: sourceContactUrlForAgent(agent, item),
-      reason: 'missing_2022_launch_intake_evidence',
+      reason: 'missing_2026_launch_intake_evidence',
       intake,
     }));
 
@@ -1728,7 +1735,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           agent_name: agentByKey(item.agentKey)?.name || item.agentKey,
           source_url: sourceUrlForItem(item),
           source_contact_url: sourceContactUrlForAgent(agentByKey(item.agentKey), item),
-          reason: 'missing_2022_launch_intake_evidence',
+          reason: 'missing_2026_launch_intake_evidence',
           intake,
         });
         continue;
@@ -1823,15 +1830,15 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     target_gap: targetGap,
     meets_daily_minimum: eligibleToQueueCount >= DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     blocking_reason: targetGap
-      ? `Need ${targetGap} more specific property posts from 1 January 2022 onward with source URL, location/area, price or guide price, usable image/source evidence, and any contact path such as phone, email, website, public source page, or social profile before the 200/day King queue target is met.`
-      : '',
+      ? `Need ${targetGap} more specific property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and any contact path such as phone, email, website, public source page, or social profile before the 200/day King review minimum is met. There is no cap: every extra eligible post is queued.`
+      : 'Daily minimum met; continue queuing every extra eligible 2026+ found-online property post because there is no cap.',
     evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     no_phone_source_contact_policy:
       PUBLIC_SOURCE_CONTACT_POLICY,
     source_page_vs_property_policy:
-      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. King queues every actual property post/listing from 1 January 2022 onward that meets the found-online intake rule; source pages without a matched post stay as source-review work.',
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. King queues every actual property post/listing from 1 January 2026 onward that meets the found-online intake rule; source pages without a matched post stay as source-review work.',
     next_required_inputs: [
-      'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2022+ post is queued.',
+      'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026+ post is queued.',
       'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
       'Promote discovery feeds into reviewed source pages/accounts, then import only posts that expose price, location, usable images/source evidence, and either a direct number or public social contact route.',
     ],

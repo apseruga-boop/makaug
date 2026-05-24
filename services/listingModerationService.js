@@ -49,6 +49,7 @@ function ownerEditTokenExpiry() {
 function getSiteBaseUrl() {
   return String(
     process.env.PUBLIC_SITE_URL
+      || process.env.PUBLIC_BASE_URL
       || process.env.APP_BASE_URL
       || process.env.BASE_URL
       || 'https://makaug.com'

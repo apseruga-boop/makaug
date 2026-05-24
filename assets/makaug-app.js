@@ -8850,7 +8850,7 @@ function setAdminWorkflowTab(tab = "review") {
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
   const limit = Math.min(Math.max(Number(options.limit || 100), 1), 100);
-  const maxPages = Math.min(Math.max(Number(options.maxPages || 10), 1), 25);
+  const maxPages = Math.min(Math.max(Number(options.maxPages || 10), 1), 500);
   const rows = [];
   let page = 1;
   let totalPages = 1;
@@ -8889,8 +8889,8 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/summary", { headers }),
     apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
-    fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 25 }),
-    fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 25 }),
+    fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 500 }),
+    fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 }),
     apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
     apiRequest("/api/admin/agents?limit=100", { headers }),
     apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
@@ -9146,7 +9146,7 @@ function adminSourceReviewReasonLabel(reason = "") {
   }
   if (normalized === "missing_property_evidence") return "Needs property evidence";
   if (normalized === "image_quality_too_low") return "Needs clearer images";
-  if (/^missing_(2022|2026)_launch_intake_evidence$/.test(normalized)) return "Needs 2022+ post evidence";
+  if (/^missing_(2022|2026)_launch_intake_evidence$/.test(normalized)) return "Needs 2026+ post evidence";
   return normalized ? normalized.replace(/_/g, " ") : "Source review needed";
 }
 
@@ -9272,7 +9272,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed source pages/feeds and queue every eligible found-online property candidate from 1 January 2022 onward. Phone is optional when the public source page/profile is the contact route.");
+  const ok = window.confirm("Scan reviewed source pages/feeds and queue every eligible found-online property candidate from 1 January 2026 onward. Phone is optional when the public source page/profile is the contact route. There is no cap.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9282,7 +9282,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Checking reviewed source pages/feeds and queuing every eligible 2022+ found-online property candidate now...";
+    statusEl.innerHTML = "Checking reviewed source pages/feeds and queuing every eligible 2026+ found-online property candidate now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9329,8 +9329,8 @@ async function adminSeedSocialSearchAuthorisedListings() {
     const targetHtml = targetStatus.target ? `
         <div class="mt-2 rounded-xl border ${targetStatus.meets_daily_minimum ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"} p-3">
           <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} found-online properties</div>
-          <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with 2022+ found-online records.")}</div>
-          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific public property post from 1 January 2022 onward with source URL, location, price or guide price, usable image/source evidence, and a contact route.")}</div>
+          <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with 2026+ found-online records. There is no cap; every extra eligible post is queued.")}</div>
+          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific public property post from 1 January 2026 onward with source URL, location, price or guide price, usable image/source evidence, and a contact route. There is no cap.")}</div>
           ${targetStatus.no_phone_source_contact_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.no_phone_source_contact_policy)}</div>` : ""}
           ${targetStatus.source_page_vs_property_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.source_page_vs_property_policy)}</div>` : ""}
         </div>` : "";
@@ -9345,19 +9345,19 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online pending records</button></div>
-        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual property post/listing from 1 January 2022 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published.</div>
+        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual property post/listing from 1 January 2026 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published, and there is no cap on eligible records.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
           <div class="mt-1">Use source/agent-authorised land photos only when they clearly belong to the listing. If no reliable photo exists, King adds a makaug land-size guide illustration so reviewers can see the plot scale without using fake room photos.</div>
         </div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
-        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2022+ property post before King queues it.</div>` : ""}
+        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2026+ property post before King queues it.</div>` : ""}
         ${visibleSampleHtml ? `<div class="mt-2 space-y-2">${visibleSampleHtml}</div>` : `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-blue-900">No pending found-online records need review in this run. Approved or live records have been removed from this pending panel.</div>`}`;
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2022+ property post, source URL, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2026+ property post, source URL, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9428,7 +9428,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. Individual posts are stored on found-online property records after King finds a specific 2022+ listing with source URL, contact route, location/area, price or guide price, and usable image/source evidence. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. Individual posts are stored on found-online property records after King finds a specific 2026+ listing with source URL, contact route, location/area, price or guide price, and usable image/source evidence. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>
@@ -9478,7 +9478,7 @@ async function adminImportFoundOnlineSourcePosts() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const raw = window.prompt("Paste a JSON array of extracted 2022+ source posts. Each post should include post_url/source_url, title, area/location, price or price_text, platform, source_name, and any image/contact fields.");
+  const raw = window.prompt("Paste a JSON array of extracted 2026+ source posts. Each post should include post_url/source_url, title, area/location, price or price_text, platform, source_name, and any image/contact fields.");
   if (!raw) return;
   let posts = [];
   try {
@@ -9515,7 +9515,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: every specific public post from 1 January 2022 onward with source URL, location/area, price or guide price, usable image/source evidence, and any public contact route is queued. No phone number is not a blocker when the source page/profile is public.</div>
+        <div class="mt-1">Import rule: every specific public post from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and any public contact route is queued. No phone number is not a blocker when the source page/profile is public, and there is no cap on eligible records.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }

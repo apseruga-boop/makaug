@@ -211,7 +211,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(frontend.includes('No pending found-online records need review in this run'), 'pending panel should explain when only approved/live matches remain');
   assert(frontend.includes('data-admin-seed-final'), 'seed summaries should expose final-state metadata for UI regression checks');
   assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
-  assert(frontend.includes('fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 25 })'), 'dashboard should fetch enough pending pages for launch sweep volume');
+  assert(frontend.includes('fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 500 })'), 'dashboard should fetch enough pending pages for launch sweep volume');
   assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
   assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');
@@ -382,8 +382,8 @@ test('found-online social search batch creates pending listings with agent profi
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
   assert.strictEqual(summary.daily_target_status.meets_daily_minimum, false, 'current curated list should not pretend it meets the 200/day minimum');
-  assert(/from 1 January 2022 onward/i.test(summary.daily_target_status.evidence_policy), 'daily target status should express the 2022+ found-online intake rule');
-  assert.strictEqual(LAUNCH_SOURCE_POST_WINDOW_START, '2022-01-01T00:00:00.000Z', 'launch intake should scan from 1 January 2022');
+  assert(/from 1 January 2026 onward/i.test(summary.daily_target_status.evidence_policy), 'daily target status should express the 2026+ found-online intake rule');
+  assert.strictEqual(LAUNCH_SOURCE_POST_WINDOW_START, '2026-01-01T00:00:00.000Z', 'launch intake should scan from 1 January 2026');
   assert(/Facebook/i.test(FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule), 'launch intake should define how Facebook images are handled');
   assert(/No public phone number is not a blocker/i.test(summary.daily_target_status.no_phone_source_contact_policy), 'daily target status should explain social/source contact fallback');
   assert(/X\/Twitter, Instagram, TikTok, YouTube, Facebook/i.test(summary.daily_target_status.source_page_vs_property_policy), 'daily target status should separate monitored cross-platform sources from queued properties');
@@ -405,7 +405,7 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.source_contact_platform, extra.source_platform, `${listing.title} should keep the contact platform aligned with the source platform`);
     assert(extra.source_contact_url && /^https?:\/\//.test(extra.source_contact_url), `${listing.title} should expose a public source/social contact URL`);
     assert(extra.source_contact_method, `${listing.title} should expose a contact method even when no phone is present`);
-    assert.strictEqual(extra.source_post_window_start, '2022-01-01T00:00:00.000Z', `${listing.title} should store the launch source window`);
+    assert.strictEqual(extra.source_post_window_start, '2026-01-01T00:00:00.000Z', `${listing.title} should store the launch source window`);
     assert(extra.source_post_date_status, `${listing.title} should store source post date status`);
     assert.strictEqual(extra.public_contact_path_available, true, `${listing.title} should mark source/social contact paths as usable`);
     assert(extra.source_audience_label || extra.source_followers_label, `${listing.title} should show source audience/follower metadata`);
@@ -525,7 +525,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePlatformFeedLabel'), 'daily found-online sweeps should label platform-specific feeds');
   assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_page_vs_property_policy'), 'daily found-online sweeps should explain source pages versus queued properties');
-  assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePostMeetsLaunchIntakeRule'), 'daily found-online sweeps should gate property posts through the 2022+ found-online intake rule');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePostMeetsLaunchIntakeRule'), 'daily found-online sweeps should gate property posts through the 2026+ found-online intake rule');
   assert(read('services/socialSearchSourcedListingsService.js').includes('PUBLIC_SOURCE_CONTACT_POLICY'), 'daily found-online sweeps should treat public source/contact pages as contact routes');
   assert(read('services/socialSearchSourcedListingsService.js').includes('facebook_image_policy'), 'daily found-online sweeps should explain Facebook image handling');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
@@ -536,7 +536,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('adminSourceReviewRecordSummaryHtml'), 'dashboard should render source-review records with source/contact links');
   assert(frontend.includes('A public social/source profile counts as the contact path when no phone is published'), 'dashboard should make no-phone social contact acceptable');
   assert(frontend.includes('source pages/feeds are parked for source review, not hidden properties'), 'dashboard should clarify source-review records are not pending properties');
-  assert(frontend.includes('from 1 January 2022 onward'), 'dashboard should communicate the found-online source window');
+  assert(frontend.includes('from 1 January 2026 onward'), 'dashboard should communicate the found-online source window');
   assert(frontend.includes('No phone number is not a blocker if a social/source profile exists'), 'dashboard should explain source-review no-phone policy');
   assert(frontend.includes('A page without a phone can still be usable'), 'source database should explain public social/source URLs can be contact paths');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');

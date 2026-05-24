@@ -28,14 +28,14 @@ function policy() {
   return {
     source_record_target: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
     daily_property_queue_minimum: DAILY_FOUND_ONLINE_PROPERTY_TARGET,
-    property_queue_target: `scan all source pages/feeds, then queue every eligible specific property post from 1 January 2022 onward; do not auto-create ${PROPERTY_SOURCE_REGISTRY_TARGET_COUNT} properties from source pages alone`,
-    source_window_days: 120,
-    target_source_year: 2022,
+    property_queue_target: `scan all source pages/feeds, then queue every eligible specific property post from 1 January 2026 onward; there is no property queue cap, and do not auto-create ${PROPERTY_SOURCE_REGISTRY_TARGET_COUNT} properties from source pages alone`,
+    source_window_days: 366,
+    target_source_year: 2026,
     source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
     candidate_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     image_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
     facebook_image_rule: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
-    hard_queue_rule: 'If the intake count is below the 200/day minimum, report the gap and the missing evidence instead of padding with fabricated properties.',
+    hard_queue_rule: 'If the intake count is below the 200/day minimum, report the gap and the missing evidence instead of padding with fabricated properties. If more than 200 eligible posts exist, queue all of them.',
     review_destination: 'King dashboard pending review',
   };
 }
