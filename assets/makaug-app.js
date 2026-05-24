@@ -8769,11 +8769,13 @@ function adminSourcedInventoryCandidateBadge(row = {}) {
 
 function adminPendingQueueCounts(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
-  const foundOnline = source.filter(adminIsFoundOnlineSourcedListing).length;
+  const foundOnlinePending = source.filter(adminIsFoundOnlineSourcedListing).length;
+  const foundOnlineAll = adminFoundOnlineAllRows();
   const student = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student").length;
   return {
     all: source.length,
-    found_online: foundOnline,
+    found_online: foundOnlineAll.length || foundOnlinePending,
+    found_online_pending: foundOnlinePending,
     student,
   };
 }
@@ -8784,9 +8786,26 @@ function adminPendingQueueFilterLabel(filter = adminPendingQueueFilter) {
   return "All pending";
 }
 
+function adminFoundOnlineAllRows() {
+  const source = adminUniqueSeedItems([
+    ...(Array.isArray(adminRemoteListings) ? adminRemoteListings : []),
+    ...(Array.isArray(adminLiveListings) ? adminLiveListings : []),
+    ...(Array.isArray(adminCurrentPendingListings) ? adminCurrentPendingListings : [])
+  ]);
+  return adminApplyLaunchCleanFilter(source)
+    .filter(adminIsFoundOnlineSourcedListing)
+    .filter((row) => {
+      const status = normalizeModerationStatus(row?.status || row?.moderation_status);
+      return !["deleted", "archived", "rejected"].includes(status);
+    });
+}
+
 function adminFilterPendingQueueRows(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
-  if (adminPendingQueueFilter === "found_online") return source.filter(adminIsFoundOnlineSourcedListing);
+  if (adminPendingQueueFilter === "found_online") {
+    const allFoundOnline = adminFoundOnlineAllRows();
+    return allFoundOnline.length ? allFoundOnline : source.filter(adminIsFoundOnlineSourcedListing);
+  }
   if (adminPendingQueueFilter === "student") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student");
   return source;
 }
@@ -8822,12 +8841,16 @@ function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
 
 function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
   const counts = adminPendingQueueCounts(rows);
+  const isFoundOnlineView = adminPendingQueueFilter === "found_online";
+  const statusText = isFoundOnlineView
+    ? `${adminEscape(filteredRows.length)} found-online source property records shown. ${adminEscape(counts.found_online_pending || 0)} are still pending review; approved/live source records stay visible here for audit, source follow-up, and future action.`
+    : `${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Found-online sweep records stay in this dashboard after approval so King can still find them.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div class="font-black">Pending queue view: ${adminEscape(adminPendingQueueFilterLabel())}</div>
-          <div class="mt-1">${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Found-online sweep records stay in this queue until King approves, rejects, hides, or deletes them.</div>
+          <div class="mt-1">${statusText}</div>
         </div>
         <div class="flex gap-2 flex-wrap">
           ${adminPendingQueueFilterButton("all", "All", counts.all)}
@@ -9029,7 +9052,7 @@ function renderAdminPendingRows(listings) {
   adminCurrentPendingListings = cleanListings;
   const filteredListings = adminFilterPendingQueueRows(cleanListings);
   const toolbarHtml = adminPendingQueueToolbarHtml(cleanListings, filteredListings);
-  if (!cleanListings.length) {
+  if (!cleanListings.length && !filteredListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
     return;
   }
@@ -9045,6 +9068,8 @@ function renderAdminPendingRows(listings) {
     const backendId = String(p.backend_id || p.id || "");
     const reviewId = backendId || localId;
     const reviewArg = adminListingIdArg(reviewId);
+    const isPendingReview = adminIsPendingReviewSeedItem(p);
+    const publicUrl = String(p.url || (backendId ? `/property/${backendId}` : "") || "").trim();
     const featured = isFeaturedListing(p);
     const sourceBadge = adminSourcedInventoryCandidateBadge(p);
     return `
@@ -9061,7 +9086,9 @@ function renderAdminPendingRows(listings) {
         </div>
         <div class="mt-3 flex gap-2 flex-wrap">
           <button onclick="openAdminListingReview(${reviewArg})" class="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Open Review</button>
-          <button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>
+          ${isPendingReview ? `<button onclick="adminQuickRejectListing(${reviewArg})" class="border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Reject</button>` : ""}
+          ${!isPendingReview && publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Public</a>` : ""}
+          ${!isPendingReview ? `<button onclick="openAdminListingLivePreview(${reviewArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Live-style Preview</button>` : ""}
         </div>
       </div>`;
   }).join("")}`;
@@ -9392,7 +9419,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="font-black">Found-online property candidates created</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
-        <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online pending records</button></div>
+        <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
         <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual property post/listing from 1 January 2026 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published, and there is no cap on eligible records.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">

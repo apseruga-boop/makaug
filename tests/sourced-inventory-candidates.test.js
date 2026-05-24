@@ -232,8 +232,13 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('found-online-queue-tabs-20260524'), 'index should bump the app asset version so production browsers fetch the found-online queue filter UI');
   assert(html.includes('found-online-evidence-sweep-20260524'), 'index should bump the app asset version so production browsers fetch found-online source/date/evidence fixes');
   assert(html.includes('public-image-src-fix-20260524'), 'index should bump the app asset version so production browsers fetch public image source fixes');
+  assert(html.includes('found-online-admin-archive-20260524'), 'index should bump the app asset version so production browsers fetch the found-online admin archive view');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
-  assert(frontend.includes('Show all found-online pending records'), 'seed status should expose a direct action to the full found-online queue');
+  assert(frontend.includes('function adminFoundOnlineAllRows'), 'dashboard should keep approved/live found-online records findable after publication');
+  assert(frontend.includes('adminRemoteListings') && frontend.includes('adminLiveListings') && frontend.includes('adminCurrentPendingListings'), 'found-online archive should merge all admin listing snapshots');
+  assert(frontend.includes('approved/live source records stay visible here for audit'), 'dashboard should explain where approved found-online records went');
+  assert(frontend.includes('Open Public') && frontend.includes('Live-style Preview'), 'approved found-online records should be actionable without showing a reject-only pending workflow');
+  assert(frontend.includes('Show all found-online source records'), 'seed status should expose a direct action to the full found-online source archive');
   assert(socialSearchServiceSource.includes('function normalizedStatusValue'), 'service should trim and normalize stored statuses');
   assert(socialSearchServiceSource.includes('const reviewQueueVisible = isReviewQueueStatus(existing);'), 'service should evaluate existing records with status and moderation stage together');
   assert(socialSearchServiceSource.includes('item.review_queue_visible && !item.already_live_or_approved && isReviewQueueStatus(item)'), 'service should exclude final records from review_queue_listings');
