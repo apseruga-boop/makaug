@@ -12,6 +12,7 @@ const migration = read('db/migrations/042_property_source_registry.sql');
 const tiktokDeepSweepMigration = read('db/migrations/046_tiktok_deep_sweep_source_profiles.sql');
 const tiktokVideoIndexMigration = read('db/migrations/047_tiktok_realtor_mahad_video_index.sql');
 const tiktokFacebookDoubleDownMigration = read('db/migrations/048_tiktok_facebook_double_down_profiles.sql');
+const socialFirstXPriorityMigration = read('db/migrations/049_social_first_x_priority_profiles.sql');
 const script = read('scripts/seed-property-source-registry.js');
 const dailySweepScript = read('scripts/run-daily-found-online-source-sweep.js');
 const adminRoute = read('routes/admin.js');
@@ -64,6 +65,10 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(service.includes('SOURCE_FRESHNESS_WINDOW_DAYS = 366'), 'source records should keep 2026 launch-window freshness metadata for prioritisation');
   assert(service.includes('first published from 1 January 2026 through today'), 'source records should scan from the 2026 found-online window start');
   assert(service.includes('target_source_year: TARGET_SOURCE_YEAR'), 'source records should flag 2026 as the active target source year');
+  assert(service.includes('SOCIAL_FIRST_PLATFORM_PRIORITY'), 'source registry should encode social-first platform priority');
+  assert(service.includes('SOCIAL_PROFILE_CREATION_RULE'), 'source registry should encode the repeated-inventory profile threshold');
+  assert(service.includes('SOCIAL_ONE_OFF_LISTING_RULE'), 'source registry should keep one-off social posts listing-only until repeat activity is visible');
+  assert(service.includes('TikTok, Facebook, YouTube, X/Twitter, and Instagram before website/portal'), 'source registry should de-prioritise websites behind social channels');
   assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000'), 'source registry should enforce the 30,000 ceiling');
   assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000'), 'source registry should reserve an 8,000-record X hashtag sweep');
   assert(service.includes('CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000'), 'source registry should reserve a 12,000-record Instagram/Facebook/TikTok/YouTube hashtag sweep');
@@ -191,6 +196,33 @@ test('TikTok and Facebook double-down adds named broker profiles without fake li
   assert(agentsRoute.includes('SOCIAL-KNIGHT-FRANK-UGANDA-20260524'), 'public broker profiles should expose Knight Frank social links');
   assert(agentsRoute.includes('SOCIAL-ROBS-PROPERTIES-TRAVELS-20260524'), 'public broker profiles should expose Robs Properties TikTok link');
   assert(healthRoute.includes('048_tiktok_facebook_double_down_profiles.sql'), 'migration health should expose the TikTok/Facebook double-down status');
+});
+
+test('social-first X sweep adds named Twitter sources and enforces profile threshold policy', () => {
+  assert(socialFirstXPriorityMigration.includes('social_first_x_priority_20260524'), 'social-first X migration should carry a traceable batch id');
+  assert(socialFirstXPriorityMigration.includes('x-knight-frank-uganda-profile'), 'social-first X sweep should add Knight Frank Uganda X source profile');
+  assert(socialFirstXPriorityMigration.includes('x-broll-uganda-profile'), 'social-first X sweep should add Broll Uganda X source profile');
+  assert(socialFirstXPriorityMigration.includes('x-chris-property-uganda-profile'), 'social-first X sweep should add Chris Property Uganda X source profile');
+  assert(socialFirstXPriorityMigration.includes('x-ecoland-property-services-profile'), 'social-first X sweep should add Ecoland Property Services X source profile');
+  assert(socialFirstXPriorityMigration.includes('x-bigways-ug-profile'), 'social-first X sweep should add Bigways X source profile');
+  assert(socialFirstXPriorityMigration.includes('profile_creation_status'), 'social-first X sweep should track discovery-only profiles that do not yet meet the broker-profile threshold');
+  assert(socialFirstXPriorityMigration.includes('blocked_until_repeated_inventory_or_cross_platform_presence'), 'single-profile/single-listing sources should not create broker profiles');
+  assert(socialFirstXPriorityMigration.includes('platform_priority_tier'), 'social-first X sweep should tag platform priority metadata');
+  assert(socialFirstXPriorityMigration.includes('priority_social_channel'), 'social-first X sweep should mark social platforms as priority channels');
+  assert(socialFirstXPriorityMigration.includes('secondary_website_or_portal'), 'social-first X sweep should mark websites as secondary confirmation sources');
+  assert(socialFirstXPriorityMigration.includes('single isolated property post stays as a found-online listing without a profile'), 'social-first X sweep should enforce listing-only one-off posts');
+  assert(socialFirstXPriorityMigration.includes('Queue only exact 2026+ property posts/listings with source URL'), 'social-first X sweep should require exact source evidence before import');
+  assert(socialFirstXPriorityMigration.includes('Do not fabricate from account shells or search pages'), 'social-first X sweep should block fabricated review-queue rows');
+  assert(socialFirstXPriorityMigration.includes('SOCIAL-BROLL-UGANDA-X-20260524'), 'social-first X sweep should create a Broll broker profile because repeated/cross-platform source evidence exists');
+  assert(socialFirstXPriorityMigration.includes('SOCIAL-CHRIS-PROPERTY-UGANDA-X-20260524'), 'social-first X sweep should create a Chris Property broker profile because repeated inventory exists');
+  assert(socialFirstXPriorityMigration.includes('SOCIAL-ECOLAND-PROPERTY-SERVICES-X-20260524'), 'social-first X sweep should create an Ecoland broker profile because repeated inventory exists');
+  assert(!socialFirstXPriorityMigration.includes('INSERT INTO properties'), 'social-first X sweep must not fabricate property rows from account/search shells');
+  assert(agentsRoute.includes('x_url'), 'agent API should expose X/Twitter social link fields');
+  assert(agentsRoute.includes('SOCIAL-BROLL-UGANDA-X-20260524'), 'public broker profiles should expose Broll X link');
+  assert(agentsRoute.includes('SOCIAL-CHRIS-PROPERTY-UGANDA-X-20260524'), 'public broker profiles should expose Chris Property X link');
+  assert(agentsRoute.includes('SOCIAL-ECOLAND-PROPERTY-SERVICES-X-20260524'), 'public broker profiles should expose Ecoland X link');
+  assert(agentsRoute.includes('SOCIAL-BIGWAYS-UG-X-20260524'), 'public broker profiles should expose Bigways X link');
+  assert(healthRoute.includes('049_social_first_x_priority_profiles.sql'), 'migration health should expose the social-first X priority status');
 });
 
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {

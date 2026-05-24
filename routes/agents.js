@@ -31,8 +31,13 @@ const KNOWN_AGENT_SOCIAL_LINKS = [
     licence: 'SOCIAL-KNIGHT-FRANK-UGANDA-20260524',
     tiktok: 'https://www.tiktok.com/@knightfrankuganda',
     facebook: 'https://www.facebook.com/372685259596951',
+    x: 'https://x.com/knightfrankug',
     website: 'https://www.knightfrank.ug/',
   },
+  { licence: 'SOCIAL-BROLL-UGANDA-X-20260524', x: 'https://x.com/BrollUganda', website: 'https://broll.ug/' },
+  { licence: 'SOCIAL-CHRIS-PROPERTY-UGANDA-X-20260524', x: 'https://x.com/chrispropertyug', website: 'https://chrispropertyuganda.com/' },
+  { licence: 'SOCIAL-ECOLAND-PROPERTY-SERVICES-X-20260524', x: 'https://x.com/ecolandproperty', website: 'https://www.ecolandproperty.com/' },
+  { licence: 'SOCIAL-BIGWAYS-UG-X-20260524', x: 'https://x.com/Bigways_UG', website: 'https://bigways.co.ug/' },
   { licence: 'SOCIAL-KHP-ESTATES-20260524', facebook: 'https://www.facebook.com/109087123897182', website: 'https://khpestates.com/' },
   { licence: 'SOCIAL-NAS-REALTORS-20260524', facebook: 'https://www.facebook.com/Nasrealtors/' },
   { licence: 'SOCIAL-DELTA-REAL-ESTATES-UGANDA-20260524', facebook: 'https://www.facebook.com/Deltarealestatesuganda/' },
@@ -80,6 +85,7 @@ function knownAgentSocialSelect(alias = 'a') {
         ${knownAgentSocialCase(safeAlias, 'youtube', 'youtube_url')},
         ${knownAgentSocialCase(safeAlias, 'tiktok', 'tiktok_url')},
         ${knownAgentSocialCase(safeAlias, 'facebook', 'facebook_url')},
+        ${knownAgentSocialCase(safeAlias, 'x', 'x_url')},
         ${knownAgentSocialCase(safeAlias, 'website', 'website_url')}`;
 }
 
