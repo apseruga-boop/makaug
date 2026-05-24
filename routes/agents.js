@@ -9,26 +9,78 @@ const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride'
 const { parsePagination, toPagination } = require('../utils/pagination');
 
 const router = express.Router();
-const CARNELIAN_AGENT_EMAIL = 'carnelianproperties4@gmail.com';
-const CARNELIAN_AGENT_LICENCE = 'CARNELIAN-YOUTUBE-20260519';
-const CARNELIAN_YOUTUBE_URL = 'https://www.youtube.com/@CarnelianPropertiesuganda';
-const CARNELIAN_TIKTOK_URL = 'https://www.tiktok.com/@carnelian.propert';
-const REALTOR_MAHAD_AGENT_LICENCE = 'SOCIAL-REALTOR-MAHAD-20260520';
-const REALTOR_MAHAD_TIKTOK_URL = 'https://www.tiktok.com/@realtor_mahad';
+const KNOWN_AGENT_SOCIAL_LINKS = [
+  {
+    licence: 'CARNELIAN-YOUTUBE-20260519',
+    email: 'carnelianproperties4@gmail.com',
+    youtube: 'https://www.youtube.com/@CarnelianPropertiesuganda',
+    tiktok: 'https://www.tiktok.com/@carnelian.propert',
+    website: 'https://www.youtube.com/@CarnelianPropertiesuganda',
+  },
+  {
+    licence: 'SOCIAL-REALTOR-MAHAD-20260520',
+    name: 'realtor mahad',
+    tiktok: 'https://www.tiktok.com/@realtor_mahad',
+    website: 'https://www.youtube.com/@realtormahad',
+  },
+  {
+    licence: 'SOCIAL-ROBS-PROPERTIES-TRAVELS-20260524',
+    tiktok: 'https://www.tiktok.com/@robpropertiestravel',
+  },
+  {
+    licence: 'SOCIAL-KNIGHT-FRANK-UGANDA-20260524',
+    tiktok: 'https://www.tiktok.com/@knightfrankuganda',
+    facebook: 'https://www.facebook.com/372685259596951',
+    website: 'https://www.knightfrank.ug/',
+  },
+  { licence: 'SOCIAL-KHP-ESTATES-20260524', facebook: 'https://www.facebook.com/109087123897182', website: 'https://khpestates.com/' },
+  { licence: 'SOCIAL-NAS-REALTORS-20260524', facebook: 'https://www.facebook.com/Nasrealtors/' },
+  { licence: 'SOCIAL-DELTA-REAL-ESTATES-UGANDA-20260524', facebook: 'https://www.facebook.com/Deltarealestatesuganda/' },
+  { licence: 'SOCIAL-ROYALE-PROPERTY-CONSULTANTS-20260524', facebook: 'https://www.facebook.com/Royalepropertiesuganda/' },
+  { licence: 'SOCIAL-ANOMA-GROUP-20260524', facebook: 'https://www.facebook.com/anomagroupltd', website: 'https://www.anomaproperties.com/' },
+  { licence: 'SOCIAL-CINAM-INVESTMENTS-20260524', facebook: 'https://www.facebook.com/CinamInvestments/' },
+  { licence: 'SOCIAL-HONEST-ESTATE-DEVELOPERS-20260524', facebook: 'https://www.facebook.com/174491755991678/', website: 'https://www.honestestatedevelopers.com' },
+  { licence: 'SOCIAL-PRIME-HOUSING-ESTATES-20260524', facebook: 'https://www.facebook.com/primehousingestates', website: 'https://primeestates.co.ug' },
+  { licence: 'SOCIAL-JAKANA-HEIGHTS-20260524', facebook: 'https://www.facebook.com/286687085651624/' },
+  { licence: 'SOCIAL-PROPERTY-SERVICES-LIMITED-20260524', facebook: 'https://www.facebook.com/164016330337117/', website: 'https://www.propertyservicesltd.com' },
+  { licence: 'SOCIAL-KAMERUKA-PROPERTIES-20260524', facebook: 'https://www.facebook.com/327009134464566/', website: 'https://www.kameruka.com' },
+  { licence: 'SOCIAL-KINGMAKER-PROPERTIES-UGANDA-20260524', facebook: 'https://www.facebook.com/KingMakerPropertiesUganda/', website: 'https://www.kingmakerproperties.co.ug/' },
+];
 const PUBLIC_AGENT_SUPPRESSED_MARKERS = ['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'];
+
+function sqlLiteral(value = '') {
+  return String(value).replace(/'/g, "''");
+}
+
+function knownAgentMatch(alias, link) {
+  const checks = [];
+  if (link.licence) checks.push(`COALESCE(${alias}.licence_number, '') = '${sqlLiteral(link.licence)}'`);
+  if (link.email) checks.push(`LOWER(COALESCE(${alias}.email, '')) = '${sqlLiteral(link.email.toLowerCase())}'`);
+  if (link.name) {
+    checks.push(`LOWER(COALESCE(${alias}.full_name, '')) = '${sqlLiteral(link.name.toLowerCase())}'`);
+    checks.push(`LOWER(COALESCE(${alias}.company_name, '')) = '${sqlLiteral(link.name.toLowerCase())}'`);
+  }
+  return checks.length ? `(${checks.join(' OR ')})` : 'FALSE';
+}
+
+function knownAgentSocialCase(alias, field, columnAlias) {
+  const clauses = KNOWN_AGENT_SOCIAL_LINKS
+    .filter((link) => link[field])
+    .map((link) => `WHEN ${knownAgentMatch(alias, link)} THEN '${sqlLiteral(link[field])}'`)
+    .join('\n          ');
+  return `CASE
+          ${clauses}
+          ELSE NULL
+        END AS ${columnAlias}`;
+}
 
 function knownAgentSocialSelect(alias = 'a') {
   const safeAlias = alias === 'a' ? 'a' : alias;
-  const carnelianMatch = `(LOWER(COALESCE(${safeAlias}.email, '')) = '${CARNELIAN_AGENT_EMAIL}' OR COALESCE(${safeAlias}.licence_number, '') = '${CARNELIAN_AGENT_LICENCE}')`;
-  const realtorMahadMatch = `(COALESCE(${safeAlias}.licence_number, '') = '${REALTOR_MAHAD_AGENT_LICENCE}' OR LOWER(COALESCE(${safeAlias}.full_name, '')) = 'realtor mahad' OR LOWER(COALESCE(${safeAlias}.company_name, '')) = 'realtor mahad')`;
   return `
-        CASE WHEN ${carnelianMatch} THEN '${CARNELIAN_YOUTUBE_URL}' ELSE NULL END AS youtube_url,
-        CASE
-          WHEN ${carnelianMatch} THEN '${CARNELIAN_TIKTOK_URL}'
-          WHEN ${realtorMahadMatch} THEN '${REALTOR_MAHAD_TIKTOK_URL}'
-          ELSE NULL
-        END AS tiktok_url,
-        CASE WHEN ${carnelianMatch} THEN 'https://www.youtube.com/@CarnelianPropertiesuganda' ELSE NULL END AS website_url`;
+        ${knownAgentSocialCase(safeAlias, 'youtube', 'youtube_url')},
+        ${knownAgentSocialCase(safeAlias, 'tiktok', 'tiktok_url')},
+        ${knownAgentSocialCase(safeAlias, 'facebook', 'facebook_url')},
+        ${knownAgentSocialCase(safeAlias, 'website', 'website_url')}`;
 }
 
 function addPublicAgentLaunchTestFilter(filters, values) {

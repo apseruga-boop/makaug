@@ -37,7 +37,8 @@ router.get('/migrations', async (_req, res) => {
     '044_clean_sourced_candidates_seed_found_online_2026.sql',
     '045_expand_found_online_sweep_images_and_sources.sql',
     '046_tiktok_deep_sweep_source_profiles.sql',
-    '047_tiktok_realtor_mahad_video_index.sql'
+    '047_tiktok_realtor_mahad_video_index.sql',
+    '048_tiktok_facebook_double_down_profiles.sql'
   ];
   try {
     const result = await db.query(

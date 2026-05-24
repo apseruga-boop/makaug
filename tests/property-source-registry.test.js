@@ -11,6 +11,7 @@ const service = read('services/propertySourceRegistryService.js');
 const migration = read('db/migrations/042_property_source_registry.sql');
 const tiktokDeepSweepMigration = read('db/migrations/046_tiktok_deep_sweep_source_profiles.sql');
 const tiktokVideoIndexMigration = read('db/migrations/047_tiktok_realtor_mahad_video_index.sql');
+const tiktokFacebookDoubleDownMigration = read('db/migrations/048_tiktok_facebook_double_down_profiles.sql');
 const script = read('scripts/seed-property-source-registry.js');
 const dailySweepScript = read('scripts/run-daily-found-online-source-sweep.js');
 const adminRoute = read('routes/admin.js');
@@ -161,7 +162,7 @@ test('TikTok deep sweep creates source profiles without fabricating hidden posts
   assert(tiktokDeepSweepMigration.includes('authenticated_tiktok_review_or_api_export_required_for_complete_item_list'), 'TikTok sweep should record the authenticated ingestion requirement');
   assert(tiktokDeepSweepMigration.includes("WHERE platform = 'tiktok'"), 'TikTok sweep should refresh every existing TikTok source record');
   assert(!tiktokDeepSweepMigration.includes('INSERT INTO properties'), 'TikTok sweep must not fabricate property rows from feed/search pages');
-  assert(agentsRoute.includes('REALTOR_MAHAD_TIKTOK_URL'), 'public broker profiles should expose Realtor Mahad TikTok');
+  assert(agentsRoute.includes('https://www.tiktok.com/@realtor_mahad'), 'public broker profiles should expose Realtor Mahad TikTok');
   assert(healthRoute.includes('046_tiktok_deep_sweep_source_profiles.sql'), 'migration health should expose the TikTok deep sweep status');
 });
 
@@ -172,6 +173,24 @@ test('TikTok Realtor Mahad index stores recent video evidence for authenticated 
   assert(tiktokVideoIndexMigration.includes('needs exact TikTok post URL and stills before property import'), 'TikTok video evidence should block review-queue import until exact post media is extracted');
   assert(!tiktokVideoIndexMigration.includes('INSERT INTO properties'), 'TikTok video index must not fabricate property rows from mirror snippets');
   assert(healthRoute.includes('047_tiktok_realtor_mahad_video_index.sql'), 'migration health should expose the TikTok video index status');
+});
+
+test('TikTok and Facebook double-down adds named broker profiles without fake listings', () => {
+  assert(tiktokFacebookDoubleDownMigration.includes('tiktok_facebook_double_down_20260524'), 'TikTok/Facebook double-down migration should carry a traceable batch id');
+  assert(tiktokFacebookDoubleDownMigration.includes('tiktok-robs-properties-travels-profile'), 'double-down sweep should add Robs Properties TikTok source profile');
+  assert(tiktokFacebookDoubleDownMigration.includes('tiktok-knight-frank-uganda-profile'), 'double-down sweep should add Knight Frank Uganda TikTok source profile');
+  assert(tiktokFacebookDoubleDownMigration.includes('facebook-khp-estates-page'), 'double-down sweep should add KHP Estates Facebook source profile');
+  assert(tiktokFacebookDoubleDownMigration.includes('facebook-kingmaker-properties-uganda-page'), 'double-down sweep should add Kingmaker Facebook source profile');
+  assert(tiktokFacebookDoubleDownMigration.includes('SOCIAL-ROBS-PROPERTIES-TRAVELS-20260524'), 'double-down sweep should create Robs Properties broker profile');
+  assert(tiktokFacebookDoubleDownMigration.includes('SOCIAL-KINGMAKER-PROPERTIES-UGANDA-20260524'), 'double-down sweep should create Kingmaker broker profile');
+  assert(tiktokFacebookDoubleDownMigration.includes("WHERE platform IN ('tiktok', 'facebook')"), 'double-down sweep should refresh all TikTok and Facebook registry rows');
+  assert(tiktokFacebookDoubleDownMigration.includes('specific Facebook post URLs and image URLs required before property import'), 'Facebook import should require exact posts and images');
+  assert(tiktokFacebookDoubleDownMigration.includes('exact TikTok post URLs, captions, posted dates, and still images'), 'TikTok import should require exact post and media evidence');
+  assert(!tiktokFacebookDoubleDownMigration.includes('INSERT INTO properties'), 'double-down sweep must not fabricate review-queue properties');
+  assert(agentsRoute.includes('facebook_url'), 'agent API should expose Facebook social link fields');
+  assert(agentsRoute.includes('SOCIAL-KNIGHT-FRANK-UGANDA-20260524'), 'public broker profiles should expose Knight Frank social links');
+  assert(agentsRoute.includes('SOCIAL-ROBS-PROPERTIES-TRAVELS-20260524'), 'public broker profiles should expose Robs Properties TikTok link');
+  assert(healthRoute.includes('048_tiktok_facebook_double_down_profiles.sql'), 'migration health should expose the TikTok/Facebook double-down status');
 });
 
 test('WhatsApp search results disclose found-online source without losing makaug links', () => {
