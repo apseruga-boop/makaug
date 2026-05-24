@@ -269,6 +269,9 @@ test('public property images escape and normalize generated SVG evidence cards',
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
   assert(!frontend.includes('<img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}"'), 'public cards should not inject raw p.img values into src');
   assert(!frontend.includes('<img src="${p.img}" alt="${p.title}"'), 'student cards should not inject raw p.img values into src');
+  assert(propertiesRoute.includes('function normalizePublicImageUrl'), 'properties API should normalize generated SVG image URLs');
+  assert(propertiesRoute.includes('primary_image_url: primaryImageUrl'), 'properties API should return the normalized primary image URL');
+  assert(propertiesRoute.includes('image: primaryImageUrl'), 'properties API should return the normalized card image URL');
 });
 
 test('Bakaima authorised batch creates 33 pending land listings with evidence photos', () => {

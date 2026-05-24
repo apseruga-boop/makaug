@@ -273,6 +273,23 @@ function canUseOwnerEditToken(property, token) {
   return isOwnerEditTokenValid(token, property.owner_edit_token_hash);
 }
 
+function normalizePublicImageUrl(value) {
+  const raw = cleanText(value);
+  if (!raw) return null;
+  const svgMatch = raw.match(/^data:image\/svg\+xml(?:;charset=[^,;]+)?(?:;utf8)?,(.*)$/i);
+  if (!svgMatch) return raw;
+  const payload = svgMatch[1] || '';
+  let svg = payload;
+  if (!payload.includes('<')) {
+    try {
+      svg = decodeURIComponent(payload);
+    } catch (error) {
+      svg = payload;
+    }
+  }
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const landVerification = buildUgNlisLandVerificationPack(extra);
@@ -1064,15 +1081,17 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
+        const primaryImageUrl = normalizePublicImageUrl(row.primary_image_url);
         const responseRow = {
           ...publicRow,
+          primary_image_url: primaryImageUrl,
           listingId: row.id,
           slug: row.id,
           url: `/property/${row.id}`,
           category: row.listing_type,
           currency,
           location: [row.area, row.district].filter(Boolean).join(', '),
-          image: row.primary_image_url || null,
+          image: primaryImageUrl,
           verification_status: row.registration_status || null,
           availability: row.status,
           sponsored: row.featured === true,
