@@ -738,8 +738,10 @@ function sourcePlatformFeedLabel(platform = '') {
 
 const DEFAULT_SOCIAL_SOURCE_IMAGE_FRAMES = [
   { file: 'hqdefault.jpg', label: 'Source video cover still', primary: true },
+  { file: '0.jpg', label: 'Source video preview still', primary: false },
   { file: '1.jpg', label: 'Source video supporting still', primary: false },
   { file: '2.jpg', label: 'Source video additional still', primary: false },
+  { file: '3.jpg', label: 'Source video extra still', primary: false },
 ];
 
 function youtubeImageRowsFor(item) {
@@ -881,7 +883,8 @@ function listingImageRowsFor(item = {}) {
     is_primary: evidenceRows.length === 0,
     sort_order: evidenceRows.length,
   };
-  return [...evidenceRows, diagram].slice(0, 5).map((image, index) => ({
+  const visibleEvidenceRows = evidenceRows.slice(0, 4);
+  return [...visibleEvidenceRows, diagram].slice(0, 5).map((image, index) => ({
     ...image,
     sort_order: index,
     is_primary: index === 0,

@@ -8736,7 +8736,7 @@ function adminSourcedCandidateSourceLinks(row = {}) {
     ...addArray(row.photo_source_urls),
     ...addArray(extra.source_urls),
     ...addArray(extra.photo_source_urls),
-    ...images.flatMap((image) => [image.source_url, image.source_link, image.original_url])
+    ...images.flatMap((image) => [image.source_url, image.source_link, image.original_url, image.url])
   ];
   return [...new Set(raw
     .map((value) => String(value || "").trim())
@@ -8777,6 +8777,30 @@ function adminFilterPendingQueueRows(rows = []) {
 function adminPendingQueueFilterButton(filter, label, count) {
   const active = adminPendingQueueFilter === filter;
   return `<button type="button" onclick="adminSetPendingQueueFilter('${adminAttr(filter)}')" class="${active ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"} border border-gray-300 px-3 py-1.5 rounded-lg text-xs font-black">${adminEscape(label)} <span class="${active ? "text-gray-200" : "text-gray-500"}">${adminEscape(count)}</span></button>`;
+}
+
+function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
+  if (!adminIsFoundOnlineSourcedListing(row)) return "";
+  const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const links = adminSourcedCandidateSourceLinks(row);
+  const firstPosted = String(
+    extra.first_posted_online_label
+    || extra.source_published_label
+    || extra.youtube_source_published_label
+    || extra.first_seen_online_label
+    || extra.original_publish_date_status
+    || ""
+  ).trim();
+  const sourceName = String(extra.source_name || row.lister_name || "Found-online source").trim();
+  const platform = String(extra.source_platform || extra.source_contact_platform || "").trim();
+  const primaryLink = links[0] || "";
+  const compact = options.compact !== false;
+  return `
+    <div class="${compact ? "mt-1" : "mt-3"} rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-950">
+      <div><strong>Source:</strong> ${adminEscape([sourceName, platform].filter(Boolean).join(" • ") || "Found online")}</div>
+      ${firstPosted ? `<div class="mt-1"><strong>First posted/seen:</strong> ${adminEscape(firstPosted)}</div>` : ""}
+      ${primaryLink ? `<div class="mt-1"><a href="${adminAttr(primaryLink)}" target="_blank" rel="noopener" class="font-black text-blue-700 underline">Open source</a></div>` : ""}
+    </div>`;
 }
 
 function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
@@ -9014,6 +9038,7 @@ function renderAdminPendingRows(listings) {
             <div class="text-xs text-gray-500 mt-1">${adminEscape(locationText)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(createdText)} • Ref: ${adminEscape(p.inquiry_reference || reviewId || "-")}</div>
             ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Consent, contact, authorised photos, and ownership must be verified before approval.</div>` : ""}
+            ${sourceBadge ? adminFoundOnlineSourceSummaryHtml(p) : ""}
           </div>
           <span class="text-xs font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
         </div>
@@ -13957,9 +13982,11 @@ function renderAdminReviewPanel(review) {
       }
     })
     : "";
+  const sourcedCandidateSourceSummaryHtml = isSourcedCandidate ? adminFoundOnlineSourceSummaryHtml(review, { compact: false }) : "";
   const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
     <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
       <strong>Found-online/source record:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
+      ${sourcedCandidateSourceSummaryHtml}
       ${hasGeneratedPlaceholderPhotos ? `
         <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-semibold text-amber-900">
           Placeholder images are attached to this record. These are not property photos. Import authorised photos before approval.

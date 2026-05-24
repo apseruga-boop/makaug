@@ -17,6 +17,8 @@ const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
 const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
+const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
+const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
   BAKAIMA_BATCH_ID,
@@ -116,6 +118,10 @@ test('King dashboard shows found-online intake instead of generic sourced candid
   assert(frontend.includes('Found-online/source record'), 'review panel should use found-online/source wording');
   assert(frontend.includes('verify consent, contact details, authorised photos'), 'review panel should show verification warning');
   assert(frontend.includes('function adminSourcedCandidateSourceLinks'), 'review panel should expose stored source/photo evidence links');
+  assert(frontend.includes('image.source_url, image.source_link, image.original_url, image.url'), 'source links should include attached image URLs such as YouTube stills');
+  assert(frontend.includes('function adminFoundOnlineSourceSummaryHtml'), 'dashboard should summarize source name, first-posted date, and source link inline');
+  assert(frontend.includes('First posted/seen'), 'pending queue should display the first posted/seen source date');
+  assert(frontend.includes('Open source'), 'pending queue should expose source click-through links');
   assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose found-online approval control');
   assert(frontend.includes('function adminEvidenceDownloadFilename'), 'evidence downloads should use a filename matching the actual mime type');
   assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
@@ -221,6 +227,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
   assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');
   assert(html.includes('found-online-queue-tabs-20260524'), 'index should bump the app asset version so production browsers fetch the found-online queue filter UI');
+  assert(html.includes('found-online-evidence-sweep-20260524'), 'index should bump the app asset version so production browsers fetch found-online source/date/evidence fixes');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('Show all found-online pending records'), 'seed status should expose a direct action to the full found-online queue');
   assert(socialSearchServiceSource.includes('function normalizedStatusValue'), 'service should trim and normalize stored statuses');
@@ -429,7 +436,9 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
-    assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length >= 3, `${listing.title} should keep source image URLs`);
+    assert(Array.isArray(extra.photo_source_urls) && extra.photo_source_urls.length >= 5, `${listing.title} should keep five source image URLs for video evidence`);
+    assert(extra.photo_source_urls.some((url) => /\/0\.jpg$/i.test(url)), `${listing.title} should keep the YouTube preview still`);
+    assert(extra.photo_source_urls.some((url) => /\/3\.jpg$/i.test(url)), `${listing.title} should keep the fifth YouTube still`);
     assert.strictEqual(extra.minimum_reliable_image_count, 1, `${listing.title} should allow launch intake with one usable source image plus evidence`);
     assert(/Do not invent property-room photos/i.test(extra.image_evidence_policy), `${listing.title} should keep strict image evidence guidance`);
     assert(/bypass private platform restrictions/i.test(extra.image_evidence_policy), `${listing.title} should avoid private platform image workarounds`);
@@ -451,6 +460,20 @@ test('found-online social search batch creates pending listings with agent profi
     assert(listing.images.every((image) => image.url.includes(`https://i.ytimg.com/vi/${listing.source_item.youtubeId}/`) || image.url.startsWith('data:image/svg+xml')), `${listing.title} should use only matching source images or generated support diagrams`);
     assert(!listing.images.some((image) => /bedroom|bathroom|kitchen/i.test(image.room_label)), `${listing.title} should not guess room labels from generic source stills`);
   }
+});
+
+test('found-online second sweep migration expands source-backed 2026 records and YouTube stills', () => {
+  assert(foundOnlineSecondSweepMigration.includes('found_online_2026_second_sweep_20260524'), 'second sweep migration should tag the new launch source batch');
+  assert(foundOnlineSecondSweepMigration.includes('upc-11056-ntinda-ministers-5bed-1-5b'), 'second sweep should include additional confirmed Uganda Property Centre 2026 records');
+  assert(foundOnlineSecondSweepMigration.includes('jiji-rent-kampala-munyonyo-3bed-duplex-2-1m'), 'second sweep should include first-seen Jiji rent category rows');
+  assert(foundOnlineSecondSweepMigration.includes('first_seen_2026_live_category_pending_exact_post_date'), 'category rows should clearly mark exact post dates as pending confirmation');
+  assert(foundOnlineSecondSweepMigration.includes('first_posted_online_label'), 'new rows should carry first-posted/first-seen labels for King review');
+  assert(foundOnlineSecondSweepMigration.includes('source_url_is_exact_listing'), 'new rows should distinguish exact listing URLs from category evidence URLs');
+  assert(foundOnlineSecondSweepMigration.includes("'hqdefault.jpg'"), 'YouTube evidence should keep the cover still');
+  assert(foundOnlineSecondSweepMigration.includes("'0.jpg'"), 'YouTube evidence should keep the preview still');
+  assert(foundOnlineSecondSweepMigration.includes("'3.jpg'"), 'YouTube evidence should keep five frame URLs');
+  assert(foundOnlineSecondSweepMigration.includes("'video_still_count', 5"), 'YouTube rows should be marked with five stills');
+  assert(healthRoute.includes('045_expand_found_online_sweep_images_and_sources.sql'), 'migration health should expose the second sweep deployment status');
 });
 
 test('launch intake policy accepts no-phone source contact and non-YouTube evidence cards', () => {
