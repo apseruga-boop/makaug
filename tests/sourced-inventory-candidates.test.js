@@ -18,6 +18,7 @@ const agentsRoute = read('routes/agents.js');
 const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
+const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -604,6 +605,20 @@ test('found-online social search admin path and share cards are protected and au
   assert(card.includes('https://makaug.com/?listing_preview=1'), 'share card should include the private preview URL');
   assert(card.includes(`https://www.youtube.com/watch?v=${listing.source_item.youtubeId}`), 'share card should include the source video');
   assert(card.includes('Call/WhatsApp'), 'share card should include contact wording when a phone exists');
+});
+
+test('found-online launch inventory is published publicly with disclosure guardrails', () => {
+  assert(foundOnlinePublicLaunchMigration.includes('found_online_public_launch_20260524'), 'public launch migration should carry a traceable batch id');
+  assert(foundOnlinePublicLaunchMigration.includes("status = 'approved'"), 'found-online launch rows should become public approved listings');
+  assert(foundOnlinePublicLaunchMigration.includes("source = 'found_online_property_source_v1'"), 'public launch migration should only target found-online source rows');
+  assert(foundOnlinePublicLaunchMigration.includes("extra_fields->>'source_url'"), 'public launch migration should require source URL evidence');
+  assert(foundOnlinePublicLaunchMigration.includes('price IS NOT NULL'), 'public launch migration should require price evidence');
+  assert(foundOnlinePublicLaunchMigration.includes("COALESCE(area, '') <> ''"), 'public launch migration should require location/area evidence');
+  assert(foundOnlinePublicLaunchMigration.includes('approval_disclaimer'), 'public launch migration should keep public verification disclaimer metadata');
+  assert(foundOnlinePublicLaunchMigration.includes('ownership_verification_status'), 'public launch migration should not pretend ownership is fully verified');
+  assert(foundOnlinePublicLaunchMigration.includes('source_rights_status'), 'public launch migration should keep media/source rights review metadata');
+  assert(foundOnlinePublicLaunchMigration.includes('found_online_public_launch_published'), 'public launch migration should log moderation events');
+  assert(healthRoute.includes('050_publish_found_online_launch_inventory.sql'), 'migration health should expose found-online public launch migration');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {
