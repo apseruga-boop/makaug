@@ -8708,9 +8708,15 @@ function adminIsSourcedInventoryCandidate(row = {}) {
 
 function adminIsFoundOnlineSourcedListing(row = {}) {
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
+  const source = String(row.source || extra.source || "").toLowerCase();
+  const listedVia = String(row.listed_via || extra.listed_via || "").toLowerCase();
   const badge = String(extra.source_badge || extra.source_discovery_label || "").toLowerCase();
-  return extra.found_online === true
+  return row.found_online_candidate === true
+    || extra.found_online_candidate === true
+    || extra.found_online === true
     || extra.social_search_candidate === true
+    || source === "found_online_property_source_v1"
+    || listedVia === "found_online"
     || badge === "found_online"
     || badge === "found online";
 }

@@ -121,10 +121,15 @@ test('King dashboard shows found-online intake instead of generic sourced candid
   assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
   assert(frontend.includes('Placeholder images are attached'), 'dashboard should warn when images are placeholders');
   assert(frontend.includes('function adminIsFoundOnlineSourcedListing'), 'dashboard should detect found-online sourced records');
+  assert(frontend.includes('source === "found_online_property_source_v1"'), 'found-online filter should count rows by production source marker');
+  assert(frontend.includes('listedVia === "found_online"'), 'found-online filter should count rows by production listed_via marker');
   assert(frontend.includes('Found online'), 'dashboard should display found-online copy');
   assert(frontend.includes('function adminPendingQueueCounts'), 'dashboard should count pending queue categories');
   assert(frontend.includes('function adminSetPendingQueueFilter'), 'dashboard should let King filter the pending queue');
   assert(frontend.includes('Pending queue view'), 'dashboard should show which pending queue filter is active');
+  const cleanupMigration = read('db/migrations/044_clean_sourced_candidates_seed_found_online_2026.sql');
+  assert(cleanupMigration.includes("title ILIKE 'Sourced candidate - %'"), 'production migration should delete old generic sourced-candidate rows');
+  assert(cleanupMigration.includes("'found_online_2026_platform_sweep_20260524'"), 'production migration should seed the 2026 found-online sweep batch');
 });
 
 test('admin listing API exposes sourcing metadata only behind admin access', () => {
