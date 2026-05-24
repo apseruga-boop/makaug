@@ -608,9 +608,14 @@ function isSourcedInventoryCandidateRecord(row = {}) {
   const source = cleanText(row.source || extra.source).toLowerCase();
   const listedVia = cleanText(row.listed_via || extra.listed_via).toLowerCase();
   return row.sourced_inventory_candidate === true
+    || row.found_online_candidate === true
     || extra.sourced_inventory_candidate === true
+    || extra.found_online_candidate === true
+    || extra.found_online === true
     || source === 'sourced_inventory_candidate_v1'
-    || listedVia === 'sourced_inventory';
+    || source === 'found_online_property_source_v1'
+    || listedVia === 'sourced_inventory'
+    || listedVia === 'found_online';
 }
 
 function sourcedCandidateRecordReadyForOverride(row = {}) {
@@ -964,7 +969,7 @@ async function listPropertiesHandler(req, res, next) {
         p.lister_phone,
         p.lister_email,
         p.extra_fields AS admin_extra_fields,
-        p.extra_fields->>'sourced_inventory_candidate' AS sourced_inventory_candidate,
+        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
         p.extra_fields->>'city' AS city,
         p.extra_fields->>'neighborhood' AS neighborhood,
         p.extra_fields->>'street_name' AS street_name,
@@ -1055,7 +1060,7 @@ async function listPropertiesHandler(req, res, next) {
           moderation_stage: rowModerationStage,
           moderation_notes: rowModerationNotes,
           moderation_reason: rowModerationReason,
-          sourced_inventory_candidate: rowSourcedInventoryCandidate,
+          found_online_candidate: rowFoundOnlineCandidate,
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
@@ -1087,8 +1092,9 @@ async function listPropertiesHandler(req, res, next) {
           responseRow.moderation_notes = rowModerationNotes || null;
           responseRow.moderation_reason = rowModerationReason || null;
           responseRow.extra_fields = adminExtraFields || {};
-          responseRow.sourced_inventory_candidate = rowSourcedInventoryCandidate === 'true'
-            || adminExtraFields?.sourced_inventory_candidate === true;
+          responseRow.found_online_candidate = rowFoundOnlineCandidate === 'true'
+            || adminExtraFields?.found_online_candidate === true
+            || adminExtraFields?.found_online === true;
         }
         return responseRow;
       }),
@@ -2290,14 +2296,14 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     if (requestedSourcedCandidateOverride && !isSourcedCandidate) {
       return res.status(403).json({
         ok: false,
-        error: 'Sourced candidate override is only available for sourced inventory candidate records'
+        error: 'Found-online approval is only available for found-online intake records'
       });
     }
 
     if (requestedSourcedCandidateOverride && (!sourcedCandidateConsentConfirmed || !sourcedCandidateImageRightsConfirmed)) {
       return res.status(400).json({
         ok: false,
-        error: 'Consent and image rights confirmation are required for sourced candidate override',
+        error: 'Consent and image rights confirmation are required for found-online approval',
         details: [
           'Set consent_confirmed=true after verifying permission to publish the listing.',
           'Set image_rights_confirmed=true after verifying the attached photos are authorised for makaug use.'
@@ -2308,7 +2314,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     if (requestedSourcedCandidateOverride && !sourcedCandidateRecordReadyForOverride(current)) {
       return res.status(400).json({
         ok: false,
-        error: 'Authorised sourced candidate photos must be imported before approval',
+        error: 'Authorised found-online photos must be imported before approval',
         details: [
           'The record still looks like a generated placeholder or does not carry stored consent/image-rights confirmation.',
           'Import authorised photos first, or use the Bakaima authorised seed records that already carry supplied flyer evidence.'
@@ -2370,10 +2376,10 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
 
     let sourcedCandidateDispensation = null;
     if (sourcedCandidateOverride) {
-      moderationReason = moderationReason || 'Approved under sourced candidate special dispensation after consent, image rights, and source evidence were confirmed.';
+      moderationReason = moderationReason || 'Approved as found-online intake after consent, image rights, and source evidence were confirmed.';
       sourcedCandidateDispensation = {
         used: true,
-        source: 'sourced_inventory_candidate_v1',
+        source: 'found_online_property_source_v1',
         at: new Date().toISOString(),
         actor_id: actorId,
         consent_confirmed: true,
@@ -2382,7 +2388,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         warning_checks_overridden: missingWarningOverrides,
         reason: moderationReason
       };
-      approvalWarnings.push('Sourced candidate special dispensation used; admin confirmed consent and image rights before approval.');
+      approvalWarnings.push('Found-online approval used; admin confirmed consent and image rights before approval.');
     }
 
     const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
@@ -2570,12 +2576,12 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           [
             listing.id,
             actorId,
-            'sourced_candidate_special_dispensation_used',
+            'found_online_approval_used',
             current.status,
             nextStatus,
             JSON.stringify(checklist),
             moderationReason,
-            'Admin confirmed consent and image rights for this sourced inventory candidate override.',
+            'Admin confirmed consent and image rights for this found-online approval.',
             JSON.stringify(sourcedCandidateDispensation)
           ]
         );

@@ -32,7 +32,7 @@ function usage() {
     '  or image_1_time,image_1_label ... image_8_time,image_8_label',
     '',
     'The output CSV can be imported with:',
-    '  npm run inventory:import-sourced-images -- --file=outputs/found-online-video-stills/found-online-image-import.csv --confirm --confirm-rights',
+    '  npm run inventory:import-found-online-images -- --file=outputs/found-online-video-stills/found-online-image-import.csv --confirm --confirm-rights',
   ].join('\n');
 }
 

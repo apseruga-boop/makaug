@@ -75,10 +75,7 @@ const {
 } = require('../services/outlookAiEmailAgentService');
 const { sendPhoneOtp } = require('../services/phoneOtpDeliveryService');
 const { buildListingReference } = require('../services/listingReferenceService');
-const {
-  SOURCE: SOURCED_INVENTORY_CANDIDATE_SOURCE,
-  seedSourcedInventoryCandidates
-} = require('../scripts/seed-sourced-inventory-candidates');
+const SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const {
   BAKAIMA_BATCH_ID,
   seedBakaimaAuthorisedListings
@@ -2083,30 +2080,14 @@ router.get('/properties/live', async (req, res, next) => {
 
 router.post('/sourced-inventory-candidates/seed', async (req, res, next) => {
   try {
-    const count = Math.min(Math.max(parseInt(req.body?.count || '200', 10) || 200, 1), 1000);
-    const start = Math.max(parseInt(req.body?.start || '1', 10) || 1, 1);
-    const type = ['sale', 'rent', 'student', 'land', 'commercial'].includes(String(req.body?.type || '').toLowerCase())
-      ? String(req.body.type).toLowerCase()
-      : '';
-    const replace = req.body?.replace !== false;
-    const result = await seedSourcedInventoryCandidates({
-      db,
-      count,
-      start,
-      type,
-      replace,
-      cleanupOnly: false
-    });
-    await writeAudit('admin_sourced_inventory_candidates_seeded', {
+    await writeAudit('admin_generic_candidate_seed_rejected', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
-      count,
-      start,
-      type: type || 'mixed',
-      replace,
-      created_properties: result.created_properties,
-      guardrails: result.guardrails
+      reason: 'generic_candidates_retired_found_online_only'
     }, adminActorId(req));
-    return res.json({ ok: true, data: result });
+    return res.status(410).json({
+      ok: false,
+      error: 'Generic placeholder candidates are retired. Use found-online source posts/imports only.'
+    });
   } catch (error) {
     return next(error);
   }

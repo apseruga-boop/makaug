@@ -8,7 +8,7 @@ const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const script = read('scripts/seed-sourced-inventory-candidates.js');
-const imageImportScript = read('scripts/import-sourced-candidate-images.js');
+const imageImportScript = read('scripts/import-found-online-images.js');
 const videoStillScript = read('scripts/prepare-found-online-video-stills.js');
 const frontend = read('assets/makaug-app.js');
 const adminRoute = read('routes/admin.js');
@@ -61,10 +61,13 @@ function test(name, fn) {
   }
 }
 
-test('sourced candidate seed creates 200 pending records with approval guardrails', () => {
-  assert(script.includes("const DEFAULT_COUNT = 200"), 'default seed size should be 200');
+test('generic sourced candidate seed is retired from launch intake', () => {
+  assert(!pkg.scripts['inventory:seed-sourced-candidates'], 'package scripts should not expose generic sourced-candidate creation');
+  assert(script.includes('Generic sourced-candidate seeding is retired'), 'direct script runs should refuse generic sourced-candidate creation');
+  assert(script.includes('process.exit(2)'), 'retired generic seed should exit before writing records');
+  assert(script.includes("const DEFAULT_COUNT = 200"), 'legacy default seed size should stay searchable for cleanup history');
   assert(script.includes("const SOURCE = 'sourced_inventory_candidate_v1'"), 'source should be explicit and searchable');
-  assert(script.includes("status: 'pending'"), 'seeded listings must enter pending review');
+  assert(script.includes("status: 'pending'"), 'legacy listings should remain identifiable during cleanup');
   assert(script.includes("verification_terms_accepted: false"), 'verification must block direct approval until reviewed');
   assert(script.includes("id_document_url: null"), 'seeded candidates must not fake ID documents');
   assert(script.includes("consent_required: true"), 'candidate metadata must flag consent requirement');
@@ -85,12 +88,12 @@ test('sourced candidate seed avoids copied third-party images and source URLs', 
   });
 });
 
-test('sourced candidate image import requires authorised photos and only updates candidates', () => {
-  assert(imageImportScript.includes('source = $1'), 'image import should match the sourced candidate source only');
+test('found-online image import requires authorised photos and only updates intake records', () => {
+  assert(imageImportScript.includes('source = ANY($1::text[])'), 'image import should match found-online/legacy intake sources only');
   assert(imageImportScript.includes('consent_confirmed'), 'image import should require consent confirmation');
   assert(imageImportScript.includes('image_rights_confirmed'), 'image import should require image rights confirmation');
   assert(imageImportScript.includes('authorised_imported'), 'image import should mark images as authorised imports');
-  assert(imageImportScript.includes('sourced_candidate_authorised_images_imported'), 'image import should write moderation event history');
+  assert(imageImportScript.includes('found_online_authorised_images_imported'), 'image import should write moderation event history');
   assert(imageImportScript.includes('Refusing to write in production without --confirm'), 'production writes should require explicit confirmation');
   assert(imageImportScript.includes('source_urls'), 'image import should retain source URLs for King review');
 });
@@ -104,14 +107,16 @@ test('found-online video still preparation requires deliberate timestamps and ri
   assert(videoStillScript.includes('found-online-image-import.csv'), 'video still workflow should produce importer-compatible CSV');
 });
 
-test('King dashboard visibly separates sourced candidates from ordinary reviews', () => {
+test('King dashboard shows found-online intake instead of generic sourced candidates', () => {
   assert(frontend.includes('function adminIsSourcedInventoryCandidate'), 'dashboard should have sourced candidate detection helper');
   assert(frontend.includes('function adminSourcedInventoryCandidateBadge'), 'dashboard should have sourced candidate badge helper');
-  assert(frontend.includes('Sourced candidate'), 'dashboard should display sourced candidate copy');
-  assert(frontend.includes('Sourcing review required before public approval'), 'all-listings view should warn before approval');
+  assert(!frontend.includes('>Sourced candidate<'), 'dashboard should not show generic sourced-candidate badges');
+  assert(!frontend.includes('Approve Sourced Candidate'), 'review panel should not show generic sourced-candidate approval copy');
+  assert(!html.includes('Create 200 Sourced Candidates'), 'review queue should not expose generic sourced-candidate creation');
+  assert(frontend.includes('Found-online/source record'), 'review panel should use found-online/source wording');
   assert(frontend.includes('verify consent, contact details, authorised photos'), 'review panel should show verification warning');
   assert(frontend.includes('function adminSourcedCandidateSourceLinks'), 'review panel should expose stored source/photo evidence links');
-  assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose sourced candidate special approval control');
+  assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose found-online approval control');
   assert(frontend.includes('function adminEvidenceDownloadFilename'), 'evidence downloads should use a filename matching the actual mime type');
   assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
   assert(frontend.includes('Placeholder images are attached'), 'dashboard should warn when images are placeholders');
@@ -126,19 +131,15 @@ test('admin listing API exposes sourcing metadata only behind admin access', () 
   assert(propertiesRoute.includes('p.extra_fields AS admin_extra_fields'), 'admin rows should fetch full extra fields for dashboard review');
   assert(propertiesRoute.includes('if (adminAccess)'), 'admin-only response fields must be gated by admin access');
   assert(propertiesRoute.includes('responseRow.extra_fields = adminExtraFields || {}'), 'full extra_fields should only be attached for admin rows');
-  assert(propertiesRoute.includes('sourced_inventory_candidate'), 'admin API should surface the candidate flag');
+  assert(propertiesRoute.includes('found_online_candidate'), 'admin API should surface the found-online candidate flag');
 });
 
 test('package script exposes the safe inventory intake command', () => {
+  assert(!pkg.scripts['inventory:seed-sourced-candidates'], 'package.json should not expose retired generic inventory seed command');
   assert.strictEqual(
-    pkg.scripts['inventory:seed-sourced-candidates'],
-    'node scripts/seed-sourced-inventory-candidates.js',
-    'package.json should expose inventory seed command'
-  );
-  assert.strictEqual(
-    pkg.scripts['inventory:import-sourced-images'],
-    'node scripts/import-sourced-candidate-images.js',
-    'package.json should expose sourced candidate image import command'
+    pkg.scripts['inventory:import-found-online-images'],
+    'node scripts/import-found-online-images.js',
+    'package.json should expose found-online image import command'
   );
   assert.strictEqual(
     pkg.scripts['inventory:seed-bakaima'],
@@ -158,12 +159,12 @@ test('package script exposes the safe inventory intake command', () => {
   assert(script.includes('--start=') && script.includes('--type='), 'seed script should support appending typed candidate ranges');
 });
 
-test('admin-only endpoint can seed production candidates without public submission notifications', () => {
+test('admin-only endpoint rejects retired generic sourced candidates', () => {
   assert(adminRoute.includes("router.use(requireAdminApiKey)"), 'admin routes must be protected before seed endpoint');
   assert(adminRoute.includes("router.post('/sourced-inventory-candidates/seed'"), 'admin seed endpoint should exist');
-  assert(adminRoute.includes('seedSourcedInventoryCandidates'), 'admin endpoint should use direct DB seed service');
-  assert(adminRoute.includes('start,') && adminRoute.includes('type,'), 'admin endpoint should pass candidate range/type controls');
-  assert(adminRoute.includes('admin_sourced_inventory_candidates_seeded'), 'admin endpoint should write audit trail');
+  assert(adminRoute.includes('admin_generic_candidate_seed_rejected'), 'admin endpoint should audit rejected generic seed attempts');
+  assert(adminRoute.includes('Generic placeholder candidates are retired'), 'admin endpoint should block generic placeholder candidates');
+  assert(!adminRoute.includes('seedSourcedInventoryCandidates({'), 'admin endpoint should not call the generic seed service');
 });
 
 test('sourced candidate approval override is server-side limited and audited', () => {
@@ -173,10 +174,10 @@ test('sourced candidate approval override is server-side limited and audited', (
   assert(propertiesRoute.includes('image_rights_confirmed'), 'override should require image rights confirmation');
   assert(propertiesRoute.includes('sourcedCandidateRecordReadyForOverride'), 'override should verify the stored record is ready, not only the request body');
   assert(propertiesRoute.includes('generated_placeholder_images_only'), 'override should reject records that still use generated placeholders');
-  assert(propertiesRoute.includes('Authorised sourced candidate photos must be imported before approval'), 'override error should explain authorised photos are required');
-  assert(propertiesRoute.includes('Sourced candidate override is only available'), 'override should reject ordinary listings');
+  assert(propertiesRoute.includes('Authorised found-online photos must be imported before approval'), 'override error should explain authorised photos are required');
+  assert(propertiesRoute.includes('Found-online approval is only available'), 'override should reject ordinary listings');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');
-  assert(propertiesRoute.includes('sourced_candidate_special_dispensation_used'), 'override should be written to moderation history');
+  assert(propertiesRoute.includes('found_online_approval_used'), 'override should be written to moderation history');
 });
 
 test('admin has a guarded April 29 test-batch cleanup path', () => {
@@ -188,14 +189,14 @@ test('admin has a guarded April 29 test-batch cleanup path', () => {
   assert(html.includes('admin-clean-april29-tests-btn'), 'all-listings panel should include cleanup control');
 });
 
-test('King review queue has one-click sourced candidate creation', () => {
-  assert(html.includes('admin-seed-sourced-candidates-btn'), 'review queue should expose sourced candidate button');
-  assert(html.includes('admin-sourced-candidates-status'), 'review queue should expose seed status output');
+test('King review queue exposes found-online intake only', () => {
+  assert(!html.includes('admin-seed-sourced-candidates-btn'), 'review queue should not expose generic sourced candidate button');
+  assert(!frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should not implement generic sourced candidate creation');
+  assert(html.includes('admin-found-online-status'), 'review queue should expose found-online status output');
   assert(html.includes('admin-seed-social-search-listings-btn'), 'review queue should expose found-online listing button');
-  assert(frontend.includes('function ensureAdminSourcedCandidateControls'), 'frontend should inject seed controls when cached HTML is stale');
-  assert(frontend.includes('async function adminSeedSourcedInventoryCandidates'), 'frontend should implement seed action');
+  assert(frontend.includes('function ensureAdminFoundOnlineControls'), 'frontend should inject found-online controls when cached HTML is stale');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'frontend should implement found-online seed action');
-  assert(frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should call protected admin seed endpoint');
+  assert(!frontend.includes('/api/admin/sourced-inventory-candidates/seed'), 'frontend should not call generic sourced candidate seed endpoint');
   assert(frontend.includes('/api/admin/social-search-authorised-listings/seed'), 'frontend should call protected found-online endpoint');
   assert(frontend.includes('renderAdminDashboard()'), 'frontend should refresh King queue after seeding');
 });
@@ -206,7 +207,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(frontend.includes('function adminUniqueSeedItems'), 'frontend should dedupe seed result summaries');
   assert(frontend.includes('function adminScrubPendingSeedStatusPanel'), 'frontend should defensively remove stale final-state cards from the pending panel');
   assert(frontend.includes('adminSeededListingSummaryHtml(item, { pendingPanel: true })'), 'pending panel should render summaries through the pending-only guard');
-  assert(frontend.includes('ensureAdminSourcedCandidateControls();\n  adminScrubPendingSeedStatusPanel();'), 'dashboard refresh should scrub stale approved/live found-online cards from the pending panel');
+  assert(frontend.includes('ensureAdminFoundOnlineControls();\n  adminScrubPendingSeedStatusPanel();'), 'dashboard refresh should scrub stale approved/live found-online cards from the pending panel');
   assert(frontend.includes('No pending found-online records need review in this run'), 'pending panel should explain when only approved/live matches remain');
   assert(frontend.includes('data-admin-seed-final'), 'seed summaries should expose final-state metadata for UI regression checks');
   assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
@@ -381,8 +382,8 @@ test('found-online social search batch creates pending listings with agent profi
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
   assert.strictEqual(summary.daily_target_status.meets_daily_minimum, false, 'current curated list should not pretend it meets the 200/day minimum');
-  assert(/Queue every specific public 2026 property post/i.test(summary.daily_target_status.evidence_policy), 'daily target status should express the launch intake rule');
-  assert.strictEqual(LAUNCH_SOURCE_POST_WINDOW_START, '2026-01-01T00:00:00.000Z', 'launch intake should scan from 1 January 2026');
+  assert(/from 1 January 2022 onward/i.test(summary.daily_target_status.evidence_policy), 'daily target status should express the 2022+ found-online intake rule');
+  assert.strictEqual(LAUNCH_SOURCE_POST_WINDOW_START, '2022-01-01T00:00:00.000Z', 'launch intake should scan from 1 January 2022');
   assert(/Facebook/i.test(FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule), 'launch intake should define how Facebook images are handled');
   assert(/No public phone number is not a blocker/i.test(summary.daily_target_status.no_phone_source_contact_policy), 'daily target status should explain social/source contact fallback');
   assert(/X\/Twitter, Instagram, TikTok, YouTube, Facebook/i.test(summary.daily_target_status.source_page_vs_property_policy), 'daily target status should separate monitored cross-platform sources from queued properties');
@@ -394,8 +395,9 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(listing.status, 'pending');
     assert.strictEqual(listing.moderation_stage, 'submitted');
     assert.strictEqual(listing.source, SOCIAL_SEARCH_SOURCE);
-    assert.strictEqual(listing.listed_via, 'sourced_inventory');
+    assert.strictEqual(listing.listed_via, 'found_online');
     assert.strictEqual(extra.source_batch, SOCIAL_SEARCH_BATCH_ID);
+    assert.strictEqual(extra.found_online_candidate, true);
     assert.strictEqual(extra.found_online, true);
     assert.strictEqual(extra.social_search_candidate, true);
     assert.strictEqual(extra.source_badge, 'found_online');
@@ -403,7 +405,7 @@ test('found-online social search batch creates pending listings with agent profi
     assert.strictEqual(extra.source_contact_platform, extra.source_platform, `${listing.title} should keep the contact platform aligned with the source platform`);
     assert(extra.source_contact_url && /^https?:\/\//.test(extra.source_contact_url), `${listing.title} should expose a public source/social contact URL`);
     assert(extra.source_contact_method, `${listing.title} should expose a contact method even when no phone is present`);
-    assert.strictEqual(extra.source_post_window_start, '2026-01-01T00:00:00.000Z', `${listing.title} should store the launch source window`);
+    assert.strictEqual(extra.source_post_window_start, '2022-01-01T00:00:00.000Z', `${listing.title} should store the launch source window`);
     assert(extra.source_post_date_status, `${listing.title} should store source post date status`);
     assert.strictEqual(extra.public_contact_path_available, true, `${listing.title} should mark source/social contact paths as usable`);
     assert(extra.source_audience_label || extra.source_followers_label, `${listing.title} should show source audience/follower metadata`);
@@ -523,7 +525,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePlatformFeedLabel'), 'daily found-online sweeps should label platform-specific feeds');
   assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_page_vs_property_policy'), 'daily found-online sweeps should explain source pages versus queued properties');
-  assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePostMeetsLaunchIntakeRule'), 'daily found-online sweeps should gate property posts through the 2026 launch intake rule');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePostMeetsLaunchIntakeRule'), 'daily found-online sweeps should gate property posts through the 2022+ found-online intake rule');
   assert(read('services/socialSearchSourcedListingsService.js').includes('PUBLIC_SOURCE_CONTACT_POLICY'), 'daily found-online sweeps should treat public source/contact pages as contact routes');
   assert(read('services/socialSearchSourcedListingsService.js').includes('facebook_image_policy'), 'daily found-online sweeps should explain Facebook image handling');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
@@ -534,7 +536,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('adminSourceReviewRecordSummaryHtml'), 'dashboard should render source-review records with source/contact links');
   assert(frontend.includes('A public social/source profile counts as the contact path when no phone is published'), 'dashboard should make no-phone social contact acceptable');
   assert(frontend.includes('source pages/feeds are parked for source review, not hidden properties'), 'dashboard should clarify source-review records are not pending properties');
-  assert(frontend.includes('from 1 January 2026 onward'), 'dashboard should communicate the launch intake source window');
+  assert(frontend.includes('from 1 January 2022 onward'), 'dashboard should communicate the found-online source window');
   assert(frontend.includes('No phone number is not a blocker if a social/source profile exists'), 'dashboard should explain source-review no-phone policy');
   assert(frontend.includes('A page without a phone can still be usable'), 'source database should explain public social/source URLs can be contact paths');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');

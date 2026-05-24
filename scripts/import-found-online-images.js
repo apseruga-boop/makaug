@@ -7,7 +7,9 @@ const fs = require('fs');
 const path = require('path');
 
 const db = require('../config/database');
-const { SOURCE } = require('./seed-sourced-inventory-candidates');
+const FOUND_ONLINE_SOURCE = 'found_online_property_source_v1';
+const LEGACY_SOURCE = 'sourced_inventory_candidate_v1';
+const SOURCE_VALUES = [FOUND_ONLINE_SOURCE, LEGACY_SOURCE];
 
 const args = process.argv.slice(2);
 const argValue = (name) => {
@@ -21,14 +23,14 @@ const DRY_RUN = args.includes('--dry-run');
 const CONFIRM = args.includes('--confirm');
 const CONFIRM_RIGHTS = args.includes('--confirm-rights');
 const APPEND = args.includes('--append');
-const ACTOR_ID = argValue('actor') || 'sourced_image_import';
+const ACTOR_ID = argValue('actor') || 'found_online_image_import';
 const MAX_IMAGES_PER_LISTING = 20;
 const MAX_LOCAL_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function usage() {
   return [
     'Usage:',
-    '  npm run inventory:import-sourced-images -- --file=authorised-images.csv --confirm --confirm-rights',
+    '  npm run inventory:import-found-online-images -- --file=authorised-images.csv --confirm --confirm-rights',
     '',
     'Accepted CSV/JSON fields:',
     '  property_id OR inquiry_reference OR candidate_number',
@@ -36,7 +38,7 @@ function usage() {
     '  source_url OR source_urls (pipe/comma/newline separated)',
     '  consent_confirmed=true and image_rights_confirmed=true unless --confirm-rights is passed',
     '',
-    'Only records with source=sourced_inventory_candidate_v1 are updated.'
+    'Only found-online intake records are updated.'
   ].join('\n');
 }
 
@@ -175,9 +177,8 @@ async function findCandidate(client, row) {
   const inquiryReference = cleanText(row.inquiry_reference || row.reference || row.ref);
   const candidateNumber = cleanText(row.candidate_number || row.candidate_no);
   const title = cleanText(row.title);
-  const params = [];
-  const filters = ['source = $1'];
-  params.push(SOURCE);
+  const params = [SOURCE_VALUES];
+  const filters = ['source = ANY($1::text[])'];
   if (propertyId) {
     params.push(propertyId);
     filters.push(`id::text = $${params.length}`);
@@ -201,8 +202,8 @@ async function findCandidate(client, row) {
      LIMIT 2`,
     params
   );
-  if (!result.rows.length) throw new Error(`No sourced candidate found for ${propertyId || inquiryReference || candidateNumber || title}`);
-  if (result.rows.length > 1) throw new Error(`Multiple sourced candidates matched ${propertyId || inquiryReference || candidateNumber || title}`);
+  if (!result.rows.length) throw new Error(`No found-online record found for ${propertyId || inquiryReference || candidateNumber || title}`);
+  if (result.rows.length > 1) throw new Error(`Multiple found-online records matched ${propertyId || inquiryReference || candidateNumber || title}`);
   return result.rows[0];
 }
 
@@ -263,8 +264,8 @@ async function importRow(client, row, baseDir) {
          ),
        updated_at = NOW()
      WHERE id = $1
-       AND source = $4`,
-    [candidate.id, JSON.stringify(sourceUrls), JSON.stringify(importMeta), SOURCE]
+       AND source = ANY($4::text[])`,
+    [candidate.id, JSON.stringify(sourceUrls), JSON.stringify(importMeta), SOURCE_VALUES]
   );
 
   await client.query(
@@ -274,11 +275,11 @@ async function importRow(client, row, baseDir) {
     [
       candidate.id,
       ACTOR_ID,
-      'sourced_candidate_authorised_images_imported',
+      'found_online_authorised_images_imported',
       candidate.status,
       candidate.status,
-      'Imported authorised sourced candidate photos and source evidence.',
-      `Imported ${images.length} authorised image(s) for sourced candidate review.`,
+      'Imported authorised found-online photos and source evidence.',
+      `Imported ${images.length} authorised image(s) for found-online review.`,
       JSON.stringify(importMeta)
     ]
   );

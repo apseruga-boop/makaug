@@ -8696,9 +8696,14 @@ function adminIsSourcedInventoryCandidate(row = {}) {
   const source = String(row.source || extra.source || "").toLowerCase();
   const listedVia = String(row.listed_via || extra.listed_via || "").toLowerCase();
   return row.sourced_inventory_candidate === true
+    || row.found_online_candidate === true
     || extra.sourced_inventory_candidate === true
+    || extra.found_online_candidate === true
+    || extra.found_online === true
     || source === "sourced_inventory_candidate_v1"
-    || listedVia === "sourced_inventory";
+    || source === "found_online_property_source_v1"
+    || listedVia === "sourced_inventory"
+    || listedVia === "found_online";
 }
 
 function adminIsFoundOnlineSourcedListing(row = {}) {
@@ -8733,30 +8738,26 @@ function adminSourcedCandidateSourceLinks(row = {}) {
 }
 
 function adminSourcedInventoryCandidateBadge(row = {}) {
-  if (!adminIsSourcedInventoryCandidate(row)) return "";
   if (adminIsFoundOnlineSourcedListing(row)) {
     return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Found online</span>`;
   }
-  return `<span class="ml-2 inline-flex align-middle rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-800">Sourced candidate</span>`;
+  return "";
 }
 
 function adminPendingQueueCounts(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
   const foundOnline = source.filter(adminIsFoundOnlineSourcedListing).length;
   const student = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student").length;
-  const sourced = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) !== "student" && adminIsSourcedInventoryCandidate(row)).length;
   return {
     all: source.length,
     found_online: foundOnline,
     student,
-    sourced,
   };
 }
 
 function adminPendingQueueFilterLabel(filter = adminPendingQueueFilter) {
   if (filter === "found_online") return "Found online";
   if (filter === "student") return "Student";
-  if (filter === "sourced") return "Other sourced";
   return "All pending";
 }
 
@@ -8764,7 +8765,6 @@ function adminFilterPendingQueueRows(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
   if (adminPendingQueueFilter === "found_online") return source.filter(adminIsFoundOnlineSourcedListing);
   if (adminPendingQueueFilter === "student") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student");
-  if (adminPendingQueueFilter === "sourced") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) !== "student" && adminIsSourcedInventoryCandidate(row));
   return source;
 }
 
@@ -8786,14 +8786,13 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
           ${adminPendingQueueFilterButton("all", "All", counts.all)}
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
-          ${adminPendingQueueFilterButton("sourced", "Other sourced", counts.sourced)}
         </div>
       </div>
     </div>`;
 }
 
 function adminSetPendingQueueFilter(filter = "all") {
-  const allowed = new Set(["all", "found_online", "student", "sourced"]);
+  const allowed = new Set(["all", "found_online", "student"]);
   adminPendingQueueFilter = allowed.has(String(filter)) ? String(filter) : "all";
   renderAdminPendingRows(adminCurrentPendingListings);
 }
@@ -8977,7 +8976,7 @@ async function fetchRemoteAdminSnapshot() {
 function renderAdminPendingRows(listings) {
   const wrap = document.getElementById("admin-pending-table");
   if (!wrap) return;
-  ensureAdminSourcedCandidateControls();
+  ensureAdminFoundOnlineControls();
   adminScrubPendingSeedStatusPanel();
   const cleanListings = adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem);
   adminCurrentPendingListings = cleanListings;
@@ -9020,13 +9019,13 @@ function renderAdminPendingRows(listings) {
   }).join("")}`;
 }
 
-function ensureAdminSourcedCandidateControls() {
+function ensureAdminFoundOnlineControls() {
   const panel = document.getElementById("admin-review-queue-control");
   const table = document.getElementById("admin-pending-table");
   if (!panel || !table) return;
-  if (!document.getElementById("admin-sourced-candidates-status")) {
+  if (!document.getElementById("admin-found-online-status")) {
     const status = document.createElement("div");
-    status.id = "admin-sourced-candidates-status";
+    status.id = "admin-found-online-status";
     status.className = "hidden mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900";
     table.parentNode.insertBefore(status, table);
   }
@@ -9037,8 +9036,7 @@ function ensureAdminSourcedCandidateControls() {
     table.parentNode.insertBefore(sourcePanel, table);
   }
   if (
-    document.getElementById("admin-seed-sourced-candidates-btn")
-    && document.getElementById("admin-seed-bakaima-listings-btn")
+    document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
     && document.getElementById("admin-seed-social-search-listings-btn")
     && document.getElementById("admin-seed-source-registry-btn")
@@ -9065,9 +9063,6 @@ function ensureAdminSourcedCandidateControls() {
   }
   if (!document.getElementById("admin-load-source-registry-btn")) {
     missingButtons.push(`<button id="admin-load-source-registry-btn" type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">View Source Database</button>`);
-  }
-  if (!document.getElementById("admin-seed-sourced-candidates-btn")) {
-    missingButtons.push(`<button id="admin-seed-sourced-candidates-btn" type="button" onclick="adminSeedSourcedInventoryCandidates()" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-2 rounded-lg text-xs font-bold">Create 200 Sourced Candidates</button>`);
   }
   missingButtons.push(`<button type="button" onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Refresh Queue</button>`);
   actions.innerHTML = missingButtons.join("");
@@ -9129,7 +9124,7 @@ function adminSeededListingSummaryHtml(item = {}, options = {}) {
 }
 
 function adminScrubPendingSeedStatusPanel(root) {
-  const container = root || document.getElementById("admin-sourced-candidates-status");
+  const container = root || document.getElementById("admin-found-online-status");
   if (!container) return;
   const finalStatuses = new Set(["approved", "live", "published", "sold", "hidden", "deleted", "rejected", "archived"]);
   container.querySelectorAll("[data-admin-seed-final='true']").forEach((node) => node.remove());
@@ -9151,7 +9146,7 @@ function adminSourceReviewReasonLabel(reason = "") {
   }
   if (normalized === "missing_property_evidence") return "Needs property evidence";
   if (normalized === "image_quality_too_low") return "Needs clearer images";
-  if (normalized === "missing_2026_launch_intake_evidence") return "Needs 2026 post evidence";
+  if (/^missing_(2022|2026)_launch_intake_evidence$/.test(normalized)) return "Needs 2022+ post evidence";
   return normalized ? normalized.replace(/_/g, " ") : "Source review needed";
 }
 
@@ -9179,7 +9174,7 @@ async function adminSeedBakaimaAuthorisedListings() {
   }
   const ok = window.confirm("Create/rebuild the 33 authorised Bakaima estate-plot listings in the King review queue?");
   if (!ok) return;
-  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-bakaima-listings-btn");
   if (button) {
     button.disabled = true;
@@ -9229,7 +9224,7 @@ async function adminSeedCarnelianAuthorisedListings() {
   }
   const ok = window.confirm("Create/rebuild the two authorised Carnelian YouTube house-tour listings in the King review queue?");
   if (!ok) return;
-  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-carnelian-listings-btn");
   if (button) {
     button.disabled = true;
@@ -9277,9 +9272,9 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed source pages/feeds and queue every eligible 2026 found-online property candidate. Phone is optional when the public source page/profile is the contact route.");
+  const ok = window.confirm("Scan reviewed source pages/feeds and queue every eligible found-online property candidate from 1 January 2022 onward. Phone is optional when the public source page/profile is the contact route.");
   if (!ok) return;
-  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
   if (button) {
     button.disabled = true;
@@ -9287,7 +9282,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Checking reviewed source pages/feeds and queuing every eligible 2026 found-online property candidate now...";
+    statusEl.innerHTML = "Checking reviewed source pages/feeds and queuing every eligible 2022+ found-online property candidate now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9333,9 +9328,9 @@ async function adminSeedSocialSearchAuthorisedListings() {
     const targetStatus = data.daily_target_status || {};
     const targetHtml = targetStatus.target ? `
         <div class="mt-2 rounded-xl border ${targetStatus.meets_daily_minimum ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"} p-3">
-          <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} 2026 launch-intake properties</div>
-          <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with 2026 launch-intake records.")}</div>
-          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific 2026 public property post with source URL, location, price or guide price, usable image/source evidence, and a contact route.")}</div>
+          <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} found-online properties</div>
+          <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with 2022+ found-online records.")}</div>
+          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific public property post from 1 January 2022 onward with source URL, location, price or guide price, usable image/source evidence, and a contact route.")}</div>
           ${targetStatus.no_phone_source_contact_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.no_phone_source_contact_policy)}</div>` : ""}
           ${targetStatus.source_page_vs_property_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.source_page_vs_property_policy)}</div>` : ""}
         </div>` : "";
@@ -9350,19 +9345,19 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online pending records</button></div>
-        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual 2026 property post/listing from 1 January 2026 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published.</div>
+        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual property post/listing from 1 January 2022 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
           <div class="mt-1">Use source/agent-authorised land photos only when they clearly belong to the listing. If no reliable photo exists, King adds a makaug land-size guide illustration so reviewers can see the plot scale without using fake room photos.</div>
         </div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
-        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2026 property post before King queues it.</div>` : ""}
+        ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2022+ property post before King queues it.</div>` : ""}
         ${visibleSampleHtml ? `<div class="mt-2 space-y-2">${visibleSampleHtml}</div>` : `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-blue-900">No pending found-online records need review in this run. Approved or live records have been removed from this pending panel.</div>`}`;
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2026 property post, source URL, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2022+ property post, source URL, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9433,7 +9428,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. Individual posts are stored on property candidates after King finds a specific 2026 listing with source URL, contact route, location/area, price or guide price, and usable image/source evidence. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. Individual posts are stored on found-online property records after King finds a specific 2022+ listing with source URL, contact route, location/area, price or guide price, and usable image/source evidence. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>
@@ -9483,7 +9478,7 @@ async function adminImportFoundOnlineSourcePosts() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const raw = window.prompt("Paste a JSON array of extracted 2026 source posts. Each post should include post_url/source_url, title, area/location, price or price_text, platform, source_name, and any image/contact fields.");
+  const raw = window.prompt("Paste a JSON array of extracted 2022+ source posts. Each post should include post_url/source_url, title, area/location, price or price_text, platform, source_name, and any image/contact fields.");
   if (!raw) return;
   let posts = [];
   try {
@@ -9497,7 +9492,7 @@ async function adminImportFoundOnlineSourcePosts() {
     toast("No source posts found in the JSON.");
     return;
   }
-  const statusEl = document.getElementById("admin-sourced-candidates-status");
+  const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-import-found-online-posts-btn");
   if (button) {
     button.disabled = true;
@@ -9520,7 +9515,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: every specific public 2026 post with source URL, location/area, price or guide price, usable image/source evidence, and any public contact route is queued. No phone number is not a blocker when the source page/profile is public.</div>
+        <div class="mt-1">Import rule: every specific public post from 1 January 2022 onward with source URL, location/area, price or guide price, usable image/source evidence, and any public contact route is queued. No phone number is not a blocker when the source page/profile is public.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
@@ -9573,55 +9568,6 @@ async function adminSeedPropertySourceRegistry() {
       panel.innerHTML = `Could not create source database: ${adminEscape(e.message || "Unknown error")}`;
     }
     toast(`Source seed failed: ${e.message || "error"}`);
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.classList.remove("opacity-60", "cursor-wait");
-    }
-  }
-}
-
-async function adminSeedSourcedInventoryCandidates() {
-  if (!canUseLiveAdminApi()) {
-    toast("Sign in as admin or save ADMIN_API_KEY first.");
-    return;
-  }
-  const ok = window.confirm("Create/rebuild 200 pending sourced candidates in the King review queue? Existing sourced candidates from this seed will be replaced.");
-  if (!ok) return;
-  const statusEl = document.getElementById("admin-sourced-candidates-status");
-  const button = document.getElementById("admin-seed-sourced-candidates-btn");
-  if (button) {
-    button.disabled = true;
-    button.classList.add("opacity-60", "cursor-wait");
-  }
-  if (statusEl) {
-    statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Creating 200 pending sourced candidates now...";
-  }
-  try {
-    const response = await apiRequest("/api/admin/sourced-inventory-candidates/seed", {
-      method: "POST",
-      headers: adminAuthHeaders(),
-      body: { count: 200, replace: true }
-    });
-    const data = response?.data || {};
-    const guardrails = data.guardrails || {};
-    if (statusEl) {
-      statusEl.innerHTML = `
-        <div class="font-black">Sourced candidates created</div>
-        <div class="mt-1">${adminEscape(data.created_properties || guardrails.total || 0)} pending records are now in the King review queue.</div>
-        <div class="mt-1">Guardrails: ${adminEscape(guardrails.consent_required || 0)} require consent, ${adminEscape(guardrails.approval_blocked || 0)} blocked until verification.</div>`;
-    }
-    toast("200 sourced candidates are ready for review.");
-    await renderAdminDashboard();
-    setAdminWorkflowTab("review");
-    adminScrollTo("#admin-review-queue-control");
-  } catch (e) {
-    if (statusEl) {
-      statusEl.classList.remove("hidden");
-      statusEl.innerHTML = `Could not create sourced candidates: ${adminEscape(e.message || "Unknown error")}`;
-    }
-    toast(`Seed failed: ${e.message || "error"}`);
   } finally {
     if (button) {
       button.disabled = false;
@@ -14007,7 +13953,7 @@ function renderAdminReviewPanel(review) {
     : "";
   const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
     <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
-      <strong>Sourced candidate:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
+      <strong>Found-online/source record:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
       ${hasGeneratedPlaceholderPhotos ? `
         <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-semibold text-amber-900">
           Placeholder images are attached to this record. These are not property photos. Import authorised photos before approval.
@@ -14226,12 +14172,12 @@ function renderAdminReviewPanel(review) {
             <button onclick="saveAdminListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-semibold">Save Review</button>
             ${generatedDecisionReason ? `<button onclick="useAdminGeneratedDecisionReason()" class="border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-semibold">Use Suggested Reason</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'approved', ${reviewIdArg})" ${approvalUnlocked ? "" : "disabled"} class="${approvalUnlocked ? "bg-green-700 hover:bg-green-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve & Notify</button>
-            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Sourced Candidate</button>` : ""}
+            ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
           ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until non-overrideable red checks are resolved.</div>`}
           ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
-          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Special sourced approval records that consent and image rights were confirmed. It only works on sourced inventory candidate records." : "Import authorised property photos and stored consent/image-rights confirmation before using sourced candidate approval."}</div>` : ""}
+          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Found-online approval records that consent and image rights were confirmed. It only works on found-online intake records." : "Import authorised property photos and stored consent/image-rights confirmation before using found-online approval."}</div>` : ""}
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -14470,7 +14416,7 @@ async function adminSendOutlookDraft(actionId) {
 async function adminApproveSourcedCandidateOverride(listingId) {
   const review = adminActiveReview || {};
   if (!adminIsSourcedInventoryCandidate(review)) {
-    toast("Special sourced approval is only available on sourced candidate records.");
+    toast("Found-online approval is only available on found-online intake records.");
     return;
   }
   if (!adminSourcedCandidateCanUseOverride(review)) {
@@ -14479,8 +14425,8 @@ async function adminApproveSourcedCandidateOverride(listingId) {
   }
   const sourceLinks = adminSourcedCandidateSourceLinks(review);
   const message = sourceLinks.length
-    ? "Approve this sourced candidate under special dispensation? This confirms consent, image rights, and the stored source/photo links have been checked."
-    : "Approve this sourced candidate under special dispensation? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside makaug.";
+    ? "Approve this found-online record? This confirms consent, image rights, and the stored source/photo links have been checked."
+    : "Approve this found-online record? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside makaug.";
   const ok = window.confirm(message);
   if (!ok) return;
   await adminSetListingStatus(listingId, "approved", listingId, {
@@ -14530,7 +14476,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
   if (isSourcedCandidateOverride && !moderationReason) {
-    moderationReason = "Approved under sourced candidate special dispensation after consent, image rights, and source evidence were confirmed.";
+    moderationReason = "Approved as found-online intake after consent, image rights, and source evidence were confirmed.";
     const reasonEl = document.getElementById("admin-review-reason");
     if (reasonEl) reasonEl.value = moderationReason;
   }
@@ -24326,9 +24272,11 @@ function isFoundOnlineListing(p = {}) {
   return p.found_online === true
     || p.social_search_candidate === true
     || p.sourced_inventory_candidate === true
+    || p.found_online_candidate === true
     || extra.found_online === true
     || extra.social_search_candidate === true
     || extra.sourced_inventory_candidate === true
+    || extra.found_online_candidate === true
     || badge === "found_online"
     || badge === "found online"
     || badge === "sourced_online"

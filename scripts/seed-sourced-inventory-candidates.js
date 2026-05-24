@@ -28,6 +28,7 @@ const REPLACE = args.has('--replace');
 const CLEANUP = args.has('--cleanup');
 const CONFIRM = args.has('--confirm');
 const RUN_ID = process.env.SOURCED_INVENTORY_RUN_ID || `SIC-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+const RETIRED_MESSAGE = 'Generic sourced-candidate seeding is retired. Use found-online source posts/imports only.';
 
 const AREAS = [
   ['Central', 'Kampala', 'Kololo', 0.335, 32.588], ['Central', 'Kampala', 'Nakasero', 0.320, 32.580],
@@ -495,6 +496,9 @@ function summarize(listings) {
 }
 
 async function main() {
+  console.error(RETIRED_MESSAGE);
+  process.exit(2);
+
   const listings = plannedListings(COUNT, { start: START, type: ONLY_TYPE });
   if (DRY_RUN) {
     console.log(JSON.stringify({

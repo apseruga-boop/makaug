@@ -6,7 +6,7 @@ const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000;
 const X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000;
 const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000;
 const SOURCE_FRESHNESS_WINDOW_DAYS = 120;
-const TARGET_SOURCE_YEAR = 2026;
+const TARGET_SOURCE_YEAR = 2022;
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
@@ -181,8 +181,8 @@ function source({
       review_required: true,
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
-      target_property_window: 'Scan public property posts, videos, reels, shorts, and listings first published from 1 January 2026 through today, with priority on the newest posts.',
-      listing_candidate_rule: 'Create a King review property candidate for every specific 2026 public post/listing with source URL, location/area, price or guide price, usable image/source evidence, and any contact path. A public source/social page is a contact path when no phone is published.',
+      target_property_window: 'Scan public property posts, videos, reels, shorts, and listings first published from 1 January 2022 through today, with priority on the newest posts.',
+      listing_candidate_rule: 'Create a King review found-online property record for every specific 2022+ public post/listing with source URL, location/area, price or guide price, usable image/source evidence, and any contact path. A public source/social page is a contact path when no phone is published.',
       source_use: 'Find public property posts, prepare candidates for King review, attribute source, and request owner/agent confirmation before public approval.',
       image_quality_rule: 'Use direct public listing photos, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not repeat fuzzy frames, invent room labels, or bypass private platform restrictions.',
       ...metadata,
@@ -1160,7 +1160,7 @@ const DISCOVERY_INTENTS = [
   'single room self contained Kampala',
   'furnished apartment Nakasero Kampala',
   'furnished apartment Kololo Kampala',
-  'hostel near Makerere 2026',
+  'hostel near Makerere 2022',
   'student room near Kyambogo',
   'hostel rooms Makerere Kikoni',
   'student accommodation near MUBS',
@@ -1192,11 +1192,11 @@ const DISCOVERY_INTENTS = [
   'plots for sale Jinja Road Uganda',
   'plots for sale Mityana Road Uganda',
   'commercial land Namanve Uganda',
-  '2026 Uganda house for sale',
-  '2026 Kampala property for sale',
-  '2026 Uganda property rent',
-  '2026 Uganda land for sale',
-  '2026 Kampala commercial property',
+  '2022 Uganda house for sale',
+  '2022 Kampala property for sale',
+  '2022 Uganda property rent',
+  '2022 Uganda land for sale',
+  '2022 Kampala commercial property',
   'property video tour Uganda',
   'house shorts Uganda real estate',
   'Uganda property TikTok agent',
@@ -1235,7 +1235,7 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
       hashtag_watchlist: hashtagWatchlist.map((tag) => `#${tag}`),
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
-      target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed in 2026, especially the last four months.',
+      target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed from 2022 onward, especially the newest available posts.',
       review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
       image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
       expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, price/location, and usable images are clear.',
@@ -1288,7 +1288,7 @@ function hashtagDiscoverySource({ platform, tag, area, district, intent, index }
       query: label,
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
-      target_property_window: 'Prioritise hashtag results from 2026, especially the last four months.',
+      target_property_window: 'Prioritise hashtag results from 2022 onward, especially the newest available posts.',
       platform_aliases: platform === 'x' ? ['twitter', 'x'] : undefined,
       image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
       expected_action: 'Promote source pages/accounts first; queue a property only when a specific recent listing has enough evidence.',
