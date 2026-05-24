@@ -8651,6 +8651,23 @@ function adminAttr(value) {
   return adminEscape(value);
 }
 
+function normalizeImageSrcForDisplay(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const svgMatch = raw.match(/^data:image\/svg\+xml(?:;charset=[^,;]+)?(?:;utf8)?,(.*)$/i);
+  if (!svgMatch) return raw;
+  const payload = svgMatch[1] || "";
+  let svg = payload;
+  if (!payload.includes("<")) {
+    try { svg = decodeURIComponent(payload); } catch (error) {}
+  }
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function publicImageSrc(value, fallback = "") {
+  return normalizeImageSrcForDisplay(value) || fallback;
+}
+
 function adminCleanModeEnabled() {
   const toggle = document.getElementById("admin-live-clean-mode");
   return !toggle || toggle.checked !== false;
@@ -25153,10 +25170,11 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
+  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   return `
     <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       <div class="h-48 relative overflow-hidden">
-        <img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}" alt="${p.title}" class="w-full h-full object-cover">
+        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
           ${listingFreshnessBadgeHtml(p)}
@@ -25287,6 +25305,7 @@ function studentCard(p) {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
+  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
   const uniTags = (p.student_universities && p.student_universities.length)
     ? p.student_universities.slice(0, 3)
     : (p.nearest_university ? [p.nearest_university] : []);
@@ -25300,7 +25319,7 @@ function studentCard(p) {
   return `
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       <div class="relative h-48 overflow-hidden">
-        <img src="${p.img}" alt="${p.title}" class="w-full h-full object-cover">
+        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">
         ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
@@ -30188,7 +30207,7 @@ function updateListPreview() {
     }));
     const previewPhotos = lpPreviewPhotos;
     const previewMain = previewPhotos.find((item) => item.is_main) || previewPhotos[0];
-    const previewImg = previewMain?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80";
+    const previewImg = publicImageSrc(previewMain?.url, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
     const previewType = type === "student" ? "student" : type;
     const source = listingSourceMeta({ listed_by: "private" });
     const bedVal = lpVal("lp-beds");
@@ -30232,7 +30251,7 @@ function updateListPreview() {
     previewWrap.innerHTML = `
       <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         <div class="h-64 md:h-72 relative overflow-hidden">
-          <img src="${previewImg}" alt="${title}" class="w-full h-full object-cover">
+          <img src="${adminAttr(previewImg)}" alt="${adminAttr(title)}" class="w-full h-full object-cover">
           <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
             <div class="${badgeColor(previewType)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(previewType)}</div>
             <div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>
@@ -30245,7 +30264,7 @@ function updateListPreview() {
           <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
             ${previewPhotos.length ? previewPhotos.map((item, idx) => `
               <button type="button" onclick="openPreviewPhotoLightbox(${idx})" class="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
-                <img src="${item.url}" alt="${item.name}" class="w-full h-20 object-cover">
+                <img src="${adminAttr(publicImageSrc(item.url))}" alt="${adminAttr(item.name)}" class="w-full h-20 object-cover">
                 <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${item.slot}${item.is_main ? ` • ${translateListingLabel("Main")}` : ""}</div>
               </button>
             `).join("") : `<div class="col-span-full text-xs text-gray-500">${translateListingLabel("Upload photos in Step 2 to preview exactly how they will appear.")}</div>`}
@@ -30307,13 +30326,13 @@ function renderPreviewPhotoLightbox() {
     return;
   }
   const active = lpPreviewPhotos[lpPreviewPhotoIndex] || lpPreviewPhotos[0];
-  imageEl.src = active.url;
+  imageEl.src = publicImageSrc(active.url);
   captionEl.textContent = `${lpPreviewPhotoIndex + 1}/${lpPreviewPhotos.length} - ${active.slot || active.name || "Photo"}`;
   thumbsEl.innerHTML = lpPreviewPhotos.map((item, idx) => {
     const activeCls = idx === lpPreviewPhotoIndex ? "ring-2 ring-green-600 border-green-600" : "border-gray-200";
     return `
       <button type="button" onclick="openPreviewPhotoLightbox(${idx})" class="rounded-lg overflow-hidden border ${activeCls} bg-gray-50">
-        <img src="${item.url}" alt="${item.name || `Photo ${idx + 1}`}" class="w-full h-14 object-cover">
+        <img src="${adminAttr(publicImageSrc(item.url))}" alt="${adminAttr(item.name || `Photo ${idx + 1}`)}" class="w-full h-14 object-cover">
       </button>
     `;
   }).join("");
@@ -30361,13 +30380,13 @@ function renderDetailGalleryLightbox() {
   const property = findPropertyForUi(activeDetailPropertyId);
   const slotLabel = getDisplayPhotoLabel(active, detailGalleryPhotoIndex, property);
   const locationLabel = active.location_label || "";
-  imageEl.src = active.url;
+  imageEl.src = publicImageSrc(active.url);
   captionEl.textContent = `${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} - ${slotLabel}${locationLabel ? ` • ${locationLabel}` : ""}`;
   thumbsEl.innerHTML = detailGalleryPhotos.map((item, idx) => {
     const activeCls = idx === detailGalleryPhotoIndex ? "ring-2 ring-green-600 border-green-600" : "border-gray-200";
     return `
       <button type="button" onclick="openDetailGalleryLightbox(${idx})" class="rounded-lg overflow-hidden border ${activeCls} bg-gray-50">
-        <img src="${item.url}" alt="${item.name || `Photo ${idx + 1}`}" class="w-full h-14 object-cover">
+        <img src="${adminAttr(publicImageSrc(item.url))}" alt="${adminAttr(item.name || `Photo ${idx + 1}`)}" class="w-full h-14 object-cover">
       </button>
     `;
   }).join("");
@@ -30382,7 +30401,7 @@ function selectDetailGalleryPhoto(index = 0) {
   const active = detailGalleryPhotos[detailGalleryPhotoIndex] || detailGalleryPhotos[0];
   const hero = document.getElementById("detail-gallery-hero-img");
   if (hero && active?.url) {
-    hero.src = active.url;
+    hero.src = publicImageSrc(active.url);
     hero.alt = getDisplayPhotoLabel(active, detailGalleryPhotoIndex, property) || property.title || "Property photo";
   }
   const count = document.getElementById("detail-gallery-count-label");
@@ -31103,6 +31122,7 @@ async function openDetail(id, options = {}) {
   detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
   const selectedPhoto = detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto;
+  const selectedPhotoSrc = publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const detailIdArg = JSON.stringify(String(p.id));
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
@@ -31141,7 +31161,7 @@ async function openDetail(id, options = {}) {
       <div class="lg:col-span-2">
         <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
-            <img id="detail-gallery-hero-img" src="${selectedPhoto?.url || p.img}" alt="${getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || p.title}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
+            <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || p.title)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
             <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
               <i class="fas fa-images"></i> <span id="detail-gallery-count-label">${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} ${photoCountLabel}</span>
             </div>
@@ -31151,7 +31171,7 @@ async function openDetail(id, options = {}) {
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
               ${detailGalleryPhotos.map((photo, idx) => `
                 <button type="button" onclick="selectDetailGalleryPhoto(${idx})" data-detail-gallery-thumb="${idx}" aria-current="${idx === detailGalleryPhotoIndex ? "true" : "false"}" class="border ${idx === detailGalleryPhotoIndex ? "border-green-500" : "border-gray-200"} rounded-lg overflow-hidden bg-gray-50 text-left hover:border-green-400 transition-colors">
-                  <img src="${photo.url}" alt="${photo.name || `Photo ${idx + 1}`}" class="w-full h-20 object-cover">
+                  <img src="${adminAttr(publicImageSrc(photo.url))}" alt="${adminAttr(photo.name || `Photo ${idx + 1}`)}" class="w-full h-20 object-cover">
                   <div class="px-2 py-1.5 text-[11px] text-gray-600 truncate">${getDisplayPhotoLabel(photo, idx, p)}</div>
                 </button>
               `).join("")}
@@ -31347,7 +31367,7 @@ async function openBrokerProfile(id) {
   setCanonicalBrokerProfileUrl(b, "broker_profile_open");
   const remoteListings = Array.isArray(b.remote_listings) ? b.remote_listings.filter(isListingPublicVisible) : [];
   const list = remoteListings.length ? remoteListings : getPublicListings().filter((p) => String(p.agent || "") === String(id || ""));
-  const photoSrc = b.photo || b.profile_photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`;
+  const photoSrc = publicImageSrc(b.photo || b.profile_photo_url, `https://ui-avatars.com/api/?name=${encodeURIComponent(b.name)}&background=dcfce7&color=166534&size=300`);
   content.innerHTML = `
     <button onclick="showPage('brokers')" class="text-green-700 text-sm font-semibold mb-4 inline-flex items-center gap-2"><i class="fas fa-arrow-left"></i> Back to Brokers</button>
 
@@ -31355,7 +31375,7 @@ async function openBrokerProfile(id) {
       <div class="grid lg:grid-cols-[260px,1fr] gap-7 items-start">
         <div>
           <div class="w-48 h-48 mx-auto rounded-full border-4 border-green-100 shadow-sm overflow-hidden bg-green-50 flex items-center justify-center">
-            <img src="${photoSrc}" alt="${b.name}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-6xl\\'>${b.emoji || "👔"}</div>';">
+            <img src="${adminAttr(photoSrc)}" alt="${adminAttr(b.name)}" class="w-full h-full object-cover" onerror="this.remove(); this.parentElement.innerHTML='<div class=\\'text-6xl\\'>${adminAttr(b.emoji || "👔")}</div>';">
           </div>
           <p class="text-center text-xs text-gray-400 mt-2">Broker profile photo</p>
         </div>

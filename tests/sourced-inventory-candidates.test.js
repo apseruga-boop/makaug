@@ -231,6 +231,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');
   assert(html.includes('found-online-queue-tabs-20260524'), 'index should bump the app asset version so production browsers fetch the found-online queue filter UI');
   assert(html.includes('found-online-evidence-sweep-20260524'), 'index should bump the app asset version so production browsers fetch found-online source/date/evidence fixes');
+  assert(html.includes('public-image-src-fix-20260524'), 'index should bump the app asset version so production browsers fetch public image source fixes');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('Show all found-online pending records'), 'seed status should expose a direct action to the full found-online queue');
   assert(socialSearchServiceSource.includes('function normalizedStatusValue'), 'service should trim and normalize stored statuses');
@@ -257,6 +258,17 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('Original post date is being confirmed from the source platform'), 'source disclosure should explain when platform post date is not exposed');
   assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');
   assert(frontend.includes('detail-broker-profile-link'), 'detail contact card should make broker logo/name click through to the profile');
+});
+
+test('public property images escape and normalize generated SVG evidence cards', () => {
+  assert(frontend.includes('function normalizeImageSrcForDisplay'), 'frontend should normalize generated SVG data URLs before rendering');
+  assert(frontend.includes('data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}'), 'SVG data URLs should be encoded for mobile browsers');
+  assert(frontend.includes('const photoSrc = publicImageSrc(p.img'), 'public listing cards should normalize the main image source');
+  assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}"'), 'public listing cards should escape image src and title attributes');
+  assert(frontend.includes('const selectedPhotoSrc = publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should normalize the selected image source');
+  assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
+  assert(!frontend.includes('<img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}"'), 'public cards should not inject raw p.img values into src');
+  assert(!frontend.includes('<img src="${p.img}" alt="${p.title}"'), 'student cards should not inject raw p.img values into src');
 });
 
 test('Bakaima authorised batch creates 33 pending land listings with evidence photos', () => {
