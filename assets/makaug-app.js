@@ -546,6 +546,9 @@ let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
+let adminPendingPhotoDeleteId = "";
+let adminPendingPhotoDeleteTimer = null;
+const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
 let remoteBrokersLoaded = false;
@@ -10671,20 +10674,73 @@ async function adminSetListingPhotoPrimary(imageId) {
   }
 }
 
-async function adminDeleteListingPhoto(imageId) {
+function adminResetPhotoDeleteConfirmation(exceptImageId = "") {
+  const keepId = String(exceptImageId || "");
+  if (!keepId) adminPendingPhotoDeleteId = "";
+  if (adminPendingPhotoDeleteTimer) {
+    clearTimeout(adminPendingPhotoDeleteTimer);
+    adminPendingPhotoDeleteTimer = null;
+  }
+  document.querySelectorAll("[data-admin-photo-delete-button]").forEach((button) => {
+    const buttonImageId = String(button.getAttribute("data-admin-photo-delete-button") || "");
+    const isKept = keepId && buttonImageId === keepId;
+    if (!isKept) {
+      button.textContent = "Delete";
+      button.classList.remove("bg-red-600", "text-white", "border-red-600", "opacity-60", "cursor-wait");
+      button.classList.add("border-red-200", "text-red-600", "hover:bg-red-50");
+      button.disabled = false;
+    }
+  });
+}
+
+function adminArmListingPhotoDelete(imageId, button) {
+  const safeImageId = String(imageId || "");
+  if (!safeImageId) return false;
+  adminPendingPhotoDeleteId = safeImageId;
+  adminResetPhotoDeleteConfirmation(safeImageId);
+  const target = button || Array.from(document.querySelectorAll("[data-admin-photo-delete-button]"))
+    .find((candidate) => String(candidate.getAttribute("data-admin-photo-delete-button") || "") === safeImageId);
+  if (target) {
+    target.textContent = "Confirm delete";
+    target.classList.remove("border-red-200", "text-red-600", "hover:bg-red-50");
+    target.classList.add("bg-red-600", "text-white", "border-red-600");
+    target.disabled = false;
+  }
+  adminPendingPhotoDeleteTimer = setTimeout(() => {
+    if (adminPendingPhotoDeleteId === safeImageId) adminResetPhotoDeleteConfirmation();
+  }, 8000);
+  toast("Tap Confirm delete to remove this listing photo.");
+  return true;
+}
+
+async function adminDeleteListingPhoto(imageId, button) {
   const review = adminActiveReview || {};
   if (!review.id || !imageId || !canUseLiveAdminApi()) return;
-  const ok = window.confirm("Remove this photo from the listing?");
-  if (!ok) return;
+  const safeImageId = String(imageId || "");
+  if (adminPhotoDeleteInFlight.has(safeImageId)) return;
+  if (adminPendingPhotoDeleteId !== safeImageId) {
+    adminArmListingPhotoDelete(safeImageId, button);
+    return;
+  }
   try {
+    adminPhotoDeleteInFlight.add(safeImageId);
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Deleting...";
+      button.classList.add("opacity-60", "cursor-wait");
+    }
     const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(review.id)}/images/${encodeURIComponent(imageId)}`, {
       method: "DELETE",
       headers: adminAuthHeaders()
     });
+    adminResetPhotoDeleteConfirmation();
     renderAdminReviewPanel(response?.data || {});
     toast("Listing photo removed.");
   } catch (e) {
+    adminResetPhotoDeleteConfirmation();
     toast(`Photo delete failed: ${e.message || "error"}`);
+  } finally {
+    adminPhotoDeleteInFlight.delete(safeImageId);
   }
 }
 
@@ -13994,6 +14050,9 @@ function renderAdminReviewPanel(review) {
     subtitle.textContent = `${review.inquiry_reference || review.id || "-"} • ${[review.area, review.district].filter(Boolean).join(", ") || "-"}`;
   }
   const images = Array.isArray(review.images) ? review.images : [];
+  if (adminPendingPhotoDeleteId && !images.some((img) => String(img.id || "") === adminPendingPhotoDeleteId)) {
+    adminResetPhotoDeleteConfirmation();
+  }
   const automated = review?.review?.automated || {};
   const checklistItems = automated?.checks || review?.review?.checklist_items || [];
   const canApprove = automated?.can_approve !== false;
@@ -14163,7 +14222,7 @@ function renderAdminReviewPanel(review) {
                   <input id="admin-replace-photo-${adminAttr(img.id || idx)}" type="file" accept="image/*" class="hidden" onchange="adminReplaceListingPhoto('${adminAttr(img.id || "")}', this)">
                   <button type="button" onclick="document.getElementById('admin-replace-photo-${adminAttr(img.id || idx)}')?.click()" class="border border-green-200 text-green-700 hover:bg-green-50 px-2 py-1 rounded text-[10px] font-bold">Replace</button>
                   ${img.is_primary ? "" : `<button type="button" onclick="adminSetListingPhotoPrimary('${adminAttr(img.id || "")}')" class="border border-gray-200 text-gray-700 hover:bg-white px-2 py-1 rounded text-[10px] font-bold">Primary</button>`}
-                  <button type="button" onclick="adminDeleteListingPhoto('${adminAttr(img.id || "")}')" class="border border-red-200 text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[10px] font-bold">Delete</button>
+                  <button type="button" data-admin-photo-delete-button="${adminAttr(img.id || "")}" onclick="adminDeleteListingPhoto('${adminAttr(img.id || "")}', this)" class="border border-red-200 text-red-600 hover:bg-red-50 px-2 py-1 rounded text-[10px] font-bold">Delete</button>
                 </div>
               </div>
             `).join("") : `<div class="text-sm text-gray-500">No images attached.</div>`}

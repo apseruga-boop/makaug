@@ -659,6 +659,9 @@ test('King review queue can manage authorised listing photos', () => {
   assert(frontend.includes('function adminReplaceListingPhoto'), 'dashboard should expose per-photo replacement');
   assert(frontend.includes('function adminSetListingPhotoPrimary'), 'dashboard should allow choosing the primary image');
   assert(frontend.includes('function adminDeleteListingPhoto'), 'dashboard should allow deleting bad listing images');
+  assert(frontend.includes('data-admin-photo-delete-button'), 'photo delete should use stable inline confirmation buttons');
+  assert(frontend.includes('Confirm delete'), 'photo delete confirmation should stay inside the photo card');
+  assert(!frontend.includes('window.confirm("Remove this photo from the listing?")'), 'photo delete should not use unstable native confirm dialogs');
   assert(frontend.includes('Upload authorised agent photos'), 'photo panel should make the agent-photo workflow visible');
   assert(frontend.includes('Replace all current photos'), 'photo panel should support replacing poor existing images');
 });
