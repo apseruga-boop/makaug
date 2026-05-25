@@ -129,14 +129,14 @@ const scenarios = [
     ]
   },
   {
-    name: 'Land Search Concierge property URL routes to UgNLIS help without UUID budget',
+    name: 'Land title search property URL routes to official UgNLIS information without UUID budget',
     messages: [
-      "Hi makaug, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps. Page: makaug.com/property/a314682b-a329-4862-9343-2e73f5b81448"
+      "Hi makaug, I'm looking for land or a plot. Please send the official UgNLIS title search steps. Page: makaug.com/property/a314682b-a329-4862-9343-2e73f5b81448"
     ],
     expect: [
       {
         step: 'main_menu',
-        includes: ['UgNLIS', 'Next step', 'title/tenure'],
+        includes: ['UgNLIS', 'Have ready', 'Title search'],
         excludes: ['max USh', '314682', 'Filters:', 'Send the area or district']
       }
     ]

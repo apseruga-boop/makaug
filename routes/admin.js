@@ -1403,7 +1403,6 @@ function publicPreviewExtraFields(extraFields = {}) {
     ugnlis_search_date: extra.ugnlis_search_date || null,
     ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
     land_verification_status: landVerification.status,
-    land_verification_concierge_requested: landVerification.concierge_requested,
     translations: extra.translations && typeof extra.translations === 'object' ? extra.translations : {},
     size_raw: extra.size_raw || '',
     featured: extra.featured === true,
@@ -3013,8 +3012,7 @@ router.patch('/properties/:id/land-verification', async (req, res, next) => {
         JSON.stringify({
           provider: 'ugnlis',
           status: patch.land_verification_status || null,
-          search_letter_url_present: !!patch.ugnlis_search_letter_url,
-          concierge_requested: patch.land_verification_concierge_requested === true
+          search_letter_url_present: !!patch.ugnlis_search_letter_url
         })
       ]
     );

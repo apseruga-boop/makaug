@@ -28,12 +28,11 @@ function testServicePack() {
     ugnlis_title_folio: ' 8 ',
     ugnlis_block: ' 244 ',
     ugnlis_plot: ' 51 ',
-    ugnlis_search_letter_url: 'https://example.com/search-letter.pdf',
-    land_verification_concierge_requested: 'yes'
+    ugnlis_search_letter_url: 'https://example.com/search-letter.pdf'
   });
   assert.strictEqual(sanitized.ugnlis_title_volume, '12');
   assert.strictEqual(sanitized.land_verification_status, 'search_letter_supplied');
-  assert.strictEqual(sanitized.land_verification_concierge_requested, true);
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(sanitized, 'land_verification_concierge_requested'), false);
 
   const pack = buildUgNlisLandVerificationPack({ extra_fields: sanitized });
   assert.strictEqual(pack.status, 'search_letter_supplied');
@@ -59,9 +58,9 @@ function testRoutesAndUi() {
   assert(whatsappRoute.includes('buildUgNlisAssistantReply'));
   assert(whatsappRoute.includes('isUgNlisLandVerificationIntent'));
   assert(whatsappRoute.includes('stripLinksAndIdsForNumericParsing'));
-  assert(whatsappRoute.includes('land search concierge'));
-  assert(whatsappRoute.includes('safe next steps'));
-  assert(whatsappRoute.includes('land_verification_help_requested_at'));
+  assert(!whatsappRoute.includes('land search concierge'));
+  assert(!whatsappRoute.includes('safe next steps'));
+  assert(whatsappRoute.includes('ugnlis_official_info_requested_at'));
 
   const frontend = read('assets/makaug-app.js');
   assert(frontend.includes('shouldShowUgNlisAdvisory'));
@@ -69,12 +68,18 @@ function testRoutesAndUi() {
   assert(frontend.includes('saveAdminLandVerificationReview'));
   assert(frontend.includes('about.landHubTitle'));
   assert(frontend.includes('Official searches happen on UgNLIS'));
+  assert(frontend.includes('Before opening UgNLIS'));
+  assert(frontend.includes('role="tooltip"'));
+  assert(!frontend.includes('Land Search Concierge'));
   assert(frontend.includes('titleSensitiveTypes'));
-  assert(frontend.includes('UgNLIS guidance for land'));
+  assert(frontend.includes('official UgNLIS land checks'));
 
   const html = read('index.html');
   assert(html.includes('about.landHubTitle'));
   assert(html.includes('https://ugnlis.mlhud.go.ug/'));
+  assert(html.includes('ugnlis-official-portal-20260525'));
+  assert(read('routes/health.js').includes('053_remove_land_search_help_flags.sql'));
+  assert(read('db/migrations/053_remove_land_search_help_flags.sql').includes("- 'land_verification_concierge_requested'"));
 }
 
 function testWhatsappCopy() {
@@ -82,8 +87,9 @@ function testWhatsappCopy() {
   assert(reply.includes('UgNLIS'));
   assert(reply.includes('https://ugnlis.mlhud.go.ug/'));
   assert(reply.includes('https://makaug.com/safety'));
-  assert(reply.includes('Next step: reply with the area or district'));
-  assert(reply.includes('title/tenure details'));
+  assert(reply.includes('Have ready before you open UgNLIS'));
+  assert(reply.includes('Title search: title volume and folio'));
+  assert(!reply.includes('makaug will keep the evidence trail'));
 }
 
 testServicePack();

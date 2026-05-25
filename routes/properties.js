@@ -349,7 +349,6 @@ function publicExtraFields(extraFields = {}) {
     ugnlis_search_date: extra.ugnlis_search_date || null,
     ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
     land_verification_status: landVerification.status,
-    land_verification_concierge_requested: landVerification.concierge_requested,
     featured: extra.featured === true,
     featured_at: extra.featured_at || null
   };

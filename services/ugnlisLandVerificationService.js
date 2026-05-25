@@ -99,16 +99,6 @@ function sanitizeUgNlisLandVerificationFields(input = {}) {
   ]));
   if (searchDate) output.ugnlis_search_date = searchDate;
 
-  const conciergeRequested = firstValue(source, [
-    'land_verification_concierge_requested',
-    'land_verification_help_requested',
-    'land_verification_help',
-    'concierge_requested'
-  ]);
-  if (conciergeRequested !== '') {
-    output.land_verification_concierge_requested = boolLike(conciergeRequested);
-  }
-
   const status = normalizeUgNlisStatus(firstValue(source, [
     'land_verification_status',
     'ugnlis_status',
@@ -182,11 +172,10 @@ function buildUgNlisLandVerificationPack(input = {}) {
     transaction_number: cleanText(extra.ugnlis_transaction_number, 120) || null,
     search_reference: cleanText(extra.ugnlis_search_reference, 120) || null,
     search_date: cleanText(extra.ugnlis_search_date, 80) || null,
-    concierge_requested: boolLike(extra.land_verification_concierge_requested),
     contact_path: cleanText(extra.land_verification_contact_path, 180) || null,
     notes: cleanText(extra.ugnlis_search_notes, 1000) || null,
     evidence,
-    public_guidance: 'Official land title searches and transaction tracking should happen on UgNLIS. makaug can guide buyers and listers, store evidence, and show whether a search letter or title reference has been supplied.'
+    public_guidance: 'Use UgNLIS for official land title searches and transaction tracking. Government land records remain the source of truth.'
   };
 }
 
@@ -194,48 +183,57 @@ function buildUgNlisAssistantReply({ language = 'en', baseUrl = 'https://makaug.
   const code = ['lg', 'sw'].includes(language) ? language : 'en';
   const lines = {
     en: [
-      'makaug land verification help',
+      'UgNLIS official land search',
       '',
       'Official land title searches should be done on Uganda’s National Land Information System (UgNLIS):',
       UGNLIS_PORTAL_URL,
       '',
       `User notice: online searches may be available for ${UGNLIS_SUPPORTED_ONLINE_SEARCH_DISTRICTS.join(', ')} at UGX ${UGNLIS_SEARCH_FEE_UGX.toLocaleString('en-UG')}.`,
       '',
-      'Next step: reply with the area or district, plot or estate name, size, price, and any title/tenure details you already have.',
-      'If you have a volume, folio, block, plot number, search letter, or UgNLIS transaction reference, send it here and makaug will keep the evidence trail against the listing.',
-      'makaug can guide the preparation and safety checklist, but the official search and transaction tracking must remain on UgNLIS.',
+      'Have ready before you open UgNLIS:',
+      '- Title search: title volume and folio, or county, block and plot.',
+      '- Parcel search: county/municipality/town council, plus block or road and plot number.',
+      '- Transaction tracking: transaction number from the MZO receipt.',
+      '',
+      'Use the official government portal for the search result and transaction status.',
       '',
       `Land safety guide: ${baseUrl}/safety`,
       '',
       `Start on makaug: ${baseUrl}/#page-land`
     ],
     lg: [
-      'makaug okuyamba okukakasa ettaka',
+      'Okunoonyereza ku ttaka okutongole ku UgNLIS',
       '',
       'Okunoonyereza ku title y’ettaka okukakasiddwa kukolebwa ku UgNLIS:',
       UGNLIS_PORTAL_URL,
       '',
       `Okusinziira ku bubaka bw'omukozesa, districts eziwerako zisobola okunoonyerezebwako online ku UGX ${UGNLIS_SEARCH_FEE_UGX.toLocaleString('en-UG')}.`,
       '',
-      'Ekiddako: sindika ekitundu oba district, erinnya lya plot oba estate, obunene, ebbeeyi, n’ebikwata ku title/tenure by’olina.',
-      'Bw’oba olina volume, folio, block, plot number, search letter, oba UgNLIS transaction reference, bisindike wano makaug etereke evidence ku listing.',
-      'makaug ekuyamba okutegeka checklist n’obukuumi, naye official search ne transaction tracking bikolebwa ku UgNLIS.',
+      'Byetaagisa nga tonnaggulawo UgNLIS:',
+      '- Title search: volume ne folio, oba county, block ne plot.',
+      '- Parcel search: county/municipality/town council, ne block oba road ne plot number.',
+      '- Transaction tracking: transaction number eri ku receipt ya MZO.',
+      '',
+      'Kozesa portal entongole eya gavumenti okufuna search result ne transaction status.',
       '',
       `Ebiragiro by'obukuumi bw'ettaka: ${baseUrl}/safety`,
       '',
       `Tandikira ku makaug: ${baseUrl}/#page-land`
     ],
     sw: [
-      'msaada wa makaug kwa uthibitishaji wa ardhi',
+      'Utafutaji rasmi wa ardhi kwenye UgNLIS',
       '',
       'Utafutaji rasmi wa hati ya ardhi ufanyike kwenye UgNLIS:',
       UGNLIS_PORTAL_URL,
       '',
       `Taarifa ya mtumiaji: baadhi ya wilaya zinaweza kutafutwa online kwa UGX ${UGNLIS_SEARCH_FEE_UGX.toLocaleString('en-UG')}.`,
       '',
-      'Hatua inayofuata: tuma eneo au wilaya, jina la plot/estate, ukubwa, bei, na maelezo yoyote ya title/tenure uliyonayo.',
-      'Kama una volume, folio, block, plot number, search letter, au UgNLIS transaction reference, itume hapa na makaug itahifadhi evidence kwenye listing.',
-      'makaug inaweza kusaidia maandalizi na safety checklist, lakini official search na transaction tracking lazima zibaki UgNLIS.',
+      'Kuwa na taarifa hizi kabla ya kufungua UgNLIS:',
+      '- Title search: volume na folio, au county, block na plot.',
+      '- Parcel search: county/municipality/town council, pamoja na block au road na plot number.',
+      '- Transaction tracking: transaction number kutoka risiti ya MZO.',
+      '',
+      'Tumia portal rasmi ya serikali kwa search result na transaction status.',
       '',
       `Mwongozo wa usalama wa ardhi: ${baseUrl}/safety`,
       '',
