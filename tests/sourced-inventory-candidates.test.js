@@ -21,6 +21,7 @@ const socialPlatformSweepScript = read('scripts/sweep-social-platform-posts.js')
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
 const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
+const socialOnlyPreapprovedCleanupMigration = read('db/migrations/051_enforce_social_only_preapproved_inventory.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -246,6 +247,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('public-image-src-fix-20260524'), 'index should bump the app asset version so production browsers fetch public image source fixes');
   assert(html.includes('found-online-admin-archive-20260524'), 'index should bump the app asset version so production browsers fetch the found-online admin archive view');
   assert(html.includes('live-review-separation-20260525'), 'index should bump the app asset version so production browsers fetch the live/review separation fix');
+  assert(html.includes('social-only-preapproved-20260525'), 'index should bump the app asset version so production browsers fetch the social-only preapproval cleanup');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('function adminFoundOnlineAllRows'), 'dashboard should keep a pending-only found-online helper for cached code paths');
   assert(!frontend.includes('approved/live source records stay visible here for audit'), 'Review Queue must not describe approved/live listings as still visible there');
@@ -426,7 +428,8 @@ test('found-online social search batch creates pending listings with agent profi
   const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
   assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public property records');
-  assert.strictEqual(summary.agents_count, 7, 'social search batch should prepare the seven permitted agent profiles');
+  assert.strictEqual(summary.agents_count, 4, 'social search batch should prepare profiles only for sources with multiple eligible properties');
+  assert.strictEqual(summary.source_profiles_deferred_count, 3, 'single-property sources should stay listing-only until a second property is live');
   assert.strictEqual(summary.daily_target_status.target, 200, 'morning sweep should expose the 200/day property queue target');
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
@@ -436,6 +439,7 @@ test('found-online social search batch creates pending listings with agent profi
   assert(/Facebook/i.test(FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule), 'launch intake should define how Facebook images are handled');
   assert(/No public phone number is not a blocker/i.test(summary.daily_target_status.no_phone_source_contact_policy), 'daily target status should explain social/source contact fallback');
   assert(/X\/Twitter, Instagram, TikTok, YouTube, Facebook/i.test(summary.daily_target_status.source_page_vs_property_policy), 'daily target status should separate monitored cross-platform sources from queued properties');
+  assert(/Website-only sources are ignored/i.test(summary.daily_target_status.evidence_policy), 'daily target status should block website-only sources');
   assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
   assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
@@ -469,7 +473,8 @@ test('found-online social search batch creates pending listings with agent profi
     }
     assert.strictEqual(extra.consent_confirmed, true);
     assert.strictEqual(extra.image_rights_confirmed, true);
-    assert.strictEqual(extra.image_rights_status, 'authorised_public_source_images_or_evidence');
+    assert.strictEqual(extra.preapproved_source_post, true);
+    assert.strictEqual(extra.image_rights_status, 'preapproved_social_source_media_or_evidence');
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
@@ -511,6 +516,9 @@ test('found-online second sweep migration expands source-backed 2026 records and
   assert(foundOnlineSecondSweepMigration.includes("'3.jpg'"), 'YouTube evidence should keep five frame URLs');
   assert(foundOnlineSecondSweepMigration.includes("'video_still_count', 5"), 'YouTube rows should be marked with five stills');
   assert(healthRoute.includes('045_expand_found_online_sweep_images_and_sources.sql'), 'migration health should expose the second sweep deployment status');
+  assert(socialOnlyPreapprovedCleanupMigration.includes('website_or_non_social_source_blocked'), 'cleanup should remove website/non-social found-online rows from launch inventory');
+  assert(socialOnlyPreapprovedCleanupMigration.includes('missing_preapproval_or_image_rights'), 'cleanup should remove rows without pre-approval and image-rights confirmation');
+  assert(socialOnlyPreapprovedCleanupMigration.includes("status = 'suspended'"), 'cleanup should hide source-created agent profiles until they have multiple live listings');
 });
 
 test('launch intake policy accepts no-phone source contact and non-YouTube evidence cards', () => {
@@ -526,6 +534,10 @@ test('launch intake policy accepts no-phone source contact and non-YouTube evide
     address: 'Makerere, Kampala',
     price: 450000,
     listingType: 'students',
+    pre_approved: true,
+    consent_confirmed: true,
+    image_rights_confirmed: true,
+    permission_status: 'agent_preapproved',
   };
   const sourceOnlyAgent = {
     key: 'facebook-source-only',
@@ -554,11 +566,15 @@ test('found-online source-post importer normalizes extracted posts for King revi
     price_text: 'USh 350m',
     first_posted_at: '2026-02-10T09:00:00.000Z',
     source_contact_url: 'https://www.facebook.com/example',
+    pre_approved: true,
+    consent_confirmed: true,
+    image_rights_confirmed: true,
+    permission_status: 'agent_preapproved',
   });
   const intake = sourcePostMeetsLaunchIntakeRule(imported, imported.sourceAgent);
   assert.strictEqual(imported.sourceBatch, FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID, 'imported posts should use the source-post import batch');
   assert.strictEqual(imported.price, 350000000, 'importer should parse Uganda shorthand prices');
-  assert.strictEqual(intake.eligible, true, 'imported no-phone posts with public source contact should be queueable');
+  assert.strictEqual(intake.eligible, true, 'imported pre-approved no-phone posts with public source contact should be queueable');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
@@ -573,12 +589,16 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
     district: 'Wakiso',
     price_text: 'USh 450m',
     listing_type: 'sale',
+    pre_approved: true,
+    consent_confirmed: true,
+    image_rights_confirmed: true,
+    permission_status: 'agent_preapproved',
   });
   const intake = sourcePostMeetsLaunchIntakeRule(imported, imported.sourceAgent);
   assert.strictEqual(imported.sourcePlatform, 'TikTok', 'TikTok post imports should keep the platform');
   assert.strictEqual(imported.sourceAgent.tiktokUrl, 'https://www.tiktok.com/@realtor_mahad/video/7330000000000000000', 'exact TikTok URL should be usable as contact/source path');
   assert.strictEqual(intake.date_status, 'needs_source_platform_date_confirmation', 'missing TikTok post dates should stay visible as confirmation-needed');
-  assert.strictEqual(intake.eligible, true, 'exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
+  assert.strictEqual(intake.eligible, true, 'pre-approved exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
   assert.strictEqual(sourceImageRowsFor(imported).length, 0, 'TikTok posts without direct media URLs should not pretend to have copied images');
   assert(socialSearchServiceSource.includes('sourceEvidenceCardDataUrl'), 'TikTok no-image imports should fall back to a labelled makaug evidence card');
 
@@ -588,6 +608,10 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
       'title: 4 bed house for sale in Kira, Wakiso',
       'price: USh 650M',
       'posted: 2026-05-20',
+      'pre_approved: true',
+      'consent_confirmed: true',
+      'image_rights_confirmed: true',
+      'permission_status: agent_preapproved',
     ].join('\n'),
     oembedByUrl: {
       'https://www.tiktok.com/@agentug/video/7330000000000000001': {
@@ -607,6 +631,8 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(exactRows[0].area, 'Kira');
   assert.strictEqual(exactRows[0].district, 'Wakiso');
   assert.strictEqual(exactRows[0].price_text, 'USh 650M');
+  assert.strictEqual(exactRows[0].pre_approved, 'true');
+  assert.strictEqual(exactRows[0].image_rights_confirmed, 'true');
   assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
 });
 
@@ -691,6 +717,8 @@ test('found-online social search admin path and share cards are protected and au
   assert(adminRoute.includes('admin_found_online_source_posts_imported'), 'admin source-post import should be audited');
   assert.strictEqual(pkg.scripts['inventory:import-source-posts'], 'node scripts/import-found-online-source-posts.js', 'package should expose the source-post import command');
   assert(read('scripts/import-found-online-source-posts.js').includes('--input posts.csv --confirm'), 'source-post import script should accept CSV/JSON files');
+  assert(read('scripts/import-found-online-source-posts.js').includes('pre_approved, consent_confirmed, image_rights_confirmed'), 'source-post import script should require preapproval and rights fields');
+  assert(read('scripts/import-found-online-source-posts.js').includes('createProfilesForRepeatedSourcesOnly: true'), 'source-post import script should defer one-off source profiles');
   assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete evidence sources instead of crashing the whole batch');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
@@ -707,7 +735,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_page_vs_property_policy'), 'daily found-online sweeps should explain source pages versus queued properties');
   assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePostMeetsLaunchIntakeRule'), 'daily found-online sweeps should gate property posts through the 2026+ found-online intake rule');
-  assert(read('services/socialSearchSourcedListingsService.js').includes('PUBLIC_SOURCE_CONTACT_POLICY'), 'daily found-online sweeps should treat public source/contact pages as contact routes');
+  assert(read('services/socialSearchSourcedListingsService.js').includes('PUBLIC_SOURCE_CONTACT_POLICY'), 'daily found-online sweeps should treat public social pages as contact routes');
   assert(read('services/socialSearchSourcedListingsService.js').includes('facebook_image_policy'), 'daily found-online sweeps should explain Facebook image handling');
   assert(frontend.includes('async function adminSeedSocialSearchAuthorisedListings'), 'dashboard should implement found-online seed action');
   assert(frontend.includes('async function adminImportFoundOnlineSourcePosts'), 'dashboard should implement source-post import action');
@@ -715,11 +743,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('Import Source Posts'), 'dashboard should expose source-post import action');
   assert(frontend.includes('already live/approved records were hidden from this pending panel'), 'dashboard should hide approved/live records from pending moderation status cards');
   assert(frontend.includes('adminSourceReviewRecordSummaryHtml'), 'dashboard should render source-review records with source/contact links');
-  assert(frontend.includes('A public social/source profile counts as the contact path when no phone is published'), 'dashboard should make no-phone social contact acceptable');
+  assert(frontend.includes('Website-only sources are ignored'), 'dashboard should explain website-only sources are blocked');
   assert(frontend.includes('source pages/feeds are parked for source review, not hidden properties'), 'dashboard should clarify source-review records are not pending properties');
   assert(frontend.includes('from 1 January 2026 onward'), 'dashboard should communicate the found-online source window');
-  assert(frontend.includes('No phone number is not a blocker if a social/source profile exists'), 'dashboard should explain source-review no-phone policy');
-  assert(frontend.includes('A page without a phone can still be usable'), 'source database should explain public social/source URLs can be contact paths');
+  assert(frontend.includes('No phone number is not a blocker if a public social profile exists'), 'dashboard should explain source-review no-phone policy');
+  assert(frontend.includes('Website-only sources are disabled'), 'source database should explain website sources are not imported as properties');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');
   assert(frontend.includes('Land image rule'), 'dashboard should explain the land-image fallback strategy');
   assert(frontend.includes('Morning sweep target'), 'dashboard should show the daily evidence-ready target/gap after a sweep');
@@ -735,9 +763,9 @@ test('found-online social search admin path and share cards are protected and au
   assert(card.includes('Call/WhatsApp'), 'share card should include contact wording when a phone exists');
 });
 
-test('found-online launch inventory is published publicly with disclosure guardrails', () => {
+test('found-online public-launch migration is superseded by social-only preapproval cleanup', () => {
   assert(foundOnlinePublicLaunchMigration.includes('found_online_public_launch_20260524'), 'public launch migration should carry a traceable batch id');
-  assert(foundOnlinePublicLaunchMigration.includes("status = 'approved'"), 'found-online launch rows should become public approved listings');
+  assert(foundOnlinePublicLaunchMigration.includes("status = 'approved'"), 'legacy launch migration should remain traceable');
   assert(foundOnlinePublicLaunchMigration.includes("source = 'found_online_property_source_v1'"), 'public launch migration should only target found-online source rows');
   assert(foundOnlinePublicLaunchMigration.includes("extra_fields->>'source_url'"), 'public launch migration should require source URL evidence');
   assert(foundOnlinePublicLaunchMigration.includes('price IS NOT NULL'), 'public launch migration should require price evidence');
@@ -746,7 +774,10 @@ test('found-online launch inventory is published publicly with disclosure guardr
   assert(foundOnlinePublicLaunchMigration.includes('ownership_verification_status'), 'public launch migration should not pretend ownership is fully verified');
   assert(foundOnlinePublicLaunchMigration.includes('source_rights_status'), 'public launch migration should keep media/source rights review metadata');
   assert(foundOnlinePublicLaunchMigration.includes('found_online_public_launch_published'), 'public launch migration should log moderation events');
+  assert(socialOnlyPreapprovedCleanupMigration.includes("status = 'deleted'"), 'social-only cleanup should remove unapproved found-online rows from public inventory');
+  assert(socialOnlyPreapprovedCleanupMigration.includes('preapproval_required_for_reimport'), 'cleanup should require preapproval before any reimport');
   assert(healthRoute.includes('050_publish_found_online_launch_inventory.sql'), 'migration health should expose found-online public launch migration');
+  assert(healthRoute.includes('051_enforce_social_only_preapproved_inventory.sql'), 'migration health should expose social-only cleanup migration');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {

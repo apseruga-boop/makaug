@@ -1827,7 +1827,7 @@ const CONTENT_I18N = {
     "about.searchEngineTitle": "How makaug finds property information",
     "about.searchEngineText": "makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through King review before it can appear as a trusted live listing.",
     "about.searchSourceTitle": "Source visibility",
-    "about.searchSourceText": "Found-online listings show when makaug first found them, where the source came from, and whether the source is an agent channel, website, marketplace, or social feed.",
+    "about.searchSourceText": "Found-online listings show when makaug first found them, the social source they came from, and the route buyers can use to check the original post.",
     "about.searchReviewTitle": "Human review",
     "about.searchReviewText": "Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
     "about.searchRemovalTitle": "Claim or remove",
@@ -1925,7 +1925,7 @@ const CONTENT_I18N = {
     "about.searchEngineTitle": "Engeri makaug gy'ezulamu amawulire ga property",
     "about.searchEngineText": "makaug efuuka search engine ya property mu Uganda. Tugatta listings okuva eri owners ne brokers n'ensibuko za online ezikeberebwa oba ezikkiriziddwa, ne tuziyisa mu King review nga tezinnaba listings eziri live.",
     "about.searchSourceTitle": "Ensibuko eragibwa",
-    "about.searchSourceText": "Listings ezizuuliddwa online ziraga ddi makaug lwe yazisooka okulaba, ensibuko gy'ezivudde, n'obanga ziva ku agent channel, website, marketplace, oba social feed.",
+    "about.searchSourceText": "Listings ezizuuliddwa online ziraga ddi makaug lwe yazisooka okulaba, social source gy'ezivudde, n'ekkubo abantu lye bayitamu okukakasa post eyasooka.",
     "about.searchReviewTitle": "Okukebera kw'omuntu",
     "about.searchReviewText": "Awo data eva mu source teteekebwa live butereevu. King dashboard ekebera location, photos, contact details, duplicates, ownership signals, n'okukkiriza kwa agent nga approval tennaba.",
     "about.searchRemovalTitle": "Claim oba remove",
@@ -2023,7 +2023,7 @@ const CONTENT_I18N = {
     "about.searchEngineTitle": "Jinsi makaug hupata taarifa za mali",
     "about.searchEngineText": "makaug inakuwa search engine ya mali Uganda. Tunachanganya listings kutoka kwa wamiliki na brokers pamoja na vyanzo vya mtandaoni vilivyopitiwa au kuidhinishwa, kisha kila candidate hupitia King review kabla ya kuwa live.",
     "about.searchSourceTitle": "Chanzo kinaonekana",
-    "about.searchSourceText": "Listings zilizopatikana mtandaoni zinaonyesha lini makaug iliziona kwanza, chanzo kilikotoka, na kama ni agent channel, website, marketplace, au social feed.",
+    "about.searchSourceText": "Listings zilizopatikana mtandaoni zinaonyesha lini makaug iliziona kwanza, chanzo cha kijamii kilikotoka, na njia ya kukagua chapisho la awali.",
     "about.searchReviewTitle": "Ukaguzi wa mtu",
     "about.searchReviewText": "Data ya source haiwekwi live bila ukaguzi. King dashboard hukagua location, photos, contact details, duplicates, ownership signals, na ruhusa ya agent kabla ya approval.",
     "about.searchRemovalTitle": "Claim au remove",
@@ -9362,7 +9362,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed source pages/feeds and queue every eligible found-online property candidate from 1 January 2026 onward. Phone is optional when the public source page/profile is the contact route. There is no cap.");
+  const ok = window.confirm("Scan reviewed social source pages/feeds and queue only pre-approved found-online property candidates from 1 January 2026 onward. Website-only sources are ignored. Profiles are created only after multiple eligible properties.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9372,7 +9372,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Checking reviewed source pages/feeds and queuing every eligible 2026+ found-online property candidate now...";
+    statusEl.innerHTML = "Checking reviewed social source pages/feeds and queuing only pre-approved 2026+ found-online property candidates now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9435,7 +9435,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
-        <div class="mt-1">The 30,000 source database is pages, channels, accounts, hashtag searches, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. The Review Queue receives every actual property post/listing from 1 January 2026 onward once it has source evidence, any contact route, location/area, price or guide price, and usable images or source-image evidence. A public social/source profile counts as the contact path when no phone is published, and there is no cap on eligible records.</div>
+        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives only pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, price or guide price, image-rights confirmation, and usable images or source evidence are present.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
@@ -9447,7 +9447,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a social/source profile exists; these records stay parked only when they still need a specific 2026+ property post, source URL, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a public social profile exists, but website-only sources are blocked. Records stay parked when they still need a specific 2026+ social property post, source URL, pre-approval, image-rights confirmation, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9518,7 +9518,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. Individual posts are stored on found-online property records after King finds a specific 2026+ listing with source URL, contact route, location/area, price or guide price, and usable image/source evidence. A page without a phone can still be usable if its social/source URL is public; it only parks for review when no specific property post is matched yet.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, pre-approval, image-rights confirmation, location/area, price or guide price, and usable image/source evidence.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
       </div>
@@ -9605,7 +9605,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: every specific public post from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and any public contact route is queued. No phone number is not a blocker when the source page/profile is public, and there is no cap on eligible records.</div>
+        <div class="mt-1">Import rule: only pre-approved public social posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, image-rights confirmation, and a public social/direct contact route are queued. Website-only sources are ignored. Profiles are created only when the source has multiple eligible properties.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }

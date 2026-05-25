@@ -7,7 +7,7 @@ const X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000;
 const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000;
 const SOURCE_FRESHNESS_WINDOW_DAYS = 366;
 const TARGET_SOURCE_YEAR = 2026;
-const SOCIAL_FIRST_PLATFORM_PRIORITY = ['tiktok', 'facebook', 'youtube', 'x', 'instagram', 'website'];
+const SOCIAL_FIRST_PLATFORM_PRIORITY = ['tiktok', 'facebook', 'youtube', 'x', 'instagram'];
 const SOCIAL_PROFILE_CREATION_RULE = 'Create or update a makaug source/broker profile only when the source shows repeated property activity, plural inventory, or cross-platform presence. A single isolated property post stays as a found-online listing without a profile.';
 const SOCIAL_ONE_OFF_LISTING_RULE = 'One-off social posts can become found-online listings when evidence is complete, but do not create a profile until repeated inventory or multi-platform presence is observed.';
 
@@ -185,13 +185,13 @@ function source({
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
       target_property_window: 'Scan public property posts, videos, reels, shorts, and listings first published from 1 January 2026 through today, with priority on the newest posts.',
-      listing_candidate_rule: 'Create a King review found-online property record for every specific 2026+ public post/listing with source URL, location/area, price or guide price, usable image/source evidence, and any contact path. A public source/social page is a contact path when no phone is published.',
+      listing_candidate_rule: 'Create a King review found-online property record only for pre-approved 2026+ public social posts with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path. Website-only sources stay out of property inventory.',
       platform_priority_order: SOCIAL_FIRST_PLATFORM_PRIORITY,
-      platform_priority_rule: 'Prioritise TikTok, Facebook, YouTube, X/Twitter, and Instagram before website/portal confirmation sources.',
+      platform_priority_rule: 'Use TikTok, Facebook, YouTube, X/Twitter, and Instagram only for found-online launch inventory. Website/portal sources are disabled.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
       source_use: 'Find public property posts, prepare candidates for King review, attribute source, and request owner/agent confirmation before public approval.',
-      image_quality_rule: 'Use direct public listing photos, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not repeat fuzzy frames, invent room labels, or bypass private platform restrictions.',
+      image_quality_rule: 'Use social-platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide only when the source/agent has pre-approved media use. Do not copy website/portal photos, repeat fuzzy frames, invent room labels, or bypass private platform restrictions.',
       ...metadata,
     },
   };
@@ -1245,7 +1245,7 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
       target_property_window: 'Prioritise specific posts, videos, reels, shorts, or listings first published or refreshed from 2026 onward, especially the newest available posts.',
       review_goal: 'Find active public agents, pages, posts, or videos; capture contact details only when publicly listed.',
       image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
-      platform_priority_rule: 'Use social channels before website/portal confirmation sources.',
+      platform_priority_rule: 'Use social channels only; website/portal sources are disabled for found-online launch inventory.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
       expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, price/location, and usable images are clear. Create a source/broker profile only after repeated inventory or cross-platform presence is visible.',
@@ -1301,7 +1301,7 @@ function hashtagDiscoverySource({ platform, tag, area, district, intent, index }
       target_property_window: 'Prioritise hashtag results from 2026 onward, especially the newest available posts.',
       platform_aliases: platform === 'x' ? ['twitter', 'x'] : undefined,
       image_quality_rule: 'Promote only clear, differentiated source images or video stills; avoid duplicate or fuzzy frames.',
-      platform_priority_rule: 'Use social channels before website/portal confirmation sources.',
+      platform_priority_rule: 'Use social channels only; website/portal sources are disabled for found-online launch inventory.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
       expected_action: 'Queue a property when a specific recent listing has enough evidence; promote a source profile only after repeated inventory or cross-platform presence is visible.',
@@ -1385,7 +1385,12 @@ function expandedHashtagDiscoverySources(platforms = ['x', 'instagram', 'faceboo
 
 let propertySourceRegistryCache = null;
 
+function socialSourceRegistryRows(rows = []) {
+  return rows.filter((item) => SOCIAL_FIRST_PLATFORM_PRIORITY.includes(String(item.platform || '').toLowerCase()));
+}
+
 function buildPropertySourceRegistry() {
+  const socialBaseRegistry = socialSourceRegistryRows(BASE_PROPERTY_SOURCE_REGISTRY);
   const generatedXHashtagDiscoverySources = expandedHashtagDiscoverySources(
     ['x'],
     X_HASHTAG_DISCOVERY_TARGET_COUNT
@@ -1397,14 +1402,14 @@ function buildPropertySourceRegistry() {
   const discoverySourceTargetCount = Math.max(
     0,
     PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
-      - BASE_PROPERTY_SOURCE_REGISTRY.length
+      - socialBaseRegistry.length
       - generatedXHashtagDiscoverySources.length
       - generatedCrossPlatformHashtagDiscoverySources.length
   );
   const generatedDiscoverySources = expandedDiscoverySources(discoverySourceTargetCount);
 
   return [
-    ...BASE_PROPERTY_SOURCE_REGISTRY,
+    ...socialBaseRegistry,
     ...generatedXHashtagDiscoverySources,
     ...generatedCrossPlatformHashtagDiscoverySources,
     ...generatedDiscoverySources,

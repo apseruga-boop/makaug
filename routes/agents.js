@@ -52,6 +52,7 @@ const KNOWN_AGENT_SOCIAL_LINKS = [
   { licence: 'SOCIAL-KINGMAKER-PROPERTIES-UGANDA-20260524', facebook: 'https://www.facebook.com/KingMakerPropertiesUganda/', website: 'https://www.kingmakerproperties.co.ug/' },
 ];
 const PUBLIC_AGENT_SUPPRESSED_MARKERS = ['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'];
+const PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2;
 
 function sqlLiteral(value = '') {
   return String(value).replace(/'/g, "''");
@@ -103,6 +104,15 @@ function addPublicAgentLaunchTestFilter(filters, values) {
   filters.push("COALESCE(a.email, '') !~* '(qa-test|makaug\\.invalid|dummy|sample)'");
   filters.push("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'");
   filters.push("COALESCE(a.specializations::text, '') !~* '(qa test delete|soft launch test|dummy|sample)'");
+}
+
+function addPublicAgentInventoryFilter(filters) {
+  filters.push(`(
+    SELECT COUNT(*)::int
+    FROM properties p
+    WHERE p.agent_id = a.id
+      AND p.status = 'approved'
+  ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}`);
 }
 
 function verifyListingSubmitToken(token) {
@@ -412,6 +422,7 @@ router.get('/', async (req, res, next) => {
       filters.push(`a.status = $${values.length}`);
     }
     addPublicAgentLaunchTestFilter(filters, values);
+    addPublicAgentInventoryFilter(filters);
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
@@ -486,6 +497,13 @@ router.get('/:id', async (req, res, next) => {
         WHERE p.agent_id = a.id AND p.status = 'approved'
       ) p ON true
       WHERE a.id = $1
+        AND a.status = 'approved'
+        AND (
+          SELECT COUNT(*)::int
+          FROM properties live_profile_listing
+          WHERE live_profile_listing.agent_id = a.id
+            AND live_profile_listing.status = 'approved'
+        ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}
         AND COALESCE(a.full_name, '') NOT ILIKE '%QA TEST - DELETE%'
         AND COALESCE(a.full_name, '') NOT ILIKE '%SOFT LAUNCH TEST - DELETE%'
         AND COALESCE(a.company_name, '') NOT ILIKE '%QA TEST - DELETE%'
