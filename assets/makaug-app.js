@@ -9118,6 +9118,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-seed-carnelian-listings-btn")
     && document.getElementById("admin-seed-social-search-listings-btn")
     && document.getElementById("admin-sweep-tiktok-posts-btn")
+    && document.getElementById("admin-import-tiktok-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
@@ -9137,6 +9138,9 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-tiktok-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
+  }
+  if (!document.getElementById("admin-import-tiktok-posts-btn")) {
+    missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
@@ -9623,6 +9627,84 @@ async function adminImportFoundOnlineSourcePosts() {
   }
 }
 
+function adminTikTokExactImportPrompt(seedText = "") {
+  return [
+    "Paste exact TikTok video URLs. One URL per block is best.",
+    "",
+    "Optional details help King queue the listing immediately:",
+    "https://www.tiktok.com/@handle/video/1234567890123456789",
+    "title: 4 bed house for sale in Kira",
+    "location: Kira, Wakiso",
+    "price: USh 650M",
+    "posted: 2026-05-20",
+    "images: https://example.com/still1.jpg, https://example.com/still2.jpg",
+    "",
+    "You can also paste rows like:",
+    "https://www.tiktok.com/@handle/video/123 | 4 bed house for sale | Kira | USh 650M",
+    seedText ? `\n${seedText}` : ""
+  ].join("\n");
+}
+
+async function adminImportTikTokExactPosts(seedText = "") {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const raw = window.prompt(adminTikTokExactImportPrompt(seedText), seedText || "");
+  if (!raw) return;
+  const statusEl = document.getElementById("admin-found-online-status");
+  const button = document.getElementById("admin-import-tiktok-posts-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Importing exact TikTok videos into Found Online review...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/tiktok-source-posts/import", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        raw_text: raw,
+        dry_run: false,
+        fetch_oembed: true
+      }
+    });
+    const data = response?.data || {};
+    const importResult = data.import_result || data;
+    const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+    const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">TikTok exact videos imported</div>
+        <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} already existed. ${adminEscape(sourceReview.length)} need more source details.</div>
+        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online listings when the caption/details include location or area, price or guide price, and a public contact route. If TikTok oEmbed provides a public thumbnail/title, King stores it as source evidence.</div>
+        ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
+        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, price, or source evidence, then import again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+    }
+    toast("TikTok exact-video import finished.");
+    if (importResult.created_properties || importResult.existing_properties) {
+      adminPendingQueueFilter = "found_online";
+      await renderAdminDashboard();
+      setAdminWorkflowTab("review");
+      adminScrollTo("#admin-review-queue-control");
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `TikTok exact-video import failed: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`TikTok import failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
   const x = data.x || {};
@@ -9638,7 +9720,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="text-[11px] text-pink-800 mt-0.5">${adminEscape(task.source_record_kind || "source")} • exact video URL required before a property is queued</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
-        <button type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-2 py-1 rounded text-[11px] font-bold">Import Exact Posts</button>
+        <button type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
       </div>
     </div>`).join("");
   const xJobHtml = xJobs.slice(0, 10).map((job) => `

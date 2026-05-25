@@ -18,7 +18,9 @@ const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
 const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
+const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
+const TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN = /https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+(?:[^\s]*)?/ig;
 
 const CORE_PROPERTY_QUERY = [
   'property', 'house', 'home', 'apartment', 'land', 'plot', 'rent', 'rental',
@@ -99,6 +101,277 @@ function sourceHashtag(source = {}) {
   const tagMatch = url.match(/tiktok\.com\/tag\/([^/?#]+)/i);
   if (tagMatch) return decodeURIComponent(tagMatch[1]);
   return cleanText(tags[0] || '').replace(/^#/, '');
+}
+
+function normalizeTikTokVideoUrl(value = '') {
+  const raw = cleanText(value).replace(/[),.;]+$/g, '');
+  if (!raw) return '';
+  const httpsUrl = raw.replace(/^http:\/\//i, 'https://');
+  return TIKTOK_EXACT_VIDEO_URL_PATTERN.test(httpsUrl) ? httpsUrl : '';
+}
+
+function extractTikTokVideoUrls(text = '') {
+  const matches = String(text || '').match(TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN) || [];
+  return [...new Set(matches.map(normalizeTikTokVideoUrl).filter(Boolean))];
+}
+
+function tiktokHandleFromUrl(url = '') {
+  const match = cleanText(url).match(/tiktok\.com\/@([^/?#]+)/i);
+  return match ? match[1] : '';
+}
+
+function tiktokProfileUrlFromVideoUrl(url = '') {
+  const handle = tiktokHandleFromUrl(url);
+  return handle ? `https://www.tiktok.com/@${handle}` : '';
+}
+
+function fieldKey(value = '') {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function parseDelimitedTikTokLine(line = '') {
+  const url = extractTikTokVideoUrls(line)[0] || '';
+  if (!url || !line.includes('|')) return null;
+  const parts = line.split('|').map((part) => cleanText(part)).filter(Boolean);
+  const withoutUrl = parts.filter((part) => !extractTikTokVideoUrls(part).length);
+  return {
+    post_url: url,
+    title: withoutUrl[0] || '',
+    area: withoutUrl[1] || '',
+    price_text: withoutUrl[2] || '',
+    first_posted_at: withoutUrl[3] || '',
+    caption: withoutUrl.join(' '),
+  };
+}
+
+function parseTikTokFields(block = '') {
+  const fields = {};
+  const freeText = [];
+  for (const rawLine of String(block || '').split(/\r?\n/)) {
+    const line = cleanText(rawLine);
+    if (!line) continue;
+    const fieldMatch = line.match(/^([a-zA-Z][a-zA-Z _-]{1,32})\s*:\s*(.+)$/);
+    if (fieldMatch) {
+      const key = fieldKey(fieldMatch[1]);
+      const value = cleanText(fieldMatch[2]);
+      if (key) fields[key] = value;
+      continue;
+    }
+    if (!extractTikTokVideoUrls(line).length) freeText.push(line);
+  }
+  if (freeText.length && !fields.caption && !fields.description) {
+    fields.caption = freeText.join(' ');
+  }
+  return fields;
+}
+
+function normalizeParsedTikTokFields(fields = {}) {
+  return {
+    title: fields.title || fields.property || fields.listing || '',
+    caption: fields.caption || fields.description || fields.notes || '',
+    area: fields.area || fields.location || fields.neighbourhood || fields.neighborhood || '',
+    district: fields.district || fields.city || '',
+    price_text: fields.price || fields.price_text || fields.guide_price || '',
+    listing_type: fields.type || fields.listing_type || fields.category || '',
+    bedrooms: fields.bedrooms || fields.beds || '',
+    bathrooms: fields.bathrooms || fields.baths || '',
+    first_posted_at: fields.posted || fields.posted_at || fields.date || fields.first_posted_at || fields.published_at || '',
+    source_name: fields.source || fields.source_name || fields.agent || fields.account || '',
+    source_page_url: fields.profile || fields.source_page_url || fields.source_contact_url || fields.contact_url || '',
+    source_contact_url: fields.contact || fields.source_contact_url || fields.profile || '',
+    contact_phone: fields.phone || fields.contact_phone || fields.whatsapp || '',
+    contact_email: fields.email || fields.contact_email || '',
+    image_urls: fields.images || fields.image_urls || fields.photos || fields.media_urls || '',
+  };
+}
+
+function tikTokSeedsFromText(rawText = '') {
+  const blocks = String(rawText || '')
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const seeds = [];
+  for (const block of blocks.length ? blocks : [String(rawText || '')]) {
+    const delimited = block.split(/\r?\n/).map(parseDelimitedTikTokLine).filter(Boolean);
+    if (delimited.length) {
+      seeds.push(...delimited);
+      continue;
+    }
+    const urls = extractTikTokVideoUrls(block);
+    if (!urls.length) continue;
+    const fields = normalizeParsedTikTokFields(parseTikTokFields(block));
+    for (const url of urls) {
+      seeds.push({ ...fields, post_url: url });
+    }
+  }
+  return seeds;
+}
+
+function tikTokSeedsFromInputs({ posts = [], urls = [], rawText = '' } = {}) {
+  const postSeeds = (Array.isArray(posts) ? posts : [])
+    .map((post) => (typeof post === 'string' ? { post_url: post } : post))
+    .filter(Boolean);
+  const urlSeeds = (Array.isArray(urls) ? urls : [])
+    .map((url) => ({ post_url: url }));
+  const textSeeds = tikTokSeedsFromText(rawText);
+  return [...postSeeds, ...urlSeeds, ...textSeeds]
+    .map((seed) => ({
+      ...seed,
+      post_url: normalizeTikTokVideoUrl(seed.post_url || seed.source_url || seed.url),
+    }))
+    .filter((seed) => seed.post_url);
+}
+
+function normalizeTikTokOEmbed(payload = {}) {
+  return {
+    title: cleanText(payload.title || ''),
+    author_name: cleanText(payload.author_name || ''),
+    author_url: cleanText(payload.author_url || ''),
+    thumbnail_url: cleanText(payload.thumbnail_url || ''),
+    provider_name: cleanText(payload.provider_name || 'TikTok'),
+  };
+}
+
+async function fetchTikTokOEmbed(url = '', { fetchImpl = fetch } = {}) {
+  const exactUrl = normalizeTikTokVideoUrl(url);
+  if (!exactUrl) return { ok: false, skipped: true, reason: 'missing_exact_tiktok_video_url' };
+  const endpoint = new URL(TIKTOK_OEMBED_URL);
+  endpoint.searchParams.set('url', exactUrl);
+  const response = await fetchImpl(endpoint, {
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      reason: payload?.message || payload?.error || 'tiktok_oembed_failed',
+      payload,
+    };
+  }
+  return {
+    ok: true,
+    payload: normalizeTikTokOEmbed(payload),
+  };
+}
+
+function buildTikTokExactPostImportRows({
+  posts = [],
+  urls = [],
+  rawText = '',
+  oembedByUrl = {},
+} = {}) {
+  const seeds = tikTokSeedsFromInputs({ posts, urls, rawText });
+  const seen = new Set();
+  return seeds
+    .filter((seed) => {
+      if (seen.has(seed.post_url)) return false;
+      seen.add(seed.post_url);
+      return true;
+    })
+    .map((seed, index) => {
+      const oembed = normalizeTikTokOEmbed(oembedByUrl[seed.post_url] || {});
+      const sourceUrl = seed.post_url;
+      const profileUrl = seed.source_page_url || seed.source_contact_url || oembed.author_url || tiktokProfileUrlFromVideoUrl(sourceUrl);
+      const handle = tiktokHandleFromUrl(sourceUrl);
+      const sourceName = cleanText(seed.source_name || oembed.author_name || (handle ? `@${handle}` : 'TikTok property source'));
+      const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
+      const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
+      const combinedText = cleanText(`${title} ${caption}`);
+      const area = cleanText(seed.area || seed.location || extractArea(combinedText));
+      const district = cleanText(seed.district || districtForArea(area, combinedText));
+      const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
+      const imageUrls = [
+        ...String(seed.image_urls || seed.images || seed.photo_urls || seed.media_urls || '')
+          .split(/[\n,|]+/)
+          .map(cleanText)
+          .filter(Boolean),
+        oembed.thumbnail_url,
+      ].filter(Boolean);
+      return {
+        post_url: sourceUrl,
+        source_url: sourceUrl,
+        source_page_url: profileUrl,
+        source_contact_url: seed.source_contact_url || profileUrl || sourceUrl,
+        source_key: seed.source_key || handle || sourceUrl,
+        source_name: sourceName,
+        platform: 'TikTok',
+        tiktok_url: sourceUrl,
+        title,
+        caption,
+        description: caption || title,
+        area,
+        district,
+        location: area || district,
+        price_text: priceText,
+        listing_type: seed.listing_type || listingTypeFromText(combinedText),
+        bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
+        bathrooms: seed.bathrooms || '',
+        first_posted_at: seed.first_posted_at || seed.posted_at || seed.published_at || seed.source_published_at || '',
+        image_urls: imageUrls,
+        contact_phone: seed.contact_phone || seed.phone || seed.whatsapp || '',
+        contact_email: seed.contact_email || seed.email || '',
+        source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+        source_registry_key: seed.source_registry_key || '',
+        source_urls: [profileUrl, sourceUrl].filter(Boolean),
+        raw_source_post: {
+          ...seed,
+          oembed,
+          import_method: 'tiktok_exact_video_intake',
+        },
+      };
+    });
+}
+
+async function importTikTokExactVideoPosts({
+  db,
+  posts = [],
+  urls = [],
+  rawText = '',
+  dryRun = false,
+  fetchOembed = true,
+  fetchImpl = fetch,
+} = {}) {
+  const seeds = tikTokSeedsFromInputs({ posts, urls, rawText });
+  const oembedByUrl = {};
+  const oembedReports = [];
+  if (fetchOembed) {
+    for (const seed of seeds) {
+      if (oembedByUrl[seed.post_url]) continue;
+      const report = await fetchTikTokOEmbed(seed.post_url, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'tiktok_oembed_failed',
+      }));
+      oembedReports.push({
+        post_url: seed.post_url,
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+      });
+      if (report.ok && report.payload) oembedByUrl[seed.post_url] = report.payload;
+    }
+  }
+  const importRows = buildTikTokExactPostImportRows({
+    posts: seeds,
+    oembedByUrl,
+  });
+  const importResult = await queueFoundOnlineSourcePostListings({
+    db,
+    posts: importRows,
+    dryRun,
+    createProfilesForRepeatedSourcesOnly: true,
+  });
+  return {
+    ok: true,
+    batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+    dry_run: dryRun,
+    exact_video_url_count: importRows.length,
+    tiktok_import_rows: importRows,
+    oembed_fetch_count: oembedReports.length,
+    oembed_reports: oembedReports,
+    import_result: importResult,
+    ...importResult,
+  };
 }
 
 function isDiscoveryFeed(source = {}) {
@@ -476,9 +749,13 @@ module.exports = {
   MAX_PLATFORM_SWEEP_SOURCES,
   DEFAULT_X_RESULTS_PER_SOURCE,
   X_BEARER_ENV_NAMES,
+  TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
+  extractTikTokVideoUrls,
   buildTikTokCaptureTasks,
+  buildTikTokExactPostImportRows,
   buildXSearchJobs,
+  importTikTokExactVideoPosts,
   normalizeXApiPost,
   runSocialPlatformPostSweep,
 };

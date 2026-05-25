@@ -98,6 +98,7 @@ const {
 } = require('../services/propertySourceRegistryService');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  importTikTokExactVideoPosts,
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
 const { getProviderMeta } = require('../services/llmProvider');
@@ -2219,6 +2220,40 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       created_properties: result.import_result?.created_properties || 0,
       existing_properties: result.import_result?.existing_properties || 0,
       review_queue_properties: result.import_result?.review_queue_properties || 0,
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/tiktok-source-posts/import', async (req, res, next) => {
+  try {
+    const posts = Array.isArray(req.body?.posts)
+      ? req.body.posts
+      : (Array.isArray(req.body) ? req.body : []);
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const rawText = req.body?.raw_text || req.body?.rawText || req.body?.text || '';
+    const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
+    const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
+    const result = await importTikTokExactVideoPosts({
+      db,
+      posts,
+      urls,
+      rawText,
+      dryRun,
+      fetchOembed
+    });
+    await writeAudit('admin_tiktok_exact_posts_imported', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+      dry_run: dryRun,
+      exact_video_url_count: result.exact_video_url_count,
+      oembed_fetch_count: result.oembed_fetch_count,
+      created_properties: result.created_properties,
+      existing_properties: result.existing_properties,
+      review_queue_properties: result.review_queue_properties,
+      source_review_count: result.source_review_count,
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

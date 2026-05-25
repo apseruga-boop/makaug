@@ -58,8 +58,11 @@ const {
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   MAX_PLATFORM_SWEEP_SOURCES,
+  TIKTOK_OEMBED_URL,
   buildTikTokCaptureTasks,
+  buildTikTokExactPostImportRows,
   buildXSearchJobs,
+  extractTikTokVideoUrls,
   normalizeXApiPost,
 } = require('../services/socialPlatformPostDiscoveryService');
 
@@ -576,6 +579,33 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(intake.eligible, true, 'exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
   assert.strictEqual(sourceImageRowsFor(imported).length, 0, 'TikTok posts without direct media URLs should not pretend to have copied images');
   assert(socialSearchServiceSource.includes('sourceEvidenceCardDataUrl'), 'TikTok no-image imports should fall back to a labelled makaug evidence card');
+
+  const exactRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@agentug/video/7330000000000000001',
+      'title: 4 bed house for sale in Kira, Wakiso',
+      'price: USh 650M',
+      'posted: 2026-05-20',
+    ].join('\n'),
+    oembedByUrl: {
+      'https://www.tiktok.com/@agentug/video/7330000000000000001': {
+        title: '4 bed house for sale in Kira, Wakiso. USh 650M',
+        author_name: 'Agent UG',
+        author_url: 'https://www.tiktok.com/@agentug',
+        thumbnail_url: 'https://p16-sign-va.tiktokcdn.com/example.jpg',
+      },
+    },
+  });
+  assert.strictEqual(TIKTOK_OEMBED_URL, 'https://www.tiktok.com/oembed');
+  assert.deepStrictEqual(extractTikTokVideoUrls('Watch https://www.tiktok.com/@agentug/video/7330000000000000001 now'), ['https://www.tiktok.com/@agentug/video/7330000000000000001']);
+  assert.strictEqual(exactRows.length, 1, 'exact TikTok importer should turn pasted video URLs into import rows');
+  assert.strictEqual(exactRows[0].source_url, 'https://www.tiktok.com/@agentug/video/7330000000000000001');
+  assert.strictEqual(exactRows[0].source_page_url, 'https://www.tiktok.com/@agentug');
+  assert.strictEqual(exactRows[0].source_name, 'Agent UG');
+  assert.strictEqual(exactRows[0].area, 'Kira');
+  assert.strictEqual(exactRows[0].district, 'Wakiso');
+  assert.strictEqual(exactRows[0].price_text, 'USh 650M');
+  assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
 });
 
 test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {
@@ -585,9 +615,13 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
   assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
+  assert(adminRoute.includes("router.post('/tiktok-source-posts/import'"), 'admin should expose a protected exact TikTok post import endpoint');
+  assert(adminRoute.includes('admin_tiktok_exact_posts_imported'), 'exact TikTok post imports should write an audit event');
   assert(adminRoute.includes('admin_social_platform_posts_sweep'), 'social platform sweeps should write an audit event');
   assert(frontend.includes('adminSweepSocialPlatformPosts'), 'King dashboard should expose social platform sweep controls');
+  assert(frontend.includes('adminImportTikTokExactPosts'), 'King dashboard should expose exact TikTok video import controls');
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
+  assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
