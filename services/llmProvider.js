@@ -1,5 +1,3 @@
-const OpenAI = require('openai');
-
 const PROVIDERS = {
   OPENAI: 'openai',
   OPENAI_COMPAT: 'openai_compat',
@@ -9,6 +7,14 @@ const PROVIDERS = {
 
 let cachedSignature = '';
 let cachedClient = null;
+let cachedOpenAI = null;
+
+function loadOpenAI() {
+  if (!cachedOpenAI) {
+    cachedOpenAI = require('openai');
+  }
+  return cachedOpenAI;
+}
 
 function normalizeProviderName(value) {
   const raw = String(value || '').trim().toLowerCase();
@@ -100,6 +106,7 @@ function getProviderClient() {
     return null;
   }
 
+  const OpenAI = loadOpenAI();
   cachedClient = new OpenAI(options);
   cachedSignature = signature;
   return cachedClient;
@@ -130,6 +137,7 @@ function getProviderMeta() {
 }
 
 async function toProviderFile(buffer, fileName, options = {}) {
+  const OpenAI = loadOpenAI();
   return OpenAI.toFile(buffer, fileName, options);
 }
 

@@ -1,12 +1,111 @@
 #!/usr/bin/env node
-require('dotenv').config();
-
+const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const path = require('path');
 const crypto = require('crypto');
 const dns = require('dns');
-const { chromium } = require('playwright-core');
+
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+
+try {
+  process.chdir(PROJECT_ROOT);
+} catch (error) {
+  // eslint-disable-next-line no-console
+  console.error(new Date().toISOString(), '[whatsapp-web-copilot]', `failed to enter project root: ${error.message}`);
+}
+
+function sleepSync(ms) {
+  const buffer = new SharedArrayBuffer(4);
+  const view = new Int32Array(buffer);
+  Atomics.wait(view, 0, 0, ms);
+}
+
+function readTextFileWithRetry(filePath, label, attempts = 8) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      if (error?.code === 'ENOENT') return null;
+      const message = String(error?.message || error || '');
+      const retryable = error?.code === 'EAGAIN'
+        || error?.errno === -11
+        || message.includes('Unknown system error -11');
+      if (!retryable || attempt >= attempts) {
+        console.error(new Date().toISOString(), '[whatsapp-web-copilot]', `failed to read ${label}: ${message}`);
+        return null;
+      }
+      sleepSync(Math.min(2000, 250 * attempt));
+    }
+  }
+  return null;
+}
+
+function loadProjectEnv() {
+  const candidates = [
+    String(process.env.MAKAUG_WHATSAPP_ENV_FILE || '').trim(),
+    '/private/tmp/makaug-whatsapp.env',
+    path.join(PROJECT_ROOT, '.env')
+  ].filter(Boolean);
+  let source = '';
+  for (const envPath of candidates) {
+    source = readTextFileWithRetry(envPath, envPath);
+    if (source) break;
+  }
+  if (!source) return;
+
+  for (const line of source.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const equals = trimmed.indexOf('=');
+    if (equals <= 0) continue;
+    const key = trimmed.slice(0, equals).trim();
+    let value = trimmed.slice(equals + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] == null) process.env[key] = value;
+  }
+}
+
+loadProjectEnv();
+
+function requireWithReadRetry(moduleName, attempts = 30) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return require(moduleName);
+    } catch (error) {
+      const message = String(error?.message || error || '');
+      const retryable = error?.code === 'EAGAIN'
+        || error?.errno === -11
+        || message.includes('Unknown system error -11');
+      if (!retryable || attempt >= attempts) throw error;
+      // macOS can occasionally return -11 while launchd starts the bridge and
+      // Node reads large dependency files. A short sync retry prevents a crash loop.
+      console.error(new Date().toISOString(), '[whatsapp-web-copilot]', `dependency read retry ${attempt}/${attempts} for ${moduleName}: ${message}`);
+      sleepSync(Math.min(3000, 500 * attempt));
+    }
+  }
+  return require(moduleName);
+}
+
+function resolvePlaywrightCoreModule() {
+  const candidates = [
+    String(process.env.WHATSAPP_WEB_COPILOT_PLAYWRIGHT_CORE_PATH || '').trim(),
+    '/private/tmp/makaug-playwright-runtime/node_modules/playwright-core'
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      if (fs.existsSync(path.join(candidate, 'package.json'))) return candidate;
+    } catch (_error) {
+      // Try the next candidate.
+    }
+  }
+  return 'playwright-core';
+}
+
+const { chromium } = requireWithReadRetry(resolvePlaywrightCoreModule());
 
 if (typeof dns.setDefaultResultOrder === 'function') {
   dns.setDefaultResultOrder('ipv4first');
@@ -42,6 +141,13 @@ const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 120);
 const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
+const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 3)));
+const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 1)));
+const configuredRecentRowCacheMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 4000);
+const RECENT_CHAT_ROW_CACHE_MS = Math.min(
+  15000,
+  Math.max(1000, Number.isFinite(configuredRecentRowCacheMs) ? configuredRecentRowCacheMs : 4000)
+);
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
@@ -71,6 +177,7 @@ const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
 const recentlySentReplyKeys = new Map();
+const recentChatRowKeys = new Map();
 let activeInboundRecipientHint = '';
 const COMPOSER_SELECTORS = [
   'footer [data-testid="conversation-compose-box-input"][contenteditable="true"]',
@@ -147,6 +254,40 @@ function rememberBrowserMessageKey(browserMessageKey) {
     const first = seenBrowserMessageIds.values().next().value;
     if (first) seenBrowserMessageIds.delete(first);
   }
+}
+
+function recentChatRowKey(row = {}) {
+  const chatKey = normalizeChatKey(row.title || '');
+  const preview = String(row.preview || '').replace(/\s+/g, ' ').trim().slice(0, 220);
+  const timestampLabel = String(row.timestampLabel || '').trim();
+  const unreadState = row.unread ? 'unread' : 'read';
+  const rowType = row.callLog ? 'call' : 'message';
+  return `${chatKey}:${timestampLabel}:${unreadState}:${rowType}:${preview}`.slice(0, 500);
+}
+
+function pruneRecentChatRowKeys(now = Date.now(), ttlMs = RECENT_CHAT_ROW_CACHE_MS) {
+  for (const [rowKey, seenAt] of recentChatRowKeys.entries()) {
+    if (now - seenAt > ttlMs) recentChatRowKeys.delete(rowKey);
+  }
+  while (recentChatRowKeys.size > 300) {
+    const first = recentChatRowKeys.keys().next().value;
+    if (!first) break;
+    recentChatRowKeys.delete(first);
+  }
+}
+
+function shouldSkipRecentChatRow(rowKey, ttlMs = RECENT_CHAT_ROW_CACHE_MS) {
+  if (!rowKey) return false;
+  const now = Date.now();
+  pruneRecentChatRowKeys(now, ttlMs);
+  const seenAt = recentChatRowKeys.get(rowKey);
+  return Number.isFinite(seenAt) && now - seenAt < ttlMs;
+}
+
+function rememberRecentChatRow(rowKey) {
+  if (!rowKey) return;
+  recentChatRowKeys.set(rowKey, Date.now());
+  pruneRecentChatRowKeys();
 }
 
 function rememberCallEventKey(callEventKey, ttlMs = 10 * 60 * 1000) {
@@ -262,26 +403,111 @@ async function sendHeartbeat(extra = {}) {
 
 async function detectWhatsappReady(page) {
   return page.evaluate(() => {
-    const bodyText = (document.body?.innerText || '').toLowerCase();
-    const hasComposer = !!document.querySelector('footer div[role="textbox"][contenteditable="true"], footer div[contenteditable="true"]');
-    const hasChatList = !!document.querySelector('[aria-label*="Chat list"], [aria-label*="chat list"], [data-testid="chat-list"], div[role="grid"], div[role="list"]');
+    const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const bodyText = normalize(document.body?.innerText || '');
+    const isVisible = (el) => {
+      if (!el) return false;
+      const style = window.getComputedStyle(el);
+      if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+      const rect = el.getBoundingClientRect();
+      return rect.width > 8 && rect.height > 8;
+    };
+    const exists = (selector) => {
+      try {
+        return !!document.querySelector(selector);
+      } catch (_error) {
+        return false;
+      }
+    };
+    const existsVisible = (selector) => {
+      try {
+        return Array.from(document.querySelectorAll(selector)).some(isVisible);
+      } catch (_error) {
+        return false;
+      }
+    };
+    const hasComposer = existsVisible('footer div[role="textbox"][contenteditable="true"], footer div[contenteditable="true"]');
+    const hasChatListBySelector = [
+      '#pane-side',
+      '#side',
+      '[aria-label*="Chat list"]',
+      '[aria-label*="chat list"]',
+      '[data-testid="chat-list"]',
+      '[data-testid="chat-list-search"]',
+      '[data-testid="cell-frame-container"]',
+      'div[role="grid"]',
+      'div[role="list"]',
+      'div[role="listitem"]'
+    ].some(existsVisible);
+    const hasChatRows = Array.from(document.querySelectorAll('[data-testid="cell-frame-container"], div[role="listitem"], div[role="row"], [role="gridcell"]'))
+      .some(isVisible);
+    const hasSidebarLikeText = bodyText.includes('message notifications are off')
+      || (bodyText.includes('all') && bodyText.includes('unread') && bodyText.includes('favorites') && bodyText.includes('groups'))
+      || bodyText.includes('search or start new chat')
+      || bodyText.includes('search or start a new chat')
+      || bodyText.includes('search or start a chat')
+      || bodyText.includes('search or start');
+    const hasChatList = hasChatListBySelector || hasChatRows || hasSidebarLikeText;
+    const hasSearchBox = Array.from(document.querySelectorAll('input, textarea, [role="textbox"], [contenteditable="true"], [aria-label], [title]'))
+      .some((el) => {
+        if (!isVisible(el)) return false;
+        const text = [
+          el.getAttribute('aria-label'),
+          el.getAttribute('placeholder'),
+          el.getAttribute('title'),
+          el.textContent
+        ].map(normalize).join(' ');
+        return text.includes('search');
+      });
     const hasLoggedInShell = bodyText.includes('search or start new chat')
       || bodyText.includes('search or start a new chat')
+      || bodyText.includes('search or start a chat')
+      || bodyText.includes('search or start')
+      || bodyText.includes('new chat')
       || bodyText.includes('message notifications are off')
-      || bodyText.includes('archived');
+      || bodyText.includes('archived')
+      || (bodyText.includes('all') && bodyText.includes('unread') && bodyText.includes('favorites') && bodyText.includes('groups'));
     const loginPrompt = bodyText.includes('scan the qr code')
       || bodyText.includes('scan to log in')
       || bodyText.includes('scan the qr')
       || bodyText.includes('use whatsapp on your phone to link a device')
-      || bodyText.includes('link to your account')
-      || bodyText.includes('log in with phone number')
-      || bodyText.includes('stay logged in');
-    const waitingForLogin = loginPrompt && !(hasComposer || hasChatList || hasLoggedInShell);
+      || (bodyText.includes('link to your account') && (bodyText.includes('scan') || bodyText.includes('qr code')))
+      || bodyText.includes('log in with phone number');
+    const databaseError = bodyText.includes('a database error occurred')
+      || bodyText.includes('database error occurred')
+      || bodyText.includes('your browser storage is full')
+      || bodyText.includes('please clear browser storage');
+    const openElsewhere = bodyText.includes('whatsapp is open in another window')
+      || bodyText.includes('use whatsapp in this window')
+      || bodyText.includes('click "use here"')
+      || bodyText.includes('click “use here”');
+    const readySignals = hasComposer || hasChatList || hasSearchBox || hasLoggedInShell;
+    const waitingForLogin = (loginPrompt || databaseError) && !readySignals;
     return {
       waitingForLogin,
-      ready: (hasComposer || hasChatList || hasLoggedInShell) && !waitingForLogin
+      ready: readySignals && !waitingForLogin,
+      hasComposer,
+      hasChatList,
+      hasSearchBox,
+      hasLoggedInShell,
+      loginPrompt,
+      databaseError,
+      openElsewhere
     };
   });
+}
+
+function summarizeWhatsappReadyState(readyState = {}) {
+  const flags = [
+    readyState.hasComposer ? 'composer' : '',
+    readyState.hasChatList ? 'chat_list' : '',
+    readyState.hasSearchBox ? 'search_box' : '',
+    readyState.hasLoggedInShell ? 'logged_in_shell' : '',
+    readyState.loginPrompt ? 'login_prompt' : '',
+    readyState.databaseError ? 'database_error' : '',
+    readyState.openElsewhere ? 'open_elsewhere' : ''
+  ].filter(Boolean).join(',');
+  return `signals=${flags || 'none'}`;
 }
 
 async function detectAndDeclineIncomingCall(page) {
@@ -404,12 +630,25 @@ async function scanUnreadChats(page) {
   return scanChatRows(page, { unreadOnly: true, limit: 25 });
 }
 
+async function clickVisibleLocator(locator, timeoutMs = 900) {
+  try {
+    await locator.waitFor({ state: 'visible', timeout: timeoutMs });
+    await locator.click({ timeout: timeoutMs });
+    return true;
+  } catch (_error) {
+    return false;
+  }
+}
+
 async function openChatByIndex(page, index) {
   const selectors = ['[data-testid="cell-frame-container"]', 'div[role="listitem"]'];
   for (const selector of selectors) {
-    const locator = page.locator(selector).nth(index);
-    if (await locator.count()) {
-      await locator.click();
+    const rows = page.locator(selector);
+    const rowCount = await rows.count().catch(() => 0);
+    if (rowCount > index) {
+      const locator = rows.nth(index);
+      const clicked = await clickVisibleLocator(locator, 700);
+      if (!clicked) continue;
       await page.waitForTimeout(120);
       return true;
     }
@@ -1188,45 +1427,75 @@ async function ingestUnreadChats(page) {
 
 async function ingestRecentChatsSweep(page, limit = RECENT_CHAT_SWEEP_LIMIT) {
   const rows = await scanChatRows(page, { unreadOnly: false, limit });
+  let scanned = 0;
+  let openedRows = 0;
   let processed = 0;
+  const finish = (shortCircuit = false) => {
+    if (processed) {
+      log(`recent chat sweep processed ${processed} inbound message${processed === 1 ? '' : 's'}`);
+    }
+    return {
+      scanned,
+      processed,
+      shortCircuit
+    };
+  };
 
   for (const row of rows) {
+    scanned += 1;
+    const rowKey = recentChatRowKey(row);
+    if (!row.unread && shouldSkipRecentChatRow(rowKey)) continue;
+
     if (row.callLog) {
       const result = await ingestCallPreviewRow({ row, source: 'recent_chat_call_preview' });
       processed += result.processed || 0;
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
       }
-      if (result.processed || result.duplicate) continue;
+      if (result.processed || result.queuedReply) {
+        rememberRecentChatRow(rowKey);
+        return finish(true);
+      }
+      if (result.duplicate || result.skipped) {
+        rememberRecentChatRow(rowKey);
+        continue;
+      }
     }
 
+    if (openedRows >= RECENT_CHAT_SWEEP_OPEN_LIMIT) break;
     const opened = await openChatByIndex(page, row.index);
     if (!opened) continue;
+    openedRows += 1;
 
     const snapshots = await getRecentIncomingSnapshots(page, 1);
+    let rowObserved = !snapshots.length;
     for (const snapshot of snapshots) {
       const browserMessageKey = browserMessageKeyFor(snapshot, row);
-      if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) continue;
+      if (browserMessageKey && seenBrowserMessageIds.has(browserMessageKey)) {
+        rowObserved = true;
+        continue;
+      }
       const hydrated = await hydrateVoiceSnapshot(page, {
         ...snapshot,
         browserMessageKey
       });
       const result = await ingestSnapshot({ snapshot: hydrated, row, source: 'recent_chat_sweep' });
+      rowObserved = true;
       processed += result.processed || 0;
       if (result.queuedReply) {
         await processOutbox(page, { recipient: result.chatKey, maxSends: 1 });
       }
+      if (result.processed || result.queuedReply) {
+        rememberRecentChatRow(rowKey);
+        return finish(true);
+      }
+    }
+    if (rowObserved) {
+      rememberRecentChatRow(rowKey);
     }
   }
 
-  if (processed) {
-    log(`recent chat sweep processed ${processed} inbound message${processed === 1 ? '' : 's'}`);
-  }
-
-  return {
-    scanned: rows.length,
-    processed
-  };
+  return finish(false);
 }
 
 async function ingestActiveChat(page) {
@@ -1463,13 +1732,15 @@ async function openChatForReply(page, recipient) {
 
         const exactTitle = page.locator(`span[title="${chatKey.replace(/"/g, '\\"')}"]`).first();
         if (await exactTitle.count()) {
-          await exactTitle.click();
+          const clicked = await clickVisibleLocator(exactTitle, 1200);
+          if (!clicked) continue;
           return !!await waitForReplyComposer(page, 7000);
         }
 
         const row = page.locator('[data-testid="cell-frame-container"], div[role="listitem"]').first();
         if (await row.count()) {
-          await row.click();
+          const clicked = await clickVisibleLocator(row, 1200);
+          if (!clicked) continue;
           return !!await waitForReplyComposer(page, 7000);
         }
       } catch (_error) {
@@ -1607,16 +1878,139 @@ async function ensureWhatsappTab(page) {
   }
 }
 
-async function getUsableWhatsappPage(context) {
+function scoreWhatsappReadyState(readyState = {}) {
+  let score = 0;
+  if (readyState.ready) score += 100;
+  if (readyState.hasComposer) score += 20;
+  if (readyState.hasChatList) score += 18;
+  if (readyState.hasSearchBox) score += 10;
+  if (readyState.hasLoggedInShell) score += 8;
+  if (readyState.openElsewhere) score += 12;
+  if (readyState.loginPrompt) score -= 25;
+  if (readyState.databaseError) score -= 40;
+  if (readyState.waitingForLogin) score -= 35;
+  return score;
+}
+
+async function claimWhatsappUseHere(page) {
+  try {
+    const useHereButton = page.getByText('Use here', { exact: true }).first();
+    const clicked = await clickVisibleLocator(useHereButton, 1200);
+    if (clicked) {
+      log('claimed WhatsApp Web session from another window with "Use here".');
+      await page.waitForTimeout(2500);
+      return true;
+    }
+  } catch (_error) {
+    // Fall through to the DOM fallback. WhatsApp changes this markup often.
+  }
+
+  try {
+    const clicked = await page.evaluate(() => {
+      const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+      const bodyText = normalize(document.body?.innerText || '').toLowerCase();
+      const isUseHereScreen = bodyText.includes('whatsapp is open in another window')
+        || bodyText.includes('use whatsapp in this window')
+        || bodyText.includes('use here');
+      if (!isUseHereScreen) return false;
+
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        return style.visibility !== 'hidden'
+          && style.display !== 'none'
+          && Number(style.opacity || 1) !== 0
+          && rect.width > 10
+          && rect.height > 10;
+      };
+
+      const candidates = Array.from(document.querySelectorAll('button, [role="button"], span, div'));
+      const target = candidates.find((el) => normalize(el.textContent).toLowerCase() === 'use here' && isVisible(el));
+      const clickable = target?.closest('button, [role="button"]') || target;
+      if (!clickable) return false;
+      clickable.click();
+      return true;
+    });
+    if (clicked) {
+      log('claimed WhatsApp Web session from another window with DOM fallback.');
+      await page.waitForTimeout(2500);
+      return true;
+    }
+  } catch (error) {
+    log(`failed to claim WhatsApp Web "Use here" state: ${error?.message || error}`);
+  }
+
+  return false;
+}
+
+async function inspectWhatsappCandidate(page) {
+  try {
+    await ensureWhatsappTab(page);
+    await page.waitForTimeout(250);
+    let readyState = await detectWhatsappReady(page);
+    if (readyState.openElsewhere && await claimWhatsappUseHere(page)) {
+      readyState = await detectWhatsappReady(page);
+    }
+    return {
+      page,
+      url: page.url() || '',
+      readyState,
+      score: scoreWhatsappReadyState(readyState)
+    };
+  } catch (error) {
+    return {
+      page,
+      url: '',
+      readyState: {
+        ready: false,
+        waitingForLogin: false,
+        inspectionError: String(error?.message || error || '').slice(0, 160)
+      },
+      score: -100
+    };
+  }
+}
+
+async function findBestWhatsappPage(context) {
   const pages = context.pages().filter((candidate) => !candidate.isClosed());
-  const whatsappPage = pages.find((candidate) => {
+  const whatsappPages = pages.filter((candidate) => {
     try {
       return candidate.url().includes('web.whatsapp.com');
     } catch (_error) {
       return false;
     }
   });
-  const page = whatsappPage || pages[0] || await context.newPage();
+
+  const inspected = [];
+  for (const candidate of whatsappPages) {
+    inspected.push(await inspectWhatsappCandidate(candidate));
+  }
+
+  inspected.sort((a, b) => b.score - a.score);
+  return {
+    best: inspected[0] || null,
+    inspected
+  };
+}
+
+async function getUsableWhatsappPage(context) {
+  const { best, inspected } = await findBestWhatsappPage(context);
+  if (best?.page && best.score > -20) {
+    if (inspected.length > 1) {
+      log(`selected WhatsApp tab (${best.url || 'no_url'}) ${summarizeWhatsappReadyState(best.readyState)}`);
+    }
+    return best.page;
+  }
+
+  const pages = context.pages().filter((candidate) => !candidate.isClosed());
+  const page = pages.find((candidate) => {
+    try {
+      return !candidate.url().includes('web.whatsapp.com');
+    } catch (_error) {
+      return false;
+    }
+  }) || pages[0] || await context.newPage();
   await ensureWhatsappTab(page);
   return page;
 }
@@ -1626,8 +2020,8 @@ async function recoverWhatsappPage(context, previousPage) {
     if (previousPage && !previousPage.isClosed()) {
       await ensureWhatsappTab(previousPage);
       await previousPage.waitForTimeout(250);
-      await detectWhatsappReady(previousPage);
-      return previousPage;
+      const previousState = await detectWhatsappReady(previousPage);
+      if (previousState.ready) return previousPage;
     }
   } catch (_error) {
     // The old page is not usable. Fall through and locate/open a fresh WhatsApp tab.
@@ -1677,7 +2071,7 @@ async function main() {
   log('WhatsApp Web copilot started.');
   log(`Base URL: ${BASE_URL}`);
   log(`Client ID: ${CLIENT_ID}`);
-  log(`Poll interval: ${POLL_MS}ms; login poll: ${LOGIN_POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
+  log(`Poll interval: ${POLL_MS}ms; login poll: ${LOGIN_POLL_MS}ms; recent chat sweep: ${RECENT_CHAT_SWEEP_MS}ms; fast lane rows: ${RECENT_CHAT_FAST_LANE_LIMIT}; sweep open cap: ${RECENT_CHAT_SWEEP_OPEN_LIMIT}; row cache: ${RECENT_CHAT_ROW_CACHE_MS}ms; API retry attempts: ${API_RETRY_ATTEMPTS}`);
   if (connectedOverCdp) {
     log(`Connected over CDP: ${CDP_URL}`);
   } else {
@@ -1688,11 +2082,16 @@ async function main() {
   let lastHeartbeat = 0;
   let lastBridgeState = '';
   let lastRecentSweep = 0;
+  let lastTabReselect = 0;
   let consecutiveLoopErrors = 0;
 
   while (true) {
     try {
-      const readyState = await detectWhatsappReady(page);
+      let readyState = await detectWhatsappReady(page);
+      if (readyState.openElsewhere && await claimWhatsappUseHere(page)) {
+        readyState = await detectWhatsappReady(page);
+        lastBridgeState = '';
+      }
       const now = Date.now();
       const bridgeState = readyState.ready
         ? 'online'
@@ -1701,20 +2100,43 @@ async function main() {
           : 'starting';
 
       if (bridgeState !== lastBridgeState) {
-        log(`bridge state -> ${bridgeState} (${page.url() || 'no_url'})`);
+        log(`bridge state -> ${bridgeState} (${page.url() || 'no_url'}) ${summarizeWhatsappReadyState(readyState)}`);
         lastBridgeState = bridgeState;
       }
 
       if (!readyState.ready) {
+        if (now - lastTabReselect >= Math.max(5000, LOGIN_POLL_MS)) {
+          lastTabReselect = now;
+          const selectedPage = await getUsableWhatsappPage(context);
+          if (selectedPage !== page) {
+            page = selectedPage;
+            readyState = await detectWhatsappReady(page);
+            log(`reselected WhatsApp tab (${page.url() || 'no_url'}) ${summarizeWhatsappReadyState(readyState)}`);
+            lastBridgeState = '';
+            continue;
+          }
+        }
+
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
           await sendHeartbeat({
-            status: readyState.waitingForLogin ? 'waiting_for_login' : 'starting',
+            status: readyState.databaseError
+              ? 'browser_database_error'
+              : readyState.openElsewhere
+                ? 'open_elsewhere'
+                : readyState.waitingForLogin
+                  ? 'waiting_for_login'
+                  : 'starting',
             current_url: page.url(),
             unread_count: 0,
             metadata: {
-              note: readyState.waitingForLogin
-                ? 'Waiting for WhatsApp Web login'
-                : 'Browser starting'
+              ready_state: readyState,
+              note: readyState.databaseError
+                ? 'WhatsApp Web is showing a browser database/storage error. Refresh WhatsApp Web or relink the bridge profile if it persists.'
+                : readyState.openElsewhere
+                  ? 'WhatsApp Web is open in another window; the bridge is trying to claim this session with Use here.'
+                  : readyState.waitingForLogin
+                    ? 'Waiting for WhatsApp Web login'
+                    : 'Browser starting'
             }
           });
           lastHeartbeat = now;
@@ -1765,10 +2187,22 @@ async function main() {
       let recentSweepResult = { scanned: 0, processed: 0 };
       let sentAfterSweep = 0;
       const hadLiveActivity = !!(processedCallEvents || sentAfterCall || activeProcessed || sentAfterActive || unreadResult.processed || sentAfterUnread);
-      if (!hadLiveActivity && now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
-        recentSweepResult = await ingestRecentChatsSweep(page);
-        lastRecentSweep = Date.now();
+      if (!hadLiveActivity) {
+        recentSweepResult = await ingestRecentChatsSweep(page, RECENT_CHAT_FAST_LANE_LIMIT);
         if (recentSweepResult.processed) {
+          sentAfterSweep = await processOutbox(page, { maxSends: 2 });
+        }
+      }
+      const hadFastLaneActivity = !!(recentSweepResult.processed || sentAfterSweep || recentSweepResult.shortCircuit);
+      if (!hadLiveActivity && !hadFastLaneActivity && now - lastRecentSweep >= RECENT_CHAT_SWEEP_MS) {
+        const widerRecentSweepResult = await ingestRecentChatsSweep(page);
+        lastRecentSweep = Date.now();
+        recentSweepResult = {
+          scanned: (recentSweepResult.scanned || 0) + (widerRecentSweepResult.scanned || 0),
+          processed: (recentSweepResult.processed || 0) + (widerRecentSweepResult.processed || 0),
+          shortCircuit: !!widerRecentSweepResult.shortCircuit
+        };
+        if (widerRecentSweepResult.processed) {
           sentAfterSweep = await processOutbox(page, { maxSends: 2 });
         }
       }
