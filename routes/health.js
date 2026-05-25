@@ -43,7 +43,8 @@ router.get('/migrations', async (_req, res) => {
     '050_publish_found_online_launch_inventory.sql',
     '051_enforce_social_only_preapproved_inventory.sql',
     '052_remove_implicit_found_online_approvals.sql',
-    '053_remove_land_search_help_flags.sql'
+    '053_remove_land_search_help_flags.sql',
+    '054_restore_youtube_social_found_online_inventory.sql'
   ];
   try {
     const result = await db.query(

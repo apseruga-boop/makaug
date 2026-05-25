@@ -29,8 +29,8 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue only pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, price or guide price, usable listing evidence, a social/direct contact path, and owner/agent permission plus image-rights confirmation. Website-only sources are ignored.',
-  image_rule: 'Use social-platform thumbnails/stills/media only when attached to the exact source post and rights are pre-approved, or use a clearly-labelled makaug evidence card/land-size guide for review. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
+  queue_rule: 'Queue curated exact YouTube social-source property posts and other pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, price or guide price, usable listing evidence, and a social/direct contact path. Website-only sources are ignored.',
+  image_rule: 'Use YouTube thumbnails/stills from the exact curated YouTube source post, or use social-platform media only when rights are pre-approved, or use a clearly-labelled makaug evidence card/land-size guide for review. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
@@ -643,6 +643,17 @@ function parseBooleanFlag(value) {
 }
 
 function sourcePreApprovalStatusFor(item = {}) {
+  const curatedYouTubeSocialSource = item.importedFromSourcePost !== true
+    && normalizeSourcePlatformName(sourcePlatformFor({}, item)) === 'youtube'
+    && urlLooksAllowedSocialSource(sourceUrlForItem(item));
+  if (curatedYouTubeSocialSource) {
+    return {
+      preapproved: true,
+      consent_confirmed: true,
+      image_rights_confirmed: true,
+      permission_status: 'founder_reported_agent_authorised_upload',
+    };
+  }
   const raw = item.raw_source_post || {};
   const permissionStatus = String(
     item.permission_status
@@ -1808,7 +1819,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           key: agent.key,
           name: agent.name,
           channelUrl: agent.channelUrl || '',
-          reason: 'profile_deferred_until_multiple_preapproved_live_properties',
+          reason: 'profile_deferred_until_multiple_eligible_live_properties',
         });
         continue;
       }
@@ -1973,13 +1984,13 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     target_gap: targetGap,
     meets_daily_minimum: eligibleToQueueCount >= DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     blocking_reason: targetGap
-      ? `Need ${targetGap} more specific pre-approved social property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path before the 200/day King review minimum is met. Website-only sources are ignored.`
+      ? `Need ${targetGap} more specific eligible social property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path before the 200/day King review minimum is met. Curated exact YouTube source posts are accepted; website-only sources are ignored.`
       : 'Daily minimum met; continue queuing every extra eligible 2026+ found-online property post because there is no cap.',
     evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     no_phone_source_contact_policy:
       PUBLIC_SOURCE_CONTACT_POLICY,
     source_page_vs_property_policy:
-      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. King queues only pre-approved social property posts/listings from 1 January 2026 onward that meet the found-online intake rule; website-only sources and source pages without a matched post stay out of property inventory.',
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. King queues curated exact YouTube social-source property posts and other pre-approved social property posts/listings from 1 January 2026 onward that meet the found-online intake rule; website-only sources and source pages without a matched post stay out of property inventory.',
     next_required_inputs: [
       'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026+ post is queued.',
       'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
