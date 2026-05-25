@@ -10,6 +10,7 @@ const htmlSource = fs.readFileSync('index.html', 'utf8');
 const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
+const propertiesRouteSource = fs.readFileSync('routes/properties.js', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -70,7 +71,7 @@ test('browser release probe blocks uncontrolled seed listings from public pages'
 });
 
 test('anonymous public property APIs suppress launch seed QA listings', () => {
-  const routeSource = fs.readFileSync('routes/properties.js', 'utf8');
+  const routeSource = propertiesRouteSource;
   assert.match(routeSource, /LAUNCH_SEED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(routeSource, /LAUNCH_DUMMY_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);
   assert.match(routeSource, /function addPublicLaunchSeedFilter/);
@@ -81,6 +82,17 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /apiRequest\("\/api\/properties\?status=approved&limit=1000&public_only=1", \{ skipAuth: true \}\)/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('public featured property feed only returns featured backend listings', () => {
+  assert.match(propertiesRouteSource, /const featuredRaw = req\.query\.featured \?\? req\.query\.is_featured \?\? req\.query\.isFeatured/);
+  assert.match(propertiesRouteSource, /const featuredFilterRequested = featuredRaw !== undefined/);
+  assert.match(propertiesRouteSource, /if \(featuredFilterRequested\) \{/);
+  assert.match(propertiesRouteSource, /COALESCE\(p\.extra_fields->>'featured', 'false'\) IN \('true', '1', 'yes'\)/);
+  assert.match(propertiesRouteSource, /const defaultSort = featuredFilterRequested && featuredOnly \? 'featured' : 'newest'/);
+  assert.match(appSource, /let publicFeaturedListingsFromApi = \[\]/);
+  assert.match(appSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured/);
+  assert.match(appSource, /const featuredListings = publicFeaturedListingsFromApi\.length \? publicFeaturedListingsFromApi : publicListings/);
 });
 
 test('anonymous public agent APIs suppress QA broker records', () => {
@@ -190,4 +202,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /approval-profile-sync-20260519/);
   assert.match(htmlSource, /broker-profile-share-links-20260519/);
   assert.match(htmlSource, /direct-agent-profile-20260519/);
+  assert.match(htmlSource, /public-featured-feed-fix-20260525/);
 });

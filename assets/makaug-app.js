@@ -551,6 +551,7 @@ let adminPendingPhotoDeleteTimer = null;
 const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
+let publicFeaturedListingsFromApi = [];
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -14965,6 +14966,7 @@ async function adminSetListingFeatured(propertyId, featured) {
     applyFeatured(PROPERTIES.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
     applyFeatured(adminRemoteListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
     applyFeatured(adminLiveListings.find((p) => String(p.id) === id || String(p.backend_id || "") === id));
+    let publicFeaturedRefreshed = false;
     try {
       const detail = await apiRequest(`/api/properties/${encodeURIComponent(id)}`, {
         headers: adminAuthHeaders()
@@ -14981,7 +14983,9 @@ async function adminSetListingFeatured(propertyId, featured) {
       upsertPropertyForUi(publicProperty);
     } catch (detailError) {
       await refreshPublicListingsFromApi({ silent: true });
+      publicFeaturedRefreshed = true;
     }
+    if (!publicFeaturedRefreshed) await refreshPublicListingsFromApi({ silent: true });
     renderAll();
     resetMaps();
     await renderAdminDashboard();
@@ -25756,7 +25760,8 @@ function renderSaved() {
 
 function renderAll() {
   const publicListings = getPublicListings();
-  renderGrid("home-grid", getFeaturedListings(publicListings).slice(0, 3));
+  const featuredListings = publicFeaturedListingsFromApi.length ? publicFeaturedListingsFromApi : publicListings;
+  renderGrid("home-grid", getFeaturedListings(featuredListings).slice(0, 3));
   renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
   renderGrid("rent-grid", publicListings.filter((p) => normalizeType(p.type) === "rent"));
   const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
@@ -26496,7 +26501,15 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   try {
     const response = await apiRequest("/api/properties?status=approved&limit=1000&public_only=1", { skipAuth: true });
     const rows = Array.isArray(response?.data) ? response.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-    const remoteIds = new Set(rows.map((p) => String(p.id || "")).filter(Boolean));
+    let featuredRows = [];
+    try {
+      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured", { skipAuth: true });
+      featuredRows = Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+    } catch (featuredError) {
+      console.warn("Unable to refresh featured listings", featuredError);
+    }
+    const combinedRows = [...rows, ...featuredRows];
+    const remoteIds = new Set(combinedRows.map((p) => String(p.id || "")).filter(Boolean));
     for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
       const p = PROPERTIES[i];
       const id = String(p?.backend_id || p?.id || "");
@@ -26504,7 +26517,8 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         PROPERTIES.splice(i, 1);
       }
     }
-    rows.forEach((p) => upsertPropertyForUi(p));
+    combinedRows.forEach((p) => upsertPropertyForUi(p));
+    publicFeaturedListingsFromApi = featuredRows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
     publicListingsFromApiLoaded = true;
     return true;
   } catch (e) {
