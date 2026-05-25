@@ -24,6 +24,7 @@ const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_o
 const socialOnlyPreapprovedCleanupMigration = read('db/migrations/051_enforce_social_only_preapproved_inventory.sql');
 const strictFoundOnlinePreapprovalMigration = read('db/migrations/052_remove_implicit_found_online_approvals.sql');
 const youtubeSocialRestoreMigration = read('db/migrations/054_restore_youtube_social_found_online_inventory.sql');
+const youtubeSocialRepublishMigration = read('db/migrations/055_republish_curated_youtube_social_inventory.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -252,6 +253,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('social-only-preapproved-20260525'), 'index should bump the app asset version so production browsers fetch the social-only preapproval cleanup');
   assert(html.includes('strict-preapproval-20260525'), 'index should bump the app asset version so production browsers fetch the strict explicit-preapproval cleanup');
   assert(html.includes('youtube-social-restore-20260525'), 'index should bump the app asset version so production browsers fetch the YouTube social restore copy');
+  assert(html.includes('youtube-social-republish-20260525'), 'index should bump the app asset version so production browsers fetch the YouTube social republish fix');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('function adminFoundOnlineAllRows'), 'dashboard should keep a pending-only found-online helper for cached code paths');
   assert(!frontend.includes('approved/live source records stay visible here for audit'), 'Review Queue must not describe approved/live listings as still visible there');
@@ -794,10 +796,15 @@ test('found-online public-launch migration is superseded by social-only preappro
   assert(youtubeSocialRestoreMigration.includes('youtube_social_found_online_restore_20260525'), 'restore migration should tag the YouTube social restoration batch');
   assert(youtubeSocialRestoreMigration.includes("status = 'approved'"), 'restore migration should return accepted YouTube social rows to public approved inventory');
   assert(youtubeSocialRestoreMigration.includes("LOWER(COALESCE(p.extra_fields->>'source_platform', '')) = 'youtube'"), 'restore migration should be scoped to YouTube social rows only');
+  assert(youtubeSocialRepublishMigration.includes('youtube_social_batch_republish_20260525'), 'republish migration should tag the deterministic YouTube source repair batch');
+  assert(youtubeSocialRepublishMigration.includes("'approved_youtube_social_source'"), 'republish migration should approve curated YouTube social-source rows');
+  assert(youtubeSocialRepublishMigration.includes("'source_batch', 'social_search_authorised_20260520'"), 'republish migration should preserve the curated social-search batch id');
+  assert(youtubeSocialRepublishMigration.includes('https://i.ytimg.com/vi/'), 'republish migration should attach YouTube source stills for public cards');
   assert(healthRoute.includes('050_publish_found_online_launch_inventory.sql'), 'migration health should expose found-online public launch migration');
   assert(healthRoute.includes('051_enforce_social_only_preapproved_inventory.sql'), 'migration health should expose social-only cleanup migration');
   assert(healthRoute.includes('052_remove_implicit_found_online_approvals.sql'), 'migration health should expose strict implicit-approval cleanup migration');
   assert(healthRoute.includes('054_restore_youtube_social_found_online_inventory.sql'), 'migration health should expose YouTube social restore migration');
+  assert(healthRoute.includes('055_republish_curated_youtube_social_inventory.sql'), 'migration health should expose deterministic YouTube social republish migration');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {
