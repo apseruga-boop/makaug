@@ -9492,6 +9492,8 @@ function adminSourceRecordLabel(item = {}) {
 function adminSourceRegistryHtml(data = {}) {
   const sources = Array.isArray(data.sources) ? data.sources : [];
   const summary = data.summary || {};
+  const totalCount = Number(data.count || summary.count || sources.length || 0);
+  const returnedCount = Number(data.returned_count || sources.length || 0);
   const byPlatform = data.by_platform || summary.by_platform || {};
   const platformText = Object.entries(byPlatform)
     .map(([platform, count]) => `${platform}: ${count}`)
@@ -9513,11 +9515,11 @@ function adminSourceRegistryHtml(data = {}) {
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <div class="font-black text-emerald-950">Property source database</div>
-        <div class="mt-1">${adminEscape(data.count || summary.count || sources.length || 0)} public source records loaded for daily found-online discovery.</div>
+        <div class="mt-1">${adminEscape(totalCount)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
         <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, pre-approval, image-rights confirmation, location/area, price or guide price, and usable image/source evidence.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
-        ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(sources.length)} loaded source records below.</div>` : ""}
+        ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(returnedCount)} source records below. The full ${adminEscape(totalCount)}-record database stays server-side so this panel does not time out.</div>` : ""}
       </div>
       <button type="button" onclick="adminLoadPropertySourceRegistry()" class="border border-emerald-300 text-emerald-800 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-bold">Refresh Sources</button>
     </div>
@@ -9540,7 +9542,7 @@ async function adminLoadPropertySourceRegistry() {
     panel.innerHTML = "Loading source database...";
   }
   try {
-    const response = await apiRequest("/api/admin/property-source-registry?limit=30000", {
+    const response = await apiRequest("/api/admin/property-source-registry?limit=500", {
       method: "GET",
       headers: adminAuthHeaders()
     });
@@ -9677,7 +9679,7 @@ async function adminImportTikTokExactPosts(seedText = "") {
       statusEl.innerHTML = `
         <div class="font-black">TikTok exact videos imported</div>
         <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} already existed. ${adminEscape(sourceReview.length)} need more source details.</div>
-        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online listings when the caption/details include location or area, price or guide price, and a public contact route. If TikTok oEmbed provides a public thumbnail/title, King stores it as source evidence.</div>
+        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area, price or guide price, and a public contact route. Missing platform date, consent, or image rights stay visible for King review before approval.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, price, or source evidence, then import again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }

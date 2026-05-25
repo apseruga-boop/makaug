@@ -649,6 +649,24 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(exactRows[0].pre_approved, 'true');
   assert.strictEqual(exactRows[0].image_rights_confirmed, 'true');
   assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
+
+  const captionOnlyRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@ismaelssekatawa25/video/7330000000000000002',
+      '*KATOSI MPUNGE LAKE VIEW ESTATE PLOTS FOR SALE!* 100ft x 50ft at 4millions Acre. 30millions negotiable Located in a tranquil and secure environment. Call +256749966423 Email. ismaelssekatawa25@gmail.com #realestateinvesting #plotsforsale',
+    ].join('\n'),
+  });
+  const captionOnly = normalizeFoundOnlineSourcePost(captionOnlyRows[0]);
+  const captionOnlyIntake = sourcePostMeetsLaunchIntakeRule(captionOnly, captionOnly.sourceAgent);
+  assert.strictEqual(captionOnlyRows[0].area, 'Katosi', 'TikTok caption import should extract Katosi/Mpunge area evidence');
+  assert.strictEqual(captionOnlyRows[0].district, 'Mukono', 'TikTok caption import should map Katosi/Mpunge to Mukono district');
+  assert.strictEqual(captionOnlyRows[0].price_text, '30millions negotiable', 'TikTok caption import should parse plural/no-space Uganda price text');
+  assert.strictEqual(captionOnlyRows[0].contact_phone, '+256749966423', 'TikTok caption import should extract public phone contact');
+  assert.strictEqual(captionOnlyRows[0].contact_email, 'ismaelssekatawa25@gmail.com', 'TikTok caption import should extract public email contact');
+  assert.strictEqual(captionOnly.price, 30000000, 'plural TikTok price text should normalize to UGX amount');
+  assert.strictEqual(captionOnlyIntake.preapproved, false, 'caption-only TikTok posts should not pretend consent is already confirmed');
+  assert.strictEqual(captionOnlyIntake.exact_tiktok_pending_king_review, true, 'exact TikTok posts can enter King review while consent/date is confirmed');
+  assert.strictEqual(captionOnlyIntake.eligible, true, 'exact TikTok posts with caption evidence should queue instead of failing with source-review only');
 });
 
 test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {

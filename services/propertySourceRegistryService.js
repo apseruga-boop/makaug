@@ -3,6 +3,7 @@
 const PROPERTY_SOURCE_REGISTRY_BATCH_ID = 'property_source_registry_20260520';
 const REGISTRY_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000;
+const PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500;
 const X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000;
 const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000;
 const SOURCE_FRESHNESS_WINDOW_DAYS = 366;
@@ -1508,7 +1509,8 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
   const registrySources = sources || getPropertySourceRegistry();
   try {
     await client.query('BEGIN');
-    const upserted = [];
+    let upsertedCount = 0;
+    const upsertedSample = [];
     const activeSourceKeys = [];
     for (const item of registrySources) {
       const row = normalizeSourceForDb(item);
@@ -1580,7 +1582,10 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
           JSON.stringify(row.metadata),
         ]
       );
-      upserted.push(result.rows[0]);
+      upsertedCount += 1;
+      if (upsertedSample.length < PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT) {
+        upsertedSample.push(result.rows[0]);
+      }
     }
     const pruned = await client.query(
       `DELETE FROM property_source_registry
@@ -1592,11 +1597,13 @@ async function seedPropertySourceRegistry({ db, sources } = {}) {
     return {
       ok: true,
       batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
-      upserted_sources: upserted.length,
+      upserted_sources: upsertedCount,
       pruned_stale_sources: pruned.rowCount,
       by_platform: byPlatformSummary(registrySources),
       by_status: byStatusSummary(registrySources),
-      sources: upserted,
+      returned_count: upsertedSample.length,
+      response_sample_limit: PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT,
+      sources: upsertedSample,
     };
   } catch (error) {
     await client.query('ROLLBACK');

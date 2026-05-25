@@ -52,11 +52,11 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(summary.by_platform.instagram >= 5000, 'source database should include at least 5,000 Instagram discovery records');
   assert(summary.by_platform.facebook >= 5000, 'source database should include at least 5,000 Facebook discovery records');
   assert(summary.by_platform.youtube >= 5000, 'source database should include at least 5,000 YouTube creator/search sources');
-  assert(summary.by_platform.website >= 10, 'source database should keep website/portal sources');
+  assert(!summary.by_platform.website, 'website-only source records should stay out of the social-first registry');
   assert.strictEqual(PROPERTY_SOURCE_REGISTRY.length, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, 'source registry should load exactly the configured 30,000 records');
   assert(summary.reviewed_source_pages_count >= 10, 'source registry should separately count reviewed pages/channels/accounts');
   assert(summary.discovery_feed_count >= 10000, 'source registry should separately count broad discovery feeds');
-  ['carnelian-properties-uganda', 'bakaima-real-estate-agents', 'realtor-mahad', 'ezra-homes-ug', 'opulent-properties-uganda', 'real-estate-database-uganda', 'tiktok-uganda-real-estate-hashtag', 'x-uganda-real-estate-hashtag'].forEach((key) => {
+  ['carnelian-properties-uganda', 'realtor-mahad', 'ezra-homes-ug', 'tiktok-uganda-real-estate-hashtag', 'x-uganda-real-estate-hashtag'].forEach((key) => {
     assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.key === key), `missing source key ${key}`);
   });
   assert(summary.direct_contact_sources >= 2, 'authorised/direct-contact sources should be explicit');
@@ -68,7 +68,7 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(service.includes('SOCIAL_FIRST_PLATFORM_PRIORITY'), 'source registry should encode social-first platform priority');
   assert(service.includes('SOCIAL_PROFILE_CREATION_RULE'), 'source registry should encode the repeated-inventory profile threshold');
   assert(service.includes('SOCIAL_ONE_OFF_LISTING_RULE'), 'source registry should keep one-off social posts listing-only until repeat activity is visible');
-  assert(service.includes('TikTok, Facebook, YouTube, X/Twitter, and Instagram before website/portal'), 'source registry should de-prioritise websites behind social channels');
+  assert(service.includes('Website/portal sources are disabled'), 'source registry should disable website-only sources for launch inventory');
   assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000'), 'source registry should enforce the 30,000 ceiling');
   assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000'), 'source registry should reserve an 8,000-record X hashtag sweep');
   assert(service.includes('CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000'), 'source registry should reserve a 12,000-record Instagram/Facebook/TikTok/YouTube hashtag sweep');
@@ -111,7 +111,9 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('async function adminSeedPropertySourceRegistry'), 'frontend should seed source database');
   assert(frontend.includes('async function adminLoadPropertySourceRegistry'), 'frontend should load source database');
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
-  assert(frontend.includes('/api/admin/property-source-registry?limit=30000'), 'frontend should call protected list API with the 30,000 source-registry ceiling');
+  assert(frontend.includes('/api/admin/property-source-registry?limit=500'), 'frontend should load a bounded source-registry page to avoid Render 502s');
+  assert(frontend.includes('stays server-side so this panel does not time out'), 'King should explain the full source registry is not rendered in one response');
+  assert(service.includes('PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500'), 'seed response should sample source rows instead of returning all 30,000 records');
   assert(service.includes('Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT)'), 'source registry list API should allow the full expanded registry');
   assert(frontend.includes('fishing net, not the approval queue'), 'King should explain source records are not listing records');
   assert(frontend.includes('reviewed pages/channels/accounts'), 'King should separate reviewed source pages from broad feeds');

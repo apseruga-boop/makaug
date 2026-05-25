@@ -636,6 +636,12 @@ function itemHasAllowedSocialSource(item = {}, agent = {}) {
   return isAllowedSocialSourcePlatform(platform) && urlLooksAllowedSocialSource(sourceUrlForItem(item));
 }
 
+function itemIsExactTikTokVideoSource(item = {}, agent = {}) {
+  const platform = normalizeSourcePlatformName(sourcePlatformFor(agent, item));
+  const sourceUrl = sourceUrlForItem(item);
+  return platform === 'tiktok' && /tiktok\.com\/@[^/]+\/video\/\d+/i.test(sourceUrl);
+}
+
 function parseBooleanFlag(value) {
   if (value === true) return true;
   if (value === false || value == null) return false;
@@ -731,8 +737,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
+  const exactTikTokPendingKingReview = itemIsExactTikTokVideoSource(item, agent) && !preApproval.preapproved;
+  const hasQueuePermission = preApproval.preapproved || exactTikTokPendingKingReview;
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && preApproval.preapproved,
+    eligible: hasSource && allowedSocialSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
@@ -744,6 +752,10 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     consent_confirmed: preApproval.consent_confirmed,
     image_rights_confirmed: preApproval.image_rights_confirmed,
     permission_status: preApproval.permission_status,
+    exact_tiktok_pending_king_review: exactTikTokPendingKingReview,
+    queue_permission_status: hasQueuePermission
+      ? (preApproval.preapproved ? 'preapproved_social_source' : 'exact_tiktok_source_pending_king_review')
+      : 'missing_preapproval',
     website_source_blocked: hasSource && !allowedSocialSource,
     no_phone_ok_with_source_contact: Boolean(!String(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '').trim() && hasContact),
   };
@@ -1490,9 +1502,9 @@ function parseMoneyValue(value) {
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount)) return null;
-  if (/\d(?:\.\d+)?\s*(b|bn|billion)\b/.test(raw)) return Math.round(amount * 1000000000);
-  if (/\d(?:\.\d+)?\s*(m|mn|million)\b/.test(raw)) return Math.round(amount * 1000000);
-  if (/\d(?:\.\d+)?\s*(k|thousand)\b/.test(raw)) return Math.round(amount * 1000);
+  if (/\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)) return Math.round(amount * 1000000000);
+  if (/\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)) return Math.round(amount * 1000000);
+  if (/\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)) return Math.round(amount * 1000);
   return Math.round(amount);
 }
 
