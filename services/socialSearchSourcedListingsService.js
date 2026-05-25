@@ -643,14 +643,6 @@ function parseBooleanFlag(value) {
 }
 
 function sourcePreApprovalStatusFor(item = {}) {
-  if (item.importedFromSourcePost !== true) {
-    return {
-      preapproved: true,
-      consent_confirmed: true,
-      image_rights_confirmed: true,
-      permission_status: 'founder_reported_agent_authorised_upload',
-    };
-  }
   const raw = item.raw_source_post || {};
   const permissionStatus = String(
     item.permission_status

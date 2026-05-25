@@ -22,6 +22,7 @@ const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
 const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
 const socialOnlyPreapprovedCleanupMigration = read('db/migrations/051_enforce_social_only_preapproved_inventory.sql');
+const strictFoundOnlinePreapprovalMigration = read('db/migrations/052_remove_implicit_found_online_approvals.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -248,6 +249,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('found-online-admin-archive-20260524'), 'index should bump the app asset version so production browsers fetch the found-online admin archive view');
   assert(html.includes('live-review-separation-20260525'), 'index should bump the app asset version so production browsers fetch the live/review separation fix');
   assert(html.includes('social-only-preapproved-20260525'), 'index should bump the app asset version so production browsers fetch the social-only preapproval cleanup');
+  assert(html.includes('strict-preapproval-20260525'), 'index should bump the app asset version so production browsers fetch the strict explicit-preapproval cleanup');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('function adminFoundOnlineAllRows'), 'dashboard should keep a pending-only found-online helper for cached code paths');
   assert(!frontend.includes('approved/live source records stay visible here for audit'), 'Review Queue must not describe approved/live listings as still visible there');
@@ -423,13 +425,14 @@ test('Carnelian WhatsApp share card carries listing URL, video and agent contact
   assert(card.includes(CARNELIAN_CONTACT.phoneAlt), 'share card should include alternate Carnelian phone');
 });
 
-test('found-online social search batch creates pending listings with agent profiles and evidence', () => {
+test('found-online social search batch stays review-only until explicit preapproval is supplied', () => {
   const summary = summarizeSocialSearchListings();
   const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
-  assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public property records');
-  assert.strictEqual(summary.agents_count, 4, 'social search batch should prepare profiles only for sources with multiple eligible properties');
-  assert.strictEqual(summary.source_profiles_deferred_count, 3, 'single-property sources should stay listing-only until a second property is live');
+  assert.strictEqual(summary.count, 18, 'social search batch should retain tracked recent public property records as source-review work');
+  assert.strictEqual(summary.seed_eligible_count, 0, 'social search seed rows must not become properties without explicit preapproval fields');
+  assert.strictEqual(summary.agents_count, 0, 'social search batch should not prepare profiles until multiple explicit-preapproved properties exist');
+  assert.strictEqual(summary.source_profiles_deferred_count, SOCIAL_SEARCH_AGENTS.length, 'all source profiles stay deferred until explicit-preapproved inventory is live');
   assert.strictEqual(summary.daily_target_status.target, 200, 'morning sweep should expose the 200/day property queue target');
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
@@ -443,6 +446,11 @@ test('found-online social search batch creates pending listings with agent profi
   assert.strictEqual(SOCIAL_SEARCH_LISTINGS.length, listings.length, 'planned social search listings should match source records');
   assert(summary.by_type.sale >= 14, 'social search batch should prioritise sale listings from the provided channels');
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
+  assert.strictEqual(
+    sourcePostMeetsLaunchIntakeRule(SOCIAL_SEARCH_LISTINGS[0], SOCIAL_SEARCH_AGENTS.find((agent) => agent.key === SOCIAL_SEARCH_LISTINGS[0].agentKey)).eligible,
+    false,
+    'tracked social seed rows should remain ineligible until explicit preapproval, consent, and image rights are supplied'
+  );
   for (const listing of listings) {
     const extra = JSON.parse(listing.extra_fields);
     assert.strictEqual(listing.status, 'pending');
@@ -471,10 +479,11 @@ test('found-online social search batch creates pending listings with agent profi
     } else {
       assert.strictEqual(extra.source_contact_available_without_phone, false, `${listing.title} should not mark source-only contact when a phone is published`);
     }
-    assert.strictEqual(extra.consent_confirmed, true);
-    assert.strictEqual(extra.image_rights_confirmed, true);
-    assert.strictEqual(extra.preapproved_source_post, true);
-    assert.strictEqual(extra.image_rights_status, 'preapproved_social_source_media_or_evidence');
+    assert.strictEqual(extra.consent_confirmed, false);
+    assert.strictEqual(extra.image_rights_confirmed, false);
+    assert.strictEqual(extra.preapproved_source_post, false);
+    assert.strictEqual(extra.permission_status, 'missing_preapproval');
+    assert.strictEqual(extra.image_rights_status, 'blocked_until_image_rights_preapproved');
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
@@ -518,6 +527,8 @@ test('found-online second sweep migration expands source-backed 2026 records and
   assert(healthRoute.includes('045_expand_found_online_sweep_images_and_sources.sql'), 'migration health should expose the second sweep deployment status');
   assert(socialOnlyPreapprovedCleanupMigration.includes('website_or_non_social_source_blocked'), 'cleanup should remove website/non-social found-online rows from launch inventory');
   assert(socialOnlyPreapprovedCleanupMigration.includes('missing_preapproval_or_image_rights'), 'cleanup should remove rows without pre-approval and image-rights confirmation');
+  assert(strictFoundOnlinePreapprovalMigration.includes('implicit_found_online_approval_removed'), 'strict cleanup should remove legacy rows that were only implicitly approved');
+  assert(strictFoundOnlinePreapprovalMigration.includes('preapproved_source_post'), 'strict cleanup should require explicit preapproved source-post metadata');
   assert(socialOnlyPreapprovedCleanupMigration.includes("status = 'suspended'"), 'cleanup should hide source-created agent profiles until they have multiple live listings');
 });
 
@@ -776,8 +787,11 @@ test('found-online public-launch migration is superseded by social-only preappro
   assert(foundOnlinePublicLaunchMigration.includes('found_online_public_launch_published'), 'public launch migration should log moderation events');
   assert(socialOnlyPreapprovedCleanupMigration.includes("status = 'deleted'"), 'social-only cleanup should remove unapproved found-online rows from public inventory');
   assert(socialOnlyPreapprovedCleanupMigration.includes('preapproval_required_for_reimport'), 'cleanup should require preapproval before any reimport');
+  assert(strictFoundOnlinePreapprovalMigration.includes("status = 'deleted'"), 'strict cleanup should delete legacy implicitly approved found-online rows');
+  assert(strictFoundOnlinePreapprovalMigration.includes('strict_found_online_preapproval_20260525'), 'strict cleanup should tag the exact removal batch');
   assert(healthRoute.includes('050_publish_found_online_launch_inventory.sql'), 'migration health should expose found-online public launch migration');
   assert(healthRoute.includes('051_enforce_social_only_preapproved_inventory.sql'), 'migration health should expose social-only cleanup migration');
+  assert(healthRoute.includes('052_remove_implicit_found_online_approvals.sql'), 'migration health should expose strict implicit-approval cleanup migration');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {

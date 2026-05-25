@@ -41,7 +41,8 @@ router.get('/migrations', async (_req, res) => {
     '048_tiktok_facebook_double_down_profiles.sql',
     '049_social_first_x_priority_profiles.sql',
     '050_publish_found_online_launch_inventory.sql',
-    '051_enforce_social_only_preapproved_inventory.sql'
+    '051_enforce_social_only_preapproved_inventory.sql',
+    '052_remove_implicit_found_online_approvals.sql'
   ];
   try {
     const result = await db.query(
