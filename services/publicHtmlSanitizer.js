@@ -59,6 +59,7 @@ const PUBLIC_FORBIDDEN_STRINGS = [
 const PUBLIC_MODAL_IDS = [
   'admin-evidence-modal',
   'admin-whatsapp-modal',
+  'admin-photo-delete-modal',
   'list-choice-modal',
   'listing-submit-modal',
   'save-property-modal',
@@ -508,6 +509,7 @@ function stripProtectedPageBlocks(html) {
   output = removeBetweenMarkers(output, '<div id="page-admin-docs"', '<div id="page-saved"');
   output = removeElementById(output, 'admin-evidence-modal');
   output = removeElementById(output, 'admin-whatsapp-modal');
+  output = removeElementById(output, 'admin-photo-delete-modal');
   return output;
 }
 

@@ -547,6 +547,7 @@ let adminReviewWarningOverrides = {};
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
 let adminPendingPhotoDeleteId = "";
+let adminPendingPhotoDeleteReviewId = "";
 let adminPendingPhotoDeleteTimer = null;
 const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
@@ -10877,7 +10878,10 @@ async function adminSetListingPhotoPrimary(imageId) {
 
 function adminResetPhotoDeleteConfirmation(exceptImageId = "") {
   const keepId = String(exceptImageId || "");
-  if (!keepId) adminPendingPhotoDeleteId = "";
+  if (!keepId) {
+    adminPendingPhotoDeleteId = "";
+    adminPendingPhotoDeleteReviewId = "";
+  }
   if (adminPendingPhotoDeleteTimer) {
     clearTimeout(adminPendingPhotoDeleteTimer);
     adminPendingPhotoDeleteTimer = null;
@@ -10894,37 +10898,118 @@ function adminResetPhotoDeleteConfirmation(exceptImageId = "") {
   });
 }
 
+function adminFindListingPhotoById(review, imageId) {
+  const safeImageId = String(imageId || "");
+  const images = Array.isArray(review?.images) ? review.images : [];
+  return images.find((img) => String(img?.id || "") === safeImageId) || null;
+}
+
+function adminSetPhotoDeleteModalBusy(isBusy) {
+  const button = document.getElementById("admin-photo-delete-confirm-btn");
+  if (!button) return;
+  button.disabled = !!isBusy;
+  button.textContent = isBusy ? "Deleting..." : "Delete photo";
+  button.classList.toggle("opacity-60", !!isBusy);
+  button.classList.toggle("cursor-wait", !!isBusy);
+}
+
+function adminSetPhotoDeleteModalStatus(message = "", tone = "error") {
+  const status = document.getElementById("admin-photo-delete-modal-status");
+  if (!status) return;
+  const text = String(message || "").trim();
+  status.textContent = text;
+  status.classList.toggle("hidden", !text);
+  status.classList.toggle("border-red-200", tone !== "success");
+  status.classList.toggle("bg-red-50", tone !== "success");
+  status.classList.toggle("text-red-700", tone !== "success");
+  status.classList.toggle("border-green-200", tone === "success");
+  status.classList.toggle("bg-green-50", tone === "success");
+  status.classList.toggle("text-green-700", tone === "success");
+}
+
+function renderAdminPhotoDeleteModal(review, image) {
+  const titleEl = document.getElementById("admin-photo-delete-listing-title");
+  const metaEl = document.getElementById("admin-photo-delete-listing-meta");
+  const previewEl = document.getElementById("admin-photo-delete-preview");
+  const copyEl = document.getElementById("admin-photo-delete-copy");
+  if (titleEl) titleEl.textContent = review?.title || "this listing";
+  if (metaEl) {
+    metaEl.textContent = [
+      review?.inquiry_reference || review?.id || "",
+      [review?.area, review?.district].filter(Boolean).join(", ")
+    ].filter(Boolean).join(" - ") || "Listing photo";
+  }
+  if (copyEl) {
+    copyEl.textContent = image?.is_primary
+      ? "This is marked as the primary listing photo. Deleting it will remove it from the public listing and review evidence."
+      : "Deleting this photo removes it from the listing and review evidence. This cannot be undone from the dashboard.";
+  }
+  if (previewEl) {
+    const label = image?.room_label || image?.slot_key || image?.slot || "Selected photo";
+    previewEl.innerHTML = image?.url
+      ? `<img src="${adminAttr(image.url)}" alt="${adminAttr(label)}" class="h-36 w-full rounded-xl border border-gray-200 bg-gray-50 object-cover">`
+      : `<div class="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">No preview image is stored for this photo.</div>`;
+  }
+  adminSetPhotoDeleteModalBusy(false);
+  adminSetPhotoDeleteModalStatus("");
+}
+
+function closeAdminPhotoDeleteModal() {
+  adminResetPhotoDeleteConfirmation();
+  adminSetPhotoDeleteModalBusy(false);
+  adminSetPhotoDeleteModalStatus("");
+  closeModal("admin-photo-delete-modal");
+}
+
 function adminArmListingPhotoDelete(imageId, button) {
   const safeImageId = String(imageId || "");
   if (!safeImageId) return false;
+  const review = adminActiveReview || {};
+  const image = adminFindListingPhotoById(review, safeImageId);
   adminPendingPhotoDeleteId = safeImageId;
+  adminPendingPhotoDeleteReviewId = String(review.id || "");
   adminResetPhotoDeleteConfirmation(safeImageId);
   const target = button || Array.from(document.querySelectorAll("[data-admin-photo-delete-button]"))
     .find((candidate) => String(candidate.getAttribute("data-admin-photo-delete-button") || "") === safeImageId);
   if (target) {
     target.textContent = "Confirm delete";
-    target.classList.remove("border-red-200", "text-red-600", "hover:bg-red-50");
+    target.classList.remove("border-red-200", "text-red-600", "hover:bg-red-50", "opacity-60", "cursor-wait");
     target.classList.add("bg-red-600", "text-white", "border-red-600");
     target.disabled = false;
   }
-  adminPendingPhotoDeleteTimer = setTimeout(() => {
-    if (adminPendingPhotoDeleteId === safeImageId) adminResetPhotoDeleteConfirmation();
-  }, 8000);
-  toast("Tap Confirm delete to remove this listing photo.");
+  renderAdminPhotoDeleteModal(review, image);
+  openModal("admin-photo-delete-modal");
+  toast("Confirm the photo deletion in the popup.");
   return true;
 }
 
-async function adminDeleteListingPhoto(imageId, button) {
+async function adminConfirmListingPhotoDelete() {
+  const safeImageId = String(adminPendingPhotoDeleteId || "");
+  if (!safeImageId) {
+    closeAdminPhotoDeleteModal();
+    return;
+  }
+  await adminDeleteListingPhoto(safeImageId, document.getElementById("admin-photo-delete-confirm-btn"), { confirmed: true });
+}
+
+async function adminDeleteListingPhoto(imageId, button, options = {}) {
   const review = adminActiveReview || {};
   if (!review.id || !imageId || !canUseLiveAdminApi()) return;
   const safeImageId = String(imageId || "");
   if (adminPhotoDeleteInFlight.has(safeImageId)) return;
-  if (adminPendingPhotoDeleteId !== safeImageId) {
+  const confirmed = options?.confirmed === true;
+  if (!confirmed) {
     adminArmListingPhotoDelete(safeImageId, button);
+    return;
+  }
+  if (adminPendingPhotoDeleteReviewId && String(review.id || "") !== adminPendingPhotoDeleteReviewId) {
+    adminSetPhotoDeleteModalStatus("This review changed while the popup was open. Re-open the latest listing photo before deleting.");
+    toast("Photo delete paused: review changed.");
     return;
   }
   try {
     adminPhotoDeleteInFlight.add(safeImageId);
+    adminSetPhotoDeleteModalBusy(true);
     if (button) {
       button.disabled = true;
       button.textContent = "Deleting...";
@@ -10934,11 +11019,12 @@ async function adminDeleteListingPhoto(imageId, button) {
       method: "DELETE",
       headers: adminAuthHeaders()
     });
-    adminResetPhotoDeleteConfirmation();
+    closeAdminPhotoDeleteModal();
     renderAdminReviewPanel(response?.data || {});
     toast("Listing photo removed.");
   } catch (e) {
-    adminResetPhotoDeleteConfirmation();
+    adminSetPhotoDeleteModalBusy(false);
+    adminSetPhotoDeleteModalStatus(`Photo delete failed: ${e.message || "error"}`);
     toast(`Photo delete failed: ${e.message || "error"}`);
   } finally {
     adminPhotoDeleteInFlight.delete(safeImageId);
@@ -14246,7 +14332,7 @@ function renderAdminReviewPanel(review) {
   }
   const images = Array.isArray(review.images) ? review.images : [];
   if (adminPendingPhotoDeleteId && !images.some((img) => String(img.id || "") === adminPendingPhotoDeleteId)) {
-    adminResetPhotoDeleteConfirmation();
+    closeAdminPhotoDeleteModal();
   }
   const automated = review?.review?.automated || {};
   const checklistItems = automated?.checks || review?.review?.checklist_items || [];
@@ -32468,6 +32554,7 @@ function syncModalOpenState() {
 
 document.addEventListener("click", (e) => {
   if (e.target.classList.contains("modal-overlay")) {
+    if (e.target.getAttribute("data-modal-static") === "true") return;
     e.target.classList.remove("open");
     syncModalOpenState();
   }
