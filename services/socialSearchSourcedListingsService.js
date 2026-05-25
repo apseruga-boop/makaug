@@ -15,14 +15,24 @@ const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
-const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social/source profile, website, source page, or platform message route exists; makaug shows Contact via source until the agent adds a direct number.';
+const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
+const PREAPPROVED_PERMISSION_STATUSES = [
+  'founder_reported_agent_authorised_upload',
+  'founder_reported_agent_authorised_listing',
+  'founder_confirmed_preapproved',
+  'agent_authorised_upload',
+  'agent_authorised_listing',
+  'agent_preapproved',
+  'owner_agent_preapproved',
+];
+const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue every specific public property post/listing from 1 January 2026 onward that has a source URL, location or area, price or guide price, usable listing evidence, and any contact path. Phone is optional when a public source/social/website route exists. There is no queue cap: every eligible post is added for King review.',
-  image_rule: 'Use direct public listing images, platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide. Do not invent property-room photos or bypass private platform restrictions.',
-  facebook_image_rule: 'For Facebook, store the public post URL as source evidence. Use a public direct media/og:image URL or authorised screenshot when available; otherwise use a labelled evidence card and ask the source/agent for HD images.',
-  platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter', 'websites', 'student accommodation sources'],
+  queue_rule: 'Queue only pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, price or guide price, usable listing evidence, a social/direct contact path, and owner/agent permission plus image-rights confirmation. Website-only sources are ignored.',
+  image_rule: 'Use social-platform thumbnails/stills/media only when attached to the exact source post and rights are pre-approved, or use a clearly-labelled makaug evidence card/land-size guide for review. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
+  facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images.',
+  platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
 
 const SOCIAL_SEARCH_AGENTS = [
@@ -587,7 +597,6 @@ function sourceUrlForItem(item = {}) {
 
 function sourceContactCandidateUrls(agent = {}, item = {}) {
   return uniqueUrls([
-    agent.website,
     agent.channelUrl,
     agent.facebookUrl,
     agent.instagramUrl,
@@ -597,7 +606,7 @@ function sourceContactCandidateUrls(agent = {}, item = {}) {
     item.sourceContactUrl,
     item.contactUrl,
     sourceUrlForItem(item),
-  ]);
+  ]).filter(urlLooksAllowedSocialSource);
 }
 
 function hasAnyPublicContactPath(agent = {}, item = {}) {
@@ -605,6 +614,95 @@ function hasAnyPublicContactPath(agent = {}, item = {}) {
     String(agent.phone || agent.phoneAlt || agent.email || item.phone || item.phoneAlt || item.email || '').trim()
       || sourceContactCandidateUrls(agent, item).length
   );
+}
+
+function normalizeSourcePlatformName(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'x/twitter') return 'x';
+  return normalized;
+}
+
+function isAllowedSocialSourcePlatform(platform = '') {
+  return ALLOWED_SOCIAL_SOURCE_PLATFORMS.includes(normalizeSourcePlatformName(platform));
+}
+
+function urlLooksAllowedSocialSource(value = '') {
+  const url = safeUrl(value).toLowerCase();
+  return Boolean(url && /(youtube\.com|youtu\.be|tiktok\.com|instagram\.com|facebook\.com|fb\.watch|x\.com|twitter\.com)/i.test(url));
+}
+
+function itemHasAllowedSocialSource(item = {}, agent = {}) {
+  const platform = sourcePlatformFor(agent, item);
+  return isAllowedSocialSourcePlatform(platform) && urlLooksAllowedSocialSource(sourceUrlForItem(item));
+}
+
+function parseBooleanFlag(value) {
+  if (value === true) return true;
+  if (value === false || value == null) return false;
+  return /^(true|1|yes|y|on)$/i.test(String(value).trim());
+}
+
+function sourcePreApprovalStatusFor(item = {}) {
+  if (item.importedFromSourcePost !== true) {
+    return {
+      preapproved: true,
+      consent_confirmed: true,
+      image_rights_confirmed: true,
+      permission_status: 'founder_reported_agent_authorised_upload',
+    };
+  }
+  const raw = item.raw_source_post || {};
+  const permissionStatus = String(
+    item.permission_status
+      || item.permissionStatus
+      || raw.permission_status
+      || raw.permissionStatus
+      || ''
+  ).trim().toLowerCase();
+  const consentConfirmed = parseBooleanFlag(
+    item.consent_confirmed
+      ?? item.consentConfirmed
+      ?? item.agent_authorised
+      ?? item.agentAuthorised
+      ?? item.pre_approved
+      ?? item.preApproved
+      ?? raw.consent_confirmed
+      ?? raw.consentConfirmed
+      ?? raw.agent_authorised
+      ?? raw.agentAuthorised
+      ?? raw.pre_approved
+      ?? raw.preApproved
+  );
+  const imageRightsConfirmed = parseBooleanFlag(
+    item.image_rights_confirmed
+      ?? item.imageRightsConfirmed
+      ?? item.authorised_images
+      ?? item.authorisedImages
+      ?? item.pre_approved
+      ?? item.preApproved
+      ?? raw.image_rights_confirmed
+      ?? raw.imageRightsConfirmed
+      ?? raw.authorised_images
+      ?? raw.authorisedImages
+      ?? raw.pre_approved
+      ?? raw.preApproved
+  );
+  const explicitPreapproved = parseBooleanFlag(
+    item.pre_approved
+      ?? item.preApproved
+      ?? item.agent_preapproved
+      ?? item.agentPreapproved
+      ?? raw.pre_approved
+      ?? raw.preApproved
+      ?? raw.agent_preapproved
+      ?? raw.agentPreapproved
+  );
+  return {
+    preapproved: explicitPreapproved || (consentConfirmed && imageRightsConfirmed && PREAPPROVED_PERMISSION_STATUSES.includes(permissionStatus)),
+    consent_confirmed: consentConfirmed || explicitPreapproved,
+    image_rights_confirmed: imageRightsConfirmed || explicitPreapproved,
+    permission_status: permissionStatus || (explicitPreapproved ? 'agent_preapproved' : 'missing_preapproval'),
+  };
 }
 
 function parseSourceDate(value = '') {
@@ -623,19 +721,27 @@ function sourceDateStatusFor(item = {}) {
 
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
+  const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
   const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim());
   const hasPrice = item.price != null || Boolean(String(item.guidePrice || item.priceText || '').trim());
   const hasContact = hasAnyPublicContactPath(agent, item);
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
+  const preApproval = sourcePreApprovalStatusFor(item);
   return {
-    eligible: hasSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window',
+    eligible: hasSource && allowedSocialSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && preApproval.preapproved,
     has_source_url: hasSource,
+    allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
     has_price_or_guide_price: hasPrice,
     has_contact_path: hasContact,
     has_image_or_source_evidence: hasImageOrEvidence,
     date_status: dateStatus,
+    preapproved: preApproval.preapproved,
+    consent_confirmed: preApproval.consent_confirmed,
+    image_rights_confirmed: preApproval.image_rights_confirmed,
+    permission_status: preApproval.permission_status,
+    website_source_blocked: hasSource && !allowedSocialSource,
     no_phone_ok_with_source_contact: Boolean(!String(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '').trim() && hasContact),
   };
 }
@@ -676,7 +782,6 @@ function sourceContactUrlForAgent(agent = {}, item = {}) {
 function sourceContactMethodForAgent(agent = {}) {
   if (agent.phone) return 'phone';
   if (agent.email) return 'email';
-  if (agent.website) return 'website';
   if (agent.facebookUrl) return 'facebook';
   if (agent.instagramUrl) return 'instagram';
   if (agent.tiktokUrl) return 'tiktok';
@@ -688,7 +793,6 @@ function sourceContactMethodForAgent(agent = {}) {
 function sourceContactLabelForAgent(agent = {}) {
   if (agent.phone) return 'Call or WhatsApp the agent';
   if (agent.email) return 'Email the agent';
-  if (agent.website) return 'Contact through the agent website';
   if (agent.facebookUrl) return 'Contact through the public Facebook source';
   if (agent.instagramUrl) return 'Contact through the public Instagram source';
   if (agent.tiktokUrl) return 'Contact through the public TikTok source';
@@ -980,7 +1084,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedAt = sourcePublishedAtFor(item);
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
-  const importedSourcePost = item.importedFromSourcePost === true;
+  const preApproval = sourcePreApprovalStatusFor(item);
   return {
     found_online_candidate: true,
     social_search_candidate: true,
@@ -1021,16 +1125,15 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
-    agent_permission_reported: !importedSourcePost,
-    permission_status: importedSourcePost
-      ? 'public_source_evidence_pending_agent_authorisation'
-      : 'founder_reported_agent_authorised_upload',
-    consent_required: false,
-    consent_confirmed: !importedSourcePost,
-    image_rights_confirmed: !importedSourcePost,
-    image_rights_status: importedSourcePost
-      ? 'public_source_evidence_pending_authorisation'
-      : 'authorised_public_source_images_or_evidence',
+    agent_permission_reported: preApproval.preapproved,
+    permission_status: preApproval.permission_status,
+    preapproved_source_post: preApproval.preapproved,
+    consent_required: true,
+    consent_confirmed: preApproval.consent_confirmed,
+    image_rights_confirmed: preApproval.image_rights_confirmed,
+    image_rights_status: preApproval.image_rights_confirmed
+      ? 'preapproved_social_source_media_or_evidence'
+      : 'blocked_until_image_rights_preapproved',
     image_evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
     facebook_image_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
     launch_intake_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
@@ -1063,7 +1166,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     longitude_source: 'manual_public_source_area_pin',
     area_highlights: `${item.area} is a practical Uganda property search area with access to local roads, schools, health facilities, shops, and daily services. Confirm the exact property pin with the listing agent before approval.`,
     nearby_facilities: nearby.map(([name, type, distanceKm]) => ({ name, type, distanceKm })),
-    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2026+ found-online intake', sourceContactLabel],
+    source_labels: ['found online', sourcePlatformFeedLabel(sourcePlatform), '2026+ social-only intake', sourceContactLabel],
     source_urls: uniqueUrls([agent.channelUrl, sourceUrl, sourceContactUrl, item.sourceUrls]),
     photo_source_urls: sourceImageRows.map((image) => image.url),
     authorised_photo_urls: imageRows.map((image) => image.url),
@@ -1340,8 +1443,9 @@ async function insertListing(client, listing, agentId) {
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
-        consent_confirmed: listing.source_item.importedFromSourcePost === true ? false : true,
-        image_rights_confirmed: listing.source_item.importedFromSourcePost === true ? false : true,
+        preapproved_source_post: sourcePreApprovalStatusFor(listing.source_item).preapproved,
+        consent_confirmed: sourcePreApprovalStatusFor(listing.source_item).consent_confirmed,
+        image_rights_confirmed: sourcePreApprovalStatusFor(listing.source_item).image_rights_confirmed,
         source_batch: itemBatchId(listing.source_item),
         source_url: sourceUrlForItem(listing.source_item),
         youtube_url: listing.source_item.youtubeId ? youtubeUrl(listing.source_item.youtubeId) : '',
@@ -1487,6 +1591,10 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     photoUrls: asTextArray(raw.photo_urls),
     mediaUrls: asTextArray(raw.media_urls),
     sourceUrls: asTextArray(raw.source_urls),
+    permission_status: raw.permission_status || raw.permissionStatus || '',
+    consent_confirmed: raw.consent_confirmed ?? raw.consentConfirmed ?? raw.agent_authorised ?? raw.agentAuthorised ?? raw.pre_approved ?? raw.preApproved ?? false,
+    image_rights_confirmed: raw.image_rights_confirmed ?? raw.imageRightsConfirmed ?? raw.authorised_images ?? raw.authorisedImages ?? raw.pre_approved ?? raw.preApproved ?? false,
+    pre_approved: raw.pre_approved ?? raw.preApproved ?? raw.agent_preapproved ?? raw.agentPreapproved ?? false,
     raw_source_post: raw,
   };
 }
@@ -1533,7 +1641,7 @@ async function queueFoundOnlineSourcePostListings({
   db,
   posts = [],
   dryRun = false,
-  createProfilesForRepeatedSourcesOnly = false,
+  createProfilesForRepeatedSourcesOnly = true,
 } = {}) {
   const items = (Array.isArray(posts) ? posts : [])
     .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
@@ -1685,6 +1793,14 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
     await client.query('BEGIN');
     const agentIdsByKey = {};
     const skippedAgents = [];
+    const eligibleCountsByAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
+      const agent = agentByKey(item.agentKey);
+      if (sourcePostMeetsLaunchIntakeRule(item, agent).eligible) {
+        acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
+      }
+      return acc;
+    }, {});
+    const shouldCreateProfileForSeedItem = (item = {}) => Number(eligibleCountsByAgent[item.agentKey] || 0) > 1;
     for (const agent of SOCIAL_SEARCH_AGENTS) {
       if (!agentHasPublicContact(agent)) {
         skippedAgents.push({
@@ -1692,6 +1808,15 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
           name: agent.name,
           channelUrl: agent.channelUrl || agent.website || '',
           reason: 'missing_any_public_contact_path',
+        });
+        continue;
+      }
+      if (Number(eligibleCountsByAgent[agent.key] || 0) <= 1) {
+        skippedAgents.push({
+          key: agent.key,
+          name: agent.name,
+          channelUrl: agent.channelUrl || '',
+          reason: 'profile_deferred_until_multiple_preapproved_live_properties',
         });
         continue;
       }
@@ -1736,7 +1861,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         });
         continue;
       }
-      if (!agentIdsByKey[item.agentKey]) {
+      if (shouldCreateProfileForSeedItem(item) && !agentIdsByKey[item.agentKey]) {
         const agent = agentByKey(item.agentKey) || {};
         skippedListings.push({
           key: item.key,
@@ -1763,8 +1888,11 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         });
         continue;
       }
-      const listing = buildSocialSearchListing(item, agentIdsByKey[item.agentKey]);
-      created.push(await insertListing(client, listing, agentIdsByKey[item.agentKey]));
+      const agentId = shouldCreateProfileForSeedItem(item) ? agentIdsByKey[item.agentKey] : null;
+      const listing = buildSocialSearchListing(item, agentId);
+      const inserted = await insertListing(client, listing, agentId);
+      inserted.profile_action = agentId ? 'create_or_update_source_profile' : 'defer_single_post_profile';
+      created.push(inserted);
     }
     await client.query('COMMIT');
     const alreadyPresentReviewQueue = alreadyPresent.filter((item) => item.review_queue_visible && !item.already_live_or_approved && isReviewQueueStatus(item));
@@ -1853,13 +1981,13 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     target_gap: targetGap,
     meets_daily_minimum: eligibleToQueueCount >= DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     blocking_reason: targetGap
-      ? `Need ${targetGap} more specific property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and any contact path such as phone, email, website, public source page, or social profile before the 200/day King review minimum is met. There is no cap: every extra eligible post is queued.`
+      ? `Need ${targetGap} more specific pre-approved social property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path before the 200/day King review minimum is met. Website-only sources are ignored.`
       : 'Daily minimum met; continue queuing every extra eligible 2026+ found-online property post because there is no cap.',
     evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     no_phone_source_contact_policy:
       PUBLIC_SOURCE_CONTACT_POLICY,
     source_page_vs_property_policy:
-      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, student accommodation sources, and websites. King queues every actual property post/listing from 1 January 2026 onward that meets the found-online intake rule; source pages without a matched post stay as source-review work.',
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. King queues only pre-approved social property posts/listings from 1 January 2026 onward that meet the found-online intake rule; website-only sources and source pages without a matched post stay out of property inventory.',
     next_required_inputs: [
       'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026+ post is queued.',
       'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
@@ -1871,6 +1999,11 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
 function summarizeSocialSearchListings() {
   const listings = plannedSocialSearchListings();
   const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible);
+  const eligibleCountsByAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
+    if (sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible) acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
+    return acc;
+  }, {});
+  const profileEligibleAgents = SOCIAL_SEARCH_AGENTS.filter((agent) => Number(eligibleCountsByAgent[agent.key] || 0) > 1);
   const byAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
     const agent = agentByKey(item.agentKey)?.name || item.agentKey;
     acc[agent] = (acc[agent] || 0) + 1;
@@ -1883,7 +2016,8 @@ function summarizeSocialSearchListings() {
   }, {});
   return {
     count: listings.length,
-    agents_count: SOCIAL_SEARCH_AGENTS.length,
+    agents_count: profileEligibleAgents.length,
+    source_profiles_deferred_count: SOCIAL_SEARCH_AGENTS.length - profileEligibleAgents.length,
     seed_eligible_count: seedEligibleListings.length,
     skipped_until_public_contact_count: SOCIAL_SEARCH_LISTINGS.length - seedEligibleListings.length,
     by_agent: byAgent,

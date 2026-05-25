@@ -86,7 +86,11 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
 test('anonymous public agent APIs suppress QA broker records', () => {
   assert.match(agentsRouteSource, /PUBLIC_AGENT_SUPPRESSED_MARKERS = \['QA TEST - DELETE', 'SOFT LAUNCH TEST - DELETE'\]/);
   assert.match(agentsRouteSource, /function addPublicAgentLaunchTestFilter/);
+  assert.match(agentsRouteSource, /PUBLIC_AGENT_MIN_LIVE_LISTINGS = 2/);
+  assert.match(agentsRouteSource, /function addPublicAgentInventoryFilter/);
   assert.match(agentsRouteSource, /addPublicAgentLaunchTestFilter\(filters, values\)/);
+  assert.match(agentsRouteSource, /addPublicAgentInventoryFilter\(filters\)/);
+  assert.match(agentsRouteSource, /COUNT\(\*\)::int[\s\S]*p\.agent_id = a\.id[\s\S]*p\.status = 'approved'[\s\S]*>= \$\{PUBLIC_AGENT_MIN_LIVE_LISTINGS\}/);
   assert(agentsRouteSource.includes("COALESCE(a.email, '') !~* '(qa-test|makaug\\\\.invalid|dummy|sample)'"));
   assert(agentsRouteSource.includes("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'"));
 });

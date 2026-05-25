@@ -40,7 +40,8 @@ router.get('/migrations', async (_req, res) => {
     '047_tiktok_realtor_mahad_video_index.sql',
     '048_tiktok_facebook_double_down_profiles.sql',
     '049_social_first_x_priority_profiles.sql',
-    '050_publish_found_online_launch_inventory.sql'
+    '050_publish_found_online_launch_inventory.sql',
+    '051_enforce_social_only_preapproved_inventory.sql'
   ];
   try {
     const result = await db.query(

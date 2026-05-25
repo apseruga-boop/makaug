@@ -182,6 +182,10 @@ function normalizeParsedTikTokFields(fields = {}) {
     contact_phone: fields.phone || fields.contact_phone || fields.whatsapp || '',
     contact_email: fields.email || fields.contact_email || '',
     image_urls: fields.images || fields.image_urls || fields.photos || fields.media_urls || '',
+    pre_approved: fields.pre_approved || fields.preapproved || fields.agent_preapproved || '',
+    consent_confirmed: fields.consent_confirmed || fields.agent_authorised || fields.agent_authorized || '',
+    image_rights_confirmed: fields.image_rights_confirmed || fields.authorised_images || fields.authorized_images || '',
+    permission_status: fields.permission_status || '',
   };
 }
 
@@ -311,6 +315,10 @@ function buildTikTokExactPostImportRows({
         image_urls: imageUrls,
         contact_phone: seed.contact_phone || seed.phone || seed.whatsapp || '',
         contact_email: seed.contact_email || seed.email || '',
+        pre_approved: seed.pre_approved || seed.preApproved || '',
+        consent_confirmed: seed.consent_confirmed || seed.consentConfirmed || seed.agent_authorised || seed.agentAuthorised || '',
+        image_rights_confirmed: seed.image_rights_confirmed || seed.imageRightsConfirmed || seed.authorised_images || seed.authorisedImages || '',
+        permission_status: seed.permission_status || seed.permissionStatus || '',
         source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
         source_registry_key: seed.source_registry_key || '',
         source_urls: [profileUrl, sourceUrl].filter(Boolean),
@@ -411,6 +419,7 @@ function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit
         exact_post_url_pattern: 'https://www.tiktok.com/@{handle}/video/{video_id}',
         import_ready_when: [
           'exact TikTok video URL is captured',
+          'owner/agent pre-approval and image-rights confirmation are captured',
           'caption/overlay gives property title or description',
           'location or area is visible',
           'price or guide price is visible',
@@ -716,8 +725,8 @@ async function runSocialPlatformPostSweep({
     dry_run: dryRun,
     platforms: requestedPlatforms,
     policy: {
-      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property only after the exact TikTok /@handle/video/id URL, price, location, source contact path, and source-image evidence are captured.',
-      x: 'X/Twitter source lists become properties only after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, price, location, and contact path.',
+      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property only after the exact TikTok /@handle/video/id URL, price, location, source contact path, pre-approval, and source-image rights evidence are captured.',
+      x: 'X/Twitter source lists become properties only after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, price, location, contact path, and pre-approval.',
       profile_creation_rule: 'The sweep creates or links a profile only when a source contributes multiple eligible properties; one-off posts remain found-online listings without creating a new profile.',
     },
     tiktok: {

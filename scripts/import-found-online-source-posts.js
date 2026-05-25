@@ -29,12 +29,14 @@ function usage() {
     'Input fields accepted include:',
     '  post_url/source_url, source_page_url, source_key, source_name, platform, title, description,',
     '  first_posted_at/published_at/posted_at, district, area/location, price/price_text,',
-    '  listing_type, bedrooms, bathrooms, image_urls, contact_phone, contact_email, source_contact_url',
+    '  listing_type, bedrooms, bathrooms, image_urls, contact_phone, contact_email, source_contact_url,',
+    '  pre_approved, consent_confirmed, image_rights_confirmed, permission_status',
     '',
     'TikTok minimum viable rows:',
     '  source_url/post_url must be the exact public TikTok video URL when available.',
     '  source_page_url can be the TikTok profile/contact path.',
-    '  first_posted_at and image_urls are optional; missing dates show as being confirmed and missing images use a labelled makaug evidence card.',
+    '  pre_approved/consent_confirmed/image_rights_confirmed must be true before a property row is created.',
+    '  missing dates show as being confirmed and missing images use a labelled makaug evidence card.',
   ].join('\n'));
 }
 
@@ -104,6 +106,7 @@ async function main() {
     db,
     posts,
     dryRun,
+    createProfilesForRepeatedSourcesOnly: true,
   });
   console.log(JSON.stringify({
     ok: true,
