@@ -23,6 +23,7 @@ const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_onl
 const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
 const socialOnlyPreapprovedCleanupMigration = read('db/migrations/051_enforce_social_only_preapproved_inventory.sql');
 const strictFoundOnlinePreapprovalMigration = read('db/migrations/052_remove_implicit_found_online_approvals.sql');
+const youtubeSocialRestoreMigration = read('db/migrations/054_restore_youtube_social_found_online_inventory.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -250,6 +251,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(html.includes('live-review-separation-20260525'), 'index should bump the app asset version so production browsers fetch the live/review separation fix');
   assert(html.includes('social-only-preapproved-20260525'), 'index should bump the app asset version so production browsers fetch the social-only preapproval cleanup');
   assert(html.includes('strict-preapproval-20260525'), 'index should bump the app asset version so production browsers fetch the strict explicit-preapproval cleanup');
+  assert(html.includes('youtube-social-restore-20260525'), 'index should bump the app asset version so production browsers fetch the YouTube social restore copy');
   assert(frontend.includes('adminPendingQueueFilter = "found_online"'), 'found-online sweep should switch the Review Queue to the found-online filter');
   assert(frontend.includes('function adminFoundOnlineAllRows'), 'dashboard should keep a pending-only found-online helper for cached code paths');
   assert(!frontend.includes('approved/live source records stay visible here for audit'), 'Review Queue must not describe approved/live listings as still visible there');
@@ -425,14 +427,14 @@ test('Carnelian WhatsApp share card carries listing URL, video and agent contact
   assert(card.includes(CARNELIAN_CONTACT.phoneAlt), 'share card should include alternate Carnelian phone');
 });
 
-test('found-online social search batch stays review-only until explicit preapproval is supplied', () => {
+test('found-online social search batch accepts curated YouTube source records', () => {
   const summary = summarizeSocialSearchListings();
   const listings = plannedSocialSearchListings(Object.fromEntries(SOCIAL_SEARCH_AGENTS.map((agent, index) => [agent.key, `agent-${index}`])));
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
-  assert.strictEqual(summary.count, 18, 'social search batch should retain tracked recent public property records as source-review work');
-  assert.strictEqual(summary.seed_eligible_count, 0, 'social search seed rows must not become properties without explicit preapproval fields');
-  assert.strictEqual(summary.agents_count, 0, 'social search batch should not prepare profiles until multiple explicit-preapproved properties exist');
-  assert.strictEqual(summary.source_profiles_deferred_count, SOCIAL_SEARCH_AGENTS.length, 'all source profiles stay deferred until explicit-preapproved inventory is live');
+  assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public YouTube property records');
+  assert.strictEqual(summary.seed_eligible_count, 18, 'curated exact YouTube source rows should be eligible found-online properties');
+  assert.strictEqual(summary.agents_count, 4, 'social search batch should prepare profiles only for YouTube sources with multiple eligible properties');
+  assert.strictEqual(summary.source_profiles_deferred_count, 3, 'single-property sources should stay listing-only until a second property is live');
   assert.strictEqual(summary.daily_target_status.target, 200, 'morning sweep should expose the 200/day property queue target');
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
@@ -448,8 +450,8 @@ test('found-online social search batch stays review-only until explicit preappro
   assert(summary.by_type.land >= 2, 'social search batch should include land records where the source gives land detail');
   assert.strictEqual(
     sourcePostMeetsLaunchIntakeRule(SOCIAL_SEARCH_LISTINGS[0], SOCIAL_SEARCH_AGENTS.find((agent) => agent.key === SOCIAL_SEARCH_LISTINGS[0].agentKey)).eligible,
-    false,
-    'tracked social seed rows should remain ineligible until explicit preapproval, consent, and image rights are supplied'
+    true,
+    'curated exact YouTube source rows should be eligible after King confirmed YouTube social rows are acceptable'
   );
   for (const listing of listings) {
     const extra = JSON.parse(listing.extra_fields);
@@ -479,11 +481,11 @@ test('found-online social search batch stays review-only until explicit preappro
     } else {
       assert.strictEqual(extra.source_contact_available_without_phone, false, `${listing.title} should not mark source-only contact when a phone is published`);
     }
-    assert.strictEqual(extra.consent_confirmed, false);
-    assert.strictEqual(extra.image_rights_confirmed, false);
-    assert.strictEqual(extra.preapproved_source_post, false);
-    assert.strictEqual(extra.permission_status, 'missing_preapproval');
-    assert.strictEqual(extra.image_rights_status, 'blocked_until_image_rights_preapproved');
+    assert.strictEqual(extra.consent_confirmed, true);
+    assert.strictEqual(extra.image_rights_confirmed, true);
+    assert.strictEqual(extra.preapproved_source_post, true);
+    assert.strictEqual(extra.permission_status, 'founder_reported_agent_authorised_upload');
+    assert.strictEqual(extra.image_rights_status, 'preapproved_social_source_media_or_evidence');
     assert.strictEqual(extra.map_pin_confirmed, false);
     assert(/^https:\/\/www\.youtube\.com\/watch\?v=/.test(extra.youtube_url), `${listing.title} should keep the source video URL`);
     assert(Array.isArray(extra.source_urls) && extra.source_urls.some((url) => /youtube\.com/i.test(url)), `${listing.title} should keep public source URLs`);
@@ -789,9 +791,13 @@ test('found-online public-launch migration is superseded by social-only preappro
   assert(socialOnlyPreapprovedCleanupMigration.includes('preapproval_required_for_reimport'), 'cleanup should require preapproval before any reimport');
   assert(strictFoundOnlinePreapprovalMigration.includes("status = 'deleted'"), 'strict cleanup should delete legacy implicitly approved found-online rows');
   assert(strictFoundOnlinePreapprovalMigration.includes('strict_found_online_preapproval_20260525'), 'strict cleanup should tag the exact removal batch');
+  assert(youtubeSocialRestoreMigration.includes('youtube_social_found_online_restore_20260525'), 'restore migration should tag the YouTube social restoration batch');
+  assert(youtubeSocialRestoreMigration.includes("status = 'approved'"), 'restore migration should return accepted YouTube social rows to public approved inventory');
+  assert(youtubeSocialRestoreMigration.includes("LOWER(COALESCE(p.extra_fields->>'source_platform', '')) = 'youtube'"), 'restore migration should be scoped to YouTube social rows only');
   assert(healthRoute.includes('050_publish_found_online_launch_inventory.sql'), 'migration health should expose found-online public launch migration');
   assert(healthRoute.includes('051_enforce_social_only_preapproved_inventory.sql'), 'migration health should expose social-only cleanup migration');
   assert(healthRoute.includes('052_remove_implicit_found_online_approvals.sql'), 'migration health should expose strict implicit-approval cleanup migration');
+  assert(healthRoute.includes('054_restore_youtube_social_found_online_inventory.sql'), 'migration health should expose YouTube social restore migration');
 });
 
 test('King review preview opens pending listings through a protected admin route', () => {

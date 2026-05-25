@@ -9359,7 +9359,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed social source pages/feeds and queue only pre-approved found-online property candidates from 1 January 2026 onward. Website-only sources are ignored. Profiles are created only after multiple eligible properties.");
+  const ok = window.confirm("Scan reviewed social source pages/feeds and queue curated YouTube plus pre-approved found-online property candidates from 1 January 2026 onward. Website-only sources are ignored. Profiles are created only after multiple eligible properties.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9369,7 +9369,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Checking reviewed social source pages/feeds and queuing only pre-approved 2026+ found-online property candidates now...";
+    statusEl.innerHTML = "Checking reviewed social source pages/feeds and queuing curated YouTube plus pre-approved 2026+ found-online property candidates now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9432,7 +9432,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
-        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives only pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, price or guide price, image-rights confirmation, and usable images or source evidence are present.</div>
+        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, price or guide price, and usable images or source evidence are present.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
@@ -9602,7 +9602,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: only pre-approved public social posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, image-rights confirmation, and a public social/direct contact route are queued. Website-only sources are ignored. Profiles are created only when the source has multiple eligible properties.</div>
+        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other pre-approved public social posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. Profiles are created only when the source has multiple eligible properties.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
