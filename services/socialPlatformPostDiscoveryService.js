@@ -38,7 +38,8 @@ const AREA_HINTS = [
   'Komamboga', 'Kiwatule', 'Bukoto', 'Naguru', 'Kololo', 'Nakasero', 'Luzira',
   'Lubowa', 'Seguku', 'Kitende', 'Kajansi', 'Akright', 'Garuga', 'Kiwafu',
   'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
-  'Namanve', 'Luweero', 'Masaka', 'Mbarara', 'Mbale', 'Gulu', 'Arua',
+  'Namanve', 'Katosi', 'Mpunge', 'Mpungwe', 'Lake Victoria', 'Luweero', 'Masaka',
+  'Mbarara', 'Mbale', 'Gulu', 'Arua',
 ];
 
 function cleanText(value = '') {
@@ -285,6 +286,8 @@ function buildTikTokExactPostImportRows({
       const area = cleanText(seed.area || seed.location || extractArea(combinedText));
       const district = cleanText(seed.district || districtForArea(area, combinedText));
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
+      const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
+      const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
       const imageUrls = [
         ...String(seed.image_urls || seed.images || seed.photo_urls || seed.media_urls || '')
           .split(/[\n,|]+/)
@@ -313,12 +316,12 @@ function buildTikTokExactPostImportRows({
         bathrooms: seed.bathrooms || '',
         first_posted_at: seed.first_posted_at || seed.posted_at || seed.published_at || seed.source_published_at || '',
         image_urls: imageUrls,
-        contact_phone: seed.contact_phone || seed.phone || seed.whatsapp || '',
-        contact_email: seed.contact_email || seed.email || '',
+        contact_phone: contactPhone,
+        contact_email: contactEmail,
         pre_approved: seed.pre_approved || seed.preApproved || '',
         consent_confirmed: seed.consent_confirmed || seed.consentConfirmed || seed.agent_authorised || seed.agentAuthorised || '',
         image_rights_confirmed: seed.image_rights_confirmed || seed.imageRightsConfirmed || seed.authorised_images || seed.authorisedImages || '',
-        permission_status: seed.permission_status || seed.permissionStatus || '',
+        permission_status: seed.permission_status || seed.permissionStatus || 'exact_tiktok_source_pending_king_review',
         source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
         source_registry_key: seed.source_registry_key || '',
         source_urls: [profileUrl, sourceUrl].filter(Boolean),
@@ -485,6 +488,7 @@ function districtForArea(area = '', text = '') {
   const haystack = cleanText(`${candidate} ${text}`);
   const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
   if (district) return district;
+  if (/katosi|mpunge|mpungwe|mukono/i.test(haystack)) return 'Mukono';
   if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso/i.test(haystack)) return 'Wakiso';
   if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo/i.test(haystack)) return 'Kampala';
   return 'Kampala';
@@ -501,15 +505,27 @@ function listingTypeFromText(text = '') {
 
 function priceTextFromText(text = '') {
   const raw = cleanText(text);
+  const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
+  if (negotiableMatch) return cleanText(negotiableMatch[0]);
   const patterns = [
-    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|m|mn|million|k|thousand))?(?:\/month| per month| monthly)?/i,
-    /\b\d+(?:\.\d+)?\s*(?:bn|billion|m|mn|million)\b(?:\/month| per month| monthly)?/i,
+    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly)?/i,
+    /\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,
   ];
   for (const pattern of patterns) {
     const match = raw.match(pattern);
     if (match) return match[0];
   }
   return '';
+}
+
+function phoneFromText(text = '') {
+  const match = cleanText(text).match(/(?:\+?256|0)\s*[\d\s().-]{7,14}\d/);
+  return match ? match[0].replace(/[^\d+]/g, '') : '';
+}
+
+function emailFromText(text = '') {
+  const match = cleanText(text).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : '';
 }
 
 function bedroomsFromText(text = '') {
