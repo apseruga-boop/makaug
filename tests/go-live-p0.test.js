@@ -127,6 +127,7 @@ const FORBIDDEN_PUBLIC_IDS = [
   'page-admin-setup-status',
   'admin-evidence-modal',
   'admin-whatsapp-modal',
+  'admin-photo-delete-modal',
   'list-choice-modal',
   'listing-submit-modal',
   'save-property-modal',
@@ -820,6 +821,11 @@ function run() {
   assert(backendConnectionProbeScript.includes('SMS_TEST_PHONE'), 'backend probe should include explicit SMS test phone key');
   assert(backendConnectionProbeScript.includes('sourceWiringChecks'), 'backend probe should inspect source wiring for launch-critical flows');
   assert(frontendSource.includes('id="admin-launch-control"'), 'admin launch control should exist');
+  assert(frontendSource.includes('id="admin-photo-delete-modal"'), 'admin photo deletion should use a persistent confirmation modal');
+  assert(frontendSource.includes('data-modal-static="true" data-admin-photo-delete-modal="1"'), 'admin photo delete modal should not disappear on background clicks');
+  assert(frontendSource.includes('closeAdminPhotoDeleteModal'), 'admin photo delete modal should have an explicit cancel/close handler');
+  assert(frontendSource.includes('adminConfirmListingPhotoDelete'), 'admin photo delete modal should confirm deletion through a dedicated handler');
+  assert(frontendSource.includes('renderAdminPhotoDeleteModal'), 'admin photo delete modal should render selected photo details before deletion');
   assert(frontendSource.includes('/admin/setup-status'), 'admin launch control should link owner setup status');
   assert(frontendSource.includes('id="admin-control-shortcuts"'), 'admin dashboard should expose direct owner control shortcuts');
   assert(frontendSource.includes('id="admin-command-centre"'), 'admin dashboard should expose the simplified command centre');
