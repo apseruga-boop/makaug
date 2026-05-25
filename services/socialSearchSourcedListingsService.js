@@ -1529,7 +1529,12 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   return existing;
 }
 
-async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = false } = {}) {
+async function queueFoundOnlineSourcePostListings({
+  db,
+  posts = [],
+  dryRun = false,
+  createProfilesForRepeatedSourcesOnly = false,
+} = {}) {
   const items = (Array.isArray(posts) ? posts : [])
     .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
     .filter((item) => item.sourceUrl || item.title);
@@ -1538,6 +1543,16 @@ async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = fal
     agent: sourceAgentForItem(item),
     intake: sourcePostMeetsLaunchIntakeRule(item, sourceAgentForItem(item)),
   }));
+  const eligibleSourceCounts = evaluated.reduce((acc, { item, intake }) => {
+    if (intake.eligible) acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
+    return acc;
+  }, {});
+  const shouldCreateSourceProfile = (item = {}, agent = {}) => {
+    if (!createProfilesForRepeatedSourcesOnly) return true;
+    if (item.raw_source_post?.create_profile === true || item.raw_source_post?.create_agent_profile === true) return true;
+    if (agent.createProfile === true || agent.create_profile === true) return true;
+    return Number(eligibleSourceCounts[item.agentKey] || 0) > 1;
+  };
   const sourceReviewRecords = evaluated
     .filter(({ intake }) => !intake.eligible)
     .map(({ item, agent, intake }) => ({
@@ -1569,6 +1584,7 @@ async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = fal
         source_url: sourceUrlForItem(item),
         source_contact_url: sourceContactUrlForAgent(agent, item),
         agent_name: agent.name || item.agentKey,
+        profile_action: shouldCreateSourceProfile(item, agent) ? 'create_or_update_source_profile' : 'defer_single_post_profile',
         dry_run: true,
       })),
       source_review_records: sourceReviewRecords,
@@ -1609,11 +1625,15 @@ async function queueFoundOnlineSourcePostListings({ db, posts = [], dryRun = fal
         continue;
       }
       if (!intake.eligible) continue;
-      if (!agentIdsByKey[item.agentKey]) {
+      const createProfile = shouldCreateSourceProfile(item, agent);
+      if (createProfile && !agentIdsByKey[item.agentKey]) {
         agentIdsByKey[item.agentKey] = await upsertSocialAgent(client, agent);
       }
-      const listing = buildSocialSearchListing(item, agentIdsByKey[item.agentKey]);
-      created.push(await insertListing(client, listing, agentIdsByKey[item.agentKey]));
+      const agentId = createProfile ? agentIdsByKey[item.agentKey] : null;
+      const listing = buildSocialSearchListing(item, agentId);
+      const inserted = await insertListing(client, listing, agentId);
+      inserted.profile_action = createProfile ? 'create_or_update_source_profile' : 'defer_single_post_profile';
+      created.push(inserted);
     }
 
     await client.query('COMMIT');

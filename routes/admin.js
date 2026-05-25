@@ -96,6 +96,10 @@ const {
   seedPropertySourceRegistry,
   summarizePropertySourceRegistry
 } = require('../services/propertySourceRegistryService');
+const {
+  SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  runSocialPlatformPostSweep
+} = require('../services/socialPlatformPostDiscoveryService');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -2181,6 +2185,40 @@ router.post('/found-online-source-posts/import', async (req, res, next) => {
       review_queue_properties: result.review_queue_properties,
       source_review_count: result.source_review_count,
       daily_target_status: result.daily_target_status
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/social-platform-posts/sweep', async (req, res, next) => {
+  try {
+    const platform = req.body?.platform || 'all';
+    const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
+    const maxSources = req.body?.max_sources || req.body?.maxSources || 40;
+    const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
+    const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
+    const result = await runSocialPlatformPostSweep({
+      db,
+      platform,
+      dryRun,
+      maxSources,
+      maxResultsPerSource,
+      searchMode
+    });
+    await writeAudit('admin_social_platform_posts_sweep', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+      platform,
+      dry_run: dryRun,
+      tiktok_capture_task_count: result.tiktok?.capture_task_count || 0,
+      x_search_job_count: result.x?.search_job_count || 0,
+      x_api_configured: result.x?.api_configured === true,
+      discovered_posts_count: result.discovered_posts_count || 0,
+      created_properties: result.import_result?.created_properties || 0,
+      existing_properties: result.import_result?.existing_properties || 0,
+      review_queue_properties: result.import_result?.review_queue_properties || 0,
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
   } catch (error) {

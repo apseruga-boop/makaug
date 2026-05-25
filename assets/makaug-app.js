@@ -9117,6 +9117,8 @@ function ensureAdminFoundOnlineControls() {
     document.getElementById("admin-seed-bakaima-listings-btn")
     && document.getElementById("admin-seed-carnelian-listings-btn")
     && document.getElementById("admin-seed-social-search-listings-btn")
+    && document.getElementById("admin-sweep-tiktok-posts-btn")
+    && document.getElementById("admin-sweep-x-posts-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
   ) return;
@@ -9132,6 +9134,12 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-seed-social-search-listings-btn")) {
     missingButtons.push(`<button id="admin-seed-social-search-listings-btn" type="button" onclick="adminSeedSocialSearchAuthorisedListings()" class="border border-sky-200 text-sky-700 hover:bg-sky-50 px-3 py-2 rounded-lg text-xs font-bold">Queue Found-Online Properties</button>`);
+  }
+  if (!document.getElementById("admin-sweep-tiktok-posts-btn")) {
+    missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
+  }
+  if (!document.getElementById("admin-sweep-x-posts-btn")) {
+    missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
   }
   if (!document.getElementById("admin-import-found-online-posts-btn")) {
     missingButtons.push(`<button id="admin-import-found-online-posts-btn" type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-3 py-2 rounded-lg text-xs font-bold">Import Source Posts</button>`);
@@ -9607,6 +9615,113 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `Could not import source posts: ${adminEscape(e.message || "Unknown error")}`;
     }
     toast(`Source post import failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
+  const tiktok = data.tiktok || {};
+  const x = data.x || {};
+  const importResult = data.import_result || {};
+  const tiktokTasks = Array.isArray(tiktok.capture_tasks) ? tiktok.capture_tasks : [];
+  const xJobs = Array.isArray(x.search_jobs) ? x.search_jobs : [];
+  const xReports = Array.isArray(x.fetch_reports) ? x.fetch_reports : [];
+  const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+  const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+  const tiktokTaskHtml = tiktokTasks.slice(0, 16).map((task) => `
+    <div class="rounded-lg border border-pink-100 bg-white p-2">
+      <div class="font-bold text-pink-950">${adminEscape(task.query || task.source_name || "TikTok source")}</div>
+      <div class="text-[11px] text-pink-800 mt-0.5">${adminEscape(task.source_record_kind || "source")} • exact video URL required before a property is queued</div>
+      <div class="mt-1 flex gap-2 flex-wrap">
+        ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
+        <button type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-2 py-1 rounded text-[11px] font-bold">Import Exact Posts</button>
+      </div>
+    </div>`).join("");
+  const xJobHtml = xJobs.slice(0, 10).map((job) => `
+    <div class="rounded-lg border border-slate-200 bg-white p-2">
+      <div class="font-bold text-slate-950">${adminEscape(job.source_name || "X source")}</div>
+      <div class="text-[11px] text-slate-600 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
+      ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="inline-flex mt-1 border border-slate-300 text-slate-700 hover:bg-slate-50 px-2 py-1 rounded text-[11px] font-bold">Open X source</a>` : ""}
+    </div>`).join("");
+  const xReportHtml = xReports.slice(0, 10).map((report) => `
+    <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
+      <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "X job")}</div>
+      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} posts fetched` : adminEscape(report.reason || "X API did not return posts")}</div>
+    </div>`).join("");
+  return `
+    <div class="font-black">Social platform sweep finished</div>
+    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} already existed.</div>
+    <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Create profiles only for repeated source inventory; one-off posts stay as listings.")}</div>
+    ${tiktok.capture_task_count ? `
+      <div class="mt-3 rounded-xl border border-pink-100 bg-pink-50 p-3 text-pink-950">
+        <div class="font-black">TikTok hashtag/profile capture</div>
+        <div class="mt-1">${adminEscape(tiktok.capture_task_count)} TikTok sources are ready for exact-video capture. Hashtags are the discovery net; King queues only exact /@handle/video/id posts with price, location, contact route, and source evidence.</div>
+        <div class="mt-2 space-y-2">${tiktokTaskHtml}</div>
+      </div>` : ""}
+    ${x.search_job_count ? `
+      <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-950">
+        <div class="font-black">X/Twitter source sweep</div>
+        <div class="mt-1">${adminEscape(x.search_job_count)} X search jobs prepared. API configured: ${x.api_configured ? "Yes" : "No"}${x.skipped_reason ? ` • ${adminEscape(x.skipped_reason)}` : ""}</div>
+        ${xReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${xReportHtml}</div>` : ""}
+        ${xJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show X search jobs</summary><div class="mt-2 space-y-2">${xJobHtml}</div></details>` : ""}
+      </div>` : ""}
+    ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Queued properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
+    ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Posts needing source review</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+}
+
+async function adminSweepSocialPlatformPosts(platform = "all") {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const normalized = String(platform || "all").toLowerCase();
+  const dryRun = normalized === "tiktok";
+  const ok = window.confirm(normalized === "tiktok"
+    ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
+    : "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server.");
+  if (!ok) return;
+  const statusEl = document.getElementById("admin-found-online-status");
+  const button = document.getElementById(normalized === "x" ? "admin-sweep-x-posts-btn" : "admin-sweep-tiktok-posts-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = normalized === "tiktok"
+      ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
+      : "Sweeping X/Twitter sources and importing eligible exact posts...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/social-platform-posts/sweep", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        platform: normalized,
+        dry_run: dryRun,
+        max_sources: normalized === "tiktok" ? 80 : 40,
+        max_results: 25,
+        x_search_mode: "all"
+      }
+    });
+    const data = response?.data || {};
+    if (statusEl) statusEl.innerHTML = adminSocialPlatformSweepHtml(data, normalized);
+    if (!dryRun && (data.import_result?.created_properties || data.import_result?.existing_properties)) {
+      adminPendingQueueFilter = "found_online";
+      await renderAdminDashboard();
+      setAdminWorkflowTab("review");
+    }
+    toast(normalized === "tiktok" ? "TikTok capture tasks are ready." : "X sweep finished.");
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Social platform sweep failed: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Social sweep failed: ${e.message || "error"}`);
   } finally {
     if (button) {
       button.disabled = false;

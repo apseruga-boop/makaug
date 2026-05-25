@@ -16,6 +16,8 @@ const html = read('index.html');
 const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
 const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
+const socialPlatformSweepServiceSource = read('services/socialPlatformPostDiscoveryService.js');
+const socialPlatformSweepScript = read('scripts/sweep-social-platform-posts.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
 const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
@@ -53,6 +55,12 @@ const {
   sourceImageRowsFor,
   whatsappShareMessage: socialSearchWhatsappShareMessage,
 } = require('../services/socialSearchSourcedListingsService');
+const {
+  SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  buildTikTokCaptureTasks,
+  buildXSearchJobs,
+  normalizeXApiPost,
+} = require('../services/socialPlatformPostDiscoveryService');
 
 function test(name, fn) {
   try {
@@ -567,6 +575,67 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(intake.eligible, true, 'exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
   assert.strictEqual(sourceImageRowsFor(imported).length, 0, 'TikTok posts without direct media URLs should not pretend to have copied images');
   assert(socialSearchServiceSource.includes('sourceEvidenceCardDataUrl'), 'TikTok no-image imports should fall back to a labelled makaug evidence card');
+});
+
+test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {
+  assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
+  assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
+  assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
+  assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
+  assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
+  assert(adminRoute.includes('admin_social_platform_posts_sweep'), 'social platform sweeps should write an audit event');
+  assert(frontend.includes('adminSweepSocialPlatformPosts'), 'King dashboard should expose social platform sweep controls');
+  assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
+  assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
+  assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
+  assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
+  assert(socialSearchServiceSource.includes('defer_single_post_profile'), 'source-post import should support one-off listing-only profile handling');
+
+  const tiktokTasks = buildTikTokCaptureTasks({
+    sources: [{
+      key: 'tiktok-uganda-real-estate-hashtag',
+      name: 'TikTok #UgandaRealEstate',
+      platform: 'tiktok',
+      sourceType: 'hashtag_feed',
+      url: 'https://www.tiktok.com/tag/ugandarealestate',
+      hashtags: ['UgandaRealEstate'],
+    }],
+    limit: 1,
+  });
+  assert.strictEqual(tiktokTasks.length, 1);
+  assert.strictEqual(tiktokTasks[0].exact_post_url_required, true);
+  assert(tiktokTasks[0].exact_post_url_pattern.includes('/@{handle}/video/{video_id}'), 'TikTok task should name the exact-video URL pattern');
+
+  const xJobs = buildXSearchJobs({
+    sources: [{
+      key: 'x-uganda-property',
+      name: 'X Uganda property search',
+      platform: 'x',
+      sourceType: 'search_feed',
+      url: 'https://x.com/search?q=%23UgandaRealEstate%20Uganda%20property&src=typed_query&f=live',
+    }],
+    limit: 1,
+  });
+  assert.strictEqual(xJobs.length, 1);
+  assert(xJobs[0].query.includes('has:media'), 'X search jobs should request media-backed posts');
+  assert(xJobs[0].endpoint.includes('/2/tweets/search/all'), 'X full archive search should be available for 2026-onward sweeps');
+
+  const normalized = normalizeXApiPost({
+    id: '1800000000000000000',
+    author_id: '42',
+    created_at: '2026-05-20T10:00:00.000Z',
+    text: '4 bed house for sale in Kira, Wakiso. USh 650M. DM for viewing.',
+    attachments: { media_keys: ['3_1'] },
+  }, {
+    users: [{ id: '42', username: 'agentug', name: 'Agent UG', public_metrics: { followers_count: 1200 } }],
+    media: [{ media_key: '3_1', type: 'photo', url: 'https://pbs.twimg.com/media/example.jpg' }],
+  }, xJobs[0]);
+  assert.strictEqual(normalized.source_url, 'https://x.com/agentug/status/1800000000000000000');
+  assert.strictEqual(normalized.platform, 'x');
+  assert.strictEqual(normalized.area, 'Kira');
+  assert.strictEqual(normalized.district, 'Wakiso');
+  assert.strictEqual(normalized.price_text, 'USh 650M');
+  assert.deepStrictEqual(normalized.image_urls, ['https://pbs.twimg.com/media/example.jpg']);
 });
 
 test('found-online rebuild protects live approved social-search listings', () => {
