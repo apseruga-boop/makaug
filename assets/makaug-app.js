@@ -889,7 +889,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land in one place.",
+    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks in one place.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1042,7 +1042,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
-    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, ensibuko za online ezikeberebwa, n'okulungamizibwa ku UgNLIS ku ttaka mu kifo kimu.",
+    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, ensibuko za online ezikeberebwa, n'okukakasa ettaka ku UgNLIS entongole mu kifo kimu.",
     heroRent: "Pangisa",
     heroBuy: "Gula",
     heroCommercial: "Busuubuzi",
@@ -1170,7 +1170,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Jukwaa la bure la mali Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
-    heroSubtitle: "Tafuta mali Uganda kama search engine: listings za wamiliki, brokers, vyanzo vya mtandaoni vilivyopitiwa, na mwongozo wa UgNLIS kwa ardhi sehemu moja.",
+    heroSubtitle: "Tafuta mali Uganda kama search engine: listings za wamiliki, brokers, vyanzo vya mtandaoni vilivyopitiwa, na ukaguzi rasmi wa ardhi kupitia UgNLIS sehemu moja.",
     heroRent: "Kupanga",
     heroBuy: "Nunua",
     heroCommercial: "Biashara",
@@ -1297,7 +1297,7 @@ const I18N_UI = {
     signIn: "Dony",
     heroBadge: "Uganda's #1 free property platform",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
     heroSearch: "Yeny",
     langBanner: "Tii ki makaug i lok 7 me Uganda",
     areaOnly: "Kabedo manok",
@@ -1329,7 +1329,7 @@ const I18N_UI = {
     signIn: "Ingira",
     heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
     heroSearch: "Shanga",
     langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
     areaOnly: "Aho honyine",
@@ -1361,7 +1361,7 @@ const I18N_UI = {
     signIn: "Injira",
     heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
     heroSearch: "Shaka",
     langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
     areaOnly: "Akarere aka gusa",
@@ -1393,7 +1393,7 @@ const I18N_UI = {
     signIn: "Yingira",
     heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and UgNLIS guidance for land.",
+    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
     heroSearch: "Noonia",
     langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
     areaOnly: "Ekitundu kino kyonka",
@@ -1833,16 +1833,15 @@ const CONTENT_I18N = {
     "about.searchRemovalTitle": "Claim or remove",
     "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
     "about.landHubLabel": "Land verification support",
-    "about.landHubTitle": "UgNLIS guidance without duplicating government services",
-    "about.landHubText": "For land listings, makaug can guide buyers, owners, and brokers toward Uganda's official National Land Information System, store title-search evidence, and show whether a search letter or title reference has been supplied. Official title searches and transaction tracking remain on UgNLIS.",
+    "about.landHubTitle": "Official UgNLIS land checks without duplicating government services",
+    "about.landHubText": "For land listings, makaug points buyers, owners, and brokers to Uganda's official National Land Information System. Official title searches, search letters, and transaction tracking remain on UgNLIS.",
     "about.landHubPortal": "Open UgNLIS portal",
-    "about.landHubWhatsapp": "Ask on WhatsApp",
     "about.landHubOfficialTitle": "Official source of truth",
     "about.landHubOfficialText": "We link users to UgNLIS for official land search and transaction tracking instead of copying or replacing the Ministry system.",
     "about.landHubEvidenceTitle": "Search-letter evidence",
     "about.landHubEvidenceText": "King review can record title volume, folio, block, plot, search reference, and a search-letter link so the public listing shows clear evidence status.",
-    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
-    "about.landHubConciergeText": "When someone needs help, makaug can explain the steps, collect missing title details, and remind them to complete the official search on UgNLIS.",
+    "about.landHubProcessTitle": "What to have ready",
+    "about.landHubProcessText": "Before opening UgNLIS, ask for the title volume and folio or the county, block and plot details. Transaction tracking needs the transaction number from the Ministry Zonal Office receipt.",
     "about.helpLabel": "Who we help",
     "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
@@ -1931,16 +1930,15 @@ const CONTENT_I18N = {
     "about.searchRemovalTitle": "Claim oba remove",
     "about.searchRemovalText": "Owners ne agents basobola oku-claim, okulongoosa, okukyusa photos, okutereeza details, oba okusaba listing eggyibweko. makaug ekuuma attribution ne review trail.",
     "about.landHubLabel": "Obuyambi mu kukakasa ettaka",
-    "about.landHubTitle": "Okulungamizibwa ku UgNLIS nga tetuddiddemu mirimu gya gavumenti",
-    "about.landHubText": "Ku listings z'ettaka, makaug esobola okulungamya buyers, owners, ne brokers okugenda ku National Land Information System ya Uganda, okutereka obujulizi bwa title search, n'okulaga oba search letter oba title reference eweeredde. Okunoonyereza okutongole ku title n'okulondoola transactions bisigala ku UgNLIS.",
+    "about.landHubTitle": "Okukakasa ettaka ku UgNLIS entongole nga tetuddiddemu mirimu gya gavumenti",
+    "about.landHubText": "Ku listings z'ettaka, makaug eraga buyers, owners, ne brokers ekkubo erigenda ku National Land Information System entongole eya Uganda. Official title search, search letters, n'okulondoola transactions bisigala ku UgNLIS.",
     "about.landHubPortal": "Ggulawo portal ya UgNLIS",
-    "about.landHubWhatsapp": "Buuza ku WhatsApp",
     "about.landHubOfficialTitle": "Ensibuko entongole",
     "about.landHubOfficialText": "Tuyunga users ku UgNLIS okukola land search n'okulondoola transactions mu ngeri entongole, mu kifo ky'okukoppa oba okudda mu kifo kya system ya Ministry.",
     "about.landHubEvidenceTitle": "Obujulizi bwa search letter",
     "about.landHubEvidenceText": "King review esobola okutereka title volume, folio, block, plot, search reference, ne search-letter link listing ya public erage status y'obujulizi mu ngeri etegeerekeka.",
-    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
-    "about.landHubConciergeText": "Omuntu bw'aba yeetaaga obuyambi, makaug emunnyonnyola emitendera, ekuŋŋaanya title details ezibula, era emujjukiza okukola search entongole ku UgNLIS.",
+    "about.landHubProcessTitle": "By'olina okutegeka",
+    "about.landHubProcessText": "Nga tonnaggulawo UgNLIS, saba title volume ne folio oba county, block ne plot details. Okulondoola transaction kwetaaga transaction number eri ku receipt ya Ministry Zonal Office.",
     "about.helpLabel": "Be tuyamba",
     "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
@@ -2029,16 +2027,15 @@ const CONTENT_I18N = {
     "about.searchRemovalTitle": "Claim au remove",
     "about.searchRemovalText": "Wamiliki na agents wanaweza claim, update, kubadilisha photos, kusahihisha details, au kuomba removal. makaug huhifadhi attribution na review trail.",
     "about.landHubLabel": "Msaada wa uhakiki wa ardhi",
-    "about.landHubTitle": "Mwongozo wa UgNLIS bila kurudia huduma za serikali",
-    "about.landHubText": "Kwa listings za ardhi, makaug inaweza kuwaongoza wanunuzi, wamiliki, na brokers kuelekea National Land Information System rasmi ya Uganda, kuhifadhi ushahidi wa title search, na kuonyesha kama search letter au title reference imetolewa. Utafutaji rasmi wa hati na ufuatiliaji wa transactions hubaki kwenye UgNLIS.",
+    "about.landHubTitle": "Ukaguzi rasmi wa ardhi kupitia UgNLIS bila kurudia huduma za serikali",
+    "about.landHubText": "Kwa listings za ardhi, makaug huwaelekeza wanunuzi, wamiliki, na brokers kwenye National Land Information System rasmi ya Uganda. Title searches, search letters, na transaction tracking rasmi hubaki kwenye UgNLIS.",
     "about.landHubPortal": "Fungua portal ya UgNLIS",
-    "about.landHubWhatsapp": "Uliza WhatsApp",
     "about.landHubOfficialTitle": "Chanzo rasmi cha ukweli",
     "about.landHubOfficialText": "Tunawaelekeza users UgNLIS kwa land search rasmi na transaction tracking badala ya kunakili au kuchukua nafasi ya mfumo wa Ministry.",
     "about.landHubEvidenceTitle": "Ushahidi wa search letter",
     "about.landHubEvidenceText": "King review inaweza kuhifadhi title volume, folio, block, plot, search reference, na search-letter link ili public listing ionyeshe status ya ushahidi kwa uwazi.",
-    "about.landHubConciergeTitle": "WhatsApp Land Search Concierge",
-    "about.landHubConciergeText": "Mtu akihitaji msaada, makaug inaweza kueleza hatua, kukusanya title details zilizokosekana, na kumkumbusha kukamilisha official search kwenye UgNLIS.",
+    "about.landHubProcessTitle": "Taarifa za kuwa nazo",
+    "about.landHubProcessText": "Kabla ya kufungua UgNLIS, omba title volume na folio au county, block na plot details. Transaction tracking inahitaji transaction number kutoka risiti ya Ministry Zonal Office.",
     "about.helpLabel": "Tunasaidia nani",
     "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
@@ -11012,7 +11009,7 @@ const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   rent: "Hi makaug, I'm on the To Rent page and I'm looking for a rental. Please help me with area, budget, bedrooms, availability, and viewing options.",
   students: "Hi makaug, I'm looking for student accommodation. Please help me find safe rooms near campus, with price, distance, rules, and availability.",
   commercial: "Hi makaug, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
-  land: "Hi makaug, I'm looking for land or a plot. Please help me with location, size, price, title or tenure checks, and safe next steps.",
+  land: "Hi makaug, I'm looking for land or a plot. Please send the official UgNLIS portal link and the information needed for a title or parcel search.",
   brokers: "Hi makaug, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
   mortgage: "Hi makaug, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
   "ai-chatbot": "Hi makaug, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
@@ -14137,13 +14134,12 @@ function renderAdminUgNlisReviewPanel(review = {}) {
   if (!adminIsLandReviewListing(review)) return "";
   const extra = review.extra_fields || {};
   const status = extra.land_verification_status || "not_started";
-  const checked = extra.land_verification_concierge_requested === true || extra.land_verification_help_requested === true;
   return `
     <div class="mt-4 border border-emerald-100 rounded-xl p-3 bg-emerald-50" id="admin-ugnlis-review-panel">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <div class="text-xs uppercase tracking-wide text-emerald-800 font-semibold">UgNLIS Land Verification</div>
-          <p class="mt-1 text-xs text-emerald-950">Store official search evidence here. Searches still happen on UgNLIS; makaug keeps the evidence trail and buyer guidance.</p>
+          <p class="mt-1 text-xs text-emerald-950">Record official search details supplied by the owner, broker, or buyer. Official searches and transaction tracking stay on UgNLIS.</p>
         </div>
         <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener" class="text-xs font-bold text-emerald-800 underline">Open UgNLIS</a>
       </div>
@@ -14181,15 +14177,11 @@ function renderAdminUgNlisReviewPanel(review = {}) {
           <input id="admin-ugnlis-search-date" type="date" value="${adminAttr(String(adminUgNlisFieldValue(review, "ugnlis_search_date")).slice(0, 10))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
         </label>
       </div>
-      <label class="mt-3 flex items-center gap-2 text-xs font-semibold text-emerald-950">
-        <input id="admin-ugnlis-concierge" type="checkbox" ${checked ? "checked" : ""} class="rounded border-emerald-300 text-emerald-700">
-        Land Search Concierge requested
-      </label>
       <label class="mt-2 block text-xs font-semibold text-emerald-950">Review notes
         <textarea id="admin-ugnlis-notes" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" rows="3" placeholder="What was checked, what is still pending?">${adminEscape(adminUgNlisFieldValue(review, "ugnlis_search_notes"))}</textarea>
       </label>
       <div class="mt-3 flex gap-2 flex-wrap">
-        <button type="button" onclick="saveAdminLandVerificationReview()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save UgNLIS Evidence</button>
+        <button type="button" onclick="saveAdminLandVerificationReview()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save Official Search Details</button>
         <button type="button" onclick="copyAdminText('https://ugnlis.mlhud.go.ug/')" class="border border-emerald-200 text-emerald-800 hover:bg-white px-3 py-2 rounded-lg text-xs font-bold">Copy Portal Link</button>
       </div>
     </div>`;
@@ -14207,7 +14199,6 @@ function collectAdminLandVerificationPayload() {
     ugnlis_transaction_number: document.getElementById("admin-ugnlis-transaction-number")?.value || "",
     ugnlis_search_reference: document.getElementById("admin-ugnlis-search-reference")?.value || "",
     ugnlis_search_date: document.getElementById("admin-ugnlis-search-date")?.value || "",
-    land_verification_concierge_requested: !!document.getElementById("admin-ugnlis-concierge")?.checked,
     ugnlis_search_notes: document.getElementById("admin-ugnlis-notes")?.value || ""
   };
 }
@@ -18316,8 +18307,6 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.land_size_value = landParsed.value;
     payload.land_size_unit = landParsed.unit;
     payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
-    payload.extra_fields.land_verification_help_requested = extra.land_verification_help === "yes";
-    payload.extra_fields.land_verification_concierge_requested = extra.land_verification_help === "yes";
     payload.extra_fields.land_verification_status = extra.ugnlis_transaction_number ? "details_collected" : "not_started";
     payload.extra_fields.ugnlis_title_volume = extra.ugnlis_title_volume || null;
     payload.extra_fields.ugnlis_title_folio = extra.ugnlis_title_folio || null;
@@ -18326,7 +18315,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.extra_fields.ugnlis_plot = extra.ugnlis_plot || null;
     payload.extra_fields.ugnlis_transaction_number = extra.ugnlis_transaction_number || null;
     payload.extra_fields.land_boundary_notes = extra.boundary_notes || null;
-    payload.extra_fields.ownership_verification_requested = ownerVerificationRequested || extra.land_verification_help === "yes";
+    payload.extra_fields.ownership_verification_requested = ownerVerificationRequested;
   }
 
   if (type === "commercial") {
@@ -24784,7 +24773,6 @@ function getUgNlisVerificationPack(p = {}) {
     transaction_number: pack.transaction_number || extra.ugnlis_transaction_number || "",
     search_reference: pack.search_reference || extra.ugnlis_search_reference || "",
     search_date: pack.search_date || extra.ugnlis_search_date || "",
-    concierge_requested: pack.concierge_requested === true || extra.land_verification_concierge_requested === true,
     notes: pack.notes || extra.ugnlis_search_notes || "",
     official_portal_url: pack.official_portal_url || UGNLIS_PORTAL_URL,
     ministry_page_url: pack.ministry_page_url || UGNLIS_MINISTRY_PAGE_URL,
@@ -24804,21 +24792,6 @@ function isUgNlisLandListing(p = {}) {
   return shouldShowUgNlisAdvisory(p);
 }
 
-function buildUgNlisWhatsappMessageForUi(p = {}) {
-  const pack = getUgNlisVerificationPack(p);
-  const title = p.title || translatePropertyUi("this property listing");
-  const location = [p.area, p.district].filter(Boolean).join(", ");
-  return [
-    `Hi makaug, I need land/title verification guidance for this listing.`,
-    `Listing: ${title}.`,
-    location ? `Location: ${location}.` : "",
-    pack.title_reference ? `Title: ${pack.title_reference}.` : "",
-    pack.parcel_reference ? `Parcel: ${pack.parcel_reference}.` : "",
-    `Please help me with location, size, price, title or tenure checks, the official UgNLIS search steps, and safe next steps.`,
-    p.id ? `Page: ${window.location.origin}/property/${p.id}` : ""
-  ].filter(Boolean).join("\n");
-}
-
 function renderUgNlisVerificationCard(p = {}) {
   if (!isUgNlisLandListing(p)) return "";
   const pack = getUgNlisVerificationPack(p);
@@ -24829,8 +24802,15 @@ function renderUgNlisVerificationCard(p = {}) {
     pack.search_reference && [translatePropertyUi("Search reference"), pack.search_reference],
     pack.search_date && [translatePropertyUi("Search date"), formatListingDate(pack.search_date) || pack.search_date],
   ].filter(Boolean);
-  const message = buildUgNlisWhatsappMessageForUi(p);
-  const whatsappUrl = buildWhatsAppUrl(MAKAUG_SUPPORT_WHATSAPP, message);
+  const tooltipId = `ugnlis-portal-help-${String(p.id || p.listingId || "listing").replace(/[^a-z0-9_-]/gi, "") || "listing"}`;
+  const portalHelpTitle = translatePropertyUi("Before opening UgNLIS");
+  const portalHelpText = translatePropertyUi("UgNLIS process summary");
+  const portalHelpItems = [
+    translatePropertyUi("Title search: ask for title volume and folio, or county, block and plot."),
+    translatePropertyUi("Parcel search: ask for county/municipality/town council, plus block or road and plot number."),
+    translatePropertyUi("Transaction tracking: use the transaction number from the MZO receipt."),
+    translatePropertyUi("Public portal searches require UGX 10,000 per search.")
+  ];
   return `
     <section class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
       <div class="flex items-start gap-3">
@@ -24845,15 +24825,19 @@ function renderUgNlisVerificationCard(p = {}) {
             </div>
             <span class="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">${adminEscape(pack.status_label)}</span>
           </div>
-          <p class="mt-2 text-sm text-emerald-950">${translatePropertyUi("Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.")}</p>
+          <p class="mt-2 text-sm text-emerald-950">${translatePropertyUi("Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.")}</p>
           ${evidence.length ? `<div class="mt-3 grid gap-2 sm:grid-cols-2">${evidence.map(([label, value]) => `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="text-[11px] uppercase tracking-wide text-emerald-700 font-bold">${adminEscape(label)}</div><div class="mt-0.5 text-sm font-semibold text-gray-800">${adminEscape(value)}</div></div>`).join("")}</div>` : ""}
           <div class="mt-3 flex flex-wrap gap-2">
-            <a href="${UGNLIS_PORTAL_URL}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-600">
-              <i class="fas fa-arrow-up-right-from-square"></i>${translatePropertyUi("Open UgNLIS portal")}
-            </a>
-            <a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50">
-              <i class="fab fa-whatsapp"></i>${translatePropertyUi("Land Search Concierge")}
-            </a>
+            <span class="relative inline-flex group">
+              <a href="${UGNLIS_PORTAL_URL}" target="_blank" rel="noopener noreferrer" aria-describedby="${adminAttr(tooltipId)}" title="${adminAttr(`${portalHelpTitle}: ${portalHelpItems.join(" ")}`)}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                <i class="fas fa-arrow-up-right-from-square"></i>${translatePropertyUi("Open UgNLIS portal")}
+              </a>
+              <span id="${adminAttr(tooltipId)}" role="tooltip" class="pointer-events-none absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-emerald-200 bg-white p-3 text-left text-xs text-emerald-950 opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                <span class="block font-black text-emerald-900">${adminEscape(portalHelpTitle)}</span>
+                <span class="mt-1 block">${adminEscape(portalHelpText)}</span>
+                <span class="mt-2 block space-y-1">${portalHelpItems.map((item) => `<span class="block">- ${adminEscape(item)}</span>`).join("")}</span>
+              </span>
+            </span>
             ${pack.search_letter_url ? `<a href="${adminAttr(pack.search_letter_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50"><i class="fas fa-file-shield"></i>${translatePropertyUi("Search letter")}</a>` : ""}
           </div>
           <p class="mt-3 text-xs text-emerald-800">${translatePropertyUi("User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.")}</p>
@@ -29311,9 +29295,14 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "No phone number is published. Use the source page to contact the lister.": "Tewali nnamba ya ssimu eteereddwawo. Kozesa omuko gw'ensibuko okukwatagana n'omulisi.",
       "Official land verification": "Okukakasa ettaka mu nkola entongole",
       "Verify with UgNLIS": "Kakasa ku UgNLIS",
-      "Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.": "Okunoonyereza okutongole kukolebwa ku UgNLIS. makaug etereka obujulizi era ekulaga ekiddako, naye portal ya gavumenti y'esigala ensibuko entuufu.",
+      "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Okunoonyereza okutongole kukolebwa ku UgNLIS. Kozesa portal ya gavumenti okukola title search n'okulondoola transactions; records za gavumenti ze nsibuko entuufu.",
       "Open UgNLIS portal": "Ggulawo portal ya UgNLIS",
-      "Land Search Concierge": "Obuyambi bw'okunoonyereza ku ttaka",
+      "Before opening UgNLIS": "Nga tonnaggulawo UgNLIS",
+      "UgNLIS process summary": "Tegeka ebikwata ku title oba parcel nga tonnatandika search entongole.",
+      "Title search: ask for title volume and folio, or county, block and plot.": "Title search: saba title volume ne folio, oba county, block ne plot.",
+      "Parcel search: ask for county/municipality/town council, plus block or road and plot number.": "Parcel search: saba county/municipality/town council, ne block oba road ne plot number.",
+      "Transaction tracking: use the transaction number from the MZO receipt.": "Okulondoola transaction: kozesa transaction number eri ku receipt ya MZO.",
+      "Public portal searches require UGX 10,000 per search.": "Public portal search yetaaga UGX 10,000 buli search.",
       "Search letter": "Search letter",
       "Title details": "Ebikwata ku title",
       "Parcel details": "Ebikwata ku plot",
@@ -29438,9 +29427,14 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "No phone number is published. Use the source page to contact the lister.": "Hakuna namba ya simu iliyochapishwa. Tumia ukurasa wa chanzo kuwasiliana na mtangazaji.",
       "Official land verification": "Uthibitishaji rasmi wa ardhi",
       "Verify with UgNLIS": "Thibitisha kupitia UgNLIS",
-      "Official searches happen on UgNLIS. makaug keeps the evidence trail and can guide you, but the government portal remains the source of truth.": "Utafutaji rasmi hufanyika kwenye UgNLIS. makaug huhifadhi ushahidi na kukuongoza, lakini portal ya serikali ndiyo chanzo rasmi.",
+      "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Utafutaji rasmi hufanyika kwenye UgNLIS. Tumia portal ya serikali kwa title search na transaction tracking; rekodi za serikali ndizo chanzo rasmi.",
       "Open UgNLIS portal": "Fungua portal ya UgNLIS",
-      "Land Search Concierge": "Msaada wa utafutaji wa ardhi",
+      "Before opening UgNLIS": "Kabla ya kufungua UgNLIS",
+      "UgNLIS process summary": "Andaa taarifa za title au parcel kabla ya kuanza utafutaji rasmi.",
+      "Title search: ask for title volume and folio, or county, block and plot.": "Title search: omba title volume na folio, au county, block na plot.",
+      "Parcel search: ask for county/municipality/town council, plus block or road and plot number.": "Parcel search: omba county/municipality/town council, pamoja na block au road na plot number.",
+      "Transaction tracking: use the transaction number from the MZO receipt.": "Transaction tracking: tumia transaction number kutoka risiti ya MZO.",
+      "Public portal searches require UGX 10,000 per search.": "Public portal search inahitaji UGX 10,000 kwa kila search.",
       "Search letter": "Search letter",
       "Title details": "Maelezo ya hati",
       "Parcel details": "Maelezo ya kiwanja",
@@ -29889,7 +29883,6 @@ const LP_CONFIG = {
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
-      { key: "land_verification_help", label: "Need makaug help with owner/title verification?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - contact me about verification" }] },
       { key: "ugnlis_title_volume", label: "UgNLIS Title Volume", type: "text", placeholder: "Optional, if known" },
       { key: "ugnlis_title_folio", label: "UgNLIS Title Folio", type: "text", placeholder: "Optional, if known" },
       { key: "ugnlis_county", label: "County", type: "text", placeholder: "Optional, if known" },

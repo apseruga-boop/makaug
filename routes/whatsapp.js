@@ -4777,11 +4777,11 @@ function contextualPageRouteFromMessage(text = '') {
 function isUgNlisLandVerificationIntent(text = '') {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return false;
-  if (/\b(ugnlis|national land information system|land search concierge|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean)) {
+  if (/\b(ugnlis|national land information system|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean)) {
     return true;
   }
-  return /\b(?:land|plot|property|listing)\b.{0,120}\b(?:title|tenure|ownership|official search|safe next steps|verification|verify|search steps|evidence)\b/i.test(clean)
-    || /\b(?:title|tenure|ownership|official search|safe next steps|verification|verify|search steps|evidence)\b.{0,120}\b(?:land|plot|property|listing)\b/i.test(clean);
+  return /\b(?:land|plot|property|listing)\b.{0,120}\b(?:title|tenure|ownership|official search|verification|verify|search steps)\b/i.test(clean)
+    || /\b(?:title|tenure|ownership|official search|verification|verify|search steps)\b.{0,120}\b(?:land|plot|property|listing)\b/i.test(clean);
 }
 
 // Step machine
@@ -4880,7 +4880,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (isUgNlisLandVerificationIntent(cleanBody)) {
     await patchSessionData(phone, {
-      land_verification_help_requested_at: new Date().toISOString(),
+      ugnlis_official_info_requested_at: new Date().toISOString(),
       idle_resume_prompt: null
     });
     return respond(buildUgNlisAssistantReply({ language: lang, baseUrl: HOME_URL }), 'main_menu');
