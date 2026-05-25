@@ -94,8 +94,12 @@ test('anonymous public agent APIs suppress QA broker records', () => {
 test('admin live endpoint mirrors public visibility and exposes cleanup action', () => {
   assert.match(adminRouteSource, /function adminLaunchTestListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingCondition/);
+  assert.match(adminRouteSource, /function adminPublicLiveListingWhere/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/live'/);
-  assert.match(adminRouteSource, /AND \$\{publicLiveCondition\}/);
+  assert.match(adminRouteSource, /WHERE \$\{publicLiveCondition\}/);
+  assert.match(adminRouteSource, /CONCAT\('\/property\/', p\.id::text\) AS property_url/);
+  assert.match(appSource, /function adminIsPublicLiveAdminListing/);
+  assert.match(appSource, /Open Public Listing/);
   assert.match(adminRouteSource, /router\.post\('\/test-listings\/cleanup-live'/);
   assert.match(adminRouteSource, /live_test_listing_cleanup/);
   assert.match(appSource, /adminCleanupLiveTestListings/);

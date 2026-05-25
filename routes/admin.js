@@ -150,6 +150,10 @@ function adminPublicLiveListingCondition(alias = 'p') {
   return `(NOT ${adminLaunchTestListingCondition(alias)})`;
 }
 
+function adminPublicLiveListingWhere(alias = 'p') {
+  return `${alias}.status = 'approved' AND ${adminPublicLiveListingCondition(alias)}`;
+}
+
 function numberOrZero(value) {
   const n = Number(value || 0);
   return Number.isFinite(n) ? n : 0;
@@ -1812,7 +1816,7 @@ router.get('/command-centre', async (_req, res, next) => {
       propertyRequests
     ] = await Promise.all([
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
-      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status IN ('approved','sold')"),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
       safeCount("SELECT COUNT(*)::int AS total FROM agents WHERE status = 'pending' OR COALESCE(registration_status, 'not_registered') <> 'registered'"),
@@ -2020,13 +2024,12 @@ router.get('/properties/live', async (req, res, next) => {
     const { page, limit, offset } = parsePagination(req.query);
     const values = [limit, offset];
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
-    const publicLiveCondition = includeTestLike ? 'TRUE' : adminPublicLiveListingCondition('p');
+    const publicLiveCondition = includeTestLike ? "p.status = 'approved'" : adminPublicLiveListingWhere('p');
 
     const countResult = await db.query(
       `SELECT COUNT(*)::int AS total
        FROM properties p
-       WHERE p.status IN ('approved','sold')
-         AND ${publicLiveCondition}`
+       WHERE ${publicLiveCondition}`
     );
     const total = countResult.rows[0]?.total || 0;
 
@@ -2051,6 +2054,8 @@ router.get('/properties/live', async (req, res, next) => {
         p.approved_at,
         p.last_moderation_notification_at,
         p.extra_fields,
+        CONCAT('/property/', p.id::text) AS property_url,
+        TRUE AS public_visible,
         (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
         p.extra_fields->>'featured_at' AS featured_at,
         COALESCE(p.approved_at, p.reviewed_at, p.updated_at, p.created_at) AS live_at,
@@ -2065,8 +2070,7 @@ router.get('/properties/live', async (req, res, next) => {
          ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
          LIMIT 1
        ) img ON true
-       WHERE p.status IN ('approved','sold')
-         AND ${publicLiveCondition}
+       WHERE ${publicLiveCondition}
        ORDER BY live_at DESC
        LIMIT $1
        OFFSET $2`,

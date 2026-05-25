@@ -8001,13 +8001,18 @@ function normalizeModerationStatus(status) {
   if (["pending", "pending_review", "test_pending_review", "pending_review_hidden", "under_review", "submitted", "draft", "in_review"].includes(raw)) return "pending";
   if (["hidden", "off_market", "paused", "archived"].includes(raw)) return "hidden";
   if (["deleted", "removed", "trash"].includes(raw)) return "deleted";
-  return "approved";
+  return raw || "unknown";
 }
 
 function isListingPublicVisible(property) {
   if (adminRecordLooksLikeTest(property)) return false;
   const status = normalizeModerationStatus(property?.status);
-  return status === "approved" || status === "sold";
+  return status === "approved";
+}
+
+function adminIsPublicLiveAdminListing(property = {}) {
+  if (property.public_visible === false) return false;
+  return isListingPublicVisible(property);
 }
 
 function isLocalDevelopmentHost() {
@@ -8773,11 +8778,10 @@ function adminSourcedInventoryCandidateBadge(row = {}) {
 function adminPendingQueueCounts(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
   const foundOnlinePending = source.filter(adminIsFoundOnlineSourcedListing).length;
-  const foundOnlineAll = adminFoundOnlineAllRows();
   const student = source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student").length;
   return {
     all: source.length,
-    found_online: foundOnlineAll.length || foundOnlinePending,
+    found_online: foundOnlinePending,
     found_online_pending: foundOnlinePending,
     student,
   };
@@ -8790,24 +8794,20 @@ function adminPendingQueueFilterLabel(filter = adminPendingQueueFilter) {
 }
 
 function adminFoundOnlineAllRows() {
-  const source = adminUniqueSeedItems([
-    ...(Array.isArray(adminRemoteListings) ? adminRemoteListings : []),
-    ...(Array.isArray(adminLiveListings) ? adminLiveListings : []),
-    ...(Array.isArray(adminCurrentPendingListings) ? adminCurrentPendingListings : [])
-  ]);
+  const source = adminUniqueSeedItems(Array.isArray(adminCurrentPendingListings) ? adminCurrentPendingListings : []);
   return adminApplyLaunchCleanFilter(source)
     .filter(adminIsFoundOnlineSourcedListing)
+    .filter(adminIsPendingReviewSeedItem)
     .filter((row) => {
       const status = normalizeModerationStatus(row?.status || row?.moderation_status);
-      return !["deleted", "archived", "rejected"].includes(status);
+      return status === "pending";
     });
 }
 
 function adminFilterPendingQueueRows(rows = []) {
   const source = Array.isArray(rows) ? rows : [];
   if (adminPendingQueueFilter === "found_online") {
-    const allFoundOnline = adminFoundOnlineAllRows();
-    return allFoundOnline.length ? allFoundOnline : source.filter(adminIsFoundOnlineSourcedListing);
+    return source.filter(adminIsFoundOnlineSourcedListing).filter(adminIsPendingReviewSeedItem);
   }
   if (adminPendingQueueFilter === "student") return source.filter((row) => !adminIsFoundOnlineSourcedListing(row) && normalizeType(row?.listing_type || row?.type) === "student");
   return source;
@@ -8846,8 +8846,8 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
   const counts = adminPendingQueueCounts(rows);
   const isFoundOnlineView = adminPendingQueueFilter === "found_online";
   const statusText = isFoundOnlineView
-    ? `${adminEscape(filteredRows.length)} found-online source property records shown. ${adminEscape(counts.found_online_pending || 0)} are still pending review; approved/live source records stay visible here for audit, source follow-up, and future action.`
-    : `${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Found-online sweep records stay in this dashboard after approval so King can still find them.`;
+    ? `${adminEscape(filteredRows.length)} found-online source property records are pending review. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
+    : `${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -8986,7 +8986,7 @@ async function fetchRemoteAdminSnapshot() {
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
   const allListings = (allRows || []).map(normalizeRemoteAdminListing);
-  let liveListings = allListings.filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status)));
+  let liveListings = allListings.filter(adminIsPublicLiveAdminListing);
   try {
     const liveRows = await fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 });
     liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
@@ -9930,7 +9930,7 @@ function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
   const live = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : [])
-    .filter((p) => normalizeModerationStatus(p.status) === "approved")
+    .filter(adminIsPublicLiveAdminListing)
     .sort((a, b) => {
       const af = isFeaturedListing(a) ? 1 : 0;
       const bf = isFeaturedListing(b) ? 1 : 0;
@@ -9947,6 +9947,7 @@ function renderAdminFeaturedRows(listings) {
   wrap.innerHTML = live.map((p) => {
     const id = String(p.backend_id || p.id || "");
     const idArg = adminListingIdArg(id);
+    const publicUrl = String(p.property_url || p.url || (id ? `/property/${id}` : "")).trim();
     const featured = isFeaturedListing(p);
     const visibilityBadge = adminPublicControlVisibilityBadge(p);
     return `
@@ -9960,7 +9961,8 @@ function renderAdminFeaturedRows(listings) {
           <span class="text-xs font-semibold px-2 py-1 rounded ${featured ? "bg-green-700 text-white" : "bg-gray-100 text-gray-700"}">${featured ? "Featured" : "Available"}</span>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Preview</button>
+          ${publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-green-700 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Open Public</a>` : ""}
+          <button onclick="openAdminListingLivePreview(${idArg})" class="border border-blue-200 text-blue-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Review Preview</button>
           <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-green-700 hover:bg-green-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature on Homepage"}</button>
         </div>
       </div>`;
@@ -9970,7 +9972,7 @@ function renderAdminFeaturedRows(listings) {
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
-  const view = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : []).filter((p) => ["approved", "sold"].includes(normalizeModerationStatus(p.status))).slice(0, 50);
+  const view = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : []).filter(adminIsPublicLiveAdminListing).slice(0, 50);
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
     return;
@@ -9978,6 +9980,7 @@ function renderAdminLiveListingsRows(listings) {
   wrap.innerHTML = view.map((p) => {
     const id = String(p.backend_id || p.id || "");
     const idArg = adminListingIdArg(id);
+    const publicUrl = String(p.property_url || p.url || (id ? `/property/${id}` : "")).trim();
     const featured = isFeaturedListing(p);
     const followClass = p.follow_up_due ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-700";
     const visibilityBadge = adminPublicControlVisibilityBadge(p);
@@ -9992,7 +9995,8 @@ function renderAdminLiveListingsRows(listings) {
           <span class="text-xs font-semibold px-2 py-1 rounded ${followClass}">${adminEscape(adminFollowUpText(p))}</span>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button onclick="openAdminListingLivePreview(${idArg})" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Live Listing</button>
+          ${publicUrl ? `<a href="${adminAttr(publicUrl)}" target="_blank" rel="noopener" class="border border-green-700 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Public Listing</a>` : ""}
+          <button onclick="openAdminListingLivePreview(${idArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Review Preview</button>
           <button onclick="openAdminFollowUpWhatsApp(${idArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp Follow-up</button>
           <button onclick="adminSetListingStatus(${idArg}, 'sold', ${idArg})" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Mark Sold</button>
           <button onclick="adminSetListingFeatured(${idArg}, ${featured ? "false" : "true"})" class="${featured ? "bg-gray-800 hover:bg-gray-700" : "bg-emerald-700 hover:bg-emerald-600"} text-white px-3 py-1.5 rounded-lg text-xs font-semibold">${featured ? "Remove Featured" : "Feature"}</button>
