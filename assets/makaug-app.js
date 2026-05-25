@@ -9703,7 +9703,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       body: {
         platform: normalized,
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 80 : 40,
+        max_sources: normalized === "tiktok" ? 30000 : 40,
         max_results: 25,
         x_search_mode: "all"
       }

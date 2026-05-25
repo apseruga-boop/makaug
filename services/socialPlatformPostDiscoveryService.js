@@ -13,6 +13,7 @@ const { DISTRICTS } = require('../utils/constants');
 
 const SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID = 'social_platform_post_discovery_20260525';
 const DEFAULT_MAX_SOURCES = 40;
+const MAX_PLATFORM_SWEEP_SOURCES = 30000;
 const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
@@ -120,7 +121,7 @@ function sourcesForPlatform(platform = 'all') {
 function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit = DEFAULT_MAX_SOURCES } = {}) {
   return sources
     .filter((source) => normalizePlatform(source.platform) === 'tiktok')
-    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, 5000))
+    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
     .map((source) => {
       const hashtag = sourceHashtag(source);
       const handle = sourceHandle(source);
@@ -171,7 +172,7 @@ function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_M
   const endpoint = searchMode === 'recent' ? X_RECENT_SEARCH_URL : X_FULL_ARCHIVE_SEARCH_URL;
   return sources
     .filter((source) => normalizePlatform(source.platform) === 'x')
-    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, 5000))
+    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
     .map((source) => ({
       platform: 'x',
       source_key: sourceKey(source),
@@ -380,7 +381,7 @@ async function runSocialPlatformPostSweep({
 } = {}) {
   const normalizedPlatform = normalizePlatform(platform || 'all');
   const requestedPlatforms = normalizedPlatform === 'all' ? ['tiktok', 'x'] : [normalizedPlatform];
-  const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, 5000);
+  const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
@@ -472,6 +473,7 @@ async function runSocialPlatformPostSweep({
 module.exports = {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   DEFAULT_MAX_SOURCES,
+  MAX_PLATFORM_SWEEP_SOURCES,
   DEFAULT_X_RESULTS_PER_SOURCE,
   X_BEARER_ENV_NAMES,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,

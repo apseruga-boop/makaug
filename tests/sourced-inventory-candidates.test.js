@@ -57,6 +57,7 @@ const {
 } = require('../services/socialSearchSourcedListingsService');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  MAX_PLATFORM_SWEEP_SOURCES,
   buildTikTokCaptureTasks,
   buildXSearchJobs,
   normalizeXApiPost,
@@ -579,6 +580,7 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
 
 test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {
   assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
+  assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 30000);
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
@@ -589,6 +591,7 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
+  assert(frontend.includes('max_sources: normalized === "tiktok" ? 30000 : 40'), 'TikTok sweep should request every tracked TikTok source, not only a small visible sample');
   assert(socialSearchServiceSource.includes('defer_single_post_profile'), 'source-post import should support one-off listing-only profile handling');
 
   const tiktokTasks = buildTikTokCaptureTasks({
