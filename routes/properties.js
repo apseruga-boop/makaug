@@ -741,6 +741,9 @@ async function listPropertiesHandler(req, res, next) {
     const sessionId = cleanText(req.query.session || req.query.session_id || req.query.guest_session_id);
     const locationSource = cleanText(req.query.locationSource || req.query.location_source);
     const publicOnly = parseBooleanLike(req.query.public_only || req.query.publicOnly, false);
+    const featuredRaw = req.query.featured ?? req.query.is_featured ?? req.query.isFeatured;
+    const featuredFilterRequested = featuredRaw !== undefined && featuredRaw !== null && cleanText(featuredRaw) !== '';
+    const featuredOnly = parseBooleanLike(featuredRaw, false);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -801,6 +804,13 @@ async function listPropertiesHandler(req, res, next) {
         addFilter(filters, values, "(p.status = 'approved' OR (p.status = 'sold' AND p.sold_at >= NOW() - INTERVAL '7 days'))");
       } else {
         addFilter(filters, values, 'p.status = ?', status);
+      }
+    }
+    if (featuredFilterRequested) {
+      if (featuredOnly) {
+        filters.push("(COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes'))");
+      } else {
+        filters.push("(COALESCE(p.extra_fields->>'featured', 'false') NOT IN ('true', '1', 'yes'))");
       }
     }
 
@@ -939,12 +949,14 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     const sortMap = {
+      featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC",
       newest: 'p.created_at DESC',
       price_asc: 'p.price ASC NULLS LAST',
       price_desc: 'p.price DESC NULLS LAST'
     };
 
-    const sortBy = cleanText(req.query.sort || 'newest').toLowerCase();
+    const defaultSort = featuredFilterRequested && featuredOnly ? 'featured' : 'newest';
+    const sortBy = cleanText(req.query.sort || defaultSort).toLowerCase();
     const orderBy = hasRadiusSearch
       ? `${distanceSql} ASC NULLS LAST, p.created_at DESC`
       : (sortMap[sortBy] || sortMap.newest);
