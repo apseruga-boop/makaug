@@ -1217,6 +1217,13 @@ function run() {
   assert(whatsappWebCopilotScript.includes('[data-id^="true_"]'), 'WhatsApp Web copilot must detect outgoing bubbles with current WhatsApp Web selectors');
   assert(whatsappWebCopilotScript.includes('detectAndDeclineIncomingCall'), 'WhatsApp Web copilot must detect and decline incoming calls');
   assert(whatsappWebCopilotScript.includes('/api/whatsapp/web-bridge/call'), 'WhatsApp Web copilot must send call events to the backend');
+  assert(whatsappWebCopilotScript.includes('claimWhatsappUseHere'), 'WhatsApp Web copilot must recover sessions that say WhatsApp is open in another window');
+  assert(whatsappWebCopilotScript.includes('scoreWhatsappReadyState'), 'WhatsApp Web copilot must rank multiple WhatsApp tabs before choosing one');
+  assert(whatsappWebCopilotScript.includes('open_elsewhere'), 'WhatsApp Web bridge heartbeat must expose the open-elsewhere recovery state');
+  assert(!whatsappWebCopilotScript.includes('bodySnippet'), 'WhatsApp Web readiness telemetry must not log raw chat/sidebar text');
+  assert(whatsappWebCopilotScript.includes('RECENT_CHAT_FAST_LANE_LIMIT'), 'WhatsApp Web copilot must check the newest recent-chat row every loop');
+  assert(whatsappWebCopilotScript.includes('RECENT_CHAT_SWEEP_OPEN_LIMIT'), 'WhatsApp Web copilot must cap wider recent-chat openings');
+  assert(whatsappWebCopilotScript.includes('shouldSkipRecentChatRow'), 'WhatsApp Web copilot must skip unchanged recent-chat rows briefly');
   assert(whatsappWebCopilotScript.includes('hasCallLog'), 'WhatsApp Web copilot must detect WhatsApp no-answer call cards');
   assert(whatsappWebCopilotScript.includes("detected_from: 'whatsapp_call_log_card'"), 'WhatsApp Web copilot must tag call-card missed-call events');
   assert(whatsappWebCopilotScript.includes('recent_chat_call_preview'), 'WhatsApp Web copilot must detect missed calls from chat-list previews');

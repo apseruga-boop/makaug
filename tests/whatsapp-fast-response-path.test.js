@@ -23,6 +23,10 @@ const whatsappWebBridgeServiceSource = fs.readFileSync(
   path.join(__dirname, '..', 'services', 'whatsappWebBridgeService.js'),
   'utf8'
 );
+const llmProviderSource = fs.readFileSync(
+  path.join(__dirname, '..', 'services', 'llmProvider.js'),
+  'utf8'
+);
 
 async function run() {
   const listingMessage = 'Hi makaug, I want to list a property. Type: For Sale. Please help me create the listing.';
@@ -76,6 +80,26 @@ async function run() {
     'WhatsApp Web sender must sweep recent chats several times per second'
   );
   assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 1')
+      && whatsappWebCopilotSource.includes('ingestRecentChatsSweep(page, RECENT_CHAT_FAST_LANE_LIMIT)'),
+    'WhatsApp Web sender must check the newest chat row every loop before the wider sweep'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 3')
+      && whatsappWebCopilotSource.includes('openedRows >= RECENT_CHAT_SWEEP_OPEN_LIMIT'),
+    'WhatsApp Web sender must cap old-chat openings so stale sweeps cannot hold the loop for a minute'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 4000')
+      && whatsappWebCopilotSource.includes('function shouldSkipRecentChatRow(')
+      && whatsappWebCopilotSource.includes('function rememberRecentChatRow('),
+    'WhatsApp Web sender must cache unchanged recent rows so old chats cannot block fresh replies'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('return finish(true);'),
+    'WhatsApp Web sender must stop the recent-chat sweep as soon as it handles a new inbound message'
+  );
+  assert(
     whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS'),
     'WhatsApp Web sender must expose a fast composer-clear confirmation timeout'
   );
@@ -124,8 +148,14 @@ async function run() {
     whatsappWebCopilotSource.includes('const RECENTLY_SENT_REPLY_TTL_MS = Math.min(\n  30000,'),
     'WhatsApp Web copilot duplicate suppression must be capped below one minute'
   );
+  assert(
+    llmProviderSource.includes('function loadOpenAI()')
+      && !llmProviderSource.startsWith("const OpenAI = require('openai');"),
+    'WhatsApp fast paths must not synchronously load the OpenAI SDK during route startup'
+  );
 
   console.log('WhatsApp fast response path tests passed');
+  process.exit(0);
 }
 
 run().catch((error) => {

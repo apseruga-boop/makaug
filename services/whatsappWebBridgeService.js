@@ -76,7 +76,16 @@ async function upsertWhatsappWebBridgeClient({
   const normalizedClientId = String(clientId || '').trim();
   if (!normalizedClientId) return null;
 
-  const normalizedStatus = ['offline', 'starting', 'waiting_for_login', 'online', 'degraded', 'error'].includes(String(status || '').trim().toLowerCase())
+  const normalizedStatus = [
+    'offline',
+    'starting',
+    'waiting_for_login',
+    'open_elsewhere',
+    'browser_database_error',
+    'online',
+    'degraded',
+    'error'
+  ].includes(String(status || '').trim().toLowerCase())
     ? String(status || '').trim().toLowerCase()
     : 'online';
 
