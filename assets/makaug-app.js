@@ -9081,7 +9081,7 @@ function renderAdminPendingRows(listings) {
             <div class="font-bold text-gray-800">${adminEscape(p.title || "Untitled listing")}${sourceBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(locationText)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(createdText)} • Ref: ${adminEscape(p.inquiry_reference || reviewId || "-")}</div>
-            ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Consent, contact, authorised photos, and ownership must be verified before approval.</div>` : ""}
+            ${sourceBadge ? `<div class="text-xs text-blue-800 font-semibold mt-1">Location is required before approval. Other found-online checks can be reviewed and overridden by King.</div>` : ""}
             ${sourceBadge ? adminFoundOnlineSourceSummaryHtml(p) : ""}
           </div>
           <span class="text-xs font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
@@ -9361,7 +9361,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed social source pages/feeds and queue curated YouTube plus pre-approved found-online property candidates from 1 January 2026 onward. Website-only sources are ignored. Profiles are created only after multiple eligible properties.");
+  const ok = window.confirm("Scan reviewed social source pages/feeds and queue curated YouTube plus public social found-online property candidates from 1 January 2026 onward. Location is required, missing price becomes Price upon application, and website-only sources are ignored. Profiles are created only after multiple eligible properties.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9371,7 +9371,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Checking reviewed social source pages/feeds and queuing curated YouTube plus pre-approved 2026+ found-online property candidates now...";
+    statusEl.innerHTML = "Checking reviewed social source pages/feeds and queuing curated YouTube plus public social 2026+ found-online property candidates now...";
   }
   try {
     const response = await apiRequest("/api/admin/social-search-authorised-listings/seed", {
@@ -9434,7 +9434,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
-        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, and usable images or source evidence are present. Missing source prices are queued as Price upon application.</div>
+        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other public social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, and usable images or source evidence are present. Missing source prices are queued as Price upon application. Location is non-negotiable before approval; other checks can be recorded as King review overrides.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
@@ -9446,7 +9446,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a public social profile exists, but website-only sources are blocked. Records stay parked when they still need a specific 2026+ social property post, source URL, pre-approval, image-rights confirmation, location/area, or usable image/source evidence before King queues a listing. Missing source prices become Price upon application.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a public social profile exists, but website-only sources are blocked. Records stay parked when they still need a specific 2026+ social property post, source URL, location/area, usable image/source evidence, or public contact path before King queues a listing. Missing source prices become Price upon application.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9519,7 +9519,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(totalCount)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, pre-approval, image-rights confirmation, location/area, and usable image/source evidence. Missing source prices become Price upon application.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, location/area, and usable image/source evidence. Missing source prices become Price upon application.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(returnedCount)} source records below. The full ${adminEscape(totalCount)}-record database stays server-side so this panel does not time out.</div>` : ""}
       </div>
@@ -9606,7 +9606,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other pre-approved public social posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Profiles are created only when the source has multiple eligible properties.</div>
+        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other public social posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Location is the approval non-negotiable. Profiles are created only when the source has multiple eligible properties.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
@@ -9681,7 +9681,7 @@ async function adminImportTikTokExactPosts(seedText = "") {
       statusEl.innerHTML = `
         <div class="font-black">TikTok exact videos imported</div>
         <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} already existed. ${adminEscape(sourceReview.length)} need more source details.</div>
-        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area and a public contact route. If no price is published, makaug queues it as Price upon application. Missing platform date, consent, or image rights stay visible for King review before approval.</div>
+        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area and a public contact route. If no price is published, makaug queues it as Price upon application. Missing platform date, consent, or image rights stay visible for King review, but only missing location blocks approval.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, public contact route, or source evidence, then import again. Price is optional and becomes Price upon application when missing.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
@@ -10754,10 +10754,21 @@ function adminIsGeneratedPlaceholderPhoto(review = {}, image = {}) {
 
 function adminSourcedCandidateCanUseOverride(review = {}) {
   const extra = review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
-  const status = String(extra.image_rights_status || "").toLowerCase();
-  return extra.consent_confirmed === true
-    && extra.image_rights_confirmed === true
-    && status !== "generated_placeholder_images_only";
+  return Boolean(
+    String(review.area || "").trim()
+      || String(review.district || "").trim()
+      || String(review.address || "").trim()
+      || String(review.location || "").trim()
+      || String(extra.area || "").trim()
+      || String(extra.district || "").trim()
+      || String(extra.location || "").trim()
+      || String(extra.source_area || "").trim()
+      || String(extra.source_location || "").trim()
+      || String(extra.location_label || "").trim()
+      || (review.latitude != null && review.longitude != null)
+      || (extra.latitude != null && extra.longitude != null)
+      || extra.coordinates
+  );
 }
 
 function adminListingPhotoEvidence(review = {}, img = {}, idx = 0) {
@@ -10772,7 +10783,7 @@ function adminListingPhotoEvidence(review = {}, img = {}, idx = 0) {
     filename: `makaug-listing-${safeRef}-photo-${idx + 1}.${extension}`,
     room_label: label,
     is_placeholder: placeholder,
-    notice: placeholder ? "This is an internal generated placeholder, not a property photo. Import authorised property photos before approval." : ""
+    notice: placeholder ? "This is an internal generated support image, not a property photo. Use the source evidence and location before approving." : ""
   };
 }
 
@@ -14078,7 +14089,7 @@ function openAdminEvidence(id) {
             }),
             room_label: photo.room_label || photo.slot_key || photo.slot || "",
             is_placeholder: photo.is_placeholder === true,
-            notice: photo.notice || (photo.is_placeholder === true ? "This is an internal generated placeholder, not a property photo. Import authorised property photos before approval." : "")
+            notice: photo.notice || (photo.is_placeholder === true ? "This is an internal generated support image, not a property photo. Use the source evidence and location before approving." : "")
           });
           return `
             <button type="button" onclick="openAdminEvidence('${adminAttr(photoId)}')" class="text-left border border-gray-200 rounded-xl overflow-hidden bg-white hover:border-green-400">
@@ -14369,11 +14380,11 @@ function renderAdminReviewPanel(review) {
   const sourcedCandidateSourceSummaryHtml = isSourcedCandidate ? adminFoundOnlineSourceSummaryHtml(review, { compact: false }) : "";
   const sourcedCandidateEvidenceHtml = isSourcedCandidate ? `
     <div class="mt-3 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-900">
-      <strong>Found-online/source record:</strong> verify consent, contact details, authorised photos, ownership/title evidence, and external duplicate scan before approval.
+      <strong>Found-online/source record:</strong> location is non-negotiable before approval. Contact, ID, photo count, declarations, ownership/title evidence, and external duplicate checks can be reviewed and overridden by King for source-import records.
       ${sourcedCandidateSourceSummaryHtml}
       ${hasGeneratedPlaceholderPhotos ? `
         <div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 font-semibold text-amber-900">
-          Placeholder images are attached to this record. These are not property photos. Import authorised photos before approval.
+          Placeholder/support images are attached to this record. These are not property photos; approve only after source evidence and location are acceptable.
         </div>
       ` : ""}
       <div class="mt-2">
@@ -14592,9 +14603,9 @@ function renderAdminReviewPanel(review) {
             ${isSourcedCandidate ? `<button onclick="adminApproveSourcedCandidateOverride(${reviewIdArg})" ${sourcedCandidateOverrideReady ? "" : "disabled"} class="${sourcedCandidateOverrideReady ? "bg-blue-700 hover:bg-blue-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-semibold">Approve Found Online</button>` : ""}
             <button onclick="adminSetListingStatus(${reviewIdArg}, 'rejected', ${reviewIdArg})" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-semibold">Reject & Notify</button>
           </div>
-          ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">Approval is blocked until non-overrideable red checks are resolved.</div>`}
+          ${canApprove ? "" : `<div class="text-xs text-red-600 mt-2">${isSourcedCandidate ? (sourcedCandidateOverrideReady ? "Standard approval is blocked by owner-flow checks. Use Approve Found Online after source review; location is present." : "Found-online approval is blocked until a location or area is added.") : "Approval is blocked until non-overrideable red checks are resolved."}</div>`}
           ${canApprove && pendingWarningOverrides.length ? `<div class="text-xs text-amber-700 mt-2">Before approving, open and review these items, then record an override where appropriate: ${pendingWarningOverrides.map((label) => adminEscape(label)).join(", ")}.</div>` : ""}
-          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Found-online approval records that consent and image rights were confirmed. It only works on found-online intake records." : "Import authorised property photos and stored consent/image-rights confirmation before using found-online approval."}</div>` : ""}
+          ${isSourcedCandidate ? `<div class="text-xs ${sourcedCandidateOverrideReady ? "text-blue-700" : "text-amber-700"} mt-2">${sourcedCandidateOverrideReady ? "Found-online approval can override non-location checks. Location is present, so King can approve after reviewing the source evidence." : "Add a location or area before found-online approval. Location is the only non-negotiable check for this source-import approval path."}</div>` : ""}
         </div>
 
         <div class="border border-gray-200 rounded-xl p-4">
@@ -14837,19 +14848,19 @@ async function adminApproveSourcedCandidateOverride(listingId) {
     return;
   }
   if (!adminSourcedCandidateCanUseOverride(review)) {
-    toast("Import authorised photos and consent/image-rights evidence before approval.");
+    toast("Add a location or area before found-online approval.");
     return;
   }
   const sourceLinks = adminSourcedCandidateSourceLinks(review);
   const message = sourceLinks.length
-    ? "Approve this found-online record? This confirms consent, image rights, and the stored source/photo links have been checked."
-    : "Approve this found-online record? No source links are stored on the record, so only continue if you have verified the consented photos/source records outside makaug.";
+    ? "Approve this found-online record? Location is present. This records that King reviewed the stored source/photo links and overrode the remaining non-location checks."
+    : "Approve this found-online record? Location is present. No source links are stored on the record, so only continue if you verified the source evidence outside makaug.";
   const ok = window.confirm(message);
   if (!ok) return;
   await adminSetListingStatus(listingId, "approved", listingId, {
     sourced_candidate_override: true,
-    consent_confirmed: true,
-    image_rights_confirmed: true
+    found_online_location_confirmed: true,
+    source_reviewed: true
   });
 }
 
@@ -14893,7 +14904,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
   const checklist = getAdminReviewChecklistFromDom();
   if (isSourcedCandidateOverride && !moderationReason) {
-    moderationReason = "Approved as found-online intake after consent, image rights, and source evidence were confirmed.";
+    moderationReason = "Approved as found-online intake after location was confirmed and non-location source-review checks were overridden.";
     const reasonEl = document.getElementById("admin-review-reason");
     if (reasonEl) reasonEl.value = moderationReason;
   }

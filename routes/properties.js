@@ -634,12 +634,22 @@ function isSourcedInventoryCandidateRecord(row = {}) {
     || listedVia === 'found_online';
 }
 
-function sourcedCandidateRecordReadyForOverride(row = {}) {
+function sourcedCandidateRecordHasApprovalLocation(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
-  const imageRightsStatus = cleanText(extra.image_rights_status).toLowerCase();
-  return parseBooleanLike(extra.consent_confirmed, false)
-    && parseBooleanLike(extra.image_rights_confirmed, false)
-    && imageRightsStatus !== 'generated_placeholder_images_only';
+  const hasCoordinates = row.latitude != null && row.longitude != null;
+  return Boolean(
+    cleanText(row.area)
+      || cleanText(row.district)
+      || cleanText(row.address)
+      || cleanText(row.location)
+      || cleanText(extra.area)
+      || cleanText(extra.district)
+      || cleanText(extra.location)
+      || cleanText(extra.source_area)
+      || cleanText(extra.source_location)
+      || cleanText(extra.location_label)
+      || hasCoordinates
+  );
 }
 
 router.get('/suggestions', async (req, res, next) => {
@@ -2322,6 +2332,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       && parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false);
     const sourcedCandidateConsentConfirmed = parseBooleanLike(req.body.consent_confirmed, false);
     const sourcedCandidateImageRightsConfirmed = parseBooleanLike(req.body.image_rights_confirmed, false);
+    const sourcedCandidateLocationConfirmed = parseBooleanLike(req.body.found_online_location_confirmed || req.body.location_confirmed, false);
 
     if (requestedSourcedCandidateOverride && !isSourcedCandidate) {
       return res.status(403).json({
@@ -2330,24 +2341,13 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       });
     }
 
-    if (requestedSourcedCandidateOverride && (!sourcedCandidateConsentConfirmed || !sourcedCandidateImageRightsConfirmed)) {
+    if (requestedSourcedCandidateOverride && !sourcedCandidateRecordHasApprovalLocation(current)) {
       return res.status(400).json({
         ok: false,
-        error: 'Consent and image rights confirmation are required for found-online approval',
+        error: 'Location is required before found-online approval',
         details: [
-          'Set consent_confirmed=true after verifying permission to publish the listing.',
-          'Set image_rights_confirmed=true after verifying the attached photos are authorised for makaug use.'
-        ]
-      });
-    }
-
-    if (requestedSourcedCandidateOverride && !sourcedCandidateRecordReadyForOverride(current)) {
-      return res.status(400).json({
-        ok: false,
-        error: 'Authorised found-online photos must be imported before approval',
-        details: [
-          'The record still looks like a generated placeholder or does not carry stored consent/image-rights confirmation.',
-          'Import authorised photos first, or use the Bakaima authorised seed records that already carry supplied flyer evidence.'
+          'Add at least an area, district, address, source location, or valid coordinates before approving.',
+          'Found-online approval can override missing contact, ID, image-count, pricing, and declaration checks, but it cannot override missing location.'
         ]
       });
     }
@@ -2406,20 +2406,35 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
 
     let sourcedCandidateDispensation = null;
     if (sourcedCandidateOverride) {
-      moderationReason = moderationReason || 'Approved as found-online intake after consent, image rights, and source evidence were confirmed.';
+      moderationReason = moderationReason || 'Approved as found-online intake after location was confirmed and non-location source-review checks were overridden.';
       sourcedCandidateDispensation = {
         used: true,
         source: 'found_online_property_source_v1',
         at: new Date().toISOString(),
         actor_id: actorId,
-        consent_confirmed: true,
-        image_rights_confirmed: true,
+        approval_policy: 'location_required_non_location_checks_admin_override',
+        location_confirmed: sourcedCandidateLocationConfirmed || sourcedCandidateRecordHasApprovalLocation(current),
+        consent_confirmed: sourcedCandidateConsentConfirmed,
+        image_rights_confirmed: sourcedCandidateImageRightsConfirmed,
         missing_checks_overridden: missingChecks,
         warning_checks_overridden: missingWarningOverrides,
         reason: moderationReason
       };
-      approvalWarnings.push('Found-online approval used; admin confirmed consent and image rights before approval.');
+      approvalWarnings.push('Found-online approval used; admin confirmed location and overrode non-location review checks.');
     }
+    const sourcedCandidateExtraFields = sourcedCandidateDispensation
+      ? {
+        sourced_candidate_special_dispensation: sourcedCandidateDispensation,
+        found_online_approval_policy: 'location_required_non_location_checks_admin_override',
+        found_online_location_confirmed: sourcedCandidateDispensation.location_confirmed,
+        found_online_non_location_checks_overridden: true,
+        ...(sourcedCandidateConsentConfirmed ? { consent_confirmed: true } : {}),
+        ...(sourcedCandidateImageRightsConfirmed ? {
+          image_rights_confirmed: true,
+          image_rights_status: 'admin_confirmed_authorised'
+        } : {})
+      }
+      : null;
 
     const regeneratedOwnerToken = nextStatus === 'rejected' ? createOwnerEditToken() : '';
     const regeneratedOwnerTokenHash = regeneratedOwnerToken ? hashOwnerEditToken(regeneratedOwnerToken) : null;
@@ -2456,15 +2471,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
                ELSE COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('moderation_reason', $3::text)
              END
            ) || jsonb_build_object('review_warning_overrides', $11::jsonb)
-             || CASE
-               WHEN $12::jsonb IS NULL THEN '{}'::jsonb
-               ELSE jsonb_build_object(
-                 'sourced_candidate_special_dispensation', $12::jsonb,
-                 'consent_confirmed', true,
-                 'image_rights_confirmed', true,
-                 'image_rights_status', 'admin_confirmed_authorised'
-               )
-             END
+             || COALESCE($12::jsonb, '{}'::jsonb)
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, approved_at, last_moderation_notification_at, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, extra_fields`,
         [
@@ -2479,7 +2486,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           regeneratedOwnerTokenHash,
           regeneratedOwnerTokenExpiresAt,
           JSON.stringify(warningOverrides),
-          sourcedCandidateDispensation ? JSON.stringify(sourcedCandidateDispensation) : null
+          sourcedCandidateExtraFields ? JSON.stringify(sourcedCandidateExtraFields) : null
         ]
       );
       listing = result.rows[0];
@@ -2505,15 +2512,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
                'moderation_reason', $6::text,
                'review_warning_overrides', $7::jsonb
              )
-             || CASE
-               WHEN $8::jsonb IS NULL THEN '{}'::jsonb
-               ELSE jsonb_build_object(
-                 'sourced_candidate_special_dispensation', $8::jsonb,
-                 'consent_confirmed', true,
-                 'image_rights_confirmed', true,
-                 'image_rights_status', 'admin_confirmed_authorised'
-               )
-             END
+             || COALESCE($8::jsonb, '{}'::jsonb)
          WHERE id = $1
          RETURNING id, title, listing_type, inquiry_reference, lister_name, lister_phone, lister_email, status, reviewed_at, extra_fields`,
         [
@@ -2524,7 +2523,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
           reviewNotes,
           moderationReason,
           JSON.stringify(warningOverrides),
-          sourcedCandidateDispensation ? JSON.stringify(sourcedCandidateDispensation) : null
+          sourcedCandidateExtraFields ? JSON.stringify(sourcedCandidateExtraFields) : null
         ]
       );
       listing = {
@@ -2611,7 +2610,7 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
             nextStatus,
             JSON.stringify(checklist),
             moderationReason,
-            'Admin confirmed consent and image rights for this found-online approval.',
+            'Admin confirmed location and overrode non-location checks for this found-online approval.',
             JSON.stringify(sourcedCandidateDispensation)
           ]
         );

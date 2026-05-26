@@ -24,7 +24,7 @@ function usage() {
     'Usage:',
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
-    '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25',
+    '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
     '',
     'Platforms:',
     '  tiktok  Builds exact-video capture tasks from tracked TikTok hashtag/profile feeds.',
@@ -44,6 +44,7 @@ async function main() {
   const maxSources = argValue('--max-sources', argValue('--limit', '40'));
   const maxResultsPerSource = argValue('--max-results', '25');
   const searchMode = argValue('--x-search-mode', 'all');
+  const lookbackDays = argValue('--lookback-days', '0');
   if (!dryRun && !confirm) {
     usage();
     process.exit(2);
@@ -55,6 +56,7 @@ async function main() {
     maxSources,
     maxResultsPerSource,
     searchMode,
+    lookbackDays,
   });
   console.log(JSON.stringify({
     ok: true,

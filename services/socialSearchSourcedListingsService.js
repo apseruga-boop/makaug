@@ -30,9 +30,9 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue curated exact YouTube social-source property posts and other pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, usable listing evidence, and a social/direct contact path. If no price is published, makaug stores Price upon application instead of blocking the import. Website-only sources are ignored.',
-  image_rule: 'Use YouTube thumbnails/stills from the exact curated YouTube source post, or use social-platform media only when rights are pre-approved, or use a clearly-labelled makaug evidence card/land-size guide for review. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
-  facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images.',
+  queue_rule: 'Queue curated exact YouTube social-source property posts and other specific public social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, usable listing/source evidence, and a social/direct contact path. Location is non-negotiable. Missing price becomes Price upon application. Website-only sources are ignored.',
+  image_rule: 'Use YouTube thumbnails/stills from the exact curated YouTube source post, social-platform media only when rights are pre-approved, or a clearly-labelled makaug evidence card/land-size guide for review. King can approve found-online records with source evidence after confirming location and overriding non-location checks. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
+  facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
 
@@ -711,7 +711,7 @@ function sourcePreApprovalStatusFor(item = {}) {
     preapproved: explicitPreapproved || (consentConfirmed && imageRightsConfirmed && PREAPPROVED_PERMISSION_STATUSES.includes(permissionStatus)),
     consent_confirmed: consentConfirmed || explicitPreapproved,
     image_rights_confirmed: imageRightsConfirmed || explicitPreapproved,
-    permission_status: permissionStatus || (explicitPreapproved ? 'agent_preapproved' : 'missing_preapproval'),
+    permission_status: permissionStatus || (explicitPreapproved ? 'agent_preapproved' : 'pending_king_source_review'),
   };
 }
 
@@ -753,8 +753,8 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
-  const exactTikTokPendingKingReview = itemIsExactTikTokVideoSource(item, agent) && !preApproval.preapproved;
-  const hasQueuePermission = preApproval.preapproved || exactTikTokPendingKingReview;
+  const pendingKingSourceReview = !preApproval.preapproved;
+  const hasQueuePermission = allowedSocialSource;
   return {
     eligible: hasSource && allowedSocialSource && hasLocation && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission,
     has_source_url: hasSource,
@@ -771,10 +771,11 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
     consent_confirmed: preApproval.consent_confirmed,
     image_rights_confirmed: preApproval.image_rights_confirmed,
     permission_status: preApproval.permission_status,
-    exact_tiktok_pending_king_review: exactTikTokPendingKingReview,
+    exact_tiktok_pending_king_review: itemIsExactTikTokVideoSource(item, agent) && pendingKingSourceReview,
+    pending_king_source_review: pendingKingSourceReview,
     queue_permission_status: hasQueuePermission
-      ? (preApproval.preapproved ? 'preapproved_social_source' : 'exact_tiktok_source_pending_king_review')
-      : 'missing_preapproval',
+      ? (preApproval.preapproved ? 'preapproved_social_source' : 'social_source_pending_king_review_location_required')
+      : 'unsupported_source_platform',
     website_source_blocked: hasSource && !allowedSocialSource,
     no_phone_ok_with_source_contact: Boolean(!String(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '').trim() && hasContact),
   };
@@ -1174,7 +1175,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     image_rights_confirmed: preApproval.image_rights_confirmed,
     image_rights_status: preApproval.image_rights_confirmed
       ? 'preapproved_social_source_media_or_evidence'
-      : 'blocked_until_image_rights_preapproved',
+      : 'source_review_pending_location_required',
     image_evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.image_rule,
     facebook_image_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.facebook_image_rule,
     launch_intake_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
@@ -1291,7 +1292,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: 'pending',
     moderation_stage: 'submitted',
     reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm availability, price or Price upon application, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King. Batch: ${itemBatchId(item)}.`,
     moderation_reason: 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
     images: listingImageRowsFor(item),
     source_item: item,
@@ -2029,7 +2030,7 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     no_phone_source_contact_policy:
       PUBLIC_SOURCE_CONTACT_POLICY,
     source_page_vs_property_policy:
-      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. King queues curated exact YouTube social-source property posts and other pre-approved social property posts/listings from 1 January 2026 onward that meet the found-online intake rule; website-only sources and source pages without a matched post stay out of property inventory.',
+      'The 30,000 source database is source pages, hashtags, accounts, and discovery feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. King queues curated exact YouTube social-source property posts and other specific public social property posts/listings from 1 January 2026 onward that meet the found-online intake rule. Location is non-negotiable; website-only sources and source pages without a matched post stay out of property inventory.',
     next_required_inputs: [
       'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026+ post is queued.',
       'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
