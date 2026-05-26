@@ -1412,7 +1412,7 @@ function typeLabel(type, lang) {
 }
 
 function formatPrice(price, period) {
-  if (!price || Number.isNaN(Number(price))) return 'Price on request';
+  if (!price || Number.isNaN(Number(price))) return 'Price upon application';
   const v = Number(price);
   if (v >= 1_000_000_000) {
     return `USh ${(v / 1_000_000_000).toFixed(1)}B${period ? `/${period}` : ''}`;

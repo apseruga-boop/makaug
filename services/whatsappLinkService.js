@@ -53,7 +53,7 @@ function priceText(listing = {}) {
   const value = cleanValue(listing.price_text || listing.formatted_price);
   if (value) return value;
   const price = cleanValue(listing.price);
-  if (!price || price === '0') return '';
+  if (!price || price === '0') return 'Price upon application';
   const currency = cleanValue(listing.currency || 'USh');
   const period = cleanValue(listing.price_period || listing.period);
   return `${currency} ${price}${period ? `/${period}` : ''}`;

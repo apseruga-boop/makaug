@@ -36,6 +36,7 @@ function usage() {
     '  source_url/post_url must be the exact public TikTok video URL when available.',
     '  source_page_url can be the TikTok profile/contact path.',
     '  pre_approved/consent_confirmed/image_rights_confirmed must be true before a property row is created.',
+    '  missing price is accepted as Price upon application.',
     '  missing dates show as being confirmed and missing images use a labelled makaug evidence card.',
   ].join('\n'));
 }

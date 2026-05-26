@@ -15,6 +15,7 @@ const LAUNCH_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_import';
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
+const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
 const PREAPPROVED_PERMISSION_STATUSES = [
   'founder_reported_agent_authorised_upload',
@@ -29,7 +30,7 @@ const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker wh
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
-  queue_rule: 'Queue curated exact YouTube social-source property posts and other pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, price or guide price, usable listing evidence, and a social/direct contact path. Website-only sources are ignored.',
+  queue_rule: 'Queue curated exact YouTube social-source property posts and other pre-approved specific social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, usable listing evidence, and a social/direct contact path. If no price is published, makaug stores Price upon application instead of blocking the import. Website-only sources are ignored.',
   image_rule: 'Use YouTube thumbnails/stills from the exact curated YouTube source post, or use social-platform media only when rights are pre-approved, or use a clearly-labelled makaug evidence card/land-size guide for review. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
@@ -121,7 +122,7 @@ const SOCIAL_SEARCH_AGENTS = [
     profilePhotoUrl: '',
     districts: ['Kampala', 'Wakiso'],
     specializations: ['Homes for sale', 'Dream home search', 'Local property matching'],
-    bio: 'Dream Home Real Estate helps buyers find homes around Greater Kampala. The profile is prepared from founder-provided channel information; no property record is auto-created until a specific recent video gives enough price and location evidence.',
+    bio: 'Dream Home Real Estate helps buyers find homes around Greater Kampala. The profile is prepared from founder-provided channel information; no property record is auto-created until a specific recent video gives enough location and source evidence. Missing source prices are marked Price upon application.',
   },
   {
     key: 'realtor-mahad',
@@ -728,11 +729,26 @@ function sourceDateStatusFor(item = {}) {
     : 'before_2026_source_window';
 }
 
+function hasPublishedPriceOrGuidePrice(item = {}) {
+  const text = String(item.guidePrice || item.priceText || '').trim();
+  const poaText = /\b(?:price\s*)?(?:upon application|on request|poa)\b/i.test(text);
+  return Number(item.price || 0) > 0 || Boolean(text && !poaText);
+}
+
+function sourcePriceLabelFor(item = {}) {
+  if (Number(item.price || 0) > 0) {
+    return `${money(item.price)}${item.price_period && item.price_period !== 'once' ? `/${item.price_period}` : ''}`;
+  }
+  const text = String(item.guidePrice || item.priceText || '').trim();
+  return text && !/\b(?:price\s*)?(?:upon application|on request|poa)\b/i.test(text) ? text : PRICE_UPON_APPLICATION_LABEL;
+}
+
 function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const hasSource = Boolean(sourceUrlForItem(item));
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
   const hasLocation = Boolean(String(item.address || item.area || item.district || '').trim());
-  const hasPrice = item.price != null || Boolean(String(item.guidePrice || item.priceText || '').trim());
+  const hasPrice = hasPublishedPriceOrGuidePrice(item);
+  const priceUponApplication = !hasPrice;
   const hasContact = hasAnyPublicContactPath(agent, item);
   const hasImageOrEvidence = Boolean(sourceImageRowsFor(item).length || sourceUrlForItem(item));
   const dateStatus = sourceDateStatusFor(item);
@@ -740,11 +756,14 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   const exactTikTokPendingKingReview = itemIsExactTikTokVideoSource(item, agent) && !preApproval.preapproved;
   const hasQueuePermission = preApproval.preapproved || exactTikTokPendingKingReview;
   return {
-    eligible: hasSource && allowedSocialSource && hasLocation && hasPrice && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission,
+    eligible: hasSource && allowedSocialSource && hasLocation && hasContact && hasImageOrEvidence && dateStatus !== 'before_2026_source_window' && hasQueuePermission,
     has_source_url: hasSource,
     allowed_social_source: allowedSocialSource,
     has_location_or_area: hasLocation,
     has_price_or_guide_price: hasPrice,
+    price_upon_application: priceUponApplication,
+    price_status: hasPrice ? 'published_price_or_guide_price' : 'price_upon_application',
+    price_label: sourcePriceLabelFor(item),
     has_contact_path: hasContact,
     has_image_or_source_evidence: hasImageOrEvidence,
     date_status: dateStatus,
@@ -884,7 +903,7 @@ function sourceEvidenceCardDataUrl(item = {}, agent = {}) {
   const platform = sourcePlatformFor(agent, item);
   const title = item.title || item.sourceTitle || 'Found-online property source';
   const area = item.address || [item.area, item.district].filter(Boolean).join(', ') || 'Location/area to verify';
-  const priceText = item.price ? money(item.price) : 'Guide price to verify';
+  const priceText = sourcePriceLabelFor(item);
   const posted = sourcePublishedLabelFor(item);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
   <rect width="1280" height="820" fill="#f8fafc"/>
@@ -959,7 +978,7 @@ function landSizeDiagramDataUrl(item = {}) {
   const title = item.title || 'Land size guide';
   const area = item.address || [item.area, item.district].filter(Boolean).join(', ') || 'Location to verify';
   const sizeText = landSizeText(item);
-  const priceText = item.price ? money(item.price) : 'Guide price to verify';
+  const priceText = sourcePriceLabelFor(item);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820">
   <rect width="1280" height="820" fill="#f7fbef"/>
   <rect x="0" y="0" width="1280" height="145" fill="#2f7d42"/>
@@ -1020,7 +1039,9 @@ function publicDescriptionFor(item = {}) {
         ? `${item.beds}-bedroom home`
         : 'property';
   const area = item.address || [item.area, item.district].filter(Boolean).join(', ');
-  const priceText = item.price ? ` The guide price shown in the source is ${money(item.price)}${item.price_period && item.price_period !== 'once' ? `/${item.price_period}` : ''}.` : '';
+  const priceText = hasPublishedPriceOrGuidePrice(item)
+    ? ` The guide price shown in the source is ${sourcePriceLabelFor(item)}.`
+    : ` The source did not publish a price, so makaug shows ${PRICE_UPON_APPLICATION_LABEL} until the source confirms it.`;
   const roomText = item.beds
     ? ` It is presented as a ${item.beds}-bedroom ${item.subtype || 'property'}${item.baths ? ` with ${item.baths} bathrooms` : ''}.`
     : item.landSizeValue
@@ -1047,7 +1068,7 @@ function reviewSteps(item = {}) {
   const steps = [
     'Confirm the exact source post/listing was first published on or after 1 January 2026',
     'Confirm the agent/source still wants this exact listing live on makaug.com',
-    'Confirm current availability and guide price before approval',
+    `Confirm current availability and price, or keep ${PRICE_UPON_APPLICATION_LABEL} if the source does not publish one`,
     'Confirm the exact road/map pin and update it if the agent gives a better pin',
     'Confirm title/ownership evidence or broker authority before public approval',
     'Keep differentiated evidence-based source images, public platform thumbnails, authorised screenshots, or labelled evidence cards; upload direct HD agent photos when supplied',
@@ -1138,6 +1159,11 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_contact_available_without_phone: sourceContactAvailableWithoutPhone,
     public_contact_path_available: hasAnyPublicContactPath(agent, item),
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
+    price_label: sourcePriceLabelFor(item),
+    source_price_label: sourcePriceLabelFor(item),
+    price_upon_application: !hasPublishedPriceOrGuidePrice(item),
+    price_status: hasPublishedPriceOrGuidePrice(item) ? 'published_price_or_guide_price' : 'price_upon_application',
+    source_price_policy: 'If the public social source does not publish a price, makaug shows Price upon application and King confirms the price during review/follow-up.',
     source_channel_url: agent.channelUrl || '',
     source: SOCIAL_SEARCH_SOURCE,
     agent_permission_reported: preApproval.preapproved,
@@ -1197,11 +1223,12 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
   const agent = sourceAgentForItem(item);
   const sourceContactUrl = sourceContactUrlForAgent(agent, item);
   const sourceUrl = sourceUrlForItem(item);
+  const priceLabel = sourcePriceLabelFor(item);
   return [
     `Hi, this is ${agent.name || 'the listing agent'}.`,
     `${item.title} is prepared on makaug.com for King review as a found-online authorised listing.`,
     `Location: ${item.address}`,
-    item.price ? `Guide price: ${money(item.price)}.` : '',
+    `Price: ${priceLabel}.`,
     `${item.youtubeId ? 'Source video' : 'Source post'}: ${sourceUrl}`,
     sourcePublishedLabelFor(item),
     ownerPreviewUrl ? `Private preview: ${ownerPreviewUrl}` : '',
@@ -1221,7 +1248,7 @@ function buildSocialSearchListing(item, agentId = null) {
     district: item.district,
     area: item.area,
     address: item.address,
-    price: item.price,
+    price: Number(item.price || 0) > 0 ? item.price : null,
     price_period: item.price_period || item.pricePeriod || 'once',
     bedrooms: item.beds,
     bathrooms: item.baths,
@@ -1264,7 +1291,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: 'pending',
     moderation_stage: 'submitted',
     reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm availability, price, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH AUTHORISED LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm availability, price or Price upon application, pin, and image rights before approval. Batch: ${itemBatchId(item)}.`,
     moderation_reason: 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
     images: listingImageRowsFor(item),
     source_item: item,
@@ -1996,7 +2023,7 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     target_gap: targetGap,
     meets_daily_minimum: eligibleToQueueCount >= DAILY_FOUND_ONLINE_PROPERTY_TARGET,
     blocking_reason: targetGap
-      ? `Need ${targetGap} more specific eligible social property posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path before the 200/day King review minimum is met. Curated exact YouTube source posts are accepted; website-only sources are ignored.`
+      ? `Need ${targetGap} more specific eligible social property posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a phone, email, or public social contact path before the 200/day King review minimum is met. Missing source prices are queued as Price upon application. Curated exact YouTube source posts are accepted; website-only sources are ignored.`
       : 'Daily minimum met; continue queuing every extra eligible 2026+ found-online property post because there is no cap.',
     evidence_policy: FOUND_ONLINE_LAUNCH_INTAKE_POLICY.queue_rule,
     no_phone_source_contact_policy:
@@ -2006,7 +2033,7 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
     next_required_inputs: [
       'Run inventory:import-source-posts or the protected admin source-post import API with extracted platform posts so every eligible 2026+ post is queued.',
       'Use platform/API exports for YouTube, Meta/Facebook/Instagram, X, and TikTok or an authenticated review workflow for member-only sources.',
-      'Promote discovery feeds into reviewed source pages/accounts, then import only posts that expose price, location, usable images/source evidence, and either a direct number or public social contact route.',
+      'Promote discovery feeds into reviewed source pages/accounts, then import posts that expose location, usable images/source evidence, and either a direct number or public social contact route; if the source omits price, mark Price upon application.',
     ],
   };
 }
@@ -2058,6 +2085,7 @@ module.exports = {
   DAILY_FOUND_ONLINE_PROPERTY_TARGET,
   LAUNCH_SOURCE_POST_WINDOW_START,
   FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+  PRICE_UPON_APPLICATION_LABEL,
   FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
   SOCIAL_SEARCH_AGENTS,
   SOCIAL_SEARCH_LISTINGS,
