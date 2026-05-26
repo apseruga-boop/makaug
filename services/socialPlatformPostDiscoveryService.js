@@ -66,6 +66,13 @@ function cappedNumber(value, fallback, min = 1, max = 500) {
   return Math.max(min, Math.min(Math.round(parsed), max));
 }
 
+function isoStartTimeForLookbackDays(days = 0) {
+  const parsed = Number(days);
+  if (!Number.isFinite(parsed) || parsed <= 0) return '';
+  const ms = Math.round(parsed) * 24 * 60 * 60 * 1000;
+  return new Date(Date.now() - ms).toISOString();
+}
+
 function urlParam(url = '', key = '') {
   try {
     return new URL(url).searchParams.get(key) || '';
@@ -422,7 +429,7 @@ function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit
         exact_post_url_pattern: 'https://www.tiktok.com/@{handle}/video/{video_id}',
         import_ready_when: [
           'exact TikTok video URL is captured',
-          'owner/agent pre-approval and image-rights confirmation are captured',
+          'source evidence is captured for King review; only location is non-negotiable before approval',
           'caption/overlay gives property title or description',
           'location or area is visible',
           'price is visible or should be marked Price upon application',
@@ -453,8 +460,9 @@ function buildXQueryForSource(source = {}) {
   return `(${discoveryTerms}) (${UGANDA_LOCATION_QUERY}) (${CORE_PROPERTY_QUERY}) has:media -is:retweet`;
 }
 
-function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_MAX_SOURCES, searchMode = 'all' } = {}) {
+function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_MAX_SOURCES, searchMode = 'all', startTime = '' } = {}) {
   const endpoint = searchMode === 'recent' ? X_RECENT_SEARCH_URL : X_FULL_ARCHIVE_SEARCH_URL;
+  const archiveStartTime = cleanText(startTime) || LAUNCH_SOURCE_POST_WINDOW_START;
   return sources
     .filter((source) => normalizePlatform(source.platform) === 'x')
     .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
@@ -467,7 +475,7 @@ function buildXSearchJobs({ sources = sourcesForPlatform('x'), limit = DEFAULT_M
       source_url: sourceUrl(source),
       query: buildXQueryForSource(source).slice(0, searchMode === 'recent' ? 1024 : 4096),
       endpoint,
-      start_time: searchMode === 'recent' ? null : LAUNCH_SOURCE_POST_WINDOW_START,
+      start_time: searchMode === 'recent' ? null : archiveStartTime,
       max_results: DEFAULT_X_RESULTS_PER_SOURCE,
     }));
 }
@@ -614,7 +622,7 @@ async function fetchXSearchJob(job = {}, {
   url.searchParams.set('expansions', 'author_id,attachments.media_keys,geo.place_id');
   url.searchParams.set('user.fields', 'username,name,url,description,public_metrics,verified');
   url.searchParams.set('media.fields', 'media_key,type,url,preview_image_url,width,height');
-  if (searchMode !== 'recent') url.searchParams.set('start_time', LAUNCH_SOURCE_POST_WINDOW_START);
+  if (searchMode !== 'recent') url.searchParams.set('start_time', job.start_time || LAUNCH_SOURCE_POST_WINDOW_START);
   const response = await fetchImpl(url, {
     headers: { Authorization: `Bearer ${bearerToken}` },
   });
@@ -673,6 +681,7 @@ async function runSocialPlatformPostSweep({
   maxSources = DEFAULT_MAX_SOURCES,
   maxResultsPerSource = DEFAULT_X_RESULTS_PER_SOURCE,
   searchMode = 'all',
+  lookbackDays = 0,
   fetchX = true,
   env = process.env,
   fetchImpl = fetch,
@@ -682,17 +691,20 @@ async function runSocialPlatformPostSweep({
   const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
+  const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
     ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
-    ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode })
+    ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
     : [];
   const bearer = envBearerToken(env);
   let xFetch = {
     api_configured: Boolean(bearer.token),
     token_env: bearer.name || '',
     search_mode: searchMode,
+    lookback_days: Number(lookbackDays) || 0,
+    archive_start_time: archiveStartTime || LAUNCH_SOURCE_POST_WINDOW_START,
     skipped_reason: bearer.token ? '' : 'Set X_BEARER_TOKEN, TWITTER_BEARER_TOKEN, or X_API_BEARER_TOKEN to convert X source feeds into exact post imports.',
     posts: [],
     reports: [],
@@ -741,8 +753,8 @@ async function runSocialPlatformPostSweep({
     dry_run: dryRun,
     platforms: requestedPlatforms,
     policy: {
-      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, pre-approval/source review status, and source-image evidence are captured; if no price is published, mark Price upon application.',
-      x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, contact path, and pre-approval; if no price is published, mark Price upon application.',
+      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
+      x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       profile_creation_rule: 'The sweep creates or links a profile only when a source contributes multiple eligible properties; one-off posts remain found-online listings without creating a new profile.',
     },
     tiktok: {

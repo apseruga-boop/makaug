@@ -137,7 +137,7 @@ test('King dashboard shows found-online intake instead of generic sourced candid
   assert(!frontend.includes('Approve Sourced Candidate'), 'review panel should not show generic sourced-candidate approval copy');
   assert(!html.includes('Create 200 Sourced Candidates'), 'review queue should not expose generic sourced-candidate creation');
   assert(frontend.includes('Found-online/source record'), 'review panel should use found-online/source wording');
-  assert(frontend.includes('verify consent, contact details, authorised photos'), 'review panel should show verification warning');
+  assert(frontend.includes('location is non-negotiable before approval'), 'review panel should show the found-online location gate');
   assert(frontend.includes('function adminSourcedCandidateSourceLinks'), 'review panel should expose stored source/photo evidence links');
   assert(frontend.includes('image.source_url, image.source_link, image.original_url, image.url'), 'source links should include attached image URLs such as YouTube stills');
   assert(frontend.includes('function adminFoundOnlineSourceSummaryHtml'), 'dashboard should summarize source name, first-posted date, and source link inline');
@@ -146,7 +146,7 @@ test('King dashboard shows found-online intake instead of generic sourced candid
   assert(frontend.includes('adminApproveSourcedCandidateOverride'), 'dashboard should expose found-online approval control');
   assert(frontend.includes('function adminEvidenceDownloadFilename'), 'evidence downloads should use a filename matching the actual mime type');
   assert(frontend.includes('function adminIsGeneratedPlaceholderPhoto'), 'dashboard should detect generated placeholder images');
-  assert(frontend.includes('Placeholder images are attached'), 'dashboard should warn when images are placeholders');
+  assert(frontend.includes('Placeholder/support images are attached'), 'dashboard should warn when images are placeholders');
   assert(frontend.includes('function adminIsFoundOnlineSourcedListing'), 'dashboard should detect found-online sourced records');
   assert(frontend.includes('source === "found_online_property_source_v1"'), 'found-online filter should count rows by production source marker');
   assert(frontend.includes('listedVia === "found_online"'), 'found-online filter should count rows by production listed_via marker');
@@ -202,11 +202,11 @@ test('admin-only endpoint rejects retired generic sourced candidates', () => {
 test('sourced candidate approval override is server-side limited and audited', () => {
   assert(propertiesRoute.includes('function isSourcedInventoryCandidateRecord'), 'status route should identify sourced candidate records server-side');
   assert(propertiesRoute.includes('sourced_candidate_override'), 'status route should require explicit sourced override flag');
-  assert(propertiesRoute.includes('consent_confirmed'), 'override should require consent confirmation');
-  assert(propertiesRoute.includes('image_rights_confirmed'), 'override should require image rights confirmation');
-  assert(propertiesRoute.includes('sourcedCandidateRecordReadyForOverride'), 'override should verify the stored record is ready, not only the request body');
-  assert(propertiesRoute.includes('generated_placeholder_images_only'), 'override should reject records that still use generated placeholders');
-  assert(propertiesRoute.includes('Authorised found-online photos must be imported before approval'), 'override error should explain authorised photos are required');
+  assert(propertiesRoute.includes('found_online_location_confirmed'), 'override should record location confirmation');
+  assert(propertiesRoute.includes('sourcedCandidateRecordHasApprovalLocation'), 'override should verify location from the stored record, not only the request body');
+  assert(propertiesRoute.includes('Location is required before found-online approval'), 'override error should explain that location is required');
+  assert(propertiesRoute.includes('cannot override missing location'), 'override details should make location non-negotiable');
+  assert(propertiesRoute.includes('non-location review checks'), 'override should document that non-location checks are overridden');
   assert(propertiesRoute.includes('Found-online approval is only available'), 'override should reject ordinary listings');
   assert(propertiesRoute.includes('sourced_candidate_special_dispensation'), 'override should be stored on the property record');
   assert(propertiesRoute.includes('found_online_approval_used'), 'override should be written to moderation history');
@@ -591,7 +591,7 @@ test('found-online source-post importer normalizes extracted posts for King revi
   const intake = sourcePostMeetsLaunchIntakeRule(imported, imported.sourceAgent);
   assert.strictEqual(imported.sourceBatch, FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID, 'imported posts should use the source-post import batch');
   assert.strictEqual(imported.price, 350000000, 'importer should parse Uganda shorthand prices');
-  assert.strictEqual(intake.eligible, true, 'imported pre-approved no-phone posts with public source contact should be queueable');
+  assert.strictEqual(intake.eligible, true, 'imported no-phone social posts with location and public source contact should be queueable');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
@@ -615,7 +615,7 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(imported.sourcePlatform, 'TikTok', 'TikTok post imports should keep the platform');
   assert.strictEqual(imported.sourceAgent.tiktokUrl, 'https://www.tiktok.com/@realtor_mahad/video/7330000000000000000', 'exact TikTok URL should be usable as contact/source path');
   assert.strictEqual(intake.date_status, 'needs_source_platform_date_confirmation', 'missing TikTok post dates should stay visible as confirmation-needed');
-  assert.strictEqual(intake.eligible, true, 'pre-approved exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
+  assert.strictEqual(intake.eligible, true, 'exact TikTok URLs with source contact, area, and price should queue even while date/images are being confirmed');
   assert.strictEqual(sourceImageRowsFor(imported).length, 0, 'TikTok posts without direct media URLs should not pretend to have copied images');
   assert(socialSearchServiceSource.includes('sourceEvidenceCardDataUrl'), 'TikTok no-image imports should fall back to a labelled makaug evidence card');
 
@@ -667,7 +667,7 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(captionOnlyRows[0].contact_email, 'ismaelssekatawa25@gmail.com', 'TikTok caption import should extract public email contact');
   assert.strictEqual(captionOnly.price, 30000000, 'plural TikTok price text should normalize to UGX amount');
   assert.strictEqual(captionOnlyIntake.preapproved, false, 'caption-only TikTok posts should not pretend consent is already confirmed');
-  assert.strictEqual(captionOnlyIntake.exact_tiktok_pending_king_review, true, 'exact TikTok posts can enter King review while consent/date is confirmed');
+  assert.strictEqual(captionOnlyIntake.pending_king_source_review, true, 'social posts can enter King review while consent/date is confirmed');
   assert.strictEqual(captionOnlyIntake.eligible, true, 'exact TikTok posts with caption evidence should queue instead of failing with source-review only');
 
   const noPriceRows = buildTikTokExactPostImportRows({
@@ -707,6 +707,7 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
+  assert(socialPlatformSweepScript.includes('--lookback-days'), 'social sweep script should support two-week X/Twitter lookback sweeps');
   assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
   assert(adminRoute.includes("router.post('/tiktok-source-posts/import'"), 'admin should expose a protected exact TikTok post import endpoint');
   assert(adminRoute.includes('admin_tiktok_exact_posts_imported'), 'exact TikTok post imports should write an audit event');
@@ -749,6 +750,18 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert.strictEqual(xJobs.length, 1);
   assert(xJobs[0].query.includes('has:media'), 'X search jobs should request media-backed posts');
   assert(xJobs[0].endpoint.includes('/2/tweets/search/all'), 'X full archive search should be available for 2026-onward sweeps');
+  const xLookbackJobs = buildXSearchJobs({
+    sources: [{
+      key: 'x-uganda-property-lookback',
+      name: 'X Uganda property lookback',
+      platform: 'x',
+      sourceType: 'search_feed',
+      url: 'https://x.com/search?q=%23UgandaRealEstate%20Uganda%20property&src=typed_query&f=live',
+    }],
+    limit: 1,
+    startTime: '2026-05-12T00:00:00.000Z',
+  });
+  assert.strictEqual(xLookbackJobs[0].start_time, '2026-05-12T00:00:00.000Z', 'X full archive jobs should accept a 14-day lookback start time');
 
   const normalized = normalizeXApiPost({
     id: '1800000000000000000',
@@ -782,7 +795,8 @@ test('found-online social search admin path and share cards are protected and au
   assert(adminRoute.includes('admin_found_online_source_posts_imported'), 'admin source-post import should be audited');
   assert.strictEqual(pkg.scripts['inventory:import-source-posts'], 'node scripts/import-found-online-source-posts.js', 'package should expose the source-post import command');
   assert(read('scripts/import-found-online-source-posts.js').includes('--input posts.csv --confirm'), 'source-post import script should accept CSV/JSON files');
-  assert(read('scripts/import-found-online-source-posts.js').includes('pre_approved, consent_confirmed, image_rights_confirmed'), 'source-post import script should require preapproval and rights fields');
+  assert(read('scripts/import-found-online-source-posts.js').includes('location or area is required'), 'source-post import script should make location the non-negotiable field');
+  assert(read('scripts/import-found-online-source-posts.js').includes('King can override non-location checks'), 'source-post import script should explain relaxed source-review approval');
   assert(read('scripts/import-found-online-source-posts.js').includes('createProfilesForRepeatedSourcesOnly: true'), 'source-post import script should defer one-off source profiles');
   assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete evidence sources instead of crashing the whole batch');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
