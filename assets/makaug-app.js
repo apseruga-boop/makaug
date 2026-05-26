@@ -891,7 +891,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "Search Uganda property like a search engine: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks in one place.",
+    heroSubtitle: "A property search engine for Uganda: homes, rentals, land, student rooms, and social-source listings.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1044,7 +1044,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Pulatifoomu ya Property ey'obwereere mu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo ennungi",
-    heroSubtitle: "Noonya property ya Uganda nga search engine: listings za bannannyini, brokers, ensibuko za online ezikeberebwa, n'okukakasa ettaka ku UgNLIS entongole mu kifo kimu.",
+    heroSubtitle: "Search engine ya property mu Uganda: amaka, ez'okupangisa, ettaka, rooms z'abayizi, n'ebizuuliddwa ku social media.",
     heroRent: "Pangisa",
     heroBuy: "Gula",
     heroCommercial: "Busuubuzi",
@@ -1172,7 +1172,7 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Jukwaa la bure la mali Uganda",
     heroTitleHtml: "Pata <span class=\"text-green-300\">maka</span> yako bora",
-    heroSubtitle: "Tafuta mali Uganda kama search engine: listings za wamiliki, brokers, vyanzo vya mtandaoni vilivyopitiwa, na ukaguzi rasmi wa ardhi kupitia UgNLIS sehemu moja.",
+    heroSubtitle: "Search engine ya mali Uganda: nyumba, za kupanga, ardhi, vyumba vya wanafunzi, na listings kutoka mitandao ya kijamii.",
     heroRent: "Kupanga",
     heroBuy: "Nunua",
     heroCommercial: "Biashara",
@@ -1299,7 +1299,7 @@ const I18N_UI = {
     signIn: "Dony",
     heroBadge: "Uganda's #1 free property platform",
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
+    heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
     langBanner: "Tii ki makaug i lok 7 me Uganda",
     areaOnly: "Kabedo manok",
@@ -1331,7 +1331,7 @@ const I18N_UI = {
     signIn: "Ingira",
     heroBadge: "Pulatifoomu ya property y'obwereere #1 omu Uganda",
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
+    heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
     langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
     areaOnly: "Aho honyine",
@@ -1363,7 +1363,7 @@ const I18N_UI = {
     signIn: "Injira",
     heroBadge: "Platform y'obusaare eya property #1 omuri Uganda",
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
+    heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
     langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
     areaOnly: "Akarere aka gusa",
@@ -1395,7 +1395,7 @@ const I18N_UI = {
     signIn: "Yingira",
     heroBadge: "Pulatifoomu ya property ey'obwerere #1 mu Uganda",
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
-    heroSubtitle: "Search Uganda property in one place: owner listings, broker listings, reviewed online sources, and official UgNLIS land checks.",
+    heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
     langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
     areaOnly: "Ekitundu kino kyonka",
@@ -24554,6 +24554,11 @@ function listingSourceMeta(p) {
   };
 }
 
+function listingRouteBadgeMeta(p) {
+  if (isFoundOnlineListing(p)) return null;
+  return listingSourceMeta(p);
+}
+
 function listingRegistrationMeta(p) {
   if (isFoundOnlineListing(p)) {
     return {
@@ -25592,7 +25597,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
   const broker = findBrokerById(p.agent);
-  const source = listingSourceMeta(p);
+  const source = listingRouteBadgeMeta(p);
 	      const registration = listingRegistrationMeta(p);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
@@ -25605,9 +25610,9 @@ async function shareBrokerBusinessCard(id, channel = "native") {
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
           ${listingFreshnessBadgeHtml(p)}
-          <div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
+          ${source ? `<div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${source.icon} text-[10px]"></i> ${source.label}
-          </div>
+          </div>` : ""}
           ${registration ? `<div class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${registration.icon} text-[10px]"></i> ${registration.label}
           </div>` : ""}
@@ -25727,7 +25732,7 @@ function studentAmenityIcon(name) {
 function studentCard(p) {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
-  const source = listingSourceMeta(p);
+  const source = listingRouteBadgeMeta(p);
   const registration = listingRegistrationMeta(p);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
@@ -25762,9 +25767,9 @@ function studentCard(p) {
         <p class="text-gray-600 mt-1">${distanceText}</p>
         ${nearDistanceText ? `<p class="text-xs font-semibold text-purple-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistanceText}</p>` : ""}
         <div class="mt-2">
-          <span class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
+          ${source ? `<span class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${source.icon} text-[10px]"></i> ${source.label}
-          </span>
+          </span>` : ""}
           ${registration ? `<span class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1 ml-1.5">
             <i class="${registration.icon} text-[10px]"></i> ${registration.label}
           </span>` : ""}
@@ -31550,7 +31555,7 @@ async function openDetail(id, options = {}) {
     area: p.area
   });
   const broker = findBrokerById(p.agent);
-  const source = listingSourceMeta(p);
+  const source = listingRouteBadgeMeta(p);
   const registration = listingRegistrationMeta(p);
   const similar = getSimilarProperties(p, 3);
   const normalizedType = normalizeType(p.type);
@@ -31633,7 +31638,7 @@ async function openDetail(id, options = {}) {
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="${badgeColor(p.type)} text-white text-xs font-bold px-2 py-1 rounded">${badgeLabel(p.type)}</span>
                   ${isSoldListing ? `<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">SOLD</span>` : ""}
-                  <span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>
+                  ${source ? `<span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>` : ""}
                   ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
                 </div>
                 <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${p.title}</h1>

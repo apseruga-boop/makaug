@@ -72,7 +72,7 @@ function testRoutesAndUi() {
   assert(frontend.includes('role="tooltip"'));
   assert(!frontend.includes('Land Search Concierge'));
   assert(frontend.includes('titleSensitiveTypes'));
-  assert(frontend.includes('official UgNLIS land checks'));
+  assert(frontend.includes('Official searches happen on UgNLIS'));
 
   const html = read('index.html');
   assert(html.includes('about.landHubTitle'));

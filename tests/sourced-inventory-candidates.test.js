@@ -277,6 +277,7 @@ test('public property cards keep NEW freshness and replace registered badge with
   const freshnessHelper = frontend.slice(frontend.indexOf('function listingFreshnessBadgeHtml'), frontend.indexOf('function foundOnlineSourceMeta'));
   assert(freshnessHelper.indexOf('if (isListingNew(p))') < freshnessHelper.indexOf('if (isFoundOnlineListing(p))'), 'fresh found-online listings should still show NEW first');
   assert(frontend.includes('if (isFoundOnlineListing(p))') && frontend.includes('translateListingLabel("Sourced online")'), 'found-online cards should show sourced-online instead of registered');
+  assert(frontend.includes('function listingRouteBadgeMeta') && frontend.includes('if (isFoundOnlineListing(p)) return null;'), 'found-online cards should not show broker/private listing route badges');
   assert(frontend.includes('sourceBatch === "social_search_authorised_20260520"'), 'public UI should recognise the social-search batch');
   assert(frontend.includes('listingFreshnessBadgeHtml(p)'), 'property cards should render the found-online badge helper');
   assert(frontend.includes('"Found online": "Kizuuliddwa ku mutimbagano"'), 'Luganda should include found-online copy');
