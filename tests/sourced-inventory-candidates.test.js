@@ -51,6 +51,7 @@ const {
   FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
   FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
   LAUNCH_SOURCE_POST_WINDOW_START,
+  PRICE_UPON_APPLICATION_LABEL,
   normalizeFoundOnlineSourcePost,
   plannedSocialSearchListings,
   queueFoundOnlineSourcePostListings,
@@ -69,6 +70,7 @@ const {
   extractTikTokVideoUrls,
   normalizeXApiPost,
 } = require('../services/socialPlatformPostDiscoveryService');
+const { buildAutomatedListingReview } = require('../services/listingModerationService');
 
 function test(name, fn) {
   try {
@@ -667,6 +669,36 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(captionOnlyIntake.preapproved, false, 'caption-only TikTok posts should not pretend consent is already confirmed');
   assert.strictEqual(captionOnlyIntake.exact_tiktok_pending_king_review, true, 'exact TikTok posts can enter King review while consent/date is confirmed');
   assert.strictEqual(captionOnlyIntake.eligible, true, 'exact TikTok posts with caption evidence should queue instead of failing with source-review only');
+
+  const noPriceRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@lizibweproperties/video/7330000000000000003',
+      'Luxurious villa with swimming pool for sale in kololo +256743694821 #lizibweproperties #Kololo #KampalaRealEstate',
+    ].join('\n'),
+  });
+  const noPricePost = normalizeFoundOnlineSourcePost(noPriceRows[0]);
+  const noPriceIntake = sourcePostMeetsLaunchIntakeRule(noPricePost, noPricePost.sourceAgent);
+  assert.strictEqual(noPriceRows[0].area, 'Kololo', 'TikTok no-price caption should still extract Kololo location evidence');
+  assert.strictEqual(noPriceRows[0].price_text, '', 'TikTok no-price caption should not invent a numeric price');
+  assert.strictEqual(noPricePost.price, null, 'TikTok no-price import should store a null numeric price');
+  assert.strictEqual(noPriceIntake.has_price_or_guide_price, false, 'missing source price should stay visible in the intake metadata');
+  assert.strictEqual(noPriceIntake.price_upon_application, true, 'missing source price should be marked Price upon application');
+  assert.strictEqual(noPriceIntake.price_label, PRICE_UPON_APPLICATION_LABEL, 'missing source price should use the public price label');
+  assert.strictEqual(noPriceIntake.eligible, true, 'exact TikTok posts with location/contact/source evidence should queue even when price is missing');
+
+  const automatedReview = buildAutomatedListingReview({
+    listing: {
+      title: 'Kololo villa for sale',
+      description: 'Exact TikTok source post for King review.',
+      district: 'Kampala',
+      area: 'Kololo',
+      listing_type: 'sale',
+      price: null,
+      extra_fields: { price_upon_application: true, price_label: PRICE_UPON_APPLICATION_LABEL }
+    }
+  });
+  const pricingCheck = automatedReview.checks.find((check) => check.key === 'pricing_checked');
+  assert.strictEqual(pricingCheck.status, 'pass', 'Price upon application should satisfy the pricing check for review imports');
 });
 
 test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {

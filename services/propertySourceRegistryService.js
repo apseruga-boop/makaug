@@ -186,7 +186,7 @@ function source({
       freshness_window_days: SOURCE_FRESHNESS_WINDOW_DAYS,
       target_source_year: TARGET_SOURCE_YEAR,
       target_property_window: 'Scan public property posts, videos, reels, shorts, and listings first published from 1 January 2026 through today, with priority on the newest posts.',
-      listing_candidate_rule: 'Create a King review found-online property record only for pre-approved 2026+ public social posts with source URL, location/area, price or guide price, usable image/source evidence, and a phone, email, or public social contact path. Website-only sources stay out of property inventory.',
+      listing_candidate_rule: 'Create a King review found-online property record only for pre-approved 2026+ public social posts with source URL, location/area, usable image/source evidence, and a phone, email, or public social contact path. If the source does not publish a price, store Price upon application. Website-only sources stay out of property inventory.',
       platform_priority_order: SOCIAL_FIRST_PLATFORM_PRIORITY,
       platform_priority_rule: 'Use TikTok, Facebook, YouTube, X/Twitter, and Instagram only for found-online launch inventory. Website/portal sources are disabled.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
@@ -518,7 +518,7 @@ const BASE_PROPERTY_SOURCE_REGISTRY = [
     status: 'candidate',
     canContactDirectly: false,
     hashtags: ['UgandaRealEstate', 'RealEstateUganda', 'KampalaProperties', 'PropertyUganda'],
-    notes: 'X public hashtag feed. Use only to discover public agents/pages/posts; promote a property candidate only after source URL, contact path, price, location and usable images are clear.',
+    notes: 'X public hashtag feed. Use only to discover public agents/pages/posts; promote a property candidate only after source URL, contact path, location and usable images are clear. If the post has no price, store Price upon application.',
     metadata: {
       hashtag: '#UgandaRealEstate',
       platform_aliases: ['twitter', 'x'],
@@ -1249,7 +1249,7 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
       platform_priority_rule: 'Use social channels only; website/portal sources are disabled for found-online launch inventory.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
-      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, price/location, and usable images are clear. Create a source/broker profile only after repeated inventory or cross-platform presence is visible.',
+      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, location, usable images/source evidence are clear. Missing price should be stored as Price upon application. Create a source/broker profile only after repeated inventory or cross-platform presence is visible.',
     },
   });
 }
@@ -1292,7 +1292,7 @@ function hashtagDiscoverySource({ platform, tag, area, district, intent, index }
     consentStatus: 'public_source_review_needed',
     scrapePolicy: 'public_hashtag_manual_review_only',
     canContactDirectly: false,
-    notes: 'Generated hashtag-discovery feed. Use to find active public property pages/posts, then create a King candidate only when source evidence, contact path, location, price and usable images are clear.',
+    notes: 'Generated hashtag-discovery feed. Use to find active public property pages/posts, then create a King candidate only when source evidence, contact path, location and usable images are clear. If no price is published, store Price upon application.',
     metadata: {
       generated_hashtag_discovery: true,
       hashtag: `#${tag}`,

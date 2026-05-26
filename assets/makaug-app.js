@@ -358,10 +358,10 @@ function getListingMapPoint(property = {}) {
 }
 
 const CURRENCIES = {
-  UGX: { fmt: (v, p) => v ? `USh ${formatCompact(v)}${p ? "/" + p : ""}` : "Price on request" },
-  USD: { fmt: (v, p) => v ? `$${Math.round(v / 3800).toLocaleString()}${p ? "/" + p : ""}` : "-" },
-  GBP: { fmt: (v, p) => v ? `£${Math.round(v / 4900).toLocaleString()}${p ? "/" + p : ""}` : "-" },
-  EUR: { fmt: (v, p) => v ? `€${Math.round(v / 4100).toLocaleString()}${p ? "/" + p : ""}` : "-" }
+  UGX: { fmt: (v, p) => v ? `USh ${formatCompact(v)}${p ? "/" + p : ""}` : "Price upon application" },
+  USD: { fmt: (v, p) => v ? `$${Math.round(v / 3800).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" },
+  GBP: { fmt: (v, p) => v ? `£${Math.round(v / 4900).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" },
+  EUR: { fmt: (v, p) => v ? `€${Math.round(v / 4100).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" }
 };
 
 const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
@@ -9419,7 +9419,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-2 rounded-xl border ${targetStatus.meets_daily_minimum ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-900"} p-3">
           <div class="font-black">Morning sweep target: ${adminEscape(targetStatus.eligible_to_queue_count || 0)} / ${adminEscape(targetStatus.target)} found-online properties</div>
           <div class="mt-1">Gap to today's minimum: ${adminEscape(targetStatus.target_gap || 0)}. ${adminEscape(targetStatus.blocking_reason || "Target met with 2026+ found-online records. There is no cap; every extra eligible post is queued.")}</div>
-          <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific public property post from 1 January 2026 onward with source URL, location, price or guide price, usable image/source evidence, and a contact route. There is no cap.")}</div>
+        <div class="mt-1 text-[11px]">${adminEscape(targetStatus.evidence_policy || "Queue every specific public property post from 1 January 2026 onward with source URL, location, usable image/source evidence, and a contact route. If the source does not publish a price, use Price upon application. There is no cap.")}</div>
           ${targetStatus.no_phone_source_contact_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.no_phone_source_contact_policy)}</div>` : ""}
           ${targetStatus.source_page_vs_property_policy ? `<div class="mt-1 text-[11px]">${adminEscape(targetStatus.source_page_vs_property_policy)}</div>` : ""}
         </div>` : "";
@@ -9434,7 +9434,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
-        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, price or guide price, and usable images or source evidence are present.</div>
+        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other pre-approved social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, and usable images or source evidence are present. Missing source prices are queued as Price upon application.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
@@ -9446,7 +9446,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
       if (sourceReviewRecords.length) {
         statusEl.innerHTML += `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3">
           <div class="font-black text-amber-950">Source review records</div>
-          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a public social profile exists, but website-only sources are blocked. Records stay parked when they still need a specific 2026+ social property post, source URL, pre-approval, image-rights confirmation, location/area, price or guide price, or usable image/source evidence before King queues a listing.</div>
+          <div class="mt-1 text-amber-900">These are not properties yet. No phone number is not a blocker if a public social profile exists, but website-only sources are blocked. Records stay parked when they still need a specific 2026+ social property post, source URL, pre-approval, image-rights confirmation, location/area, or usable image/source evidence before King queues a listing. Missing source prices become Price upon application.</div>
           <div class="mt-2 space-y-2">${sourceReviewRecords.map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div>
         </div>`;
       }
@@ -9519,7 +9519,7 @@ function adminSourceRegistryHtml(data = {}) {
         <div class="font-black text-emerald-950">Property source database</div>
         <div class="mt-1">${adminEscape(totalCount)} public source records loaded for daily found-online discovery.</div>
         <div class="mt-1 text-emerald-900"><span class="font-bold">${adminEscape(activeCount || 0)}</span> reviewed pages/channels/accounts • <span class="font-bold">${adminEscape(candidateCount || 0)}</span> discovery feeds/search terms to promote into real pages.</div>
-        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, pre-approval, image-rights confirmation, location/area, price or guide price, and usable image/source evidence.</div>
+        <div class="mt-1 text-[11px] text-emerald-800">Important: this table is the fishing net, not the approval queue. It stores social source pages, channels, accounts, hashtags, and search feeds across X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social sources. Website-only sources are disabled. Individual posts are stored on found-online property records only after King finds a specific 2026+ social listing with source URL, contact route, pre-approval, image-rights confirmation, location/area, and usable image/source evidence. Missing source prices become Price upon application.</div>
         ${platformText ? `<div class="mt-1 text-emerald-800">${adminEscape(platformText)}</div>` : ""}
         ${sources.length ? `<div class="mt-1 text-[11px] text-emerald-700">Showing ${adminEscape(returnedCount)} source records below. The full ${adminEscape(totalCount)}-record database stays server-side so this panel does not time out.</div>` : ""}
       </div>
@@ -9606,7 +9606,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other pre-approved public social posts from 1 January 2026 onward with source URL, location/area, price or guide price, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. Profiles are created only when the source has multiple eligible properties.</div>
+        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other pre-approved public social posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Profiles are created only when the source has multiple eligible properties.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
@@ -9636,7 +9636,7 @@ function adminTikTokExactImportPrompt(seedText = "") {
     "https://www.tiktok.com/@handle/video/1234567890123456789",
     "title: 4 bed house for sale in Kira",
     "location: Kira, Wakiso",
-    "price: USh 650M",
+    "price: USh 650M (optional - if missing, makaug uses Price upon application)",
     "posted: 2026-05-20",
     "images: https://example.com/still1.jpg, https://example.com/still2.jpg",
     "",
@@ -9681,9 +9681,9 @@ async function adminImportTikTokExactPosts(seedText = "") {
       statusEl.innerHTML = `
         <div class="font-black">TikTok exact videos imported</div>
         <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} already existed. ${adminEscape(sourceReview.length)} need more source details.</div>
-        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area, price or guide price, and a public contact route. Missing platform date, consent, or image rights stay visible for King review before approval.</div>
+        <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area and a public contact route. If no price is published, makaug queues it as Price upon application. Missing platform date, consent, or image rights stay visible for King review before approval.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
-        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, price, or source evidence, then import again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, public contact route, or source evidence, then import again. Price is optional and becomes Price upon application when missing.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
     toast("TikTok exact-video import finished.");
     if (importResult.created_properties || importResult.existing_properties) {
@@ -9742,7 +9742,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     ${tiktok.capture_task_count ? `
       <div class="mt-3 rounded-xl border border-pink-100 bg-pink-50 p-3 text-pink-950">
         <div class="font-black">TikTok hashtag/profile capture</div>
-        <div class="mt-1">${adminEscape(tiktok.capture_task_count)} TikTok sources are ready for exact-video capture. Hashtags are the discovery net; King queues only exact /@handle/video/id posts with price, location, contact route, and source evidence.</div>
+        <div class="mt-1">${adminEscape(tiktok.capture_task_count)} TikTok sources are ready for exact-video capture. Hashtags are the discovery net; King queues exact /@handle/video/id posts with location, contact route, and source evidence. Missing source prices are marked Price upon application.</div>
         <div class="mt-2 space-y-2">${tiktokTaskHtml}</div>
       </div>` : ""}
     ${x.search_job_count ? `
@@ -11404,12 +11404,12 @@ function buildListingWhatsappMessageForUi(p = {}) {
   const category = getListingWhatsappCategory(p);
   const location = getListingWhatsappLocation(p);
   const url = getPropertyShareUrl(p);
-  const price = p.price ? fmtP(p.price, p.period) : "";
+  const price = fmtP(p.price || 0, p.period || p.price_period || "");
   const nextKey = category === "land" ? "landNext" : (category === "student" ? "studentNext" : "next");
   return [
     listingWhatsappContactText(category, { title }),
     listingWhatsappContactText("location", { location }),
-    price ? listingWhatsappContactText("price", { price }) : "",
+    listingWhatsappContactText("price", { price }),
     listingWhatsappContactText(nextKey),
     url ? listingWhatsappContactText("link", { url }) : ""
   ].filter(Boolean).join(" ").replace(/\b(undefined|null)\b/gi, "").replace(/\s+/g, " ").trim();
@@ -24999,7 +24999,7 @@ function buildPropertyShareText(property = {}) {
   const shareUrl = getPropertyShareUrl(property);
   const title = buildPropertyShareTitle(property);
   const location = [property?.area, property?.district].filter(Boolean).join(", ");
-  const price = Number(property?.price) ? fmtP(property.price, property.period) : "";
+  const price = fmtP(property?.price || 0, property?.period || property?.price_period || "");
   const headline = [title, location, price].filter(Boolean).join(" • ");
   return [headline, shareUrl].filter(Boolean).join("\n");
 }
@@ -25011,7 +25011,7 @@ function getPropertyShareHref(property = {}, channel = "copy") {
   if (channel === "whatsapp") return `https://wa.me/?text=${encodeURIComponent(shareText)}`;
   if (channel === "facebook") return `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
   if (channel === "linkedin") return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
-  if (channel === "twitter") return `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${title}${Number(property?.price) ? ` • ${fmtP(property.price, property.period)}` : ""}`)}&url=${encodeURIComponent(shareUrl)}`;
+  if (channel === "twitter") return `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${title} • ${fmtP(property?.price || 0, property?.period || property?.price_period || "")}`)}&url=${encodeURIComponent(shareUrl)}`;
   if (channel === "tiktok") return "https://www.tiktok.com/upload?lang=en";
   return shareUrl;
 }
@@ -25413,7 +25413,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
     commercial: translateListingLabel("positioned for business operations and growth"),
     student: translateListingLabel("tailored for students and guardians seeking safe accommodation")
   };
-  const priceText = Number(property?.price) ? fmtP(property.price, property.period) : "";
+  const priceText = fmtP(property?.price || 0, property?.period || property?.price_period || "");
   return [
     introBits,
     locationBits ? `${translateListingLabel("Located in")} ${locationBits}.` : "",
@@ -25422,7 +25422,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
     `${translateListingLabel("Nearby highlights include")}: ${nearbyText}.`,
     areaSummary ? `${translateListingLabel("Area summary")}: ${areaSummary}` : "",
     `${translateListingLabel("This listing is")} ${typePurpose[normalizedType] || translateListingLabel("well-positioned in its area")}.`,
-    priceText ? `${translateListingLabel("Guide price")}: ${priceText}.` : ""
+    `${translateListingLabel("Guide price")}: ${priceText}.`
   ].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 }
 
@@ -28023,6 +28023,7 @@ const LISTING_LABEL_I18N = {
     "Area": "Ekitundu",
     "District": "Disitulikiti",
     "Price on request": "Omuwendo ku kusaba",
+    "Price upon application": "Omuwendo gufunibwa ng'osabye",
     "Type • Key details": "Ekika • Ebikulu",
     "Amenities will appear here": "Ebiriwo bijja kulabika wano",
     "Need to change anything? Use quick edit buttons before you submit.": "Waliwo ky'oyagala okukyusa? Kozesa obutambi bw'okulongoosa nga tonnawereza.",
@@ -28420,6 +28421,7 @@ const LISTING_LABEL_I18N = {
     "Area": "Eneo",
     "District": "Wilaya",
     "Price on request": "Bei kwa maombi",
+    "Price upon application": "Bei kwa maombi",
     "Type • Key details": "Aina • Maelezo muhimu",
     "Amenities will appear here": "Huduma zitaonekana hapa",
     "Need to change anything? Use quick edit buttons before you submit.": "Unahitaji kubadilisha kitu? Tumia vitufe vya haraka vya kuhariri kabla ya kutuma.",
@@ -30516,7 +30518,7 @@ function updateListPreview() {
 	      const priceNum = lpNum("lp-price");
 	      const periodRaw = lpVal("lp-period");
 	      const periodVal = (periodRaw === "once" || periodRaw === "neg") ? "" : periodRaw;
-	      if (priceEl) priceEl.textContent = priceNum ? fmtP(priceNum, periodVal) : translateListingLabel("Price on request");
+	      if (priceEl) priceEl.textContent = priceNum ? fmtP(priceNum, periodVal) : translateListingLabel("Price upon application");
 
   const metaParts = [];
   const subtype = document.getElementById("lp-subtype")?.selectedOptions?.[0]?.textContent || cfg.badge;
@@ -30639,7 +30641,7 @@ function updateListPreview() {
             <div class="bg-blue-600 text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="fas fa-bolt text-[10px]"></i> ${translateListingLabel("NEW")}</div>
             <div class="${source.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i> ${source.label}</div>
           </div>
-          <div class="absolute bottom-3 right-3 bg-green-900/90 text-white px-3 py-1.5 rounded text-base font-black">${priceEl?.textContent || translateListingLabel("Price on request")}</div>
+          <div class="absolute bottom-3 right-3 bg-green-900/90 text-white px-3 py-1.5 rounded text-base font-black">${priceEl?.textContent || translateListingLabel("Price upon application")}</div>
         </div>
         <div class="px-5 pt-4">
           <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">${translateListingLabel("Uploaded photos preview")}</div>

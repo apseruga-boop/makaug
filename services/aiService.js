@@ -233,7 +233,7 @@ function listingTypeLabel(type) {
 
 function formatUGX(value) {
   const amount = safeNumber(value, 0);
-  if (!amount) return 'UGX (price on request)';
+  if (!amount) return 'Price upon application';
   try {
     return `UGX ${amount.toLocaleString('en-UG')}`;
   } catch (_error) {

@@ -208,9 +208,10 @@ function buildAutomatedListingReview({
   const hasMapPin = (listing.latitude != null && listing.longitude != null) || !!extra.map_pin_confirmed || !!extra.coordinates;
   const hasContact = !!listing.lister_phone && !!listing.lister_email;
   const hasRequiredCore = !!(listing.title && listing.description && listing.district && listing.area && listing.listing_type);
+  const priceUponApplication = !!(extra.price_upon_application || /price\s+upon\s+application/i.test(String(extra.price_label || extra.source_price_label || '')));
   const hasPrice = String(listing.listing_type || '').toLowerCase() === 'student'
-    ? listing.price != null
-    : Number(listing.price || 0) > 0;
+    ? (listing.price != null || priceUponApplication)
+    : (Number(listing.price || 0) > 0 || priceUponApplication);
   const minRequiredImages = String(listing.listing_type || '').toLowerCase() === 'land' ? 3 : 5;
   const idDocumentUrl = listing.id_document_url || extra?.verify?.id_document_url || '';
   const idDocumentName = listing.id_document_name || extra?.verify?.id_document_name || '';
@@ -299,8 +300,10 @@ function buildAutomatedListingReview({
     checkResult(
       'pricing_checked',
       hasPrice ? 'pass' : 'fail',
-      hasPrice ? 'Price is present.' : 'Price is missing or zero.',
-      { price: listing.price ?? null, listing_type: listing.listing_type || null }
+      hasPrice
+        ? (priceUponApplication ? 'Price is marked as Price upon application.' : 'Price is present.')
+        : 'Price is missing or zero.',
+      { price: listing.price ?? null, listing_type: listing.listing_type || null, price_upon_application: priceUponApplication }
     ),
     checkResult(
       'otp_verified',

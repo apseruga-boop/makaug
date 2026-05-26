@@ -425,7 +425,7 @@ function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit
           'owner/agent pre-approval and image-rights confirmation are captured',
           'caption/overlay gives property title or description',
           'location or area is visible',
-          'price or guide price is visible',
+          'price is visible or should be marked Price upon application',
           'public source/profile/contact route is available',
           'screenshot/still/thumbnail evidence is captured or a labelled evidence card is used',
         ],
@@ -741,8 +741,8 @@ async function runSocialPlatformPostSweep({
     dry_run: dryRun,
     platforms: requestedPlatforms,
     policy: {
-      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property only after the exact TikTok /@handle/video/id URL, price, location, source contact path, pre-approval, and source-image rights evidence are captured.',
-      x: 'X/Twitter source lists become properties only after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, price, location, contact path, and pre-approval.',
+      tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, pre-approval/source review status, and source-image evidence are captured; if no price is published, mark Price upon application.',
+      x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, contact path, and pre-approval; if no price is published, mark Price upon application.',
       profile_creation_rule: 'The sweep creates or links a profile only when a source contributes multiple eligible properties; one-off posts remain found-online listings without creating a new profile.',
     },
     tiktok: {
