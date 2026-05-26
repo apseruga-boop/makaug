@@ -24739,34 +24739,73 @@ function foundOnlineSourceMeta(p = {}) {
   } else if (typeof p?.extra_fields === "string") {
     try { extra = JSON.parse(p.extra_fields) || {}; } catch (error) {}
   }
-  const sourceName = String(extra.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
-  const platform = String(extra.source_platform || (extra.youtube_url || extra.video_url ? "YouTube" : "") || "").trim();
-  const sourceUrl = String(
-    extra.source_url
-    || extra.source_evidence_url
-    || extra.original_url
-    || extra.post_url
-    || extra.platform_url
-    || extra.social_url
-    || extra.youtube_url
-    || extra.video_url
-    || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "")
-    || ""
+  const sourceUrls = Array.isArray(extra.source_urls) ? extra.source_urls : (Array.isArray(p.source_urls) ? p.source_urls : []);
+  const inferPlatformFromUrl = (value = "") => {
+    const url = String(value || "").toLowerCase();
+    if (url.includes("tiktok.com")) return "TikTok";
+    if (url.includes("instagram.com")) return "Instagram";
+    if (url.includes("facebook.com") || url.includes("fb.watch")) return "Facebook";
+    if (url.includes("x.com") || url.includes("twitter.com")) return "X/Twitter";
+    if (url.includes("youtube.com") || url.includes("youtu.be")) return "YouTube";
+    return "";
+  };
+  const firstUrl = (...values) => {
+    const flat = values.flat(Infinity);
+    const found = flat.find((value) => /^https?:\/\//i.test(String(value || "").trim()));
+    return found ? String(found).trim() : "";
+  };
+  const sourceName = String(extra.source_name || p.source_name || extra.owner_or_agent_name || p.lister_name || "").trim();
+  const sourceUrl = firstUrl(
+    extra.source_url,
+    p.source_url,
+    extra.source_post_url,
+    p.source_post_url,
+    extra.source_evidence_url,
+    extra.original_url,
+    p.original_url,
+    extra.post_url,
+    p.post_url,
+    extra.platform_url,
+    p.platform_url,
+    extra.social_url,
+    p.social_url,
+    extra.youtube_url,
+    p.youtube_url,
+    extra.video_url,
+    p.video_url,
+    sourceUrls
+  );
+  const sourceContactUrl = firstUrl(
+    extra.source_contact_url,
+    p.source_contact_url,
+    extra.source_channel_url,
+    p.source_channel_url,
+    extra.youtube_channel_url,
+    p.youtube_channel_url,
+    extra.social_profile_url,
+    p.social_profile_url,
+    extra.channel_url,
+    p.channel_url,
+    extra.creator_url,
+    p.creator_url,
+    sourceUrl,
+    sourceUrls
+  );
+  const platform = String(
+    extra.source_platform
+      || p.source_platform
+      || inferPlatformFromUrl(sourceUrl)
+      || inferPlatformFromUrl(sourceContactUrl)
+      || (extra.youtube_url || p.youtube_url || extra.video_url || p.video_url ? "YouTube" : "")
+      || ""
   ).trim();
-  const sourceContactUrl = String(
-    extra.source_contact_url
-    || extra.source_channel_url
-    || extra.youtube_channel_url
-    || extra.social_profile_url
-    || extra.channel_url
-    || extra.creator_url
-    || sourceUrl
-    || (Array.isArray(extra.source_urls) ? extra.source_urls[0] : "")
-    || ""
+  const sourceContactPlatform = String(extra.source_contact_platform || p.source_contact_platform || platform || inferPlatformFromUrl(sourceContactUrl) || "").trim();
+  const sourceContactLabel = String(
+    extra.source_contact_label
+      || p.source_contact_label
+      || (sourceContactUrl ? `Contact via ${sourceContactPlatform || platform || "source"} source` : "")
   ).trim();
-  const sourceContactLabel = String(extra.source_contact_label || "").trim();
-  const sourceContactMethod = String(extra.source_contact_method || "").trim();
-  const sourceContactPlatform = String(extra.source_contact_platform || platform || "").trim();
+  const sourceContactMethod = String(extra.source_contact_method || p.source_contact_method || "").trim();
   const followersLabel = String(extra.source_followers_label || extra.source_audience_label || "").trim();
   const firstPosted = formatListingDate(
     extra.first_posted_online_at
@@ -24813,6 +24852,20 @@ function foundOnlineSourceMeta(p = {}) {
     addedToMakaugLabel,
     hasDirectContact,
   };
+}
+
+function foundOnlineSourceContactButtonLabel(meta = {}) {
+  const platform = String(meta.sourceContactPlatform || meta.platform || "").trim();
+  return platform
+    ? translatePropertyUi("Contact via {platform} source", { platform })
+    : translatePropertyUi("Contact via source");
+}
+
+function foundOnlineSourceContactSubtitle(meta = {}) {
+  const platform = String(meta.sourceContactPlatform || meta.platform || "").trim();
+  return platform
+    ? translatePropertyUi("{platform} source contact", { platform })
+    : translatePropertyUi("Public source contact");
 }
 
 function listingOnlineSourceDisclosureHtml(p = {}) {
@@ -31525,6 +31578,8 @@ async function openDetail(id, options = {}) {
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
   const sourceContactUrl = foundOnlineMeta?.sourceContactUrl || "";
+  const sourceContactButtonLabel = foundOnlineMeta ? foundOnlineSourceContactButtonLabel(foundOnlineMeta) : translatePropertyUi("Contact via source");
+  const sourceContactSubtitle = foundOnlineMeta ? foundOnlineSourceContactSubtitle(foundOnlineMeta) : "";
   const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
     || (sourceContactUrl ? translatePropertyUi("Open the public source page for contact details.") : "");
   const brokerPhone = broker?.phone || "";
@@ -31661,16 +31716,16 @@ async function openDetail(id, options = {}) {
                 <span class="block text-sm text-gray-500 truncate">${broker.company || broker.name}</span>
               </span>
             </a>
-            ${brokerPhoneHref ? `<a href="${adminAttr(brokerPhoneHref)}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Contact via source")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
-            ${brokerWhatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(brokerWhatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Open source contact")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+            ${brokerPhoneHref ? `<a href="${adminAttr(brokerPhoneHref)}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${sourceContactButtonLabel}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
+            ${brokerWhatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(brokerWhatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${sourceContactButtonLabel}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
             ${sourceContactUrl && !brokerPhoneHref ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
             <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
-            <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("Public listing contact")}</p>
+            <p class="text-xs text-gray-500 mb-3">${adminEscape(sourceContactSubtitle || translatePropertyUi("Public listing contact"))}</p>
             ${allowCall ? `<a href="${adminAttr(ownerPhoneHref)}" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Contact")}</a>` : ""}
-            ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Contact via source")}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
+            ${ownerWhatsAppUrl ? `<a href="${adminAttr(ownerWhatsAppUrl)}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${ownerPhoneArg}, 'listing_detail_whatsapp')" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Contact")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${sourceContactButtonLabel}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
             ${ownerEmailUrl ? `<a href="${adminAttr(ownerEmailUrl)}" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Email Contact")}</a>` : ""}
             ${sourceContactUrl && !ownerWhatsAppUrl ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}

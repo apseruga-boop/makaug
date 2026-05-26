@@ -290,12 +290,53 @@ function normalizePublicImageUrl(value) {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+function safePublicSourceUrl(value) {
+  const url = cleanText(value);
+  return /^https?:\/\//i.test(url) ? url : '';
+}
+
+function inferPublicSourcePlatform(value = '') {
+  const url = cleanText(value).toLowerCase();
+  if (url.includes('tiktok.com')) return 'TikTok';
+  if (url.includes('instagram.com')) return 'Instagram';
+  if (url.includes('facebook.com') || url.includes('fb.watch')) return 'Facebook';
+  if (url.includes('x.com') || url.includes('twitter.com')) return 'X/Twitter';
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'YouTube';
+  return '';
+}
+
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const landVerification = buildUgNlisLandVerificationPack(extra);
   const safeSourceUrls = Array.isArray(extra.source_urls)
     ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
     : [];
+  const sourceUrl = safePublicSourceUrl(
+    extra.source_url
+      || extra.source_post_url
+      || extra.post_url
+      || extra.platform_url
+      || extra.original_url
+      || safeSourceUrls[0]
+  );
+  const sourceContactUrl = safePublicSourceUrl(
+    extra.source_contact_url
+      || extra.source_channel_url
+      || extra.youtube_channel_url
+      || extra.social_profile_url
+      || extra.channel_url
+      || extra.creator_url
+      || sourceUrl
+      || safeSourceUrls[0]
+  );
+  const sourcePlatform = cleanText(extra.source_platform)
+    || inferPublicSourcePlatform(sourceUrl)
+    || inferPublicSourcePlatform(sourceContactUrl);
+  const sourceContactPlatform = cleanText(extra.source_contact_platform)
+    || sourcePlatform
+    || inferPublicSourcePlatform(sourceContactUrl);
+  const sourceContactLabel = cleanText(extra.source_contact_label)
+    || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -312,11 +353,11 @@ function publicExtraFields(extraFields = {}) {
     source_batch: extra.source_batch || null,
     source_registry_key: extra.source_registry_key || null,
     source_listing_key: extra.source_listing_key || null,
-    source_platform: extra.source_platform || null,
+    source_platform: sourcePlatform || null,
     source_type: extra.source_type || null,
     source_name: extra.source_name || null,
     source_agent_name: extra.source_agent_name || extra.source_name || null,
-    source_url: extra.source_url || null,
+    source_url: sourceUrl || null,
     source_urls: safeSourceUrls,
     first_seen_online_at: extra.first_seen_online_at || null,
     first_seen_online_label: extra.first_seen_online_label || null,
@@ -329,10 +370,10 @@ function publicExtraFields(extraFields = {}) {
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,
     source_audience_label: extra.source_audience_label || null,
-    source_contact_url: extra.source_contact_url || null,
-    source_contact_label: extra.source_contact_label || null,
+    source_contact_url: sourceContactUrl || null,
+    source_contact_label: sourceContactLabel,
     source_contact_method: extra.source_contact_method || null,
-    source_contact_platform: extra.source_contact_platform || null,
+    source_contact_platform: sourceContactPlatform || null,
     source_channel_url: extra.source_channel_url || extra.youtube_channel_url || null,
     youtube_channel_url: extra.youtube_channel_url || extra.source_channel_url || null,
     area_highlights: extra.area_highlights || '',

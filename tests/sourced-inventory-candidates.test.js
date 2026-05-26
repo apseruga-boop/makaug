@@ -800,6 +800,8 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('scripts/import-found-online-source-posts.js').includes('createProfilesForRepeatedSourcesOnly: true'), 'source-post import script should defer one-off source profiles');
   assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete evidence sources instead of crashing the whole batch');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
+  assert(read('routes/properties.js').includes('sourceContactUrl = safePublicSourceUrl'), 'public property API should expose a source/contact URL fallback for found-online records');
+  assert(read('routes/properties.js').includes("`Contact via ${sourceContactPlatform || 'source'} source`"), 'public property API should label source contact by platform when direct phone is absent');
   assert(read('services/socialSearchSourcedListingsService.js').includes('missing_any_public_contact_path'), 'seed should treat social pages as a usable contact path before skipping a source');
   assert(read('services/socialSearchSourcedListingsService.js').includes('existingSocialSearchListingKeys'), 'daily found-online sweeps should skip already queued listing keys');
   assert(read('services/socialSearchSourcedListingsService.js').includes("'already_queued'"), 'daily found-online sweeps should report already queued records');
@@ -828,6 +830,9 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('No phone number is not a blocker if a public social profile exists'), 'dashboard should explain source-review no-phone policy');
   assert(frontend.includes('Website-only sources are disabled'), 'source database should explain website sources are not imported as properties');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');
+  assert(frontend.includes('foundOnlineSourceContactButtonLabel'), 'public listing detail should build a platform-specific source contact CTA');
+  assert(frontend.includes('p.source_contact_url'), 'public listing detail should fall back to top-level source contact fields as well as extra_fields');
+  assert(frontend.includes('Contact via {platform} source'), 'public listing detail should label TikTok/Facebook/X source contact buttons by platform');
   assert(frontend.includes('Land image rule'), 'dashboard should explain the land-image fallback strategy');
   assert(frontend.includes('Morning sweep target'), 'dashboard should show the daily evidence-ready target/gap after a sweep');
   const listing = plannedSocialSearchListings()[0];
