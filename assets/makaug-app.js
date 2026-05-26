@@ -14329,6 +14329,290 @@ async function saveAdminLandVerificationReview() {
   }
 }
 
+function adminReviewSourceText(review = {}) {
+  const extra = review.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+  return [
+    review.title,
+    review.description,
+    review.moderation_notes,
+    extra.source_title,
+    extra.source_caption,
+    extra.caption,
+    extra.source_description,
+    extra.source_text,
+    extra.tiktok_caption,
+    extra.whatsapp_share_card,
+    review.whatsapp_share_card
+  ].filter(Boolean).join(" ");
+}
+
+function adminReviewMoneyFromText(text = "") {
+  const raw = String(text || "").replace(/,/g, "");
+  const billion = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:b|bn|billion)\b/i);
+  if (billion) return Math.round(Number(billion[1]) * 1000000000);
+  const million = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:m|million|millions)\b/i);
+  if (million) return Math.round(Number(million[1]) * 1000000);
+  const currency = raw.match(/\b(?:ugx|ush|ugshs|shs)\s*([0-9][0-9.]*)\b/i);
+  if (currency) return Math.round(Number(currency[1]));
+  return null;
+}
+
+function adminReviewFirstNumber(text = "", pattern) {
+  const match = String(text || "").match(pattern);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function adminReviewDetectedLocation(text = "", review = {}) {
+  const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
+    || review.district
+    || "";
+  const sortedHints = [...LOCATION_HINTS].sort((a, b) => b.length - a.length);
+  const area = sortedHints.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
+    || (/kampala/i.test(text) ? "Kampala" : "")
+    || review.area
+    || "";
+  return { area, district: district || (area === "Kampala" ? "Kampala" : "") };
+}
+
+function adminReviewPropertyTypeFromText(text = "") {
+  const lower = String(text || "").toLowerCase();
+  if (/apartment|flat/.test(lower)) return "Apartment";
+  if (/villa/.test(lower)) return "Villa";
+  if (/bungalow/.test(lower)) return "Bungalow";
+  if (/hostel/.test(lower)) return "Hostel";
+  if (/office/.test(lower)) return "Office";
+  if (/shop|retail/.test(lower)) return "Retail shop";
+  if (/warehouse/.test(lower)) return "Warehouse";
+  if (/land|plot|acre|decimal/.test(lower)) return "Land";
+  return "";
+}
+
+function adminReviewExtractedAmenities(text = "", facts = {}) {
+  const lower = String(text || "").toLowerCase();
+  const amenities = [];
+  const add = (condition, label) => { if (condition && !amenities.includes(label)) amenities.push(label); };
+  add(/tight security|security|secure/.test(lower), "Tight security");
+  add(/big sitting room|large sitting room|spacious sitting|sitting room/.test(lower), "Big sitting room");
+  add(/modern kitchen|fitted kitchen|kitchen/.test(lower), "Modern kitchen");
+  add(/jacuzzi/.test(lower), "Jacuzzi");
+  add(/balcon/.test(lower), facts.balconies ? `${facts.balconies} balconies` : "Balcony");
+  add(/parking/.test(lower), "Parking");
+  add(/swimming pool|pool/.test(lower), "Swimming pool");
+  add(/wifi|wi-fi/.test(lower), "Wi-Fi");
+  return amenities;
+}
+
+function adminReviewListingTypeFromText(text = "", facts = {}, review = {}) {
+  const lower = String(text || "").toLowerCase();
+  if (/\b(hostel|student accommodation|student room|campus)\b/.test(lower)) return "student";
+  if (/\b(land|plot|acre|decimal)\b/.test(lower) && !/\bapartment|house|villa\b/.test(lower)) return "land";
+  if (/\b(office|shop|warehouse|commercial)\b/.test(lower)) return "commercial";
+  if (/\b(to rent|for rent|renting|rental|monthly|per month|\/month|month)\b/.test(lower)) return "rent";
+  if (facts.price && facts.price <= 50000000 && /\b(apartment|bedroom|washroom|balcon|sitting room)\b/.test(lower)) return "rent";
+  if (/\b(for sale|sale|selling|buy|purchase)\b/.test(lower)) return "sale";
+  return normalizeType(review.listing_type || review.type || "sale") || "sale";
+}
+
+function adminReviewBuildConciseDescription(review = {}, facts = {}) {
+  const type = facts.listing_type || normalizeType(review.listing_type || review.type || "");
+  const propertyType = facts.property_type || review.property_type || (type === "land" ? "land" : "property");
+  const location = [facts.area || review.area, facts.district || review.district].filter(Boolean).join(", ") || "the listed area";
+  const price = facts.price || review.price;
+  const period = facts.price_period || review.price_period || (type === "rent" ? "month" : "once");
+  const rooms = [
+    facts.bedrooms ? `${facts.bedrooms} bedrooms` : "",
+    facts.bathrooms ? `${facts.bathrooms} washrooms` : "",
+    facts.balconies ? `${facts.balconies} balconies` : ""
+  ].filter(Boolean);
+  const amenityText = (facts.amenities || []).filter((item) => !/balcon/i.test(item)).slice(0, 5);
+  const introType = type === "rent" ? "for rent" : type === "sale" ? "for sale" : type === "student" ? "for student accommodation" : type === "commercial" ? "for commercial use" : "available";
+  const sentenceOne = `${propertyType}${rooms.length ? ` with ${rooms.join(", ")}` : ""} ${introType} around ${location}${price ? ` at ${fmtP(price, period)}` : ""}.`;
+  const sentenceTwo = amenityText.length ? `Source details mention ${amenityText.join(", ")}.` : "";
+  const sentenceThree = "Confirm exact location, availability, and viewing details through the source contact before approval.";
+  return [sentenceOne, sentenceTwo, sentenceThree].filter(Boolean).join(" ");
+}
+
+function adminExtractReviewFacts(review = {}) {
+  const text = adminReviewSourceText(review);
+  const price = adminReviewMoneyFromText(text);
+  const bedrooms = adminReviewFirstNumber(text, /(\d+)\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/i);
+  const bathrooms = adminReviewFirstNumber(text, /(\d+)\s*(?:wash\s*rooms?|washrooms?|bath\s*rooms?|bathrooms?|baths?|toilets?)\b/i);
+  const balconies = adminReviewFirstNumber(text, /(\d+)\s*balcon(?:y|ies)\b/i);
+  const propertyType = adminReviewPropertyTypeFromText(text) || review.property_type || "";
+  const location = adminReviewDetectedLocation(text, review);
+  const partial = { price, bedrooms, bathrooms, balconies, property_type: propertyType, ...location };
+  const listingType = adminReviewListingTypeFromText(text, partial, review);
+  const pricePeriod = listingType === "rent" ? "month" : (review.price_period || "once");
+  const amenities = adminReviewExtractedAmenities(text, partial);
+  const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, title: "" };
+  const titleParts = [];
+  if (bedrooms) titleParts.push(`${bedrooms}-Bed`);
+  if (/luxury/i.test(text)) titleParts.push("Luxury");
+  titleParts.push(propertyType || (listingType === "land" ? "Land" : "Property"));
+  if (listingType === "rent") titleParts.push("for Rent");
+  if (listingType === "sale") titleParts.push("for Sale");
+  if (listingType === "commercial") titleParts.push("for Commercial Use");
+  if (facts.area || facts.district) titleParts.push(`in ${facts.area || facts.district}`);
+  facts.title = titleParts.join(" ").replace(/\s+/g, " ").trim();
+  facts.description = adminReviewBuildConciseDescription(review, facts);
+  return facts;
+}
+
+function adminReviewFactBadgesHtml(facts = {}) {
+  const parts = [
+    facts.listing_type ? `Type: ${facts.listing_type}` : "",
+    facts.price ? `Price: ${fmtP(facts.price, facts.price_period || "")}` : "",
+    facts.area ? `Area: ${facts.area}` : "",
+    facts.district ? `District: ${facts.district}` : "",
+    facts.property_type ? `Property: ${facts.property_type}` : "",
+    facts.bedrooms ? `${facts.bedrooms} bedrooms` : "",
+    facts.bathrooms ? `${facts.bathrooms} washrooms` : "",
+    facts.balconies ? `${facts.balconies} balconies` : "",
+    ...(Array.isArray(facts.amenities) ? facts.amenities : [])
+  ].filter(Boolean);
+  if (!parts.length) return `<div class="text-xs text-amber-800">No obvious facts were extracted. Edit manually before approval.</div>`;
+  return `<div class="flex flex-wrap gap-1.5">${parts.map((part) => `<span class="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900">${adminEscape(part)}</span>`).join("")}</div>`;
+}
+
+function adminReviewListingEditPanel(review = {}) {
+  const facts = adminExtractReviewFacts(review);
+  const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
+  const districtOptions = ["", ...DISTRICTS].map((district) => `<option value="${adminAttr(district)}" ${String(review.district || "") === district ? "selected" : ""}>${adminEscape(district || "Choose district")}</option>`).join("");
+  const typeOptions = [
+    ["sale", "For sale"],
+    ["rent", "To rent"],
+    ["land", "Land"],
+    ["commercial", "Commercial"],
+    ["student", "Student accommodation"]
+  ].map(([value, label]) => `<option value="${value}" ${normalizeType(review.listing_type || review.type || "") === value ? "selected" : ""}>${label}</option>`).join("");
+  const periodOptions = [
+    ["once", "Once"],
+    ["month", "Per month"],
+    ["week", "Per week"],
+    ["night", "Per night"],
+    ["sem", "Per semester"]
+  ].map(([value, label]) => `<option value="${value}" ${String(review.price_period || "") === value ? "selected" : ""}>${label}</option>`).join("");
+  return `
+    <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs font-black uppercase tracking-wide text-amber-900">Edit public listing facts before approval</div>
+          <p class="mt-1 text-xs text-amber-900">Use the source caption to fill the card properly, then correct anything King knows is wrong. Location remains non-negotiable.</p>
+        </div>
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" onclick="adminApplyExtractedReviewFacts()" class="rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600">Use extracted source details</button>
+          <button type="button" onclick="adminUseConciseReviewDescription()" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-amber-900 hover:bg-amber-100">Shorten description</button>
+        </div>
+      </div>
+      <div class="mt-3 rounded-lg border border-amber-100 bg-amber-100/60 p-2">
+        <div class="text-[11px] font-black uppercase tracking-wide text-amber-900">Extracted from source text</div>
+        <div class="mt-2">${adminReviewFactBadgesHtml(facts)}</div>
+      </div>
+      <div class="mt-3 grid md:grid-cols-2 gap-3">
+        <label class="block text-xs font-bold text-gray-700">Public title
+          <input id="admin-review-title-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Listing type
+          <select id="admin-review-listing-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
+          <input id="admin-review-area-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">District
+          <select id="admin-review-district-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${districtOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Address / location note
+          <input id="admin-review-address-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.address || "")}" placeholder="Road, building, estate, or source location note">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Property type
+          <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Price
+          <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Price period
+          <select id="admin-review-price-period-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${periodOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Bedrooms
+          <input id="admin-review-bedrooms-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.bedrooms ?? "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Bathrooms / washrooms
+          <input id="admin-review-bathrooms-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.bathrooms ?? "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Latitude
+          <input id="admin-review-latitude-edit" type="number" step="0.000001" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.latitude ?? "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Longitude
+          <input id="admin-review-longitude-edit" type="number" step="0.000001" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.longitude ?? "")}">
+        </label>
+        <label class="block text-xs font-bold text-gray-700 md:col-span-2">Amenities / source facts
+          <input id="admin-review-amenities-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(amenities)}" placeholder="Tight security, modern kitchen, jacuzzi">
+        </label>
+        <label class="block text-xs font-bold text-gray-700 md:col-span-2">Short public description
+          <textarea id="admin-review-description-edit" class="mt-1 min-h-[120px] w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" placeholder="Keep this short. Put extra details in amenities/source facts.">${adminEscape(review.description || "")}</textarea>
+        </label>
+      </div>
+    </div>`;
+}
+
+function adminSetReviewEditValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = value == null ? "" : String(value);
+}
+
+function adminApplyExtractedReviewFacts() {
+  if (!adminActiveReview) return;
+  const facts = adminExtractReviewFacts(adminActiveReview);
+  adminSetReviewEditValue("admin-review-title-edit", facts.title || adminActiveReview.title || "");
+  adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
+  adminSetReviewEditValue("admin-review-area-edit", facts.area || adminActiveReview.area || "");
+  adminSetReviewEditValue("admin-review-district-edit", facts.district || adminActiveReview.district || "");
+  adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
+  adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
+  adminSetReviewEditValue("admin-review-price-period-edit", facts.price_period || adminActiveReview.price_period || "");
+  adminSetReviewEditValue("admin-review-bedrooms-edit", facts.bedrooms ?? adminActiveReview.bedrooms ?? "");
+  adminSetReviewEditValue("admin-review-bathrooms-edit", facts.bathrooms ?? adminActiveReview.bathrooms ?? "");
+  const currentAmenities = (document.getElementById("admin-review-amenities-edit")?.value || "").split(",").map((item) => item.trim()).filter(Boolean);
+  const mergedAmenities = [...new Set([...currentAmenities, ...(facts.amenities || [])])];
+  adminSetReviewEditValue("admin-review-amenities-edit", mergedAmenities.join(", "));
+  adminSetReviewEditValue("admin-review-description-edit", facts.description || adminActiveReview.description || "");
+  toast("Extracted source details applied. Check location before approval.");
+}
+
+function adminUseConciseReviewDescription() {
+  if (!adminActiveReview) return;
+  const facts = adminExtractReviewFacts(adminActiveReview);
+  adminSetReviewEditValue("admin-review-description-edit", adminReviewBuildConciseDescription(adminActiveReview, facts));
+  toast("Short description prepared.");
+}
+
+function collectAdminReviewListingPatch() {
+  const get = (id) => document.getElementById(id)?.value ?? "";
+  const amenities = get("admin-review-amenities-edit")
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return {
+    title: get("admin-review-title-edit"),
+    description: get("admin-review-description-edit"),
+    listing_type: get("admin-review-listing-type-edit"),
+    district: get("admin-review-district-edit"),
+    area: get("admin-review-area-edit"),
+    address: get("admin-review-address-edit"),
+    price: get("admin-review-price-edit"),
+    price_period: get("admin-review-price-period-edit"),
+    property_type: get("admin-review-property-type-edit"),
+    bedrooms: get("admin-review-bedrooms-edit"),
+    bathrooms: get("admin-review-bathrooms-edit"),
+    latitude: get("admin-review-latitude-edit"),
+    longitude: get("admin-review-longitude-edit"),
+    amenities
+  };
+}
+
 function renderAdminReviewPanel(review) {
   adminActiveReview = review;
   adminReviewEvidence = {};
@@ -14442,7 +14726,8 @@ function renderAdminReviewPanel(review) {
             <div>
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">Listing</div>
               <h4 class="text-xl font-black text-gray-900 mt-1">${adminEscape(review.title || "Untitled listing")}${sourcedCandidateBadge}</h4>
-              <p class="text-sm text-gray-600 mt-1">${adminEscape(review.description || "")}</p>
+              <p class="text-sm text-gray-600 mt-1 max-h-36 overflow-auto rounded-lg bg-gray-50 p-2">${adminEscape(review.description || "")}</p>
+              ${adminReviewListingEditPanel(review)}
               ${sourcedCandidateEvidenceHtml}
             </div>
             <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
@@ -14662,10 +14947,12 @@ async function runAdminExternalDuplicateScan(listingId) {
 async function saveAdminListingReview() {
   if (!adminActiveReview?.id) return;
   try {
+    const listingPatch = collectAdminReviewListingPatch();
     const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/review`, {
       method: "PATCH",
       headers: adminAuthHeaders(),
       body: {
+        listing: listingPatch,
         checklist: getAdminReviewChecklistFromDom(),
         notes: document.getElementById("admin-review-notes")?.value || "",
         reason: document.getElementById("admin-review-reason")?.value || "",
@@ -14675,6 +14962,8 @@ async function saveAdminListingReview() {
     });
     adminActiveReview = {
       ...adminActiveReview,
+      ...listingPatch,
+      ...(response?.data || {}),
       review: {
         ...(adminActiveReview.review || {}),
         checklist: response?.data?.moderation_checklist || getAdminReviewChecklistFromDom(),
@@ -14683,7 +14972,8 @@ async function saveAdminListingReview() {
         warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
       }
     };
-    toast("Review saved.");
+    toast("Listing facts and review saved.");
+    await openAdminListingReview(adminActiveReview.id);
   } catch (e) {
     toast(`Review save failed: ${e.message || "error"}`);
   }

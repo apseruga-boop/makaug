@@ -885,6 +885,20 @@ test('King review preview opens pending listings through a protected admin route
   assert(frontend.includes('admin_live_style_preview'), 'admin preview opens should be tracked separately from public views');
 });
 
+test('King review can correct sourced listing facts before approval', () => {
+  assert(adminRoute.includes('listing_type = $'), 'admin review edits should be able to correct sale/rent/student/commercial/land type');
+  assert(adminRoute.includes('LISTING_TYPES.includes'), 'admin review listing type edits should be validated');
+  assert(adminRoute.includes('latitude = $') && adminRoute.includes('longitude = $'), 'admin review edits should be able to correct map coordinates');
+  assert(frontend.includes('Edit public listing facts before approval'), 'King review should expose a listing fact editor');
+  assert(frontend.includes('Use extracted source details'), 'King review should offer source-caption extraction into card fields');
+  assert(frontend.includes('function adminExtractReviewFacts'), 'King review should parse source text into editable listing facts');
+  assert(frontend.includes('function collectAdminReviewListingPatch'), 'King review save should collect edited listing fields');
+  assert(frontend.includes('listing: listingPatch'), 'King review save should send listing edits through the review endpoint');
+  assert(frontend.includes('admin-review-listing-type-edit'), 'King review should allow changing sale/rent type');
+  assert(frontend.includes('admin-review-area-edit') && frontend.includes('admin-review-district-edit'), 'King review should allow location correction');
+  assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');
+});
+
 test('King review queue can manage authorised listing photos', () => {
   assert(adminRoute.includes("router.post('/properties/:id/images'"), 'admin should be able to add listing photos');
   assert(adminRoute.includes("router.patch('/properties/:id/images/:imageId'"), 'admin should be able to replace/set primary listing photos');

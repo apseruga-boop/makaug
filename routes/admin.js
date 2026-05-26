@@ -3,9 +3,9 @@ const bcrypt = require('bcryptjs');
 
 const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
-const { asArray, cleanText, toNullableInt, isValidEmail, isValidPhone } = require('../middleware/validation');
+const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
-const { DISTRICTS } = require('../utils/constants');
+const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
 const { processPendingCampaignQueue, refreshCampaignStatus } = require('../services/whatsappCampaignService');
@@ -1634,11 +1634,38 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     idx += 1;
   });
 
+  if (Object.prototype.hasOwnProperty.call(patch, 'listing_type')) {
+    const listingType = cleanText(patch.listing_type).toLowerCase();
+    const normalizedType = listingType === 'students' ? 'student' : listingType;
+    if (!LISTING_TYPES.includes(normalizedType)) {
+      errors.push('listing_type must be one of sale, rent, land, commercial, or student');
+    }
+    setParts.push(`listing_type = $${idx}`);
+    values.push(normalizedType);
+    idx += 1;
+  }
+
   if (Object.prototype.hasOwnProperty.call(patch, 'district')) {
     const district = cleanText(patch.district);
     if (!DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
     setParts.push(`district = $${idx}`);
     values.push(district);
+    idx += 1;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'latitude')) {
+    const latitude = toNullableFloat(patch.latitude);
+    if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
+    setParts.push(`latitude = $${idx}`);
+    values.push(latitude);
+    idx += 1;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(patch, 'longitude')) {
+    const longitude = toNullableFloat(patch.longitude);
+    if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
+    setParts.push(`longitude = $${idx}`);
+    values.push(longitude);
     idx += 1;
   }
 
@@ -2929,7 +2956,9 @@ router.patch('/properties/:id/review', async (req, res, next) => {
          extra_fields = COALESCE(extra_fields, '{}'::jsonb) || jsonb_build_object('review_warning_overrides', $7::jsonb),
          updated_at = NOW()
        WHERE id = $1
-       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason, reviewed_by, extra_fields, updated_at`,
+       RETURNING id, status, moderation_stage, moderation_checklist, moderation_notes, moderation_reason,
+         reviewed_by, extra_fields, listing_type, title, description, district, area, address,
+         price, price_period, property_type, bedrooms, bathrooms, latitude, longitude, amenities, updated_at`,
       [
         req.params.id,
         stage,
