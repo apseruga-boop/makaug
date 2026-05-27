@@ -40,6 +40,12 @@ const AREA_HINTS = [
   'Munyonyo', 'Makindye', 'Kansanga', 'Mengo', 'Makerere', 'Kyambogo', 'MUBS',
   'Namanve', 'Katosi', 'Mpunge', 'Mpungwe', 'Lake Victoria', 'Luweero', 'Masaka',
   'Mbarara', 'Mbale', 'Gulu', 'Arua',
+  'Bujjuko', 'Bujuuko', 'Namayumba', 'Kakiri', 'Masulita', 'Hoima Road',
+  'Mityana Road', 'Entebbe Road', 'Jinja Road', 'Kigo', 'Kawuku', 'Kisubi',
+  'Nkumba', 'Kyaliwajjala', 'Kireka', 'Sonde', 'Kungu', 'Bulindo', 'Gayaza',
+  'Matugga', 'Nansana', 'Nabweru', 'Kyebando', 'Kawempe', 'Kikoni', 'Nakawa',
+  'Banda', 'UCU Mukono', 'Ndejje', 'Ndeeba', 'Kikuubo', 'Industrial Area',
+  'Lugogo', 'Nateete', 'Buloba', 'Kyengera', 'Busega', 'Mpererwe', 'Katosi Road',
 ];
 
 function cleanText(value = '') {
@@ -496,9 +502,9 @@ function districtForArea(area = '', text = '') {
   const haystack = cleanText(`${candidate} ${text}`);
   const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
   if (district) return district;
-  if (/katosi|mpunge|mpungwe|mukono/i.test(haystack)) return 'Mukono';
-  if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso/i.test(haystack)) return 'Wakiso';
-  if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo/i.test(haystack)) return 'Kampala';
+  if (/katosi|mpunge|mpungwe|mukono|ucu|goma|nakisunga/i.test(haystack)) return 'Mukono';
+  if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso|bujjuko|bujuuko|namayumba|kakiri|masulita|hoima road|kigo|kawuku|kisubi|nkumba|kyaliwajjala|kireka|sonde|kungu|bulindo|gayaza|matugga|nansana|nabweru|buloba|kyengera|busega|mpererwe/i.test(haystack)) return 'Wakiso';
+  if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo|kikoni|nakawa|banda|ndeeba|kikuubo|industrial area|lugogo|nateete|kawempe|kyebando/i.test(haystack)) return 'Kampala';
   return 'Kampala';
 }
 

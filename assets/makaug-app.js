@@ -18427,10 +18427,28 @@ function getYouTubeEmbedUrl(url) {
   }
 }
 
+function getTikTokEmbedUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    if (!host.endsWith("tiktok.com")) return "";
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const videoIndex = parts.findIndex((part) => part.toLowerCase() === "video");
+    const id = videoIndex >= 0 ? parts[videoIndex + 1] || "" : "";
+    if (!/^\d{6,}$/.test(id)) return "";
+    return `https://www.tiktok.com/embed/v2/${id}`;
+  } catch (error) {
+    return "";
+  }
+}
+
 function renderVideoEmbedCard(url, options = {}) {
   const safeUrl = String(url || "").trim();
   if (!/^https?:\/\//i.test(safeUrl)) return "";
   const embedUrl = getYouTubeEmbedUrl(safeUrl);
+  const tiktokEmbedUrl = !embedUrl ? getTikTokEmbedUrl(safeUrl) : "";
   const title = options.title || translateListingLabel("Video tour");
   const sub = options.sub || translateListingLabel("Play the walkthrough without leaving this page.");
   if (embedUrl) {
@@ -18445,6 +18463,22 @@ function renderVideoEmbedCard(url, options = {}) {
         </div>
         <div class="aspect-video bg-black">
           <iframe src="${adminAttr(embedUrl)}" title="Property video tour" class="w-full h-full" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        </div>
+      </div>
+    `;
+  }
+  if (tiktokEmbedUrl) {
+    return `
+      <div class="rounded-2xl border border-pink-100 bg-slate-950 overflow-hidden">
+        <div class="flex items-center justify-between gap-3 p-3 bg-white">
+          <div>
+            <div class="text-sm font-bold text-gray-900"><i class="fab fa-tiktok text-slate-900"></i> ${title}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${sub}</div>
+          </div>
+          <a href="${adminAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-pink-700 hover:underline">${translateListingLabel("Open TikTok")}</a>
+        </div>
+        <div class="bg-black min-h-[520px]">
+          <iframe src="${adminAttr(tiktokEmbedUrl)}" title="TikTok property source video" class="w-full min-h-[520px]" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
         </div>
       </div>
     `;
@@ -24573,7 +24607,10 @@ function getNearbyAmenitySuggestions(params = {}) {
   if (hasCoords) {
     enriched.sort((a, b) => (a.distanceKm || 999) - (b.distanceKm || 999));
   }
-  return enriched.slice(0, 8);
+  if (!hasCoords) return enriched.slice(0, 8);
+  const local = enriched.filter((item) => Number.isFinite(item.distanceKm) && item.distanceKm <= 25);
+  const selected = local.length >= 5 ? local : enriched.slice(0, 5);
+  return selected.slice(0, 8);
 }
 
 function normalizeNearbyPlaceForUi(item) {
@@ -24594,6 +24631,15 @@ function normalizeNearbyPlaceForUi(item) {
     type,
     distanceKm: Number.isFinite(distanceKm) ? distanceKm : null
   };
+}
+
+function formatNearbyDistanceKm(value) {
+  const distance = Number(value);
+  if (!Number.isFinite(distance)) return "";
+  const rounded = distance >= 10
+    ? Math.round(distance)
+    : Math.round(distance * 10) / 10;
+  return `${rounded} km`;
 }
 
 function normalizeNearbyPlacesForUi(items = []) {
@@ -25214,6 +25260,8 @@ function foundOnlineSourceMeta(p = {}) {
     p.social_url,
     extra.youtube_url,
     p.youtube_url,
+    extra.tiktok_url,
+    p.tiktok_url,
     extra.video_url,
     p.video_url,
     sourceUrls
@@ -25239,6 +25287,7 @@ function foundOnlineSourceMeta(p = {}) {
       || p.source_platform
       || inferPlatformFromUrl(sourceUrl)
       || inferPlatformFromUrl(sourceContactUrl)
+      || (extra.tiktok_url || p.tiktok_url ? "TikTok" : "")
       || (extra.youtube_url || p.youtube_url || extra.video_url || p.video_url ? "YouTube" : "")
       || ""
   ).trim();
@@ -27003,8 +27052,8 @@ function mapRemotePropertyForUi(p, options = {}) {
     img: p?.primary_image_url || p?.img || imageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
     desc: p?.description || p?.desc || "",
     address: p?.address || "",
-    lat: Number(p?.latitude ?? p?.lat),
-    lng: Number(p?.longitude ?? p?.lng),
+    lat: parseFloatSafe(p?.latitude ?? p?.lat),
+    lng: parseFloatSafe(p?.longitude ?? p?.lng),
     status: p?.status || "pending",
     sold_at: p?.sold_at || null,
     moderation_status: normalizeModerationStatus(p?.status),
@@ -27023,8 +27072,9 @@ function mapRemotePropertyForUi(p, options = {}) {
     region: p?.region || p?.extra_fields?.region || "",
     street_name: p?.street_name || p?.extra_fields?.street_name || "",
     preferred_contact_method: p?.preferred_contact_method || p?.extra_fields?.preferred_contact_method || "both",
-    video_url: p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.youtube_url || "",
+    video_url: p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.youtube_url || p?.extra_fields?.tiktok_url || "",
     youtube_url: p?.youtube_url || p?.extra_fields?.youtube_url || "",
+    tiktok_url: p?.tiktok_url || p?.extra_fields?.tiktok_url || (/tiktok\.com/i.test(String(p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.source_url || "")) ? (p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.source_url || "") : ""),
     resolved_location_label: p?.resolved_location_label || p?.extra_fields?.resolved_location_label || "",
     nearby_places: normalizeNearbyPlacesForUi(
       Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
@@ -28403,6 +28453,12 @@ const UG_AMENITY_POINTS = [
   { name: "Kyambogo University", kind: "School", district: "Kampala", lat: 0.348, lng: 32.63 },
   { name: "Acacia Mall", kind: "Shopping", district: "Kampala", lat: 0.338, lng: 32.585 },
   { name: "Nakawa Market", kind: "Market", district: "Kampala", lat: 0.334, lng: 32.61 },
+  { name: "Makerere Kikoni hostels", kind: "Student hostels", district: "Kampala", lat: 0.333, lng: 32.565 },
+  { name: "MUBS Nakawa campus", kind: "University", district: "Kampala", lat: 0.327, lng: 32.618 },
+  { name: "Kampala International University", kind: "University", district: "Kampala", lat: 0.294, lng: 32.603 },
+  { name: "Kikuubo commercial area", kind: "Commercial district", district: "Kampala", lat: 0.314, lng: 32.576 },
+  { name: "Lugogo business park area", kind: "Commercial district", district: "Kampala", lat: 0.330, lng: 32.608 },
+  { name: "Nakawa industrial area", kind: "Industrial area", district: "Kampala", lat: 0.333, lng: 32.617 },
   { name: "Entebbe International Airport", kind: "Airport", district: "Wakiso", lat: 0.042, lng: 32.443 },
   { name: "Victoria Mall Entebbe", kind: "Shopping", district: "Wakiso", lat: 0.061, lng: 32.469 },
   { name: "St Mary’s College Kisubi", kind: "School", district: "Wakiso", lat: 0.114, lng: 32.535 },
@@ -28413,8 +28469,22 @@ const UG_AMENITY_POINTS = [
   { name: "Kira Municipal Council offices", kind: "Public services", district: "Wakiso", lat: 0.398, lng: 32.641 },
   { name: "NIRA Kira offices", kind: "Public services", district: "Wakiso", lat: 0.399, lng: 32.642 },
   { name: "Kira town centre shops", kind: "Shopping", district: "Wakiso", lat: 0.397, lng: 32.644 },
+  { name: "Bujjuko trading centre", kind: "Town centre", district: "Wakiso", lat: 0.374, lng: 32.389 },
+  { name: "Akright Bujjuko estate access", kind: "Estate access", district: "Wakiso", lat: 0.372, lng: 32.392 },
+  { name: "Kakiri town centre", kind: "Town centre", district: "Wakiso", lat: 0.409, lng: 32.380 },
+  { name: "Namayumba town access", kind: "Town centre", district: "Wakiso", lat: 0.454, lng: 32.314 },
+  { name: "Buloba town shops", kind: "Shopping", district: "Wakiso", lat: 0.323, lng: 32.451 },
+  { name: "Nansana municipal area", kind: "Town centre", district: "Wakiso", lat: 0.364, lng: 32.520 },
+  { name: "Matugga town access", kind: "Town centre", district: "Wakiso", lat: 0.441, lng: 32.522 },
+  { name: "Gayaza town centre", kind: "Town centre", district: "Wakiso", lat: 0.452, lng: 32.606 },
+  { name: "Nkumba University", kind: "University", district: "Wakiso", lat: 0.093, lng: 32.507 },
+  { name: "Kisubi schools corridor", kind: "School", district: "Wakiso", lat: 0.117, lng: 32.529 },
   { name: "UCU Main Campus", kind: "University", district: "Mukono", lat: 0.355, lng: 32.753 },
   { name: "Mukono Kings High School", kind: "School", district: "Mukono", lat: 0.357, lng: 32.75 },
+  { name: "Mukono town centre", kind: "Town centre", district: "Mukono", lat: 0.353, lng: 32.753 },
+  { name: "Seeta trading centre", kind: "Shopping", district: "Mukono", lat: 0.361, lng: 32.705 },
+  { name: "Namanve industrial park", kind: "Industrial area", district: "Mukono", lat: 0.348, lng: 32.697 },
+  { name: "Katosi landing road access", kind: "Road access", district: "Mukono", lat: 0.181, lng: 32.797 },
   { name: "Jinja Main Market", kind: "Market", district: "Jinja", lat: 0.427, lng: 33.203 },
   { name: "Jinja Regional Referral Hospital", kind: "Hospital", district: "Jinja", lat: 0.438, lng: 33.201 },
   { name: "Jinja College", kind: "School", district: "Jinja", lat: 0.434, lng: 33.206 },
@@ -31999,7 +32069,8 @@ async function openDetail(id, options = {}) {
   const normalizedType = normalizeType(p.type);
   const showMortgageWidget = normalizedType === "sale" || normalizedType === "land" || isCommercialForSale(p);
   const savedNearbyRaw = Array.isArray(p.nearby_places) ? p.nearby_places : [];
-  const suggestedNearbyRaw = getNearbyAmenitySuggestions({ lat: p.lat, lng: p.lng, district: p.district, city: p.city, area: p.area });
+  const detailMapPoint = getListingMapPoint(p);
+  const suggestedNearbyRaw = getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng, district: p.district, city: p.city, area: p.area });
   const detailNearby = mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw);
   const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
@@ -32039,8 +32110,9 @@ async function openDetail(id, options = {}) {
   const contactMessageArg = adminAttr(JSON.stringify(contactMessage));
   const ownerPhoneArg = adminAttr(JSON.stringify(ownerPhone || ""));
   const brokerWhatsAppArg = adminAttr(JSON.stringify(brokerWhatsapp || ""));
-  const videoUrl = String(p.video_url || p.youtube_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || "").trim();
+  const videoUrl = String(p.video_url || p.youtube_url || p.tiktok_url || p.extra_fields?.video_url || p.extra_fields?.youtube_url || p.extra_fields?.tiktok_url || "").trim();
   const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
+  const safeVideoIsTikTok = /tiktok\.com/i.test(safeVideoUrl);
   const directionsUrl = propertyDirectionsUrl(p);
   const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
@@ -32125,7 +32197,7 @@ async function openDetail(id, options = {}) {
             ` : ""}
             <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
             ${safeVideoUrl ? `<div class="mt-4">${renderVideoEmbedCard(safeVideoUrl, {
-              title: translateListingLabel("Video tour"),
+              title: safeVideoIsTikTok ? translateListingLabel("TikTok video") : translateListingLabel("Video tour"),
               sub: translateListingLabel("Watch the walkthrough before you enquire.")
             })}</div>` : ""}
             <div class="mt-4 bg-green-50 border border-green-100 rounded-xl p-3">
@@ -32137,13 +32209,13 @@ async function openDetail(id, options = {}) {
               <div class="flex flex-wrap gap-2">
                 ${detailNearby.slice(0, 8).map((item) => {
                   const d = Number.isFinite(item.distanceKm) ? item.distanceKm : (Number.isFinite(item.distance_km) ? item.distance_km : null);
-                  const dist = Number.isFinite(d) ? ` · ${Number(d).toFixed(1)} km` : "";
+                  const dist = Number.isFinite(d) ? `${formatNearbyDistanceKm(d)} ` : "";
                   const label = translateListingLabel(item.name || item.label || "Nearby");
                   const typeLabel = item.type || item.kind || "";
                   const display = typeLabel && !String(label).toLowerCase().includes(String(typeLabel).toLowerCase())
                     ? `${typeLabel}: ${label}`
                     : label;
-                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${adminEscape(display)}${dist}</span>`;
+                  return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${dist}${adminEscape(display)}</span>`;
                 }).join("")}
               </div>
             </div>
@@ -32989,10 +33061,9 @@ async function initDetailMap(p) {
   const el = document.getElementById("map-detail");
   if (!el) return;
   const useGoogle = await ensureGoogleMapsApi();
-  const rawLat = Number(p?.lat ?? p?.latitude);
-  const rawLng = Number(p?.lng ?? p?.longitude);
-  const lat = Number.isFinite(rawLat) ? rawLat : MAP_DEFAULT_CENTER.lat;
-  const lng = Number.isFinite(rawLng) ? rawLng : MAP_DEFAULT_CENTER.lng;
+  const point = getListingMapPoint(p);
+  const lat = point?.lat ?? MAP_DEFAULT_CENTER.lat;
+  const lng = point?.lng ?? MAP_DEFAULT_CENTER.lng;
   if (useGoogle && window.google?.maps) {
     el.innerHTML = "";
     const map = new google.maps.Map(el, {

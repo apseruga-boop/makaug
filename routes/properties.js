@@ -337,6 +337,23 @@ function publicExtraFields(extraFields = {}) {
     || inferPublicSourcePlatform(sourceContactUrl);
   const sourceContactLabel = cleanText(extra.source_contact_label)
     || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  const tiktokUrl = safePublicSourceUrl(
+    extra.tiktok_url
+      || extra.tiktok_video_url
+      || (/tiktok\.com/i.test(String(extra.video_url || '')) ? extra.video_url : '')
+      || (/tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : '')
+  );
+  const youtubeUrl = safePublicSourceUrl(
+    extra.youtube_url
+      || (/youtube\.com|youtu\.be/i.test(String(extra.video_url || '')) ? extra.video_url : '')
+      || (/youtube\.com|youtu\.be/i.test(String(sourceUrl || '')) ? sourceUrl : '')
+  );
+  const videoUrl = safePublicSourceUrl(
+    extra.video_url
+      || youtubeUrl
+      || tiktokUrl
+      || (/youtube\.com|youtu\.be|tiktok\.com/i.test(String(sourceUrl || '')) ? sourceUrl : '')
+  );
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -345,8 +362,9 @@ function publicExtraFields(extraFields = {}) {
     resolved_location_label: extra.resolved_location_label || null,
     public_display_name: extra.public_display_name || null,
     preferred_contact_method: extra.preferred_contact_method || null,
-    video_url: extra.video_url || null,
-    youtube_url: extra.youtube_url || null,
+    video_url: videoUrl || null,
+    youtube_url: youtubeUrl || null,
+    tiktok_url: tiktokUrl || null,
     found_online: extra.found_online === true,
     social_search_candidate: extra.social_search_candidate === true,
     source_badge: extra.source_badge || null,

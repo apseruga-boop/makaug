@@ -17,6 +17,7 @@ const propertiesRoute = read('routes/properties.js');
 const agentsRoute = read('routes/agents.js');
 const socialSearchServiceSource = read('services/socialSearchSourcedListingsService.js');
 const socialPlatformSweepServiceSource = read('services/socialPlatformPostDiscoveryService.js');
+const propertySourceRegistrySource = read('services/propertySourceRegistryService.js');
 const socialPlatformSweepScript = read('scripts/sweep-social-platform-posts.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
@@ -71,6 +72,7 @@ const {
   normalizeXApiPost,
 } = require('../services/socialPlatformPostDiscoveryService');
 const { buildAutomatedListingReview } = require('../services/listingModerationService');
+const { getPropertySourceRegistry } = require('../services/propertySourceRegistryService');
 
 function test(name, fn) {
   try {
@@ -400,7 +402,11 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('adminCreateShareablePreviewLink'), 'review panel should expose shareable private preview link creation');
   assert(frontend.includes('/review-token'), 'review panel should call the protected preview-token route');
   assert(frontend.includes('normalizeNearbyPlaceForUi'), 'frontend should normalize old string amenities and new amenity objects');
+  assert(frontend.includes('formatNearbyDistanceKm'), 'public detail should render nearby amenities with km distances');
+  assert(frontend.includes('const detailMapPoint = getListingMapPoint(p);'), 'public detail amenities should use the same resolved point as the map');
+  assert(frontend.includes('getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng'), 'nearby amenities should be calculated from the visible map pin');
   assert(frontend.includes('mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw)'), 'detail page should enrich saved amenities with nearby hospitals and schools');
+  assert(frontend.includes('selected.slice(0, 8)'), 'nearby amenities should be distance-filtered before display');
   assert(frontend.includes('extra.nearby_facilities'), 'property search should include persisted nearby facility names');
 });
 
@@ -718,6 +724,19 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
 test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {
   assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
   assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 30000);
+  assert(propertySourceRegistrySource.includes("'CommercialPropertyKampala'"), 'TikTok/social watchlist should include commercial Kampala property hashtags');
+  assert(propertySourceRegistrySource.includes("'StudentAccommodationMakerere'"), 'TikTok/social watchlist should include student accommodation hashtags');
+  assert(propertySourceRegistrySource.includes("'BujjukoLand'"), 'TikTok/social watchlist should include land/location-specific plot hashtags');
+  assert(propertySourceRegistrySource.includes("'TikTok Uganda student hostels'"), 'generated discovery intents should target TikTok student property posts');
+  assert(propertySourceRegistrySource.includes("'Facebook Uganda land plots'"), 'generated discovery intents should target Facebook land property posts');
+  const sourceRegistry = getPropertySourceRegistry();
+  const tiktokSourceUrls = sourceRegistry
+    .filter((source) => String(source.platform || '').toLowerCase() === 'tiktok')
+    .map((source) => String(source.url || '').toLowerCase());
+  assert.strictEqual(sourceRegistry.length, 30000, 'source registry should still build the full 30,000-source discovery database');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/studentaccommodationmakerere')), 'TikTok registry should track student-specific hashtags');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/commercialpropertykampala')), 'TikTok registry should track commercial property hashtags');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/bujjukoland') || url.includes('/tag/bujuukoland')), 'TikTok registry should track Bujjuko/Bujuuko land hashtags');
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
@@ -730,6 +749,10 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert(frontend.includes('adminImportTikTokExactPosts'), 'King dashboard should expose exact TikTok video import controls');
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
+  assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
+  assert(frontend.includes('https://www.tiktok.com/embed/v2/'), 'TikTok source videos should render with TikTok embed URLs');
+  assert(frontend.includes('safeVideoIsTikTok'), 'TikTok videos should be labelled separately from YouTube videos');
+  assert(propertiesRoute.includes('tiktok_url: tiktokUrl || null'), 'public property API should expose exact TikTok source video URLs');
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
