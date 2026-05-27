@@ -155,7 +155,7 @@ const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CON
 const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 550));
 const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 80);
 const SEND_COMPOSER_CLEAR_MS = Math.min(1200, Math.max(80, Number.isFinite(configuredComposerClearMs) ? configuredComposerClearMs : 220));
-const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 50);
+const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 700);
 const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
   1200,
   Math.max(50, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 125)
@@ -166,7 +166,7 @@ const SEND_RETRY_CONFIRM_MS = Math.min(
   Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
 );
 const TRUST_SEND_ON_COMPOSER_CLEAR = !['0', 'false', 'no', 'off'].includes(
-  String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'true').trim().toLowerCase()
+  String(process.env.WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false').trim().toLowerCase()
 );
 const configuredRecentlySentReplyTtlMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENTLY_SENT_REPLY_TTL_MS || 15000);
 const RECENTLY_SENT_REPLY_TTL_MS = Math.min(
@@ -1623,18 +1623,27 @@ async function waitForOutgoingReplyConfirmation(page, expectedText, beforeState 
   const expected = normalizeReplyText(expectedText);
   const expectedPrefix = expected.slice(0, 120);
   const beforeCount = Number(beforeState.count || 0);
+  const beforeLastText = normalizeReplyText(beforeState.lastText || '');
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     const state = await getOutgoingMessageState(page).catch(() => ({ count: 0, recentTexts: [] }));
-    const recentTexts = Array.isArray(state.recentTexts) ? state.recentTexts : [];
-    const matchedText = expectedPrefix
-      ? recentTexts.some((text) => normalizeReplyText(text).includes(expectedPrefix))
-      : false;
-    if (state.count > beforeCount && (!expectedPrefix || matchedText || state.lastText)) {
+    const recentTexts = Array.isArray(state.recentTexts)
+      ? state.recentTexts.map((text) => normalizeReplyText(text)).filter(Boolean)
+      : [];
+    const addedCount = Math.max(0, Number(state.count || 0) - beforeCount);
+    const newTailTexts = addedCount > 0 ? recentTexts.slice(-Math.max(1, addedCount)) : [];
+    const matchedNewText = expectedPrefix
+      ? newTailTexts.some((text) => text.includes(expectedPrefix))
+      : addedCount > 0;
+    if (addedCount > 0 && (!expectedPrefix || matchedNewText)) {
       return true;
     }
-    if (matchedText) return true;
+
+    const lastText = normalizeReplyText(state.lastText || '');
+    if (expectedPrefix && lastText && lastText !== beforeLastText && lastText.includes(expectedPrefix)) {
+      return true;
+    }
 
     await page.waitForTimeout(25);
   }

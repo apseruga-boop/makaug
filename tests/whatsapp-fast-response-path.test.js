@@ -116,12 +116,17 @@ async function run() {
     'WhatsApp Web sender must use the fast composer-clear timeout after sending'
   );
   assert(
-    whatsappWebCopilotSource.includes('SEND_CONFIRM_AFTER_CLEAR_MS'),
-    'WhatsApp Web sender must avoid long post-clear waits after the composer clears'
+    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 700'),
+    'WhatsApp Web sender must wait briefly for a real outgoing bubble after the composer clears'
   );
   assert(
-    whatsappWebCopilotSource.includes('WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR'),
-    'WhatsApp Web sender must allow fast confirmation once WhatsApp clears the composer'
+    whatsappWebCopilotSource.includes("WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false'"),
+    'WhatsApp Web sender must not mark a reply sent from composer-clear alone by default'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('matchedNewText')
+      && !whatsappWebCopilotSource.includes('if (matchedText) return true;'),
+    'WhatsApp Web sender must not treat an older identical outgoing message as a fresh send confirmation'
   );
   assert(
     whatsappWebBridgeServiceSource.includes('WHATSAPP_WEB_BRIDGE_RETRY_SECONDS || 1'),
