@@ -1541,6 +1541,16 @@ function numberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function publicPhoneFromText(text = '') {
+  const match = String(text || '').match(/(?:\+?256|0)\s*[\d\s().-]{7,14}\d/);
+  return match ? match[0].replace(/[^\d+]/g, '') : '';
+}
+
+function publicEmailFromText(text = '') {
+  const match = String(text || '').match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : '';
+}
+
 function normalizeFoundOnlineListingType(value = '') {
   const raw = String(value || '').toLowerCase();
   if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
@@ -1557,6 +1567,17 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     || safeUrl(raw.source_post_url)
     || safeUrl(raw.permalink)
     || safeUrl(raw.url);
+  const sourceText = [
+    raw.title,
+    raw.source_title,
+    raw.caption,
+    raw.description,
+    raw.summary,
+    raw.raw_text,
+    raw.source_text,
+  ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+  const extractedPhone = publicPhoneFromText(sourceText);
+  const extractedEmail = publicEmailFromText(sourceText);
   const sourceName = String(raw.source_name || raw.agent_name || raw.lister_name || raw.page_name || raw.account_name || raw.sourceKey || raw.source_key || 'Found-online source').trim();
   const sourceKey = slugKey(raw.source_key || raw.sourceRegistryKey || raw.source_registry_key || sourceName || sourceUrl, `source-${index + 1}`);
   const postKey = slugKey(raw.source_listing_key || raw.key || raw.post_id || raw.id || sourceUrl || `${sourceKey}-${raw.title || index + 1}`, `source-post-${index + 1}`);
@@ -1585,9 +1606,9 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     name: sourceName,
     company: raw.company_name || raw.company || sourceName,
     licence: String(raw.licence || raw.license || `FOUND-ONLINE-${sourceKey.toUpperCase()}`).slice(0, 120),
-    phone: raw.phone || raw.contact_phone || raw.lister_phone || raw.whatsapp || null,
+    phone: raw.phone || raw.contact_phone || raw.lister_phone || raw.whatsapp || extractedPhone || null,
     phoneAlt: raw.phone_alt || raw.contact_phone_alt || raw.lister_phone_alt || '',
-    email: raw.email || raw.contact_email || raw.lister_email || null,
+    email: raw.email || raw.contact_email || raw.lister_email || extractedEmail || null,
     channelUrl: raw.source_page_url || raw.source_contact_url || raw.channel_url || raw.profile_url || raw.account_url || raw.source_url || sourceUrl,
     website: raw.website_url || raw.website || '',
     facebookUrl: raw.facebook_url || (/facebook\.com/i.test(sourceUrl) ? sourceUrl : ''),

@@ -593,6 +593,19 @@ test('found-online source-post importer normalizes extracted posts for King revi
   assert.strictEqual(imported.sourceBatch, FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID, 'imported posts should use the source-post import batch');
   assert.strictEqual(imported.price, 350000000, 'importer should parse Uganda shorthand prices');
   assert.strictEqual(intake.eligible, true, 'imported no-phone social posts with location and public source contact should be queueable');
+
+  const captionContact = normalizeFoundOnlineSourcePost({
+    post_url: 'https://www.instagram.com/reel/example-kololo-rent',
+    source_page_url: 'https://www.instagram.com/exampleagent',
+    source_name: 'Example Agent',
+    platform: 'Instagram',
+    caption: 'Luxury apartment for rent in Kololo. Call +256743694821 or email hello@example.com.',
+    area: 'Kololo',
+    district: 'Kampala',
+    price_text: 'USh 3.5m/month',
+  });
+  assert.strictEqual(captionContact.sourceAgent.phone, '+256743694821', 'generic source-post importer should reverse public WhatsApp/phone from captions');
+  assert.strictEqual(captionContact.sourceAgent.email, 'hello@example.com', 'generic source-post importer should reverse public email from captions');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
@@ -834,6 +847,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('foundOnlineSourceContactButtonLabel'), 'public listing detail should build a platform-specific source contact CTA');
   assert(frontend.includes('p.source_contact_url'), 'public listing detail should fall back to top-level source contact fields as well as extra_fields');
   assert(frontend.includes('Contact via {platform} source'), 'public listing detail should label TikTok/Facebook/X source contact buttons by platform');
+  assert(frontend.includes('Contact through source'), 'public listing detail should replace internal enquiry forms on found-online listings');
+  assert(frontend.includes('We do not send enquiries to this lister from makaug'), 'found-online contact copy should not promise internal enquiry delivery');
+  assert(frontend.includes('admin-review-location-map'), 'King review should include an editable map pin section');
+  assert(frontend.includes('initAdminReviewLocationMap'), 'King review should initialize the editable review map');
+  assert(frontend.includes('adminReviewUseMapPin'), 'King review should save map pin coordinates back to the listing fields');
   assert(frontend.includes('Land image rule'), 'dashboard should explain the land-image fallback strategy');
   assert(frontend.includes('Morning sweep target'), 'dashboard should show the daily evidence-ready target/gap after a sweep');
   const listing = plannedSocialSearchListings()[0];

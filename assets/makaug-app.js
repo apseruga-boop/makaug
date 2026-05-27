@@ -544,6 +544,9 @@ let adminPendingQueueFilter = "all";
 let adminReviewEvidence = {};
 let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
+let adminReviewLocationMap = null;
+let adminReviewLocationMarker = null;
+let adminReviewLocationProvider = "";
 let adminWhatsAppDraft = null;
 let adminAiSnapshot = null;
 let adminPendingPhotoDeleteId = "";
@@ -14547,6 +14550,20 @@ function adminReviewListingEditPanel(review = {}) {
         <label class="block text-xs font-bold text-gray-700">Longitude
           <input id="admin-review-longitude-edit" type="number" step="0.000001" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.longitude ?? "")}">
         </label>
+        <div class="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
+          <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <div class="text-xs font-black uppercase tracking-wide text-blue-900">Review map pin</div>
+              <p class="mt-1 text-xs text-blue-900">Move the pin or click the map to set the exact public location before approval.</p>
+            </div>
+            <div id="admin-review-location-map-status" class="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-blue-900">Loading map...</div>
+          </div>
+          <div id="admin-review-location-map" class="mt-3 map-h-sm rounded-lg border border-blue-200 bg-white"></div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button type="button" onclick="adminReviewSyncLocationMapFromInputs()" class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-bold text-blue-900 hover:bg-blue-100">Center map from fields</button>
+            <button type="button" onclick="adminReviewUseMapPin()" class="rounded-lg bg-blue-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-600">Use current pin</button>
+          </div>
+        </div>
         <label class="block text-xs font-bold text-gray-700 md:col-span-2">Amenities / source facts
           <input id="admin-review-amenities-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(amenities)}" placeholder="Tight security, modern kitchen, jacuzzi">
         </label>
@@ -14579,6 +14596,7 @@ function adminApplyExtractedReviewFacts() {
   const mergedAmenities = [...new Set([...currentAmenities, ...(facts.amenities || [])])];
   adminSetReviewEditValue("admin-review-amenities-edit", mergedAmenities.join(", "));
   adminSetReviewEditValue("admin-review-description-edit", facts.description || adminActiveReview.description || "");
+  adminReviewSyncLocationMapFromInputs();
   toast("Extracted source details applied. Check location before approval.");
 }
 
@@ -14587,6 +14605,135 @@ function adminUseConciseReviewDescription() {
   const facts = adminExtractReviewFacts(adminActiveReview);
   adminSetReviewEditValue("admin-review-description-edit", adminReviewBuildConciseDescription(adminActiveReview, facts));
   toast("Short description prepared.");
+}
+
+function adminReviewLocationStatus(message, tone = "blue") {
+  const el = document.getElementById("admin-review-location-map-status");
+  if (!el) return;
+  const palette = {
+    green: "rounded-full bg-green-100 px-2 py-1 text-[11px] font-bold text-green-800",
+    amber: "rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold text-amber-900",
+    red: "rounded-full bg-red-100 px-2 py-1 text-[11px] font-bold text-red-800",
+    blue: "rounded-full bg-white px-2 py-1 text-[11px] font-bold text-blue-900"
+  };
+  el.className = palette[tone] || palette.blue;
+  el.textContent = message;
+}
+
+function adminReviewLocationDraft() {
+  const latitude = document.getElementById("admin-review-latitude-edit")?.value;
+  const longitude = document.getElementById("admin-review-longitude-edit")?.value;
+  const area = document.getElementById("admin-review-area-edit")?.value;
+  const district = document.getElementById("admin-review-district-edit")?.value;
+  const address = document.getElementById("admin-review-address-edit")?.value;
+  return {
+    ...(adminActiveReview || {}),
+    lat: latitude,
+    lng: longitude,
+    latitude,
+    longitude,
+    area,
+    district,
+    address,
+    city: area || adminActiveReview?.city || ""
+  };
+}
+
+function adminReviewLocationPoint() {
+  const draft = adminReviewLocationDraft();
+  const rawLat = Number(draft.latitude ?? draft.lat);
+  const rawLng = Number(draft.longitude ?? draft.lng);
+  if (Number.isFinite(rawLat) && Number.isFinite(rawLng) && isLikelyUgandaCoordinate(rawLat, rawLng)) {
+    return { lat: rawLat, lng: rawLng, exact: true };
+  }
+  return getListingMapPoint(draft);
+}
+
+function adminReviewSetLocationInputs(lat, lng, message = "Map pin set") {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return;
+  adminSetReviewEditValue("admin-review-latitude-edit", Number(lat).toFixed(6));
+  adminSetReviewEditValue("admin-review-longitude-edit", Number(lng).toFixed(6));
+  adminReviewLocationStatus(message, isLikelyUgandaCoordinate(Number(lat), Number(lng)) ? "green" : "amber");
+}
+
+function adminReviewMoveLocationPin(lat, lng, options = {}) {
+  if (!adminReviewLocationMap || !adminReviewLocationMarker || !Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return;
+  const next = [Number(lat), Number(lng)];
+  if (adminReviewLocationProvider === "leaflet") {
+    adminReviewLocationMarker.setLatLng(next);
+    if (options.pan !== false) adminReviewLocationMap.setView(next, options.zoom || MAP_PROPERTY_ZOOM);
+    try { adminReviewLocationMarker.openPopup(); } catch (e) {}
+  }
+}
+
+function adminReviewSyncLocationMapFromInputs() {
+  const point = adminReviewLocationPoint();
+  if (!Number.isFinite(point?.lat) || !Number.isFinite(point?.lng)) {
+    adminReviewLocationStatus("Add area or coordinates", "amber");
+    return;
+  }
+  if (!adminReviewLocationMap) {
+    initAdminReviewLocationMap(adminActiveReview);
+    return;
+  }
+  adminReviewMoveLocationPin(point.lat, point.lng, {
+    zoom: point.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM
+  });
+  adminReviewLocationStatus(point.exact ? "Exact pin from fields" : "Approximate area pin", point.exact ? "green" : "amber");
+}
+
+function adminReviewUseMapPin() {
+  if (!adminReviewLocationMarker || adminReviewLocationProvider !== "leaflet") {
+    adminReviewLocationStatus("Map pin not ready", "amber");
+    return;
+  }
+  const point = adminReviewLocationMarker.getLatLng();
+  adminReviewSetLocationInputs(point.lat, point.lng, "Exact pin saved to fields");
+  toast("Review location updated from the map pin.");
+}
+
+async function initAdminReviewLocationMap(review = adminActiveReview) {
+  const el = document.getElementById("admin-review-location-map");
+  if (!el) return;
+  const ok = await ensureLeafletApi();
+  if (!ok || !window.L) {
+    adminReviewLocationStatus("Map failed to load", "red");
+    return;
+  }
+  const point = adminReviewLocationPoint(review);
+  const lat = Number.isFinite(point?.lat) ? point.lat : MAP_DEFAULT_CENTER.lat;
+  const lng = Number.isFinite(point?.lng) ? point.lng : MAP_DEFAULT_CENTER.lng;
+  if (adminReviewLocationMap?.remove) {
+    try { adminReviewLocationMap.remove(); } catch (e) {}
+  }
+  adminReviewLocationMap = null;
+  adminReviewLocationMarker = null;
+  adminReviewLocationProvider = "leaflet";
+  if (el._leaflet_id) {
+    try { el._leaflet_id = null; } catch (e) {}
+  }
+  el.innerHTML = "";
+  const map = L.map(el).setView([lat, lng], point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19
+  }).addTo(map);
+  const marker = L.marker([lat, lng], { draggable: true }).addTo(map).bindPopup("Review location pin");
+  marker.on("dragend", () => {
+    const next = marker.getLatLng();
+    adminReviewSetLocationInputs(next.lat, next.lng, "Exact pin moved");
+  });
+  map.on("click", (event) => {
+    const next = event.latlng;
+    marker.setLatLng(next);
+    adminReviewSetLocationInputs(next.lat, next.lng, "Exact pin set");
+  });
+  adminReviewLocationMap = map;
+  adminReviewLocationMarker = marker;
+  adminReviewLocationStatus(point?.exact ? "Exact pin loaded" : "Approximate area pin", point?.exact ? "green" : "amber");
+  setTimeout(() => {
+    try { map.invalidateSize(); marker.openPopup(); } catch (e) {}
+  }, 150);
 }
 
 function collectAdminReviewListingPatch() {
@@ -14909,6 +15056,7 @@ function renderAdminReviewPanel(review) {
     </div>`;
   panel.classList.remove("hidden");
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => initAdminReviewLocationMap(review), 120);
 }
 
 async function openAdminListingReview(listingId) {
@@ -31872,11 +32020,12 @@ async function openDetail(id, options = {}) {
   const ownerPhoneHref = ownerPhone ? `tel:${String(ownerPhone).replace(/\s+/g, "")}` : "";
   const ownerEmail = p.lister_email || p.contact_email || "";
   const foundOnlineMeta = foundOnlineSourceMeta(p);
-  const sourceContactUrl = foundOnlineMeta?.sourceContactUrl || "";
+  const sourceContactUrl = foundOnlineMeta?.sourceContactUrl || foundOnlineMeta?.sourceUrl || "";
   const sourceContactButtonLabel = foundOnlineMeta ? foundOnlineSourceContactButtonLabel(foundOnlineMeta) : translatePropertyUi("Contact via source");
   const sourceContactSubtitle = foundOnlineMeta ? foundOnlineSourceContactSubtitle(foundOnlineMeta) : "";
   const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
     || (sourceContactUrl ? translatePropertyUi("Open the public source page for contact details.") : "");
+  const isFoundOnlineContact = !!foundOnlineMeta;
   const brokerPhone = broker?.phone || "";
   const brokerPhoneHref = brokerPhone ? `tel:${String(brokerPhone).replace(/\s+/g, "")}` : "";
   const brokerWhatsapp = broker?.whatsapp || brokerPhone || "";
@@ -31901,6 +32050,26 @@ async function openDetail(id, options = {}) {
   const inquiryPhoneDefault = canPrefillInquiryFromUser ? (authState?.user?.phone || "") : "";
   const inquiryEmailDefault = canPrefillInquiryFromUser ? (authState?.user?.email || "") : "";
   const brokerProfilePath = broker ? getBrokerProfilePath(broker) : "";
+  const foundOnlineContactPanelHtml = isFoundOnlineContact ? `
+          <div class="mt-4 pt-4 border-t border-gray-100">
+            <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Contact through source")}</h4>
+            <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("makaug found this listing online. We do not send enquiries to this lister from makaug. Use the original source/contact route to check availability and arrange a viewing.")}</p>
+            ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-50">${adminEscape(sourceContactButtonLabel || translatePropertyUi("Open source contact"))}</a>` : `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">${translatePropertyUi("Source contact is being confirmed by King review.")}</div>`}
+          </div>
+  ` : "";
+  const internalInquiryFormHtml = !isFoundOnlineContact ? `
+          <div class="mt-4 pt-4 border-t border-gray-100">
+            <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
+            <p class="text-xs text-gray-500 mb-2">${adminEscape(translatePropertyUi("Your enquiry will go to {name}.", { name: inquiryRecipientName }))}</p>
+            <div class="space-y-2">
+              <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
+              <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
+              <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
+              <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" }))}</textarea>
+              <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
+            </div>
+          </div>
+  ` : "";
   document.getElementById("detail-content").innerHTML = `
     <div class="grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
@@ -32025,17 +32194,8 @@ async function openDetail(id, options = {}) {
             ${sourceContactUrl && !ownerWhatsAppUrl ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
-          <div class="mt-4 pt-4 border-t border-gray-100">
-            <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Send enquiry")}</h4>
-            <p class="text-xs text-gray-500 mb-2">${adminEscape(translatePropertyUi("Your enquiry will go to {name}.", { name: inquiryRecipientName }))}</p>
-            <div class="space-y-2">
-              <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
-              <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
-              <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
-              <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" }))}</textarea>
-              <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
-            </div>
-          </div>
+          ${foundOnlineContactPanelHtml}
+          ${internalInquiryFormHtml}
           ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Mortgage Estimate")}</h4>
             <div class="grid grid-cols-2 gap-2 mb-2">
