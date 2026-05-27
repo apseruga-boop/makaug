@@ -332,12 +332,87 @@ function getHierarchyPointForArea(district, area) {
   return null;
 }
 
+const UG_AREA_PIN_OVERRIDES = [
+  { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
+  { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
+  { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita", "Kakiri Masulita Hoima Road", "Hoima Road"] },
+  { name: "Masulita", district: "Wakiso", lat: 0.51, lng: 32.46, aliases: ["Masulita"] },
+  { name: "Kira", district: "Wakiso", lat: 0.3978, lng: 32.6414, aliases: ["Kira", "Kira Town"] },
+  { name: "Kira-Mulawa", district: "Wakiso", lat: 0.412, lng: 32.65, aliases: ["Kira-Mulawa", "Kira Mulawa", "Mulawa"] },
+  { name: "Kira-Nsasa", district: "Wakiso", lat: 0.428, lng: 32.665, aliases: ["Kira-Nsasa", "Kira Nsasa", "Nsasa"] },
+  { name: "Namugongo", district: "Wakiso", lat: 0.363, lng: 32.636, aliases: ["Namugongo"] },
+  { name: "Najjera", district: "Wakiso", lat: 0.396, lng: 32.615, aliases: ["Najjera", "Najjeera"] },
+  { name: "Kitende", district: "Wakiso", lat: 0.197, lng: 32.535, aliases: ["Kitende"] },
+  { name: "Kajjansi", district: "Wakiso", lat: 0.216, lng: 32.552, aliases: ["Kajjansi", "Kajansi"] },
+  { name: "Bwebajja Akright", district: "Wakiso", lat: 0.198, lng: 32.535, aliases: ["Bwebajja Akright", "Bwebajja"] },
+  { name: "Seguku", district: "Wakiso", lat: 0.247, lng: 32.555, aliases: ["Seguku", "Sseguku"] },
+  { name: "Entebbe Road", district: "Wakiso", lat: 0.216, lng: 32.552, aliases: ["Entebbe Road"] },
+  { name: "Kasangati-Nangabo", district: "Wakiso", lat: 0.434, lng: 32.61, aliases: ["Kasangati-Nangabo", "Kasangati Nangabo", "Kasangati", "Nangabo"] },
+  { name: "Katosi", district: "Mukono", lat: 0.181, lng: 32.797, aliases: ["Katosi", "Mpunge", "Mpungwe", "Katosi Mpunge"] },
+  { name: "Kololo", district: "Kampala", lat: 0.356, lng: 32.612, aliases: ["Kololo"] },
+  { name: "Komamboga / Kyanja", district: "Kampala", lat: 0.394, lng: 32.598, aliases: ["Komamboga", "Kyanja", "Komamboga Kyanja"] },
+  { name: "Kyebando", district: "Kampala", lat: 0.368, lng: 32.584, aliases: ["Kyebando"] },
+  { name: "Kikoni", district: "Kampala", lat: 0.333, lng: 32.565, aliases: ["Kikoni"] },
+  { name: "Nakawa", district: "Kampala", lat: 0.334, lng: 32.61, aliases: ["Nakawa"] },
+  { name: "Ndeeba", district: "Kampala", lat: 0.301, lng: 32.548, aliases: ["Ndeeba"] },
+  { name: "Kikuubo", district: "Kampala", lat: 0.314, lng: 32.576, aliases: ["Kikuubo"] }
+];
+
+function knownAreaAliasPattern(alias = "") {
+  return String(alias || "")
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\s+/g, "\\s+")
+    .replace(/-/g, "[-\\s]+");
+}
+
+function findKnownUgandaAreaPointFromText(value = "") {
+  const haystack = String(value || "").trim();
+  if (!haystack) return null;
+  const sorted = UG_AREA_PIN_OVERRIDES
+    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
+    .sort((a, b) => String(b.alias || "").length - String(a.alias || "").length);
+  for (const point of sorted) {
+    const pattern = knownAreaAliasPattern(point.alias);
+    if (!pattern) continue;
+    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(haystack)) {
+      return { lat: point.lat, lng: point.lng, district: point.district, area: point.name };
+    }
+  }
+  return null;
+}
+
+function getKnownUgandaAreaPoint(property = {}) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const candidates = [
+    property?.area,
+    property?.neighborhood,
+    extra.neighborhood,
+    property?.city,
+    extra.city,
+    property?.resolved_location_label,
+    extra.resolved_location_label,
+    property?.address,
+    property?.title,
+    property?.desc,
+    property?.description
+  ];
+  for (const candidate of candidates) {
+    const point = findKnownUgandaAreaPointFromText(candidate);
+    if (point) return point;
+  }
+  return null;
+}
+
 function getListingMapPoint(property = {}) {
   const rawLat = Number(property?.lat ?? property?.latitude);
   const rawLng = Number(property?.lng ?? property?.longitude);
   if (Number.isFinite(rawLat) && Number.isFinite(rawLng) && isLikelyUgandaCoordinate(rawLat, rawLng)) {
     return { lat: rawLat, lng: rawLng, exact: true };
   }
+
+  const knownAreaPoint = getKnownUgandaAreaPoint(property);
+  if (knownAreaPoint) return { ...knownAreaPoint, exact: false, source: "area_override" };
 
   const district = property?.district || "";
   const city = property?.city || property?.location_town || "";
@@ -24595,11 +24670,11 @@ function getNearbyAmenitySuggestions(params = {}) {
   const lng = Number(params.lng);
   const district = params.district || "";
   let pool = UG_AMENITY_POINTS.slice();
-  if (district) {
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  if (district && !hasCoords) {
     const byDistrict = pool.filter((item) => item.district === district);
     if (byDistrict.length >= 3) pool = byDistrict;
   }
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
   const enriched = pool.map((item) => {
     const distanceKm = hasCoords ? haversineKm(lat, lng, item.lat, item.lng) : null;
     return { ...item, distanceKm };
@@ -25185,6 +25260,10 @@ function isFoundOnlineListing(p = {}) {
     || extra.source_contact_url
     || extra.source_channel_url
     || extra.youtube_channel_url
+    || extra.tiktok_url
+    || extra.video_url
+    || p.tiktok_url
+    || p.video_url
   );
   const looksSocial = /youtube|tiktok|instagram|facebook|twitter|x\b/.test(sourcePlatform);
   return p.found_online === true
@@ -25208,6 +25287,26 @@ function isFoundOnlineListing(p = {}) {
     || listingSource.includes("sourced")
     || listingSource.includes("found_online")
     || ((sourceType.includes("social") || sourceType.includes("online") || looksSocial) && hasSourceTrail);
+}
+
+function shouldUseSourceOnlyContact(p = {}, meta = null) {
+  if (meta) return true;
+  if (isFoundOnlineListing(p)) return true;
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const trail = [
+    p.source_url,
+    p.source_contact_url,
+    p.video_url,
+    p.tiktok_url,
+    p.youtube_url,
+    extra.source_url,
+    extra.source_contact_url,
+    extra.video_url,
+    extra.tiktok_url,
+    extra.youtube_url,
+    extra.source_platform
+  ].join(" ").toLowerCase();
+  return /tiktok\.com|youtube\.com|youtu\.be|instagram\.com|facebook\.com|x\.com|twitter\.com|found_online|source_post/.test(trail);
 }
 
 function listingFreshnessBadgeHtml(p = {}) {
@@ -25992,9 +26091,19 @@ function getLocalizedPropertyDescription(property = {}, nearby = []) {
   return raw || buildLocalizedPropertyNarrative(property, nearby);
 }
 
+function sanitizePublicListingCopyForUi(value = "") {
+  return String(value || "")
+    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, "")
+    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, "")
+    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, "")
+    .replace(/\s*Pending King review[^.]*\.?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function getLocalizedPropertyHighlights(property = {}, nearby = []) {
   const translated = getLocalizedListingText(property, "area_highlights", "");
-  if (translated) return translated;
+  if (translated) return sanitizePublicListingCopyForUi(translated);
   const location = getPropertyStructuredLocation(property);
   if (currentLang !== "en" || !property?.area_highlights) {
     return buildLocationHighlightsText({
@@ -26006,7 +26115,7 @@ function getLocalizedPropertyHighlights(property = {}, nearby = []) {
       nearby
     });
   }
-  return property.area_highlights;
+  return sanitizePublicListingCopyForUi(property.area_highlights);
 }
 
 async function submitPropertyInquiry(id) {
@@ -28179,7 +28288,9 @@ const UG_LOCATION_TREE = {
         { name: "Abayita Ababiri", lat: 0.106, lng: 32.525 },
         { name: "Kitende", lat: 0.198, lng: 32.533 },
         { name: "Kajjansi", lat: 0.208, lng: 32.552 },
-        { name: "Bwebajja", lat: 0.179, lng: 32.541 }
+        { name: "Bwebajja", lat: 0.179, lng: 32.541 },
+        { name: "Ndejje", lat: 0.244, lng: 32.553 },
+        { name: "Lubugumu", lat: 0.239, lng: 32.554 }
       ]
     },
     {
@@ -28210,6 +28321,9 @@ const UG_LOCATION_TREE = {
       neighborhoods: [
         { name: "Wakiso Central", lat: 0.404, lng: 32.459 },
         { name: "Kakiri", lat: 0.409, lng: 32.38 },
+        { name: "Bujjuko", lat: 0.374, lng: 32.389 },
+        { name: "Bujuuko", lat: 0.374, lng: 32.389 },
+        { name: "Masulita", lat: 0.51, lng: 32.46 },
         { name: "Kasanje", lat: 0.217, lng: 32.383 },
         { name: "Nabweru South", lat: 0.367, lng: 32.526 }
       ]
@@ -32096,7 +32210,7 @@ async function openDetail(id, options = {}) {
   const sourceContactSubtitle = foundOnlineMeta ? foundOnlineSourceContactSubtitle(foundOnlineMeta) : "";
   const sourceContactCopy = foundOnlineMeta?.sourceContactLabel
     || (sourceContactUrl ? translatePropertyUi("Open the public source page for contact details.") : "");
-  const isFoundOnlineContact = !!foundOnlineMeta;
+  const isFoundOnlineContact = shouldUseSourceOnlyContact(p, foundOnlineMeta);
   const brokerPhone = broker?.phone || "";
   const brokerPhoneHref = brokerPhone ? `tel:${String(brokerPhone).replace(/\s+/g, "")}` : "";
   const brokerWhatsapp = broker?.whatsapp || brokerPhone || "";

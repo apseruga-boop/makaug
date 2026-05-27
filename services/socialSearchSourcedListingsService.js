@@ -26,6 +26,17 @@ const PREAPPROVED_PERMISSION_STATUSES = [
   'agent_preapproved',
   'owner_agent_preapproved',
 ];
+const SOCIAL_AREA_PIN_OVERRIDES = [
+  { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
+  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
+  { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
+  { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
+  { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
+  { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
+  { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
+  { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
+];
 const PUBLIC_SOURCE_CONTACT_POLICY = 'No public phone number is not a blocker when a public social profile or platform message route exists; makaug shows Contact via social source until the agent adds a direct number. Website-only source/contact routes are not accepted for found-online launch inventory.';
 const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
@@ -539,6 +550,31 @@ function slugKey(value = '', fallback = 'source') {
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
   return slug || fallback;
+}
+
+function compactText(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function socialAreaAliasPattern(alias = '') {
+  return compactText(alias)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+')
+    .replace(/-/g, '[-\\s]+');
+}
+
+function socialAreaPinFromText(value = '') {
+  const haystack = compactText(value);
+  if (!haystack) return null;
+  const sorted = SOCIAL_AREA_PIN_OVERRIDES
+    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
+    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
+  for (const point of sorted) {
+    const pattern = socialAreaAliasPattern(point.alias);
+    if (!pattern) continue;
+    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
+  }
+  return null;
 }
 
 function asTextArray(value = []) {
@@ -1596,9 +1632,14 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     sourcePlatform: raw.source_platform || raw.platform,
   });
   const sourceDistricts = asTextArray(raw.districts);
-  const district = String(raw.district || raw.city || raw.region || sourceDistricts[0] || '').trim();
-  const area = String(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || district || '').trim();
-  const address = String(raw.address || raw.location_label || raw.location || area || '').trim();
+  const rawArea = compactText(raw.area || raw.location || raw.neighbourhood || raw.neighborhood || '');
+  const areaPin = socialAreaPinFromText(`${rawArea} ${sourceText}`);
+  const fallbackDistrict = compactText(raw.district || sourceDistricts[0] || raw.city || raw.region || '');
+  const district = areaPin?.district || fallbackDistrict || 'Kampala';
+  const area = areaPin && (!rawArea || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
+    ? areaPin.name
+    : (rawArea || areaPin?.name || district);
+  const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
   const listingType = normalizeFoundOnlineListingType(raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description);
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
   const sourceAgent = {
@@ -1649,8 +1690,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     baths: numberOrNull(raw.bathrooms ?? raw.baths),
     landSizeValue: numberOrNull(raw.land_size_value ?? raw.landSizeValue),
     landSizeUnit: raw.land_size_unit || raw.landSizeUnit || null,
-    lat: numberOrNull(raw.latitude ?? raw.lat),
-    lng: numberOrNull(raw.longitude ?? raw.lng),
+    lat: numberOrNull(raw.latitude ?? raw.lat) ?? areaPin?.lat ?? null,
+    lng: numberOrNull(raw.longitude ?? raw.lng) ?? areaPin?.lng ?? null,
     imageUrls: asTextArray(raw.image_urls || raw.images || raw.photo_urls || raw.media_urls),
     photoUrls: asTextArray(raw.photo_urls),
     mediaUrls: asTextArray(raw.media_urls),

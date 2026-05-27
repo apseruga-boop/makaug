@@ -48,8 +48,41 @@ const AREA_HINTS = [
   'Lugogo', 'Nateete', 'Buloba', 'Kyengera', 'Busega', 'Mpererwe', 'Katosi Road',
 ];
 
+const AREA_PIN_OVERRIDES = [
+  { name: 'Ndejje', district: 'Wakiso', lat: 0.244, lng: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
+  { name: 'Bujjuko Akright Estate', district: 'Wakiso', lat: 0.374, lng: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
+  { name: 'Kakiri', district: 'Wakiso', lat: 0.409, lng: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
+  { name: 'Masulita', district: 'Wakiso', lat: 0.51, lng: 32.46, aliases: ['Masulita'] },
+  { name: 'Kira', district: 'Wakiso', lat: 0.3978, lng: 32.6414, aliases: ['Kira', 'Kira Town'] },
+  { name: 'Kira-Mulawa', district: 'Wakiso', lat: 0.412, lng: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
+  { name: 'Kira-Nsasa', district: 'Wakiso', lat: 0.428, lng: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Katosi', district: 'Mukono', lat: 0.181, lng: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
+  { name: 'Kololo', district: 'Kampala', lat: 0.356, lng: 32.612, aliases: ['Kololo'] }
+];
+
 function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function areaAliasPattern(alias = '') {
+  return cleanText(alias)
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+')
+    .replace(/-/g, '[-\\s]+');
+}
+
+function areaPinFromText(value = '') {
+  const haystack = cleanText(value);
+  if (!haystack) return null;
+  const sorted = AREA_PIN_OVERRIDES
+    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
+    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
+  for (const point of sorted) {
+    const pattern = areaAliasPattern(point.alias);
+    if (!pattern) continue;
+    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
+  }
+  return null;
 }
 
 function normalizePlatform(value = '') {
@@ -296,8 +329,12 @@ function buildTikTokExactPostImportRows({
       const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
       const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
       const combinedText = cleanText(`${title} ${caption}`);
-      const area = cleanText(seed.area || seed.location || extractArea(combinedText));
-      const district = cleanText(seed.district || districtForArea(area, combinedText));
+      const rawArea = cleanText(seed.area || seed.location || '');
+      const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
+      const area = areaPin && (!rawArea || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
+        ? areaPin.name
+        : cleanText(rawArea || extractArea(combinedText));
+      const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
       const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
@@ -323,6 +360,8 @@ function buildTikTokExactPostImportRows({
         area,
         district,
         location: area || district,
+        latitude: seed.latitude || seed.lat || areaPin?.lat || '',
+        longitude: seed.longitude || seed.lng || areaPin?.lng || '',
         price_text: priceText,
         listing_type: seed.listing_type || listingTypeFromText(combinedText),
         bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
@@ -498,12 +537,14 @@ function extractArea(text = '') {
 
 function districtForArea(area = '', text = '') {
   const candidate = cleanText(area) || extractArea(text);
-  if (DISTRICTS.includes(candidate)) return candidate;
   const haystack = cleanText(`${candidate} ${text}`);
+  const areaPin = areaPinFromText(haystack);
+  if (areaPin?.district) return areaPin.district;
+  if (DISTRICTS.includes(candidate)) return candidate;
   const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(haystack));
   if (district) return district;
   if (/katosi|mpunge|mpungwe|mukono|ucu|goma|nakisunga/i.test(haystack)) return 'Mukono';
-  if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso|bujjuko|bujuuko|namayumba|kakiri|masulita|hoima road|kigo|kawuku|kisubi|nkumba|kyaliwajjala|kireka|sonde|kungu|bulindo|gayaza|matugga|nansana|nabweru|buloba|kyengera|busega|mpererwe/i.test(haystack)) return 'Wakiso';
+  if (/kira|naalya|najjera|namugongo|bwebajja|kajansi|kitende|akright|wakiso|bujjuko|bujuuko|namayumba|kakiri|masulita|hoima road|kigo|kawuku|kisubi|nkumba|ndejje|lubugumu|kyaliwajjala|kireka|sonde|kungu|bulindo|gayaza|matugga|nansana|nabweru|buloba|kyengera|busega|mpererwe/i.test(haystack)) return 'Wakiso';
   if (/kampala|ntinda|bukoto|naguru|kololo|namanve|muyenga|makindye|kansanga|makerere|kyambogo|kikoni|nakawa|banda|ndeeba|kikuubo|industrial area|lugogo|nateete|kawempe|kyebando/i.test(haystack)) return 'Kampala';
   return 'Kampala';
 }

@@ -26,6 +26,7 @@ const socialOnlyPreapprovedCleanupMigration = read('db/migrations/051_enforce_so
 const strictFoundOnlinePreapprovalMigration = read('db/migrations/052_remove_implicit_found_online_approvals.sql');
 const youtubeSocialRestoreMigration = read('db/migrations/054_restore_youtube_social_found_online_inventory.sql');
 const youtubeSocialRepublishMigration = read('db/migrations/055_republish_curated_youtube_social_inventory.sql');
+const socialSourceLocationPinMigration = read('db/migrations/056_fix_social_source_location_pins.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -405,9 +406,16 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('formatNearbyDistanceKm'), 'public detail should render nearby amenities with km distances');
   assert(frontend.includes('const detailMapPoint = getListingMapPoint(p);'), 'public detail amenities should use the same resolved point as the map');
   assert(frontend.includes('getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng'), 'nearby amenities should be calculated from the visible map pin');
+  assert(frontend.includes('UG_AREA_PIN_OVERRIDES'), 'public map resolver should carry known Uganda area pins for social imports without exact coordinates');
+  assert(frontend.includes('getKnownUgandaAreaPoint(property)'), 'public map resolver should use the listing area/address/title before falling back to district centres');
+  assert(frontend.includes('if (district && !hasCoords)'), 'nearby amenities should not lock to a wrong district when a resolved map pin is available');
+  assert(propertiesRoute.includes('publicLocationOverrideForListing'), 'public API should correct social-source district/lat/lng from visible area evidence');
+  assert(propertiesRoute.includes('cleanPublicListingCopy'), 'public API should strip review/approval instructions from public listing copy');
+  assert(socialSourceLocationPinMigration.includes('social_area_pin_repair_20260527'), 'migration should repair already-live social-source location pins');
   assert(frontend.includes('mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw)'), 'detail page should enrich saved amenities with nearby hospitals and schools');
   assert(frontend.includes('selected.slice(0, 8)'), 'nearby amenities should be distance-filtered before display');
   assert(frontend.includes('extra.nearby_facilities'), 'property search should include persisted nearby facility names');
+  assert(html.includes('social-location-pin-repair-20260527'), 'index should cache-bust the frontend map/contact repair bundle');
 });
 
 test('Carnelian broker profile is click-through with social links and live listings', () => {
@@ -672,6 +680,28 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(exactRows[0].image_rights_confirmed, 'true');
   assert.deepStrictEqual(exactRows[0].image_urls, ['https://p16-sign-va.tiktokcdn.com/example.jpg']);
 
+  const ndejjeRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@homes_in_uganda/video/7330000000000000004',
+      '#kampalarentals loft studio apartments @400k monthly in Ndejje just call me 0706110456',
+    ].join('\n'),
+  });
+  assert.strictEqual(ndejjeRows[0].area, 'Ndejje', 'TikTok importer should keep Ndejje as the listing area');
+  assert.strictEqual(ndejjeRows[0].district, 'Wakiso', 'TikTok importer should not map Ndejje rentals to Kampala district fallback');
+  assert.strictEqual(ndejjeRows[0].latitude, 0.244, 'TikTok importer should attach a Ndejje area-level map pin');
+  assert.strictEqual(ndejjeRows[0].longitude, 32.553, 'TikTok importer should attach a Ndejje area-level map pin');
+
+  const hoimaRoadRows = buildTikTokExactPostImportRows({
+    posts: [{
+      post_url: 'https://www.tiktok.com/@plotsug/video/7330000000000000005',
+      title: 'Estate plots in Kakiri masulita hoima road from 10million ugx',
+      area: 'Hoima',
+      platform: 'TikTok',
+    }],
+  });
+  assert.strictEqual(hoimaRoadRows[0].area, 'Kakiri', 'Hoima Road captions should resolve to the Wakiso corridor, not Hoima district');
+  assert.strictEqual(hoimaRoadRows[0].district, 'Wakiso', 'Hoima Road captions should stay in Wakiso for map pins');
+
   const captionOnlyRows = buildTikTokExactPostImportRows({
     rawText: [
       'https://www.tiktok.com/@ismaelssekatawa25/video/7330000000000000002',
@@ -705,6 +735,11 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(noPriceIntake.price_upon_application, true, 'missing source price should be marked Price upon application');
   assert.strictEqual(noPriceIntake.price_label, PRICE_UPON_APPLICATION_LABEL, 'missing source price should use the public price label');
   assert.strictEqual(noPriceIntake.eligible, true, 'exact TikTok posts with location/contact/source evidence should queue even when price is missing');
+
+  const normalizedNdejje = normalizeFoundOnlineSourcePost(ndejjeRows[0]);
+  assert.strictEqual(normalizedNdejje.district, 'Wakiso', 'source-post normalizer should preserve Ndejje as Wakiso for future imports');
+  assert.strictEqual(normalizedNdejje.lat, 0.244, 'source-post normalizer should store an area-level pin when the source gives a known area');
+  assert.strictEqual(normalizedNdejje.lng, 32.553, 'source-post normalizer should store an area-level pin when the source gives a known area');
 
   const automatedReview = buildAutomatedListingReview({
     listing: {

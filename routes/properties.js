@@ -112,6 +112,73 @@ function normalizeListingType(type) {
   return t;
 }
 
+const PUBLIC_AREA_PIN_OVERRIDES = [
+  { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
+  { name: 'Bujjuko Akright Estate', district: 'Wakiso', latitude: 0.374, longitude: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
+  { name: 'Kakiri', district: 'Wakiso', latitude: 0.409, longitude: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
+  { name: 'Masulita', district: 'Wakiso', latitude: 0.51, longitude: 32.46, aliases: ['Masulita'] },
+  { name: 'Kira', district: 'Wakiso', latitude: 0.3978, longitude: 32.6414, aliases: ['Kira', 'Kira Town'] },
+  { name: 'Kira-Mulawa', district: 'Wakiso', latitude: 0.412, longitude: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
+  { name: 'Kira-Nsasa', district: 'Wakiso', latitude: 0.428, longitude: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Namugongo', district: 'Wakiso', latitude: 0.363, longitude: 32.636, aliases: ['Namugongo'] },
+  { name: 'Najjera', district: 'Wakiso', latitude: 0.396, longitude: 32.615, aliases: ['Najjera', 'Najjeera'] },
+  { name: 'Kitende', district: 'Wakiso', latitude: 0.197, longitude: 32.535, aliases: ['Kitende'] },
+  { name: 'Kajjansi', district: 'Wakiso', latitude: 0.216, longitude: 32.552, aliases: ['Kajjansi', 'Kajansi'] },
+  { name: 'Bwebajja Akright', district: 'Wakiso', latitude: 0.198, longitude: 32.535, aliases: ['Bwebajja Akright', 'Bwebajja'] },
+  { name: 'Seguku', district: 'Wakiso', latitude: 0.247, longitude: 32.555, aliases: ['Seguku', 'Sseguku'] },
+  { name: 'Entebbe Road', district: 'Wakiso', latitude: 0.216, longitude: 32.552, aliases: ['Entebbe Road'] },
+  { name: 'Kasangati-Nangabo', district: 'Wakiso', latitude: 0.434, longitude: 32.61, aliases: ['Kasangati-Nangabo', 'Kasangati Nangabo', 'Kasangati', 'Nangabo'] },
+  { name: 'Katosi', district: 'Mukono', latitude: 0.181, longitude: 32.797, aliases: ['Katosi', 'Mpunge', 'Mpungwe', 'Katosi Mpunge'] },
+  { name: 'Kololo', district: 'Kampala', latitude: 0.356, longitude: 32.612, aliases: ['Kololo'] },
+  { name: 'Komamboga / Kyanja', district: 'Kampala', latitude: 0.394, longitude: 32.598, aliases: ['Komamboga', 'Kyanja', 'Komamboga Kyanja'] },
+  { name: 'Kyebando', district: 'Kampala', latitude: 0.368, longitude: 32.584, aliases: ['Kyebando'] },
+  { name: 'Kikoni', district: 'Kampala', latitude: 0.333, longitude: 32.565, aliases: ['Kikoni'] },
+  { name: 'Nakawa', district: 'Kampala', latitude: 0.334, longitude: 32.61, aliases: ['Nakawa'] },
+  { name: 'Ndeeba', district: 'Kampala', latitude: 0.301, longitude: 32.548, aliases: ['Ndeeba'] },
+  { name: 'Kikuubo', district: 'Kampala', latitude: 0.314, longitude: 32.576, aliases: ['Kikuubo'] }
+];
+
+function publicAreaAliasPattern(alias = '') {
+  return String(alias || '')
+    .trim()
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\s+/g, '\\s+')
+    .replace(/-/g, '[-\\s]+');
+}
+
+function publicLocationOverrideFromText(value = '') {
+  const haystack = cleanText(value);
+  if (!haystack) return null;
+  const sorted = PUBLIC_AREA_PIN_OVERRIDES
+    .flatMap((point) => (point.aliases || [point.name]).map((alias) => ({ ...point, alias })))
+    .sort((a, b) => String(b.alias || '').length - String(a.alias || '').length);
+  for (const point of sorted) {
+    const pattern = publicAreaAliasPattern(point.alias);
+    if (!pattern) continue;
+    if (new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, 'i').test(haystack)) return point;
+  }
+  return null;
+}
+
+function publicLocationOverrideForListing(row = {}, extra = row.extra_fields || {}) {
+  return publicLocationOverrideFromText([
+    row.area,
+    row.address,
+    extra.resolved_location_label,
+    row.title,
+    row.description
+  ].filter(Boolean).join(' '));
+}
+
+function cleanPublicListingCopy(value = '') {
+  return cleanText(value)
+    .replace(/\s*Confirm the exact property pin with the listing agent before approval\.?/gi, '')
+    .replace(/\s*Confirm exact gate or plot pin with the agent before public approval\.?/gi, '')
+    .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, '')
+    .replace(/\s*Pending King review[^.]*\.?/gi, '')
+    .trim();
+}
+
 function normalizePhone(phone) {
   return cleanText(phone).replace(/\s+/g, '');
 }
@@ -394,7 +461,7 @@ function publicExtraFields(extraFields = {}) {
     source_contact_platform: sourceContactPlatform || null,
     source_channel_url: extra.source_channel_url || extra.youtube_channel_url || null,
     youtube_channel_url: extra.youtube_channel_url || extra.source_channel_url || null,
-    area_highlights: extra.area_highlights || '',
+    area_highlights: cleanPublicListingCopy(extra.area_highlights || ''),
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
     land_verification: landVerification,
@@ -421,12 +488,20 @@ function publicPropertyRow(property, images = []) {
     id_document_url: _idDocumentUrl,
     ...safeProperty
   } = property || {};
+  const safeExtra = publicExtraFields(property?.extra_fields);
+  const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
+  const publicLatitude = toNullableFloat(safeProperty.latitude);
+  const publicLongitude = toNullableFloat(safeProperty.longitude);
   return {
     ...safeProperty,
-    extra_fields: publicExtraFields(property?.extra_fields),
+    description: cleanPublicListingCopy(safeProperty.description || ''),
+    district: locationOverride?.district || safeProperty.district,
+    latitude: publicLatitude == null && locationOverride ? locationOverride.latitude : safeProperty.latitude,
+    longitude: publicLongitude == null && locationOverride ? locationOverride.longitude : safeProperty.longitude,
+    extra_fields: safeExtra,
     land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),
-    featured: safeProperty.featured === true || String(safeProperty.extra_fields?.featured || '').toLowerCase() === 'true',
-    featured_at: safeProperty.featured_at || safeProperty.extra_fields?.featured_at || null,
+    featured: safeProperty.featured === true || String(safeExtra?.featured || '').toLowerCase() === 'true',
+    featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
     id_number_present: !!property?.id_number,
     id_document_present: !!property?.id_document_name,
     images
@@ -1162,15 +1237,26 @@ async function listPropertiesHandler(req, res, next) {
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
         const primaryImageUrl = normalizePublicImageUrl(row.primary_image_url);
+        const safeExtra = publicExtraFields(adminExtraFields || {});
+        const locationOverride = publicLocationOverrideForListing(row, safeExtra);
+        const rowLatitude = toNullableFloat(row.latitude);
+        const rowLongitude = toNullableFloat(row.longitude);
+        const publicDistrict = locationOverride?.district || row.district;
+        const publicLatitude = rowLatitude == null && locationOverride ? locationOverride.latitude : row.latitude;
+        const publicLongitude = rowLongitude == null && locationOverride ? locationOverride.longitude : row.longitude;
         const responseRow = {
           ...publicRow,
+          description: cleanPublicListingCopy(publicRow.description || ''),
+          district: publicDistrict,
+          latitude: publicLatitude,
+          longitude: publicLongitude,
           primary_image_url: primaryImageUrl,
           listingId: row.id,
           slug: row.id,
           url: `/property/${row.id}`,
           category: row.listing_type,
           currency,
-          location: [row.area, row.district].filter(Boolean).join(', '),
+          location: [row.area, publicDistrict].filter(Boolean).join(', '),
           image: primaryImageUrl,
           verification_status: row.registration_status || null,
           availability: row.status,
@@ -1179,7 +1265,7 @@ async function listPropertiesHandler(req, res, next) {
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
           distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
-          extra_fields: publicExtraFields(adminExtraFields || {})
+          extra_fields: safeExtra
         };
         if (adminAccess) {
           responseRow.source = rowSource || null;
