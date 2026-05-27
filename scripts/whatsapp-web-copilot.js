@@ -129,7 +129,7 @@ const PROFILE_DIR = path.resolve(
   process.cwd(),
   String(process.env.WHATSAPP_WEB_COPILOT_PROFILE_DIR || '.whatsapp-web-copilot-profile')
 );
-const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 75);
+const configuredPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_POLL_MS || 50);
 const POLL_MS = Math.min(150, Math.max(40, Number.isFinite(configuredPollMs) ? configuredPollMs : 75));
 const configuredLoginPollMs = Number(process.env.WHATSAPP_WEB_COPILOT_LOGIN_POLL_MS || 2500);
 const LOGIN_POLL_MS = Math.min(
@@ -138,12 +138,12 @@ const LOGIN_POLL_MS = Math.min(
 );
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
-const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 120);
+const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 60);
 const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
 const RECENT_CHAT_SWEEP_LIMIT = Math.min(12, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_LIMIT || 8)));
-const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 3)));
-const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 1)));
-const configuredRecentRowCacheMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 4000);
+const RECENT_CHAT_SWEEP_OPEN_LIMIT = Math.min(5, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_OPEN_LIMIT || 5)));
+const RECENT_CHAT_FAST_LANE_LIMIT = Math.min(3, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_FAST_LANE_LIMIT || 3)));
+const configuredRecentRowCacheMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_ROW_CACHE_MS || 1200);
 const RECENT_CHAT_ROW_CACHE_MS = Math.min(
   15000,
   Math.max(1000, Number.isFinite(configuredRecentRowCacheMs) ? configuredRecentRowCacheMs : 4000)
@@ -151,16 +151,16 @@ const RECENT_CHAT_ROW_CACHE_MS = Math.min(
 const OUTBOX_CLAIM_LIMIT = Math.min(25, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_CLAIM_LIMIT || 25)));
 const OUTBOX_SENDS_PER_LOOP = Math.min(8, Math.max(1, Number(process.env.WHATSAPP_WEB_COPILOT_OUTBOX_SENDS_PER_LOOP || 5)));
 const API_RETRY_ATTEMPTS = Math.min(8, Math.max(3, Number(process.env.WHATSAPP_WEB_COPILOT_API_RETRY_ATTEMPTS || 5)));
-const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 550);
+const configuredSendConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_MS || 300);
 const SEND_CONFIRM_MS = Math.min(2000, Math.max(250, Number.isFinite(configuredSendConfirmMs) ? configuredSendConfirmMs : 550));
-const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 220);
+const configuredComposerClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_COMPOSER_CLEAR_MS || 80);
 const SEND_COMPOSER_CLEAR_MS = Math.min(1200, Math.max(80, Number.isFinite(configuredComposerClearMs) ? configuredComposerClearMs : 220));
-const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 125);
+const configuredSendConfirmAfterClearMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_CONFIRM_AFTER_CLEAR_MS || 50);
 const SEND_CONFIRM_AFTER_CLEAR_MS = Math.min(
   1200,
   Math.max(50, Number.isFinite(configuredSendConfirmAfterClearMs) ? configuredSendConfirmAfterClearMs : 125)
 );
-const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 750);
+const configuredSendRetryConfirmMs = Number(process.env.WHATSAPP_WEB_COPILOT_SEND_RETRY_CONFIRM_MS || 350);
 const SEND_RETRY_CONFIRM_MS = Math.min(
   2000,
   Math.max(300, Number.isFinite(configuredSendRetryConfirmMs) ? configuredSendRetryConfirmMs : 750)
@@ -2145,6 +2145,7 @@ async function main() {
         continue;
       }
 
+      const sentAtLoopStart = await processOutbox(page, { maxSends: 4 });
       let processedCallEvents = 0;
       let sentAfterCall = 0;
       const callEvent = await detectAndDeclineIncomingCall(page);
@@ -2207,7 +2208,7 @@ async function main() {
         }
       }
       const sentAtLoopEnd = await processOutbox(page, { maxSends: 2 });
-      const sentCount = sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
+      const sentCount = sentAtLoopStart + sentAfterCall + sentAfterActive + sentAfterUnread + sentAfterSweep + sentAtLoopEnd;
       const activeSnapshot = await getActiveChatSnapshot(page);
 
       if (now - lastHeartbeat >= HEARTBEAT_MS) {
