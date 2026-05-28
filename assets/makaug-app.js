@@ -9198,6 +9198,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-import-tiktok-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
+    && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
   ) return;
@@ -9225,6 +9226,9 @@ function ensureAdminFoundOnlineControls() {
   }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
+  }
+  if (!document.getElementById("admin-copy-social-capture-helper-btn")) {
+    missingButtons.push(`<button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>`);
   }
   if (!document.getElementById("admin-import-exact-social-links-btn")) {
     missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminImportExactSocialLinks()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Import Social Links</button>`);
@@ -9729,6 +9733,108 @@ function adminDuplicateSourceWarningHtml(duplicateWarnings = []) {
   </div>`;
 }
 
+function adminSocialCaptureHelperScript() {
+  return `(async function(){
+  var clean=function(value){return String(value||"").replace(/\\s+/g," ").trim();};
+  var normalize=function(href){
+    try {
+      var u=new URL(href,location.href);
+      var host=u.hostname.replace(/^www\\./,"").toLowerCase();
+      var path=u.pathname || "";
+      if (host==="youtu.be") {
+        var shortId=path.replace(/^\\/+/, "").split("/")[0];
+        return shortId ? "https://www.youtube.com/watch?v="+shortId : "";
+      }
+      if (host.endsWith("youtube.com")) {
+        if (path==="/watch" && u.searchParams.get("v")) return "https://www.youtube.com/watch?v="+u.searchParams.get("v");
+        if (path.indexOf("/shorts/")===0) return "https://www.youtube.com/shorts/"+path.split("/")[2];
+      }
+      if (host.endsWith("tiktok.com")) {
+        var tik=path.match(/^\\/@[^/]+\\/video\\/\\d+/);
+        if (tik) return "https://www.tiktok.com"+tik[0];
+      }
+      if (host.endsWith("instagram.com")) {
+        var insta=path.match(/^\\/(p|reel|tv)\\/[^/]+/);
+        if (insta) return "https://www.instagram.com"+insta[0]+"/";
+      }
+      if (host==="x.com" || host==="twitter.com" || host.endsWith(".x.com") || host.endsWith(".twitter.com")) {
+        var x=path.match(/^\\/[^/]+\\/status\\/\\d+/);
+        if (x) return "https://x.com"+x[0];
+      }
+      if (host.endsWith("facebook.com") || host.endsWith("fb.watch")) {
+        if (host.endsWith("fb.watch")) return u.origin+path;
+        if (path.indexOf("/watch/")===0 && u.searchParams.get("v")) return "https://www.facebook.com/watch/?v="+u.searchParams.get("v");
+        if (path.indexOf("/reel/")===0) return "https://www.facebook.com"+path.split("/").slice(0,3).join("/");
+        if (path.indexOf("/groups/")===0 && path.indexOf("/posts/")>0) return "https://www.facebook.com"+path.split("/").slice(0,5).join("/");
+        if (/\\/posts\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
+        if (/\\/videos\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
+        if (path==="/story.php" && u.searchParams.get("story_fbid")) return u.href;
+        if (path==="/permalink.php" && u.searchParams.get("story_fbid")) return u.href;
+      }
+      return "";
+    } catch (error) {
+      return "";
+    }
+  };
+  var seen={};
+  var rows=[];
+  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
+    var url=normalize(anchor.href);
+    if (!url || seen[url]) return;
+    seen[url]=true;
+    var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
+    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
+    rows.push(url+(text ? " | "+text : ""));
+  });
+  if (!rows.length) {
+    alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
+    return;
+  }
+  var output=rows.join("\\n");
+  try {
+    await navigator.clipboard.writeText(output);
+  } catch (error) {
+    var box=document.createElement("textarea");
+    box.value=output;
+    box.style.position="fixed";
+    box.style.left="8px";
+    box.style.top="8px";
+    box.style.width="80vw";
+    box.style.height="40vh";
+    box.style.zIndex="2147483647";
+    document.body.appendChild(box);
+    box.focus();
+    box.select();
+  }
+  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Import Social Links, and paste.");
+})();`;
+}
+
+async function adminCopySocialCaptureHelper() {
+  const helper = adminSocialCaptureHelperScript();
+  const statusEl = document.getElementById("admin-found-online-status");
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(helper);
+    copied = true;
+  } catch (error) {
+    copied = false;
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = `
+      <div class="font-black">No-API social capture helper ready</div>
+      <div class="mt-1">This is the workaround for TikTok, Facebook, Instagram, X, and YouTube pages that do not give us API access: open a tracked source page, paste/run this helper on that page, then paste the copied links into Import Social Links.</div>
+      <div class="mt-2 grid md:grid-cols-3 gap-2">
+        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Open source</div><div class="text-[11px] mt-1">Use a TikTok hashtag, YouTube search, Facebook group/page, Instagram tag, or X search from the source database.</div></div>
+        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Run helper</div><div class="text-[11px] mt-1">Paste this helper in the source page console/bookmarklet. It copies exact post/video URLs visible in the page.</div></div>
+        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Import</div><div class="text-[11px] mt-1">Return here, click Import Social Links, paste the rows, then King reviews location and evidence.</div></div>
+      </div>
+      <textarea class="mt-2 w-full rounded-lg border border-indigo-200 bg-white p-2 text-[11px] font-mono" rows="7" readonly>${adminEscape(helper)}</textarea>`;
+  }
+  toast(copied ? "Capture helper copied." : "Capture helper is shown in the panel.");
+}
+
 function adminTikTokExactImportPrompt(seedText = "") {
   return [
     "Paste exact TikTok video URLs. One URL per block is best.",
@@ -9814,6 +9920,7 @@ function adminExactSocialLinksImportPrompt(seedText = "") {
     "Paste exact social post links from YouTube, TikTok, X/Twitter, Instagram, or Facebook.",
     "",
     "This is the no-API workaround: makaug uses exact public URLs, oEmbed/public metadata where available, and King-supplied visible details.",
+    "Tip: click Copy Capture Helper, run it on a TikTok/YouTube/Facebook/Instagram/X source page, then paste the copied rows here.",
     "",
     "One block per post is best:",
     "https://www.youtube.com/watch?v=abc123XYZ90",
@@ -9915,6 +10022,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="text-[11px] text-pink-800 mt-0.5">${adminEscape(task.source_record_kind || "source")} • exact video URL required before a property is queued</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
+        <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
         <button type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
       </div>
     </div>`).join("");
@@ -9945,6 +10053,11 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="font-black">Social platform sweep finished</div>
     <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Create profiles only for repeated source inventory; one-off posts stay as listings.")}</div>
+    <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
+      <div class="font-black">API-block workaround</div>
+      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Import Social Links queues the eligible properties with duplicate blocking and repeated-contact profile detection.</div>
+      <button type="button" onclick="adminCopySocialCaptureHelper()" class="mt-2 border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
+    </div>
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
     ${tiktok.capture_task_count ? `
       <div class="mt-3 rounded-xl border border-pink-100 bg-pink-50 p-3 text-pink-950">

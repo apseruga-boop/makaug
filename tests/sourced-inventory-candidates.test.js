@@ -633,6 +633,8 @@ test('found-online source-post importer normalizes extracted posts for King revi
   assert(socialSearchServiceSource.includes('exact_source_url_duplicate'), 'duplicate warnings should explain when the exact social link was loaded before');
   assert(frontend.includes('Duplicate social links blocked'), 'King dashboard should show duplicate social links instead of quietly ignoring them');
   assert(frontend.includes('duplicate/existing links were blocked'), 'King dashboard import summary should name duplicate/existing link blocks');
+  assert(frontend.includes('adminCopySocialCaptureHelper'), 'King dashboard should expose a no-API browser capture helper for social source pages');
+  assert(frontend.includes('API-block workaround'), 'social platform sweep should explain the browser-capture workaround when APIs are unavailable');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
