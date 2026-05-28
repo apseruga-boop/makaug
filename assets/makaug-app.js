@@ -25755,6 +25755,24 @@ function foundOnlineSourceContactSubtitle(meta = {}) {
     : translatePropertyUi("Public source contact");
 }
 
+function translateFoundOnlineSourceText(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const exact = translateListingLabel(text);
+  if (exact !== text) return exact;
+  const publicSourceMatch = text.match(/^Contact through the public\s+(.+?)\s+source$/i);
+  if (publicSourceMatch) {
+    const platform = publicSourceMatch[1].trim();
+    return `${translateListingLabel("Contact through the public")} ${platform} ${translateListingLabel("source")}`.replace(/\s+/g, " ").trim();
+  }
+  const contactViaMatch = text.match(/^Contact via\s+(.+?)\s+source$/i);
+  if (contactViaMatch) {
+    const platform = contactViaMatch[1].trim();
+    return `${translateListingLabel("Contact via")} ${platform} ${translateListingLabel("source")}`.replace(/\s+/g, " ").trim();
+  }
+  return text;
+}
+
 function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
   const title = encodeURIComponent(p.title || "third-party property result");
   const listing = encodeURIComponent(p.id || p.backend_id || "");
@@ -25777,9 +25795,11 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
   const sourceBits = [meta.sourceName, meta.platform].filter(Boolean).join(" • ");
   const contactHref = meta.sourceContactUrl || meta.sourceUrl;
   const contactCopy = meta.sourceContactLabel
-    || (meta.sourceContactMethod === "social" || !meta.hasDirectContact
+    ? translateFoundOnlineSourceText(meta.sourceContactLabel)
+    : (meta.sourceContactMethod === "social" || !meta.hasDirectContact
       ? translateListingLabel("Contact through the public social channel")
       : translateListingLabel("Open the public source page for contact details."));
+  const audienceLabel = translateFoundOnlineSourceText(meta.followersLabel);
   return `
     <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-sm text-blue-950">
       <div class="flex items-start gap-2">
@@ -25795,7 +25815,7 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
             ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First picked up by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
             ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
-            ${meta.followersLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(meta.followersLabel)}</span>` : ""}
+            ${audienceLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(audienceLabel)}</span>` : ""}
           </div>
           ${foundOnlineSourceActionLinksHtml(p, meta)}
           ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel("Original post date is being confirmed from the source platform."))}</div>` : ""}
@@ -30451,20 +30471,34 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Sourced online": "Ezuuliddwa online",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa, era n'ekeberebwa nga tennateekebwa ku makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Listing eno yazuuliddwa mu source ya property eri online oba ekkiriziddwa. makaug eraga obujulizi bw'ensibuko abantu basobole okukakasa post eyasooka n'engeri y'okukwatagana.",
+      "Third-party property result": "Property ezuuliddwa okuva ku nsibuko ey'omuntu omulala",
+      "This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "Property eno yazuuliddwa okuva ku nsibuko ey'olukale ey'omuntu omulala. Makaug eraga eby'okunoonya n'okuzuula byokka. Makaug tekakasizza bwannannyini, okubeerawo, bbeeyi, title y'ettaka, obuyinza bw'omutunzi, eddembe ly'ebifaananyi, oba ebikwata ku contact. Kebera ensibuko eyasooka era okole okukakasa kwo nga tonnasasula oba okutegeka okulaba.",
+      "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "Makaug tegamba nti ebifaananyi, videos, captions, ennyonnyola, trademarks, oba contact details ez'omuntu omulala byayo. Ebintu byonna eby'omuntu omulala bisigala bya nannyini ddembe eyabisooka. Okukwatagana kuyita ku nsibuko eyasooka.",
+      "Open original source": "Ggulawo ensibuko eyasooka",
+      "Contact original poster": "Kwatagana n'eyasooka okuteekawo",
+      "Claim this listing": "Sabira listing eno",
+      "Request correction": "Saba okutereeza",
+      "Request removal": "Saba okuggyawo",
+      "Report fraud or incorrect information": "Loopa obufere oba amawulire agatali matuufu",
       "First posted online": "Yasooka okuteekebwa online",
       "First seen by makaug": "makaug yasooka okugiraba",
       "First picked up by makaug": "makaug yasooka okugikima",
       "Being confirmed from source": "Kikakasibwa okuva ku nsibuko",
+      "Audience count to confirm from source": "Omuwendo gw'abagoberera gukakasibwa okuva ku nsibuko",
       "Original post date is being confirmed from the source platform.": "Olunaku lwa post eyasooka lukakasibwa okuva ku platform y'ensibuko.",
       "Added to makaug": "Yayongerwa ku makaug",
       "Audience": "Abagoberera",
       "Source": "Ensibuko",
+      "source": "ensibuko",
       "Open source": "Ggulawo ensibuko",
+      "Contact via": "Kwatagana okuyita ku",
       "Contact via source": "Kwatagana okuyita ku nsibuko",
+      "Contact through the public": "Kwatagana okuyita ku",
       "Contact through the public social channel": "Kwatagana okuyita ku mukutu gwa social ogw'olukale",
       "Open source contact": "Ggulawo contact y'ensibuko",
       "Open the public source page for contact details.": "Ggulawo omuko gw'ensibuko ey'olukale okulaba contact.",
       "No phone number is published. Use the source page to contact the lister.": "Tewali nnamba ya ssimu eteereddwawo. Kozesa omuko gw'ensibuko okukwatagana n'omulisi.",
+      "Official platform embed. Makaug does not re-host social media photos or videos.": "Embed entongole eya platform. Makaug tedda ku server yaayo bifaananyi oba videos bya social media.",
       "Official land verification": "Okukakasa ettaka mu nkola entongole",
       "Verify with UgNLIS": "Kakasa ku UgNLIS",
       "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Okunoonyereza okutongole kukolebwa ku UgNLIS. Kozesa portal ya gavumenti okukola title search n'okulondoola transactions; records za gavumenti ze nsibuko entuufu.",
@@ -30583,20 +30617,34 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Sourced online": "Imepatikana mtandaoni",
       "This listing was found through a public or authorised online property source and checked before publishing on makaug.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni, kisha likakaguliwa kabla ya kuchapishwa kwenye makaug.",
       "This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.": "Tangazo hili lilipatikana kupitia chanzo cha mali cha umma au kilichoidhinishwa mtandaoni. makaug huonyesha njia ya chanzo ili wanunuzi wakague chapisho la awali na njia ya kuwasiliana.",
+      "Third-party property result": "Matokeo ya mali kutoka chanzo cha nje",
+      "This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "Mali hii ilipatikana kutoka chanzo cha umma cha mtu mwingine. Makaug hutoa muhtasari wa utafutaji na ugunduzi pekee. Makaug haijathibitisha umiliki, upatikanaji, bei, hati ya ardhi, mamlaka ya muuzaji, haki za picha, au mawasiliano. Tafadhali angalia chanzo cha awali na ufanye uthibitishaji wako kabla ya kulipa au kupanga kuona mali.",
+      "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "Makaug haidai umiliki wa picha, video, captions, maelezo, alama za biashara, au mawasiliano ya wahusika wengine. Maudhui yote ya wahusika wengine yanabaki mali ya mwenye haki wa awali. Mawasiliano hufanyika kupitia chanzo cha awali.",
+      "Open original source": "Fungua chanzo cha awali",
+      "Contact original poster": "Wasiliana na aliyechapisha awali",
+      "Claim this listing": "Dai tangazo hili",
+      "Request correction": "Omba marekebisho",
+      "Request removal": "Omba kuondolewa",
+      "Report fraud or incorrect information": "Ripoti udanganyifu au taarifa zisizo sahihi",
       "First posted online": "Ilichapishwa kwanza mtandaoni",
       "First seen by makaug": "Ilionekana kwanza na makaug",
       "First picked up by makaug": "Ilichukuliwa kwanza na makaug",
       "Being confirmed from source": "Inathibitishwa kutoka chanzo",
+      "Audience count to confirm from source": "Idadi ya hadhira inathibitishwa kutoka chanzo",
       "Original post date is being confirmed from the source platform.": "Tarehe ya chapisho la awali inathibitishwa kutoka kwenye jukwaa la chanzo.",
       "Added to makaug": "Imeongezwa kwenye makaug",
       "Audience": "Wafuasi",
       "Source": "Chanzo",
+      "source": "chanzo",
       "Open source": "Fungua chanzo",
+      "Contact via": "Wasiliana kupitia",
       "Contact via source": "Wasiliana kupitia chanzo",
+      "Contact through the public": "Wasiliana kupitia",
       "Contact through the public social channel": "Wasiliana kupitia chaneli ya kijamii ya umma",
       "Open source contact": "Fungua mawasiliano ya chanzo",
       "Open the public source page for contact details.": "Fungua ukurasa wa chanzo cha umma kupata mawasiliano.",
       "No phone number is published. Use the source page to contact the lister.": "Hakuna namba ya simu iliyochapishwa. Tumia ukurasa wa chanzo kuwasiliana na mtangazaji.",
+      "Official platform embed. Makaug does not re-host social media photos or videos.": "Embed rasmi ya platform. Makaug haihost upya picha au video za mitandao ya kijamii.",
       "Official land verification": "Uthibitishaji rasmi wa ardhi",
       "Verify with UgNLIS": "Thibitisha kupitia UgNLIS",
       "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Utafutaji rasmi hufanyika kwenye UgNLIS. Tumia portal ya serikali kwa title search na transaction tracking; rekodi za serikali ndizo chanzo rasmi.",

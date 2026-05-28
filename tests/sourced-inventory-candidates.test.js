@@ -295,6 +295,10 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('"Found online": "Imepatikana mtandaoni"'), 'Kiswahili should include found-online copy');
   assert(frontend.includes('"First posted online"'), 'source disclosure should translate first-posted metadata');
   assert(frontend.includes('"First picked up by makaug"'), 'source disclosure should translate first-picked-up metadata');
+  assert(frontend.includes('translateFoundOnlineSourceText'), 'source disclosure should translate database-supplied source phrases');
+  assert(frontend.includes('"Open original source": "Ggulawo ensibuko eyasooka"'), 'source disclosure should translate original-source action');
+  assert(frontend.includes('"Contact original poster": "Wasiliana na aliyechapisha awali"'), 'source disclosure should translate original-poster action');
+  assert(frontend.includes('"Report fraud or incorrect information": "Ripoti udanganyifu au taarifa zisizo sahihi"'), 'source disclosure should translate report action');
   assert(frontend.includes('"Contact via source"'), 'source disclosure should translate contact-through-source action');
   assert(frontend.includes('Original post date is being confirmed from the source platform'), 'source disclosure should explain when platform post date is not exposed');
   assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');

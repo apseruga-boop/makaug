@@ -157,6 +157,12 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(frontend.includes('Being confirmed from source'), 'source disclosure should show a clear fallback while the original post date is being confirmed');
   assert(frontend.includes('Added to makaug'), 'source disclosure should show when makaug added the sourced record');
   assert(frontend.includes('Audience'), 'source disclosure should show follower/subscriber metadata when available');
+  assert(frontend.includes('translateFoundOnlineSourceText'), 'source disclosure should translate stored source metadata phrases before rendering');
+  assert(frontend.includes('"Third-party property result": "Property ezuuliddwa okuva ku nsibuko ey'), 'source disclosure should translate the third-party block title in Luganda');
+  assert(frontend.includes('"Third-party property result": "Matokeo ya mali kutoka chanzo cha nje"'), 'source disclosure should translate the third-party block title in Kiswahili');
+  assert(frontend.includes('"Claim this listing": "Sabira listing eno"'), 'source disclosure should translate claim action copy');
+  assert(frontend.includes('"Request correction": "Omba marekebisho"'), 'source disclosure should translate correction action copy');
+  assert(frontend.includes('"Audience count to confirm from source"'), 'source disclosure should translate audience fallback metadata');
   assert(frontend.includes('Contact via source'), 'source disclosure should support social/source contact fallback when no phone is published');
   assert(frontend.includes('Open source'), 'source disclosure should link to source evidence');
   assert(read('routes/properties.js').includes('isFoundOnlinePublicRow'), 'public property API should identify third-party discovery rows');
