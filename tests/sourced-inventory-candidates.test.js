@@ -432,6 +432,8 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(html.includes('social-location-pin-repair-20260527'), 'index should cache-bust the frontend map/contact repair bundle');
   assert(ladyPropertyKiraMansionCorrectionMigration.includes("listing_type = 'sale'"), 'migration should correct the live Lady Property Agent mansion to sale');
   assert(ladyPropertyKiraMansionCorrectionMigration.includes('7644543309066571015'), 'migration should be scoped to the exact TikTok video that was misclassified');
+  assert(!ladyPropertyKiraMansionCorrectionMigration.includes('OR video_url ILIKE'), 'migration should not reference a non-existent properties.video_url column');
+  assert(ladyPropertyKiraMansionCorrectionMigration.includes("extra_fields->>'video_url'"), 'migration should match stored source video URLs through extra_fields');
   assert(ladyPropertyKiraMansionCorrectionMigration.includes('king_review_type_location_correction'), 'migration should write moderation history for the correction');
   assert(healthRoute.includes('058_correct_lady_property_agent_kira_mansion.sql'), 'migration health should expose the Kira mansion correction deployment status');
 });

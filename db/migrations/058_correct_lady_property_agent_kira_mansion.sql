@@ -44,9 +44,11 @@ WITH corrected AS (
     updated_at = NOW()
   WHERE
     id = '1e3bdf76-2afc-43a2-bef1-3d3c85e9baec'::uuid
-    OR video_url ILIKE '%7644543309066571015%'
     OR COALESCE(extra_fields->>'source_url', '') ILIKE '%7644543309066571015%'
+    OR COALESCE(extra_fields->>'video_url', '') ILIKE '%7644543309066571015%'
+    OR COALESCE(extra_fields->>'tiktok_url', '') ILIKE '%7644543309066571015%'
     OR COALESCE(extra_fields->>'source_listing_key', '') ILIKE '%7644543309066571015%'
+    OR COALESCE(extra_fields::text, '') ILIKE '%7644543309066571015%'
   RETURNING id
 )
 INSERT INTO property_moderation_events (property_id, actor_id, action, notes, delivery)
