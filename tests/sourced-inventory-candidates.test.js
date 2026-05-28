@@ -28,6 +28,7 @@ const youtubeSocialRestoreMigration = read('db/migrations/054_restore_youtube_so
 const youtubeSocialRepublishMigration = read('db/migrations/055_republish_curated_youtube_social_inventory.sql');
 const socialSourceLocationPinMigration = read('db/migrations/056_fix_social_source_location_pins.sql');
 const autoSourceProfileCleanupMigration = read('db/migrations/057_suspend_auto_source_agent_profiles.sql');
+const ladyPropertyKiraMansionCorrectionMigration = read('db/migrations/058_correct_lady_property_agent_kira_mansion.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -429,6 +430,10 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(frontend.includes('selected.slice(0, 8)'), 'nearby amenities should be distance-filtered before display');
   assert(frontend.includes('extra.nearby_facilities'), 'property search should include persisted nearby facility names');
   assert(html.includes('social-location-pin-repair-20260527'), 'index should cache-bust the frontend map/contact repair bundle');
+  assert(ladyPropertyKiraMansionCorrectionMigration.includes("listing_type = 'sale'"), 'migration should correct the live Lady Property Agent mansion to sale');
+  assert(ladyPropertyKiraMansionCorrectionMigration.includes('7644543309066571015'), 'migration should be scoped to the exact TikTok video that was misclassified');
+  assert(ladyPropertyKiraMansionCorrectionMigration.includes('king_review_type_location_correction'), 'migration should write moderation history for the correction');
+  assert(healthRoute.includes('058_correct_lady_property_agent_kira_mansion.sql'), 'migration health should expose the Kira mansion correction deployment status');
 });
 
 test('source-only broker profiles are deferred until the agent self-registers', () => {
