@@ -779,7 +779,7 @@ async function importTikTokExactVideoPosts({
     db,
     posts: importRows,
     dryRun,
-    createProfilesForRepeatedSourcesOnly: true,
+    createProfilesForRepeatedSourcesOnly: false,
   });
   return {
     ok: true,
@@ -989,7 +989,7 @@ async function importExactSocialSourcePosts({
     db,
     posts: importRows,
     dryRun,
-    createProfilesForRepeatedSourcesOnly: true,
+    createProfilesForRepeatedSourcesOnly: false,
   });
   return {
     ok: true,
@@ -1547,7 +1547,7 @@ async function runSocialPlatformPostSweep({
       db,
       posts: discoveredPosts,
       dryRun,
-      createProfilesForRepeatedSourcesOnly: true,
+      createProfilesForRepeatedSourcesOnly: false,
     })
     : {
       ok: true,
@@ -1572,7 +1572,7 @@ async function runSocialPlatformPostSweep({
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 February 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
-      profile_creation_rule: 'The sweep creates or links a profile only when a source contributes multiple eligible properties; one-off posts remain found-online listings without creating a new profile.',
+      profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
     },
     tiktok: {
       source_count: tiktokSources.length,

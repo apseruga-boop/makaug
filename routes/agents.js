@@ -115,6 +115,13 @@ function addPublicAgentInventoryFilter(filters) {
   ) >= ${PUBLIC_AGENT_MIN_LIVE_LISTINGS}`);
 }
 
+function addPublicAgentSelfRegistrationFilter(filters) {
+  filters.push('a.user_id IS NOT NULL');
+  filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'");
+  filters.push("COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'");
+  filters.push("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'");
+}
+
 function verifyListingSubmitToken(token) {
   const secret = process.env.LISTING_OTP_JWT_SECRET
     || process.env.JWT_SECRET
@@ -422,6 +429,7 @@ router.get('/', async (req, res, next) => {
       filters.push(`a.status = $${values.length}`);
     }
     addPublicAgentLaunchTestFilter(filters, values);
+    addPublicAgentSelfRegistrationFilter(filters);
     addPublicAgentInventoryFilter(filters);
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
@@ -498,6 +506,10 @@ router.get('/:id', async (req, res, next) => {
       ) p ON true
       WHERE a.id = $1
         AND a.status = 'approved'
+        AND a.user_id IS NOT NULL
+        AND COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'
+        AND COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'
+        AND COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'
         AND (
           SELECT COUNT(*)::int
           FROM properties live_profile_listing

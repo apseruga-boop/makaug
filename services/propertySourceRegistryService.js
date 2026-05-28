@@ -9,8 +9,8 @@ const CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000;
 const SOURCE_FRESHNESS_WINDOW_DAYS = 366;
 const TARGET_SOURCE_YEAR = 2026;
 const SOCIAL_FIRST_PLATFORM_PRIORITY = ['tiktok', 'facebook', 'youtube', 'x', 'instagram'];
-const SOCIAL_PROFILE_CREATION_RULE = 'Create or update a makaug source/broker profile only when the source shows repeated property activity, plural inventory, or cross-platform presence. A single isolated property post stays as a found-online listing without a profile.';
-const SOCIAL_ONE_OFF_LISTING_RULE = 'One-off social posts can become found-online listings when evidence is complete, but do not create a profile until repeated inventory or multi-platform presence is observed.';
+const SOCIAL_PROFILE_CREATION_RULE = 'Do not automatically create or update a public Makaug source/broker profile from social discovery. Keep the source as attribution/contact evidence only until the agent or broker registers or claims the profile through the Makaug broker process.';
+const SOCIAL_ONE_OFF_LISTING_RULE = 'One-off and repeated social posts can become found-online listings when evidence is complete, but profile creation is deferred until the source owner registers or claims the Makaug broker profile.';
 
 const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
 const CORE_HASHTAGS = [
@@ -1464,7 +1464,7 @@ function discoverySource({ platform, sourceType, area, district, intent, url, in
       platform_priority_rule: 'Use social channels only; website/portal sources are disabled for found-online launch inventory.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
-      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, location, usable images/source evidence are clear. Missing price should be stored as Price upon application. Create a source/broker profile only after repeated inventory or cross-platform presence is visible.',
+      expected_action: 'Daily sweep should identify real pages/channels from this feed and prepare King-review candidates only when source URL, contact path, location, usable source evidence, and official embeds/links are clear. Missing price should be stored as Price upon application. Do not create a public source/broker profile until the source owner registers or claims it.',
     },
   });
 }
@@ -1520,7 +1520,7 @@ function hashtagDiscoverySource({ platform, tag, area, district, intent, index }
       platform_priority_rule: 'Use social channels only; website/portal sources are disabled for found-online launch inventory.',
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
-      expected_action: 'Queue a property when a specific recent listing has enough evidence; promote a source profile only after repeated inventory or cross-platform presence is visible.',
+      expected_action: 'Queue a property when a specific recent listing has enough evidence; keep the poster as source attribution only until they register or claim a Makaug broker profile.',
     },
   });
 }

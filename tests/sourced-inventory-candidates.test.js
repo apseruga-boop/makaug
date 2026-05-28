@@ -27,6 +27,7 @@ const strictFoundOnlinePreapprovalMigration = read('db/migrations/052_remove_imp
 const youtubeSocialRestoreMigration = read('db/migrations/054_restore_youtube_social_found_online_inventory.sql');
 const youtubeSocialRepublishMigration = read('db/migrations/055_republish_curated_youtube_social_inventory.sql');
 const socialSourceLocationPinMigration = read('db/migrations/056_fix_social_source_location_pins.sql');
+const autoSourceProfileCleanupMigration = read('db/migrations/057_suspend_auto_source_agent_profiles.sql');
 const healthRoute = read('routes/health.js');
 const pkg = JSON.parse(read('package.json'));
 const {
@@ -426,18 +427,22 @@ test('Carnelian admin path and dashboard action are protected and auditable', ()
   assert(html.includes('social-location-pin-repair-20260527'), 'index should cache-bust the frontend map/contact repair bundle');
 });
 
-test('Carnelian broker profile is click-through with social links and live listings', () => {
+test('source-only broker profiles are deferred until the agent self-registers', () => {
   assert.strictEqual(CARNELIAN_CONTACT.tiktok, 'https://www.tiktok.com/@carnelian.propert');
-  assert(agentsRoute.includes('CARNELIAN-YOUTUBE-20260519'), 'agent API should identify the Carnelian sourced profile');
-  assert(agentsRoute.includes('youtube_url'), 'agent API should expose YouTube social link fields');
-  assert(agentsRoute.includes('tiktok_url'), 'agent API should expose TikTok social link fields');
-  assert(agentsRoute.includes("WHERE p.agent_id = $1 AND p.status = 'approved'"), 'agent detail should only publish approved profile listings');
-  assert(agentsRoute.includes('img.url AS primary_image_url'), 'agent profile listings should carry primary images');
-  assert(frontend.includes('async function loadRemoteBrokerProfileForUi'), 'frontend should fetch broker detail before opening profile');
-  assert(frontend.includes('async function openBrokerProfile'), 'broker profile open should wait for the remote profile when needed');
-  assert(frontend.includes('renderBrokerSocialLinks(b)'), 'broker profile should render socials');
-  assert(frontend.includes('remote_listings'), 'broker profile should use live listings returned by the agent API');
-  assert(frontend.includes('View Profile'), 'broker cards should expose a visible profile action');
+  assert(agentsRoute.includes('function addPublicAgentSelfRegistrationFilter'), 'public agent API should centralize the self-registration filter');
+  assert(agentsRoute.includes('a.user_id IS NOT NULL'), 'public agent profiles should require a registered/claimed user account');
+  assert(agentsRoute.includes("COALESCE(a.verification_reason, '') NOT ILIKE '%public social source onboarding%'"), 'public agent profiles should hide source-discovery onboarding rows');
+  assert(agentsRoute.includes("COALESCE(a.verification_reason, '') NOT ILIKE '%source profile%'"), 'public agent profiles should hide legacy source profile rows');
+  assert(agentsRoute.includes("COALESCE(a.licence_number, '') !~* '^(SOCIAL|FOUND-ONLINE|TIKTOK|FACEBOOK|X)-'"), 'public agent profiles should hide auto-created social source licences');
+  assert(propertiesRoute.includes('agent_id: foundOnlinePublic ? null : publicRow.agent_id'), 'found-online listing cards should not attach source-created public agent profile ids');
+  assert(propertiesRoute.includes('agent_id: foundOnlinePublic ? null : safeProperty.agent_id'), 'found-online listing detail should not attach source-created public agent profile ids');
+  assert(socialSearchServiceSource.includes('FOUND_ONLINE_PROFILE_CREATION_POLICY'), 'source import policy should be explicit in the found-online service');
+  assert(socialSearchServiceSource.includes('auto_create_source_profiles: false'), 'source imports should not automatically create Makaug broker profiles');
+  assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source imports should keep poster attribution deferred until the agent claims/registers');
+  assert(autoSourceProfileCleanupMigration.includes('auto_source_agent_profile_removed'), 'cleanup migration should detach found-online listings from source-created profiles');
+  assert(autoSourceProfileCleanupMigration.includes('auto_source_agent_profile_hidden'), 'cleanup migration should audit hidden source-created profiles');
+  assert(autoSourceProfileCleanupMigration.includes('source_discovery_profiles_require_agent_claim_or_registration'), 'cleanup migration should record the new source profile policy');
+  assert(healthRoute.includes('057_suspend_auto_source_agent_profiles.sql'), 'migration health should expose source-profile cleanup deployment status');
 });
 
 test('Carnelian WhatsApp share card carries listing URL, video and agent contact', () => {
@@ -460,8 +465,9 @@ test('found-online social search batch accepts curated YouTube source records', 
   assert.strictEqual(SOCIAL_SEARCH_BATCH_ID, 'social_search_authorised_20260520');
   assert.strictEqual(summary.count, 18, 'social search batch should contain the high-confidence recent public YouTube property records');
   assert.strictEqual(summary.seed_eligible_count, 18, 'curated exact YouTube source rows should be eligible found-online properties');
-  assert.strictEqual(summary.agents_count, 4, 'social search batch should prepare profiles only for YouTube sources with multiple eligible properties');
-  assert.strictEqual(summary.source_profiles_deferred_count, 3, 'single-property sources should stay listing-only until a second property is live');
+  assert.strictEqual(summary.agents_count, 0, 'social search batch should not auto-create public broker profiles from source discovery');
+  assert.strictEqual(summary.source_profiles_deferred_count, SOCIAL_SEARCH_AGENTS.length, 'all source-only profiles should stay deferred until the source owner registers or claims them');
+  assert(/registers or claims/i.test(summary.profile_policy), 'summary should expose the source-profile claim/registration policy');
   assert.strictEqual(summary.daily_target_status.target, 200, 'morning sweep should expose the 200/day property queue target');
   assert.strictEqual(summary.daily_target_status.eligible_to_queue_count, summary.seed_eligible_count, 'daily target status should count every launch-intake candidate with source evidence and a contact path');
   assert(summary.daily_target_status.target_gap > 0, 'daily target status should make the current evidence gap visible');
@@ -558,7 +564,8 @@ test('found-online second sweep migration expands source-backed 2026 records and
   assert(socialOnlyPreapprovedCleanupMigration.includes('missing_preapproval_or_image_rights'), 'cleanup should remove rows without pre-approval and image-rights confirmation');
   assert(strictFoundOnlinePreapprovalMigration.includes('implicit_found_online_approval_removed'), 'strict cleanup should remove legacy rows that were only implicitly approved');
   assert(strictFoundOnlinePreapprovalMigration.includes('preapproved_source_post'), 'strict cleanup should require explicit preapproved source-post metadata');
-  assert(socialOnlyPreapprovedCleanupMigration.includes("status = 'suspended'"), 'cleanup should hide source-created agent profiles until they have multiple live listings');
+  assert(autoSourceProfileCleanupMigration.includes("status = 'suspended'"), 'cleanup should hide source-created agent profiles until the source owner registers or claims them');
+  assert(autoSourceProfileCleanupMigration.includes("a.user_id IS NULL"), 'cleanup should target only unclaimed/source-created profiles');
 });
 
 test('launch intake policy accepts no-phone source contact and non-YouTube evidence cards', () => {
@@ -828,9 +835,9 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('inferXPostedAtFromStatusId'), 'X exact-link import should infer post dates from public status IDs when no API exists');
   assert(socialPlatformSweepServiceSource.includes('snippet.publishedAt'), 'YouTube sweep policy should explain the source publish date comes from YouTube snippet.publishedAt');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
-  assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
+  assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
   assert(frontend.includes('max_sources: normalized === "tiktok" ? 30000 : normalized === "youtube" ? 250 : 40'), 'TikTok sweep should request every tracked TikTok source and YouTube should use a Render-safe API batch');
-  assert(socialSearchServiceSource.includes('defer_single_post_profile'), 'source-post import should support one-off listing-only profile handling');
+  assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({
     sources: [{
@@ -972,7 +979,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('scripts/import-found-online-source-posts.js').includes('--input posts.csv --confirm'), 'source-post import script should accept CSV/JSON files');
   assert(read('scripts/import-found-online-source-posts.js').includes('location or area is required'), 'source-post import script should make location the non-negotiable field');
   assert(read('scripts/import-found-online-source-posts.js').includes('King can override non-location checks'), 'source-post import script should explain relaxed source-review approval');
-  assert(read('scripts/import-found-online-source-posts.js').includes('createProfilesForRepeatedSourcesOnly: true'), 'source-post import script should defer one-off source profiles');
+  assert(read('scripts/import-found-online-source-posts.js').includes('createProfilesForRepeatedSourcesOnly: false'), 'source-post import script should not auto-create source broker profiles');
   assert(read('services/socialSearchSourcedListingsService.js').includes('skipped_listings'), 'seed should skip incomplete evidence sources instead of crashing the whole batch');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_contact_url'), 'seed should keep a social/source contact URL for no-phone sourced listings');
   assert(read('routes/properties.js').includes('sourceContactUrl = safePublicSourceUrl'), 'public property API should expose a source/contact URL fallback for found-online records');
@@ -1005,6 +1012,9 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('No phone number is not a blocker if a public social profile exists'), 'dashboard should explain source-review no-phone policy');
   assert(frontend.includes('Website-only sources are disabled'), 'source database should explain website sources are not imported as properties');
   assert(frontend.includes('Open Source'), 'seed summaries should use a platform-neutral source action label');
+  assert(frontend.includes('getYouTubeEmbedUrl(videoUrl)'), 'found-online source cards should use official YouTube embeds when available');
+  assert(frontend.includes('getTikTokEmbedUrl(videoUrl)'), 'found-online source cards should use official TikTok embeds when available');
+  assert(frontend.includes('Official platform embed. Makaug does not re-host social media photos or videos.'), 'found-online source cards should label official embeds without rehosting media');
   assert(frontend.includes('foundOnlineSourceContactButtonLabel'), 'public listing detail should build a platform-specific source contact CTA');
   assert(frontend.includes('p.source_contact_url'), 'public listing detail should fall back to top-level source contact fields as well as extra_fields');
   assert(frontend.includes('Contact via {platform} source'), 'public listing detail should label TikTok/Facebook/X source contact buttons by platform');

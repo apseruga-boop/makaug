@@ -2204,7 +2204,7 @@ router.post('/found-online-source-posts/import', async (req, res, next) => {
       db,
       posts,
       dryRun,
-      createProfilesForRepeatedSourcesOnly: true
+      createProfilesForRepeatedSourcesOnly: false
     });
     await writeAudit('admin_found_online_source_posts_imported', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,

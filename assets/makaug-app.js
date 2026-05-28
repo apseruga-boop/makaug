@@ -9450,7 +9450,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const ok = window.confirm("Scan reviewed social source pages/feeds and queue curated YouTube plus public social found-online property candidates from 1 January 2026 onward. Location is required, missing price becomes Price upon application, and website-only sources are ignored. Profiles are created only after multiple eligible properties.");
+  const ok = window.confirm("Scan reviewed social source pages/feeds and queue curated YouTube plus public social found-online property candidates from 1 January 2026 onward. Location is required, missing price becomes Price upon application, and website-only sources are ignored. Source-only broker profiles are not created automatically; the source owner must register or claim one.");
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-seed-social-search-listings-btn");
@@ -9529,7 +9529,7 @@ async function adminSeedSocialSearchAuthorisedListings() {
           <div class="font-black">Land image rule</div>
           <div class="mt-1">For public found-online listings, use source links or official embeds first. Do not rehost copied social or website photos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Evidence cards stay for King review and source trail only.</div>
         </div>
-        <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
+        <div class="mt-1">${adminEscape(agentCount)} registered agent profiles refreshed. Source-only profiles are not auto-created; original posters must claim/register before Makaug shows a broker profile.</div>
         ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2026+ property post before King queues it.</div>` : ""}
         ${visibleSampleHtml ? `<div class="mt-2 space-y-2">${visibleSampleHtml}</div>` : `<div class="mt-2 rounded-lg border border-blue-100 bg-white p-2 text-blue-900">No pending found-online records need review in this run. Approved or live records have been removed from this pending panel.</div>`}`;
       if (sourceReviewRecords.length) {
@@ -9696,7 +9696,7 @@ async function adminImportFoundOnlineSourcePosts() {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} duplicate/existing links were blocked. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
-        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other public social posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Location is the approval non-negotiable. Profiles are created only when the source has multiple eligible properties.</div>
+        <div class="mt-1">Import rule: curated exact YouTube social-source properties and other public social posts from 1 January 2026 onward with source URL, location/area, usable source evidence, official embed/link, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Location is the approval non-negotiable. Source-only broker profiles are not created automatically; the source owner must register or claim one.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
         ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
@@ -10052,10 +10052,10 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   return `
     <div class="font-black">Social platform sweep finished</div>
     <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
-    <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Create profiles only for repeated source inventory; one-off posts stay as listings.")}</div>
+    <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Source-only broker profiles are not created automatically; the source owner must register or claim one.")}</div>
     <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
       <div class="font-black">API-block workaround</div>
-      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Import Social Links queues the eligible properties with duplicate blocking and repeated-contact profile detection.</div>
+      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Import Social Links queues eligible properties, blocks duplicates, and keeps the poster as source attribution until they register or claim a broker profile.</div>
       <button type="button" onclick="adminCopySocialCaptureHelper()" class="mt-2 border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
     </div>
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
@@ -25825,15 +25825,36 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
   const platform = meta.platform || (/tiktok\.com/i.test(videoUrl) ? "TikTok" : (/youtube\.com|youtu\.be/i.test(videoUrl) ? "YouTube" : "Source"));
   const icon = /tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link");
   const compact = options.compact === true;
+  const youtubeEmbedUrl = videoUrl ? getYouTubeEmbedUrl(videoUrl) : "";
+  const tiktokEmbedUrl = !youtubeEmbedUrl && videoUrl ? getTikTokEmbedUrl(videoUrl) : "";
+  const officialEmbedUrl = youtubeEmbedUrl || tiktokEmbedUrl;
+  if (officialEmbedUrl) {
+    const openLabel = /tiktok/i.test(platform)
+      ? translateListingLabel("Open TikTok")
+      : /youtube/i.test(platform)
+        ? translateListingLabel("Open YouTube")
+        : translateListingLabel("Open source");
+    return `
+      <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} relative overflow-hidden bg-slate-950 text-white">
+        <iframe src="${adminAttr(officialEmbedUrl)}" title="${adminAttr(`${platform} property source video`)}" class="absolute inset-0 h-full w-full border-0 bg-black" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+        <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/95 via-slate-950/60 to-transparent p-3 pt-12 text-left">
+          <div class="inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-slate-900">
+            <i class="${icon}"></i>${adminEscape(platform)} ${translateListingLabel("source")}
+          </div>
+          ${compact ? "" : `<div class="mt-2 text-xs text-blue-50">${translateListingLabel("Official platform embed. Makaug does not re-host social media photos or videos.")}</div>`}
+        </div>
+        <a href="${adminAttr(videoUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" class="absolute right-2 top-2 rounded-full bg-white/95 px-3 py-1 text-[11px] font-black text-slate-900 shadow-sm hover:bg-white">${openLabel}</a>
+      </div>`;
+  }
   return `
-    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} grid place-items-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-5 text-center">
+    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} grid place-items-center bg-gradient-to-br from-blue-50 via-white to-emerald-50 text-slate-900 p-5 text-center border border-blue-100">
       <div>
-        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-white/10 border border-white/15 grid place-items-center">
+        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-white border border-blue-100 text-blue-700 shadow-sm grid place-items-center">
           <i class="${icon} text-2xl"></i>
         </div>
-        <div class="text-xs uppercase tracking-wide text-blue-100 font-black">${translateListingLabel("Third-party property result")}</div>
+        <div class="text-xs uppercase tracking-wide text-blue-800 font-black">${translateListingLabel("Third-party property result")}</div>
         <div class="mt-1 text-lg font-black">${adminEscape(platform)} ${videoUrl ? translateListingLabel("video/source") : translateListingLabel("source")}</div>
-        <div class="mt-2 text-xs text-blue-100 max-w-xs mx-auto">${translateListingLabel("Makaug shows facts and links back to the original source. Social media photos are not re-hosted here.")}</div>
+        <div class="mt-2 text-xs text-slate-600 max-w-xs mx-auto">${translateListingLabel("Makaug shows facts and links back to the original source. Social media photos are not re-hosted here.")}</div>
       </div>
     </div>`;
 }

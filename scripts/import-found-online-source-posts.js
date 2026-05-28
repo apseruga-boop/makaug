@@ -108,7 +108,7 @@ async function main() {
     db,
     posts,
     dryRun,
-    createProfilesForRepeatedSourcesOnly: true,
+    createProfilesForRepeatedSourcesOnly: false,
   });
   console.log(JSON.stringify({
     ok: true,

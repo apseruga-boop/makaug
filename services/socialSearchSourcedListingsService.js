@@ -46,6 +46,11 @@ const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
+const FOUND_ONLINE_PROFILE_CREATION_POLICY = {
+  auto_create_source_profiles: false,
+  profile_action: 'defer_until_agent_claims_profile',
+  rule: 'Do not automatically create public Makaug agent/broker profiles from found-online or social-source discovery. Store the original poster/source as source attribution only. A public profile is created only when the agent/broker registers or claims the listing through the approved Makaug broker process.',
+};
 
 const SOCIAL_SEARCH_AGENTS = [
   {
@@ -1861,7 +1866,7 @@ async function queueFoundOnlineSourcePostListings({
   db,
   posts = [],
   dryRun = false,
-  createProfilesForRepeatedSourcesOnly = true,
+  createProfilesForRepeatedSourcesOnly = false,
 } = {}) {
   const items = (Array.isArray(posts) ? posts : [])
     .map((post, index) => normalizeFoundOnlineSourcePost(post, index))
@@ -1882,14 +1887,7 @@ async function queueFoundOnlineSourcePostListings({
     return acc;
   }, {});
   let existingContactCounts = {};
-  const shouldCreateSourceProfile = (item = {}, agent = {}) => {
-    if (!createProfilesForRepeatedSourcesOnly) return true;
-    if (item.raw_source_post?.create_profile === true || item.raw_source_post?.create_agent_profile === true) return true;
-    if (agent.createProfile === true || agent.create_profile === true) return true;
-    const contactKey = normalizedContactKeyForSource(agent, item);
-    if (contactKey && Number(eligibleContactCounts[contactKey] || 0) + Number(existingContactCounts[contactKey] || 0) > 1) return true;
-    return Number(eligibleSourceCounts[item.agentKey] || 0) > 1;
-  };
+  const shouldCreateSourceProfile = () => FOUND_ONLINE_PROFILE_CREATION_POLICY.auto_create_source_profiles === true;
   const sourceProfileKeyForItem = (item = {}, agent = {}) => {
     const contactKey = normalizedContactKeyForSource(agent, item);
     if (contactKey && Number(eligibleContactCounts[contactKey] || 0) + Number(existingContactCounts[contactKey] || 0) > 1) {
@@ -1928,8 +1926,9 @@ async function queueFoundOnlineSourcePostListings({
         source_url: sourceUrlForItem(item),
         source_contact_url: sourceContactUrlForAgent(agent, item),
         agent_name: agent.name || item.agentKey,
-        profile_action: shouldCreateSourceProfile(item, agent) ? 'create_or_update_source_profile' : 'defer_single_post_profile',
+        profile_action: FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action,
         profile_key: shouldCreateSourceProfile(item, agent) ? sourceProfileKeyForItem(item, agent) : null,
+        profile_policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
         dry_run: true,
       })),
       source_review_records: sourceReviewRecords,
@@ -1983,8 +1982,9 @@ async function queueFoundOnlineSourcePostListings({
       const agentId = createProfile ? agentIdsByKey[profileKey] : null;
       const listing = buildSocialSearchListing(item, agentId);
       const inserted = await insertListing(client, listing, agentId);
-      inserted.profile_action = createProfile ? 'create_or_update_source_profile' : 'defer_single_post_profile';
+      inserted.profile_action = createProfile ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
       inserted.profile_key = createProfile ? profileKey : null;
+      inserted.profile_policy = FOUND_ONLINE_PROFILE_CREATION_POLICY.rule;
       created.push(inserted);
     }
 
@@ -2059,7 +2059,7 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       }
       return acc;
     }, {});
-    const shouldCreateProfileForSeedItem = (item = {}) => Number(eligibleCountsByAgent[item.agentKey] || 0) > 1;
+    const shouldCreateProfileForSeedItem = () => FOUND_ONLINE_PROFILE_CREATION_POLICY.auto_create_source_profiles === true;
     for (const agent of SOCIAL_SEARCH_AGENTS) {
       if (!agentHasPublicContact(agent)) {
         skippedAgents.push({
@@ -2070,16 +2070,13 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
         });
         continue;
       }
-      if (Number(eligibleCountsByAgent[agent.key] || 0) <= 1) {
-        skippedAgents.push({
-          key: agent.key,
-          name: agent.name,
-          channelUrl: agent.channelUrl || '',
-          reason: 'profile_deferred_until_multiple_eligible_live_properties',
-        });
-        continue;
-      }
-      agentIdsByKey[agent.key] = await upsertSocialAgent(client, agent);
+      skippedAgents.push({
+        key: agent.key,
+        name: agent.name,
+        channelUrl: agent.channelUrl || '',
+        reason: FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action,
+        policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
+      });
     }
     const cleanup = replace ? await cleanupSocialSearchBatch(client) : null;
     const existingListingKeys = await existingSocialSearchListingKeys(client);
@@ -2150,7 +2147,8 @@ async function seedSocialSearchAuthorisedListings({ db, replace = true } = {}) {
       const agentId = shouldCreateProfileForSeedItem(item) ? agentIdsByKey[item.agentKey] : null;
       const listing = buildSocialSearchListing(item, agentId);
       const inserted = await insertListing(client, listing, agentId);
-      inserted.profile_action = agentId ? 'create_or_update_source_profile' : 'defer_single_post_profile';
+      inserted.profile_action = agentId ? 'create_or_update_source_profile' : FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action;
+      inserted.profile_policy = FOUND_ONLINE_PROFILE_CREATION_POLICY.rule;
       created.push(inserted);
     }
     await client.query('COMMIT');
@@ -2258,11 +2256,7 @@ function socialSearchDailyTargetStatus({ createdCount = 0, alreadyPresentCount =
 function summarizeSocialSearchListings() {
   const listings = plannedSocialSearchListings();
   const seedEligibleListings = SOCIAL_SEARCH_LISTINGS.filter((item) => sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible);
-  const eligibleCountsByAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
-    if (sourcePostMeetsLaunchIntakeRule(item, agentByKey(item.agentKey)).eligible) acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
-    return acc;
-  }, {});
-  const profileEligibleAgents = SOCIAL_SEARCH_AGENTS.filter((agent) => Number(eligibleCountsByAgent[agent.key] || 0) > 1);
+  const profileEligibleAgents = FOUND_ONLINE_PROFILE_CREATION_POLICY.auto_create_source_profiles ? SOCIAL_SEARCH_AGENTS : [];
   const byAgent = SOCIAL_SEARCH_LISTINGS.reduce((acc, item) => {
     const agent = agentByKey(item.agentKey)?.name || item.agentKey;
     acc[agent] = (acc[agent] || 0) + 1;
@@ -2277,6 +2271,7 @@ function summarizeSocialSearchListings() {
     count: listings.length,
     agents_count: profileEligibleAgents.length,
     source_profiles_deferred_count: SOCIAL_SEARCH_AGENTS.length - profileEligibleAgents.length,
+    profile_policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
     seed_eligible_count: seedEligibleListings.length,
     skipped_until_public_contact_count: SOCIAL_SEARCH_LISTINGS.length - seedEligibleListings.length,
     by_agent: byAgent,
@@ -2304,6 +2299,7 @@ module.exports = {
   FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
   PRICE_UPON_APPLICATION_LABEL,
   FOUND_ONLINE_LAUNCH_INTAKE_POLICY,
+  FOUND_ONLINE_PROFILE_CREATION_POLICY,
   SOCIAL_SEARCH_AGENTS,
   SOCIAL_SEARCH_LISTINGS,
   plannedSocialSearchListings,
