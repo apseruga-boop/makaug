@@ -1309,10 +1309,12 @@ function districtForArea(area = '', text = '') {
 
 function listingTypeFromText(text = '') {
   const raw = cleanText(text).toLowerCase();
+  const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
   if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu)\b/.test(raw)) return 'students';
   if (/\b(commercial|office|shop|retail|warehouse|factory|showroom|arcade)\b/.test(raw)) return 'commercial';
-  if (/\b(land|plot|acre|acres|decimal|decimals|mailo)\b/.test(raw)) return 'land';
   if (/\b(rent|rental|to let|month|monthly)\b/.test(raw)) return 'rent';
+  if (hasDwelling && /\b(for sale|sale|selling|buy|purchase)\b/.test(raw)) return 'sale';
+  if (/\b(land|plot|acre|acres|decimal|decimals|mailo)\b/.test(raw) && !hasDwelling) return 'land';
   return 'sale';
 }
 

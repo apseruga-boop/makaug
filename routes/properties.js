@@ -217,6 +217,20 @@ function publicPriceLabelFor(property = {}) {
 }
 
 function buildThirdPartyPublicTitle(property = {}, extra = {}) {
+  const reviewedFields = Array.isArray(extra.king_review_corrected_fields) ? extra.king_review_corrected_fields : [];
+  const reviewedTitle = redactThirdPartyPublicText(property.title || '');
+  const reviewedTitleLooksCopied = String(property.title || '').includes('#')
+    || reviewedTitle.length > 120
+    || reviewedTitle.split(/\s+/).filter(Boolean).length > 14;
+  const typeForReview = cleanText(property.listing_type || property.category || '').toLowerCase();
+  if (
+    reviewedTitle
+    && (extra.king_review_facts_confirmed === true || reviewedFields.includes('title'))
+    && !reviewedTitleLooksCopied
+    && !(typeForReview !== 'land' && /^land\s+in\b/i.test(reviewedTitle))
+  ) {
+    return reviewedTitle;
+  }
   const area = publicAreaLabelFor(property, extra);
   const type = thirdPartyTypeLabel(property);
   const beds = Number(property.bedrooms);

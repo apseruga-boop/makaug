@@ -1609,71 +1609,92 @@ async function loadPropertyReview(propertyId) {
 }
 
 async function updatePropertyEditableFields({ propertyId, patch = {} }) {
+  const normalizedPatch = { ...patch };
+  if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
+    const typeAlias = normalizedPatch.listingType ?? normalizedPatch.type ?? normalizedPatch.category;
+    if (typeAlias != null) normalizedPatch.listing_type = typeAlias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude')) {
+    const latAlias = normalizedPatch.lat;
+    if (latAlias != null) normalizedPatch.latitude = latAlias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude')) {
+    const lngAlias = normalizedPatch.lng ?? normalizedPatch.lon ?? normalizedPatch.long;
+    if (lngAlias != null) normalizedPatch.longitude = lngAlias;
+  }
+
   const fieldMap = {
-    title: { column: 'title', value: cleanText(patch.title), required: true },
-    description: { column: 'description', value: cleanText(patch.description), required: true },
-    area: { column: 'area', value: cleanText(patch.area), required: true },
-    address: { column: 'address', value: cleanText(patch.address) || null },
-    price: { column: 'price', value: toNullableInt(patch.price) },
-    price_period: { column: 'price_period', value: cleanText(patch.price_period) || null },
-    property_type: { column: 'property_type', value: cleanText(patch.property_type) || null },
-    title_type: { column: 'title_type', value: cleanText(patch.title_type) || null },
-    bedrooms: { column: 'bedrooms', value: toNullableInt(patch.bedrooms) },
-    bathrooms: { column: 'bathrooms', value: toNullableInt(patch.bathrooms) }
+    title: { column: 'title', value: cleanText(normalizedPatch.title), required: true },
+    description: { column: 'description', value: cleanText(normalizedPatch.description), required: true },
+    area: { column: 'area', value: cleanText(normalizedPatch.area), required: true },
+    address: { column: 'address', value: cleanText(normalizedPatch.address) || null },
+    price: { column: 'price', value: toNullableInt(normalizedPatch.price) },
+    price_period: { column: 'price_period', value: cleanText(normalizedPatch.price_period) || null },
+    property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
+    title_type: { column: 'title_type', value: cleanText(normalizedPatch.title_type) || null },
+    bedrooms: { column: 'bedrooms', value: toNullableInt(normalizedPatch.bedrooms) },
+    bathrooms: { column: 'bathrooms', value: toNullableInt(normalizedPatch.bathrooms) }
   };
 
   const setParts = [];
   const values = [propertyId];
   const errors = [];
+  const correctedFields = [];
   let idx = 2;
 
   Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
-    if (!Object.prototype.hasOwnProperty.call(patch, bodyKey)) return;
+    if (!Object.prototype.hasOwnProperty.call(normalizedPatch, bodyKey)) return;
     if (spec.required && !spec.value) errors.push(`${bodyKey} cannot be empty`);
     setParts.push(`${spec.column} = $${idx}`);
     values.push(spec.value);
+    correctedFields.push(spec.column);
     idx += 1;
   });
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'listing_type')) {
-    const listingType = cleanText(patch.listing_type).toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
+    const listingType = cleanText(normalizedPatch.listing_type).toLowerCase();
     const normalizedType = listingType === 'students' ? 'student' : listingType;
     if (!LISTING_TYPES.includes(normalizedType)) {
       errors.push('listing_type must be one of sale, rent, land, commercial, or student');
     }
     setParts.push(`listing_type = $${idx}`);
     values.push(normalizedType);
+    correctedFields.push('listing_type');
     idx += 1;
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'district')) {
-    const district = cleanText(patch.district);
-    if (!DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'district')) {
+    const district = cleanText(normalizedPatch.district);
+    if (district && !DISTRICTS.includes(district)) errors.push('district must be one of Uganda\'s valid districts');
     setParts.push(`district = $${idx}`);
-    values.push(district);
+    values.push(district || null);
+    correctedFields.push('district');
     idx += 1;
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'latitude')) {
-    const latitude = toNullableFloat(patch.latitude);
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude')) {
+    const latitude = toNullableFloat(normalizedPatch.latitude);
     if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     setParts.push(`latitude = $${idx}`);
     values.push(latitude);
+    correctedFields.push('latitude');
     idx += 1;
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'longitude')) {
-    const longitude = toNullableFloat(patch.longitude);
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude')) {
+    const longitude = toNullableFloat(normalizedPatch.longitude);
     if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
     setParts.push(`longitude = $${idx}`);
     values.push(longitude);
+    correctedFields.push('longitude');
     idx += 1;
   }
 
-  if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
-    const amenities = asArray(patch.amenities).map((x) => cleanText(x)).filter(Boolean);
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'amenities')) {
+    const amenities = asArray(normalizedPatch.amenities).map((x) => cleanText(x)).filter(Boolean);
     setParts.push(`amenities = $${idx}::jsonb`);
     values.push(JSON.stringify(amenities));
+    correctedFields.push('amenities');
     idx += 1;
   }
 
@@ -1685,6 +1706,24 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   }
 
   if (!setParts.length) return null;
+
+  const latitude = toNullableFloat(normalizedPatch.latitude);
+  const longitude = toNullableFloat(normalizedPatch.longitude);
+  const hasExactCoordinates = latitude != null && longitude != null;
+  const resolvedLocationLabel = [cleanText(normalizedPatch.area), cleanText(normalizedPatch.district)].filter(Boolean).join(', ');
+  setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${idx}::jsonb`);
+  values.push(JSON.stringify({
+    king_review_corrected_fields: Array.from(new Set(correctedFields)),
+    king_review_corrected_at: new Date().toISOString(),
+    king_review_facts_confirmed: true,
+    ...(resolvedLocationLabel ? { resolved_location_label: resolvedLocationLabel } : {}),
+    ...(hasExactCoordinates ? {
+      map_pin_confirmed: true,
+      map_pin_source: 'king_review',
+      map_pin_confirmed_at: new Date().toISOString()
+    } : {})
+  }));
+  idx += 1;
 
   setParts.push('updated_at = NOW()');
 

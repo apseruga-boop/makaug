@@ -896,6 +896,18 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
   assert(noApiRows[0].first_posted_at.startsWith('2026-'), 'TikTok public video ID should infer a 2026 first-posted timestamp');
 
+  const mansionRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@lady_property_agent/video/7608944105338457366',
+      'Luxury mansion for sale in Kira at 1.3 billion UGX / $350,000 Specs 5 bedrooms 2 living room 25 decimals spacious compound Private Mailo land title',
+      'location: Kira, Wakiso',
+      'posted: 2026-05-27',
+    ].join('\n'),
+  });
+  assert.strictEqual(mansionRows[0].listing_type, 'sale', 'dwelling posts with decimal/title text should stay For Sale, not Land');
+  const normalizedMansion = normalizeFoundOnlineSourcePost(mansionRows[0]);
+  assert.strictEqual(normalizedMansion.listingType, 'sale', 'generic source-post normalizer should preserve dwelling sale type over land-title wording');
+
   const commentEvidenceRows = buildExactSocialPostImportRows({
     rawText: [
       'https://www.tiktok.com/@stayland/video/7608944105338457365',
@@ -1108,8 +1120,13 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('function adminExtractReviewFacts'), 'King review should parse source text into editable listing facts');
   assert(frontend.includes('function collectAdminReviewListingPatch'), 'King review save should collect edited listing fields');
   assert(frontend.includes('listing: listingPatch'), 'King review save should send listing edits through the review endpoint');
+  assert(frontend.includes('adminPersistActiveReviewEditsBeforeStatus'), 'King approval should persist edited facts before changing live status');
   assert(frontend.includes('admin-review-listing-type-edit'), 'King review should allow changing sale/rent type');
   assert(frontend.includes('admin-review-area-edit') && frontend.includes('admin-review-district-edit'), 'King review should allow location correction');
+  assert(frontend.includes('adminReviewLocationProvider = "google"'), 'King review map should use Google Maps when available');
+  assert(adminRoute.includes('king_review_corrected_fields'), 'admin review edits should keep correction traceability');
+  assert(adminRoute.includes("map_pin_source: 'king_review'"), 'admin review coordinate edits should mark the map pin source');
+  assert(propertiesRoute.includes('reviewedFields.includes') && propertiesRoute.includes('reviewedTitleLooksCopied'), 'public third-party titles should respect clean King edits without exposing copied captions');
   assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');
 });
 

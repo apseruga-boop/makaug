@@ -14828,7 +14828,10 @@ function adminReviewDetectedLocation(text = "", review = {}) {
 function adminReviewPropertyTypeFromText(text = "") {
   const lower = String(text || "").toLowerCase();
   if (/apartment|flat/.test(lower)) return "Apartment";
+  if (/mansion/.test(lower)) return "Mansion";
+  if (/duplex/.test(lower)) return "Duplex";
   if (/villa/.test(lower)) return "Villa";
+  if (/house|home/.test(lower)) return "House";
   if (/bungalow/.test(lower)) return "Bungalow";
   if (/hostel/.test(lower)) return "Hostel";
   if (/office/.test(lower)) return "Office";
@@ -14855,11 +14858,13 @@ function adminReviewExtractedAmenities(text = "", facts = {}) {
 
 function adminReviewListingTypeFromText(text = "", facts = {}, review = {}) {
   const lower = String(text || "").toLowerCase();
+  const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|living room|sitting room)\b/.test(lower);
   if (/\b(hostel|student accommodation|student room|campus)\b/.test(lower)) return "student";
-  if (/\b(land|plot|acre|decimal)\b/.test(lower) && !/\bapartment|house|villa\b/.test(lower)) return "land";
   if (/\b(office|shop|warehouse|commercial)\b/.test(lower)) return "commercial";
   if (/\b(to rent|for rent|renting|rental|monthly|per month|\/month|month)\b/.test(lower)) return "rent";
   if (facts.price && facts.price <= 50000000 && /\b(apartment|bedroom|washroom|balcon|sitting room)\b/.test(lower)) return "rent";
+  if (hasDwelling && /\b(for sale|sale|selling|buy|purchase)\b/.test(lower)) return "sale";
+  if (/\b(land|plot|acre|decimal|decimals|mailo)\b/.test(lower) && !hasDwelling) return "land";
   if (/\b(for sale|sale|selling|buy|purchase)\b/.test(lower)) return "sale";
   return normalizeType(review.listing_type || review.type || "sale") || "sale";
 }
@@ -15109,6 +15114,11 @@ function adminReviewMoveLocationPin(lat, lng, options = {}) {
     adminReviewLocationMarker.setLatLng(next);
     if (options.pan !== false) adminReviewLocationMap.setView(next, options.zoom || MAP_PROPERTY_ZOOM);
     try { adminReviewLocationMarker.openPopup(); } catch (e) {}
+  } else if (adminReviewLocationProvider === "google" && window.google?.maps) {
+    const point = { lat: Number(lat), lng: Number(lng) };
+    adminReviewLocationMarker.setPosition(point);
+    if (options.pan !== false && adminReviewLocationMap.panTo) adminReviewLocationMap.panTo(point);
+    if (options.zoom && adminReviewLocationMap.setZoom) adminReviewLocationMap.setZoom(options.zoom);
   }
 }
 
@@ -15129,11 +15139,21 @@ function adminReviewSyncLocationMapFromInputs() {
 }
 
 function adminReviewUseMapPin() {
-  if (!adminReviewLocationMarker || adminReviewLocationProvider !== "leaflet") {
+  if (!adminReviewLocationMarker) {
     adminReviewLocationStatus("Map pin not ready", "amber");
     return;
   }
-  const point = adminReviewLocationMarker.getLatLng();
+  let point = null;
+  if (adminReviewLocationProvider === "leaflet" && adminReviewLocationMarker.getLatLng) {
+    point = adminReviewLocationMarker.getLatLng();
+  } else if (adminReviewLocationProvider === "google" && adminReviewLocationMarker.getPosition) {
+    const pos = adminReviewLocationMarker.getPosition();
+    point = pos ? { lat: pos.lat(), lng: pos.lng() } : null;
+  }
+  if (!point) {
+    adminReviewLocationStatus("Map pin not ready", "amber");
+    return;
+  }
   adminReviewSetLocationInputs(point.lat, point.lng, "Exact pin saved to fields");
   toast("Review location updated from the map pin.");
 }
@@ -15141,11 +15161,6 @@ function adminReviewUseMapPin() {
 async function initAdminReviewLocationMap(review = adminActiveReview) {
   const el = document.getElementById("admin-review-location-map");
   if (!el) return;
-  const ok = await ensureLeafletApi();
-  if (!ok || !window.L) {
-    adminReviewLocationStatus("Map failed to load", "red");
-    return;
-  }
   const point = adminReviewLocationPoint(review);
   const lat = Number.isFinite(point?.lat) ? point.lat : MAP_DEFAULT_CENTER.lat;
   const lng = Number.isFinite(point?.lng) ? point.lng : MAP_DEFAULT_CENTER.lng;
@@ -15154,11 +15169,55 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
   }
   adminReviewLocationMap = null;
   adminReviewLocationMarker = null;
-  adminReviewLocationProvider = "leaflet";
+  adminReviewLocationProvider = "";
   if (el._leaflet_id) {
     try { el._leaflet_id = null; } catch (e) {}
   }
   el.innerHTML = "";
+  const useGoogle = await ensureGoogleMapsApi();
+  if (useGoogle && window.google?.maps) {
+    const center = { lat, lng };
+    const map = new google.maps.Map(el, {
+      center,
+      zoom: point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM,
+      mapTypeId: "satellite",
+      streetViewControl: true,
+      fullscreenControl: true,
+      mapTypeControl: true
+    });
+    const marker = new google.maps.Marker({
+      position: center,
+      map,
+      draggable: true,
+      title: "Review location pin"
+    });
+    const info = new google.maps.InfoWindow({ content: "<strong>Review location pin</strong>" });
+    marker.addListener("dragend", () => {
+      const next = marker.getPosition();
+      if (next) adminReviewSetLocationInputs(next.lat(), next.lng(), "Exact pin moved");
+    });
+    map.addListener("click", (event) => {
+      if (!event.latLng) return;
+      marker.setPosition(event.latLng);
+      map.panTo(event.latLng);
+      adminReviewSetLocationInputs(event.latLng.lat(), event.latLng.lng(), "Exact pin set");
+    });
+    marker.addListener("click", () => info.open({ anchor: marker, map }));
+    adminReviewLocationMap = map;
+    adminReviewLocationMarker = marker;
+    adminReviewLocationProvider = "google";
+    adminReviewLocationStatus(point?.exact ? "Google exact pin loaded" : "Google approximate area pin", point?.exact ? "green" : "amber");
+    setTimeout(() => {
+      try { google.maps.event.trigger(map, "resize"); info.open({ anchor: marker, map }); } catch (e) {}
+    }, 150);
+    return;
+  }
+
+  const ok = await ensureLeafletApi();
+  if (!ok || !window.L) {
+    adminReviewLocationStatus("Map failed to load", "red");
+    return;
+  }
   const map = L.map(el).setView([lat, lng], point?.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution: "&copy; OpenStreetMap contributors",
@@ -15573,6 +15632,37 @@ async function saveAdminListingReview() {
   }
 }
 
+async function adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason = "", reviewNotes = "", checklist = null) {
+  if (!adminActiveReview?.id || String(adminActiveReview.id) !== String(backendId)) return null;
+  const listingPatch = collectAdminReviewListingPatch();
+  const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/review`, {
+    method: "PATCH",
+    headers: adminAuthHeaders(),
+    body: {
+      listing: listingPatch,
+      checklist: checklist || getAdminReviewChecklistFromDom(),
+      notes: reviewNotes || document.getElementById("admin-review-notes")?.value || "",
+      reason: moderationReason || document.getElementById("admin-review-reason")?.value || "",
+      stage: "in_review",
+      warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+    }
+  });
+  const updated = response?.data || {};
+  adminActiveReview = {
+    ...adminActiveReview,
+    ...listingPatch,
+    ...updated,
+    review: {
+      ...(adminActiveReview.review || {}),
+      checklist: updated.moderation_checklist || checklist || getAdminReviewChecklistFromDom(),
+      notes: updated.moderation_notes || reviewNotes || "",
+      reason: updated.moderation_reason || moderationReason || "",
+      warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+    }
+  };
+  return updated;
+}
+
 async function openAdminListingLivePreview(listingId) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or set ADMIN_API_KEY first.");
@@ -15817,6 +15907,10 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   let statusResponse = null;
   if (backendId) {
     try {
+      if (isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+        const savedReview = await adminPersistActiveReviewEditsBeforeStatus(backendId, moderationReason, reviewNotes, checklist);
+        if (savedReview) Object.assign(listing, savedReview);
+      }
       const response = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {
         method: "PATCH",
         headers: adminAuthHeaders(),
