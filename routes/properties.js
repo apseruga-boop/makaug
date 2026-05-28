@@ -433,7 +433,12 @@ function publicExtraFields(extraFields = {}) {
     youtube_url: youtubeUrl || null,
     tiktok_url: tiktokUrl || null,
     found_online: extra.found_online === true,
+    third_party_discovery_result: extra.found_online === true
+      || extra.social_search_candidate === true
+      || extra.sourced_inventory_candidate === true
+      || /found|sourced/i.test(String(extra.source_badge || '')),
     social_search_candidate: extra.social_search_candidate === true,
+    sourced_inventory_candidate: extra.sourced_inventory_candidate === true,
     source_badge: extra.source_badge || null,
     source_batch: extra.source_batch || null,
     source_registry_key: extra.source_registry_key || null,
@@ -480,6 +485,28 @@ function publicExtraFields(extraFields = {}) {
   };
 }
 
+function isFoundOnlinePublicRow(property = {}, safeExtra = null) {
+  const extra = safeExtra || publicExtraFields(property?.extra_fields || {});
+  const sourceText = [
+    property?.source,
+    property?.listed_via,
+    extra?.source_badge,
+    extra?.source_batch,
+    extra?.source_platform,
+    extra?.source_url,
+    extra?.video_url
+  ].filter(Boolean).join(' ').toLowerCase();
+  return extra?.found_online === true
+    || extra?.social_search_candidate === true
+    || extra?.sourced_inventory_candidate === true
+    || extra?.third_party_discovery_result === true
+    || sourceText.includes('found_online')
+    || sourceText.includes('found online')
+    || sourceText.includes('sourced_online')
+    || sourceText.includes('sourced online')
+    || /tiktok\.com|youtube\.com|youtu\.be|instagram\.com|facebook\.com|fb\.watch|x\.com|twitter\.com/.test(sourceText);
+}
+
 function publicPropertyRow(property, images = []) {
   const {
     owner_edit_token_hash: _ownerEditTokenHash,
@@ -489,6 +516,7 @@ function publicPropertyRow(property, images = []) {
     ...safeProperty
   } = property || {};
   const safeExtra = publicExtraFields(property?.extra_fields);
+  const foundOnlinePublic = isFoundOnlinePublicRow(property, safeExtra);
   const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
   const publicLatitude = toNullableFloat(safeProperty.latitude);
   const publicLongitude = toNullableFloat(safeProperty.longitude);
@@ -504,7 +532,10 @@ function publicPropertyRow(property, images = []) {
     featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
     id_number_present: !!property?.id_number,
     id_document_present: !!property?.id_document_name,
-    images
+    primary_image_url: foundOnlinePublic ? null : safeProperty.primary_image_url,
+    image: foundOnlinePublic ? null : safeProperty.image,
+    images: foundOnlinePublic ? [] : images,
+    third_party_discovery_result: foundOnlinePublic
   };
 }
 
@@ -1236,8 +1267,9 @@ async function listPropertiesHandler(req, res, next) {
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
-        const primaryImageUrl = normalizePublicImageUrl(row.primary_image_url);
         const safeExtra = publicExtraFields(adminExtraFields || {});
+        const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
+        const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
         const locationOverride = publicLocationOverrideForListing(row, safeExtra);
         const rowLatitude = toNullableFloat(row.latitude);
         const rowLongitude = toNullableFloat(row.longitude);
@@ -1265,7 +1297,8 @@ async function listPropertiesHandler(req, res, next) {
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
           distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
-          extra_fields: safeExtra
+          extra_fields: safeExtra,
+          third_party_discovery_result: foundOnlinePublic
         };
         if (adminAccess) {
           responseRow.source = rowSource || null;

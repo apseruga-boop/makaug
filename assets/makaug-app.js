@@ -9523,11 +9523,11 @@ async function adminSeedSocialSearchAuthorisedListings() {
         <div class="mt-1">${adminEscape(data.created_properties || 0)} new property candidates were created. ${adminEscape(visibleSamples.length)} pending found-online records are available in the Review Queue filter below.</div>
         <div class="mt-1">${adminEscape(alreadyQueuedCount || 0)} matching property records already exist. ${adminEscape(alreadyLiveOrApproved.length)} already live/approved records were hidden from this pending panel. ${adminEscape(alreadyPendingReview.length)} existing pending records stay in the review queue.</div>
         <div class="mt-2"><button type="button" onclick="adminSetPendingQueueFilter('found_online'); adminScrollTo('#admin-pending-table')" class="rounded-lg bg-gray-900 px-3 py-2 text-xs font-black text-white">Show all found-online source records</button></div>
-        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact YouTube social-source properties plus other public social property posts/listings from 1 January 2026 onward once source evidence, contact route, location/area, and usable images or source evidence are present. Missing source prices are queued as Price upon application. Location is non-negotiable before approval; other checks can be recorded as King review overrides.</div>
+        <div class="mt-1">The 30,000 source database is now social-first: X/Twitter, Instagram, TikTok, YouTube, Facebook, and student accommodation social feeds. Website-only sources are ignored. The Review Queue receives curated exact social-source property posts/listings from 1 January 2026 onward once source evidence, contact route, and location/area are present. Public found-online pages use official embeds/source links and rewritten facts; copied social photos are not rehosted unless rights are explicitly approved. Missing source prices are queued as Price upon application. Location is non-negotiable before approval; other checks can be recorded as King review overrides.</div>
         ${targetHtml}
         <div class="mt-2 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
           <div class="font-black">Land image rule</div>
-          <div class="mt-1">Use source/agent-authorised land photos only when they clearly belong to the listing. If no reliable photo exists, King adds a makaug land-size guide illustration so reviewers can see the plot scale without using fake room photos.</div>
+          <div class="mt-1">For public found-online listings, use source links or official embeds first. Do not rehost copied social or website photos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Evidence cards stay for King review and source trail only.</div>
         </div>
         <div class="mt-1">${adminEscape(agentCount)} agent profiles refreshed from founder-approved public social sources.</div>
         ${sourceReviewRecords.length ? `<div class="mt-1 text-amber-800">${adminEscape(sourceReviewRecords.length)} source pages/feeds are parked for source review, not hidden properties. Match each to a specific 2026+ property post before King queues it.</div>` : ""}
@@ -22534,6 +22534,7 @@ function accountPolicyPreview(kind = "terms") {
       link: "/privacy-policy",
       items: [
         `We collect account, listing, contact, WhatsApp/email/SMS, saved-search, alert, and support data needed to run ${publicBrand()}.`,
+        "For third-party property results, we may collect limited publicly available property facts, source names, source links, and publicly displayed contact routes for discovery and attribution.",
         "We use this data for account access, listings, alerts, enquiries, safety checks, fraud prevention, advertising operations, and support.",
         "You can manage contact preferences, opt out of marketing, and request access, correction, export, or deletion where applicable.",
         `${publicBrand()} applies Uganda data protection principles and GDPR-style rights where relevant. AI/data use must be consent-aware and privacy-safe.`,
@@ -22545,7 +22546,8 @@ function accountPolicyPreview(kind = "terms") {
     title: `${publicBrand()} Terms & Conditions preview`,
     link: "/terms",
     items: [
-      `${publicBrand()} is a property marketplace and communication platform; it does not guarantee title, ownership, availability, or approval unless clearly verified.`,
+      `${publicBrand()} is a property search and discovery platform; third-party property results are previews, not makaug-owned listings unless clearly claimed or verified.`,
+      "makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details.",
       "Users must provide accurate account, listing, pricing, location, and contact information and must not misuse the platform.",
       "Do not pay before viewing, verification, or proper due diligence. Report suspicious listings or payment pressure.",
       "Advertising, sponsored placements, and payment links are subject to review, approval, and applicable campaign terms.",
@@ -23169,15 +23171,17 @@ const PAGE_CONTENT = {
     <div class="rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
   terms: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Terms & Conditions</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 28 May 2026</p>
     <p class="mb-3">
       These Terms govern your use of makaug.com. By using the platform, you agree to comply with these Terms,
       all applicable Ugandan laws, and any listing or safety standards published on the site.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">1. Platform Scope</h3>
     <p class="mb-3 text-sm">
-      makaug.com is a digital marketplace for property discovery and listing. We are not a party to contracts between users,
-      not a law firm, and not an escrow or payment holding service.
+      makaug.com operates as a property search and discovery platform. Some property results may be sourced from publicly
+      available third-party websites, social media pages, property portals, or other online sources. These third-party
+      results are provided for discovery and reference only. We are not a party to contracts between users, not a law firm,
+      and not an escrow or payment holding service.
     </p>
     <h3 class="font-bold text-gray-800 mb-1">2. Eligibility and Account Responsibilities</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
@@ -23192,35 +23196,55 @@ const PAGE_CONTENT = {
       <li>Duplicate, fraudulent, or deceptive listings may be removed without notice.</li>
       <li>Broker listings may require licence verification before publication.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">4. Prohibited Conduct</h3>
+    <h3 class="font-bold text-gray-800 mb-1">4. Third-party Property Results</h3>
+    <p class="mb-2 text-sm">
+      Third-party property results are search previews. makaug.com may index limited factual property information such as
+      area, guide price, property type, land size, bedrooms, bathrooms, source platform, source name, and original source link.
+      makaug.com rewrites summaries in its own neutral language and links users back to the original source or original contact route.
+    </p>
+    <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
+      <li>makaug.com does not claim ownership of third-party images, videos, captions, descriptions, trademarks, contact details, or other source materials.</li>
+      <li>All third-party content remains the property of its original rights holder.</li>
+      <li>Unless a listing is marked as claimed or verified, makaug.com does not guarantee availability, price accuracy, seller authority, image rights, land title, ownership, or contact details.</li>
+      <li>Contact for third-party property results is handled through the original source unless the owner or broker claims and verifies the listing.</li>
+      <li>makaug.com should use official embeds, links, approved APIs, approved feeds, or permission where available, and should not rehost third-party videos or copied social media photos without permission.</li>
+    </ul>
+    <h3 class="font-bold text-gray-800 mb-1">5. Correction, Claim, Removal, and Reports</h3>
+    <p class="mb-3 text-sm">
+      Rights holders, brokers, owners, creators, photographers, or authorised representatives may request that a third-party
+      result is corrected, claimed, or removed using the tools on the listing page or by contacting makaug.com. makaug.com
+      will review valid requests and remove or update disputed third-party content within 48 hours where appropriate.
+    </p>
+    <h3 class="font-bold text-gray-800 mb-1">6. Prohibited Conduct</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Advance-fee fraud, identity abuse, phishing, or document forgery.</li>
       <li>Uploading malicious links, illegal content, or abusive communications.</li>
       <li>Attempting to circumvent verification, moderation, or security controls.</li>
+      <li>Copying full third-party captions, hashtags, videos, photos, descriptions, or private-group content into makaug.com without permission.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">5. Fees and Commercial Terms</h3>
+    <h3 class="font-bold text-gray-800 mb-1">7. Fees and Commercial Terms</h3>
     <p class="mb-3 text-sm">
       Listing may be offered free under current platform policy. Advertising, featured placements, and enterprise tools
       may be separately priced under written commercial terms.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">6. Legal and Regulatory Context (Uganda)</h3>
+    <h3 class="font-bold text-gray-800 mb-1">8. Legal and Regulatory Context (Uganda)</h3>
     <p class="mb-3 text-sm">
       Users are responsible for compliance with applicable law, including the Constitution of Uganda (land ownership framework),
       Land Act, Registration of Titles Act, Landlord and Tenant Act, Data Protection and Privacy Act, and related regulations.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">7. Limitation of Liability</h3>
+    <h3 class="font-bold text-gray-800 mb-1">9. Limitation of Liability</h3>
     <p class="mb-3 text-sm">
       makaug.com does not guarantee transaction completion, title validity, seller performance, tenancy performance, or freedom from third-party disputes.
       Users must conduct independent due diligence and professional legal review before completion.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">8. Governing Law and Dispute Forum</h3>
+    <h3 class="font-bold text-gray-800 mb-1">10. Governing Law and Dispute Forum</h3>
     <p class="text-sm">
       These Terms are governed by the laws of Uganda. Any disputes not resolved amicably are subject to the jurisdiction
       of competent courts in Uganda.
     </p>`,
   privacy: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Privacy Policy</h2>
-    <p class="text-xs text-gray-500 mb-4">Last updated: 1 April 2026</p>
+    <p class="text-xs text-gray-500 mb-4">Last updated: 28 May 2026</p>
     <p class="mb-3 text-sm">
       makaug.com processes personal data in line with the Data Protection and Privacy Act, 2019 and related Ugandan regulations.
       This policy explains what we collect, why we collect it, and how users can exercise privacy rights.
@@ -23229,34 +23253,43 @@ const PAGE_CONTENT = {
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Account data: name, phone number, email, password credentials.</li>
       <li>Listing data: property details, photos, district/area, pricing, and contact preferences.</li>
+      <li>Third-party discovery data: limited publicly available property information such as property location, guide price, property type, source platform, source link, source name, and publicly displayed contact routes.</li>
       <li>Verification data where applicable: identity information and compliance documents.</li>
       <li>Technical data: device/browser data, IP address, session logs, and fraud-risk signals.</li>
     </ul>
     <h3 class="font-bold text-gray-800 mb-1">2. Purpose of Processing</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Account creation, platform delivery, and listing publication.</li>
+      <li>Property search and discovery, including directing users back to original third-party sources.</li>
       <li>User support, fraud prevention, moderation, and dispute handling.</li>
       <li>Security monitoring and legal/regulatory compliance.</li>
       <li>Performance analytics to improve usability and listing quality.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">3. Data Sharing</h3>
+    <h3 class="font-bold text-gray-800 mb-1">3. Third-party Property Results</h3>
+    <p class="mb-3 text-sm">
+      Where personal data is included in a third-party property result, makaug.com will only display what is necessary for
+      property discovery, source attribution, fraud prevention, and user safety. Contact for third-party results should point
+      users back to the original source unless the owner or broker has claimed and approved the listing. Individuals may
+      request correction or removal of their personal data by contacting makaug.com.
+    </p>
+    <h3 class="font-bold text-gray-800 mb-1">4. Data Sharing</h3>
     <p class="mb-3 text-sm">
       We do not sell personal data. Data may be shared with service providers supporting hosting, messaging, analytics,
       and fraud controls under confidentiality and security obligations, or with lawful authorities when legally required.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">4. Retention</h3>
+    <h3 class="font-bold text-gray-800 mb-1">5. Retention</h3>
     <p class="mb-3 text-sm">
       Data is retained only as long as necessary for platform operations, legal obligations, fraud investigation,
       and audit requirements, then securely deleted or anonymized.
     </p>
-    <h3 class="font-bold text-gray-800 mb-1">5. Your Rights</h3>
+    <h3 class="font-bold text-gray-800 mb-1">6. Your Rights</h3>
     <ul class="list-disc pl-5 space-y-1 text-sm mb-3">
       <li>Request access to personal data we hold about you.</li>
       <li>Request correction of inaccurate or incomplete data.</li>
       <li>Request deletion where retention is no longer required by law.</li>
       <li>Object to certain processing or request restrictions where applicable.</li>
     </ul>
-    <h3 class="font-bold text-gray-800 mb-1">6. Contact and Complaints</h3>
+    <h3 class="font-bold text-gray-800 mb-1">7. Contact and Complaints</h3>
     <p class="text-sm">
       For privacy queries, contact info@makaug.com. If unresolved, users may escalate concerns through appropriate
       Ugandan data protection channels.
@@ -25426,6 +25459,7 @@ function renderBrokerRegistrationBadge(broker, textSize = "text-xs") {
 
 function getPropertyGalleryPhotos(property) {
   if (!property) return [];
+  if (isFoundOnlineListing(property)) return [];
   const baseLocation = [property.area, property.district].filter(Boolean).join(", ");
   const list = Array.isArray(property.images) ? property.images : [];
   const normalized = list.map((item, idx) => {
@@ -25527,10 +25561,12 @@ function isFoundOnlineListing(p = {}) {
   );
   const looksSocial = /youtube|tiktok|instagram|facebook|twitter|x\b/.test(sourcePlatform);
   return p.found_online === true
+    || p.third_party_discovery_result === true
     || p.social_search_candidate === true
     || p.sourced_inventory_candidate === true
     || p.found_online_candidate === true
     || extra.found_online === true
+    || extra.third_party_discovery_result === true
     || extra.social_search_candidate === true
     || extra.sourced_inventory_candidate === true
     || extra.found_online_candidate === true
@@ -25719,6 +25755,22 @@ function foundOnlineSourceContactSubtitle(meta = {}) {
     : translatePropertyUi("Public source contact");
 }
 
+function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
+  const title = encodeURIComponent(p.title || "third-party property result");
+  const listing = encodeURIComponent(p.id || p.backend_id || "");
+  const source = encodeURIComponent(meta.sourceUrl || meta.sourceContactUrl || "");
+  const base = `listing=${listing}&title=${title}&source=${source}`;
+  return `
+    <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
+      ${meta.sourceContactUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
+      <a href="mailto:info@makaug.com?subject=Claim%20third-party%20listing&body=${base}" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</a>
+      <a href="mailto:info@makaug.com?subject=Request%20listing%20correction&body=${base}" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</a>
+      <a href="mailto:info@makaug.com?subject=Request%20listing%20removal&body=${base}" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</a>
+      <a href="/report-fraud" onclick="return navigatePublicRoute('/report-fraud', event, { source: 'third_party_listing_report' })" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</a>
+    </div>`;
+}
+
 function listingOnlineSourceDisclosureHtml(p = {}) {
   const meta = foundOnlineSourceMeta(p);
   if (!meta) return "";
@@ -25733,20 +25785,55 @@ function listingOnlineSourceDisclosureHtml(p = {}) {
       <div class="flex items-start gap-2">
         <i class="fas fa-magnifying-glass-location mt-0.5 text-blue-700"></i>
         <div>
-          <div class="font-black">${translateListingLabel("Sourced online")}</div>
-          <div class="mt-1">${translateListingLabel("This listing was found through a public or authorised online property source. makaug keeps the source trail visible so buyers can check the original post and contact route.")}</div>
+          <div class="font-black">${translateListingLabel("Third-party property result")}</div>
+          <div class="mt-1">${translateListingLabel("This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.")}</div>
+          <div class="mt-2 rounded-lg border border-blue-100 bg-white/80 p-2 text-xs text-blue-900">
+            ${translateListingLabel("Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.")}
+          </div>
           <div class="mt-2 flex flex-wrap gap-2 text-xs">
             <span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First posted online")}:</strong> ${adminEscape(meta.firstPosted || translateListingLabel("Being confirmed from source"))}</span>
             ${meta.firstSeen ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("First picked up by makaug")}:</strong> ${adminEscape(meta.firstSeen)}</span>` : ""}
             ${meta.addedToMakaug ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Added to makaug")}:</strong> ${adminEscape(meta.addedToMakaug)}</span>` : ""}
             ${sourceBits ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Source")}:</strong> ${adminEscape(sourceBits)}</span>` : ""}
             ${meta.followersLabel ? `<span class="rounded-full bg-white border border-blue-100 px-2 py-1"><strong>${translateListingLabel("Audience")}:</strong> ${adminEscape(meta.followersLabel)}</span>` : ""}
-            ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Open source")}</a>` : ""}
-            ${contactHref ? `<a href="${adminAttr(contactHref)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-2 py-1 font-bold text-blue-800 underline">${translateListingLabel("Contact via source")}</a>` : ""}
           </div>
+          ${foundOnlineSourceActionLinksHtml(p, meta)}
           ${!meta.firstPosted ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(translateListingLabel("Original post date is being confirmed from the source platform."))}</div>` : ""}
           ${contactHref && (!meta.hasDirectContact || meta.sourceContactMethod === "social") ? `<div class="mt-2 text-xs text-blue-800">${adminEscape(contactCopy)}</div>` : ""}
         </div>
+      </div>
+    </div>`;
+}
+
+function foundOnlineSourceVideoUrl(p = {}) {
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const values = [
+    p.video_url,
+    p.youtube_url,
+    p.tiktok_url,
+    extra.video_url,
+    extra.youtube_url,
+    extra.tiktok_url,
+    extra.source_url
+  ];
+  return values.find((value) => /^https?:\/\//i.test(String(value || "").trim())) || "";
+}
+
+function foundOnlineSourceVisualHtml(p = {}, options = {}) {
+  const meta = foundOnlineSourceMeta(p) || {};
+  const videoUrl = foundOnlineSourceVideoUrl(p);
+  const platform = meta.platform || (/tiktok\.com/i.test(videoUrl) ? "TikTok" : (/youtube\.com|youtu\.be/i.test(videoUrl) ? "YouTube" : "Source"));
+  const icon = /tiktok/i.test(platform) ? "fab fa-tiktok" : (/youtube/i.test(platform) ? "fab fa-youtube" : "fas fa-link");
+  const compact = options.compact === true;
+  return `
+    <div class="${compact ? "h-full min-h-[12rem]" : "min-h-[18rem]"} grid place-items-center bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 text-white p-5 text-center">
+      <div>
+        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-white/10 border border-white/15 grid place-items-center">
+          <i class="${icon} text-2xl"></i>
+        </div>
+        <div class="text-xs uppercase tracking-wide text-blue-100 font-black">${translateListingLabel("Third-party property result")}</div>
+        <div class="mt-1 text-lg font-black">${adminEscape(platform)} ${videoUrl ? translateListingLabel("video/source") : translateListingLabel("source")}</div>
+        <div class="mt-2 text-xs text-blue-100 max-w-xs mx-auto">${translateListingLabel("Makaug shows facts and links back to the original source. Social media photos are not re-hosted here.")}</div>
       </div>
     </div>`;
 }
@@ -26120,6 +26207,7 @@ function getPropertyLocationDisplay(property = {}) {
 }
 
 function getPropertyPreviewPhotoUrl(property = {}) {
+  if (isFoundOnlineListing(property)) return "";
   const images = Array.isArray(property?.images) ? property.images : [];
   const firstImage = images.find((item) => String(item?.url || "").trim());
   return property?.primary_image_url
@@ -26136,7 +26224,7 @@ function buildMapListingPopupHtml(property = {}) {
   const detailPath = getPropertyDetailPath(property);
   return `
     <div data-map-marker-popup="listing" style="min-width:220px;max-width:240px">
-      <img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />
+      ${photoUrl ? `<img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />` : `<div style="height:86px;border-radius:10px;margin-bottom:10px;background:#0f172a;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;text-align:center;padding:8px;">Third-party source result</div>`}
       <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;text-decoration:none;">
         ${adminEscape(title)}
       </a>
@@ -26458,11 +26546,12 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
-  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const isThirdPartyResult = isFoundOnlineListing(p);
+  const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   return `
     <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       <div class="h-48 relative overflow-hidden">
-        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">
+        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
           ${listingFreshnessBadgeHtml(p)}
@@ -26593,7 +26682,8 @@ function studentCard(p) {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
-  const photoSrc = publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
+  const isThirdPartyResult = isFoundOnlineListing(p);
+  const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
   const uniTags = (p.student_universities && p.student_universities.length)
     ? p.student_universities.slice(0, 3)
     : (p.nearest_university ? [p.nearest_university] : []);
@@ -26607,7 +26697,7 @@ function studentCard(p) {
   return `
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       <div class="relative h-48 overflow-hidden">
-        <img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">
+        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">`}
         ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
@@ -27407,6 +27497,8 @@ function mapRemotePropertyForUi(p, options = {}) {
     location_label: [p.area, p.district].filter(Boolean).join(", ")
   })).filter((item) => item.url);
   const id = String(p?.id || "");
+  const thirdPartyDiscovery = isFoundOnlineListing(p);
+  const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
   return {
     ...p,
     id,
@@ -27418,7 +27510,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     baths: p?.bathrooms,
     price: Number(p?.price || 0),
     period: p?.price_period || p?.period || "",
-    img: p?.primary_image_url || p?.img || imageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80",
+    img: thirdPartyDiscovery ? "" : (p?.primary_image_url || p?.img || publicImageItems[0]?.url || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"),
     desc: p?.description || p?.desc || "",
     address: p?.address || "",
     lat: parseFloatSafe(p?.latitude ?? p?.lat),
@@ -27448,8 +27540,9 @@ function mapRemotePropertyForUi(p, options = {}) {
     nearby_places: normalizeNearbyPlacesForUi(
       Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
     ),
-    images: imageItems,
-    detail_loaded: options.detailLoaded === true || images.length > 0,
+    images: publicImageItems,
+    third_party_discovery_result: thirdPartyDiscovery,
+    detail_loaded: options.detailLoaded === true || publicImageItems.length > 0,
     owner_preview_visible: options.ownerPreview === true,
     owner_preview_token: options.token || ""
   };
@@ -27467,7 +27560,10 @@ function upsertPropertyForUi(property) {
   if (idx >= 0) {
     const existing = PROPERTIES[idx];
     const next = { ...existing, ...mapped };
-    if ((!Array.isArray(mapped.images) || mapped.images.length === 0) && Array.isArray(existing.images) && existing.images.length) {
+    if (isFoundOnlineListing(mapped)) {
+      next.images = [];
+      next.img = "";
+    } else if ((!Array.isArray(mapped.images) || mapped.images.length === 0) && Array.isArray(existing.images) && existing.images.length) {
       next.images = existing.images;
     }
     if (existing.detail_loaded === true && mapped.detail_loaded !== true) {
@@ -32452,13 +32548,14 @@ async function openDetail(id, options = {}) {
 	      const availability = propertyAvailabilityText(p);
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
   const isSoldListing = normalizeModerationStatus(p.status) === "sold";
-  const detailPhotos = getPropertyGalleryPhotos(p);
-  const primaryPhoto = detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") };
-  detailGalleryPhotos = detailPhotos.length ? detailPhotos : [primaryPhoto];
-  detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item.is_main));
+  const thirdPartyDetail = isFoundOnlineListing(p);
+  const detailPhotos = thirdPartyDetail ? [] : getPropertyGalleryPhotos(p);
+  const primaryPhoto = thirdPartyDetail ? null : (detailPhotos.find((item) => item.is_main) || detailPhotos[0] || { url: p.img, slot: "", room_label: "", location_label: [p.area, p.district].filter(Boolean).join(", ") });
+  detailGalleryPhotos = thirdPartyDetail ? [] : (detailPhotos.length ? detailPhotos : [primaryPhoto]);
+  detailGalleryPhotoIndex = Math.max(0, detailGalleryPhotos.findIndex((item) => item?.is_main));
   if (detailGalleryPhotoIndex < 0) detailGalleryPhotoIndex = 0;
-  const selectedPhoto = detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto;
-  const selectedPhotoSrc = publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const selectedPhoto = thirdPartyDetail ? null : (detailGalleryPhotos[detailGalleryPhotoIndex] || primaryPhoto);
+  const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const detailIdArg = JSON.stringify(String(p.id));
   const detailLocation = getPropertyLocationDisplay(p);
   const ownerPhone = p.lister_phone || p.contact_phone || p.phone || "";
@@ -32488,7 +32585,7 @@ async function openDetail(id, options = {}) {
   const safeVideoUrl = /^https?:\/\//i.test(videoUrl) ? videoUrl : "";
   const safeVideoIsTikTok = /tiktok\.com/i.test(safeVideoUrl);
   const directionsUrl = propertyDirectionsUrl(p);
-  const contactTitle = broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister");
+  const contactTitle = isFoundOnlineContact ? translatePropertyUi("Original source") : (broker ? translatePropertyUi("Contact Broker") : translatePropertyUi("Contact Lister"));
   const photoCountLabel = translateListingLabel(detailGalleryPhotos.length === 1 ? "Photo" : "Photos");
   const inquiryRecipientName = broker?.name || foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Public listing contact");
   const canPrefillInquiryFromUser = !!authState?.user && !isAdminViewer;
@@ -32499,7 +32596,7 @@ async function openDetail(id, options = {}) {
   const foundOnlineContactPanelHtml = isFoundOnlineContact ? `
           <div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Contact through source")}</h4>
-            <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("makaug found this listing online. We do not send enquiries to this lister from makaug. Use the original source/contact route to check availability and arrange a viewing.")}</p>
+            <p class="text-xs text-gray-500 mb-3">${translatePropertyUi("This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.")}</p>
             ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-50">${adminEscape(sourceContactButtonLabel || translatePropertyUi("Open source contact"))}</a>` : `<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">${translatePropertyUi("Source contact is being confirmed by King review.")}</div>`}
           </div>
   ` : "";
@@ -32520,6 +32617,14 @@ async function openDetail(id, options = {}) {
     <div class="grid lg:grid-cols-3 gap-6">
       <div class="lg:col-span-2">
         <div class="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+          ${thirdPartyDetail ? `
+            <div class="p-4 pb-0">
+              ${safeVideoUrl ? renderVideoEmbedCard(safeVideoUrl, {
+                title: safeVideoIsTikTok ? translateListingLabel("TikTok source video") : translateListingLabel("Original source video"),
+                sub: translateListingLabel("Watch on the original platform before you enquire.")
+              }) : foundOnlineSourceVisualHtml(p)}
+            </div>
+          ` : `
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
             <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || p.title)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
             <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
@@ -32537,6 +32642,7 @@ async function openDetail(id, options = {}) {
               `).join("")}
             </div>
           </div>
+          `}
           <div class="p-5">
             <div class="flex justify-between gap-4 flex-wrap">
               <div>
@@ -32570,7 +32676,7 @@ async function openDetail(id, options = {}) {
             </div>
             ` : ""}
             <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
-            ${safeVideoUrl ? `<div class="mt-4">${renderVideoEmbedCard(safeVideoUrl, {
+            ${safeVideoUrl && !thirdPartyDetail ? `<div class="mt-4">${renderVideoEmbedCard(safeVideoUrl, {
               title: safeVideoIsTikTok ? translateListingLabel("TikTok video") : translateListingLabel("Video tour"),
               sub: translateListingLabel("Watch the walkthrough before you enquire.")
             })}</div>` : ""}
@@ -32618,7 +32724,12 @@ async function openDetail(id, options = {}) {
       <div>
         <div class="bg-white border border-gray-200 rounded-2xl p-5 sticky top-24">
           <h3 class="text-lg font-bold mb-3">${contactTitle}</h3>
-          ${broker ? `
+          ${isFoundOnlineContact ? `
+            <p class="font-semibold text-gray-800 mb-1">${adminEscape(foundOnlineMeta?.sourceName || ownerDisplayName || translatePropertyUi("Original poster"))}</p>
+            <p class="text-xs text-gray-500 mb-3">${adminEscape(sourceContactSubtitle || translatePropertyUi("Public source contact"))}</p>
+            ${sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center w-full bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel || translatePropertyUi("Open source contact"))}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Source contact unavailable")}</button>`}
+            <p class="text-[11px] text-gray-500 mb-2">${translatePropertyUi("Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.")}</p>
+          ` : broker ? `
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="detail-broker-profile-link flex items-center gap-3 rounded-xl border border-green-100 bg-green-50/60 p-3 mb-3 hover:border-green-300 hover:bg-green-50 transition">
               ${brokerAvatarHtml({ ...broker, emoji: brokerInitials(broker.name) }, "w-12 h-12")}
               <span class="min-w-0">
@@ -32640,7 +32751,7 @@ async function openDetail(id, options = {}) {
             ${sourceContactUrl && !ownerWhatsAppUrl ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
           `}
           <button id="detail-save-btn" type="button" onclick="toggleSave(${detailIdArg})" class="${getDetailSaveButtonClasses(p.id)}">${getDetailSaveButtonContent(p.id)}</button>
-          ${foundOnlineContactPanelHtml}
+          ${!isFoundOnlineContact ? foundOnlineContactPanelHtml : ""}
           ${internalInquiryFormHtml}
           ${showMortgageWidget ? `<div class="mt-4 pt-4 border-t border-gray-100">
             <h4 class="font-bold text-gray-800 text-sm mb-2">${translatePropertyUi("Mortgage Estimate")}</h4>

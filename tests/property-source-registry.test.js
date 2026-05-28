@@ -141,6 +141,16 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(html.includes('about.searchEngineTitle'), 'about page should include search-engine section');
   assert(frontend.includes('How makaug finds property information'), 'about i18n should include source model copy');
   assert(frontend.includes('listingOnlineSourceDisclosureHtml'), 'property detail should render source disclosure');
+  assert(frontend.includes('Third-party property result'), 'found-online detail should label imported listings as third-party property results');
+  assert(frontend.includes('Makaug provides a search and discovery preview only'), 'found-online detail should include search/discovery legal positioning');
+  assert(frontend.includes('Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details'), 'found-online detail should disclaim third-party ownership');
+  assert(frontend.includes('Claim this listing'), 'found-online detail should expose claim flow');
+  assert(frontend.includes('Request correction'), 'found-online detail should expose correction flow');
+  assert(frontend.includes('Request removal'), 'found-online detail should expose removal flow');
+  assert(frontend.includes('Report fraud or incorrect information'), 'found-online detail should expose fraud/incorrect-info reporting');
+  assert(frontend.includes('foundOnlineSourceVisualHtml'), 'found-online public cards should use a source/video placeholder instead of copied social photos');
+  assert(frontend.includes('thirdPartyDiscovery ? [] : imageItems'), 'remote found-online rows should not keep imported social image arrays in the public UI');
+  assert(frontend.includes('Watch on the original platform before you enquire'), 'found-online detail should put the original platform video/source before the description');
   assert(frontend.includes('First picked up by makaug'), 'source disclosure should show first-picked-up metadata');
   assert(frontend.includes('First posted online'), 'source disclosure should show original source post metadata');
   assert(frontend.includes('Being confirmed from source'), 'source disclosure should show a clear fallback while the original post date is being confirmed');
@@ -148,6 +158,11 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(frontend.includes('Audience'), 'source disclosure should show follower/subscriber metadata when available');
   assert(frontend.includes('Contact via source'), 'source disclosure should support social/source contact fallback when no phone is published');
   assert(frontend.includes('Open source'), 'source disclosure should link to source evidence');
+  assert(read('routes/properties.js').includes('isFoundOnlinePublicRow'), 'public property API should identify third-party discovery rows');
+  assert(read('routes/properties.js').includes('primaryImageUrl = foundOnlinePublic ? null'), 'public property API should suppress found-online primary images');
+  assert(read('routes/properties.js').includes('images: foundOnlinePublic ? [] : images'), 'public property detail API should suppress found-online gallery images');
+  assert(read('services/publicHtmlSanitizer.js').includes('Third-party property results are discovery previews'), 'public terms route should explain third-party discovery positioning');
+  assert(read('services/publicHtmlSanitizer.js').includes('limited publicly available property information'), 'public privacy route should explain third-party source data handling');
 });
 
 test('social search candidate records carry source registry and first-seen fields', () => {

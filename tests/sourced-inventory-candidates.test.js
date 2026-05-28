@@ -303,9 +303,10 @@ test('public property cards keep NEW freshness and replace registered badge with
 test('public property images escape and normalize generated SVG evidence cards', () => {
   assert(frontend.includes('function normalizeImageSrcForDisplay'), 'frontend should normalize generated SVG data URLs before rendering');
   assert(frontend.includes('data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}'), 'SVG data URLs should be encoded for mobile browsers');
-  assert(frontend.includes('const photoSrc = publicImageSrc(p.img'), 'public listing cards should normalize the main image source');
+  assert(frontend.includes('const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img'), 'public listing cards should suppress copied social/gallery media for third-party results while normalizing owned/direct images');
+  assert(frontend.includes('foundOnlineSourceVisualHtml(p, { compact: true })'), 'third-party result cards should render the source-first discovery visual instead of copied social media photos');
   assert(frontend.includes('<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}"'), 'public listing cards should escape image src and title attributes');
-  assert(frontend.includes('const selectedPhotoSrc = publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should normalize the selected image source');
+  assert(frontend.includes('const selectedPhotoSrc = thirdPartyDetail ? "" : publicImageSrc(selectedPhoto?.url || p.img'), 'detail gallery should suppress third-party media and normalize owned/direct selected image sources');
   assert(frontend.includes('<img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}"'), 'detail hero image should escape the selected image src');
   assert(!frontend.includes('<img src="${p.img || "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80"}"'), 'public cards should not inject raw p.img values into src');
   assert(!frontend.includes('<img src="${p.img}" alt="${p.title}"'), 'student cards should not inject raw p.img values into src');
@@ -519,13 +520,13 @@ test('found-online social search batch accepts curated YouTube source records', 
     assert(extra.photo_source_urls.some((url) => /\/0\.jpg$/i.test(url)), `${listing.title} should keep the YouTube preview still`);
     assert(extra.photo_source_urls.some((url) => /\/3\.jpg$/i.test(url)), `${listing.title} should keep the fifth YouTube still`);
     assert.strictEqual(extra.minimum_reliable_image_count, 1, `${listing.title} should allow launch intake with one usable source image plus evidence`);
-    assert(/Do not invent property-room photos/i.test(extra.image_evidence_policy), `${listing.title} should keep strict image evidence guidance`);
-    assert(/bypass private platform restrictions/i.test(extra.image_evidence_policy), `${listing.title} should avoid private platform image workarounds`);
+    assert(/do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos\/videos/i.test(extra.image_evidence_policy), `${listing.title} should keep strict third-party media guidance`);
+    assert(/source links or official embeds first/i.test(extra.image_evidence_policy), `${listing.title} should prefer source links and official embeds over copied media`);
     assert(/Facebook/i.test(extra.facebook_image_policy), `${listing.title} should keep Facebook image handling guidance`);
     if (listing.source_item.listingType === 'land') {
       assert(/land-size guide illustration/i.test(listing.images.map((image) => image.room_label).join(' ')), `${listing.title} should include a generated land-size guide image`);
       assert.strictEqual(extra.generated_land_size_diagram, true, `${listing.title} should flag generated land-size support imagery`);
-      assert(/source\/agent-authorised land images/i.test(extra.land_visual_strategy), `${listing.title} should keep the land image strategy for reviewers`);
+      assert(/source links or official embeds rather than copied social photos/i.test(extra.land_visual_strategy), `${listing.title} should keep the source-first land image strategy for reviewers`);
     }
     assert(Array.isArray(extra.nearby_facilities) && extra.nearby_facilities.length >= 5, `${listing.title} should include nearby places`);
     assert(extra.nearby_facilities.some((item) => /hospital|clinic/i.test(`${item.type} ${item.name}`)), `${listing.title} should include health facilities`);
@@ -1008,7 +1009,7 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('p.source_contact_url'), 'public listing detail should fall back to top-level source contact fields as well as extra_fields');
   assert(frontend.includes('Contact via {platform} source'), 'public listing detail should label TikTok/Facebook/X source contact buttons by platform');
   assert(frontend.includes('Contact through source'), 'public listing detail should replace internal enquiry forms on found-online listings');
-  assert(frontend.includes('We do not send enquiries to this lister from makaug'), 'found-online contact copy should not promise internal enquiry delivery');
+  assert(frontend.includes('Makaug does not send enquiries to this lister'), 'found-online contact copy should not promise internal enquiry delivery');
   assert(frontend.includes('admin-review-location-map'), 'King review should include an editable map pin section');
   assert(frontend.includes('initAdminReviewLocationMap'), 'King review should initialize the editable review map');
   assert(frontend.includes('adminReviewUseMapPin'), 'King review should save map pin coordinates back to the listing fields');

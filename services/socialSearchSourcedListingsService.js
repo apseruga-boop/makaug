@@ -42,8 +42,8 @@ const FOUND_ONLINE_LAUNCH_INTAKE_POLICY = {
   source_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
   target_source_year: 2026,
   queue_rule: 'Queue curated exact YouTube social-source property posts and other specific public social property posts from 1 January 2026 onward. The source must be YouTube, TikTok, Instagram, Facebook, or X/Twitter; it must include a source URL, location or area, usable listing/source evidence, and a social/direct contact path. Location is non-negotiable. Missing price becomes Price upon application. Website-only sources are ignored.',
-  image_rule: 'Use YouTube thumbnails/stills from the exact curated YouTube source post, social-platform media only when rights are pre-approved, or a clearly-labelled makaug evidence card/land-size guide for review. King can approve found-online records with source evidence after confirming location and overriding non-location checks. Do not copy website/portal photos. Do not invent property-room photos or bypass private platform restrictions.',
-  facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Use post media only when rights are pre-approved or an authorised screenshot/export is supplied; otherwise use a labelled evidence card and ask the source/agent for HD images. Location must still be present before approval.',
+  image_rule: 'Found-online/social imports are public discovery results: do not rehost downloaded TikTok, Facebook, Instagram, YouTube, X, LinkedIn, WhatsApp, or website photos/videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them. Public pages should show source links or official embeds first, then makaug rewritten facts and disclosures.',
+  facebook_image_rule: 'For Facebook, store the exact public post URL as source evidence. Do not scrape or rehost Meta media without permission or an approved Meta tool/feed; link back to the source and ask the source/agent for authorised images before using photos publicly. Location must still be present before approval.',
   platform_scope: ['YouTube', 'TikTok', 'Instagram', 'Facebook', 'X/Twitter'],
 };
 
@@ -1074,7 +1074,7 @@ function landSizeDiagramDataUrl(item = {}) {
 
 function landVisualStrategy(item = {}) {
   if (item.listingType !== 'land') return '';
-  return 'For found-online land, use source/agent-authorised land images only when they are clearly connected to the listing. If no reliable land photo exists, use a makaug-generated land-size guide illustration plus source evidence, then ask the agent for HD plot photos before approval.';
+  return 'For found-online land, public pages should use source links or official embeds rather than copied social photos. Store any evidence cards for King review only, then ask the source/agent for authorised HD plot photos before showing photos publicly.';
 }
 
 function listingImageRowsFor(item = {}) {

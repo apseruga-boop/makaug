@@ -270,14 +270,48 @@ const SYNTHETIC_PUBLIC_ROUTE_CONTENT = {
   '/terms': {
     title: 'makaug Terms and Conditions',
     eyebrow: 'Legal review required',
-    body: 'These terms explain acceptable use, listing responsibilities, moderation, advertising, payments, user content, account access, and platform limitations. Final legal review is still required before formal publication.',
+    body: 'makaug operates as a property search and discovery platform. Third-party property results are discovery previews, not makaug-owned or verified listings unless clearly marked as claimed or verified.',
+    extraHtml: `
+      <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <section>
+          <h3 class="font-black text-gray-900">Third-party property results</h3>
+          <p class="mt-1">Some property results may be sourced from publicly available third-party websites, social media pages, property portals, or other online sources. These results are provided for discovery and reference only.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Ownership of third-party content</h3>
+          <p class="mt-1">makaug does not claim ownership of third-party images, videos, captions, descriptions, trademarks, contact details, or other source materials. All third-party content remains the property of its original rights holder.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">No verification unless marked</h3>
+          <p class="mt-1">Unless a listing is marked as claimed or verified, makaug does not guarantee availability, price accuracy, seller authority, land title, ownership, image rights, or contact details. Users must check the original source and carry out independent verification before payment or viewing.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Correction, claim, and removal</h3>
+          <p class="mt-1">Owners, brokers, creators, photographers, rights holders, or authorised representatives may request correction, claim, or removal of a third-party result. makaug will review valid requests and remove or update disputed content within 48 hours where appropriate.</p>
+        </section>
+      </div>`,
     ctas: ['Contact support', 'Privacy policy', 'Cookie policy'],
     links: ['/help', '/privacy-policy', '/cookie-policy']
   },
   '/privacy-policy': {
     title: 'makaug Privacy Policy',
     eyebrow: 'Data protection',
-    body: 'makaug uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, and consent-aware analytics.',
+    body: 'makaug uses personal data for account access, property enquiries, saved searches, alerts, fraud prevention, support, advertising operations, source attribution, and consent-aware analytics.',
+    extraHtml: `
+      <div class="mt-5 space-y-4 text-sm text-gray-700">
+        <section>
+          <h3 class="font-black text-gray-900">Publicly available source information</h3>
+          <p class="mt-1">makaug may collect limited publicly available property information from third-party sources, including property location, guide price, property type, source link, source name, and publicly displayed contact routes.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">How this information is used</h3>
+          <p class="mt-1">makaug uses this information to help users discover property opportunities, show source attribution, prevent fraud, improve user safety, and direct users back to the original source.</p>
+        </section>
+        <section>
+          <h3 class="font-black text-gray-900">Correction and removal</h3>
+          <p class="mt-1">Where personal data is included in a third-party property result, makaug displays only what is necessary for discovery, attribution, fraud prevention, and user safety. Individuals may request correction or removal of personal data by contacting makaug.</p>
+        </section>
+      </div>`,
     ctas: ['Data request', 'Update preferences', 'Contact privacy support'],
     links: ['/help', '/login?next=%2Faccount%3Ftab%3Dpreferences', 'mailto:info@makaug.com?subject=Privacy%20request']
   },

@@ -312,7 +312,7 @@ function source({
       profile_creation_rule: SOCIAL_PROFILE_CREATION_RULE,
       single_listing_rule: SOCIAL_ONE_OFF_LISTING_RULE,
       source_use: 'Find public property posts, prepare candidates for King review, attribute source, and request owner/agent confirmation before public approval.',
-      image_quality_rule: 'Use social-platform thumbnails, authorised screenshots/stills, or a clearly-labelled makaug evidence card/land-size guide as review evidence. Do not copy website/portal photos, repeat fuzzy frames, invent room labels, or bypass private platform restrictions.',
+      image_quality_rule: 'For public found-online listings, use source links or official embeds first. Do not rehost copied social/website photos or videos as makaug gallery assets unless the rights holder has explicitly supplied or approved them; evidence cards stay for King review and source trail only.',
       ...metadata,
     },
   };
