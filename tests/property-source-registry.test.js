@@ -159,6 +159,9 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(frontend.includes('Contact via source'), 'source disclosure should support social/source contact fallback when no phone is published');
   assert(frontend.includes('Open source'), 'source disclosure should link to source evidence');
   assert(read('routes/properties.js').includes('isFoundOnlinePublicRow'), 'public property API should identify third-party discovery rows');
+  assert(read('routes/properties.js').includes('redactThirdPartyPublicText'), 'public property API should redact copied captions, source URLs, emails, hashtags, and phone numbers from found-online copy');
+  assert(read('routes/properties.js').includes('buildThirdPartyPublicSummary'), 'public property API should publish a Makaug-written factual summary for found-online rows');
+  assert(read('routes/properties.js').includes('lister_phone: foundOnlinePublic ? null'), 'public property detail API should suppress found-online lister phone fields unless the record is not third-party');
   assert(read('routes/properties.js').includes('primaryImageUrl = foundOnlinePublic ? null'), 'public property API should suppress found-online primary images');
   assert(read('routes/properties.js').includes('images: foundOnlinePublic ? [] : images'), 'public property detail API should suppress found-online gallery images');
   assert(read('services/publicHtmlSanitizer.js').includes('Third-party property results are discovery previews'), 'public terms route should explain third-party discovery positioning');

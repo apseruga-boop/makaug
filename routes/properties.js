@@ -179,6 +179,80 @@ function cleanPublicListingCopy(value = '') {
     .trim();
 }
 
+function redactThirdPartyPublicText(value = '') {
+  return cleanPublicListingCopy(value)
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '')
+    .replace(/\+?\d[\d\s().-]{6,}\d/g, '')
+    .replace(/#[\p{L}\p{N}_-]+/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function publicAreaLabelFor(property = {}, extra = {}) {
+  return cleanText(
+    extra.resolved_location_label
+    || property.area
+    || property.district
+    || property.address
+    || 'Uganda'
+  ) || 'Uganda';
+}
+
+function thirdPartyTypeLabel(property = {}) {
+  const type = cleanText(property.listing_type || property.category || '').toLowerCase();
+  if (type === 'land') return 'land';
+  if (type === 'rent') return 'property for rent';
+  if (type === 'commercial') return 'commercial property';
+  if (type === 'student') return 'student accommodation';
+  return 'property for sale';
+}
+
+function publicPriceLabelFor(property = {}) {
+  const raw = property.price == null ? '' : String(property.price).replace(/[^\d.]/g, '');
+  const amount = Number(raw);
+  if (!Number.isFinite(amount) || amount <= 0) return 'Price upon application';
+  const period = cleanText(property.price_period || '').toLowerCase();
+  return `USh ${Math.round(amount).toLocaleString('en-US')}${period === 'month' ? '/month' : ''}`;
+}
+
+function buildThirdPartyPublicTitle(property = {}, extra = {}) {
+  const area = publicAreaLabelFor(property, extra);
+  const type = thirdPartyTypeLabel(property);
+  const beds = Number(property.bedrooms);
+  const roomLabel = Number.isFinite(beds) && beds > 0 && type !== 'land' ? `${beds}-bed ` : '';
+  const propertyType = redactThirdPartyPublicText(property.property_type || '').toLowerCase();
+  if (type === 'land') {
+    const size = redactThirdPartyPublicText(extra.size_raw || property.land_size || '');
+    return `${size ? `${size} ` : ''}Land in ${area}`.trim();
+  }
+  if (type === 'property for rent') return `${roomLabel}${propertyType || 'Property'} for rent in ${area}`.trim();
+  if (type === 'commercial property') return `${propertyType || 'Commercial property'} in ${area}`.trim();
+  if (type === 'student accommodation') return `Student accommodation in ${area}`.trim();
+  return `${roomLabel}${propertyType || 'Property'} for sale in ${area}`.trim();
+}
+
+function buildThirdPartyPublicSummary(property = {}, extra = {}) {
+  const area = publicAreaLabelFor(property, extra);
+  const type = thirdPartyTypeLabel(property);
+  const sourcePlatform = redactThirdPartyPublicText(extra.source_platform || 'the original source');
+  const sourceName = redactThirdPartyPublicText(extra.source_name || extra.source_agent_name || '');
+  const price = publicPriceLabelFor(property);
+  const bedrooms = Number(property.bedrooms);
+  const bathrooms = Number(property.bathrooms);
+  const facts = [
+    area && `Area: ${area}`,
+    type && `Type: ${type}`,
+    price && `Guide price: ${price}`,
+    Number.isFinite(bedrooms) && bedrooms > 0 ? `Bedrooms: ${bedrooms}` : '',
+    Number.isFinite(bathrooms) && bathrooms > 0 ? `Bathrooms: ${bathrooms}` : ''
+  ].filter(Boolean).join('. ');
+  const source = sourceName ? `${sourceName} on ${sourcePlatform}` : sourcePlatform;
+  return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. Makaug provides a search and discovery preview using limited factual information only. ${facts}. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizePhone(phone) {
   return cleanText(phone).replace(/\s+/g, '');
 }
@@ -520,9 +594,16 @@ function publicPropertyRow(property, images = []) {
   const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
   const publicLatitude = toNullableFloat(safeProperty.latitude);
   const publicLongitude = toNullableFloat(safeProperty.longitude);
+  const publicTitle = foundOnlinePublic
+    ? buildThirdPartyPublicTitle(safeProperty, safeExtra)
+    : cleanPublicListingCopy(safeProperty.title || '');
+  const publicDescription = foundOnlinePublic
+    ? buildThirdPartyPublicSummary(safeProperty, safeExtra)
+    : cleanPublicListingCopy(safeProperty.description || '');
   return {
     ...safeProperty,
-    description: cleanPublicListingCopy(safeProperty.description || ''),
+    title: publicTitle,
+    description: publicDescription,
     district: locationOverride?.district || safeProperty.district,
     latitude: publicLatitude == null && locationOverride ? locationOverride.latitude : safeProperty.latitude,
     longitude: publicLongitude == null && locationOverride ? locationOverride.longitude : safeProperty.longitude,
@@ -532,6 +613,8 @@ function publicPropertyRow(property, images = []) {
     featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
     id_number_present: !!property?.id_number,
     id_document_present: !!property?.id_document_name,
+    lister_phone: foundOnlinePublic ? null : safeProperty.lister_phone,
+    lister_email: foundOnlinePublic ? null : safeProperty.lister_email,
     primary_image_url: foundOnlinePublic ? null : safeProperty.primary_image_url,
     image: foundOnlinePublic ? null : safeProperty.image,
     images: foundOnlinePublic ? [] : images,
@@ -1276,9 +1359,16 @@ async function listPropertiesHandler(req, res, next) {
         const publicDistrict = locationOverride?.district || row.district;
         const publicLatitude = rowLatitude == null && locationOverride ? locationOverride.latitude : row.latitude;
         const publicLongitude = rowLongitude == null && locationOverride ? locationOverride.longitude : row.longitude;
+        const publicTitle = foundOnlinePublic
+          ? buildThirdPartyPublicTitle(row, safeExtra)
+          : cleanPublicListingCopy(publicRow.title || '');
+        const publicDescription = foundOnlinePublic
+          ? buildThirdPartyPublicSummary(row, safeExtra)
+          : cleanPublicListingCopy(publicRow.description || '');
         const responseRow = {
           ...publicRow,
-          description: cleanPublicListingCopy(publicRow.description || ''),
+          title: publicTitle,
+          description: publicDescription,
           district: publicDistrict,
           latitude: publicLatitude,
           longitude: publicLongitude,
