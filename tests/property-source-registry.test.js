@@ -149,6 +149,12 @@ test('public pages explain the search-engine model and expose found-online sourc
   assert(frontend.includes('Request correction'), 'found-online detail should expose correction flow');
   assert(frontend.includes('Request removal'), 'found-online detail should expose removal flow');
   assert(frontend.includes('Report fraud or incorrect information'), 'found-online detail should expose fraud/incorrect-info reporting');
+  assert(frontend.includes('openThirdPartyListingRequest'), 'claim/correction/removal/report actions should open the in-app request workflow');
+  assert(frontend.includes('third_party_listing_removal'), 'removal requests should be categorized for admin review');
+  assert(!frontend.includes('mailto:info@makaug.com?subject=Request%20listing%20removal'), 'removal requests should not rely on mailto links');
+  assert(read('routes/contact.js').includes("router.post('/report-listing', handleReportListing)"), 'third-party listing requests should submit into the backend report queue');
+  assert(read('routes/contact.js').includes('request_type: requestType'), 'backend report queue should retain claim/correction/removal/report request type metadata');
+  assert(read('services/publicHtmlSanitizer.js').includes("preserve.add('report-modal')"), 'public property and report routes should keep the report modal available');
   assert(frontend.includes('foundOnlineSourceVisualHtml'), 'found-online public cards should use a source/video placeholder instead of copied social photos');
   assert(frontend.includes('thirdPartyDiscovery ? [] : imageItems'), 'remote found-online rows should not keep imported social image arrays in the public UI');
   assert(frontend.includes('Watch on the original platform before you enquire'), 'found-online detail should put the original platform video/source before the description');

@@ -551,6 +551,9 @@ function stripPublicModalBlocks(html, pathname = '/') {
   let output = String(html || '');
   const pathName = normalizePath(pathname).toLowerCase();
   const preserve = new Set(pathName === '/list-property' ? ['list-choice-modal', 'listing-submit-modal'] : []);
+  if (pathName.startsWith('/property/') || ['/report-fraud', '/fraud', '/anti-fraud', '/safety'].includes(pathName)) {
+    preserve.add('report-modal');
+  }
   for (const id of PUBLIC_MODAL_IDS) {
     if (preserve.has(id)) continue;
     output = removeElementById(output, id);

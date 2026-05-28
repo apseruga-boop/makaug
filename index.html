@@ -6168,15 +6168,19 @@
   <div id="report-modal" class="modal-overlay">
     <div class="modal-box">
       <button onclick="closeModal('report-modal')" class="absolute top-3 right-3 text-gray-400">✕</button>
-      <h2 class="text-xl font-bold mb-2">Report a Listing</h2>
-      <p class="text-sm text-gray-500 mb-4">Help us keep listings safe and accurate.</p>
+      <h2 id="report-modal-title" class="text-xl font-bold mb-2">Report a Listing</h2>
+      <p id="report-modal-sub" class="text-sm text-gray-500 mb-4">Help us keep listings safe and accurate.</p>
       <div class="space-y-3">
         <input id="report-reference" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Listing URL or reference">
+        <input id="report-contact" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Your email or WhatsApp (optional)">
         <select id="report-reason" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm bg-white">
-          <option>Suspected fraud</option>
-          <option>Incorrect information</option>
-          <option>Duplicate listing</option>
-          <option>Other</option>
+          <option value="Suspected fraud">Suspected fraud</option>
+          <option value="Incorrect information">Incorrect information</option>
+          <option value="Duplicate listing">Duplicate listing</option>
+          <option value="Claim third-party listing">Claim third-party listing</option>
+          <option value="Request listing correction">Request listing correction</option>
+          <option value="Request listing removal">Request listing removal</option>
+          <option value="Other">Other</option>
         </select>
         <textarea id="report-details" rows="4" class="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm" placeholder="Details"></textarea>
         <button id="report-submit-btn" onclick="submitReportListing()" class="w-full bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Report</button>

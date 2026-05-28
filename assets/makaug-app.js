@@ -19742,12 +19742,17 @@ function toggleLookingWhatsappAlt() {
 }
 
 async function submitReportListing() {
+  const modal = document.getElementById("report-modal");
   const propertyReference = (document.getElementById("report-reference")?.value || "").trim();
+  const reporterContact = (document.getElementById("report-contact")?.value || "").trim();
   const reason = (document.getElementById("report-reason")?.value || "").trim();
-  const details = (document.getElementById("report-details")?.value || "").trim();
+  const detailsEl = document.getElementById("report-details");
+  const details = (detailsEl?.value || "").trim() || (detailsEl?.dataset.defaultDetails || "").trim();
+  const requestType = (modal?.dataset.requestType || "").trim();
+  const source = (modal?.dataset.requestSource || "").trim();
 
   if (!propertyReference || !reason) {
-    toast("Please provide listing reference and reason.");
+    toast(translateListingLabel("Please provide listing reference and reason."));
     return;
   }
 
@@ -19758,16 +19763,42 @@ async function submitReportListing() {
       body: {
         property_reference: propertyReference,
         reason,
-        details
+        details,
+        reporter_contact: reporterContact,
+        source: source || (requestType ? "third_party_listing_request" : "fraud_report"),
+        request_type: requestType || undefined
       }
     });
-    await trackEvent("report_listing_submit", { reason });
-    toast("Report submitted. Thank you.");
+    await trackEvent("report_listing_submit", { reason, request_type: requestType || "report" });
+    toast(translateListingLabel("Request submitted. makaug will review it."));
     closeModal("report-modal");
   } catch (error) {
     toast(error.message || "Could not submit report.");
   } finally {
-    setButtonLoading("report-submit-btn", false, "Submit Report");
+    setButtonLoading("report-submit-btn", false, translateListingLabel("Submit Report"));
+  }
+}
+
+function resetReportListingModal() {
+  const modal = document.getElementById("report-modal");
+  if (modal) {
+    delete modal.dataset.requestType;
+    delete modal.dataset.requestSource;
+  }
+  const titleEl = document.getElementById("report-modal-title");
+  const subEl = document.getElementById("report-modal-sub");
+  const referenceEl = document.getElementById("report-reference");
+  const contactEl = document.getElementById("report-contact");
+  const detailsEl = document.getElementById("report-details");
+  if (titleEl) titleEl.textContent = translateListingLabel("Report a Listing");
+  if (subEl) subEl.textContent = translateListingLabel("Help us keep listings safe and accurate.");
+  if (referenceEl) referenceEl.value = "";
+  if (contactEl) contactEl.value = "";
+  ensureReportReasonOption("Suspected fraud");
+  if (detailsEl) {
+    detailsEl.value = "";
+    detailsEl.placeholder = translateListingLabel("Details");
+    delete detailsEl.dataset.defaultDetails;
   }
 }
 
@@ -25773,19 +25804,125 @@ function translateFoundOnlineSourceText(value = "") {
   return text;
 }
 
+const THIRD_PARTY_LISTING_REQUEST_CONFIG = {
+  claim: {
+    title: "Claim this listing",
+    subtitle: "Tell makaug who you are so we can review ownership or broker authority and connect the result to the right account.",
+    reason: "Claim third-party listing",
+    source: "third_party_listing_claim",
+    detailsHint: "Please add your name, role, and the proof that you are the owner, broker, creator, photographer, or authorised representative."
+  },
+  correction: {
+    title: "Request correction",
+    subtitle: "Tell makaug what is wrong or incomplete. We will review the source trail and update the result where appropriate.",
+    reason: "Request listing correction",
+    source: "third_party_listing_correction",
+    detailsHint: "Please describe the correction needed, including the accurate location, price, contact route, or source detail."
+  },
+  removal: {
+    title: "Request removal",
+    subtitle: "Owners, brokers, creators, photographers, rights holders, or authorised representatives can ask makaug to remove a disputed third-party result.",
+    reason: "Request listing removal",
+    source: "third_party_listing_removal",
+    detailsHint: "Please explain why this result should be removed and add any proof that you are authorised to make this request."
+  },
+  report: {
+    title: "Report fraud or incorrect information",
+    subtitle: "Report suspected fraud, unsafe contact, copied content, wrong details, or anything that could mislead property seekers.",
+    reason: "Suspected fraud",
+    source: "third_party_listing_report",
+    detailsHint: "Please describe the issue, what looks wrong, and any evidence you want makaug to review."
+  }
+};
+
+function ensureReportReasonOption(value) {
+  const select = document.getElementById("report-reason");
+  const reason = String(value || "").trim();
+  if (!select || !reason) return;
+  const exists = [...select.options].some((option) => option.value === reason);
+  if (!exists) {
+    const option = document.createElement("option");
+    option.value = reason;
+    option.textContent = reason;
+    select.appendChild(option);
+  }
+  select.value = reason;
+}
+
+function buildThirdPartyRequestReference(property = {}, meta = {}) {
+  const parts = [
+    property?.id || property?.backend_id ? getPropertyShareUrl(property) : "",
+    property?.title ? `Title: ${property.title}` : "",
+    property?.id || property?.backend_id ? `Listing ID: ${property.backend_id || property.id}` : "",
+    meta.sourceUrl ? `Source: ${meta.sourceUrl}` : "",
+    meta.sourceContactUrl && meta.sourceContactUrl !== meta.sourceUrl ? `Source contact: ${meta.sourceContactUrl}` : ""
+  ].filter(Boolean);
+  return parts.join("\n") || window.location.href;
+}
+
+function openThirdPartyListingRequest(event, requestType = "report", propertyId = "") {
+  if (event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  const type = THIRD_PARTY_LISTING_REQUEST_CONFIG[requestType] ? requestType : "report";
+  const config = THIRD_PARTY_LISTING_REQUEST_CONFIG[type];
+  const property = findPropertyForUi(propertyId) || {};
+  const meta = foundOnlineSourceMeta(property) || {};
+  const reference = buildThirdPartyRequestReference(property, meta);
+  const sourceBits = [meta.sourceName, meta.platform].filter(Boolean).join(" • ");
+  const defaultDetails = [
+    config.detailsHint,
+    property?.title ? `Listing: ${property.title}` : "",
+    sourceBits ? `Source platform: ${sourceBits}` : "",
+    meta.sourceUrl ? `Original source: ${meta.sourceUrl}` : "",
+    meta.sourceContactUrl && meta.sourceContactUrl !== meta.sourceUrl ? `Original contact route: ${meta.sourceContactUrl}` : ""
+  ].filter(Boolean).join("\n");
+
+  const modal = document.getElementById("report-modal");
+  if (!modal) {
+    const params = new URLSearchParams({
+      source: config.source,
+      reason: config.reason,
+      listing: property?.id || property?.backend_id || "",
+      title: property?.title || "",
+      original_source: meta.sourceUrl || meta.sourceContactUrl || ""
+    });
+    navigatePublicRoute(`/report-fraud?${params.toString()}`, event, { source: config.source });
+    return false;
+  }
+
+  modal.dataset.requestType = type;
+  modal.dataset.requestSource = config.source;
+  const titleEl = document.getElementById("report-modal-title");
+  const subEl = document.getElementById("report-modal-sub");
+  const referenceEl = document.getElementById("report-reference");
+  const contactEl = document.getElementById("report-contact");
+  const detailsEl = document.getElementById("report-details");
+  if (titleEl) titleEl.textContent = translateListingLabel(config.title);
+  if (subEl) subEl.textContent = translateListingLabel(config.subtitle);
+  if (referenceEl) referenceEl.value = reference;
+  if (contactEl) contactEl.value = "";
+  ensureReportReasonOption(config.reason);
+  if (detailsEl) {
+    detailsEl.value = "";
+    detailsEl.placeholder = translateListingLabel(config.detailsHint);
+    detailsEl.dataset.defaultDetails = defaultDetails;
+  }
+  openModal("report-modal");
+  return false;
+}
+
 function foundOnlineSourceActionLinksHtml(p = {}, meta = {}) {
-  const title = encodeURIComponent(p.title || "third-party property result");
-  const listing = encodeURIComponent(p.id || p.backend_id || "");
-  const source = encodeURIComponent(meta.sourceUrl || meta.sourceContactUrl || "");
-  const base = `listing=${listing}&title=${title}&source=${source}`;
+  const listingId = p.id || p.backend_id || "";
   return `
     <div class="mt-3 flex flex-wrap gap-2 text-xs">
       ${meta.sourceUrl ? `<a href="${adminAttr(meta.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Open original source")}</a>` : ""}
       ${meta.sourceContactUrl ? `<a href="${adminAttr(meta.sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800 underline">${translateListingLabel("Contact original poster")}</a>` : ""}
-      <a href="mailto:info@makaug.com?subject=Claim%20third-party%20listing&body=${base}" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</a>
-      <a href="mailto:info@makaug.com?subject=Request%20listing%20correction&body=${base}" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</a>
-      <a href="mailto:info@makaug.com?subject=Request%20listing%20removal&body=${base}" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</a>
-      <a href="/report-fraud" onclick="return navigatePublicRoute('/report-fraud', event, { source: 'third_party_listing_report' })" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</a>
+      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("claim")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Claim this listing")}</button>
+      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("correction")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-blue-100 px-3 py-1.5 font-black text-blue-800">${translateListingLabel("Request correction")}</button>
+      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("removal")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Request removal")}</button>
+      <button type="button" onclick="return openThirdPartyListingRequest(event, ${propertyIdArg("report")}, ${propertyIdArg(listingId)})" class="rounded-full bg-white border border-red-100 px-3 py-1.5 font-black text-red-700">${translateListingLabel("Report fraud or incorrect information")}</button>
     </div>`;
 }
 
@@ -30480,6 +30617,19 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Request correction": "Saba okutereeza",
       "Request removal": "Saba okuggyawo",
       "Report fraud or incorrect information": "Loopa obufere oba amawulire agatali matuufu",
+      "Help us keep listings safe and accurate.": "Tuyambe okukuuma listings nga ziri safe era ntuufu.",
+      "Request submitted. makaug will review it.": "Okusaba kuweerezeddwa. makaug ejja kukwekebejja.",
+      "Please provide listing reference and reason.": "Teekamu reference ya listing n'ensonga.",
+      "Submit Report": "Weereza report",
+      "Details": "Ebisingawo",
+      "Tell makaug who you are so we can review ownership or broker authority and connect the result to the right account.": "Tegeeza makaug ani ggwe tusobole okwekebejja obwannannyini oba obuyinza bwa broker era tugatte result ku account entuufu.",
+      "Tell makaug what is wrong or incomplete. We will review the source trail and update the result where appropriate.": "Tegeeza makaug ekikyamu oba ekibulamu. Tujja kwekebejja ensibuko era tutereeze result bwe kiba kituufu.",
+      "Owners, brokers, creators, photographers, rights holders, or authorised representatives can ask makaug to remove a disputed third-party result.": "Bannannyini, brokers, creators, photographers, abalinako eddembe, oba abakiikirira abakkiriziddwa basobola okusaba makaug eggyeewo result ey'omuntu omulala eriko obuzibu.",
+      "Report suspected fraud, unsafe contact, copied content, wrong details, or anything that could mislead property seekers.": "Loopa obufere obuteeberezebwa, contact etali safe, content ekoppeddwa, details enkyamu, oba ekintu kyonna ekiyinza okukyamya abanoonya property.",
+      "Please add your name, role, and the proof that you are the owner, broker, creator, photographer, or authorised representative.": "Teekamu erinnya lyo, role yo, n'obukakafu nti ggwe nnannyini, broker, creator, photographer, oba omukiise akkiriziddwa.",
+      "Please describe the correction needed, including the accurate location, price, contact route, or source detail.": "Nyonyola okutereeza okwetaagisa, omuli ekifo ekituufu, bbeeyi, contact route, oba source detail.",
+      "Please explain why this result should be removed and add any proof that you are authorised to make this request.": "Nyonyola lwaki result eno erina okuggyibwawo era oteekemu obukakafu nti oli mukkiriziddwa okusaba kino.",
+      "Please describe the issue, what looks wrong, and any evidence you want makaug to review.": "Nyonyola obuzibu, ekirabika nga kikyamu, n'obukakafu bw'oyagala makaug ekwekebejje.",
       "First posted online": "Yasooka okuteekebwa online",
       "First seen by makaug": "makaug yasooka okugiraba",
       "First picked up by makaug": "makaug yasooka okugikima",
@@ -30626,6 +30776,19 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Request correction": "Omba marekebisho",
       "Request removal": "Omba kuondolewa",
       "Report fraud or incorrect information": "Ripoti udanganyifu au taarifa zisizo sahihi",
+      "Help us keep listings safe and accurate.": "Tusaidie kuweka matangazo salama na sahihi.",
+      "Request submitted. makaug will review it.": "Ombi limetumwa. makaug italipitia.",
+      "Please provide listing reference and reason.": "Weka rejea ya tangazo na sababu.",
+      "Submit Report": "Tuma ripoti",
+      "Details": "Maelezo",
+      "Tell makaug who you are so we can review ownership or broker authority and connect the result to the right account.": "Iambie makaug wewe ni nani ili tukague umiliki au mamlaka ya broker na kuunganisha matokeo na akaunti sahihi.",
+      "Tell makaug what is wrong or incomplete. We will review the source trail and update the result where appropriate.": "Iambie makaug kilicho kosa au hakijakamilika. Tutakagua chanzo na kusasisha matokeo inapofaa.",
+      "Owners, brokers, creators, photographers, rights holders, or authorised representatives can ask makaug to remove a disputed third-party result.": "Wamiliki, madalali, creators, wapiga picha, wenye haki, au wawakilishi walioidhinishwa wanaweza kuomba makaug iondoe matokeo ya mhusika mwingine yenye mgogoro.",
+      "Report suspected fraud, unsafe contact, copied content, wrong details, or anything that could mislead property seekers.": "Ripoti udanganyifu unaoshukiwa, mawasiliano yasiyo salama, content iliyonakiliwa, maelezo mabaya, au chochote kinachoweza kupotosha watafuta mali.",
+      "Please add your name, role, and the proof that you are the owner, broker, creator, photographer, or authorised representative.": "Weka jina lako, jukumu lako, na uthibitisho kuwa wewe ni mmiliki, broker, creator, mpiga picha, au mwakilishi aliyeidhinishwa.",
+      "Please describe the correction needed, including the accurate location, price, contact route, or source detail.": "Eleza marekebisho yanayohitajika, pamoja na eneo sahihi, bei, njia ya mawasiliano, au taarifa ya chanzo.",
+      "Please explain why this result should be removed and add any proof that you are authorised to make this request.": "Eleza kwa nini matokeo haya yaondolewe na ongeza uthibitisho kuwa umeidhinishwa kuomba hilo.",
+      "Please describe the issue, what looks wrong, and any evidence you want makaug to review.": "Eleza tatizo, kinachoonekana vibaya, na ushahidi wowote unaotaka makaug ipitie.",
       "First posted online": "Ilichapishwa kwanza mtandaoni",
       "First seen by makaug": "Ilionekana kwanza na makaug",
       "First picked up by makaug": "Ilichukuliwa kwanza na makaug",
@@ -33680,6 +33843,9 @@ function openModal(id) {
     resetAgentProfilePhoto();
     resetAgentIdentityPhoto();
   }
+  if (id === "report-modal" && !el.dataset.requestType) {
+    resetReportListingModal();
+  }
   syncModalOpenState();
   return true;
 }
@@ -33691,6 +33857,9 @@ function closeModal(id) {
     resetAgentRegistrationOtpState();
     resetAgentProfilePhoto();
     resetAgentIdentityPhoto();
+  }
+  if (id === "report-modal") {
+    resetReportListingModal();
   }
   syncModalOpenState();
 }

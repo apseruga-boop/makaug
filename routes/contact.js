@@ -17,6 +17,8 @@ async function handleReportListing(req, res, next) {
     const reason = cleanText(req.body.reason);
     const details = cleanText(req.body.details) || null;
     const reporterContact = cleanText(req.body.reporter_contact || req.body.contact) || null;
+    const requestType = cleanText(req.body.request_type) || null;
+    const requestSource = cleanText(req.body.source) || (requestType ? 'third_party_listing_request' : 'fraud_report');
 
     if (!propertyReference || !reason) {
       return res.status(400).json({
@@ -46,7 +48,7 @@ async function handleReportListing(req, res, next) {
     const supportEmail = getSupportEmail();
     const whatsappUrl = getSupportWhatsappUrl();
     const lead = await createLead(db, {
-      source: cleanText(req.body.source) || 'fraud_report',
+      source: requestSource,
       leadType: 'fraud',
       category: reason,
       message: details || `Fraud or suspicious listing report: ${propertyReference}`,
@@ -62,7 +64,9 @@ async function handleReportListing(req, res, next) {
       metadata: {
         report_id: report.id,
         property_reference: propertyReference,
-        reason
+        reason,
+        request_type: requestType,
+        request_source: requestSource
       }
     });
     let adminDelivery = { sent: false, reason: 'not_attempted' };
@@ -77,6 +81,8 @@ async function handleReportListing(req, res, next) {
           '',
           `Report ID: ${report.id}`,
           `Property Reference: ${propertyReference}`,
+          requestType ? `Request Type: ${requestType}` : '',
+          `Request Source: ${requestSource}`,
           `Reason: ${reason}`,
           `Reporter Contact: ${reporterContact || '-'}`,
           details ? `Details: ${details}` : '',
