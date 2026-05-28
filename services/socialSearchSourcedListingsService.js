@@ -1619,9 +1619,21 @@ function numberOrNull(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeUgandanPublicPhone(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^07\d{8}$/.test(digits)) return `+256${digits.slice(1)}`;
+  if (/^7\d{8}$/.test(digits)) return `+256${digits}`;
+  return '';
+}
+
 function publicPhoneFromText(text = '') {
-  const match = String(text || '').match(/(?:\+?256|0)\s*[\d\s().-]{7,14}\d/);
-  return match ? match[0].replace(/[^\d+]/g, '') : '';
+  const candidates = String(text || '').match(/(?:\+?256|0|7)\s*[\d\s().-]{7,14}\d/g) || [];
+  for (const candidate of candidates) {
+    const normalized = normalizeUgandanPublicPhone(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
 }
 
 function publicEmailFromText(text = '') {
@@ -1653,6 +1665,15 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     raw.summary,
     raw.raw_text,
     raw.source_text,
+    raw.comments,
+    raw.comment,
+    raw.owner_comment,
+    raw.owner_comments,
+    raw.owner_response,
+    raw.poster_reply,
+    raw.poster_response,
+    raw.reply,
+    raw.replies,
   ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
   const extractedPhone = publicPhoneFromText(sourceText);
   const extractedEmail = publicEmailFromText(sourceText);
@@ -1690,7 +1711,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     name: sourceName,
     company: raw.company_name || raw.company || sourceName,
     licence: String(raw.licence || raw.license || `FOUND-ONLINE-${sourceKey.toUpperCase()}`).slice(0, 120),
-    phone: raw.phone || raw.contact_phone || raw.lister_phone || raw.whatsapp || extractedPhone || null,
+    phone: normalizeUgandanPublicPhone(raw.phone || raw.contact_phone || raw.lister_phone || raw.whatsapp || '') || extractedPhone || null,
     phoneAlt: raw.phone_alt || raw.contact_phone_alt || raw.lister_phone_alt || '',
     email: raw.email || raw.contact_email || raw.lister_email || extractedEmail || null,
     channelUrl: raw.source_page_url || raw.source_contact_url || raw.channel_url || raw.profile_url || raw.account_url || raw.source_url || sourceUrl,
@@ -1923,6 +1944,16 @@ async function queueFoundOnlineSourcePostListings({
       queued_listings: eligible.map(({ item, agent }) => ({
         key: item.key,
         title: item.title,
+        area: item.area,
+        district: item.district,
+        price: item.price,
+        price_text: item.priceText,
+        price_label: item.price ? '' : PRICE_UPON_APPLICATION_LABEL,
+        listing_type: item.listingType,
+        source_platform: item.sourcePlatform,
+        first_posted_at: item.sourcePublishedAt,
+        contact_phone: agent.phone || '',
+        contact_email: agent.email || '',
         source_url: sourceUrlForItem(item),
         source_contact_url: sourceContactUrlForAgent(agent, item),
         agent_name: agent.name || item.agentKey,

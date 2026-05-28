@@ -646,7 +646,14 @@ test('found-online source-post importer normalizes extracted posts for King revi
   assert(frontend.includes('Duplicate social links blocked'), 'King dashboard should show duplicate social links instead of quietly ignoring them');
   assert(frontend.includes('duplicate/existing links were blocked'), 'King dashboard import summary should name duplicate/existing link blocks');
   assert(frontend.includes('adminCopySocialCaptureHelper'), 'King dashboard should expose a no-API browser capture helper for social source pages');
+  assert(frontend.includes('adminOpenSocialQuickPastePanel'), 'King dashboard should expose the simple paste-first social import panel');
+  assert(frontend.includes('admin-social-quick-paste-input'), 'King dashboard should have a paste box for exact links and copied source text');
+  assert(frontend.includes('Preview Extracted Properties'), 'King dashboard should let King preview extracted social property rows before queueing');
+  assert(frontend.includes('Queue Found Online'), 'King dashboard should let King queue previewed social property rows');
+  assert(frontend.includes('comments contain the original poster'), 'quick paste flow should tell King to paste original-poster comments as evidence');
   assert(frontend.includes('API-block workaround'), 'social platform sweep should explain the browser-capture workaround when APIs are unavailable');
+  assert(socialSearchServiceSource.includes('normalizeUgandanPublicPhone'), 'source-post importer should normalize local 07 Uganda phone numbers');
+  assert(socialPlatformSweepServiceSource.includes('Visible source comments add'), 'exact social imports should carry visible source comments into review evidence');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
@@ -822,7 +829,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('adminSweepSocialPlatformPosts'), 'King dashboard should expose social platform sweep controls');
   assert(frontend.includes('adminImportExactSocialLinks'), 'King dashboard should expose no-API exact social link import controls');
   assert(frontend.includes('adminImportTikTokExactPosts'), 'King dashboard should expose exact TikTok video import controls');
-  assert(frontend.includes('Import Social Links'), 'King dashboard should expose exact social link import action');
+  assert(frontend.includes('Quick Paste Import'), 'King dashboard should expose the simplified exact social link import action');
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
   assert(frontend.includes('Sweep YouTube Videos'), 'King dashboard should expose YouTube video sweep action');
@@ -888,6 +895,20 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows[0].listing_type, 'students');
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
   assert(noApiRows[0].first_posted_at.startsWith('2026-'), 'TikTok public video ID should infer a 2026 first-posted timestamp');
+
+  const commentEvidenceRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@stayland/video/7608944105338457365',
+      'title: Loft studio apartments for rent',
+      'comments: Original poster replied: in Ndejje, monthly rent is 400k and WhatsApp 0706110456 for viewing.',
+    ].join('\n'),
+  });
+  assert.strictEqual(commentEvidenceRows[0].area, 'Ndejje', 'quick paste should use original-poster comments as location evidence');
+  assert.strictEqual(commentEvidenceRows[0].price_text, '400k', 'quick paste should use original-poster comments as price evidence');
+  assert.strictEqual(commentEvidenceRows[0].contact_phone, '+256706110456', 'quick paste should normalize local 07 Uganda phone numbers from comments');
+  assert(commentEvidenceRows[0].description.includes('Visible source comments add'), 'quick paste should carry comment evidence into King review text');
+  const normalizedCommentEvidence = normalizeFoundOnlineSourcePost(commentEvidenceRows[0]);
+  assert.strictEqual(normalizedCommentEvidence.sourceAgent.phone, '+256706110456', 'generic source-post normalizer should preserve normalized comment phone contact');
 
   const youtubeJobs = buildYouTubeSearchJobs({
     sources: [{

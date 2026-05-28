@@ -371,9 +371,21 @@ function parseTikTokFields(block = '') {
 }
 
 function normalizeParsedTikTokFields(fields = {}) {
+  const commentEvidence = cleanText([
+    fields.comments,
+    fields.comment,
+    fields.owner_comment,
+    fields.owner_comments,
+    fields.owner_response,
+    fields.poster_reply,
+    fields.poster_response,
+    fields.reply,
+    fields.replies,
+  ].filter(Boolean).join(' '));
   return {
     title: fields.title || fields.property || fields.listing || '',
     caption: fields.caption || fields.description || fields.notes || '',
+    comments: commentEvidence,
     area: fields.area || fields.location || fields.neighbourhood || fields.neighborhood || '',
     district: fields.district || fields.city || '',
     price_text: fields.price || fields.price_text || fields.guide_price || '',
@@ -680,9 +692,10 @@ function buildTikTokExactPostImportRows({
       const profileUrl = seed.source_page_url || seed.source_contact_url || oembed.author_url || tiktokProfileUrlFromVideoUrl(sourceUrl);
       const handle = tiktokHandleFromUrl(sourceUrl);
       const sourceName = cleanText(seed.source_name || oembed.author_name || (handle ? `@${handle}` : 'TikTok property source'));
+      const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
       const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
       const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
-      const combinedText = cleanText(`${title} ${caption}`);
+      const combinedText = cleanText(`${title} ${caption} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
@@ -691,7 +704,7 @@ function buildTikTokExactPostImportRows({
         : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
       const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
-      const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
+      const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
       const imageUrls = [
         ...String(seed.image_urls || seed.images || seed.photo_urls || seed.media_urls || '')
@@ -711,7 +724,9 @@ function buildTikTokExactPostImportRows({
         tiktok_url: sourceUrl,
         title,
         caption,
-        description: caption || title,
+        comments: commentEvidence,
+        source_text: combinedText,
+        description: cleanText([caption || title, commentEvidence ? `Visible source comments add: ${commentEvidence}` : ''].filter(Boolean).join(' ')),
         area,
         district,
         location: area || district,
@@ -737,6 +752,7 @@ function buildTikTokExactPostImportRows({
         raw_source_post: {
           ...seed,
           oembed,
+          comments: commentEvidence,
           import_method: 'tiktok_exact_video_intake',
         },
       };
@@ -831,8 +847,9 @@ function buildExactSocialPostImportRows({
         || `${platform} property source`
       );
       const title = cleanText(seed.title || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
+      const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
       const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || title);
-      const combinedText = cleanText(`${title} ${caption}`);
+      const combinedText = cleanText(`${title} ${caption} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
@@ -841,7 +858,7 @@ function buildExactSocialPostImportRows({
         : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
       const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
-      const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
+      const contactPhone = cleanText(normalizeUgandanPhone(seed.contact_phone || seed.phone || seed.whatsapp || '') || phoneFromText(combinedText));
       const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
       const firstPostedAt = cleanText(
         seed.first_posted_at
@@ -877,7 +894,9 @@ function buildExactSocialPostImportRows({
         video_url: /youtube\.com|youtu\.be|tiktok\.com/i.test(sourceUrl) ? sourceUrl : '',
         title,
         caption,
-        description: caption || title,
+        comments: commentEvidence,
+        source_text: combinedText,
+        description: cleanText([caption || title, commentEvidence ? `Visible source comments add: ${commentEvidence}` : ''].filter(Boolean).join(' ')),
         area,
         district,
         location: area || district,
@@ -903,6 +922,7 @@ function buildExactSocialPostImportRows({
         raw_source_post: {
           ...seed,
           no_api_metadata: metadata,
+          comments: commentEvidence,
           import_method: 'no_api_exact_social_url_intake',
           date_confidence: seed.first_posted_at || seed.posted_at || seed.published_at
             ? 'operator_supplied'
@@ -1311,9 +1331,21 @@ function priceTextFromText(text = '') {
   return '';
 }
 
+function normalizeUgandanPhone(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^07\d{8}$/.test(digits)) return `+256${digits.slice(1)}`;
+  if (/^7\d{8}$/.test(digits)) return `+256${digits}`;
+  return '';
+}
+
 function phoneFromText(text = '') {
-  const match = cleanText(text).match(/(?:\+?256|0)\s*[\d\s().-]{7,14}\d/);
-  return match ? match[0].replace(/[^\d+]/g, '') : '';
+  const candidates = cleanText(text).match(/(?:\+?256|0|7)\s*[\d\s().-]{7,14}\d/g) || [];
+  for (const candidate of candidates) {
+    const normalized = normalizeUgandanPhone(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
 }
 
 function emailFromText(text = '') {

@@ -9199,6 +9199,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
+    && document.getElementById("admin-import-exact-social-links-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
   ) return;
@@ -9219,7 +9220,7 @@ function ensureAdminFoundOnlineControls() {
     missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
   }
   if (!document.getElementById("admin-import-tiktok-posts-btn")) {
-    missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
+    missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
   }
   if (!document.getElementById("admin-sweep-youtube-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-youtube-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('youtube')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep YouTube Videos</button>`);
@@ -9231,7 +9232,7 @@ function ensureAdminFoundOnlineControls() {
     missingButtons.push(`<button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>`);
   }
   if (!document.getElementById("admin-import-exact-social-links-btn")) {
-    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminImportExactSocialLinks()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Import Social Links</button>`);
+    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Quick Paste Import</button>`);
   }
   if (!document.getElementById("admin-import-found-online-posts-btn")) {
     missingButtons.push(`<button id="admin-import-found-online-posts-btn" type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-3 py-2 rounded-lg text-xs font-bold">Import Source Posts</button>`);
@@ -9806,7 +9807,7 @@ function adminSocialCaptureHelperScript() {
     box.focus();
     box.select();
   }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Import Social Links, and paste.");
+  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Quick Paste Import, and paste.");
 })();`;
 }
 
@@ -9824,11 +9825,11 @@ async function adminCopySocialCaptureHelper() {
     statusEl.classList.remove("hidden");
     statusEl.innerHTML = `
       <div class="font-black">No-API social capture helper ready</div>
-      <div class="mt-1">This is the workaround for TikTok, Facebook, Instagram, X, and YouTube pages that do not give us API access: open a tracked source page, paste/run this helper on that page, then paste the copied links into Import Social Links.</div>
+      <div class="mt-1">This is the workaround for TikTok, Facebook, Instagram, X, and YouTube pages that do not give us API access: open a tracked source page, paste/run this helper on that page, then paste the copied links into Quick Paste Import.</div>
       <div class="mt-2 grid md:grid-cols-3 gap-2">
         <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Open source</div><div class="text-[11px] mt-1">Use a TikTok hashtag, YouTube search, Facebook group/page, Instagram tag, or X search from the source database.</div></div>
         <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Run helper</div><div class="text-[11px] mt-1">Paste this helper in the source page console/bookmarklet. It copies exact post/video URLs visible in the page.</div></div>
-        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Import</div><div class="text-[11px] mt-1">Return here, click Import Social Links, paste the rows, then King reviews location and evidence.</div></div>
+        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Import</div><div class="text-[11px] mt-1">Return here, click Quick Paste Import, paste the rows, then King reviews location and evidence.</div></div>
       </div>
       <textarea class="mt-2 w-full rounded-lg border border-indigo-200 bg-white p-2 text-[11px] font-mono" rows="7" readonly>${adminEscape(helper)}</textarea>`;
   }
@@ -9938,13 +9939,112 @@ function adminExactSocialLinksImportPrompt(seedText = "") {
   ].join("\n");
 }
 
-async function adminImportExactSocialLinks(seedText = "") {
+function adminSocialQuickPasteExample() {
+  return [
+    "https://www.tiktok.com/@handle/video/7608944105338457364",
+    "title: Luxury Kampala apartment, 3 bedrooms, 3 washrooms",
+    "location: Ndejje, Wakiso",
+    "price: USh 3.5M/month",
+    "source: Space Residences Uganda",
+    "posted: 2026-05-20",
+    "phone: 0706110456",
+    "comments: Poster replied: viewing is available this weekend; WhatsApp for exact pin.",
+  ].join("\n");
+}
+
+function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy = false } = {}) {
+  const text = seedText || "";
+  return `
+    <div class="font-black text-violet-950">Quick Paste Import</div>
+    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. You can also paste copied caption text, the original poster's comments/replies, location, price, and phone number underneath. King previews the extracted property information below, then queues the eligible records.</div>
+    <div class="mt-2 grid md:grid-cols-3 gap-2">
+      <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">1. Paste link/text</div><div class="mt-1 text-[11px]">Use exact video/post URLs. Hashtag pages are discovery only; exact posts become property candidates.</div></div>
+      <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">2. Preview extracted info</div><div class="mt-1 text-[11px]">The parser reads title, location, price, source, posted date, comments, and Uganda phone numbers.</div></div>
+      <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">3. Queue for King</div><div class="mt-1 text-[11px]">Duplicates are blocked. Location remains non-negotiable before approval; missing prices become Price upon application.</div></div>
+    </div>
+    <textarea id="admin-social-quick-paste-input" class="mt-3 w-full rounded-xl border border-violet-200 bg-white p-3 text-xs font-mono min-h-[190px]" placeholder="${adminAttr(adminSocialQuickPasteExample())}">${adminEscape(text)}</textarea>
+    <div class="mt-2 flex items-center gap-2 flex-wrap">
+      <button id="admin-social-quick-preview-btn" type="button" onclick="adminPreviewSocialQuickPaste()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Preview Extracted Properties</button>
+      <button id="admin-social-quick-queue-btn" type="button" onclick="adminQueueSocialQuickPaste()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Queue Found Online</button>
+      <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>
+      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
+    </div>
+    <div class="mt-2 text-[11px] text-violet-900">Tip: when comments contain the original poster's extra details, paste those lines as <span class="font-mono">comments:</span>. If the text contains a valid Uganda mobile number, makaug stores it as the public contact route; otherwise the contact route stays as the source/profile link.</div>
+    <div id="admin-social-quick-paste-results" class="mt-3">${resultHtml || ""}</div>`;
+}
+
+function adminOpenSocialQuickPastePanel(seedText = "") {
+  const statusEl = document.getElementById("admin-found-online-status");
+  if (!statusEl) return;
+  statusEl.classList.remove("hidden");
+  statusEl.innerHTML = adminSocialQuickPastePanelHtml({ seedText });
+  adminScrollTo("#admin-found-online-status");
+}
+
+function adminReadSocialQuickPasteText() {
+  const input = document.getElementById("admin-social-quick-paste-input");
+  return input ? input.value.trim() : "";
+}
+
+function adminSocialQuickImportRowHtml(row = {}, index = 0) {
+  const title = row.title || row.source_title || `Social property ${index + 1}`;
+  const platform = row.platform || row.source_platform || "Social";
+  const areaText = [row.area || row.location, row.district].filter(Boolean).join(", ") || "Location needed";
+  const priceText = row.price_text || row.price_label || "Price upon application";
+  const contactText = row.contact_phone
+    ? `WhatsApp/phone ${row.contact_phone}`
+    : row.contact_email
+      ? row.contact_email
+      : row.source_contact_url
+        ? "Contact through source"
+        : "Contact route needed";
+  const postedText = row.first_posted_at || row.platform_posted_at || row.video_posted_at || "Being confirmed from source";
+  return `<div class="rounded-xl border border-violet-100 bg-white p-3">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="font-black text-violet-950">${adminEscape(title)}</div>
+        <div class="mt-1 text-[11px] text-violet-800">${adminEscape(platform)} • ${adminEscape(areaText)} • ${adminEscape(priceText)}</div>
+        <div class="mt-1 text-[11px] text-violet-700">First posted: ${adminEscape(postedText)} • Contact: ${adminEscape(contactText)}</div>
+      </div>
+      <span class="shrink-0 rounded-full bg-violet-50 px-2 py-1 text-[10px] font-bold text-violet-700">${adminEscape(row.listing_type || "property")}</span>
+    </div>
+    <div class="mt-2 flex gap-2 flex-wrap">
+      ${row.source_url ? `<a href="${adminAttr(row.source_url)}" target="_blank" rel="noopener" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-2 py-1 rounded text-[11px] font-bold">Open source</a>` : ""}
+      ${row.source_contact_url ? `<a href="${adminAttr(row.source_contact_url)}" target="_blank" rel="noopener" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded text-[11px] font-bold">Contact original poster</a>` : ""}
+    </div>
+  </div>`;
+}
+
+function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
+  const importResult = data.import_result || data || {};
+  const rows = Array.isArray(data.exact_social_import_rows) ? data.exact_social_import_rows : [];
+  const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+  const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+  const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
+  const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
+  const previewRows = rows.length ? rows : queued;
+  return `
+    <div class="rounded-xl border ${dryRun ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-emerald-50"} p-3">
+      <div class="font-black ${dryRun ? "text-violet-950" : "text-emerald-950"}">${dryRun ? "Preview ready" : "Import finished"}</div>
+      <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(dryRun ? importResult.eligible_to_queue_count || queued.length || 0 : importResult.created_properties || 0)} ${dryRun ? "eligible to queue" : "new properties queued"}. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links blocked. ${adminEscape(sourceReview.length)} need more details.</div>
+      <div class="mt-1 text-[11px]">Paste comments from the original poster when they answer price, location, viewing, or phone questions. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the original source.</div>
+      ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
+    </div>
+    ${previewRows.length ? `<div class="mt-3 space-y-2">${previewRows.slice(0, 20).map((row, index) => adminSocialQuickImportRowHtml(row, index)).join("")}</div>` : ""}
+    ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
+    ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more source details</div><div class="mt-1">Add missing location/area, contact route, or visible posted date/source evidence, then preview again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+}
+
+async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const raw = window.prompt(adminExactSocialLinksImportPrompt(seedText), seedText || "");
-  if (!raw) return;
+  const raw = adminReadSocialQuickPasteText();
+  if (!raw) {
+    toast("Paste at least one exact social post link or copied source text.");
+    return;
+  }
   const statusEl = document.getElementById("admin-found-online-status");
   const button = document.getElementById("admin-import-exact-social-links-btn");
   if (button) {
@@ -9953,7 +10053,11 @@ async function adminImportExactSocialLinks(seedText = "") {
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = "Importing exact social links without platform API keys...";
+    statusEl.innerHTML = adminSocialQuickPastePanelHtml({
+      seedText: raw,
+      busy: true,
+      resultHtml: `${dryRun ? "Previewing" : "Queueing"} exact social links...`
+    });
   }
   try {
     const response = await apiRequest("/api/admin/exact-social-source-posts/import", {
@@ -9961,29 +10065,21 @@ async function adminImportExactSocialLinks(seedText = "") {
       headers: adminAuthHeaders(),
       body: {
         raw_text: raw,
-        dry_run: false,
+        dry_run: dryRun,
         fetch_oembed: true,
         fetch_public_metadata: true
       }
     });
     const data = response?.data || {};
     const importResult = data.import_result || data;
-    const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
-    const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
-    const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
-    const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
     if (statusEl) {
-      statusEl.innerHTML = `
-        <div class="font-black">Exact social links imported</div>
-        <div class="mt-1">${adminEscape(data.exact_social_url_count || 0)} exact social URLs processed without platform search APIs. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked. ${adminEscape(sourceReview.length)} need more source details.</div>
-        <div class="mt-1 text-[11px]">No-API rule: exact post/video links can queue Found Online records when they include a location/area and a public contact route. YouTube uses oEmbed plus public page metadata for title, thumbnail, channel, and posted date when available. TikTok and X can infer a first-posted timestamp from the public post ID; Instagram/Facebook need the visible posted date pasted by King if the page does not expose metadata. Missing price becomes Price upon application.</div>
-        ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
-        ${reports.length ? `<div class="mt-2 rounded-xl border border-violet-100 bg-white p-3 text-violet-950"><div class="font-black">Metadata attempts</div><div class="mt-1 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need manual visible details.</div></div>` : ""}
-        ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
-        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more source details</div><div class="mt-1">Add missing location/area, contact route, or visible posted date/source evidence, then import again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+      statusEl.innerHTML = adminSocialQuickPastePanelHtml({
+        seedText: raw,
+        resultHtml: adminSocialQuickPasteResultHtml(data, { dryRun })
+      });
     }
-    toast("Exact social link import finished.");
-    if (importResult.created_properties || importResult.existing_properties) {
+    toast(dryRun ? "Preview is ready." : "Exact social link import finished.");
+    if (!dryRun && (importResult.created_properties || importResult.existing_properties)) {
       adminPendingQueueFilter = "found_online";
       await renderAdminDashboard();
       setAdminWorkflowTab("review");
@@ -9992,7 +10088,10 @@ async function adminImportExactSocialLinks(seedText = "") {
   } catch (e) {
     if (statusEl) {
       statusEl.classList.remove("hidden");
-      statusEl.innerHTML = `Exact social link import failed: ${adminEscape(e.message || "Unknown error")}`;
+      statusEl.innerHTML = adminSocialQuickPastePanelHtml({
+        seedText: raw,
+        resultHtml: `<div class="rounded-xl border border-red-200 bg-red-50 p-3 text-red-800">Exact social link import failed: ${adminEscape(e.message || "Unknown error")}</div>`
+      });
     }
     toast(`Social link import failed: ${e.message || "error"}`);
   } finally {
@@ -10001,6 +10100,18 @@ async function adminImportExactSocialLinks(seedText = "") {
       button.classList.remove("opacity-60", "cursor-wait");
     }
   }
+}
+
+function adminPreviewSocialQuickPaste() {
+  return adminSubmitSocialQuickPaste({ dryRun: true });
+}
+
+function adminQueueSocialQuickPaste() {
+  return adminSubmitSocialQuickPaste({ dryRun: false });
+}
+
+function adminImportExactSocialLinks(seedText = "") {
+  return adminOpenSocialQuickPastePanel(seedText);
 }
 
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
@@ -10023,7 +10134,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="mt-1 flex gap-2 flex-wrap">
         ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
         <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
-        <button type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
+        <button type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
       </div>
     </div>`).join("");
   const youtubeJobHtml = youtubeJobs.slice(0, 10).map((job) => `
@@ -10055,7 +10166,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Source-only broker profiles are not created automatically; the source owner must register or claim one.")}</div>
     <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
       <div class="font-black">API-block workaround</div>
-      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Import Social Links queues eligible properties, blocks duplicates, and keeps the poster as source attribution until they register or claim a broker profile.</div>
+      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Quick Paste Import queues eligible properties, blocks duplicates, and keeps the poster as source attribution until they register or claim a broker profile.</div>
       <button type="button" onclick="adminCopySocialCaptureHelper()" class="mt-2 border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
     </div>
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
