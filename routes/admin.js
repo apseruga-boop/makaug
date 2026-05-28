@@ -109,6 +109,7 @@ const {
   buildUgNlisLandVerificationPack,
   sanitizeUgNlisLandVerificationFields
 } = require('../services/ugnlisLandVerificationService');
+const { isPointInUganda } = require('../services/locationSearchService');
 const {
   retryEmailLog,
   retryNotification,
@@ -1674,7 +1675,9 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude')) {
     const latitude = toNullableFloat(normalizedPatch.latitude);
-    if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
+    const longitude = toNullableFloat(normalizedPatch.longitude);
+    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
+    else if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     setParts.push(`latitude = $${idx}`);
     values.push(latitude);
     correctedFields.push('latitude');
@@ -1683,11 +1686,21 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude')) {
     const longitude = toNullableFloat(normalizedPatch.longitude);
-    if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
+    const latitude = toNullableFloat(normalizedPatch.latitude);
+    if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
+    else if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
     setParts.push(`longitude = $${idx}`);
     values.push(longitude);
     correctedFields.push('longitude');
     idx += 1;
+  }
+
+  if (
+    (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude') || Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude'))
+    && ((toNullableFloat(normalizedPatch.latitude) == null) !== (toNullableFloat(normalizedPatch.longitude) == null))
+    && !errors.includes('latitude and longitude must be confirmed together')
+  ) {
+    errors.push('latitude and longitude must be confirmed together');
   }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'amenities')) {
@@ -1709,7 +1722,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   const latitude = toNullableFloat(normalizedPatch.latitude);
   const longitude = toNullableFloat(normalizedPatch.longitude);
-  const hasExactCoordinates = latitude != null && longitude != null;
+  const hasExactCoordinates = latitude != null && longitude != null && isPointInUganda(latitude, longitude);
   const resolvedLocationLabel = [cleanText(normalizedPatch.area), cleanText(normalizedPatch.district)].filter(Boolean).join(', ');
   setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${idx}::jsonb`);
   values.push(JSON.stringify({

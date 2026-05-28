@@ -334,6 +334,7 @@ function getHierarchyPointForArea(district, area) {
 
 const UG_AREA_PIN_OVERRIDES = [
   { name: "Ndejje", district: "Wakiso", lat: 0.244, lng: 32.553, aliases: ["Ndejje", "Ndejje Lubugumu"] },
+  { name: "Munyonyo", district: "Kampala", lat: 0.236, lng: 32.623, aliases: ["Munyonyo", "Munyonjo", "Munyonyo Kampala", "Munyonyo Uganda"] },
   { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
   { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita", "Kakiri Masulita Hoima Road", "Hoima Road"] },
   { name: "Masulita", district: "Wakiso", lat: 0.51, lng: 32.46, aliases: ["Masulita"] },
@@ -438,6 +439,7 @@ const CURRENCIES = {
   GBP: { fmt: (v, p) => v ? `£${Math.round(v / 4900).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" },
   EUR: { fmt: (v, p) => v ? `€${Math.round(v / 4100).toLocaleString()}${p ? "/" + p : ""}` : "Price upon application" }
 };
+const REVIEW_USD_TO_UGX_GUIDE_RATE = 3800;
 
 const DEFAULT_MORTGAGE_RATE_UPDATED_AT = "2026-02-26";
 const MAP_DEFAULT_CENTER = { lat: 1.3733, lng: 32.2903 };
@@ -14803,6 +14805,9 @@ function adminReviewMoneyFromText(text = "") {
   if (million) return Math.round(Number(million[1]) * 1000000);
   const currency = raw.match(/\b(?:ugx|ush|ugshs|shs)\s*([0-9][0-9.]*)\b/i);
   if (currency) return Math.round(Number(currency[1]));
+  const usd = raw.match(/\$\s*([0-9]+(?:\.[0-9]+)?)(?:\s*(?:\/|per)\s*(?:month|mo|monthly))?/i)
+    || raw.match(/\b(?:usd|us\$)\s*([0-9]+(?:\.[0-9]+)?)(?:\s*(?:\/|per)\s*(?:month|mo|monthly))?/i);
+  if (usd) return Math.round(Number(usd[1]) * REVIEW_USD_TO_UGX_GUIDE_RATE);
   return null;
 }
 
@@ -14846,8 +14851,14 @@ function adminReviewExtractedAmenities(text = "", facts = {}) {
   const amenities = [];
   const add = (condition, label) => { if (condition && !amenities.includes(label)) amenities.push(label); };
   add(/tight security|security|secure/.test(lower), "Tight security");
+  add(/secure\s*&\s*serene|secure and serene|serene/.test(lower), "Secure and serene");
   add(/big sitting room|large sitting room|spacious sitting|sitting room/.test(lower), "Big sitting room");
+  add(/spacious lounge|large lounge|spacious/.test(lower), "Spacious lounge");
+  add(/modern finishes|modern finish/.test(lower), "Modern finishes");
   add(/modern kitchen|fitted kitchen|kitchen/.test(lower), "Modern kitchen");
+  add(/lake victoria|near lake/.test(lower), "Near Lake Victoria");
+  add(/major malls|malls|shopping/.test(lower), "Near malls");
+  add(/families|sharers/.test(lower), "Good for families or sharers");
   add(/jacuzzi/.test(lower), "Jacuzzi");
   add(/balcon/.test(lower), facts.balconies ? `${facts.balconies} balconies` : "Balcony");
   add(/parking/.test(lower), "Parking");
@@ -14891,8 +14902,8 @@ function adminReviewBuildConciseDescription(review = {}, facts = {}) {
 function adminExtractReviewFacts(review = {}) {
   const text = adminReviewSourceText(review);
   const price = adminReviewMoneyFromText(text);
-  const bedrooms = adminReviewFirstNumber(text, /(\d+)\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/i);
-  const bathrooms = adminReviewFirstNumber(text, /(\d+)\s*(?:wash\s*rooms?|washrooms?|bath\s*rooms?|bathrooms?|baths?|toilets?)\b/i);
+  const bedrooms = adminReviewFirstNumber(text, /(\d+)\s*[- ]?\s*(?:bed\s*rooms?|bedrooms?|beds?|bdrm|br)\b/i);
+  const bathrooms = adminReviewFirstNumber(text, /(\d+)\s*[- ]?\s*(?:wash\s*rooms?|washrooms?|bath\s*rooms?|bathrooms?|baths?|toilets?)\b/i);
   const balconies = adminReviewFirstNumber(text, /(\d+)\s*balcon(?:y|ies)\b/i);
   const propertyType = adminReviewPropertyTypeFromText(text) || review.property_type || "";
   const location = adminReviewDetectedLocation(text, review);
@@ -14972,13 +14983,13 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-listing-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
-          <input id="admin-review-area-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
+          <input id="admin-review-area-edit" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
         </label>
         <label class="block text-xs font-bold text-gray-700">District
-          <select id="admin-review-district-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${districtOptions}</select>
+          <select id="admin-review-district-edit" onchange="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${districtOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Address / location note
-          <input id="admin-review-address-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.address || "")}" placeholder="Road, building, estate, or source location note">
+          <input id="admin-review-address-edit" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.address || "")}" placeholder="Road, building, estate, or source location note">
         </label>
         <label class="block text-xs font-bold text-gray-700">Property type
           <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
@@ -14996,10 +15007,10 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-bathrooms-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.bathrooms ?? "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Latitude
-          <input id="admin-review-latitude-edit" type="number" step="0.000001" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.latitude ?? "")}">
+          <input id="admin-review-latitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.latitude ?? "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Longitude
-          <input id="admin-review-longitude-edit" type="number" step="0.000001" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.longitude ?? "")}">
+          <input id="admin-review-longitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.longitude ?? "")}">
         </label>
         <div class="md:col-span-2 rounded-xl border border-blue-200 bg-blue-50 p-3">
           <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -15047,6 +15058,12 @@ function adminApplyExtractedReviewFacts() {
   const mergedAmenities = [...new Set([...currentAmenities, ...(facts.amenities || [])])];
   adminSetReviewEditValue("admin-review-amenities-edit", mergedAmenities.join(", "));
   adminSetReviewEditValue("admin-review-description-edit", facts.description || adminActiveReview.description || "");
+  const latValue = document.getElementById("admin-review-latitude-edit")?.value;
+  const lngValue = document.getElementById("admin-review-longitude-edit")?.value;
+  if (!adminReviewHasUsableCoordinates(latValue, lngValue)) {
+    adminSetReviewEditValue("admin-review-latitude-edit", "");
+    adminSetReviewEditValue("admin-review-longitude-edit", "");
+  }
   adminReviewSyncLocationMapFromInputs();
   toast("Extracted source details applied. Check location before approval.");
 }
@@ -15071,18 +15088,43 @@ function adminReviewLocationStatus(message, tone = "blue") {
   el.textContent = message;
 }
 
+let adminReviewLocationSyncTimer = null;
+
+function adminReviewHasUsableCoordinates(lat, lng) {
+  if (lat == null || lng == null) return false;
+  const latText = String(lat).trim();
+  const lngText = String(lng).trim();
+  if (!latText || !lngText) return false;
+  const rawLat = Number(latText);
+  const rawLng = Number(lngText);
+  return Number.isFinite(rawLat)
+    && Number.isFinite(rawLng)
+    && isLikelyUgandaCoordinate(rawLat, rawLng);
+}
+
+function adminReviewNormalizeCoordinateInputs(latitude, longitude) {
+  if (!adminReviewHasUsableCoordinates(latitude, longitude)) return { latitude: "", longitude: "", exact: false };
+  return { latitude: String(latitude).trim(), longitude: String(longitude).trim(), exact: true };
+}
+
+function adminReviewScheduleLocationSync() {
+  clearTimeout(adminReviewLocationSyncTimer);
+  adminReviewLocationSyncTimer = setTimeout(() => adminReviewSyncLocationMapFromInputs(), 250);
+}
+
 function adminReviewLocationDraft() {
   const latitude = document.getElementById("admin-review-latitude-edit")?.value;
   const longitude = document.getElementById("admin-review-longitude-edit")?.value;
+  const coordinates = adminReviewNormalizeCoordinateInputs(latitude, longitude);
   const area = document.getElementById("admin-review-area-edit")?.value;
   const district = document.getElementById("admin-review-district-edit")?.value;
   const address = document.getElementById("admin-review-address-edit")?.value;
   return {
     ...(adminActiveReview || {}),
-    lat: latitude,
-    lng: longitude,
-    latitude,
-    longitude,
+    lat: coordinates.latitude,
+    lng: coordinates.longitude,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
     area,
     district,
     address,
@@ -15090,21 +15132,33 @@ function adminReviewLocationDraft() {
   };
 }
 
-function adminReviewLocationPoint() {
+function adminReviewLocationPoint(review = adminActiveReview) {
   const draft = adminReviewLocationDraft();
-  const rawLat = Number(draft.latitude ?? draft.lat);
-  const rawLng = Number(draft.longitude ?? draft.lng);
-  if (Number.isFinite(rawLat) && Number.isFinite(rawLng) && isLikelyUgandaCoordinate(rawLat, rawLng)) {
+  const rawLat = Number(draft.latitude);
+  const rawLng = Number(draft.longitude);
+  if (adminReviewHasUsableCoordinates(draft.latitude, draft.longitude)) {
     return { lat: rawLat, lng: rawLng, exact: true };
   }
-  return getListingMapPoint(draft);
+  return getListingMapPoint({
+    ...(review || {}),
+    ...draft,
+    lat: "",
+    lng: "",
+    latitude: "",
+    longitude: ""
+  });
 }
 
 function adminReviewSetLocationInputs(lat, lng, message = "Map pin set") {
   if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return;
+  if (!isLikelyUgandaCoordinate(Number(lat), Number(lng))) {
+    adminReviewLocationStatus("Pin must be inside Uganda", "red");
+    toast("Move the review pin inside Uganda before saving.");
+    return;
+  }
   adminSetReviewEditValue("admin-review-latitude-edit", Number(lat).toFixed(6));
   adminSetReviewEditValue("admin-review-longitude-edit", Number(lng).toFixed(6));
-  adminReviewLocationStatus(message, isLikelyUgandaCoordinate(Number(lat), Number(lng)) ? "green" : "amber");
+  adminReviewLocationStatus(message, "green");
 }
 
 function adminReviewMoveLocationPin(lat, lng, options = {}) {
@@ -15135,7 +15189,7 @@ function adminReviewSyncLocationMapFromInputs() {
   adminReviewMoveLocationPin(point.lat, point.lng, {
     zoom: point.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM
   });
-  adminReviewLocationStatus(point.exact ? "Exact pin from fields" : "Approximate area pin", point.exact ? "green" : "amber");
+  adminReviewLocationStatus(point.exact ? "Exact pin from fields" : "Approximate area pin - confirm exact pin before approval", point.exact ? "green" : "amber");
 }
 
 function adminReviewUseMapPin() {
@@ -15243,6 +15297,10 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
 
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
+  const coordinates = adminReviewNormalizeCoordinateInputs(
+    get("admin-review-latitude-edit"),
+    get("admin-review-longitude-edit")
+  );
   const amenities = get("admin-review-amenities-edit")
     .split(/[,;\n]/)
     .map((item) => item.trim())
@@ -15259,8 +15317,8 @@ function collectAdminReviewListingPatch() {
     property_type: get("admin-review-property-type-edit"),
     bedrooms: get("admin-review-bedrooms-edit"),
     bathrooms: get("admin-review-bathrooms-edit"),
-    latitude: get("admin-review-latitude-edit"),
-    longitude: get("admin-review-longitude-edit"),
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude,
     amenities
   };
 }
@@ -26560,6 +26618,37 @@ function getLocalizedListingText(property, key, fallback = "") {
   return langNode?.[key] || fallback || "";
 }
 
+const THIRD_PARTY_TITLE_PHRASES = {
+  lg: { "for rent": "ey'okupangisa", "for sale": "ey'okutunda" },
+  sw: { "for rent": "ya kupangisha", "for sale": "ya kuuza" },
+  ac: { "for rent": "me apanga", "for sale": "me cato" },
+  ny: { "for rent": "y'okupangisa", "for sale": "y'okutunda" },
+  rn: { "for rent": "y'okupangisa", "for sale": "y'okutunda" },
+  sm: { "for rent": "ey'okupangisa", "for sale": "ey'okutunda" }
+};
+
+function thirdPartyTitlePhrase(text) {
+  return THIRD_PARTY_TITLE_PHRASES[currentLang]?.[text] || text;
+}
+
+function getLocalizedPropertyTitle(property = {}) {
+  const translated = getLocalizedListingText(property, "title", "");
+  if (translated) return translated;
+  if (!isFoundOnlineListing(property)) return property?.title || translatePropertyUi("Property");
+  const normalizedType = normalizeType(property?.type || property?.listing_type || property?.category || "");
+  const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ") || translateListingLabel("Uganda");
+  const beds = Number(property?.beds ?? property?.bedrooms);
+  const bedPrefix = Number.isFinite(beds) && beds > 0 && normalizedType !== "land" ? `${beds}-${translateListingLabel("bed")} ` : "";
+  const propertyType = property?.subtype || property?.property_type || (normalizedType === "land" ? "Land" : "Property");
+  const typeLabel = translateListingLabel(propertyType);
+  if (normalizedType === "rent") return `${bedPrefix}${typeLabel} ${thirdPartyTitlePhrase("for rent")} - ${location}`.trim();
+  if (normalizedType === "sale") return `${bedPrefix}${typeLabel} ${thirdPartyTitlePhrase("for sale")} - ${location}`.trim();
+  if (normalizedType === "commercial") return `${translateListingLabel("Commercial property")} - ${location}`.trim();
+  if (normalizedType === "student") return `${translateListingLabel("Student accommodation")} - ${location}`.trim();
+  if (normalizedType === "land") return `${typeLabel} - ${location}`.trim();
+  return `${typeLabel} - ${location}`.trim();
+}
+
 function uniqueTextParts(parts = []) {
   const seen = new Set();
   return parts.filter((part) => {
@@ -26931,10 +27020,11 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
+  const displayTitle = getLocalizedPropertyTitle(p);
   return `
     <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
       <div class="h-48 relative overflow-hidden">
-        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">`}
+        ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
           <div class="${badgeColor(p.type)} text-white text-xs px-2 py-1 rounded font-bold">${badgeLabel(p.type)}</div>
           ${listingFreshnessBadgeHtml(p)}
@@ -26951,7 +27041,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
         <div class="absolute bottom-2 right-2 bg-green-900/90 text-white px-2 py-1 rounded text-sm font-bold">${fmtP(p.price, p.period)}</div>
       </div>
       <div class="p-4">
-        <h3 class="font-bold text-gray-800 line-clamp-1">${p.title}</h3>
+        <h3 class="font-bold text-gray-800 line-clamp-1">${adminEscape(displayTitle)}</h3>
         <p class="text-sm text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${p.area}, ${p.district}</p>
         ${nearDistance ? `<p class="text-xs font-semibold text-green-700 mt-1"><i class="fas fa-location-arrow mr-1"></i>${nearDistance}</p>` : ""}
         <div class="mt-2 text-sm text-gray-500 flex gap-3 flex-wrap">
@@ -32979,6 +33069,7 @@ async function openDetail(id, options = {}) {
   const detailMapPoint = getListingMapPoint(p);
   const suggestedNearbyRaw = getNearbyAmenitySuggestions({ lat: detailMapPoint.lat, lng: detailMapPoint.lng, district: p.district, city: p.city, area: p.area });
   const detailNearby = mergeNearbyPlacesForUi(savedNearbyRaw, suggestedNearbyRaw);
+  const displayTitle = getLocalizedPropertyTitle(p);
   const localizedDescription = getLocalizedPropertyDescription(p, detailNearby);
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
@@ -33045,7 +33136,7 @@ async function openDetail(id, options = {}) {
               <input id="detail-inquiry-name" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Your name"))}" value="${adminAttr(inquiryNameDefault)}">
               <input id="detail-inquiry-phone" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="+256 7XX XXX XXX" value="${adminAttr(inquiryPhoneDefault)}">
               <input id="detail-inquiry-email" type="email" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Email optional"))}" value="${adminAttr(inquiryEmailDefault)}">
-              <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: p.title || "this property" }))}</textarea>
+              <textarea id="detail-inquiry-message" rows="3" class="w-full border border-green-100 rounded-lg px-3 py-2 text-xs" placeholder="${adminAttr(translatePropertyUi("Message"))}">${adminEscape(translatePropertyUi("I am interested in {title}.", { title: displayTitle || "this property" }))}</textarea>
               <button type="button" onclick="submitPropertyInquiry(${detailIdArg})" class="w-full bg-green-800 hover:bg-green-700 text-white py-2.5 rounded-xl font-semibold text-sm">${translatePropertyUi("Send enquiry")}</button>
             </div>
           </div>
@@ -33063,7 +33154,7 @@ async function openDetail(id, options = {}) {
             </div>
           ` : `
 	              <button type="button" onclick="openDetailGalleryLightbox(detailGalleryPhotoIndex)" class="block w-full property-gallery-hero relative overflow-hidden group">
-            <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || p.title)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
+            <img id="detail-gallery-hero-img" src="${adminAttr(selectedPhotoSrc)}" alt="${adminAttr(getDisplayPhotoLabel(selectedPhoto, detailGalleryPhotoIndex, p) || displayTitle)}" class="w-full h-full object-cover group-hover:scale-[1.01] transition-transform">
             <div class="absolute bottom-3 right-3 bg-black/60 text-white text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1">
               <i class="fas fa-images"></i> <span id="detail-gallery-count-label">${detailGalleryPhotoIndex + 1}/${detailGalleryPhotos.length} ${photoCountLabel}</span>
             </div>
@@ -33089,7 +33180,7 @@ async function openDetail(id, options = {}) {
                   ${source ? `<span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>` : ""}
                   ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
                 </div>
-                <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${p.title}</h1>
+                <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${adminEscape(displayTitle)}</h1>
                 <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${detailLocation || [p.area, p.district].filter(Boolean).join(", ")}</p>
 	                    <div class="mt-2 flex items-center gap-2 text-xs text-gray-500">
 	                      <span class="inline-flex items-center gap-1"><i class="fas fa-calendar-alt text-green-600"></i>${addedMeta}</span>

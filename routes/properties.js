@@ -114,6 +114,7 @@ function normalizeListingType(type) {
 
 const PUBLIC_AREA_PIN_OVERRIDES = [
   { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
+  { name: 'Munyonyo', district: 'Kampala', latitude: 0.236, longitude: 32.623, aliases: ['Munyonyo', 'Munyonjo', 'Munyonyo Kampala', 'Munyonyo Uganda'] },
   { name: 'Bujjuko Akright Estate', district: 'Wakiso', latitude: 0.374, longitude: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
   { name: 'Kakiri', district: 'Wakiso', latitude: 0.409, longitude: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
   { name: 'Masulita', district: 'Wakiso', latitude: 0.51, longitude: 32.46, aliases: ['Masulita'] },
@@ -168,6 +169,12 @@ function publicLocationOverrideForListing(row = {}, extra = row.extra_fields || 
     row.title,
     row.description
   ].filter(Boolean).join(' '));
+}
+
+function isUsablePublicCoordinate(latitude, longitude) {
+  const lat = toNullableFloat(latitude);
+  const lng = toNullableFloat(longitude);
+  return lat != null && lng != null && isPointInUganda(lat, lng);
 }
 
 function cleanPublicListingCopy(value = '') {
@@ -251,6 +258,11 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
   const type = thirdPartyTypeLabel(property);
   const sourcePlatform = redactThirdPartyPublicText(extra.source_platform || 'the original source');
   const sourceName = redactThirdPartyPublicText(extra.source_name || extra.source_agent_name || '');
+  const reviewedFields = Array.isArray(extra.king_review_corrected_fields) ? extra.king_review_corrected_fields : [];
+  const reviewedDescription = redactThirdPartyPublicText(property.description || '');
+  const reviewedDescriptionLooksCopied = !reviewedDescription
+    || reviewedDescription.length > 420
+    || /\boriginal post date\b|\bsource post\b|\bthird-party\b|makaug has not verified/i.test(reviewedDescription);
   const price = publicPriceLabelFor(property);
   const bedrooms = Number(property.bedrooms);
   const bathrooms = Number(property.bathrooms);
@@ -262,6 +274,15 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
     Number.isFinite(bathrooms) && bathrooms > 0 ? `Bathrooms: ${bathrooms}` : ''
   ].filter(Boolean).join('. ');
   const source = sourceName ? `${sourceName} on ${sourcePlatform}` : sourcePlatform;
+  if (
+    reviewedDescription
+    && (extra.king_review_facts_confirmed === true || reviewedFields.includes('description'))
+    && !reviewedDescriptionLooksCopied
+  ) {
+    return `${reviewedDescription} Third-party property result found from ${source}. Makaug provides a search and discovery preview using limited factual information only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
   return `${buildThirdPartyPublicTitle(property, extra)} is a third-party property result found from ${source}. Makaug provides a search and discovery preview using limited factual information only. ${facts}. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Open the original source before contacting the seller, arranging a viewing, or making any payment.`
     .replace(/\s+/g, ' ')
     .trim();
@@ -606,8 +627,7 @@ function publicPropertyRow(property, images = []) {
   const safeExtra = publicExtraFields(property?.extra_fields);
   const foundOnlinePublic = isFoundOnlinePublicRow(property, safeExtra);
   const locationOverride = publicLocationOverrideForListing(safeProperty, safeExtra);
-  const publicLatitude = toNullableFloat(safeProperty.latitude);
-  const publicLongitude = toNullableFloat(safeProperty.longitude);
+  const hasUsablePublicPin = isUsablePublicCoordinate(safeProperty.latitude, safeProperty.longitude);
   const publicTitle = foundOnlinePublic
     ? buildThirdPartyPublicTitle(safeProperty, safeExtra)
     : cleanPublicListingCopy(safeProperty.title || '');
@@ -619,8 +639,8 @@ function publicPropertyRow(property, images = []) {
     title: publicTitle,
     description: publicDescription,
     district: locationOverride?.district || safeProperty.district,
-    latitude: publicLatitude == null && locationOverride ? locationOverride.latitude : safeProperty.latitude,
-    longitude: publicLongitude == null && locationOverride ? locationOverride.longitude : safeProperty.longitude,
+    latitude: !hasUsablePublicPin && locationOverride ? locationOverride.latitude : safeProperty.latitude,
+    longitude: !hasUsablePublicPin && locationOverride ? locationOverride.longitude : safeProperty.longitude,
     extra_fields: safeExtra,
     land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),
     featured: safeProperty.featured === true || String(safeExtra?.featured || '').toLowerCase() === 'true',
@@ -1369,11 +1389,10 @@ async function listPropertiesHandler(req, res, next) {
         const foundOnlinePublic = isFoundOnlinePublicRow(row, safeExtra);
         const primaryImageUrl = foundOnlinePublic ? null : normalizePublicImageUrl(row.primary_image_url);
         const locationOverride = publicLocationOverrideForListing(row, safeExtra);
-        const rowLatitude = toNullableFloat(row.latitude);
-        const rowLongitude = toNullableFloat(row.longitude);
+        const hasUsablePublicPin = isUsablePublicCoordinate(row.latitude, row.longitude);
         const publicDistrict = locationOverride?.district || row.district;
-        const publicLatitude = rowLatitude == null && locationOverride ? locationOverride.latitude : row.latitude;
-        const publicLongitude = rowLongitude == null && locationOverride ? locationOverride.longitude : row.longitude;
+        const publicLatitude = !hasUsablePublicPin && locationOverride ? locationOverride.latitude : row.latitude;
+        const publicLongitude = !hasUsablePublicPin && locationOverride ? locationOverride.longitude : row.longitude;
         const publicTitle = foundOnlinePublic
           ? buildThirdPartyPublicTitle(row, safeExtra)
           : cleanPublicListingCopy(publicRow.title || '');

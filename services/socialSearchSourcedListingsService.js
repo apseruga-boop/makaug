@@ -16,6 +16,7 @@ const FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID = 'found_online_source_post_impor
 const SOCIAL_SEARCH_FIRST_SEEN_AT = '2026-05-20T00:00:00.000Z';
 const SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT = '2026-05-20T00:00:00.000Z';
 const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
+const USD_TO_UGX_GUIDE_RATE = 3800;
 const ALLOWED_SOCIAL_SOURCE_PLATFORMS = ['youtube', 'tiktok', 'instagram', 'facebook', 'x', 'twitter'];
 const PREAPPROVED_PERMISSION_STATUSES = [
   'founder_reported_agent_authorised_upload',
@@ -1608,6 +1609,14 @@ function parseMoneyValue(value) {
   if (!match) return null;
   const amount = Number(match[1]);
   if (!Number.isFinite(amount)) return null;
+  const multiplier = /\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)
+    ? 1000000000
+    : /\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)
+      ? 1000000
+      : /\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)
+        ? 1000
+        : 1;
+  if (/^(?:\$|us\$|usd)\s*\d/.test(raw)) return Math.round(amount * multiplier * USD_TO_UGX_GUIDE_RATE);
   if (/\d(?:\.\d+)?\s*(b|bn|billions?)\b/.test(raw)) return Math.round(amount * 1000000000);
   if (/\d(?:\.\d+)?\s*(m|mn|millions?)\b/.test(raw)) return Math.round(amount * 1000000);
   if (/\d(?:\.\d+)?\s*(k|thousands?)\b/.test(raw)) return Math.round(amount * 1000);

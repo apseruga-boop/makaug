@@ -1322,6 +1322,8 @@ function priceTextFromText(text = '') {
   const raw = cleanText(text);
   const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
   if (negotiableMatch) return cleanText(negotiableMatch[0]);
+  const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\/month| per month| monthly|\/mo)?/i);
+  if (usdMatch) return cleanText(usdMatch[0]);
   const patterns = [
     /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly)?/i,
     /\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,
@@ -1356,7 +1358,7 @@ function emailFromText(text = '') {
 }
 
 function bedroomsFromText(text = '') {
-  const match = cleanText(text).match(/\b(\d{1,2})\s*(?:bed|bedroom|bdrm|br)\b/i);
+  const match = cleanText(text).match(/\b(\d{1,2})\s*(?:-|–|—)?\s*(?:bed|bedroom|bdrm|br)\b/i);
   return match ? Number(match[1]) : null;
 }
 
