@@ -929,6 +929,21 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   const normalizedCommentEvidence = normalizeFoundOnlineSourcePost(commentEvidenceRows[0]);
   assert.strictEqual(normalizedCommentEvidence.sourceAgent.phone, '+256706110456', 'generic source-post normalizer should preserve normalized comment phone contact');
 
+  const munYonyoRentRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@chillhouse1960/video/7608944105338457364',
+      '📍 Munyonyo, Uganda 🇺🇬 🔥 3-bedroom gem – only $800/month! ✅ Spacious lounge ✅ Modern finishes ✅ Secure & serene ✅ Near Lake Victoria & major malls ✅ Perfect for families or sharers 📞 0746282306 / 0776451733',
+    ].join('\n'),
+  });
+  assert.strictEqual(munYonyoRentRows[0].listing_type, 'rent', 'monthly TikTok captions should create rental listings');
+  assert.strictEqual(munYonyoRentRows[0].area, 'Munyonyo', 'Munyonyo captions should extract the correct Kampala area');
+  assert.strictEqual(munYonyoRentRows[0].district, 'Kampala', 'Munyonyo captions should map to Kampala district');
+  assert.strictEqual(munYonyoRentRows[0].price_text, '$800/month', 'dollar monthly rent should be captured from social source text');
+  assert.strictEqual(munYonyoRentRows[0].contact_phone, '+256746282306', 'first Uganda phone in source text should be normalized for contact routing');
+  assert.strictEqual(munYonyoRentRows[0].bedrooms, 3, 'hyphenated bedroom text should be extracted');
+  const normalizedMunYonyoRent = normalizeFoundOnlineSourcePost(munYonyoRentRows[0]);
+  assert.strictEqual(normalizedMunYonyoRent.price, 3040000, 'USD monthly rent should normalize to an approximate UGX review price');
+
   const youtubeJobs = buildYouTubeSearchJobs({
     sources: [{
       key: 'youtube-student-hostels-kampala-search',
@@ -1131,8 +1146,20 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('admin-review-listing-type-edit'), 'King review should allow changing sale/rent type');
   assert(frontend.includes('admin-review-area-edit') && frontend.includes('admin-review-district-edit'), 'King review should allow location correction');
   assert(frontend.includes('adminReviewLocationProvider = "google"'), 'King review map should use Google Maps when available');
+  assert(frontend.includes('REVIEW_USD_TO_UGX_GUIDE_RATE'), 'King review source extraction should understand dollar rent prices');
+  assert(frontend.includes('adminReviewHasUsableCoordinates'), 'King review should reject 0,0 and other unusable map pins before syncing');
+  assert(frontend.includes('adminReviewScheduleLocationSync'), 'King review should move the review map as area/district fields change');
+  assert(frontend.includes('Munyonyo'), 'King review should include a Munyonyo area pin for rentals around Lake Victoria');
+  assert(frontend.includes('getLocalizedPropertyTitle'), 'public cards/details should use language-aware sourced listing titles instead of copied captions');
   assert(adminRoute.includes('king_review_corrected_fields'), 'admin review edits should keep correction traceability');
   assert(adminRoute.includes("map_pin_source: 'king_review'"), 'admin review coordinate edits should mark the map pin source');
+  assert(adminRoute.includes('isPointInUganda(latitude, longitude)'), 'admin review should only accept confirmed coordinates inside Uganda');
+  assert(adminRoute.includes('latitude and longitude must be confirmed together'), 'admin review should not save half-confirmed map pins');
+  assert(socialPlatformSweepServiceSource.includes('const usdMatch'), 'social import should extract dollar price text');
+  assert(socialSearchServiceSource.includes('USD_TO_UGX_GUIDE_RATE'), 'source post normalizer should convert dollar guide prices to UGX');
+  assert(propertiesRoute.includes('isUsablePublicCoordinate'), 'public routes should ignore invalid stored coordinates and use responsible area pins');
+  assert(propertiesRoute.includes('Munyonyo'), 'public routes should include a Munyonyo area fallback pin');
+  assert(propertiesRoute.includes('reviewedDescription'), 'public third-party summaries should use King-reviewed short descriptions when clean');
   assert(propertiesRoute.includes('reviewedFields.includes') && propertiesRoute.includes('reviewedTitleLooksCopied'), 'public third-party titles should respect clean King edits without exposing copied captions');
   assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');
 });
