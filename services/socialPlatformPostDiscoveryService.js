@@ -18,9 +18,15 @@ const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
 const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
+const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
+const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
+const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
+const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-02-01T00:00:00.000Z';
+const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
 const TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN = /https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+(?:[^\s]*)?/ig;
+const SOCIAL_URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>"']+/ig;
 
 const CORE_PROPERTY_QUERY = [
   'property', 'house', 'home', 'apartment', 'land', 'plot', 'rent', 'rental',
@@ -30,6 +36,7 @@ const CORE_PROPERTY_QUERY = [
 const UGANDA_LOCATION_QUERY = [
   'Uganda', 'Kampala', 'Wakiso', 'Mukono', 'Entebbe', 'Jinja', 'Kira', 'Ntinda',
   'Naalya', 'Muyenga', 'Namugongo', 'Najjera', 'Makerere', 'Kyambogo',
+  'MUBS', 'UCU', 'Ndejje', 'Nakawa', 'Banda', 'Kikoni', 'Namanve', 'Kikuubo',
 ].join(' OR ');
 
 const AREA_HINTS = [
@@ -99,6 +106,14 @@ function envBearerToken(env = process.env) {
   return { name: '', token: '' };
 }
 
+function envYouTubeApiKey(env = process.env) {
+  for (const name of YOUTUBE_API_KEY_ENV_NAMES) {
+    const apiKey = String(env[name] || '').trim();
+    if (apiKey) return { name, apiKey };
+  }
+  return { name: '', apiKey: '' };
+}
+
 function cappedNumber(value, fallback, min = 1, max = 500) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -145,9 +160,41 @@ function sourceHandle(source = {}) {
 function sourceHashtag(source = {}) {
   const tags = Array.isArray(source.hashtags) ? source.hashtags : [];
   const url = sourceUrl(source);
-  const tagMatch = url.match(/tiktok\.com\/tag\/([^/?#]+)/i);
+  const tagMatch = url.match(/(?:tiktok\.com\/tag|youtube\.com\/hashtag|instagram\.com\/explore\/tags|facebook\.com\/hashtag)\/([^/?#]+)/i);
   if (tagMatch) return decodeURIComponent(tagMatch[1]);
   return cleanText(tags[0] || '').replace(/^#/, '');
+}
+
+function normalizeYouTubeVideoId(value = '') {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  if (/^[a-zA-Z0-9_-]{6,}$/.test(raw) && !/^https?:\/\//i.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    if (/youtu\.be$/i.test(url.hostname)) return url.pathname.split('/').filter(Boolean)[0] || '';
+    if (/youtube\.com$/i.test(url.hostname) || /\.youtube\.com$/i.test(url.hostname)) {
+      if (url.pathname === '/watch') return url.searchParams.get('v') || '';
+      const shorts = url.pathname.match(/^\/shorts\/([^/?#]+)/i);
+      if (shorts) return shorts[1] || '';
+      const embed = url.pathname.match(/^\/embed\/([^/?#]+)/i);
+      if (embed) return embed[1] || '';
+    }
+  } catch (_) {}
+  return '';
+}
+
+function youtubeWatchUrl(videoId = '') {
+  const id = normalizeYouTubeVideoId(videoId);
+  return id ? `https://www.youtube.com/watch?v=${id}` : '';
+}
+
+function normalizeYouTubeVideoUrl(value = '') {
+  return youtubeWatchUrl(value);
+}
+
+function youtubeChannelUrl(channelId = '') {
+  const id = cleanText(channelId);
+  return id ? `https://www.youtube.com/channel/${id}` : '';
 }
 
 function normalizeTikTokVideoUrl(value = '') {
@@ -172,6 +219,102 @@ function tiktokProfileUrlFromVideoUrl(url = '') {
   return handle ? `https://www.tiktok.com/@${handle}` : '';
 }
 
+function normalizeXPostUrl(value = '') {
+  const raw = cleanText(value).replace(/[),.;]+$/g, '').replace(/^http:\/\//i, 'https://');
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    const host = url.hostname.replace(/^www\./i, '').toLowerCase();
+    if (host !== 'x.com' && host !== 'twitter.com') return '';
+    const match = url.pathname.match(/^\/([^/]+)\/status\/(\d+)/i);
+    if (!match) return '';
+    return `https://x.com/${match[1]}/status/${match[2]}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizeInstagramPostUrl(value = '') {
+  const raw = cleanText(value).replace(/[),.;]+$/g, '').replace(/^http:\/\//i, 'https://');
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)instagram\.com$/i.test(url.hostname)) return '';
+    const match = url.pathname.match(/^\/(p|reel|tv)\/([^/?#]+)/i);
+    if (!match) return '';
+    return `https://www.instagram.com/${match[1]}/${match[2]}/`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizeFacebookPostUrl(value = '') {
+  const raw = cleanText(value).replace(/[),.;]+$/g, '').replace(/^http:\/\//i, 'https://');
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)facebook\.com$/i.test(url.hostname) && !/^fb\.watch$/i.test(url.hostname)) return '';
+    const path = url.pathname.replace(/\/+$/g, '');
+    if (!/(\/posts\/|\/videos\/|\/reel\/|\/watch\/|\/share\/|\/permalink\.php|\/photo(?:\.php)?)/i.test(`${path}${url.search}`)) {
+      return '';
+    }
+    return `https://www.facebook.com${path || '/'}${url.search || ''}`;
+  } catch (_) {
+    return '';
+  }
+}
+
+function normalizeExactSocialPostUrl(value = '') {
+  const raw = cleanText(value).replace(/[),.;]+$/g, '');
+  return normalizeTikTokVideoUrl(raw)
+    || normalizeYouTubeVideoUrl(raw)
+    || normalizeXPostUrl(raw)
+    || normalizeInstagramPostUrl(raw)
+    || normalizeFacebookPostUrl(raw)
+    || '';
+}
+
+function extractExactSocialPostUrls(text = '') {
+  const matches = String(text || '').match(SOCIAL_URL_GLOBAL_PATTERN) || [];
+  return [...new Set(matches.map(normalizeExactSocialPostUrl).filter(Boolean))];
+}
+
+function platformForExactSocialPostUrl(url = '') {
+  const raw = cleanText(url);
+  if (/tiktok\.com/i.test(raw)) return 'TikTok';
+  if (/youtube\.com|youtu\.be/i.test(raw)) return 'YouTube';
+  if (/(^|\/\/)(x|twitter)\.com/i.test(raw)) return 'X';
+  if (/instagram\.com/i.test(raw)) return 'Instagram';
+  if (/facebook\.com|fb\.watch/i.test(raw)) return 'Facebook';
+  return 'Social';
+}
+
+function sourcePageUrlFromExactPostUrl(url = '') {
+  const exactUrl = cleanText(url);
+  if (/tiktok\.com/i.test(exactUrl)) return tiktokProfileUrlFromVideoUrl(exactUrl);
+  if (/(^|\/\/)(x|twitter)\.com/i.test(exactUrl)) {
+    const match = exactUrl.match(/x\.com\/([^/]+)\/status/i);
+    return match ? `https://x.com/${match[1]}` : '';
+  }
+  if (/instagram\.com/i.test(exactUrl)) {
+    try {
+      const parsed = new URL(exactUrl);
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      return parts.length > 2 ? `https://www.instagram.com/${parts[0]}/` : '';
+    } catch (_) {}
+  }
+  if (/facebook\.com/i.test(exactUrl)) {
+    try {
+      const parsed = new URL(exactUrl);
+      const first = parsed.pathname.split('/').filter(Boolean)[0];
+      return first && !/^(watch|reel|share|permalink\.php|photo\.php)$/i.test(first)
+        ? `https://www.facebook.com/${first}`
+        : '';
+    } catch (_) {}
+  }
+  return '';
+}
+
 function fieldKey(value = '') {
   return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 }
@@ -181,6 +324,21 @@ function parseDelimitedTikTokLine(line = '') {
   if (!url || !line.includes('|')) return null;
   const parts = line.split('|').map((part) => cleanText(part)).filter(Boolean);
   const withoutUrl = parts.filter((part) => !extractTikTokVideoUrls(part).length);
+  return {
+    post_url: url,
+    title: withoutUrl[0] || '',
+    area: withoutUrl[1] || '',
+    price_text: withoutUrl[2] || '',
+    first_posted_at: withoutUrl[3] || '',
+    caption: withoutUrl.join(' '),
+  };
+}
+
+function parseDelimitedSocialLine(line = '') {
+  const url = extractExactSocialPostUrls(line)[0] || '';
+  if (!url || !line.includes('|')) return null;
+  const parts = line.split('|').map((part) => cleanText(part)).filter(Boolean);
+  const withoutUrl = parts.filter((part) => !extractExactSocialPostUrls(part).length);
   return {
     post_url: url,
     title: withoutUrl[0] || '',
@@ -204,7 +362,7 @@ function parseTikTokFields(block = '') {
       if (key) fields[key] = value;
       continue;
     }
-    if (!extractTikTokVideoUrls(line).length) freeText.push(line);
+    if (!extractTikTokVideoUrls(line).length && !extractExactSocialPostUrls(line).length) freeText.push(line);
   }
   if (freeText.length && !fields.caption && !fields.description) {
     fields.caption = freeText.join(' ');
@@ -233,6 +391,17 @@ function normalizeParsedTikTokFields(fields = {}) {
     consent_confirmed: fields.consent_confirmed || fields.agent_authorised || fields.agent_authorized || '',
     image_rights_confirmed: fields.image_rights_confirmed || fields.authorised_images || fields.authorized_images || '',
     permission_status: fields.permission_status || '',
+  };
+}
+
+function normalizeParsedSocialFields(fields = {}) {
+  return {
+    ...normalizeParsedTikTokFields(fields),
+    post_url: fields.url || fields.post_url || fields.source_url || fields.video_url || '',
+    platform: fields.platform || '',
+    youtube_video_id: fields.youtube_video_id || fields.youtube_id || '',
+    channel_url: fields.channel || fields.channel_url || fields.youtube_channel || '',
+    profile_url: fields.profile || fields.source_page_url || fields.account || '',
   };
 }
 
@@ -273,6 +442,43 @@ function tikTokSeedsFromInputs({ posts = [], urls = [], rawText = '' } = {}) {
     .filter((seed) => seed.post_url);
 }
 
+function socialSeedsFromText(rawText = '') {
+  const blocks = String(rawText || '')
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const seeds = [];
+  for (const block of blocks.length ? blocks : [String(rawText || '')]) {
+    const delimited = block.split(/\r?\n/).map(parseDelimitedSocialLine).filter(Boolean);
+    if (delimited.length) {
+      seeds.push(...delimited);
+      continue;
+    }
+    const urls = extractExactSocialPostUrls(block);
+    if (!urls.length) continue;
+    const fields = normalizeParsedSocialFields(parseTikTokFields(block));
+    for (const url of urls) {
+      seeds.push({ ...fields, post_url: url });
+    }
+  }
+  return seeds;
+}
+
+function socialSeedsFromInputs({ posts = [], urls = [], rawText = '' } = {}) {
+  const postSeeds = (Array.isArray(posts) ? posts : [])
+    .map((post) => (typeof post === 'string' ? { post_url: post } : post))
+    .filter(Boolean);
+  const urlSeeds = (Array.isArray(urls) ? urls : [])
+    .map((url) => ({ post_url: url }));
+  const textSeeds = socialSeedsFromText(rawText);
+  return [...postSeeds, ...urlSeeds, ...textSeeds]
+    .map((seed) => ({
+      ...seed,
+      post_url: normalizeExactSocialPostUrl(seed.post_url || seed.source_url || seed.url || seed.video_url),
+    }))
+    .filter((seed) => seed.post_url);
+}
+
 function normalizeTikTokOEmbed(payload = {}) {
   return {
     title: cleanText(payload.title || ''),
@@ -281,6 +487,154 @@ function normalizeTikTokOEmbed(payload = {}) {
     thumbnail_url: cleanText(payload.thumbnail_url || ''),
     provider_name: cleanText(payload.provider_name || 'TikTok'),
   };
+}
+
+function decodeHtmlEntities(value = '') {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+function htmlMetaContent(html = '', key = '') {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name|itemprop)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, 'i'),
+    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name|itemprop)=["']${escaped}["']`, 'i'),
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) return cleanText(decodeHtmlEntities(match[1]));
+  }
+  return '';
+}
+
+function htmlJsonStringValue(html = '', key = '') {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = html.match(new RegExp(`"${escaped}"\\s*:\\s*"([^"]+)"`, 'i'));
+  return match ? cleanText(decodeHtmlEntities(match[1].replace(/\\u0026/g, '&'))) : '';
+}
+
+function normalizeYouTubeOEmbed(payload = {}) {
+  return {
+    title: cleanText(payload.title || ''),
+    author_name: cleanText(payload.author_name || ''),
+    author_url: cleanText(payload.author_url || ''),
+    thumbnail_url: cleanText(payload.thumbnail_url || ''),
+    provider_name: cleanText(payload.provider_name || 'YouTube'),
+  };
+}
+
+async function fetchYouTubeOEmbed(url = '', { fetchImpl = fetch } = {}) {
+  const exactUrl = normalizeYouTubeVideoUrl(url);
+  if (!exactUrl) return { ok: false, skipped: true, reason: 'missing_exact_youtube_video_url' };
+  const endpoint = new URL(YOUTUBE_OEMBED_URL);
+  endpoint.searchParams.set('url', exactUrl);
+  endpoint.searchParams.set('format', 'json');
+  const response = await fetchImpl(endpoint, {
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      reason: payload?.error || payload?.message || 'youtube_oembed_failed',
+      payload,
+    };
+  }
+  return {
+    ok: true,
+    payload: normalizeYouTubeOEmbed(payload),
+  };
+}
+
+async function fetchPublicPageMetadata(url = '', { fetchImpl = fetch } = {}) {
+  const exactUrl = normalizeExactSocialPostUrl(url);
+  if (!exactUrl) return { ok: false, skipped: true, reason: 'missing_exact_social_post_url' };
+  const response = await fetchImpl(exactUrl, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml',
+      'User-Agent': 'makaug-found-online-source-review/1.0',
+    },
+  });
+  const html = await response.text().catch(() => '');
+  if (!response.ok || !html) {
+    return {
+      ok: false,
+      status: response.status,
+      reason: 'public_page_metadata_failed',
+    };
+  }
+  const title = htmlMetaContent(html, 'og:title')
+    || htmlMetaContent(html, 'twitter:title')
+    || htmlJsonStringValue(html, 'title')
+    || '';
+  const description = htmlMetaContent(html, 'og:description')
+    || htmlMetaContent(html, 'description')
+    || htmlJsonStringValue(html, 'shortDescription')
+    || htmlJsonStringValue(html, 'description')
+    || '';
+  const image = htmlMetaContent(html, 'og:image')
+    || htmlMetaContent(html, 'twitter:image')
+    || htmlMetaContent(html, 'thumbnailUrl')
+    || htmlJsonStringValue(html, 'thumbnailUrl')
+    || '';
+  const publishedAt = htmlMetaContent(html, 'datePublished')
+    || htmlMetaContent(html, 'uploadDate')
+    || htmlJsonStringValue(html, 'datePublished')
+    || htmlJsonStringValue(html, 'uploadDate')
+    || htmlJsonStringValue(html, 'publishDate')
+    || '';
+  const channelId = htmlJsonStringValue(html, 'channelId') || htmlJsonStringValue(html, 'externalId') || '';
+  const channelTitle = htmlJsonStringValue(html, 'ownerChannelName') || htmlJsonStringValue(html, 'author') || '';
+  return {
+    ok: true,
+    payload: {
+      title,
+      description,
+      image_url: image,
+      published_at: publishedAt,
+      channel_id: channelId,
+      channel_title: channelTitle,
+      channel_url: youtubeChannelUrl(channelId),
+    },
+  };
+}
+
+function inferTikTokPostedAtFromVideoId(url = '') {
+  const match = cleanText(url).match(/\/video\/(\d+)/i);
+  if (!match) return '';
+  try {
+    const unixSeconds = Number(BigInt(match[1]) >> 32n);
+    const date = new Date(unixSeconds * 1000);
+    const year = date.getUTCFullYear();
+    return year >= 2016 && year <= 2036 ? date.toISOString() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function inferXPostedAtFromStatusId(url = '') {
+  const match = cleanText(url).match(/\/status\/(\d+)/i);
+  if (!match) return '';
+  try {
+    const twitterEpochMs = 1288834974657n;
+    const unixMs = (BigInt(match[1]) >> 22n) + twitterEpochMs;
+    const date = new Date(Number(unixMs));
+    const year = date.getUTCFullYear();
+    return year >= 2010 && year <= 2036 ? date.toISOString() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function inferredPlatformPostedAt(url = '') {
+  if (/tiktok\.com/i.test(url)) return inferTikTokPostedAtFromVideoId(url);
+  if (/(^|\/\/)(x|twitter)\.com/i.test(url)) return inferXPostedAtFromStatusId(url);
+  return '';
 }
 
 async function fetchTikTokOEmbed(url = '', { fetchImpl = fetch } = {}) {
@@ -330,10 +684,11 @@ function buildTikTokExactPostImportRows({
       const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
       const combinedText = cleanText(`${title} ${caption}`);
       const rawArea = cleanText(seed.area || seed.location || '');
+      const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
-      const area = areaPin && (!rawArea || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
+      const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
         ? areaPin.name
-        : cleanText(rawArea || extractArea(combinedText));
+        : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
       const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
       const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
       const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
@@ -363,10 +718,12 @@ function buildTikTokExactPostImportRows({
         latitude: seed.latitude || seed.lat || areaPin?.lat || '',
         longitude: seed.longitude || seed.lng || areaPin?.lng || '',
         price_text: priceText,
-        listing_type: seed.listing_type || listingTypeFromText(combinedText),
+        listing_type: seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`),
         bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
         bathrooms: seed.bathrooms || '',
-        first_posted_at: seed.first_posted_at || seed.posted_at || seed.published_at || seed.source_published_at || '',
+        first_posted_at: seed.first_posted_at || seed.first_posted_online_at || seed.posted_at || seed.platform_posted_at || seed.video_posted_at || seed.published_at || seed.source_published_at || '',
+        platform_posted_at: seed.platform_posted_at || seed.first_posted_at || seed.posted_at || seed.published_at || '',
+        video_posted_at: seed.video_posted_at || seed.first_posted_at || seed.posted_at || seed.published_at || '',
         image_urls: imageUrls,
         contact_phone: contactPhone,
         contact_email: contactEmail,
@@ -437,6 +794,216 @@ async function importTikTokExactVideoPosts({
   };
 }
 
+function buildExactSocialPostImportRows({
+  posts = [],
+  urls = [],
+  rawText = '',
+  metadataByUrl = {},
+} = {}) {
+  const seeds = socialSeedsFromInputs({ posts, urls, rawText });
+  const seen = new Set();
+  return seeds
+    .filter((seed) => {
+      if (seen.has(seed.post_url)) return false;
+      seen.add(seed.post_url);
+      return true;
+    })
+    .map((seed, index) => {
+      const sourceUrl = seed.post_url;
+      const platform = cleanText(seed.platform || platformForExactSocialPostUrl(sourceUrl));
+      const metadata = metadataByUrl[sourceUrl] || {};
+      const oembed = metadata.oembed || {};
+      const page = metadata.page || {};
+      const inferredPostedAt = inferredPlatformPostedAt(sourceUrl);
+      const videoId = normalizeYouTubeVideoId(seed.youtube_video_id || sourceUrl);
+      const sourcePageUrl = seed.source_page_url
+        || seed.profile_url
+        || seed.channel_url
+        || page.channel_url
+        || oembed.author_url
+        || sourcePageUrlFromExactPostUrl(sourceUrl)
+        || sourceUrl;
+      const sourceName = cleanText(
+        seed.source_name
+        || page.channel_title
+        || oembed.author_name
+        || sourcePageUrl.replace(/^https?:\/\/(?:www\.)?/i, '').replace(/[/?#].*$/g, '')
+        || `${platform} property source`
+      );
+      const title = cleanText(seed.title || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
+      const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || title);
+      const combinedText = cleanText(`${title} ${caption}`);
+      const rawArea = cleanText(seed.area || seed.location || '');
+      const extractedRawArea = extractArea(rawArea);
+      const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
+      const area = areaPin && (!rawArea || rawArea.includes(',') || /^(kampala|wakiso|hoima|greater kampala|uganda)$/i.test(rawArea))
+        ? areaPin.name
+        : cleanText(extractedRawArea || rawArea || extractArea(combinedText));
+      const district = cleanText(areaPin?.district || seed.district || districtForArea(area, combinedText));
+      const priceText = cleanText(seed.price_text || seed.price || priceTextFromText(combinedText));
+      const contactPhone = cleanText(seed.contact_phone || seed.phone || seed.whatsapp || phoneFromText(combinedText));
+      const contactEmail = cleanText(seed.contact_email || seed.email || emailFromText(combinedText));
+      const firstPostedAt = cleanText(
+        seed.first_posted_at
+        || seed.first_posted_online_at
+        || seed.posted_at
+        || seed.platform_posted_at
+        || seed.published_at
+        || page.published_at
+        || inferredPostedAt
+      );
+      const imageUrls = [
+        ...String(seed.image_urls || seed.images || seed.photo_urls || seed.media_urls || '')
+          .split(/[\n,|]+/)
+          .map(cleanText)
+          .filter(Boolean),
+        page.image_url,
+        oembed.thumbnail_url,
+      ].filter(Boolean);
+      return {
+        post_url: sourceUrl,
+        source_url: sourceUrl,
+        source_page_url: sourcePageUrl,
+        source_contact_url: seed.source_contact_url || seed.contact_url || sourcePageUrl || sourceUrl,
+        source_key: seed.source_key || sourceName || sourceUrl,
+        source_name: sourceName,
+        platform,
+        youtube_url: videoId ? youtubeWatchUrl(videoId) : '',
+        youtube_video_id: videoId || '',
+        tiktok_url: /tiktok\.com/i.test(sourceUrl) ? sourceUrl : '',
+        x_url: /(x|twitter)\.com/i.test(sourceUrl) ? sourceUrl : '',
+        instagram_url: /instagram\.com/i.test(sourceUrl) ? sourceUrl : '',
+        facebook_url: /facebook\.com|fb\.watch/i.test(sourceUrl) ? sourceUrl : '',
+        video_url: /youtube\.com|youtu\.be|tiktok\.com/i.test(sourceUrl) ? sourceUrl : '',
+        title,
+        caption,
+        description: caption || title,
+        area,
+        district,
+        location: area || district,
+        latitude: seed.latitude || seed.lat || areaPin?.lat || '',
+        longitude: seed.longitude || seed.lng || areaPin?.lng || '',
+        price_text: priceText,
+        listing_type: seed.listing_type || listingTypeFromText(`${combinedText} ${rawArea}`),
+        bedrooms: seed.bedrooms || bedroomsFromText(combinedText),
+        bathrooms: seed.bathrooms || '',
+        first_posted_at: firstPostedAt,
+        platform_posted_at: firstPostedAt,
+        video_posted_at: firstPostedAt,
+        image_urls: imageUrls,
+        contact_phone: contactPhone,
+        contact_email: contactEmail,
+        pre_approved: seed.pre_approved || seed.preApproved || '',
+        consent_confirmed: seed.consent_confirmed || seed.consentConfirmed || seed.agent_authorised || seed.agentAuthorised || '',
+        image_rights_confirmed: seed.image_rights_confirmed || seed.imageRightsConfirmed || seed.authorised_images || seed.authorisedImages || '',
+        permission_status: seed.permission_status || seed.permissionStatus || 'exact_social_source_pending_king_review',
+        source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+        source_registry_key: seed.source_registry_key || '',
+        source_urls: [sourcePageUrl, sourceUrl].filter(Boolean),
+        raw_source_post: {
+          ...seed,
+          no_api_metadata: metadata,
+          import_method: 'no_api_exact_social_url_intake',
+          date_confidence: seed.first_posted_at || seed.posted_at || seed.published_at
+            ? 'operator_supplied'
+            : page.published_at
+              ? 'public_page_metadata'
+              : inferredPostedAt
+                ? 'inferred_from_public_post_id'
+                : 'needs_platform_date_confirmation',
+        },
+      };
+    });
+}
+
+async function importExactSocialSourcePosts({
+  db,
+  posts = [],
+  urls = [],
+  rawText = '',
+  dryRun = false,
+  fetchOembed = true,
+  fetchPublicMetadata = true,
+  fetchImpl = fetch,
+} = {}) {
+  const seeds = socialSeedsFromInputs({ posts, urls, rawText });
+  const metadataByUrl = {};
+  const metadataReports = [];
+  for (const seed of seeds) {
+    const url = seed.post_url;
+    if (!url || metadataByUrl[url]) continue;
+    const platform = platformForExactSocialPostUrl(url);
+    const metadata = {};
+    if (fetchOembed && platform === 'TikTok') {
+      const report = await fetchTikTokOEmbed(url, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'tiktok_oembed_failed',
+      }));
+      metadataReports.push({
+        post_url: url,
+        platform,
+        method: 'tiktok_oembed',
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'tiktok_oembed_failed'),
+      });
+      if (report.ok && report.payload) metadata.oembed = report.payload;
+    }
+    if (fetchOembed && platform === 'YouTube') {
+      const report = await fetchYouTubeOEmbed(url, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'youtube_oembed_failed',
+      }));
+      metadataReports.push({
+        post_url: url,
+        platform,
+        method: 'youtube_oembed',
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'youtube_oembed_failed'),
+      });
+      if (report.ok && report.payload) metadata.oembed = report.payload;
+    }
+    if (fetchPublicMetadata && platform === 'YouTube') {
+      const report = await fetchPublicPageMetadata(url, { fetchImpl }).catch((error) => ({
+        ok: false,
+        reason: error.message || 'public_page_metadata_failed',
+      }));
+      metadataReports.push({
+        post_url: url,
+        platform,
+        method: 'public_page_metadata',
+        ok: report.ok === true,
+        status: report.status || null,
+        reason: report.ok ? '' : (report.reason || 'public_page_metadata_failed'),
+      });
+      if (report.ok && report.payload) metadata.page = report.payload;
+    }
+    metadataByUrl[url] = metadata;
+  }
+  const importRows = buildExactSocialPostImportRows({
+    posts: seeds,
+    metadataByUrl,
+  });
+  const importResult = await queueFoundOnlineSourcePostListings({
+    db,
+    posts: importRows,
+    dryRun,
+    createProfilesForRepeatedSourcesOnly: true,
+  });
+  return {
+    ok: true,
+    batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+    dry_run: dryRun,
+    exact_social_url_count: importRows.length,
+    exact_social_import_rows: importRows,
+    metadata_fetch_count: metadataReports.length,
+    metadata_reports: metadataReports,
+    import_result: importResult,
+    ...importResult,
+  };
+}
+
 function isDiscoveryFeed(source = {}) {
   return sourceRecordKind(source) === 'discovery_feed';
 }
@@ -484,6 +1051,177 @@ function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit
         next_action: `Open ${sourceUrl(source) || query}, collect every 2026+ property video URL, then import with inventory:import-source-posts.`,
       };
     });
+}
+
+function buildYouTubeQueryForSource(source = {}) {
+  const url = sourceUrl(source);
+  const existingQuery = urlParam(url, 'search_query') || urlParam(url, 'q');
+  if (existingQuery) return cleanText(existingQuery);
+  const hashtag = sourceHashtag(source);
+  const tags = Array.isArray(source.hashtags)
+    ? source.hashtags.filter(Boolean).slice(0, 4).map((tag) => `#${String(tag).replace(/^#/, '')}`)
+    : [];
+  const nameWords = cleanText(sourceName(source))
+    .replace(/^youtube\s+(?:search|hashtag):?/i, '')
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !/^(youtube|search|hashtag|feed|source)$/i.test(word))
+    .slice(0, 6);
+  const discoveryTerms = [hashtag ? `#${hashtag}` : '', ...tags, ...nameWords]
+    .filter(Boolean)
+    .join(' ');
+  return cleanText(`${discoveryTerms || 'Uganda property'} Uganda property house land rent hostel student accommodation commercial`);
+}
+
+function buildYouTubeSearchJobs({
+  sources = sourcesForPlatform('youtube'),
+  limit = DEFAULT_MAX_SOURCES,
+  publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+} = {}) {
+  const start = cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
+  return sources
+    .filter((source) => normalizePlatform(source.platform) === 'youtube')
+    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
+    .map((source) => ({
+      platform: 'youtube',
+      source_key: sourceKey(source),
+      source_name: sourceName(source),
+      source_type: source.source_type || source.sourceType || '',
+      source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+      source_url: sourceUrl(source),
+      query: buildYouTubeQueryForSource(source).slice(0, 500),
+      endpoint: YOUTUBE_SEARCH_URL,
+      published_after: start,
+      max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+      includes_shorts_and_long_form: true,
+    }));
+}
+
+function youtubeThumbnailUrls(thumbnails = {}) {
+  return ['maxres', 'standard', 'high', 'medium', 'default']
+    .map((key) => thumbnails?.[key]?.url)
+    .filter(Boolean)
+    .filter((url, index, all) => all.indexOf(url) === index)
+    .slice(0, 5);
+}
+
+function normalizeYouTubeApiPost(item = {}, job = {}) {
+  const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.id || '');
+  if (!videoId) return null;
+  const snippet = item.snippet || {};
+  const title = cleanText(snippet.title || `YouTube property video ${videoId}`);
+  const description = cleanText(snippet.description || '');
+  const combinedText = cleanText(`${title} ${description}`);
+  const area = extractArea(combinedText);
+  const district = districtForArea(area, combinedText);
+  const priceText = priceTextFromText(combinedText);
+  const channelUrl = youtubeChannelUrl(snippet.channelId) || job.source_url || '';
+  const sourceUrl = youtubeWatchUrl(videoId);
+  const publishedAt = snippet.publishedAt || '';
+  return {
+    post_id: videoId,
+    source_key: snippet.channelId || job.source_key || videoId,
+    source_registry_key: job.source_key || '',
+    source_name: cleanText(snippet.channelTitle || job.source_name || 'YouTube property source'),
+    platform: 'YouTube',
+    source_url: sourceUrl,
+    post_url: sourceUrl,
+    source_page_url: channelUrl,
+    source_contact_url: channelUrl || sourceUrl,
+    youtube_url: sourceUrl,
+    youtube_video_id: videoId,
+    video_url: sourceUrl,
+    title,
+    source_title: title,
+    caption: description,
+    description: description || title,
+    first_posted_at: publishedAt,
+    published_at: publishedAt,
+    platform_posted_at: publishedAt,
+    youtube_published_at: publishedAt,
+    youtube_source_published_at: publishedAt,
+    area,
+    district,
+    location: area || district,
+    price_text: priceText,
+    listing_type: listingTypeFromText(combinedText),
+    bedrooms: bedroomsFromText(combinedText),
+    image_urls: youtubeThumbnailUrls(snippet.thumbnails),
+    source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+    source_urls: [job.source_url, channelUrl, sourceUrl].filter(Boolean),
+    raw_source_post: {
+      youtube_search_item: item,
+      source_job: job,
+      import_method: 'youtube_data_api_search',
+      published_after: job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
+      includes_shorts_and_long_form: true,
+    },
+  };
+}
+
+async function fetchYouTubeSearchJob(job = {}, {
+  apiKey = '',
+  maxResults = DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+  fetchImpl = fetch,
+} = {}) {
+  if (!apiKey) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'missing_youtube_api_key',
+      posts: [],
+    };
+  }
+  const url = new URL(YOUTUBE_SEARCH_URL);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('type', 'video');
+  url.searchParams.set('order', 'date');
+  url.searchParams.set('q', job.query);
+  url.searchParams.set('publishedAfter', job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START);
+  url.searchParams.set('maxResults', String(cappedNumber(maxResults, DEFAULT_YOUTUBE_RESULTS_PER_SOURCE, 1, 50)));
+  url.searchParams.set('safeSearch', 'none');
+  const response = await fetchImpl(url, {
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const firstError = Array.isArray(payload?.error?.errors) ? payload.error.errors[0] : null;
+    return {
+      ok: false,
+      status: response.status,
+      reason: firstError?.message || payload?.error?.message || 'youtube_api_search_failed',
+      error_reason: firstError?.reason || '',
+      posts: [],
+    };
+  }
+  const rows = Array.isArray(payload.items) ? payload.items : [];
+  return {
+    ok: true,
+    result_count: rows.length,
+    posts: rows.map((row) => normalizeYouTubeApiPost(row, job)).filter(Boolean),
+    next_page_token: payload.nextPageToken || '',
+    page_info: payload.pageInfo || {},
+  };
+}
+
+async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
+  const posts = [];
+  const reports = [];
+  for (const job of jobs) {
+    const report = await fetchYouTubeSearchJob(job, options);
+    reports.push({
+      ...job,
+      ok: report.ok,
+      skipped: report.skipped,
+      status: report.status,
+      reason: report.reason,
+      error_reason: report.error_reason,
+      result_count: report.result_count || 0,
+      next_page_token: report.next_page_token || '',
+    });
+    posts.push(...(report.posts || []));
+  }
+  return { posts, reports };
 }
 
 function buildXQueryForSource(source = {}) {
@@ -730,21 +1468,51 @@ async function runSocialPlatformPostSweep({
   searchMode = 'all',
   lookbackDays = 0,
   fetchX = true,
+  fetchYouTube = true,
+  youtubePublishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  publishedAfter = '',
   env = process.env,
   fetchImpl = fetch,
 } = {}) {
   const normalizedPlatform = normalizePlatform(platform || 'all');
-  const requestedPlatforms = normalizedPlatform === 'all' ? ['tiktok', 'x'] : [normalizedPlatform];
+  const requestedPlatforms = normalizedPlatform === 'all' ? ['tiktok', 'youtube', 'x'] : [normalizedPlatform];
   const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
+  const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
   const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
+  const youtubeStartTime = cleanText(publishedAfter || youtubePublishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
     ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
+    : [];
+  const youtubeSearchJobs = requestedPlatforms.includes('youtube')
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, publishedAfter: youtubeStartTime })
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
     : [];
+  const youtubeApi = envYouTubeApiKey(env);
+  let youtubeFetch = {
+    api_configured: Boolean(youtubeApi.apiKey),
+    api_key_env: youtubeApi.name || '',
+    published_after: youtubeStartTime,
+    skipped_reason: youtubeApi.apiKey ? '' : 'Set YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY to convert YouTube source feeds into exact video imports with snippet.publishedAt.',
+    posts: [],
+    reports: [],
+  };
+  if (requestedPlatforms.includes('youtube') && fetchYouTube && youtubeApi.apiKey && youtubeSearchJobs.length) {
+    const fetched = await fetchYouTubePostsForJobs(youtubeSearchJobs, {
+      apiKey: youtubeApi.apiKey,
+      maxResults: maxResultsPerSource,
+      fetchImpl,
+    });
+    youtubeFetch = {
+      ...youtubeFetch,
+      posts: uniquePosts(fetched.posts),
+      reports: fetched.reports,
+      skipped_reason: '',
+    };
+  }
   const bearer = envBearerToken(env);
   let xFetch = {
     api_configured: Boolean(bearer.token),
@@ -771,6 +1539,7 @@ async function runSocialPlatformPostSweep({
     };
   }
   const discoveredPosts = uniquePosts([
+    ...youtubeFetch.posts,
     ...xFetch.posts,
   ]);
   const importResult = discoveredPosts.length
@@ -801,6 +1570,7 @@ async function runSocialPlatformPostSweep({
     platforms: requestedPlatforms,
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
+      youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 February 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       profile_creation_rule: 'The sweep creates or links a profile only when a source contributes multiple eligible properties; one-off posts remain found-online listings without creating a new profile.',
     },
@@ -809,6 +1579,18 @@ async function runSocialPlatformPostSweep({
       capture_task_count: tiktokCaptureTasks.length,
       exact_video_url_pattern: TIKTOK_EXACT_VIDEO_URL_PATTERN.source,
       capture_tasks: tiktokCaptureTasks,
+    },
+    youtube: {
+      source_count: youtubeSources.length,
+      search_job_count: youtubeSearchJobs.length,
+      api_configured: youtubeFetch.api_configured,
+      api_key_env: youtubeFetch.api_key_env,
+      published_after: youtubeFetch.published_after,
+      skipped_reason: youtubeFetch.skipped_reason,
+      includes_shorts_and_long_form: true,
+      search_jobs: youtubeSearchJobs,
+      fetch_reports: youtubeFetch.reports,
+      fetched_posts_count: youtubeFetch.posts.length,
     },
     x: {
       source_count: xSources.length,
@@ -832,14 +1614,25 @@ module.exports = {
   DEFAULT_MAX_SOURCES,
   MAX_PLATFORM_SWEEP_SOURCES,
   DEFAULT_X_RESULTS_PER_SOURCE,
+  DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+  YOUTUBE_SEARCH_URL,
+  YOUTUBE_OEMBED_URL,
+  YOUTUBE_SOURCE_POST_WINDOW_START,
+  YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
+  extractExactSocialPostUrls,
   extractTikTokVideoUrls,
+  buildExactSocialPostImportRows,
   buildTikTokCaptureTasks,
   buildTikTokExactPostImportRows,
+  buildYouTubeSearchJobs,
   buildXSearchJobs,
+  importExactSocialSourcePosts,
   importTikTokExactVideoPosts,
+  normalizeExactSocialPostUrl,
+  normalizeYouTubeApiPost,
   normalizeXApiPost,
   runSocialPlatformPostSweep,
 };

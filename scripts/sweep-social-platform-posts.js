@@ -23,17 +23,19 @@ function usage() {
   console.error([
     'Usage:',
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-02-01T00:00:00.000Z --max-sources=100 --max-results=25',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
     '',
     'Platforms:',
     '  tiktok  Builds exact-video capture tasks from tracked TikTok hashtag/profile feeds.',
+    '  youtube Uses YOUTUBE_API_KEY/GOOGLE_YOUTUBE_API_KEY to fetch Shorts and long-form videos from 1 February 2026 onward and queue eligible exact video posts.',
     '  x       Uses X_BEARER_TOKEN/TWITTER_BEARER_TOKEN when available to fetch exact X post URLs and queue eligible found-online properties.',
-    '  all     Runs TikTok capture tasks plus X API discovery.',
+    '  all     Runs TikTok capture tasks plus YouTube and X API discovery.',
     '',
     'Writes:',
     '  --dry-run reports tasks/posts only.',
-    '  --confirm queues eligible exact X posts into King found-online review. TikTok hashtags still require exact video URLs before import.',
+    '  --confirm queues eligible exact YouTube/X posts into King found-online review. TikTok hashtags still require exact video URLs before import.',
   ].join('\n'));
 }
 
@@ -45,6 +47,7 @@ async function main() {
   const maxResultsPerSource = argValue('--max-results', '25');
   const searchMode = argValue('--x-search-mode', 'all');
   const lookbackDays = argValue('--lookback-days', '0');
+  const publishedAfter = argValue('--published-after', '2026-02-01T00:00:00.000Z');
   if (!dryRun && !confirm) {
     usage();
     process.exit(2);
@@ -57,6 +60,7 @@ async function main() {
     maxResultsPerSource,
     searchMode,
     lookbackDays,
+    publishedAfter,
   });
   console.log(JSON.stringify({
     ok: true,

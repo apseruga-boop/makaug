@@ -9196,6 +9196,7 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-seed-social-search-listings-btn")
     && document.getElementById("admin-sweep-tiktok-posts-btn")
     && document.getElementById("admin-import-tiktok-posts-btn")
+    && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
     && document.getElementById("admin-seed-source-registry-btn")
     && document.getElementById("admin-load-source-registry-btn")
@@ -9219,8 +9220,14 @@ function ensureAdminFoundOnlineControls() {
   if (!document.getElementById("admin-import-tiktok-posts-btn")) {
     missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
   }
+  if (!document.getElementById("admin-sweep-youtube-posts-btn")) {
+    missingButtons.push(`<button id="admin-sweep-youtube-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('youtube')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep YouTube Videos</button>`);
+  }
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
+  }
+  if (!document.getElementById("admin-import-exact-social-links-btn")) {
+    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminImportExactSocialLinks()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Import Social Links</button>`);
   }
   if (!document.getElementById("admin-import-found-online-posts-btn")) {
     missingButtons.push(`<button id="admin-import-found-online-posts-btn" type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-3 py-2 rounded-lg text-xs font-bold">Import Source Posts</button>`);
@@ -9680,12 +9687,14 @@ async function adminImportFoundOnlineSourcePosts() {
     const data = response?.data || {};
     const queued = Array.isArray(data.queued_listings) ? data.queued_listings : [];
     const sourceReview = Array.isArray(data.source_review_records) ? data.source_review_records : [];
+    const duplicateWarnings = Array.isArray(data.duplicate_warnings) ? data.duplicate_warnings : [];
     if (statusEl) {
       statusEl.innerHTML = `
         <div class="font-black">Source posts imported</div>
-        <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} were already in review. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
+        <div class="mt-1">${adminEscape(data.created_properties || 0)} new properties queued. ${adminEscape(data.existing_properties || 0)} duplicate/existing links were blocked. ${adminEscape(sourceReview.length)} need source review before queueing.</div>
         <div class="mt-1">Import rule: curated exact YouTube social-source properties and other public social posts from 1 January 2026 onward with source URL, location/area, usable image/source evidence, and a public social/direct contact route are queued. Website-only sources are ignored. If the source does not publish a price, the property is queued as Price upon application. Location is the approval non-negotiable. Profiles are created only when the source has multiple eligible properties.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
+        ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Source review needed</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
     toast("Source post import finished.");
@@ -9704,6 +9713,20 @@ async function adminImportFoundOnlineSourcePosts() {
       button.classList.remove("opacity-60", "cursor-wait");
     }
   }
+}
+
+function adminDuplicateSourceWarningHtml(duplicateWarnings = []) {
+  const warnings = Array.isArray(duplicateWarnings) ? duplicateWarnings.filter(Boolean) : [];
+  if (!warnings.length) return "";
+  return `<div class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950">
+    <div class="font-black">Duplicate social links blocked</div>
+    <div class="mt-1 text-[11px]">These links were already loaded before, so makaug did not create another property.</div>
+    <div class="mt-2 space-y-2">${warnings.slice(0, 12).map((item) => `<div class="rounded-lg border border-amber-100 bg-white p-2">
+      <div class="font-bold">${adminEscape(item.title || "Existing property")}</div>
+      <div class="mt-0.5 text-[11px]">${adminEscape(item.status || "existing")} ${item.property_url ? `• <a href="${adminAttr(item.property_url)}" target="_blank" rel="noopener" class="font-bold underline">Open existing</a>` : ""}</div>
+      ${item.source_url ? `<div class="mt-0.5 break-words text-[10px]">${adminEscape(item.source_url)}</div>` : ""}
+    </div>`).join("")}</div>
+  </div>`;
 }
 
 function adminTikTokExactImportPrompt(seedText = "") {
@@ -9755,12 +9778,14 @@ async function adminImportTikTokExactPosts(seedText = "") {
     const importResult = data.import_result || data;
     const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
     const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+    const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
     if (statusEl) {
       statusEl.innerHTML = `
         <div class="font-black">TikTok exact videos imported</div>
-        <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} already existed. ${adminEscape(sourceReview.length)} need more source details.</div>
+        <div class="mt-1">${adminEscape(data.exact_video_url_count || 0)} exact TikTok video URLs processed. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing videos were blocked. ${adminEscape(sourceReview.length)} need more source details.</div>
         <div class="mt-1 text-[11px]">TikTok rule: hashtags/search pages stay as capture work; exact /@handle/video/id posts become Found Online review records when the caption/details include location or area and a public contact route. If no price is published, makaug queues it as Price upon application. Missing platform date, consent, or image rights stay visible for King review, but only missing location blocks approval.</div>
         ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
+        ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
         ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more TikTok details</div><div class="mt-1">Add missing location/area, public contact route, or source evidence, then import again. Price is optional and becomes Price upon application when missing.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
     }
     toast("TikTok exact-video import finished.");
@@ -9784,13 +9809,104 @@ async function adminImportTikTokExactPosts(seedText = "") {
   }
 }
 
+function adminExactSocialLinksImportPrompt(seedText = "") {
+  return [
+    "Paste exact social post links from YouTube, TikTok, X/Twitter, Instagram, or Facebook.",
+    "",
+    "This is the no-API workaround: makaug uses exact public URLs, oEmbed/public metadata where available, and King-supplied visible details.",
+    "",
+    "One block per post is best:",
+    "https://www.youtube.com/watch?v=abc123XYZ90",
+    "title: Kampala student hostel room near Makerere",
+    "location: Makerere, Kampala",
+    "price: USh 450k/month (optional - if missing, makaug uses Price upon application)",
+    "posted: 2026-05-20",
+    "source: Student Rooms UG",
+    "phone: +2567XXXXXXXX",
+    "images: https://example.com/still1.jpg, https://example.com/still2.jpg",
+    "",
+    "Fast row format also works:",
+    "https://www.tiktok.com/@handle/video/1234567890123456789 | 2 bedroom apartment for rent | Ndejje | USh 400k/month | 2026-05-20",
+    seedText ? `\n${seedText}` : ""
+  ].join("\n");
+}
+
+async function adminImportExactSocialLinks(seedText = "") {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  const raw = window.prompt(adminExactSocialLinksImportPrompt(seedText), seedText || "");
+  if (!raw) return;
+  const statusEl = document.getElementById("admin-found-online-status");
+  const button = document.getElementById("admin-import-exact-social-links-btn");
+  if (button) {
+    button.disabled = true;
+    button.classList.add("opacity-60", "cursor-wait");
+  }
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = "Importing exact social links without platform API keys...";
+  }
+  try {
+    const response = await apiRequest("/api/admin/exact-social-source-posts/import", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {
+        raw_text: raw,
+        dry_run: false,
+        fetch_oembed: true,
+        fetch_public_metadata: true
+      }
+    });
+    const data = response?.data || {};
+    const importResult = data.import_result || data;
+    const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+    const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+    const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
+    const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
+    if (statusEl) {
+      statusEl.innerHTML = `
+        <div class="font-black">Exact social links imported</div>
+        <div class="mt-1">${adminEscape(data.exact_social_url_count || 0)} exact social URLs processed without platform search APIs. ${adminEscape(importResult.created_properties || 0)} new properties queued. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked. ${adminEscape(sourceReview.length)} need more source details.</div>
+        <div class="mt-1 text-[11px]">No-API rule: exact post/video links can queue Found Online records when they include a location/area and a public contact route. YouTube uses oEmbed plus public page metadata for title, thumbnail, channel, and posted date when available. TikTok and X can infer a first-posted timestamp from the public post ID; Instagram/Facebook need the visible posted date pasted by King if the page does not expose metadata. Missing price becomes Price upon application.</div>
+        ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
+        ${reports.length ? `<div class="mt-2 rounded-xl border border-violet-100 bg-white p-3 text-violet-950"><div class="font-black">Metadata attempts</div><div class="mt-1 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need manual visible details.</div></div>` : ""}
+        ${queued.length ? `<div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div>` : ""}
+        ${sourceReview.length ? `<div class="mt-2 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more source details</div><div class="mt-1">Add missing location/area, contact route, or visible posted date/source evidence, then import again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
+    }
+    toast("Exact social link import finished.");
+    if (importResult.created_properties || importResult.existing_properties) {
+      adminPendingQueueFilter = "found_online";
+      await renderAdminDashboard();
+      setAdminWorkflowTab("review");
+      adminScrollTo("#admin-review-queue-control");
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = `Exact social link import failed: ${adminEscape(e.message || "Unknown error")}`;
+    }
+    toast(`Social link import failed: ${e.message || "error"}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
+  const youtube = data.youtube || {};
   const x = data.x || {};
   const importResult = data.import_result || {};
   const tiktokTasks = Array.isArray(tiktok.capture_tasks) ? tiktok.capture_tasks : [];
+  const youtubeJobs = Array.isArray(youtube.search_jobs) ? youtube.search_jobs : [];
+  const youtubeReports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
   const xJobs = Array.isArray(x.search_jobs) ? x.search_jobs : [];
   const xReports = Array.isArray(x.fetch_reports) ? x.fetch_reports : [];
+  const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
   const tiktokTaskHtml = tiktokTasks.slice(0, 16).map((task) => `
@@ -9801,6 +9917,18 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
         <button type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
       </div>
+    </div>`).join("");
+  const youtubeJobHtml = youtubeJobs.slice(0, 10).map((job) => `
+    <div class="rounded-lg border border-red-100 bg-white p-2">
+      <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
+      <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
+      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || "2026-02-01")} • Shorts and long-form videos</div>
+      ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="inline-flex mt-1 border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
+    </div>`).join("");
+  const youtubeReportHtml = youtubeReports.slice(0, 10).map((report) => `
+    <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
+      <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "YouTube job")}</div>
+      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} videos fetched` : adminEscape(report.reason || "YouTube API did not return videos")}</div>
     </div>`).join("");
   const xJobHtml = xJobs.slice(0, 10).map((job) => `
     <div class="rounded-lg border border-slate-200 bg-white p-2">
@@ -9815,13 +9943,22 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     </div>`).join("");
   return `
     <div class="font-black">Social platform sweep finished</div>
-    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} already existed.</div>
+    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Create profiles only for repeated source inventory; one-off posts stay as listings.")}</div>
+    ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
     ${tiktok.capture_task_count ? `
       <div class="mt-3 rounded-xl border border-pink-100 bg-pink-50 p-3 text-pink-950">
         <div class="font-black">TikTok hashtag/profile capture</div>
         <div class="mt-1">${adminEscape(tiktok.capture_task_count)} TikTok sources are ready for exact-video capture. Hashtags are the discovery net; King queues exact /@handle/video/id posts with location, contact route, and source evidence. Missing source prices are marked Price upon application.</div>
         <div class="mt-2 space-y-2">${tiktokTaskHtml}</div>
+      </div>` : ""}
+    ${youtube.search_job_count ? `
+      <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
+        <div class="font-black">YouTube video sweep</div>
+        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || "2026-02-01")}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
+        <div class="mt-1 text-[11px]">YouTube search returns Shorts and long-form videos. makaug stores the exact video URL and YouTube snippet published date as First posted online when the API returns it.</div>
+        ${youtubeReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${youtubeReportHtml}</div>` : ""}
+        ${youtubeJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show YouTube search jobs</summary><div class="mt-2 space-y-2">${youtubeJobHtml}</div></details>` : ""}
       </div>` : ""}
     ${x.search_job_count ? `
       <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-slate-950">
@@ -9841,12 +9978,19 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   }
   const normalized = String(platform || "all").toLowerCase();
   const dryRun = normalized === "tiktok";
-  const ok = window.confirm(normalized === "tiktok"
+  const confirmCopy = normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
-    : "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server.");
+    : normalized === "youtube"
+      ? "Sweep tracked YouTube channels, searches, and hashtags from 1 February 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? YOUTUBE_API_KEY must be configured on the server."
+      : "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server.";
+  const ok = window.confirm(confirmCopy);
   if (!ok) return;
   const statusEl = document.getElementById("admin-found-online-status");
-  const button = document.getElementById(normalized === "x" ? "admin-sweep-x-posts-btn" : "admin-sweep-tiktok-posts-btn");
+  const button = document.getElementById(normalized === "x"
+    ? "admin-sweep-x-posts-btn"
+    : normalized === "youtube"
+      ? "admin-sweep-youtube-posts-btn"
+      : "admin-sweep-tiktok-posts-btn");
   if (button) {
     button.disabled = true;
     button.classList.add("opacity-60", "cursor-wait");
@@ -9855,7 +9999,9 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
     statusEl.classList.remove("hidden");
     statusEl.innerHTML = normalized === "tiktok"
       ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
-      : "Sweeping X/Twitter sources and importing eligible exact posts...";
+      : normalized === "youtube"
+        ? "Sweeping YouTube videos from 1 February 2026 and importing eligible exact videos..."
+        : "Sweeping X/Twitter sources and importing eligible exact posts...";
   }
   try {
     const response = await apiRequest("/api/admin/social-platform-posts/sweep", {
@@ -9864,9 +10010,10 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       body: {
         platform: normalized,
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 30000 : 40,
-        max_results: 25,
-        x_search_mode: "all"
+        max_sources: normalized === "tiktok" ? 30000 : normalized === "youtube" ? 250 : 40,
+        max_results: normalized === "youtube" ? 50 : 25,
+        x_search_mode: "all",
+        published_after: "2026-02-01T00:00:00.000Z"
       }
     });
     const data = response?.data || {};
@@ -9876,7 +10023,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       await renderAdminDashboard();
       setAdminWorkflowTab("review");
     }
-    toast(normalized === "tiktok" ? "TikTok capture tasks are ready." : "X sweep finished.");
+    toast(normalized === "tiktok" ? "TikTok capture tasks are ready." : normalized === "youtube" ? "YouTube sweep finished." : "X sweep finished.");
   } catch (e) {
     if (statusEl) {
       statusEl.classList.remove("hidden");

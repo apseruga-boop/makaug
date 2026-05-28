@@ -98,6 +98,7 @@ const {
 } = require('../services/propertySourceRegistryService');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  importExactSocialSourcePosts,
   importTikTokExactVideoPosts,
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
@@ -2231,13 +2232,17 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const maxSources = req.body?.max_sources || req.body?.maxSources || 40;
     const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
+    const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
+    const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-02-01T00:00:00.000Z';
     const result = await runSocialPlatformPostSweep({
       db,
       platform,
       dryRun,
       maxSources,
       maxResultsPerSource,
-      searchMode
+      searchMode,
+      lookbackDays,
+      publishedAfter
     });
     await writeAudit('admin_social_platform_posts_sweep', {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
@@ -2245,6 +2250,8 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       platform,
       dry_run: dryRun,
       tiktok_capture_task_count: result.tiktok?.capture_task_count || 0,
+      youtube_search_job_count: result.youtube?.search_job_count || 0,
+      youtube_api_configured: result.youtube?.api_configured === true,
       x_search_job_count: result.x?.search_job_count || 0,
       x_api_configured: result.x?.api_configured === true,
       discovered_posts_count: result.discovered_posts_count || 0,
@@ -2281,6 +2288,42 @@ router.post('/tiktok-source-posts/import', async (req, res, next) => {
       dry_run: dryRun,
       exact_video_url_count: result.exact_video_url_count,
       oembed_fetch_count: result.oembed_fetch_count,
+      created_properties: result.created_properties,
+      existing_properties: result.existing_properties,
+      review_queue_properties: result.review_queue_properties,
+      source_review_count: result.source_review_count,
+    }, adminActorId(req));
+    return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/exact-social-source-posts/import', async (req, res, next) => {
+  try {
+    const posts = Array.isArray(req.body?.posts)
+      ? req.body.posts
+      : (Array.isArray(req.body) ? req.body : []);
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const rawText = req.body?.raw_text || req.body?.rawText || req.body?.text || '';
+    const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
+    const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
+    const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
+    const result = await importExactSocialSourcePosts({
+      db,
+      posts,
+      urls,
+      rawText,
+      dryRun,
+      fetchOembed,
+      fetchPublicMetadata
+    });
+    await writeAudit('admin_exact_social_source_posts_imported', {
+      source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
+      batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+      dry_run: dryRun,
+      exact_social_url_count: result.exact_social_url_count,
+      metadata_fetch_count: result.metadata_fetch_count,
       created_properties: result.created_properties,
       existing_properties: result.existing_properties,
       review_queue_properties: result.review_queue_properties,

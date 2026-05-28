@@ -603,6 +603,24 @@ function youtubeUrl(id) {
   return `https://www.youtube.com/watch?v=${id}`;
 }
 
+function youtubeIdFromUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^[a-zA-Z0-9_-]{6,}$/.test(raw) && !/^https?:\/\//i.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    if (/youtu\.be$/i.test(url.hostname)) return url.pathname.split('/').filter(Boolean)[0] || '';
+    if (/youtube\.com$/i.test(url.hostname) || /\.youtube\.com$/i.test(url.hostname)) {
+      if (url.pathname === '/watch') return url.searchParams.get('v') || '';
+      const shorts = url.pathname.match(/^\/shorts\/([^/?#]+)/i);
+      if (shorts) return shorts[1] || '';
+      const embed = url.pathname.match(/^\/embed\/([^/?#]+)/i);
+      if (embed) return embed[1] || '';
+    }
+  } catch (_) {}
+  return '';
+}
+
 function safeUrl(value = '') {
   const url = String(value || '').trim();
   return /^https?:\/\//i.test(url) ? url : '';
@@ -848,6 +866,25 @@ function isReviewQueueStatus(statusOrRecord = '') {
 
 function sourceContactUrlForAgent(agent = {}, item = {}) {
   return sourceContactCandidateUrls(agent, item)[0] || '';
+}
+
+function normalizedContactPhoneKey(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10 && digits.startsWith('0')) digits = `256${digits.slice(1)}`;
+  if (digits.length === 9 && /^7|^3/.test(digits)) digits = `256${digits}`;
+  return digits.length >= 9 ? `phone:${digits}` : '';
+}
+
+function normalizedContactKeyForSource(agent = {}, item = {}) {
+  const phoneKey = normalizedContactPhoneKey(agent.phone || agent.phoneAlt || item.phone || item.phoneAlt || '');
+  if (phoneKey) return phoneKey;
+  const email = String(agent.email || item.email || '').trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const contactUrl = sourceContactUrlForAgent(agent, item).trim().toLowerCase().replace(/\/+$/g, '');
+  return contactUrl ? `source:${contactUrl}` : '';
 }
 
 function sourceContactMethodForAgent(agent = {}) {
@@ -1642,6 +1679,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
   const listingType = normalizeFoundOnlineListingType(raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description);
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
+  const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
   const sourceAgent = {
     key: sourceKey,
     name: sourceName,
@@ -1675,9 +1713,27 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     description: raw.description || raw.caption || raw.summary || title,
     sourceUrl,
     postUrl: sourceUrl,
+    videoUrl: raw.video_url || raw.youtube_url || raw.tiktok_url || sourceUrl,
+    youtubeId: youtubeId || null,
+    tiktokUrl: raw.tiktok_url || (/tiktok\.com/i.test(sourceUrl) ? sourceUrl : ''),
     sourceContactUrl: raw.source_contact_url || raw.contact_url || sourceAgent.channelUrl || sourceUrl,
     sourcePlatform: platform,
-    sourcePublishedAt: raw.first_posted_at || raw.published_at || raw.posted_at || raw.source_published_at || raw.created_at || null,
+    sourcePublishedAt:
+      raw.first_posted_online_at
+      || raw.first_posted_at
+      || raw.platform_posted_at
+      || raw.video_posted_at
+      || raw.video_published_at
+      || raw.youtube_published_at
+      || raw.youtube_source_published_at
+      || raw.post_published_at
+      || raw.published_at
+      || raw.posted_at
+      || raw.source_published_at
+      || raw.source_posted_at
+      || raw.original_posted_at
+      || raw.created_at
+      || null,
     area,
     district,
     address,
@@ -1742,6 +1798,65 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
   return existing;
 }
 
+async function existingFoundOnlineContactCounts(client, items = []) {
+  const phoneKeys = [];
+  const emailKeys = [];
+  const sourceKeys = [];
+  for (const item of items) {
+    const agent = sourceAgentForItem(item);
+    const contactKey = normalizedContactKeyForSource(agent, item);
+    if (contactKey.startsWith('phone:')) phoneKeys.push(contactKey.slice('phone:'.length));
+    if (contactKey.startsWith('email:')) emailKeys.push(contactKey.slice('email:'.length));
+    if (contactKey.startsWith('source:')) sourceKeys.push(contactKey.slice('source:'.length));
+  }
+  const uniquePhones = [...new Set(phoneKeys)].filter(Boolean);
+  const uniqueEmails = [...new Set(emailKeys)].filter(Boolean);
+  const uniqueSources = [...new Set(sourceKeys)].filter(Boolean);
+  if (!uniquePhones.length && !uniqueEmails.length && !uniqueSources.length) return {};
+  const result = await client.query(
+    `WITH normalized AS (
+       SELECT
+         CASE
+           WHEN LENGTH(phone_digits) = 10 AND phone_digits LIKE '0%'
+             THEN '256' || SUBSTRING(phone_digits FROM 2)
+           WHEN LENGTH(phone_digits) = 9 AND phone_digits ~ '^[37]'
+             THEN '256' || phone_digits
+           ELSE phone_digits
+         END AS phone_key,
+         LOWER(COALESCE(lister_email, '')) AS email_key,
+         LOWER(TRIM(BOTH '/' FROM COALESCE(extra_fields->>'source_contact_url', extra_fields->>'source_url', ''))) AS source_key
+       FROM (
+         SELECT
+           REGEXP_REPLACE(COALESCE(lister_phone, extra_fields->>'contact_phone_alt', ''), '\\D', '', 'g') AS phone_digits,
+           lister_email,
+           extra_fields
+         FROM properties
+         WHERE source IN ($1, $5)
+           AND COALESCE(status, '') <> 'deleted'
+       ) property_contacts
+     ),
+     matched AS (
+       SELECT
+         CASE
+           WHEN phone_key = ANY($2::text[]) THEN 'phone:' || phone_key
+           WHEN email_key = ANY($3::text[]) THEN 'email:' || email_key
+           WHEN source_key = ANY($4::text[]) THEN 'source:' || source_key
+           ELSE ''
+         END AS contact_key
+       FROM normalized
+     )
+     SELECT contact_key, COUNT(*)::int AS count
+     FROM matched
+     WHERE contact_key <> ''
+     GROUP BY contact_key`,
+    [SOCIAL_SEARCH_SOURCE, uniquePhones, uniqueEmails, uniqueSources, LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE]
+  );
+  return result.rows.reduce((acc, row) => {
+    if (row.contact_key) acc[row.contact_key] = Number(row.count || 0);
+    return acc;
+  }, {});
+}
+
 async function queueFoundOnlineSourcePostListings({
   db,
   posts = [],
@@ -1760,11 +1875,27 @@ async function queueFoundOnlineSourcePostListings({
     if (intake.eligible) acc[item.agentKey] = (acc[item.agentKey] || 0) + 1;
     return acc;
   }, {});
+  const eligibleContactCounts = evaluated.reduce((acc, { item, agent, intake }) => {
+    if (!intake.eligible) return acc;
+    const contactKey = normalizedContactKeyForSource(agent, item);
+    if (contactKey) acc[contactKey] = (acc[contactKey] || 0) + 1;
+    return acc;
+  }, {});
+  let existingContactCounts = {};
   const shouldCreateSourceProfile = (item = {}, agent = {}) => {
     if (!createProfilesForRepeatedSourcesOnly) return true;
     if (item.raw_source_post?.create_profile === true || item.raw_source_post?.create_agent_profile === true) return true;
     if (agent.createProfile === true || agent.create_profile === true) return true;
+    const contactKey = normalizedContactKeyForSource(agent, item);
+    if (contactKey && Number(eligibleContactCounts[contactKey] || 0) + Number(existingContactCounts[contactKey] || 0) > 1) return true;
     return Number(eligibleSourceCounts[item.agentKey] || 0) > 1;
+  };
+  const sourceProfileKeyForItem = (item = {}, agent = {}) => {
+    const contactKey = normalizedContactKeyForSource(agent, item);
+    if (contactKey && Number(eligibleContactCounts[contactKey] || 0) + Number(existingContactCounts[contactKey] || 0) > 1) {
+      return `found-online-${contactKey.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}`;
+    }
+    return item.agentKey;
   };
   const sourceReviewRecords = evaluated
     .filter(({ intake }) => !intake.eligible)
@@ -1798,6 +1929,7 @@ async function queueFoundOnlineSourcePostListings({
         source_contact_url: sourceContactUrlForAgent(agent, item),
         agent_name: agent.name || item.agentKey,
         profile_action: shouldCreateSourceProfile(item, agent) ? 'create_or_update_source_profile' : 'defer_single_post_profile',
+        profile_key: shouldCreateSourceProfile(item, agent) ? sourceProfileKeyForItem(item, agent) : null,
         dry_run: true,
       })),
       source_review_records: sourceReviewRecords,
@@ -1813,6 +1945,7 @@ async function queueFoundOnlineSourcePostListings({
   try {
     await client.query('BEGIN');
     const existing = await existingFoundOnlineSourcePostListings(client, items);
+    existingContactCounts = await existingFoundOnlineContactCounts(client, items);
     const agentIdsByKey = {};
     const created = [];
     const alreadyPresent = [];
@@ -1839,17 +1972,35 @@ async function queueFoundOnlineSourcePostListings({
       }
       if (!intake.eligible) continue;
       const createProfile = shouldCreateSourceProfile(item, agent);
-      if (createProfile && !agentIdsByKey[item.agentKey]) {
-        agentIdsByKey[item.agentKey] = await upsertSocialAgent(client, agent);
+      const profileKey = sourceProfileKeyForItem(item, agent);
+      if (createProfile && !agentIdsByKey[profileKey]) {
+        agentIdsByKey[profileKey] = await upsertSocialAgent(client, {
+          ...agent,
+          key: profileKey,
+          source_contact_group_key: profileKey,
+        });
       }
-      const agentId = createProfile ? agentIdsByKey[item.agentKey] : null;
+      const agentId = createProfile ? agentIdsByKey[profileKey] : null;
       const listing = buildSocialSearchListing(item, agentId);
       const inserted = await insertListing(client, listing, agentId);
       inserted.profile_action = createProfile ? 'create_or_update_source_profile' : 'defer_single_post_profile';
+      inserted.profile_key = createProfile ? profileKey : null;
       created.push(inserted);
     }
 
     await client.query('COMMIT');
+    const duplicateWarnings = alreadyPresent.map((item) => ({
+      type: 'exact_source_url_duplicate',
+      message: 'This exact social/source link has already been imported to makaug.',
+      key: item.key,
+      id: item.id,
+      title: item.title,
+      status: item.status || '',
+      moderation_stage: item.moderation_stage || '',
+      property_url: item.property_url || '',
+      source_url: item.source_url || '',
+      agent_name: item.agent_name || '',
+    }));
     const reviewQueueListings = [
       ...created,
       ...alreadyPresent.map((item) => ({
@@ -1876,6 +2027,9 @@ async function queueFoundOnlineSourcePostListings({
       review_queue_properties: reviewQueueListings.length,
       queued_listings: reviewQueueListings,
       already_present_properties: alreadyPresent,
+      duplicate_warning_count: duplicateWarnings.length,
+      duplicate_warnings: duplicateWarnings,
+      duplicate_source_url_records: duplicateWarnings,
       source_review_count: skippedListings.length,
       source_review_records: skippedListings,
       daily_target_status: {

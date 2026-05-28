@@ -65,11 +65,18 @@ const {
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   MAX_PLATFORM_SWEEP_SOURCES,
+  YOUTUBE_SOURCE_POST_WINDOW_START,
   TIKTOK_OEMBED_URL,
+  YOUTUBE_OEMBED_URL,
+  buildExactSocialPostImportRows,
   buildTikTokCaptureTasks,
   buildTikTokExactPostImportRows,
+  buildYouTubeSearchJobs,
   buildXSearchJobs,
+  extractExactSocialPostUrls,
   extractTikTokVideoUrls,
+  normalizeExactSocialPostUrl,
+  normalizeYouTubeApiPost,
   normalizeXApiPost,
 } = require('../services/socialPlatformPostDiscoveryService');
 const { buildAutomatedListingReview } = require('../services/listingModerationService');
@@ -620,6 +627,12 @@ test('found-online source-post importer normalizes extracted posts for King revi
   });
   assert.strictEqual(captionContact.sourceAgent.phone, '+256743694821', 'generic source-post importer should reverse public WhatsApp/phone from captions');
   assert.strictEqual(captionContact.sourceAgent.email, 'hello@example.com', 'generic source-post importer should reverse public email from captions');
+  assert(socialSearchServiceSource.includes('normalizedContactKeyForSource'), 'source-post importer should group repeated phone/email/source contacts');
+  assert(socialSearchServiceSource.includes('existingFoundOnlineContactCounts'), 'source-post importer should check existing listings before deciding profile creation');
+  assert(socialSearchServiceSource.includes('duplicate_warnings'), 'source-post importer should return visible duplicate warnings for exact source URLs');
+  assert(socialSearchServiceSource.includes('exact_source_url_duplicate'), 'duplicate warnings should explain when the exact social link was loaded before');
+  assert(frontend.includes('Duplicate social links blocked'), 'King dashboard should show duplicate social links instead of quietly ignoring them');
+  assert(frontend.includes('duplicate/existing links were blocked'), 'King dashboard import summary should name duplicate/existing link blocks');
 });
 
 test('TikTok minimum viable source posts can queue with evidence card and date confirmation', () => {
@@ -756,11 +769,16 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(pricingCheck.status, 'pass', 'Price upon application should satisfy the pricing check for review imports');
 });
 
-test('social platform sweeps promote TikTok hashtags to capture tasks and X posts to import rows', () => {
+test('social platform sweeps promote TikTok hashtags, YouTube videos, and X posts to import rows', () => {
   assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
   assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 30000);
+  assert.strictEqual(YOUTUBE_SOURCE_POST_WINDOW_START, '2026-02-01T00:00:00.000Z');
   assert(propertySourceRegistrySource.includes("'CommercialPropertyKampala'"), 'TikTok/social watchlist should include commercial Kampala property hashtags');
   assert(propertySourceRegistrySource.includes("'StudentAccommodationMakerere'"), 'TikTok/social watchlist should include student accommodation hashtags');
+  assert(propertySourceRegistrySource.includes("'StudentAccommodationUganda2026'"), 'TikTok/social watchlist should include 2026 student accommodation hashtags');
+  assert(propertySourceRegistrySource.includes("'HostelsKampala'"), 'TikTok/social watchlist should include Kampala hostel hashtags');
+  assert(propertySourceRegistrySource.includes("'CampusHostelsUganda'"), 'TikTok/social watchlist should include campus hostel hashtags');
+  assert(propertySourceRegistrySource.includes("'KikuuboShops'"), 'TikTok/social watchlist should include commercial shop hashtags');
   assert(propertySourceRegistrySource.includes("'BujjukoLand'"), 'TikTok/social watchlist should include land/location-specific plot hashtags');
   assert(propertySourceRegistrySource.includes("'TikTok Uganda student hostels'"), 'generated discovery intents should target TikTok student property posts');
   assert(propertySourceRegistrySource.includes("'Facebook Uganda land plots'"), 'generated discovery intents should target Facebook land property posts');
@@ -770,28 +788,45 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
     .map((source) => String(source.url || '').toLowerCase());
   assert.strictEqual(sourceRegistry.length, 30000, 'source registry should still build the full 30,000-source discovery database');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/studentaccommodationmakerere')), 'TikTok registry should track student-specific hashtags');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/studentaccommodationuganda2026')), 'TikTok registry should track new student accommodation hashtags');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/hostelskampala')), 'TikTok registry should track wider Kampala hostel hashtags');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/commercialpropertykampala')), 'TikTok registry should track commercial property hashtags');
+  assert(tiktokSourceUrls.some((url) => url.includes('/tag/kikuuboshops')), 'TikTok registry should track commercial shop hashtags');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/bujjukoland') || url.includes('/tag/bujuukoland')), 'TikTok registry should track Bujjuko/Bujuuko land hashtags');
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
+  assert(socialPlatformSweepScript.includes('--platform=youtube --confirm'), 'social sweep script should expose YouTube API import mode');
+  assert(socialPlatformSweepScript.includes('--published-after=2026-02-01T00:00:00.000Z'), 'social sweep script should expose the February YouTube start date');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
   assert(socialPlatformSweepScript.includes('--lookback-days'), 'social sweep script should support two-week X/Twitter lookback sweeps');
   assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
+  assert(adminRoute.includes("router.post('/exact-social-source-posts/import'"), 'admin should expose a no-API exact social link import endpoint');
   assert(adminRoute.includes("router.post('/tiktok-source-posts/import'"), 'admin should expose a protected exact TikTok post import endpoint');
+  assert(adminRoute.includes('admin_exact_social_source_posts_imported'), 'exact social link imports should write an audit event');
   assert(adminRoute.includes('admin_tiktok_exact_posts_imported'), 'exact TikTok post imports should write an audit event');
   assert(adminRoute.includes('admin_social_platform_posts_sweep'), 'social platform sweeps should write an audit event');
   assert(frontend.includes('adminSweepSocialPlatformPosts'), 'King dashboard should expose social platform sweep controls');
+  assert(frontend.includes('adminImportExactSocialLinks'), 'King dashboard should expose no-API exact social link import controls');
   assert(frontend.includes('adminImportTikTokExactPosts'), 'King dashboard should expose exact TikTok video import controls');
+  assert(frontend.includes('Import Social Links'), 'King dashboard should expose exact social link import action');
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
+  assert(frontend.includes('Sweep YouTube Videos'), 'King dashboard should expose YouTube video sweep action');
+  assert(frontend.includes('published_after: "2026-02-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from February 2026 onward');
   assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
   assert(frontend.includes('https://www.tiktok.com/embed/v2/'), 'TikTok source videos should render with TikTok embed URLs');
   assert(frontend.includes('safeVideoIsTikTok'), 'TikTok videos should be labelled separately from YouTube videos');
   assert(propertiesRoute.includes('tiktok_url: tiktokUrl || null'), 'public property API should expose exact TikTok source video URLs');
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
+  assert(socialPlatformSweepServiceSource.includes('YOUTUBE_API_KEY'), 'YouTube sweep should use an explicit API key env var');
+  assert.strictEqual(YOUTUBE_OEMBED_URL, 'https://www.youtube.com/oembed', 'no-API YouTube imports should use public oEmbed metadata');
+  assert(socialPlatformSweepServiceSource.includes('no_api_exact_social_url_intake'), 'exact social link import should provide a no-API workaround path');
+  assert(socialPlatformSweepServiceSource.includes('inferTikTokPostedAtFromVideoId'), 'TikTok exact-link import should infer visible-date evidence from public video IDs when no API exists');
+  assert(socialPlatformSweepServiceSource.includes('inferXPostedAtFromStatusId'), 'X exact-link import should infer post dates from public status IDs when no API exists');
+  assert(socialPlatformSweepServiceSource.includes('snippet.publishedAt'), 'YouTube sweep policy should explain the source publish date comes from YouTube snippet.publishedAt');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: true'), 'platform sweep should defer one-off source profiles');
-  assert(frontend.includes('max_sources: normalized === "tiktok" ? 30000 : 40'), 'TikTok sweep should request every tracked TikTok source, not only a small visible sample');
+  assert(frontend.includes('max_sources: normalized === "tiktok" ? 30000 : normalized === "youtube" ? 250 : 40'), 'TikTok sweep should request every tracked TikTok source and YouTube should use a Render-safe API batch');
   assert(socialSearchServiceSource.includes('defer_single_post_profile'), 'source-post import should support one-off listing-only profile handling');
 
   const tiktokTasks = buildTikTokCaptureTasks({
@@ -808,6 +843,71 @@ test('social platform sweeps promote TikTok hashtags to capture tasks and X post
   assert.strictEqual(tiktokTasks.length, 1);
   assert.strictEqual(tiktokTasks[0].exact_post_url_required, true);
   assert(tiktokTasks[0].exact_post_url_pattern.includes('/@{handle}/video/{video_id}'), 'TikTok task should name the exact-video URL pattern');
+
+  assert.deepStrictEqual(extractExactSocialPostUrls('Watch https://youtu.be/abc123XYZ90 and https://www.tiktok.com/@agentug/video/7330000000000000001'), [
+    'https://www.youtube.com/watch?v=abc123XYZ90',
+    'https://www.tiktok.com/@agentug/video/7330000000000000001',
+  ]);
+  assert.strictEqual(normalizeExactSocialPostUrl('https://twitter.com/agentug/status/1800000000000000000'), 'https://x.com/agentug/status/1800000000000000000');
+  const noApiRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@agentug/video/7608944105338457364',
+      'title: Luxury Kampala apartment 3 bedrooms USh 3.5M',
+      'location: Makerere, Kampala',
+      'source: Space Residences Uganda',
+      'phone: +256700000000',
+    ].join('\n'),
+    metadataByUrl: {
+      'https://www.tiktok.com/@agentug/video/7608944105338457364': {
+        oembed: {
+          title: 'Luxury Kampala apartment 3 bedrooms USh 3.5M',
+          author_name: 'Space Residences Uganda',
+          author_url: 'https://www.tiktok.com/@agentug',
+          thumbnail_url: 'https://p16-sign.tiktokcdn-us.com/example.jpeg',
+        },
+      },
+    },
+  });
+  assert.strictEqual(noApiRows.length, 1, 'no-API exact social import should create one import row');
+  assert.strictEqual(noApiRows[0].platform, 'TikTok');
+  assert.strictEqual(noApiRows[0].area, 'Makerere');
+  assert.strictEqual(noApiRows[0].listing_type, 'students');
+  assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
+  assert(noApiRows[0].first_posted_at.startsWith('2026-'), 'TikTok public video ID should infer a 2026 first-posted timestamp');
+
+  const youtubeJobs = buildYouTubeSearchJobs({
+    sources: [{
+      key: 'youtube-student-hostels-kampala-search',
+      name: 'YouTube search: Kampala student hostels',
+      platform: 'youtube',
+      sourceType: 'public_video_search_feed',
+      url: 'https://www.youtube.com/results?search_query=Kampala+student+hostel+rooms+Uganda',
+      hashtags: ['StudentAccommodationUganda2026', 'HostelsKampala'],
+    }],
+    limit: 1,
+    publishedAfter: '2026-02-01T00:00:00.000Z',
+  });
+  assert.strictEqual(youtubeJobs.length, 1);
+  assert.strictEqual(youtubeJobs[0].published_after, '2026-02-01T00:00:00.000Z', 'YouTube jobs should start from the requested February window');
+  assert.strictEqual(youtubeJobs[0].includes_shorts_and_long_form, true, 'YouTube jobs should not exclude Shorts or long-form videos');
+  const normalizedYoutube = normalizeYouTubeApiPost({
+    id: { videoId: 'abc123XYZ90' },
+    snippet: {
+      publishedAt: '2026-02-12T08:30:00.000Z',
+      title: 'Kampala student hostel room near Makerere USh 450k',
+      description: 'Self contained room near Makerere. Call +256700000000',
+      channelId: 'UCexample',
+      channelTitle: 'Student Rooms UG',
+      thumbnails: { high: { url: 'https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg' } },
+    },
+  }, youtubeJobs[0]);
+  assert.strictEqual(normalizedYoutube.source_url, 'https://www.youtube.com/watch?v=abc123XYZ90');
+  assert.strictEqual(normalizedYoutube.youtube_published_at, '2026-02-12T08:30:00.000Z');
+  assert.strictEqual(normalizedYoutube.first_posted_at, '2026-02-12T08:30:00.000Z', 'YouTube imports should carry the first-posted platform date');
+  assert.strictEqual(normalizedYoutube.source_page_url, 'https://www.youtube.com/channel/UCexample');
+  assert.strictEqual(normalizedYoutube.area, 'Makerere');
+  assert.strictEqual(normalizedYoutube.listing_type, 'students');
+  assert.deepStrictEqual(normalizedYoutube.image_urls, ['https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg']);
 
   const xJobs = buildXSearchJobs({
     sources: [{
