@@ -62,6 +62,7 @@ const WHATSAPP_NATURAL_SEARCH_AI_TIMEOUT_MS = Math.min(
 const WHATSAPP_LANGUAGE_AI_MODE = String(process.env.WHATSAPP_LANGUAGE_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEARCH_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
+const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
 
 // Language Translations
 const T = {
@@ -558,6 +559,8 @@ T.am = Object.assign({}, T.en, {
   invalidPhone: '❌ የስልክ ቅርጸት ትክክል አይደለም። ይሞክሩ: 0760112587',
   visitMoreListings: 'ተጨማሪ ዝርዝሮችን በ {url} ይመልከቱ።',
   seeAllAgents: 'ሁሉንም ወኪሎች ይመልከቱ: {url}',
+  nextPropertySearchActions: 'ቀጣይ: ፎቶ፣ ካርታ፣ ወይም የመጠየቂያ አማራጭ ለማየት የዝርዝሩን ሊንክ ይንኩ። እንደገና ለመፈለግ *2*፣ ወደ ዋና ምናሌ *MENU*፣ ወይም በአቅራቢያ ፍለጋ ከሆነ *WIDEN* ይመልሱ።',
+  noMatchNextActions: 'ቀጣይ: ሌላ አካባቢ፣ ዲስትሪክት፣ በጀት፣ የንብረት አይነት፣ መኝታ ብዛት ይላኩ ወይም locationዎን ያጋሩ። እንደገና ለመፈለግ *2* ወይም ወደ ምናሌ *MENU* ይመልሱ።',
   replySearchAgain: 'እንደገና ለመፈለግ 2 ይመልሱ።',
   replyAgentAgain: 'ሌላ ወኪል ለመፈለግ 3 ይመልሱ።',
   areasLabel: 'አካባቢዎች',
@@ -1207,6 +1210,16 @@ function noMatchChallengeReply(lang, sessionData = {}) {
     sw: `Uko sawa kuuliza hilo. Huenda nilichuja sana, kwa hiyo nakutuma kwenye matokeo ya live website na nimehifadhi hili kwa admin.\n\nFungua listings: ${url}\n\n${process.env.SUPPORT_EMAIL || 'info@makaug.com'}`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
+}
+
+function whatsappSearchResultsUrl(searchType = 'any', area = '') {
+  const params = new URLSearchParams();
+  const type = normalizeListingType(searchType || 'any');
+  const cleanArea = normalizeInput(area);
+  if (type && type !== 'any') params.set('listing_type', type);
+  if (cleanArea && cleanArea.toLowerCase() !== 'any area') params.set('area', cleanArea);
+  const query = params.toString();
+  return `${HOME_URL}/#page-sale${query ? `?${query}` : ''}`;
 }
 
 async function conversationalAssistantFallback({ phone, body, lang, step, intentResult, sessionData }) {
@@ -2574,7 +2587,8 @@ function naturalFilterLabel(lang = 'en') {
     ac: 'Filters',
     ny: 'Ebikozesibwa',
     rn: 'Filters',
-    sm: 'Ebikozeseddwa'
+    sm: 'Ebikozeseddwa',
+    am: 'ማጣሪያዎች'
   }[code] || 'Filters';
 }
 
@@ -2595,7 +2609,8 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
       ac: `${whatsappBrandHeader('Yeny property')}\n🔎 Aromo yenyoni pi in.\n${filterLine}Tim ber icwal area onyo district.`,
       ny: `${whatsappBrandHeader('Shaka property')}\n🔎 Nimbaasa kukishakira.\n${filterLine}Ngambira ekicweka nari district.`,
       rn: `${whatsappBrandHeader('Shaka property')}\n🔎 Nshobora kubishakira.\n${filterLine}Mumbwire area canke district.`,
-      sm: `${whatsappBrandHeader('Noonya property')}\n🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`
+      sm: `${whatsappBrandHeader('Noonya property')}\n🔎 Nsobola okukinoonya.\n${filterLine}Mpandiikira ekitundu oba district.`,
+      am: `${whatsappBrandHeader('Property search')}\n🔎 ይህን ልፈልግልዎ እችላለሁ።\n${filterLine}እባክዎ አካባቢ ወይም ዲስትሪክት ይላኩ።`
     },
     location: {
       en: `${whatsappBrandHeader('Search near you')}\n📍 Share your WhatsApp location now.\n${filterLine}I will search within *10 miles* first. Reply *WIDEN* later for more options.`,
@@ -2604,7 +2619,8 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
       ac: `${whatsappBrandHeader('Yeny ka cok')}\n📍 Tim ber icwal location mamegi i WhatsApp.\n${filterLine}Abicako i *miles 10*. Dwok *WIDEN* pi yaro.`,
       ny: `${whatsappBrandHeader('Shaka haihi')}\n📍 Tuma location yaawe eya WhatsApp hati.\n${filterLine}Ninyija kutandika omu *miles 10*. Garukamu *WIDEN* waba noyenda ebindi.`,
       rn: `${whatsappBrandHeader('Search near you')}\n📍 Share your WhatsApp location now.\n${filterLine}I will search within *10 miles* first. Reply *WIDEN* later for more options.`,
-      sm: `${whatsappBrandHeader('Noonya okumpi')}\n📍 Weereza location yo eya WhatsApp kati.\n${filterLine}Nja kusooka mu *miles 10*. Bwoyagala ebirala, ddamu *WIDEN*.`
+      sm: `${whatsappBrandHeader('Noonya okumpi')}\n📍 Weereza location yo eya WhatsApp kati.\n${filterLine}Nja kusooka mu *miles 10*. Bwoyagala ebirala, ddamu *WIDEN*.`,
+      am: `${whatsappBrandHeader('Search near you')}\n📍 የ WhatsApp locationዎን አሁን ይላኩ።\n${filterLine}መጀመሪያ በ *10 ማይል* ውስጥ እፈልጋለሁ። ተጨማሪ አማራጮች ከፈለጉ *WIDEN* ብለው ይመልሱ።`
     }
   };
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
@@ -2706,7 +2722,7 @@ function findLegacyWebsitePublicListings(filters = {}, limit = 5) {
     .slice(0, limit);
 }
 
-function mergeSearchRows(primaryRows = [], websiteRows = [], limit = 5) {
+function mergeSearchRows(primaryRows = [], websiteRows = [], limit = WHATSAPP_PROPERTY_RESULT_LIMIT) {
   const rows = [];
   const seen = new Set();
   [...primaryRows, ...websiteRows].forEach((row) => {
@@ -2794,8 +2810,12 @@ async function findPropertiesByNaturalFilters(filters = {}) {
     )`;
   }
 
+  values.push(WHATSAPP_PROPERTY_RESULT_LIMIT);
+  const limitIdx = values.length;
+
   const result = await db.query(
     `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+            COUNT(*) OVER() AS total_count,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -2807,12 +2827,12 @@ async function findPropertiesByNaturalFilters(filters = {}) {
      ) img ON TRUE
      ${where}
      ORDER BY p.created_at DESC
-     LIMIT 5`,
+     LIMIT $${limitIdx}`,
     values
   );
 
-  const websiteRows = findWebsitePublicListings(filters, 5);
-  return mergeSearchRows(result.rows, websiteRows, 5);
+  const websiteRows = findWebsitePublicListings(filters, WHATSAPP_PROPERTY_RESULT_LIMIT);
+  return mergeSearchRows(result.rows, websiteRows, WHATSAPP_PROPERTY_RESULT_LIMIT);
 }
 
 function normalizeOptKeyword(value) {
@@ -3908,8 +3928,12 @@ async function findPropertiesForWhatsapp(searchType, location) {
     }
   }
 
+  values.push(WHATSAPP_PROPERTY_RESULT_LIMIT);
+  const limitIdx = values.length;
+
   const result = await db.query(
     `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+            COUNT(*) OVER() AS total_count,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -3921,15 +3945,15 @@ async function findPropertiesForWhatsapp(searchType, location) {
      ) img ON TRUE
      ${where}
      ORDER BY p.created_at DESC
-     LIMIT 5`,
+     LIMIT $${limitIdx}`,
     values
   );
 
   const websiteRows = findWebsitePublicListings({
     searchType,
     area: cleanLocation
-  }, 5);
-  return mergeSearchRows(result.rows, websiteRows, 5);
+  }, WHATSAPP_PROPERTY_RESULT_LIMIT);
+  return mergeSearchRows(result.rows, websiteRows, WHATSAPP_PROPERTY_RESULT_LIMIT);
 }
 
 async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMiles = DEFAULT_SEARCH_RADIUS_MILES) {
@@ -3975,8 +3999,9 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
   const normalizedRadiusMiles = normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES);
   const radiusKm = normalizedRadiusMiles * 1.609344;
   const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
+  const matchedRows = nearby.length ? nearby : rowsWithDistance;
   return {
-    rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
+    rows: matchedRows.slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT).map((row) => ({ ...row, total_count: matchedRows.length })),
     usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
     radiusMiles: normalizedRadiusMiles
   };
@@ -4091,8 +4116,9 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
   const normalizedRadiusMiles = normalizeRadiusMiles(radiusMiles, DEFAULT_SEARCH_RADIUS_MILES);
   const radiusKm = normalizedRadiusMiles * 1.609344;
   const nearby = rowsWithDistance.filter((row) => row.distance_km <= radiusKm);
+  const matchedRows = nearby.length ? nearby : rowsWithDistance;
   return {
-    rows: (nearby.length ? nearby : rowsWithDistance).slice(0, 5),
+    rows: matchedRows.slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT).map((row) => ({ ...row, total_count: matchedRows.length })),
     usedNearestFallback: nearby.length === 0 && rowsWithDistance.length > 0,
     radiusMiles: normalizedRadiusMiles
   };
@@ -4609,7 +4635,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'View photos, map and enquire',
       available: 'Available',
       footer: 'Tap any link to open the full makaug page with photos, map, and enquiry options.',
-      opensOnmakaug: 'Every result opens on makaug with photos, map and enquiry options.'
+      opensOnmakaug: 'Every result opens on makaug with photos, map and enquiry options.',
+      moreResults: '{total} matching properties found. I showed the newest {shown}. View more: {url}'
     },
     lg: {
       filter: 'Filter',
@@ -4619,7 +4646,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Laba ebifaananyi, map, era obuuze',
       available: 'Kisobola okufunibwa',
       footer: 'Nyiga link yonna okuggulawo page ya makaug eriko ebifaananyi, map, n\'engeri y\'okubuuza.',
-      opensOnmakaug: 'Buli result eggulawo ku makaug n\'ebifaananyi, map, n\'engeri y\'okubuuza.'
+      opensOnmakaug: 'Buli result eggulawo ku makaug n\'ebifaananyi, map, n\'engeri y\'okubuuza.',
+      moreResults: '{total} listings ezikwatagana zizuuliddwa. Nkulaze ezisinga obupya {shown}. Laba endala: {url}'
     },
     sw: {
       filter: 'Kichujio',
@@ -4629,7 +4657,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Fungua picha, ramani na kuuliza',
       available: 'Inapatikana',
       footer: 'Bonyeza link yoyote kufungua ukurasa kamili wa makaug wenye picha, ramani, na sehemu ya kuuliza.',
-      opensOnmakaug: 'Kila matokeo hufunguka makaug na picha, ramani na njia ya kuuliza.'
+      opensOnmakaug: 'Kila matokeo hufunguka makaug na picha, ramani na njia ya kuuliza.',
+      moreResults: '{total} matangazo yanayolingana yamepatikana. Nimeonyesha {shown} mapya zaidi. Tazama zaidi: {url}'
     },
     ac: {
       filter: 'Filter',
@@ -4639,7 +4668,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Nen cal, map, ki penyo',
       available: 'Tye',
       footer: 'Dii link mo keken me yabo pot buk makaug ma tye ki cal, map, ki yoo me penyo.',
-      opensOnmakaug: 'Result acel acel yabo i makaug ki cal, map, ki yoo me penyo.'
+      opensOnmakaug: 'Result acel acel yabo i makaug ki cal, map, ki yoo me penyo.',
+      moreResults: '{total} listings ma rwate onen. Atye ka nyuti {shown} manyen loyo. Nen mapol: {url}'
     },
     ny: {
       filter: 'Filter',
@@ -4649,7 +4679,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Reeba ebishushani, map, kandi obuuze',
       available: 'Kiraboneka',
       footer: 'Kanda link yoona kuguraho page ya makaug erimu ebishushani, map, n\'okubuuza.',
-      opensOnmakaug: 'Buri result neegura ahari makaug erimu ebishushani, map, n\'okubuuza.'
+      opensOnmakaug: 'Buri result neegura ahari makaug erimu ebishushani, map, n\'okubuuza.',
+      moreResults: '{total} listings ezirikwesimire niziboneka. Nkweretse {shown} empya. Reeba ebindi: {url}'
     },
     rn: {
       filter: 'Filter',
@@ -4659,7 +4690,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Raba amafoto, map, hanyuma ubaze',
       available: 'Irahari',
       footer: 'Kanda link yose gufungura page ya makaug irimwo amafoto, map, n\'aho kubaza.',
-      opensOnmakaug: 'Buri result yuguruka kuri makaug irimwo amafoto, map, n\'aho kubaza.'
+      opensOnmakaug: 'Buri result yuguruka kuri makaug irimwo amafoto, map, n\'aho kubaza.',
+      moreResults: '{total} listings zijanye zabonetse. Neretse {shown} nshasha. Raba izindi: {url}'
     },
     sm: {
       filter: 'Filter',
@@ -4669,10 +4701,28 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       open: 'Laba ebifaananyi, map, era obuuze',
       available: 'Kisobola okufunibwa',
       footer: 'Nyiga link yonna okuggulawo page ya makaug eriko ebifaananyi, map, n\'engeri y\'okubuuza.',
-      opensOnmakaug: 'Buli result eggulawo ku makaug n\'ebifaananyi, map, n\'engeri y\'okubuuza.'
+      opensOnmakaug: 'Buli result eggulawo ku makaug n\'ebifaananyi, map, n\'engeri y\'okubuuza.',
+      moreResults: '{total} listings ezikwatagana zizuuliddwa. Nkulaze ezisinga obupya {shown}. Laba endala: {url}'
+    },
+    am: {
+      filter: 'ማጣሪያ',
+      bed: 'መኝታ',
+      bath: 'መታጠቢያ',
+      preview: 'ቅድመ እይታ',
+      open: 'ፎቶ፣ ካርታ እና መጠየቂያ ይክፈቱ',
+      available: 'ይገኛል',
+      footer: 'ፎቶ፣ ካርታ እና የመጠየቂያ አማራጮች ያሉበትን ሙሉ የ makaug ገጽ ለመክፈት ማንኛውንም ሊንክ ይንኩ።',
+      opensOnmakaug: 'እያንዳንዱ ውጤት በ makaug ላይ ፎቶ፣ ካርታ እና የመጠየቂያ አማራጮችን ይከፍታል።',
+      moreResults: '{total} ተዛማጅ ንብረቶች ተገኝተዋል። አዲሶቹን {shown} አሳይቻለሁ። ተጨማሪ ይመልከቱ: {url}'
     }
   };
   const copy = cardCopy[code] || cardCopy.en;
+  const visibleRows = Array.isArray(rows) ? rows.slice(0, WHATSAPP_PROPERTY_RESULT_LIMIT) : [];
+  const totalMatches = Math.max(
+    visibleRows.length,
+    ...visibleRows.map((row) => Number(row?.total_count || 0)).filter((n) => Number.isFinite(n) && n > 0),
+    Array.isArray(rows) ? rows.length : 0
+  );
   const lines = [];
   lines.push('🟩🟨 *makaug Matchboard* | makaug.com 🟨🟩');
   lines.push('━━━━━━━━━━━━━━━━');
@@ -4680,7 +4730,7 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
   lines.push(`🎯 ${copy.filter}: ${typeLabel(searchType, lang)} • ${location}`);
   lines.push(copy.opensOnmakaug || cardCopy.en.opensOnmakaug);
   lines.push('━━━━━━━━━━━━━━━━');
-  rows.forEach((r, idx) => {
+  visibleRows.forEach((r, idx) => {
     const meta = [
       r.property_type,
       Number.isFinite(Number(r.bedrooms)) && Number(r.bedrooms) > 0 ? `${r.bedrooms} ${copy.bed}` : '',
@@ -4703,6 +4753,15 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     lines.push(`   🔗 ${copy.open}: ${listingUrl}`);
     lines.push('━━━━━━━━━━━━━━━━');
   });
+  if (totalMatches > visibleRows.length) {
+    const url = whatsappSearchResultsUrl(searchType, location);
+    const moreLine = (copy.moreResults || cardCopy.en.moreResults)
+      .replace('{total}', String(totalMatches))
+      .replace('{shown}', String(visibleRows.length))
+      .replace('{url}', url);
+    lines.push(`📚 ${moreLine}`);
+    lines.push('━━━━━━━━━━━━━━━━');
+  }
   lines.push(`✨ ${copy.footer}`);
   lines.push(t(lang, 'nextPropertySearchActions'));
   return lines.join('\n');
@@ -7424,5 +7483,8 @@ module.exports.__test = {
   parseInboundLocation,
   normalizeBridgeInboundKey,
   shouldRunWhatsappLanguageAi,
-  shouldUseAiNaturalSearchExtraction
+  shouldUseAiNaturalSearchExtraction,
+  formatPropertySearchMessage,
+  whatsappSearchResultsUrl,
+  WHATSAPP_PROPERTY_RESULT_LIMIT
 };
