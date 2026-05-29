@@ -81,6 +81,7 @@ const {
   normalizeYouTubeApiPost,
   normalizeXApiPost,
 } = require('../services/socialPlatformPostDiscoveryService');
+const { buildSocialSourceTrustReview } = require('../services/socialSourceTrustService');
 const { buildAutomatedListingReview } = require('../services/listingModerationService');
 const { getPropertySourceRegistry } = require('../services/propertySourceRegistryService');
 
@@ -1145,6 +1146,10 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('adminPersistActiveReviewEditsBeforeStatus'), 'King approval should persist edited facts before changing live status');
   assert(frontend.includes('admin-review-listing-type-edit'), 'King review should allow changing sale/rent type');
   assert(frontend.includes('admin-review-area-edit') && frontend.includes('admin-review-district-edit'), 'King review should allow location correction');
+  assert(frontend.includes('admin-review-region-edit') && frontend.includes('admin-review-city-edit') && frontend.includes('admin-review-neighborhood-edit'), 'King review should mirror the public guided region/city/neighbourhood location flow');
+  assert(frontend.includes('adminReviewFindAddressOrPlace'), 'King review should reuse address/place search before approval');
+  assert(frontend.includes('adminReviewCoordinateNumber'), 'King review should parse comma decimal coordinates pasted from local formats');
+  assert(adminRoute.includes('toNullableCoordinate') && adminRoute.includes("raw.replace(',', '.')"), 'backend should accept comma decimal map coordinates only on the admin coordinate path');
   assert(frontend.includes('adminReviewLocationProvider = "google"'), 'King review map should use Google Maps when available');
   assert(frontend.includes('REVIEW_USD_TO_UGX_GUIDE_RATE'), 'King review source extraction should understand dollar rent prices');
   assert(frontend.includes('adminReviewHasUsableCoordinates'), 'King review should reject 0,0 and other unusable map pins before syncing');
@@ -1152,7 +1157,7 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('Munyonyo'), 'King review should include a Munyonyo area pin for rentals around Lake Victoria');
   assert(frontend.includes('getLocalizedPropertyTitle'), 'public cards/details should use language-aware sourced listing titles instead of copied captions');
   assert(adminRoute.includes('king_review_corrected_fields'), 'admin review edits should keep correction traceability');
-  assert(adminRoute.includes("map_pin_source: 'king_review'"), 'admin review coordinate edits should mark the map pin source');
+  assert(adminRoute.includes('map_pin_source') && frontend.includes('map_pin_source: coordinates.exact ? "king_review" : "king_review_area"'), 'admin review coordinate edits should mark the map pin source');
   assert(adminRoute.includes('isPointInUganda(latitude, longitude)'), 'admin review should only accept confirmed coordinates inside Uganda');
   assert(adminRoute.includes('latitude and longitude must be confirmed together'), 'admin review should not save half-confirmed map pins');
   assert(socialPlatformSweepServiceSource.includes('const usdMatch'), 'social import should extract dollar price text');
@@ -1162,6 +1167,39 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(propertiesRoute.includes('reviewedDescription'), 'public third-party summaries should use King-reviewed short descriptions when clean');
   assert(propertiesRoute.includes('reviewedFields.includes') && propertiesRoute.includes('reviewedTitleLooksCopied'), 'public third-party titles should respect clean King edits without exposing copied captions');
   assert(frontend.includes('Shorten description'), 'King review should provide a concise public description action');
+  assert(frontend.includes('adminSocialSourceTrustHtml'), 'King review should show the social source trust review before approval');
+  assert(adminRoute.includes('review_location_hierarchy'), 'admin review edits should persist the guided location hierarchy');
+  assert(adminRoute.includes('king_review_public_listing_facts'), 'admin review edits should keep a single source of truth snapshot');
+  assert(adminRoute.includes('street_name'), 'admin review edits should store granular street/landmark context in extra fields');
+  assert(socialSearchServiceSource.includes('social_source_trust_review'), 'social-source imported listings should carry a 10-point trust review');
+});
+
+test('social-source trust review scores captured public-source evidence', () => {
+  const strong = buildSocialSourceTrustReview({
+    source_platform: 'tiktok',
+    source_url: 'https://www.tiktok.com/@agent/video/7608944105338457364',
+    source_contact_url: 'https://www.tiktok.com/@agent',
+    source_name: '@agent',
+    first_posted_online_at: '2026-05-27T10:00:00.000Z',
+    area: 'Munyonyo',
+    district: 'Kampala',
+    price_label: 'USh 3.5M/month',
+    contact_phone: '0776451733',
+    source_followers_label: '12,000 followers',
+    source_account_created_at: '2024-01-05T00:00:00.000Z',
+    source_video_count: 48,
+    raw_source_post: { public_metrics: { comment_count: 8 }, owner_reply_count: 2 }
+  });
+  assert.strictEqual(strong.checks.length, 10, 'trust review should use exactly 10 checks');
+  assert.strictEqual(strong.score, 100, 'strong social evidence should score full marks when every captured signal is present');
+  assert(strong.checks.some((item) => item.key === 'account_history'), 'trust review should expose account age/history evidence');
+  assert(strong.checks.some((item) => item.key === 'posting_volume'), 'trust review should expose posting/video volume evidence');
+  const weak = buildSocialSourceTrustReview({
+    source_platform: 'tiktok',
+    source_url: 'https://www.tiktok.com/tag/ugandarealestate'
+  });
+  assert(weak.score < strong.score, 'hashtag-only capture should score lower than exact post evidence');
+  assert(weak.checks.some((item) => item.status === 'needs_evidence'), 'weak social evidence should keep missing evidence visible');
 });
 
 test('King review queue can manage authorised listing photos', () => {

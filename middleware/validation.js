@@ -17,7 +17,8 @@ function toNullableInt(value) {
 
 function toNullableFloat(value) {
   if (value == null || value === '') return null;
-  const n = parseFloat(value);
+  const normalized = String(value).trim().replace(/,/g, '');
+  const n = parseFloat(normalized);
   return Number.isFinite(n) ? n : null;
 }
 
