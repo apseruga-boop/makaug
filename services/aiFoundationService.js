@@ -2,7 +2,7 @@ const crypto = require('crypto');
 
 const db = require('../config/database');
 
-const SUPPORTED_LANGUAGES = new Set(['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm']);
+const SUPPORTED_LANGUAGES = new Set(['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am']);
 const SUPPORTED_INTENTS = new Set([
   'property_search',
   'property_listing',
@@ -422,7 +422,7 @@ const FOUNDATION_EVENT_SCHEMA = {
     session: {
       external_session_id: 'string (recommended)',
       external_user_id: 'string (optional)',
-      language: 'en|lg|sw|ac|ny|rn|sm (optional)',
+      language: 'en|lg|sw|ac|ny|rn|sm|am (optional)',
       metadata: 'object (optional)'
     },
     event: {

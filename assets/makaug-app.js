@@ -1064,7 +1064,7 @@ const I18N_UI = {
     pageSaved: "Saved Properties",
     pageAccount: "My Account",
     langLabel: "Language",
-    langBanner: "Use makaug in 7 Ugandan languages",
+    langBanner: "Use makaug in 8 languages",
     areaOnly: "This area only",
     withinLabel: "Within",
     mileUnitSingular: "mile",
@@ -1215,7 +1215,7 @@ const I18N_UI = {
     pageSaved: "Property Zo Ezaterekedwa",
     pageAccount: "Akaawunti Yange",
     langLabel: "Olulimi",
-    langBanner: "Kozesa makaug mu nnimi 7 ez'e Uganda",
+    langBanner: "Kozesa makaug mu nnimi 8",
     areaOnly: "Ekitundu kino kyokka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu oba landmark",
@@ -1343,7 +1343,7 @@ const I18N_UI = {
     pageSaved: "Mali Zilizohifadhiwa",
     pageAccount: "Akaunti Yangu",
     langLabel: "Lugha",
-    langBanner: "Tumia makaug kwa lugha 7 za Uganda",
+    langBanner: "Tumia makaug kwa lugha 8",
     areaOnly: "Eneo hili tu",
     anyUniversity: "Chuo chochote",
     phSale: "Jiji, eneo au alama maarufu",
@@ -1413,7 +1413,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
-    langBanner: "Kozesa makaug omu ndimi 7 za Uganda",
+    langBanner: "Kozesa makaug omu ndimi 8",
     areaOnly: "Aho honyine",
     anyUniversity: "Yunivasite yona",
     phSale: "Ekibuga, ekitundu",
@@ -1445,7 +1445,7 @@ const I18N_UI = {
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
-    langBanner: "Koresa makaug omu ndimi 7 ez'omuri Uganda",
+    langBanner: "Koresa makaug omu ndimi 8",
     areaOnly: "Akarere aka gusa",
     anyUniversity: "Kaminuza yose",
     phSale: "Omujyi, akarere",
@@ -1477,7 +1477,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
-    langBanner: "Kozesa makaug mu nnimi 7 eza Uganda",
+    langBanner: "Kozesa makaug mu nnimi 8",
     areaOnly: "Ekitundu kino kyonka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu",
@@ -1866,6 +1866,118 @@ Object.keys(I18N_UI_HARDENING).forEach((lang) => {
   I18N_UI[lang] = Object.assign({}, I18N_UI[lang] || {}, I18N_UI_HARDENING[lang]);
 });
 
+I18N_UI.am = Object.assign({}, I18N_UI.en, {
+  siteTitle: "makaug.com | የኡጋንዳ ንብረት ፖርታል",
+  brandSubtitle: "የኡጋንዳ ንብረት",
+  saved: "የተቀመጡ",
+  signIn: "ግባ",
+  advertiseProperty: "ንብረት ዘርዝር",
+  navSale: "ለሽያጭ",
+  navRent: "ለኪራይ",
+  navStudents: "ተማሪዎች",
+  navCommercial: "ንግድ",
+  navLand: "መሬት",
+  navBrokers: "ደላሎችን ፈልግ",
+  navMortgage: "የብድር መፈለጊያ",
+  navAI: "AI Chatbot ያግኙ",
+  navFraud: "ማጭበርበር",
+  heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
+  heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
+  heroSubtitle: "ለኡጋንዳ የንብረት መፈለጊያ: ቤቶች፣ ኪራዮች፣ መሬት፣ የተማሪ ክፍሎች እና ከማህበራዊ ምንጮች የተገኙ ውጤቶች።",
+  heroRent: "ኪራይ",
+  heroBuy: "ግዛ",
+  heroCommercial: "ንግድ",
+  heroStudents: "ተማሪዎች",
+  heroLand: "መሬት",
+  heroListFree: "ንብረት ዘርዝር",
+  heroSearch: "ፈልግ",
+  heroUseLocation: "አካባቢዬን ተጠቀም",
+  heroLocationLabel: "አካባቢ",
+  heroLocationHelper: "የአካባቢ ፍለጋ በነባሪ 10 ማይል ራዲየስ ይጠቀማል።",
+  heroLocationFinding: "በአቅራቢያዎ ያሉ ንብረቶችን በመፈለግ ላይ...",
+  heroLocationActive: "አካባቢ ንቁ ነው: ከእርስዎ 10 ማይል ውስጥ እየፈለግን ነው።",
+  heroLocationDenied: "የአካባቢ ፈቃድ ተከልክሏል። በከተማ፣ አካባቢ ወይም ምልክት ፈልጉ።",
+  heroLocationUnavailable: "አካባቢዎን ማግኘት አልቻልንም። በከተማ፣ አካባቢ ወይም ምልክት ፈልጉ።",
+  heroLocationOutside: "ከኡጋንዳ ውጭ ያሉ ይመስላል። የኡጋንዳ አካባቢ ይምረጡ ወይም ሁሉንም ኡጋንዳ ይፈልጉ።",
+  heroPropertyType: "የንብረት አይነት",
+  heroMinPrice: "ዝቅተኛ ዋጋ",
+  heroMaxPrice: "ከፍተኛ ዋጋ",
+  heroBedrooms: "መኝታ ክፍሎች",
+  heroFilters: "ማጣሪያዎች",
+  heroAny: "ማንኛውም",
+  heroBedroomStudio: "ስቱዲዮ",
+  heroTypeHouse: "ቤት",
+  heroTypeApartment: "አፓርታማ",
+  heroTypeBungalow: "ባንጋሎ",
+  heroTypeStudio: "ስቱዲዮ",
+  heroTypeRoom: "ክፍል",
+  heroTypeHostel: "ሆስቴል",
+  heroTypeLand: "መሬት",
+  heroTypeCommercialSpace: "የንግድ ቦታ",
+  heroTypeOffice: "ቢሮ",
+  heroTypeShop: "ሱቅ",
+  heroTypeWarehouse: "መጋዘን",
+  heroCommercialType: "የንግድ አይነት",
+  heroLandType: "የመሬት አይነት",
+  heroRoomType: "የክፍል አይነት",
+  heroTypeRetail: "ችርቻሮ",
+  heroTypeResidentialPlot: "የመኖሪያ ፕሎት",
+  heroTypeCommercialPlot: "የንግድ ፕሎት",
+  heroTypeAgriculturalLand: "የእርሻ መሬት",
+  heroTypeSelfContained: "ራሱን የቻለ",
+  heroTypeSharedRoom: "የጋራ ክፍል",
+  heroBathrooms: "መታጠቢያዎች",
+  heroAmenities: "አገልግሎቶች",
+  heroStudentAmenities: "የተማሪ አገልግሎቶች",
+  heroCommercialFeatures: "የንግድ ባህሪዎች",
+  heroLandFeatures: "የመሬት ባህሪዎች",
+  heroRadius: "ራዲየስ",
+  heroSortNewest: "በአዲስነት ደርድር",
+  heroSortPriceAsc: "ዋጋ ከዝቅተኛ ወደ ከፍተኛ",
+  heroSortPriceDesc: "ዋጋ ከከፍተኛ ወደ ዝቅተኛ",
+  heroSortDistance: "ርቀት",
+  heroApply: "ተግብር",
+  heroClear: "አጽዳ",
+  homeFeatured: "ተለይተው የቀረቡ ንብረቶች",
+  homeMap: "በካርታ ይመልከቱ",
+  homeBrokers: "ተለይተው የቀረቡ ወኪሎች",
+  pageSale: "ለሽያጭ የሚሆን ቤት ያግኙ",
+  pageRent: "ለኪራይ ንብረት ያግኙ",
+  pageStudents: "የተማሪ መኖሪያ ያግኙ",
+  pageCommercial: "የንግድ ንብረት ያግኙ",
+  pageLand: "የመሬት እድል ያግኙ",
+  pageBrokers: "ደላል ያግኙ",
+  pageMortgage: "የብድር መፈለጊያ",
+  pageAI: "AI Chatbot ያግኙ",
+  pageList: "ንብረት ዘርዝር",
+  pageAbout: "ስለ makaug",
+  pageSaved: "የተቀመጡ ንብረቶች",
+  pageAccount: "መለያዬ",
+  langLabel: "ቋንቋ",
+  langBanner: "makaugን በ8 ቋንቋዎች ይጠቀሙ",
+  areaOnly: "ይህ አካባቢ ብቻ",
+  withinLabel: "ውስጥ",
+  mileUnitSingular: "ማይል",
+  mileUnitPlural: "ማይል",
+  anyUniversity: "ማንኛውም ዩኒቨርሲቲ",
+  university: "ዩኒቨርሲቲ",
+  phSale: "ከተማ፣ አካባቢ፣ መንደር ወይም ምልክት",
+  phRent: "ከተማ፣ አካባቢ፣ መንደር ወይም ምልክት",
+  phStudents: "ከተማ፣ አካባቢ፣ መንደር ወይም ምልክት",
+  phCommercial: "ከተማ፣ አካባቢ፣ መንደር ወይም ምልክት",
+  phLand: "ከተማ፣ አካባቢ፣ መንደር ወይም ምልክት",
+  badgeSale: "ለሽያጭ",
+  badgeRent: "ለኪራይ",
+  badgeStudent: "ተማሪ",
+  badgeCommercial: "ንግድ",
+  badgeLand: "መሬት",
+  listingAgent: "በደላል የተዘረዘረ",
+  listingPrivate: "በግል የተዘረዘረ",
+  listingRegistered: "የተመዘገበ",
+  footerGrowth: "የ makaug የውስጥ ስፖንሰር ቦታዎች እና SEO ማውጫ ለእድገት ተዘጋጅተዋል።",
+  languageSet: "ቋንቋ ተቀይሯል"
+});
+
 const LANG_FALLBACK = {
   en: "en",
   lg: "en",
@@ -1873,7 +1985,8 @@ const LANG_FALLBACK = {
   ac: "sw",
   ny: "en",
   rn: "en",
-  sm: "en"
+  sm: "en",
+  am: "en"
 };
 
 if (I18N_UI.rn) {
@@ -2177,6 +2290,47 @@ const CONTENT_I18N = {
     "safety.reportBody": "Simamisha mazungumzo, hifadhi screenshots na payment details, kisha ripoti ili makaug.com ikague listing."
   }
 };
+
+CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
+  "about.heroLabel": "ስለ እኛ",
+  "about.title": "ስለ makaug",
+  "about.heroStatement": "በኡጋንዳ ንብረት ማግኘት፣ መዘርዘር እና መተማመን ቀላል መሆን አለበት።",
+  "about.subtitle": "makaug ለተከራዮች፣ ገዢዎች፣ ተማሪዎች፣ መሬት ፈላጊዎች፣ ባለንብረቶች፣ ደላሎች እና ንግዶች የኡጋንዳ የንብረት መድረክ እየገነባ ነው።",
+  "about.ctaSearch": "ንብረት ፈልግ",
+  "about.ctaList": "ንብረት ዘርዝር",
+  "about.ctaWhatsapp": "makaugን በ WhatsApp ጠይቅ",
+  "about.valueUgandaTitle": "ኡጋንዳ ቀዳሚ",
+  "about.valueUgandaText": "በአካባቢ ስሞች፣ ቋንቋ ፍላጎቶች፣ WhatsApp አጠቃቀም እና ተግባራዊ የዝርዝር ሂደቶች ላይ የተገነባ።",
+  "about.valueFreeTitle": "ነፃ ዝርዝር",
+  "about.valueFreeText": "ባለንብረቶች እና ደላሎች የዝርዝር ክፍያ ሳይከፍሉ ንብረት መዘርዘር ይችላሉ።",
+  "about.valueWhatsappTitle": "ድር + WhatsApp",
+  "about.valueWhatsappText": "ለሞባይል ድር ፍለጋ፣ WhatsApp ግንኙነት፣ ዳሽቦርድ ክትትል እና ደህንነታዊ ውሳኔዎች የተዘጋጀ።",
+  "about.whoTitle": "እኛ ማን ነን",
+  "about.whoText": "makaug ለድር ፍለጋ፣ ለሞባይል፣ ለ WhatsApp ግንኙነት፣ ለብዙ ቋንቋ ድጋፍ እና ለተመራ ነፃ ዝርዝር የኡጋንዳ የንብረት መድረክ ነው።",
+  "about.missionTitle": "ተልእኮችን",
+  "about.missionText": "ተልእኮአችን ንብረትን ቀላል ለማግኘት፣ ግራ መጋባትን ለመቀነስ፣ የዝርዝር ጥራትን ለማሻሻል እና ሰዎችን ከፍለጋ ወደ እይታ እና ውሳኔ ለማገዝ ነው።",
+  "about.whyTitle": "makaug ለምን አለ",
+  "about.whyText": "በኡጋንዳ የንብረት ፍለጋ በ WhatsApp፣ በደላሎች፣ በማህበራዊ ፖስቶች እና ባልተሟሉ ገጾች ሊበተን ይችላል። makaug መዋቅር፣ ፍለጋ፣ ደህንነት እና ግንኙነትን አንድ ላይ ያመጣል።",
+  "about.searchEngineLabel": "የንብረት መፈለጊያ",
+  "about.searchEngineTitle": "makaug የንብረት መረጃን እንዴት ያገኛል",
+  "about.searchEngineText": "makaug ለኡጋንዳ ንብረት የፍለጋ መሣሪያ እየሆነ ነው። የባለቤትና የደላል ዝርዝሮችን ከተገመገሙ የህዝብ ምንጮች ጋር እናጣምራለን።",
+  "about.searchSourceTitle": "የምንጭ ግልጽነት",
+  "about.searchSourceText": "በመስመር ላይ የተገኙ ዝርዝሮች makaug መጀመሪያ መቼ እንዳገኛቸው፣ ከየትኛው ማህበራዊ ምንጭ እንደመጡ እና ዋናውን ፖስት ለመመርመር መንገዱን ያሳያሉ።",
+  "about.searchReviewTitle": "የሰው ግምገማ",
+  "about.searchReviewText": "የምንጭ መረጃ በቀጥታ አይታተምም። King dashboard አካባቢ፣ ፎቶዎች፣ እውቂያ፣ ተደጋጋሚነት እና የፈቃድ ምልክቶችን ይመረምራል።",
+  "about.searchRemovalTitle": "ይጠይቁ ወይም ያስወግዱ",
+  "about.searchRemovalText": "ባለቤቶች እና ወኪሎች ዝርዝሩን መጠየቅ፣ ማሻሻል፣ መስተካከል ወይም ማስወገድ መጠየቅ ይችላሉ።",
+  "safety.eyebrow": "ከመክፈልዎ በፊት ያረጋግጡ",
+  "safety.title": "የ makaug.com የደህንነት ምክሮች",
+  "safety.subtitle": "ለእያንዳንዱ የንብረት ጉዞ ቀላል ምርመራዎች: በደህና ይመልከቱ፣ ማንነትን ያረጋግጡ፣ ተፈቃድን ያረጋግጡ፣ በሚከታተል መንገድ ይክፈሉ።",
+  "safety.reportCta": "አጠራጣሪ ዝርዝር ሪፖርት ያድርጉ",
+  "safety.whatsappCta": "makaug.comን በ WhatsApp ጠይቅ",
+  "safety.fraudCta": "የፀረ-ማጭበርበር መመሪያ ያንብቡ",
+  "safety.introTitle": "ደህንነታዊ የንብረት ጉዞ ከእይታ በፊት ይጀምራል",
+  "safety.introBody": "እያንዳንዱን ዝርዝር እንደሚፈተሽ ነገር ይውሰዱ። መልእክቶችን ያስቀምጡ፣ ዋጋዎችን ያነፃፅሩ፣ በአካል ይመልከቱ እና የሚያፋጥንዎትን ሰው አይክፈሉ።",
+  "safety.reportTitle": "አጠራጣሪ ነገር አይተዋል?",
+  "safety.reportBody": "ውይይቱን ያቁሙ፣ screenshots እና የክፍያ ዝርዝሮችን ያስቀምጡ፣ ከዚያ makaug.com ዝርዝሩን እንዲመረምር ሪፖርት ያድርጉ።"
+});
 
 function contentTr(key) {
   const lang = currentLang || "en";
@@ -3244,7 +3398,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "List a property with guided prompts and photo checklist.",
     benefit2: "Search properties by district, area, budget, beds, and purpose.",
     benefit3: "Get direct WhatsApp and call contacts for matching brokers.",
-    benefit4: "Use the chatbot in 7 Ugandan languages with fast replies.",
+    benefit4: "Use the chatbot in 8 languages with fast replies.",
     cta: "Start Chatbot on WhatsApp"
   },
   lg: {
@@ -3266,7 +3420,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property ng’oyambibwako prompts n’elist y’ebifaananyi.",
     benefit2: "Noonya property nga osinziira ku district, kitundu, budget n’ebirala.",
     benefit3: "Funa WhatsApp ne call contacts za brokers ezikukwatako.",
-    benefit4: "Kozesa chatbot mu nnimi 7 ez’e Uganda n’okuddamu okw’amangu.",
+    benefit4: "Kozesa chatbot mu nnimi 8 n’okuddamu okw’amangu.",
     cta: "Tandika Chatbot ku WhatsApp"
   },
   sw: {
@@ -3288,7 +3442,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Orodhesha mali kwa prompts zinazoelekeza na checklist ya picha.",
     benefit2: "Tafuta mali kwa wilaya, eneo, budget, vyumba, na kusudi.",
     benefit3: "Pata namba za WhatsApp na simu za mawakala wanaofaa.",
-    benefit4: "Tumia chatbot kwa lugha 7 za Uganda kwa majibu ya haraka.",
+    benefit4: "Tumia chatbot kwa lugha 8 kwa majibu ya haraka.",
     cta: "Anza Chatbot kwa WhatsApp"
   },
   ac: {
@@ -3310,7 +3464,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Tera listing ki prompts ma tye kony ki checklist pa poto.",
     benefit2: "Yenyo listing ki district, kabedo, budget, beds, ki purpose.",
     benefit3: "Nong namba me WhatsApp ki cim pa brokers ma rwatte.",
-    benefit4: "Tii ki chatbot i dhok 7 me Uganda ki lagam mapiyo.",
+    benefit4: "Tii ki chatbot i dhok 8 ki lagam mapiyo.",
     cta: "Cak Chatbot i WhatsApp"
   },
   ny: {
@@ -3332,7 +3486,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property n'obufakazi obuyambiremu na checklist y'ebifaananyi.",
     benefit2: "Noonya properties na district, area, budget, beds, n'ekigendererwa.",
     benefit3: "Funa WhatsApp na call contacts za brokers abakuhika.",
-    benefit4: "Kozesa chatbot omu ndimi 7 za Uganda n'okugarukamu mangu.",
+    benefit4: "Kozesa chatbot omu ndimi 8 n'okugarukamu mangu.",
     cta: "Tandika Chatbot omu WhatsApp"
   },
   rn: {
@@ -3354,7 +3508,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Tera property n'obuhabuzi obukurangira hamwe na checklist y'ebifaananyi.",
     benefit2: "Shaka properties ukoresheje district, area, budget, beds, n'ekigyendererwa.",
     benefit3: "Bona WhatsApp na call contacts za brokers abakuhika.",
-    benefit4: "Koresha chatbot omu ndimi 7 za Uganda n'okugaruka bwangu.",
+    benefit4: "Koresha chatbot omu ndimi 8 n'okugaruka bwangu.",
     cta: "Tandika Chatbot kuri WhatsApp"
   },
   sm: {
@@ -3376,10 +3530,33 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property ng'oyambibwa prompts n'ekipimo ky'ebifaananyi.",
     benefit2: "Noonia properties nga osinzira ku district, area, budget, beds n'ekigendererwa.",
     benefit3: "Funa WhatsApp ne call contacts za brokers abakukwataku.",
-    benefit4: "Kozesa chatbot mu nnimi 7 eza Uganda n'okuddamu okwangu.",
+    benefit4: "Kozesa chatbot mu nnimi 8 n'okuddamu okwangu.",
     cta: "Tandika Chatbot ku WhatsApp"
   }
 };
+
+AI_CHATBOT_I18N.am = Object.assign({}, AI_CHATBOT_I18N.en, {
+  title: "የ AI Chatbot አገልግሎታችንን ያግኙ",
+  sub: "በ WhatsApp ንብረት ይዘርዝሩ፣ በአካባቢ ይፈልጉ፣ የደላል እውቂያ ይጠይቁ እና በመረጡት ቋንቋ ፈጣን የንብረት ሊንኮች ያግኙ።",
+  card1Title: "በደቂቃዎች ውስጥ ንብረት ዘርዝር",
+  card1Sub: "የንብረት ዝርዝሮችን እና ፎቶዎችን በ WhatsApp ይላኩ፣ ከዚያ OTP ማረጋገጫን ያጠናቅቁ።",
+  card2Title: "በተጋራ አካባቢ ፈልግ",
+  card2Sub: "አካባቢዎን ያጋሩ እና በአቅራቢያ ያሉ ለሽያጭ ወይም ለኪራይ ዝርዝሮችን ያግኙ።",
+  card3Title: "የተረጋገጠ ደላል ያግኙ",
+  card3Sub: "በዲስትሪክት፣ በልዩነት ወይም በቋንቋ የደላል እውቂያ ይጠይቁ።",
+  flowTitle: "የ chatbot ውይይት እንዴት ይሄዳል",
+  flow1: "ወደ makaug እንኳን በደህና መጡ። 1 ዘርዝር፣ 2 ፈልግ፣ 3 ደላል ፈልግ ብለው ይመልሱ።",
+  flow2: "2 - በአካባቢዬ አቅራቢያ ፈልግ",
+  flow3: "አካባቢና በጀት ያጋሩ። ተዛማጅ ዝርዝሮችን ከሊንክ ጋር እልካለሁ።",
+  flow4: "አካባቢ ተጋርቷል + በጀት USh 1.5M ኪራይ",
+  flow5: "በአካባቢዎ 5 ተዛማጅ ንብረቶች አሉ። ዝርዝር ለማየት ሊንኩን ይንኩ።",
+  benefitsTitle: "አሁን ማድረግ የሚችሉት",
+  benefit1: "በተመራ ጥያቄዎች እና የፎቶ ዝርዝር ንብረት ዘርዝር።",
+  benefit2: "በዲስትሪክት፣ አካባቢ፣ በጀት፣ መኝታ ክፍሎች እና ዓላማ ንብረቶችን ፈልግ።",
+  benefit3: "ለተዛማጅ ደላሎች ቀጥተኛ WhatsApp እና የስልክ እውቂያ ያግኙ።",
+  benefit4: "chatbotን በ8 ቋንቋዎች በፈጣን ምላሽ ይጠቀሙ።",
+  cta: "Chatbotን በ WhatsApp ጀምር"
+});
 
 function aiTr(key) {
   const lang = currentLang || "en";
@@ -5279,7 +5456,8 @@ function languageDisplayName(code = "en") {
     ac: "Acholi",
     ny: "Runyankole",
     rn: "Rukiga",
-    sm: "Lusoga"
+    sm: "Lusoga",
+    am: "Amharic"
   }[code || "en"] || "English";
 }
 
@@ -12684,7 +12862,8 @@ function languageDisplayName(code) {
     ac: "Acholi",
     ny: "Runyankole",
     rn: "Rukiga",
-    sm: "Lusoga"
+    sm: "Lusoga",
+    am: "Amharic"
   }[String(code || "en").toLowerCase()] || "English";
 }
 
@@ -21000,7 +21179,7 @@ const ACCOUNT_ACCESS_SCREENING = {
     { key: "agent_specialities", label: "Main speciality?", options: ["Rentals", "Sales", "Land", "Student accommodation", "Commercial"] },
     { key: "agent_districts", label: "Main operating area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Other"] },
     { key: "agent_company", label: "Agency status?", options: ["Independent broker", "Agency/company", "Developer", "Land specialist"] },
-    { key: "agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Other"] },
+    { key: "agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Other"] },
     { key: "active_listing_count", label: "Approximate active listings?", options: ["0-5", "6-20", "21-50", "50+"] }
   ],
   field_agent: [
@@ -21008,7 +21187,7 @@ const ACCOUNT_ACCESS_SCREENING = {
     { key: "field_agent_experience", label: "Field experience?", options: ["New", "Under 1 year", "1-3 years", "3+ years"] },
     { key: "field_agent_availability", label: "Availability?", options: ["Full time", "Part time", "Weekends", "Flexible"] },
     { key: "transport_access", label: "Transport access?", options: ["Walking/public transport", "Motorcycle", "Car", "Other"] },
-    { key: "field_agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Other"] }
+    { key: "field_agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Other"] }
   ],
   advertiser: [
     { key: "campaign_interest", label: "Campaign goal?", options: ["Promote property", "Promote broker profile", "Promote student housing", "Promote mortgage/service", "General brand awareness"] },
@@ -22214,6 +22393,7 @@ function ensureAccountAccessDrawer() {
             <option value="ny">Runyankole</option>
             <option value="rn">Rukiga</option>
             <option value="sm">Lusoga</option>
+            <option value="am">Amharic</option>
           </select>
         </div>
         <div id="account-access-role-list-wrap">
@@ -26384,7 +26564,7 @@ function renderUgNlisVerificationCard(p = {}) {
 function formatListingDate(dateValue) {
   const date = parseDateSafe(dateValue);
   if (!date) return "";
-  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG" };
+  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET" };
   return date.toLocaleDateString(localeMap[currentLang] || "en-GB", {
     day: "2-digit",
     month: "short",
@@ -26624,7 +26804,8 @@ const THIRD_PARTY_TITLE_PHRASES = {
   ac: { "for rent": "me apanga", "for sale": "me cato" },
   ny: { "for rent": "y'okupangisa", "for sale": "y'okutunda" },
   rn: { "for rent": "y'okupangisa", "for sale": "y'okutunda" },
-  sm: { "for rent": "ey'okupangisa", "for sale": "ey'okutunda" }
+  sm: { "for rent": "ey'okupangisa", "for sale": "ey'okutunda" },
+  am: { "for rent": "ለኪራይ", "for sale": "ለሽያጭ" }
 };
 
 function thirdPartyTitlePhrase(text) {
@@ -31148,6 +31329,74 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
   });
 })();
 
+Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
+  "Drag & Drop Photos or Click to Browse": "ፎቶዎችን ይጎትቱ ወይም ለመምረጥ ይንኩ",
+  "JPG, PNG or WEBP - up to 10MB each": "JPG፣ PNG ወይም WEBP - እያንዳንዱ እስከ 10MB",
+  "Add one photo": "አንድ ፎቶ ያክሉ",
+  "Add multiple photos": "ብዙ ፎቶዎች ያክሉ",
+  "Choose one image as the": "አንድ ምስል እንደ",
+  "main photo": "ዋና ፎቶ",
+  "This will appear first in search results.": "ይህ በፍለጋ ውጤቶች መጀመሪያ ይታያል።",
+  "Video tour": "የቪዲዮ ጉብኝት",
+  "Video preview": "የቪዲዮ ቅድመ እይታ",
+  "This is how the video tour will appear after review.": "የቪዲዮ ጉብኝቱ ከግምገማ በኋላ እንዲህ ይታያል።",
+  "This is how the video tour will appear after approval.": "የቪዲዮ ጉብኝቱ ከፈቃድ በኋላ እንዲህ ይታያል።",
+  "Play the walkthrough without leaving this page.": "ከዚህ ገጽ ሳይወጡ ቪዲዮውን ይመልከቱ።",
+  "Open YouTube": "YouTube ክፈት",
+  "Open video link": "የቪዲዮ ሊንክ ክፈት",
+  "Add a YouTube walkthrough link to show an embedded preview here.": "እዚህ የተካተተ ቅድመ እይታ ለማሳየት የ YouTube ሊንክ ያክሉ።",
+  "Field Agent assisted?": "Field Agent ረድቶዎታል?",
+  "Field Agent ID": "Field Agent ID",
+  "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "Field Agent ይህን ቅጽ ለመሙላት የረዳዎት ሰው ነው። makaug ወይም የደላል ረዳት ከረዳዎት ብቻ አዎ ይምረጡ።",
+  "Only fill this if a Field Agent assisted you.": "Field Agent ከረዳዎት ብቻ ይሙሉት።",
+  "Confirm this location": "ይህን አካባቢ ያረጋግጡ",
+  "Location confirmed": "አካባቢ ተረጋግጧል",
+  "No photos selected yet.": "እስካሁን ፎቶ አልተመረጠም።",
+  "Selected photos": "የተመረጡ ፎቶዎች",
+  "Photo quality check passed. Files are suitable for review.": "የፎቶ ጥራት ምርመራ አልፏል። ፋይሎቹ ለግምገማ ተስማሚ ናቸው።",
+  "Third-party property result": "የሶስተኛ ወገን የንብረት ውጤት",
+  "This property was found from a public third-party source. Makaug provides a search and discovery preview only.": "ይህ ንብረት ከህዝብ የሶስተኛ ወገን ምንጭ ተገኝቷል። makaug የፍለጋ እና የግኝት ቅድመ እይታ ብቻ ይሰጣል።",
+  "Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "makaug ባለቤትነት፣ መገኘት፣ ዋጋ፣ የመሬት ርዕስ፣ የሻጭ ስልጣን፣ የምስል መብቶች ወይም የእውቂያ ዝርዝሮችን አላረጋገጠም። ክፍያ ወይም እይታ ከማዘጋጀትዎ በፊት ዋናውን ምንጭ ይመልከቱ እና በራስዎ ያረጋግጡ።",
+  "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "makaug የሶስተኛ ወገን ፎቶዎች፣ ቪዲዮዎች፣ captions፣ መግለጫዎች፣ ምልክቶች ወይም የእውቂያ ዝርዝሮች ባለቤትነትን አይጠይቅም። ሁሉም የሶስተኛ ወገን ይዘት የመጀመሪያው የመብት ባለቤት ንብረት ነው። ግንኙነት በዋናው ምንጭ ይካሄዳል።",
+  "First posted online": "መጀመሪያ በመስመር ላይ የተለጠፈ",
+  "First picked up by makaug": "በ makaug መጀመሪያ የተገኘ",
+  "Added to makaug": "ወደ makaug የተጨመረ",
+  "Source": "ምንጭ",
+  "Audience": "ተመልካቾች",
+  "Open original source": "ዋናውን ምንጭ ክፈት",
+  "Contact original poster": "ዋናውን ለጣፊ ያግኙ",
+  "Claim this listing": "ይህን ዝርዝር ይጠይቁ",
+  "Request correction": "ማስተካከያ ይጠይቁ",
+  "Request removal": "ማስወገድ ይጠይቁ",
+  "Report fraud or incorrect information": "ማጭበርበር ወይም የተሳሳተ መረጃ ሪፖርት ያድርጉ",
+  "Contact through the public social channel": "በህዝብ ማህበራዊ ምንጭ ያግኙ",
+  "Open source contact": "የምንጭ እውቂያ ክፈት",
+  "Open the public source page for contact details.": "ለእውቂያ ዝርዝሮች የህዝብ ምንጭ ገጹን ይክፈቱ።",
+  "No phone number is published. Use the source page to contact the lister.": "ስልክ ቁጥር አልታተመም። ዝርዝሩን ለማግኘት የምንጭ ገጹን ይጠቀሙ።",
+  "Official platform embed. Makaug does not re-host social media photos or videos.": "ኦፊሴላዊ የመድረክ embed። Makaug የማህበራዊ ሚዲያ ፎቶዎችን ወይም ቪዲዮዎችን እንደገና አያስተናግድም።",
+  "Official land verification": "ኦፊሴላዊ የመሬት ማረጋገጫ",
+  "Verify with UgNLIS": "በ UgNLIS ያረጋግጡ",
+  "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "ኦፊሴላዊ ፍለጋዎች በ UgNLIS ላይ ይካሄዳሉ። ለtitle search እና transaction tracking የመንግስት ፖርታልን ይጠቀሙ፤ የመንግስት መዝገቦች የእውነት ምንጭ ናቸው።",
+  "Open UgNLIS portal": "UgNLIS ፖርታል ክፈት",
+  "Official search not supplied": "ኦፊሴላዊ ፍለጋ አልቀረበም",
+  "Review needed": "ግምገማ ያስፈልጋል",
+  "Property": "ንብረት",
+  "House": "ቤት",
+  "Apartment": "አፓርታማ",
+  "Land": "መሬት",
+  "Commercial": "ንግድ",
+  "Student accommodation": "የተማሪ መኖሪያ",
+  "For Sale": "ለሽያጭ",
+  "To Rent": "ለኪራይ",
+  "Found online": "በመስመር ላይ የተገኘ",
+  "Sourced online": "ከመስመር ላይ የተገኘ",
+  "Price upon application": "ዋጋ በጥያቄ ላይ",
+  "Added": "የተጨመረ",
+  "Added today": "ዛሬ የተጨመረ",
+  "Added recently": "በቅርቡ የተጨመረ",
+  "Nearby": "በአቅራቢያ"
+});
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -31400,6 +31649,49 @@ const PROPERTY_UI_I18N = {
     "No property is saved publicly. Saved homes stay inside the signed-in account only.": "Tewali property eterekebwa ku lukale. Ebiterekeddwa bisigala mu account gy'oyingidde yokka."
   }
 };
+
+PROPERTY_UI_I18N.am = Object.assign({}, PROPERTY_UI_I18N.sw, {
+  "AI Write Description": "AI መግለጫ ይጻፍ",
+  "AI description written. You can still edit it before submitting.": "AI መግለጫ ጽፏል። ከማስገባትዎ በፊት ማስተካከል ይችላሉ።",
+  "Gallery": "ጋለሪ",
+  "Location": "አካባቢ",
+  "Open Google Directions": "Google Directions ክፈት",
+  "Directions unavailable": "Directions አይገኝም",
+  "Similar Properties": "ተመሳሳይ ንብረቶች",
+  "Contact Lister": "ዝርዝር አቅራቢን ያግኙ",
+  "Contact Broker": "ደላልን ያግኙ",
+  "Public listing contact": "የህዝብ ዝርዝር እውቂያ",
+  "Call Contact": "እውቂያ ይደውሉ",
+  "Call unavailable": "መደወል አይቻልም",
+  "WhatsApp Contact": "WhatsApp እውቂያ",
+  "WhatsApp unavailable": "WhatsApp አይገኝም",
+  "Call Broker": "ደላልን ይደውሉ",
+  "WhatsApp Broker": "ደላልን በ WhatsApp ያግኙ",
+  "View Broker": "ደላል ይመልከቱ",
+  "Send enquiry": "ጥያቄ ላክ",
+  "Your name": "ስምዎ",
+  "Email optional": "Email አማራጭ",
+  "Message": "መልእክት",
+  "I am interested in {title}.": "በ {title} ፍላጎት አለኝ።",
+  "Your enquiry will go to {name}.": "ጥያቄዎ ወደ {name} ይሄዳል።",
+  "Save Property": "ንብረት አስቀምጥ",
+  "Saved to Profile": "ወደ Profile ተቀምጧል",
+  "Sign in or create an account to keep it in your profile.": "በProfileዎ ውስጥ ለማስቀመጥ ይግቡ ወይም መለያ ይፍጠሩ።",
+  "Save to your profile": "ወደ Profileዎ አስቀምጥ",
+  "Keep this property in your makaug account": "ይህን ንብረት በ makaug መለያዎ ውስጥ ያስቀምጡ",
+  "Create your free account or sign in to save {title}, track updates, and come back to it later.": "{title}ን ለማስቀመጥ፣ updatesን ለመከታተል እና በኋላ ለመመለስ ነፃ መለያ ይፍጠሩ ወይም ይግቡ።",
+  "What happens next?": "ቀጥሎ ምን ይሆናል?",
+  "The property will be saved straight to your personal profile after you sign in.": "ከገቡ በኋላ ንብረቱ በግል Profileዎ ውስጥ ይቀመጣል።",
+  "You can review saved homes, compare options, and track your enquiries in one place.": "የተቀመጡ ቤቶችን ማየት፣ አማራጮችን ማነፃፀር እና ጥያቄዎችን በአንድ ቦታ መከታተል ይችላሉ።",
+  "We will also send a welcome email when your account is created.": "መለያዎ ሲፈጠር የእንኳን ደህና መጡ email እንልካለን።",
+  "Sign In": "ግባ",
+  "No property is saved publicly. Saved homes stay inside the signed-in account only.": "ምንም ንብረት በህዝብ አይቀመጥም። የተቀመጡ ቤቶች በገቡበት መለያ ውስጥ ብቻ ይቀመጣሉ።",
+  "Mortgage Estimate": "የብድር ግምት",
+  "Deposit %": "ቅድመ ክፍያ %",
+  "Term": "ጊዜ",
+  "years": "ዓመታት",
+  "Open full Mortgage Finder": "ሙሉ Mortgage Finder ክፈት"
+});
 
 function translatePropertyUi(text, vars = {}) {
   const lang = currentLang || "en";
@@ -32046,7 +32338,8 @@ function renderListingDescriptionTranslationPreview() {
     ac: "Acholi",
     ny: "Runyankole",
     rn: "Rukiga",
-    sm: "Lusoga"
+    sm: "Lusoga",
+    am: "Amharic"
   };
   if (!original) {
     copyEl.textContent = translateListingLabel("Add a description to preview it in another language.");
@@ -32539,7 +32832,7 @@ function formatMortgageUpdatedAtLabel(value) {
   if (!value) return DEFAULT_MORTGAGE_RATE_UPDATED_AT;
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return String(value);
-  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG" };
+  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET" };
   const hasTime = String(value).includes("T");
   return dt.toLocaleString(localeMap[currentLang] || "en-GB", {
     day: "2-digit",

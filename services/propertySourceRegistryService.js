@@ -12,7 +12,7 @@ const SOCIAL_FIRST_PLATFORM_PRIORITY = ['tiktok', 'facebook', 'youtube', 'x', 'i
 const SOCIAL_PROFILE_CREATION_RULE = 'Do not automatically create or update a public Makaug source/broker profile from social discovery. Keep the source as attribution/contact evidence only until the agent or broker registers or claims the profile through the Makaug broker process.';
 const SOCIAL_ONE_OFF_LISTING_RULE = 'One-off and repeated social posts can become found-online listings when evidence is complete, but profile creation is deferred until the source owner registers or claims the Makaug broker profile.';
 
-const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili'];
+const SOURCE_LANGUAGES = ['English', 'Luganda', 'Kiswahili', 'Amharic'];
 const CORE_HASHTAGS = [
   'UgandaRealEstate',
   'RealEstateUganda',

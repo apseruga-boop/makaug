@@ -103,6 +103,21 @@ const LANGUAGE_REGISTRY = {
     translationStatus: 'partial',
     providerSupport: { humanTable: false, llm: true, externalApi: false },
     humanReviewRequired: true
+  },
+  am: {
+    code: 'am',
+    legacyCode: 'am',
+    displayName: 'Amharic',
+    nativeName: 'አማርኛ',
+    aliases: ['8', 'am', 'amh', 'amharic', 'amharinya', 'አማርኛ'],
+    direction: 'ltr',
+    supportedInWeb: true,
+    supportedInWhatsApp: true,
+    supportedInAI: true,
+    fallbackLanguage: 'en',
+    translationStatus: 'partial',
+    providerSupport: { humanTable: false, llm: true, externalApi: false },
+    humanReviewRequired: true
   }
 };
 

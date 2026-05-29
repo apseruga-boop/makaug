@@ -42,7 +42,7 @@ function buildAgentWelcomeWhatsappMessage({
     '- Free to list property. No listing charge.',
     '- Add homes, rentals, land, commercial spaces, and student accommodation.',
     '- Receive enquiries by phone, WhatsApp, or website form.',
-    '- Works in English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, or Lusoga. On WhatsApp, reply LANG to change language.',
+    '- Works in English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, or Amharic. On WhatsApp, reply LANG to change language.',
     '- Reply YES and we can guide your first listing through WhatsApp.',
     '',
     'Guide: the link above.',
