@@ -303,9 +303,11 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('"Report fraud or incorrect information": "Ripoti udanganyifu au taarifa zisizo sahihi"'), 'source disclosure should translate report action');
   assert(frontend.includes('"Contact via source"'), 'source disclosure should translate contact-through-source action');
   assert(frontend.includes('function propertyDescriptionHoverHtml'), 'public cards should expose a hover/focus description tooltip');
-  assert(frontend.includes('role="tooltip"') && frontend.includes('group-hover:block'), 'property description hover should be implemented as an accessible tooltip');
+  assert(frontend.includes('role="tooltip"') && frontend.includes('property-description-tooltip'), 'property description hover should be implemented as an accessible tooltip');
   assert(frontend.includes('propertyDescriptionHoverHtml(p)'), 'sale/rent/land/commercial cards should render the pulled public description on hover');
-  assert(frontend.includes('getLocalizedPropertyDescription(p'), 'hover descriptions should use the same localized public description as detail pages');
+  assert(frontend.includes('extra.source_hover_description'), 'hover descriptions should prefer the original social/source excerpt exposed by the API');
+  assert(propertiesRoute.includes('source_hover_description: sourceHoverDescription'), 'public API should expose a safe source excerpt for found-online card hovers');
+  assert(html.includes('.property-card:hover .property-description-tooltip'), 'hover tooltip should use a stable CSS hover selector');
   assert(frontend.includes('extra.source_comments'), 'King extracted-detail helper should include creator/comment evidence from social posts');
   assert(frontend.includes('Original post date is being confirmed from the source platform'), 'source disclosure should explain when platform post date is not exposed');
   assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');

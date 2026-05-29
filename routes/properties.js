@@ -196,6 +196,56 @@ function redactThirdPartyPublicText(value = '') {
     .trim();
 }
 
+function sourceTextFragments(value, depth = 0) {
+  if (value == null || depth > 3) return [];
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return [String(value)];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => sourceTextFragments(item, depth + 1));
+  }
+  if (typeof value === 'object') {
+    return [
+      value.text,
+      value.comment,
+      value.caption,
+      value.description,
+      value.message,
+      value.reply,
+      value.creator_reply,
+      value.creator_response,
+      value.body,
+      value.title
+    ].flatMap((item) => sourceTextFragments(item, depth + 1));
+  }
+  return [];
+}
+
+function buildPublicSourceHoverDescription(extraFields = {}) {
+  const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
+  const fragments = [
+    extra.source_visual_text,
+    extra.video_ocr_text,
+    extra.frame_ocr_text,
+    extra.source_text,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_title,
+    extra.source_comments
+  ].flatMap((item) => sourceTextFragments(item));
+  const seen = new Set();
+  const parts = [];
+  fragments.forEach((fragment) => {
+    const cleaned = redactThirdPartyPublicText(fragment);
+    if (!cleaned || cleaned.length < 3) return;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(cleaned);
+  });
+  return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 900);
+}
+
 function publicAreaLabelFor(property = {}, extra = {}) {
   return cleanText(
     extra.resolved_location_label
@@ -484,6 +534,7 @@ function inferPublicSourcePlatform(value = '') {
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const landVerification = buildUgNlisLandVerificationPack(extra);
+  const sourceHoverDescription = buildPublicSourceHoverDescription(extra);
   const safeSourceUrls = Array.isArray(extra.source_urls)
     ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
     : [];
@@ -573,6 +624,8 @@ function publicExtraFields(extraFields = {}) {
     source_contact_label: sourceContactLabel,
     source_contact_method: extra.source_contact_method || null,
     source_contact_platform: sourceContactPlatform || null,
+    source_hover_description: sourceHoverDescription || null,
+    source_card_description: sourceHoverDescription || null,
     source_channel_url: extra.source_channel_url || extra.youtube_channel_url || null,
     youtube_channel_url: extra.youtube_channel_url || extra.source_channel_url || null,
     area_highlights: cleanPublicListingCopy(extra.area_highlights || ''),

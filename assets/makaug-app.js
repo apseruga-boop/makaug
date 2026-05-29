@@ -27758,6 +27758,54 @@ function getLocalizedPropertyHighlights(property = {}, nearby = []) {
   return sanitizePublicListingCopyForUi(property.area_highlights);
 }
 
+function propertySourceDescriptionFragments(value, depth = 0) {
+  if (value == null || depth > 3) return [];
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return [String(value)];
+  if (Array.isArray(value)) return value.flatMap((item) => propertySourceDescriptionFragments(item, depth + 1));
+  if (typeof value === "object") {
+    return [
+      value.text,
+      value.comment,
+      value.caption,
+      value.description,
+      value.message,
+      value.reply,
+      value.creator_reply,
+      value.creator_response,
+      value.body,
+      value.title
+    ].flatMap((item) => propertySourceDescriptionFragments(item, depth + 1));
+  }
+  return [];
+}
+
+function propertyCardSourceDescriptionText(extra = {}) {
+  const fragments = [
+    extra.source_hover_description,
+    extra.source_card_description,
+    extra.source_visual_text,
+    extra.video_ocr_text,
+    extra.frame_ocr_text,
+    extra.source_text,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_title,
+    extra.source_comments
+  ].flatMap((value) => propertySourceDescriptionFragments(value));
+  const seen = new Set();
+  return fragments.map((value) => sanitizePublicListingCopyForUi(value))
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter((value) => {
+      if (!value || value.length < 3) return false;
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(" ")
+    .trim();
+}
+
 async function submitPropertyInquiry(id) {
   const property = findPropertyForUi(id);
   if (!property) return;
@@ -27830,7 +27878,11 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 	    }
 
 function propertyCardDescriptionText(p = {}) {
-  const localized = getLocalizedPropertyDescription(p, Array.isArray(p.nearby_places) ? p.nearby_places : []);
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const sourceDescription = propertyCardSourceDescriptionText(extra);
+  const localized = isFoundOnlineListing(p) && sourceDescription
+    ? sourceDescription
+    : getLocalizedPropertyDescription(p, Array.isArray(p.nearby_places) ? p.nearby_places : []);
   return sanitizePublicListingCopyForUi(localized)
     .replace(/\s+/g, " ")
     .trim()
@@ -27841,7 +27893,7 @@ function propertyDescriptionHoverHtml(p = {}) {
   const description = propertyCardDescriptionText(p);
   if (!description) return "";
   return `
-    <div role="tooltip" class="pointer-events-none absolute left-3 right-3 top-3 z-30 hidden max-h-56 overflow-auto rounded-xl border border-emerald-100 bg-white/95 p-3 text-left text-xs leading-relaxed text-slate-800 shadow-2xl backdrop-blur group-hover:block group-focus-within:block">
+    <div role="tooltip" class="property-description-tooltip pointer-events-none absolute left-3 right-3 top-3 z-30 max-h-56 overflow-auto rounded-xl border border-emerald-100 bg-white/95 p-3 text-left text-xs leading-relaxed text-slate-800 shadow-2xl backdrop-blur">
       ${adminEscape(description)}
     </div>`;
 }
