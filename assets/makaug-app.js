@@ -3480,6 +3480,25 @@ MORTGAGE_I18N.rn = Object.assign({}, MORTGAGE_I18N.en, {
   pageSub: "Rukiga mortgage translation is not fully available yet, so this page uses English fallback rather than guessing another language."
 });
 
+MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
+  summaryPrice: "የንብረት ዋጋ",
+  summaryDepositLoan: "ቅድመ ክፍያ / ብድር",
+  healthAffordability: "የመክፈል አቅም ምርመራ",
+  bestCurrentMatch: "ምርጥ ተዛማጅ",
+  bestEstimatedMonthly: "የወር ግምት",
+  rate: "ወለድ",
+  minDeposit: "ዝቅተኛ ቅድመ ክፍያ",
+  maxTerm: "ከፍተኛ ጊዜ",
+  monthly: "ወርሃዊ",
+  yearsWord: "ዓመታት",
+  monthWord: "ወር",
+  quoteRequired: "ዋጋ ይጠይቁ",
+  totalRepayment: "የተገመተ ጠቅላላ ክፍያ",
+  arrangementFee: "የአዘጋጅት ክፍያ ግምት",
+  bankSourceLabel: "የህዝብ ምንጭ",
+  viewBankSource: "የባንክ ምንጭ ይመልከቱ"
+});
+
 function mortgageTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -4723,8 +4742,37 @@ function formatCompact(v) {
   return v.toLocaleString();
 }
 
+function localizePricePeriod(period = "") {
+  const raw = String(period || "").trim();
+  if (!raw) return "";
+  const key = raw.toLowerCase().replace(/[_-]/g, " ");
+  const periodLabels = {
+    mo: "month",
+    monthly: "month",
+    "per month": "month",
+    month: "month",
+    wk: "week",
+    weekly: "week",
+    "per week": "week",
+    week: "week",
+    yr: "year",
+    yearly: "year",
+    "per year": "year",
+    year: "year",
+    once: "once",
+    total: "once",
+    acre: "acre",
+    plot: "plot",
+    semester: "semester",
+    sem: "semester"
+  };
+  return translateListingLabel(periodLabels[key] || raw);
+}
+
 function fmtP(v, p) {
-  return (CURRENCIES[activeCur] || CURRENCIES.UGX).fmt(v, p);
+  const numeric = Number(v);
+  if (!Number.isFinite(numeric) || numeric <= 0) return translateListingLabel("Price upon application");
+  return (CURRENCIES[activeCur] || CURRENCIES.UGX).fmt(numeric, localizePricePeriod(p));
 }
 
 function setCurrency(cur) {
@@ -25700,6 +25748,17 @@ function formatNearbyDistanceKm(value) {
   return `${rounded} km`;
 }
 
+function translateNearbyAmenityName(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const prefixMatch = text.match(/^(School|Secondary School|Shopping|Hospital|Public services|Market|Airport):\s*(.+)$/i);
+  if (prefixMatch) {
+    const prefix = prefixMatch[1].replace(/\b\w/g, (char) => char.toUpperCase());
+    return `${translateListingLabel(prefix)}: ${prefixMatch[2].trim()}`;
+  }
+  return translateListingLabel(text);
+}
+
 function normalizeNearbyPlacesForUi(items = []) {
   return (Array.isArray(items) ? items : [])
     .map((item) => normalizeNearbyPlaceForUi(item))
@@ -25735,10 +25794,11 @@ function buildLocationHighlightsText(params = {}) {
   const topThree = nearby.slice(0, 3)
     .map((x) => {
       if (!x?.name) return "";
+      const name = translateNearbyAmenityName(x.name);
       if (typeof x.distanceKm === "number" && Number.isFinite(x.distanceKm)) {
-        return `${x.name} (${x.distanceKm.toFixed(1)} km)`;
+        return `${name} (${x.distanceKm.toFixed(1)} km)`;
       }
-      return x.name;
+      return name;
     })
     .filter(Boolean);
   const anchor = [area, city, district].filter(Boolean).join(", ");
@@ -27010,8 +27070,11 @@ function getSimilarProperties(property, limit = 3) {
 
 function getLocalizedListingText(property, key, fallback = "") {
   const translations = property?.translations && typeof property.translations === "object" ? property.translations : {};
-  const langNode = translations[currentLang] || translations.en || {};
-  return langNode?.[key] || fallback || "";
+  const lang = currentLang || "en";
+  const langNode = translations[lang] || {};
+  if (langNode?.[key]) return langNode[key];
+  if (lang === "en" && translations.en?.[key]) return translations.en[key];
+  return fallback || "";
 }
 
 const THIRD_PARTY_TITLE_PHRASES = {
@@ -27246,8 +27309,8 @@ function isGeneratedPropertyNarrative(text = "") {
 function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   const normalizedType = normalizeType(property?.type || property?.listing_type || "sale");
   const location = getPropertyStructuredLocation(property);
-  const title = property?.title || translateListingLabel("Property listing");
-  const subtype = property?.subtype || property?.property_type || translateListingLabel("Property");
+  const title = getLocalizedPropertyTitle(property) || translateListingLabel("Property listing");
+  const subtype = translateListingLabel(property?.subtype || property?.property_type || "Property");
   const introBits = [title, subtype].filter(Boolean).join(" - ");
   const locationBits = uniqueTextParts([location.street, location.area, location.city, location.district]).join(", ");
   const factBits = [];
@@ -27257,8 +27320,8 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   if (beds) factBits.push(`${beds} ${countLabel(beds, "bed", "beds")}`);
   if (baths) factBits.push(`${baths} ${countLabel(baths, "bath", "baths")}`);
   if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
-  if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${property.title_type || extra.title_type}`);
-  if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${extra.furnished}`);
+  if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${translateListingLabel(property.title_type || extra.title_type)}`);
+  if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${translateListingLabel(extra.furnished)}`);
   if (extra.contract_months) factBits.push(`${translateListingLabel("Minimum Contract")}: ${extra.contract_months} ${translateListingLabel("months")}`);
   if (extra.deposit) factBits.push(`${translateListingLabel("Deposit")}: ${fmtP(parseIntSafe(extra.deposit) || 0)}`);
   const amenityLabels = (Array.isArray(property?.amenities) ? property.amenities : [])
@@ -27267,7 +27330,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   const amenitiesText = amenityLabels.length ? amenityLabels.slice(0, 6).join(", ") : translateListingLabel("standard amenities");
   const nearbyText = (Array.isArray(nearby) ? nearby : [])
     .slice(0, 3)
-    .map((item) => item?.name || item?.label || "")
+    .map((item) => translateNearbyAmenityName(item?.name || item?.label || ""))
     .filter(Boolean)
     .join(", ") || translateListingLabel("key daily services");
   const areaSummary = buildLocationHighlightsText({
@@ -31615,6 +31678,123 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "Nearby": "በአቅራቢያ"
 });
 
+(() => {
+  const sourceAndDetailLabels = {
+    lg: {
+      "Original source": "Ensibuko eyasooka",
+      "Public source contact": "Contact y'ensibuko ey'olukale",
+      "{platform} source contact": "Contact y'ensibuko ya {platform}",
+      "Contact via {platform} source": "Kwatagana okuyita ku nsibuko ya {platform}",
+      "Contact through source": "Kwatagana okuyita ku nsibuko",
+      "This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.": "Kino kiva ku nsibuko ey'omuntu omulala. makaug si mutunzi, broker, agent, nannyini ttaka, oba akunganya ssente. Okukwatagana kuyita ku nsibuko eyasooka.",
+      "Source contact is being confirmed by King review.": "Contact y'ensibuko ekyakakasibwa mu King review.",
+      "Source contact unavailable": "Contact y'ensibuko teriwo",
+      "Original poster": "Eyateeka post eyasooka",
+      "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug teweereza kubuuza eri lister ono. Kozesa ensibuko eyasooka okukakasa okubeerawo, contact, n'amawulire g'okusasula.",
+      "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Tewali mbalirira eri setup eno. Ggulawo Mortgage Finder okulaba eby'okulonda ebirala.",
+      "Estimated from {amount} loan": "Kubaliriddwa okuva ku loan ya {amount}",
+      "Best match": "Ekyasinga okukwatagana",
+      "once": "omulundi gumu",
+      "month": "omwezi",
+      "year": "omwaka",
+      "week": "wiiki",
+      "acre": "acre",
+      "plot": "plot",
+      "semester": "semester",
+      "School": "Essomero",
+      "Secondary School": "Secondary School",
+      "Shopping": "Amaduuka",
+      "Hospital": "Eddwaliro",
+      "Public services": "Empeereza za gavumenti",
+      "Market": "Akatale",
+      "Airport": "Airport",
+      "Private Preview": "Okulaba okw'ekyama",
+      "This listing is not live yet. You can edit the wording while it is pending review.": "Listing eno tennaba live. Osobola okulongoosa ebigambo nga ekyali mu review.",
+      "Edit Title / Description": "Longoosa omutwe / ennyonnyola"
+    },
+    sw: {
+      "Original source": "Chanzo cha awali",
+      "Public source contact": "Mawasiliano ya chanzo cha umma",
+      "{platform} source contact": "Mawasiliano ya chanzo cha {platform}",
+      "Contact via {platform} source": "Wasiliana kupitia chanzo cha {platform}",
+      "Contact through source": "Wasiliana kupitia chanzo",
+      "This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.": "Haya ni matokeo ya mali kutoka chanzo cha nje. makaug si muuzaji, broker, agent, mmiliki wa ardhi, au mkusanyaji malipo. Mawasiliano hufanyika kupitia chanzo cha awali.",
+      "Source contact is being confirmed by King review.": "Mawasiliano ya chanzo yanathibitishwa na King review.",
+      "Source contact unavailable": "Mawasiliano ya chanzo hayapatikani",
+      "Original poster": "Aliyechapisha awali",
+      "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug haitumi maswali kwa mtangazaji huyu. Tumia chanzo cha awali kukagua upatikanaji, mawasiliano, na maelekezo ya malipo.",
+      "No direct estimate available for this setup. Open Mortgage Finder for more options.": "Hakuna makadirio ya moja kwa moja kwa mpangilio huu. Fungua Mortgage Finder kwa chaguo zaidi.",
+      "Estimated from {amount} loan": "Imekadiriwa kutoka mkopo wa {amount}",
+      "Best match": "Inayofaa zaidi",
+      "once": "mara moja",
+      "month": "mwezi",
+      "year": "mwaka",
+      "week": "wiki",
+      "acre": "ekari",
+      "plot": "kiwanja",
+      "semester": "muhula",
+      "School": "Shule",
+      "Secondary School": "Shule ya sekondari",
+      "Shopping": "Maduka",
+      "Hospital": "Hospitali",
+      "Public services": "Huduma za umma",
+      "Market": "Soko",
+      "Airport": "Uwanja wa ndege",
+      "Private Preview": "Muhtasari wa faragha",
+      "This listing is not live yet. You can edit the wording while it is pending review.": "Tangazo hili haliko live bado. Unaweza kurekebisha maneno wakati liko kwenye review.",
+      "Edit Title / Description": "Hariri kichwa / maelezo"
+    },
+    am: {
+      "This property was found from a public third-party source. Makaug provides a search and discovery preview only. Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "ይህ ንብረት ከህዝብ የሶስተኛ ወገን ምንጭ ተገኝቷል። makaug የፍለጋ እና የግኝት ቅድመ እይታ ብቻ ይሰጣል። makaug ባለቤትነት፣ መገኘት፣ ዋጋ፣ የመሬት ርዕስ፣ የሻጭ ስልጣን፣ የምስል መብቶች ወይም የእውቂያ ዝርዝሮችን አላረጋገጠም። ክፍያ ከመፈጸም ወይም እይታ ከማዘጋጀትዎ በፊት ዋናውን ምንጭ ይመልከቱ እና በራስዎ ያረጋግጡ።",
+      "Original source": "ዋናው ምንጭ",
+      "Public source contact": "የህዝብ ምንጭ እውቂያ",
+      "{platform} source contact": "የ{platform} ምንጭ እውቂያ",
+      "Contact via {platform} source": "በ{platform} ምንጭ በኩል ያግኙ",
+      "Contact via source": "በምንጭ በኩል ያግኙ",
+      "Contact through source": "በምንጭ በኩል ያግኙ",
+      "This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.": "ይህ የሶስተኛ ወገን የንብረት ውጤት ነው። makaug ሻጭ፣ ደላል፣ ወኪል፣ የመሬት ባለቤት ወይም የክፍያ ሰብሳቢ አይደለም። እውቂያ በዋናው ምንጭ በኩል ይካሄዳል።",
+      "Source contact is being confirmed by King review.": "የምንጭ እውቂያ በ King review እየተረጋገጠ ነው።",
+      "Source contact unavailable": "የምንጭ እውቂያ አይገኝም",
+      "Original poster": "ዋናው ለጣፊ",
+      "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "makaug ጥያቄዎችን ወደዚህ ዝርዝር አቅራቢ አይልክም። መገኘት፣ እውቂያ ዝርዝሮች እና የክፍያ መመሪያዎችን ለመፈተሽ ዋናውን ምንጭ ይጠቀሙ።",
+      "No direct estimate available for this setup. Open Mortgage Finder for more options.": "ለዚህ ቅንብር ቀጥተኛ ግምት አይገኝም። ተጨማሪ አማራጮችን ለማየት Mortgage Finder ይክፈቱ።",
+      "Estimated from {amount} loan": "ከ {amount} ብድር ተገምቷል",
+      "Best match": "ምርጥ ተዛማጅ",
+      "once": "አንድ ጊዜ",
+      "month": "ወር",
+      "year": "ዓመት",
+      "week": "ሳምንት",
+      "acre": "ኤከር",
+      "plot": "ፕሎት",
+      "semester": "ሴሚስተር",
+      "School": "ትምህርት ቤት",
+      "Secondary School": "ሁለተኛ ደረጃ ትምህርት ቤት",
+      "Shopping": "ግብይት",
+      "Hospital": "ሆስፒታል",
+      "Public services": "የህዝብ አገልግሎቶች",
+      "Market": "ገበያ",
+      "Airport": "አየር ማረፊያ",
+      "Private Preview": "የግል ቅድመ እይታ",
+      "This listing is not live yet. You can edit the wording while it is pending review.": "ይህ ዝርዝር እስካሁን በቀጥታ አልታየም። በግምገማ ላይ እያለ ቃላቱን ማስተካከል ይችላሉ።",
+      "Edit Title / Description": "ርዕስ / መግለጫ ያስተካክሉ",
+      "Share Broker Card": "የደላል ካርድ አጋራ",
+      "This location is attractive for owner-occupiers and long-term value growth.": "ይህ አካባቢ ለቤት ባለቤቶች እና ለረጅም ጊዜ የዋጋ እድገት የሚስብ ነው።",
+      "Renters value this area for practical day-to-day access and flexible commuting.": "ተከራዮች ይህን አካባቢ ለዕለታዊ ቀላል መዳረሻ እና ተለዋዋጭ መጓጓዣ ይመርጣሉ።",
+      "Students prefer this area for convenience, safety, and access to nearby campuses.": "ተማሪዎች ይህን አካባቢ ለቀላልነት፣ ደህንነት እና ለአቅራቢያ ካምፓሶች መዳረሻ ይመርጣሉ።",
+      "Businesses choose this location for visibility, access, and steady customer flow.": "ንግዶች ይህን ቦታ ለታይነት፣ መዳረሻ እና ቋሚ የደንበኞች ፍሰት ይመርጣሉ።",
+      "Land in this area is considered promising for phased development and future appreciation.": "በዚህ አካባቢ ያለ መሬት ለደረጃ በደረጃ ልማት እና ለወደፊት የዋጋ ጭማሪ ተስፋ ያለው ነው።",
+      "well-positioned in its area": "በአካባቢው ጥሩ ቦታ ያለው",
+      "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "የተጠቃሚ ማስታወቂያ፦ የመስመር ላይ ፍለጋዎች ለ Mukono፣ Wakiso፣ Kampala፣ Moroto፣ Arua እና Kabarole በ UGX 10,000 ሊገኙ ይችላሉ።"
+    }
+  };
+  ["ac", "ny", "rn", "sm"].forEach((lang) => {
+    sourceAndDetailLabels[lang] = { ...sourceAndDetailLabels.lg, ...(sourceAndDetailLabels[lang] || {}) };
+  });
+  Object.entries(sourceAndDetailLabels).forEach(([lang, labels]) => {
+    Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL[lang] ||= {}, labels);
+  });
+})();
+
 function translateListingLabel(text) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -31915,8 +32095,8 @@ function translatePropertyUi(text, vars = {}) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
   const template = PROPERTY_UI_I18N[lang]?.[text]
-    || PROPERTY_UI_I18N[fallback]?.[text]
     || translateListingLabel(text)
+    || PROPERTY_UI_I18N[fallback]?.[text]
     || text;
   return Object.entries(vars).reduce((acc, [key, value]) => (
     acc.replaceAll(`{${key}}`, String(value == null ? "" : value))
@@ -33534,19 +33714,19 @@ function renderDetailMortgageWidget(propertyId) {
   if (!p || !target || !depositInput || !yearsInput) return;
   const result = buildMortgageComparison(p.price, depositInput.value, yearsInput.value, mortgagePurposeFromListing(p.type));
   if (!result.best) {
-    target.innerHTML = `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">No direct estimate available for this setup. Open Mortgage Finder for more options.</div>`;
+    target.innerHTML = `<div class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">${translatePropertyUi("No direct estimate available for this setup. Open Mortgage Finder for more options.")}</div>`;
     return;
   }
   const top = result.ranked.slice(0, 3);
   target.innerHTML = `
-    <div class="text-sm font-semibold text-gray-800 mb-2">Estimated from ${formatUgxAmount(result.loanAmount)} loan</div>
+    <div class="text-sm font-semibold text-gray-800 mb-2">${translatePropertyUi("Estimated from {amount} loan", { amount: formatUgxAmount(result.loanAmount) })}</div>
     <div class="bg-green-50 border border-green-100 rounded-lg p-3 mb-2">
-      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">Best match</div>
+      <div class="text-xs uppercase tracking-wide text-green-700 font-semibold">${translatePropertyUi("Best match")}</div>
       <div class="text-sm font-bold text-gray-900 mt-1">${result.best.provider.name}</div>
-      <div class="text-xs text-gray-600 mt-0.5">${result.best.rate.toFixed(2)}% • ${formatUgxAmount(result.best.monthlyRepayment || 0)} / month</div>
+      <div class="text-xs text-gray-600 mt-0.5">${result.best.rate.toFixed(2)}% • ${formatUgxAmount(result.best.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</div>
     </div>
     <div class="space-y-1.5">
-      ${top.map((row, idx) => `<div class="flex items-center justify-between text-xs ${idx === 0 ? "text-green-800 font-semibold" : "text-gray-600"}"><span>${idx + 1}. ${row.provider.name}</span><span>${formatUgxAmount(row.monthlyRepayment || 0)}/mo</span></div>`).join("")}
+      ${top.map((row, idx) => `<div class="flex items-center justify-between text-xs ${idx === 0 ? "text-green-800 font-semibold" : "text-gray-600"}"><span>${idx + 1}. ${row.provider.name}</span><span>${formatUgxAmount(row.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</span></div>`).join("")}
     </div>`;
 }
 
@@ -33709,9 +33889,9 @@ async function openDetail(id, options = {}) {
             ${renderUgNlisVerificationCard(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">Private Preview</div>
-              <p class="text-sm text-gray-700">This listing is not live yet. You can edit the wording while it is pending review.</p>
-              <button type="button" onclick="openOwnerPreviewEdit(${detailIdArg})" class="mt-2 border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-semibold">Edit Title / Description</button>
+              <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">${translateListingLabel("Private Preview")}</div>
+              <p class="text-sm text-gray-700">${translateListingLabel("This listing is not live yet. You can edit the wording while it is pending review.")}</p>
+              <button type="button" onclick="openOwnerPreviewEdit(${detailIdArg})" class="mt-2 border border-amber-300 text-amber-800 hover:bg-amber-100 px-3 py-1.5 rounded-lg text-xs font-semibold">${translateListingLabel("Edit Title / Description")}</button>
             </div>
             ` : ""}
             <div class="mt-4 text-sm text-gray-700">${localizedDescription}</div>
@@ -33729,10 +33909,10 @@ async function openDetail(id, options = {}) {
                 ${detailNearby.slice(0, 8).map((item) => {
                   const d = Number.isFinite(item.distanceKm) ? item.distanceKm : (Number.isFinite(item.distance_km) ? item.distance_km : null);
                   const dist = Number.isFinite(d) ? `${formatNearbyDistanceKm(d)} ` : "";
-                  const label = translateListingLabel(item.name || item.label || "Nearby");
+                  const label = translateNearbyAmenityName(item.name || item.label || "Nearby");
                   const typeLabel = item.type || item.kind || "";
                   const display = typeLabel && !String(label).toLowerCase().includes(String(typeLabel).toLowerCase())
-                    ? `${typeLabel}: ${label}`
+                    ? `${translateListingLabel(typeLabel)}: ${label}`
                     : label;
                   return `<span class="inline-flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"><i class="fas fa-location-dot text-green-600"></i>${dist}${adminEscape(display)}</span>`;
                 }).join("")}
@@ -33779,7 +33959,7 @@ async function openDetail(id, options = {}) {
             ${brokerPhoneHref ? `<a href="${adminAttr(brokerPhoneHref)}" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("Call Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-700 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel)}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("Call unavailable")}</button>`}
             ${brokerWhatsapp ? `<a href="${adminAttr(buildWhatsAppUrl(brokerWhatsapp, contactMessage))}" target="_blank" rel="noopener noreferrer" onclick="recordListingWhatsappClick(${detailIdArg}, ${contactMessageArg}, ${brokerWhatsAppArg}, 'listing_detail_whatsapp')" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${translatePropertyUi("WhatsApp Broker")}</a>` : sourceContactUrl ? `<a href="${adminAttr(sourceContactUrl)}" target="_blank" rel="noopener noreferrer" class="block text-center bg-green-500 text-white py-2.5 rounded-xl font-semibold mb-2">${adminEscape(sourceContactButtonLabel)}</a>` : `<button type="button" class="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl font-semibold mb-2 cursor-not-allowed">${translatePropertyUi("WhatsApp unavailable")}</button>`}
             ${sourceContactUrl && !brokerPhoneHref ? `<p class="text-[11px] text-gray-500 mb-2">${adminEscape(sourceContactCopy || translatePropertyUi("No phone number is published. Use the source page to contact the lister."))}</p>` : ""}
-            <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">Share Broker Card</button>
+            <button onclick="shareBrokerBusinessCard(${adminListingIdArg(broker.id)}, 'whatsapp')" class="w-full border border-green-200 text-green-700 py-2.5 rounded-xl font-semibold mb-2 hover:bg-green-50">${translateListingLabel("Share Broker Card")}</button>
             <a href="${adminAttr(brokerProfilePath)}" onclick="return openBrokerProfileLink(event, ${adminListingIdArg(broker.id)})" class="w-full border border-green-700 text-green-700 py-2.5 rounded-xl font-semibold inline-flex items-center justify-center">${translatePropertyUi("View Broker")}</a>
           ` : `
             <p class="font-semibold text-gray-800 mb-1">${ownerDisplayName}</p>
