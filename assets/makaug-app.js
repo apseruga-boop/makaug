@@ -27437,6 +27437,37 @@ function getLocalizedListingText(property, key, fallback = "") {
   return fallback || "";
 }
 
+function shouldRegenerateLocalizedListingCopy(value = "") {
+  const lang = currentLang || "en";
+  if (lang === "en") return false;
+  const text = String(value || "").trim();
+  if (text.length < 80) return false;
+  const normalized = ` ${text.toLowerCase().replace(/[^a-z]+/g, " ")} `;
+  const englishMarkers = [
+    " property ",
+    " listing ",
+    " source ",
+    " guide price ",
+    " nearby ",
+    " features include ",
+    " located in ",
+    " area summary ",
+    " key facts ",
+    " this listing is ",
+    " owner ",
+    " seller ",
+    " availability ",
+    " payment ",
+    " viewing "
+  ];
+  const markerHits = englishMarkers.filter((marker) => normalized.includes(marker)).length;
+  if (markerHits >= 3) return true;
+  if (lang !== "am") return false;
+  const latinLetters = (text.match(/[A-Za-z]/g) || []).length;
+  const amharicLetters = (text.match(/[\u1200-\u137F]/g) || []).length;
+  return markerHits >= 1 && latinLetters > Math.max(60, amharicLetters * 2);
+}
+
 const THIRD_PARTY_TITLE_PHRASES = {
   lg: { "for rent": "ey'okupangisa", "for sale": "ey'okutunda" },
   sw: { "for rent": "ya kupangisha", "for sale": "ya kuuza" },
@@ -27510,13 +27541,14 @@ function getPropertyPreviewPhotoUrl(property = {}) {
 
 function buildMapListingPopupHtml(property = {}) {
   const idArg = propertyIdArg(property.id);
-  const title = property?.title || translatePropertyUi("Property");
+  const title = getLocalizedPropertyTitle(property) || translatePropertyUi("Property");
   const location = getPropertyLocationDisplay(property) || [property?.area, property?.district].filter(Boolean).join(", ");
-  const photoUrl = getPropertyPreviewPhotoUrl(property);
   const detailPath = getPropertyDetailPath(property);
+  const popupDescription = propertyCardDescriptionText(property);
+  const descriptionPreview = popupDescription ? popupDescription.slice(0, 360) : "";
   return `
     <div data-map-marker-popup="listing" style="min-width:220px;max-width:240px">
-      ${photoUrl ? `<img src="${adminAttr(photoUrl)}" alt="${adminAttr(title)}" style="width:100%;height:86px;object-fit:cover;border-radius:10px;margin-bottom:10px;background:#f3f4f6;" />` : `<div style="height:86px;border-radius:10px;margin-bottom:10px;background:#0f172a;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;text-align:center;padding:8px;">Third-party source result</div>`}
+      ${descriptionPreview ? `<div style="max-height:118px;overflow:auto;border-radius:10px;margin-bottom:10px;background:#f8fafc;color:#334155;border:1px solid #d1fae5;font-size:12px;line-height:1.45;font-weight:600;text-align:left;padding:10px;">${adminEscape(descriptionPreview)}</div>` : ""}
       <a href="${adminAttr(detailPath)}" data-map-property-link="1" data-property-id="${adminAttr(property.id)}" onclick="return openMapPropertyDetail(event, ${idArg});" style="display:block;text-align:left;font-weight:700;color:#111827;margin-bottom:4px;text-decoration:none;">
         ${adminEscape(title)}
       </a>
@@ -27723,7 +27755,7 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
 
 function getLocalizedPropertyDescription(property = {}, nearby = []) {
   const translated = getLocalizedListingText(property, "description", "");
-  if (translated) return translated;
+  if (translated && !shouldRegenerateLocalizedListingCopy(translated)) return translated;
   const raw = String(property?.desc || property?.description || "").trim();
   if (currentLang !== "en") {
     return buildLocalizedPropertyNarrative(property, nearby);
@@ -27743,7 +27775,7 @@ function sanitizePublicListingCopyForUi(value = "") {
 
 function getLocalizedPropertyHighlights(property = {}, nearby = []) {
   const translated = getLocalizedListingText(property, "area_highlights", "");
-  if (translated) return sanitizePublicListingCopyForUi(translated);
+  if (translated && !shouldRegenerateLocalizedListingCopy(translated)) return sanitizePublicListingCopyForUi(translated);
   const location = getPropertyStructuredLocation(property);
   if (currentLang !== "en" || !property?.area_highlights) {
     return buildLocationHighlightsText({
@@ -27906,7 +27938,7 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 function propertyCardDescriptionText(p = {}) {
   const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const sourceDescription = propertyCardSourceDescriptionText(extra);
-  const localized = isFoundOnlineListing(p) && sourceDescription
+  const localized = currentLang === "en" && isFoundOnlineListing(p) && sourceDescription
     ? sourceDescription
     : getLocalizedPropertyDescription(p, Array.isArray(p.nearby_places) ? p.nearby_places : []);
   return sanitizePublicListingCopyForUi(localized)
@@ -32132,7 +32164,48 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "Added": "የተጨመረ",
   "Added today": "ዛሬ የተጨመረ",
   "Added recently": "በቅርቡ የተጨመረ",
-  "Nearby": "በአቅራቢያ"
+  "Nearby": "በአቅራቢያ",
+  "Area": "አካባቢ",
+  "District": "ዲስትሪክት",
+  "Uganda": "ኡጋንዳ",
+  "Area Highlights": "የአካባቢ ጎላ ያሉ ነጥቦች",
+  "Nearby Amenities": "በአቅራቢያ ያሉ አገልግሎቶች",
+  "Property listing": "የንብረት ዝርዝር",
+  "Commercial property": "የንግድ ንብረት",
+  "Standalone House": "ብቻውን የቆመ ቤት",
+  "Office": "ቢሮ",
+  "bed": "መኝታ",
+  "beds": "መኝታዎች",
+  "bath": "መታጠቢያ",
+  "baths": "መታጠቢያዎች",
+  "months": "ወራት",
+  "Located in": "የሚገኝበት",
+  "Key facts": "ዋና መረጃዎች",
+  "Features include": "የሚያካትተው",
+  "Nearby highlights include": "በአቅራቢያ ያሉ ጎላ ያሉ ነጥቦች",
+  "Area summary": "የአካባቢ ማጠቃለያ",
+  "This listing is": "ይህ ዝርዝር",
+  "Guide price": "መመሪያ ዋጋ",
+  "Built in": "የተገነባው",
+  "Title Type": "የርዕስ አይነት",
+  "Furnishing": "የቤት እቃ",
+  "Minimum Contract": "ዝቅተኛ ውል",
+  "Deposit": "ተቀማጭ",
+  "standard amenities": "መደበኛ አገልግሎቶች",
+  "key daily services": "ዋና ዕለታዊ አገልግሎቶች",
+  "home purchase": "የቤት ግዢ",
+  "rental living": "የኪራይ መኖሪያ",
+  "land investment": "የመሬት ኢንቨስትመንት",
+  "business use": "የንግድ አጠቃቀም",
+  "property use": "የንብረት አጠቃቀም",
+  "is a strong location for": "ለዚህ ጠንካራ አካባቢ ነው",
+  "with convenient access to schools, daily services, and key transport links.": "ወደ ትምህርት ቤቶች፣ ዕለታዊ አገልግሎቶች እና ዋና የመጓጓዣ መንገዶች ቀላል መዳረሻ ያለው።",
+  "This area is popular with serious buyers and tenants looking for value and convenience.": "ይህ አካባቢ ዋጋ እና ቀላልነት ለሚፈልጉ ገዢዎች እና ተከራዮች ታዋቂ ነው።",
+  "ideal for buyers looking for long-term value": "ለረጅም ጊዜ ዋጋ ለሚፈልጉ ገዢዎች ተስማሚ ነው",
+  "well-suited for renters seeking convenience": "ቀላልነትን ለሚፈልጉ ተከራዮች ተስማሚ ነው",
+  "suitable for development or long-term investment": "ለልማት ወይም ለረጅም ጊዜ ኢንቨስትመንት ተስማሚ ነው",
+  "positioned for business operations and growth": "ለንግድ ስራዎች እና እድገት ጥሩ ቦታ ላይ ነው",
+  "tailored for students and guardians seeking safe accommodation": "ደህንነቱ የተጠበቀ መኖሪያ ለሚፈልጉ ተማሪዎች እና አሳዳጊዎች የተዘጋጀ ነው"
 });
 
 (() => {
@@ -34379,7 +34452,7 @@ async function openDetail(id, options = {}) {
               ${p.beds ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.beds}</strong> ${countLabel(p.beds, "bed", "beds")}</div>` : ""}
               ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${countLabel(p.baths, "bath", "baths")}</div>` : ""}
               ${p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""}
-              <div class="bg-green-50 rounded-lg p-2"><strong>${p.subtype || translateListingLabel("Property")}</strong></div>
+              <div class="bg-green-50 rounded-lg p-2"><strong>${translateListingLabel(p.subtype || p.property_type || "Property")}</strong></div>
             </div>
           </div>
         </div>
