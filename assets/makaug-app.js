@@ -27779,6 +27779,31 @@ function propertySourceDescriptionFragments(value, depth = 0) {
   return [];
 }
 
+function collapseRepeatedPropertySourceText(value = "") {
+  const words = String(value || "").replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 6) return words.join(" ");
+  let current = words;
+  const maxSize = Math.min(36, Math.floor(current.length / 2));
+  for (let size = maxSize; size >= 2; size -= 1) {
+    const next = [];
+    for (let i = 0; i < current.length;) {
+      const chunk = current.slice(i, i + size);
+      const key = chunk.join(" ").toLowerCase();
+      let repeats = 1;
+      while (
+        i + ((repeats + 1) * size) <= current.length
+        && current.slice(i + repeats * size, i + (repeats + 1) * size).join(" ").toLowerCase() === key
+      ) {
+        repeats += 1;
+      }
+      next.push(...chunk);
+      i += repeats * size;
+    }
+    current = next;
+  }
+  return current.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function propertyCardSourceDescriptionText(extra = {}) {
   const fragments = [
     extra.source_hover_description,
@@ -27793,7 +27818,7 @@ function propertyCardSourceDescriptionText(extra = {}) {
     extra.source_comments
   ].flatMap((value) => propertySourceDescriptionFragments(value));
   const seen = new Set();
-  return fragments.map((value) => sanitizePublicListingCopyForUi(value))
+  const text = fragments.map((value) => sanitizePublicListingCopyForUi(value))
     .map((value) => value.replace(/\s+/g, " ").trim())
     .filter((value) => {
       if (!value || value.length < 3) return false;
@@ -27804,6 +27829,7 @@ function propertyCardSourceDescriptionText(extra = {}) {
     })
     .join(" ")
     .trim();
+  return collapseRepeatedPropertySourceText(text);
 }
 
 async function submitPropertyInquiry(id) {
