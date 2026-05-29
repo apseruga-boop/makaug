@@ -972,8 +972,8 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "Makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
-    heroSubtitlePrefix: "Makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
+    heroSubtitle: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
+    heroSubtitlePrefix: "makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
     heroSubtitleCountLabelSingular: "property opportunity",
     heroSubtitleCountLabelPlural: "property opportunities",
     heroSubtitleSuffix: "in one place.",
@@ -983,8 +983,9 @@ const I18N_UI = {
     heroCounterStudent: "Student",
     heroCounterCommercial: "Commercial",
     heroCounterLand: "Land",
+    heroCounterOther: "Other",
     heroCounterSocial: "Social-source",
-    heroCounterTooltipNote: "Updated from live approved property data.",
+    heroCounterTooltipNote: "Listing types add up to the total shown.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1508,8 +1509,8 @@ const I18N_UI = {
 
 const I18N_UI_HARDENING = {
   lg: {
-    heroSubtitle: "Makaug ekozesa enkola za AI okunoonya ensibuko za property ez'olukale ku internet okwetoloola Uganda, n'etegeka emikisa gya property mu kifo kimu.",
-    heroSubtitlePrefix: "Makaug ekozesa enkola za AI okunoonya ensibuko za property ez'olukale ku internet okwetoloola Uganda, n'etegeka",
+    heroSubtitle: "makaug ekozesa enkola za AI okunoonya ensibuko za property ez'olukale ku internet okwetoloola Uganda, n'etegeka emikisa gya property mu kifo kimu.",
+    heroSubtitlePrefix: "makaug ekozesa enkola za AI okunoonya ensibuko za property ez'olukale ku internet okwetoloola Uganda, n'etegeka",
     heroSubtitleCountLabelSingular: "omukisa gwa property",
     heroSubtitleCountLabelPlural: "emikisa gya property",
     heroSubtitleSuffix: "mu kifo kimu.",
@@ -1519,8 +1520,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abayizi",
     heroCounterCommercial: "Byobusuubuzi",
     heroCounterLand: "Ettaka",
+    heroCounterOther: "Ebirala",
     heroCounterSocial: "Okuva ku social",
-    heroCounterTooltipNote: "Kizziddwa buggya okuva ku property data ekakasiddwa era eri live.",
+    heroCounterTooltipNote: "Ebika bya listing bigatta ku muwendo ogulaga waggulu.",
     withinLabel: "Mu",
     mileUnitSingular: "mailo",
     mileUnitPlural: "mailo",
@@ -1546,8 +1548,8 @@ const I18N_UI_HARDENING = {
     ctxAgricultural: "Ettaka ly’Obulimi"
   },
   sw: {
-    heroSubtitle: "Makaug hutumia mifumo ya utafutaji inayoendeshwa na AI kuchunguza vyanzo vya mali vilivyo wazi mtandaoni kote Uganda, ikiweka fursa za mali mahali pamoja.",
-    heroSubtitlePrefix: "Makaug hutumia mifumo ya utafutaji inayoendeshwa na AI kuchunguza vyanzo vya mali vilivyo wazi mtandaoni kote Uganda, ikiweka",
+    heroSubtitle: "makaug hutumia mifumo ya utafutaji inayoendeshwa na AI kuchunguza vyanzo vya mali vilivyo wazi mtandaoni kote Uganda, ikiweka fursa za mali mahali pamoja.",
+    heroSubtitlePrefix: "makaug hutumia mifumo ya utafutaji inayoendeshwa na AI kuchunguza vyanzo vya mali vilivyo wazi mtandaoni kote Uganda, ikiweka",
     heroSubtitleCountLabelSingular: "fursa ya mali",
     heroSubtitleCountLabelPlural: "fursa za mali",
     heroSubtitleSuffix: "mahali pamoja.",
@@ -1557,8 +1559,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Wanafunzi",
     heroCounterCommercial: "Biashara",
     heroCounterLand: "Ardhi",
+    heroCounterOther: "Nyingine",
     heroCounterSocial: "Chanzo cha kijamii",
-    heroCounterTooltipNote: "Imesasishwa kutoka data ya mali zilizoidhinishwa na ziko live.",
+    heroCounterTooltipNote: "Aina za listings zinajumlisha idadi iliyoonyeshwa.",
     withinLabel: "Ndani ya",
     mileUnitSingular: "maili",
     mileUnitPlural: "maili",
@@ -1584,8 +1587,8 @@ const I18N_UI_HARDENING = {
     ctxAgricultural: "Ardhi ya Kilimo"
   },
   ac: {
-    heroSubtitle: "Makaug tiyo ki AI search algorithms me yeny ka property ma tye i public online i Uganda, dok keto tic pa property i kabedo acel.",
-    heroSubtitlePrefix: "Makaug tiyo ki AI search algorithms me yeny ka property ma tye i public online i Uganda, dok keto",
+    heroSubtitle: "makaug tiyo ki AI search algorithms me yeny ka property ma tye i public online i Uganda, dok keto tic pa property i kabedo acel.",
+    heroSubtitlePrefix: "makaug tiyo ki AI search algorithms me yeny ka property ma tye i public online i Uganda, dok keto",
     heroSubtitleCountLabelSingular: "tic pa property",
     heroSubtitleCountLabelPlural: "tic pa property",
     heroSubtitleSuffix: "i kabedo acel.",
@@ -1595,8 +1598,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Jo-yot",
     heroCounterCommercial: "Curu",
     heroCounterLand: "Lobo",
+    heroCounterOther: "Mukene",
     heroCounterSocial: "Kakare me social",
-    heroCounterTooltipNote: "Ocako manyen ki data pa property ma oketo live.",
+    heroCounterTooltipNote: "Kit listing magi medo romo wel ma onyuto.",
     siteTitle: "makaug.com | Jami me gangi i Uganda",
     brandSubtitle: "GANGI ME UGANDA",
     saved: "Ma iketo",
@@ -1676,8 +1680,8 @@ const I18N_UI_HARDENING = {
     footerGrowth: "Kabedo me sponsorship pa makaug ki SEO indexing tye ayera me yubo dong."
   },
   ny: {
-    heroSubtitle: "Makaug ekozesa AI search algorithms okushaka ensibuko za property eziri public online omuri Uganda yoona, eteeka emigisha ya property hamwe.",
-    heroSubtitlePrefix: "Makaug ekozesa AI search algorithms okushaka ensibuko za property eziri public online omuri Uganda yoona, eteeka",
+    heroSubtitle: "makaug ekozesa AI search algorithms okushaka ensibuko za property eziri public online omuri Uganda yoona, eteeka emigisha ya property hamwe.",
+    heroSubtitlePrefix: "makaug ekozesa AI search algorithms okushaka ensibuko za property eziri public online omuri Uganda yoona, eteeka",
     heroSubtitleCountLabelSingular: "omugisha gwa property",
     heroSubtitleCountLabelPlural: "emigisha ya property",
     heroSubtitleSuffix: "hamwe.",
@@ -1687,8 +1691,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abanyeshomesa",
     heroCounterCommercial: "Obusuubuzi",
     heroCounterLand: "Eitaka",
+    heroCounterOther: "Ebindi",
     heroCounterSocial: "Okuva kuri social",
-    heroCounterTooltipNote: "Byahindurwa kuruga aha data ya property eziri live.",
+    heroCounterTooltipNote: "Ebika bya listing nibigaita kumara omubare ogurikworekwa.",
     siteTitle: "makaug.com | Pulatifoomu ya Property omu Uganda",
     brandSubtitle: "PROPERTY ZA UGANDA",
     saved: "Ebiwatirweho",
@@ -1768,8 +1773,8 @@ const I18N_UI_HARDENING = {
     footerGrowth: "Ebitundu by'oburango bya makaug na SEO byetegire kukuzya omutindo."
   },
   rn: {
-    heroSubtitle: "Makaug ikoresha AI search algorithms gushaka amasoko ya property ari public online muri Uganda hose, igashyira amahirwe ya property hamwe.",
-    heroSubtitlePrefix: "Makaug ikoresha AI search algorithms gushaka amasoko ya property ari public online muri Uganda hose, igashyira",
+    heroSubtitle: "makaug ikoresha AI search algorithms gushaka amasoko ya property ari public online muri Uganda hose, igashyira amahirwe ya property hamwe.",
+    heroSubtitlePrefix: "makaug ikoresha AI search algorithms gushaka amasoko ya property ari public online muri Uganda hose, igashyira",
     heroSubtitleCountLabelSingular: "amahirwe ya property",
     heroSubtitleCountLabelPlural: "amahirwe ya property",
     heroSubtitleSuffix: "hamwe.",
@@ -1779,8 +1784,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abanyeshuri",
     heroCounterCommercial: "Ubucuruzi",
     heroCounterLand: "Ubutaka",
+    heroCounterOther: "Ibindi",
     heroCounterSocial: "Ku mbuga nkoranyambaga",
-    heroCounterTooltipNote: "Byavuguruwe bivuye kuri data ya property ziri live.",
+    heroCounterTooltipNote: "Ubwoko bwa listing buhuza umubare werekanwe.",
     siteTitle: "makaug.com | Omukutu gwa Property omuri Uganda",
     brandSubtitle: "PROPERTY ZA UGANDA",
     saved: "Ebiwabikiirwe",
@@ -1860,8 +1866,8 @@ const I18N_UI_HARDENING = {
     footerGrowth: "Ebitundu by'oburango bya makaug hamwe na SEO bitegire kukuzya omutindo."
   },
   sm: {
-    heroSubtitle: "Makaug ekozesa AI search algorithms okunoona ensibuko za property ez'olukale ku internet mu Uganda yonna, n'eteeka emikisa gya property mu kifo kimu.",
-    heroSubtitlePrefix: "Makaug ekozesa AI search algorithms okunoona ensibuko za property ez'olukale ku internet mu Uganda yonna, n'eteeka",
+    heroSubtitle: "makaug ekozesa AI search algorithms okunoona ensibuko za property ez'olukale ku internet mu Uganda yonna, n'eteeka emikisa gya property mu kifo kimu.",
+    heroSubtitlePrefix: "makaug ekozesa AI search algorithms okunoona ensibuko za property ez'olukale ku internet mu Uganda yonna, n'eteeka",
     heroSubtitleCountLabelSingular: "omukisa gwa property",
     heroSubtitleCountLabelPlural: "emikisa gya property",
     heroSubtitleSuffix: "mu kifo kimu.",
@@ -1871,8 +1877,9 @@ const I18N_UI_HARDENING = {
     heroCounterStudent: "Abaisomesa",
     heroCounterCommercial: "Obusuubuzi",
     heroCounterLand: "Itaka",
+    heroCounterOther: "Ebirala",
     heroCounterSocial: "Okuva ku social",
-    heroCounterTooltipNote: "Kizziddwa buggya okuva ku property data eri live.",
+    heroCounterTooltipNote: "Ebika bya listing bigatta ku muwendo ogulaga.",
     siteTitle: "makaug.com | Pulatifoomu ya Property mu Uganda",
     brandSubtitle: "PROPERTY ZA UGANDA",
     saved: "Ebikuumiddwa",
@@ -1974,8 +1981,8 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navFraud: "ማጭበርበር",
   heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
-  heroSubtitle: "Makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
-  heroSubtitlePrefix: "Makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
+  heroSubtitle: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
+  heroSubtitlePrefix: "makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
   heroSubtitleCountLabelSingular: "የንብረት እድል",
   heroSubtitleCountLabelPlural: "የንብረት እድሎች",
   heroSubtitleSuffix: "በአንድ ቦታ።",
@@ -1985,8 +1992,9 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   heroCounterStudent: "ተማሪ",
   heroCounterCommercial: "ንግድ",
   heroCounterLand: "መሬት",
+  heroCounterOther: "ሌላ",
   heroCounterSocial: "ከማህበራዊ ምንጭ",
-  heroCounterTooltipNote: "ከተረጋገጡ ቀጥታ የንብረት መረጃዎች ዘምኗል።",
+  heroCounterTooltipNote: "የዝርዝር አይነቶች ከላይ ያለውን ጠቅላላ ቁጥር ያሟላሉ።",
   heroRent: "ኪራይ",
   heroBuy: "ግዛ",
   heroCommercial: "ንግድ",
@@ -4468,35 +4476,49 @@ function getHeroPropertyOpportunityStats() {
     publicListings = [];
   }
   const stats = {
-    total: Number(publicListingsApiTotal ?? publicListings.length) || publicListings.length,
+    total: 0,
     sale: 0,
     rent: 0,
     student: 0,
     commercial: 0,
     land: 0,
+    other: 0,
     social: 0
   };
   publicListings.forEach((property) => {
-    const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
-    const type = normalizeType(property?.type || property?.listing_type || property?.category || extra.listing_type || "");
-    const period = String(property?.period || property?.price_period || extra.price_period || "").toLowerCase();
-    const text = [
-      type,
-      property?.subtype,
-      property?.property_type,
-      property?.title,
-      property?.desc,
-      property?.description,
-      period
-    ].filter(Boolean).join(" ").toLowerCase();
-    if (type === "sale" || /\b(for sale|sale|selling|buy)\b/.test(text)) stats.sale += 1;
-    if (type === "rent" || ["mo", "month", "monthly", "per_month"].includes(period) || /\b(rent|rental|lease|per month|monthly)\b/.test(text)) stats.rent += 1;
-    if (type === "student" || /\b(student|hostel|university|campus|bedsitter)\b/.test(text)) stats.student += 1;
-    if (type === "commercial" || /\b(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)\b/.test(text)) stats.commercial += 1;
-    if (type === "land" || /\b(land|plot|acre|decimal|estate plots?)\b/.test(text)) stats.land += 1;
+    const bucket = getHeroPropertyOpportunityBucket(property);
+    stats[bucket] = (stats[bucket] || 0) + 1;
     if (isFoundOnlineListing(property)) stats.social += 1;
   });
+  stats.total = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  if (!stats.total) stats.total = Number(publicListingsApiTotal ?? publicListings.length) || publicListings.length;
   return stats;
+}
+
+function getHeroPropertyOpportunityBucket(property) {
+  const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+  const directType = normalizeType(String(property?.listing_type || property?.type || property?.category || extra.listing_type || "").toLowerCase().trim());
+  if (["sale", "rent", "student", "commercial", "land"].includes(directType)) return directType;
+  if (directType === "students") return "student";
+
+  const propertyType = String(property?.property_type || property?.subtype || extra.property_type || "").toLowerCase();
+  if (/\b(land|plot|acre|decimal|estate plots?)\b/.test(propertyType)) return "land";
+  if (/\b(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)\b/.test(propertyType)) return "commercial";
+
+  const period = String(property?.period || property?.price_period || extra.price_period || "").toLowerCase();
+  const text = [
+    property?.title,
+    property?.desc,
+    property?.description,
+    propertyType,
+    period
+  ].filter(Boolean).join(" ").toLowerCase();
+  if (/\b(student|hostel|university|campus|bedsitter)\b/.test(text)) return "student";
+  if (/\b(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)\b/.test(text)) return "commercial";
+  if (/\b(land|plot|acre|decimal|estate plots?)\b/.test(text)) return "land";
+  if (["mo", "month", "monthly", "per_month"].includes(period) || /\b(rent|rental|lease|per month|monthly)\b/.test(text)) return "rent";
+  if (/\b(for sale|sale|selling|buy)\b/.test(text)) return "sale";
+  return "other";
 }
 
 function heroOpportunityStatRow(labelKey, value) {
@@ -4528,7 +4550,7 @@ function renderHeroPropertyOpportunityCounter() {
     `${tr("heroCounterStudent")}: ${stats.student}`,
     `${tr("heroCounterCommercial")}: ${stats.commercial}`,
     `${tr("heroCounterLand")}: ${stats.land}`,
-    `${tr("heroCounterSocial")}: ${stats.social}`
+    ...(stats.other ? [`${tr("heroCounterOther")}: ${stats.other}`] : [])
   ].join(" · ");
   if (counter) {
     counter.setAttribute("title", tooltipText);
@@ -4543,7 +4565,7 @@ function renderHeroPropertyOpportunityCounter() {
         ${heroOpportunityStatRow("heroCounterStudent", stats.student)}
         ${heroOpportunityStatRow("heroCounterCommercial", stats.commercial)}
         ${heroOpportunityStatRow("heroCounterLand", stats.land)}
-        ${heroOpportunityStatRow("heroCounterSocial", stats.social)}
+        ${stats.other ? heroOpportunityStatRow("heroCounterOther", stats.other) : ""}
       </div>
       <div class="mt-2 text-[11px] text-white/65">${adminEscape(tr("heroCounterTooltipNote"))}</div>`;
   }
