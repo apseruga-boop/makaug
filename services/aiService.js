@@ -770,14 +770,14 @@ async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step 
 Supported languages: ${JSON.stringify(SUPPORTED_AI_LANGUAGES)}.
 Return strict JSON only:
 {
-  "language": "en|lg|sw|ac|ny|rn|sm",
+  "language": "en|lg|sw|ac|ny|rn|sm|am",
   "confidence": number 0..1,
   "explicitSwitch": boolean,
   "reason": "short explanation"
 }
 Rules:
 - Detect the language the user is actually using, not the country, district, or property location.
-- If the user says "respond in English/Luganda/Kiswahili/etc", set explicitSwitch true and use that requested language.
+- If the user says "respond in English/Luganda/Kiswahili/Amharic/etc", set explicitSwitch true and use that requested language.
 - If text mixes languages, choose the language of the user's request.
 - Never treat a language name as a property search area.
 - Rukiga and Runyankole are Ugandan languages. Do not map them to Kinyarwanda.
@@ -876,7 +876,7 @@ Rules:
 - Detect Uganda language queries such as "Natafuta shamba Mbale", "Noonya enju eya rent e Kampala", and "Funa agent e Wakiso".
 - Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
 - Treat Kampala, Wakiso, Mukono, Mbale, Jinja, Mbarara, Gulu, etc. as places, never as property types.
-- Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga as languages, never as search areas.
+- Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga/Amharic as languages, never as search areas.
 - Never invent impossible numbers.
 - If uncertain, set low confidence and leave field empty rather than hallucinating.`
         },
@@ -973,7 +973,7 @@ Return strict JSON only:
     - period: month | week | year | semester
     - bedrooms: number
     - property_type: house | villa | apartment | townhouse | bungalow | studio | office | warehouse | retail shop | hostel
-    - language: en | lg | sw | ac | ny | rn | sm
+    - language: en | lg | sw | ac | ny | rn | sm | am
 }
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
@@ -1284,7 +1284,8 @@ Return strict JSON with this schema:
     "ac": {"title":"string","description":"string","area_highlights":"string"},
     "ny": {"title":"string","description":"string","area_highlights":"string"},
     "rn": {"title":"string","description":"string","area_highlights":"string"},
-    "sm": {"title":"string","description":"string","area_highlights":"string"}
+    "sm": {"title":"string","description":"string","area_highlights":"string"},
+    "am": {"title":"string","description":"string","area_highlights":"string"}
   }
 }
 Rules:

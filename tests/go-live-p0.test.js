@@ -28,8 +28,11 @@ const { buildMortgageEstimate, computeMonthlyRepayment: computeMortgagePayment }
 const { HOW_TO_VIDEO_SLOTS } = require('../config/howToVideos');
 const {
   LANGUAGE_REGISTRY,
+  SUPPORTED_AI_LANGUAGES,
+  languageDisplayName,
   normalizeLanguageCode,
   toCanonicalLanguageCode,
+  toLegacyLanguageCode,
   shouldUseEnglishFallback
 } = require('../config/languageRegistry');
 const {
@@ -275,8 +278,20 @@ function run() {
   assert(!frontendSource.includes('Makar') && !frontendSource.includes('Makai') && !frontendSource.includes('Makaid') && !frontendSource.includes('makaug.co.uk'), 'public source should not contain wrong brand variants');
   assert.strictEqual(toCanonicalLanguageCode('rukiga'), 'rkg', 'Rukiga should have a canonical language code');
   assert.strictEqual(toCanonicalLanguageCode('runyankole'), 'rnynk', 'Runyankole should have a canonical language code');
+  assert.strictEqual(Object.keys(LANGUAGE_REGISTRY).length, 8, 'language registry should expose eight supported languages');
+  assert(LANGUAGE_REGISTRY.am && LANGUAGE_REGISTRY.am.displayName === 'Amharic', 'language registry should define Amharic');
+  assert.strictEqual(toLegacyLanguageCode('8'), 'am', 'WhatsApp language option 8 should select Amharic');
+  assert.strictEqual(toLegacyLanguageCode('amharic'), 'am', 'Amharic alias should resolve to legacy am code');
+  assert.strictEqual(languageDisplayName('am'), 'Amharic', 'language display name should include Amharic');
+  assert.strictEqual(SUPPORTED_AI_LANGUAGES.am, 'Amharic', 'AI language list should include Amharic');
   assert.strictEqual(normalizeLanguageCode('rkg'), 'rn', 'Rukiga should preserve legacy rn code for current UI compatibility');
   assert.strictEqual(normalizeLanguageCode('rnynk'), 'ny', 'Runyankole should preserve legacy ny code for current UI compatibility');
+  assert(sourceHtml.includes('value="am">Amharic</option>'), 'public language dropdowns should include Amharic');
+  assert(frontendSource.includes('I18N_UI.am'), 'frontend UI translations should include Amharic');
+  assert(frontendSource.includes('CONTENT_I18N.am'), 'content translations should include Amharic');
+  assert(frontendSource.includes('PROPERTY_UI_I18N.am'), 'property page translations should include Amharic');
+  assert(frontendSource.includes('LISTING_LABEL_I18N_SUPPLEMENTAL.am'), 'listing labels should include Amharic');
+  assert(whatsappRoutes.includes("'8': 'am'"), 'WhatsApp language menu should route option 8 to Amharic');
   assert.strictEqual(shouldUseEnglishFallback('rukiga'), true, 'Rukiga must use English fallback until reviewed translations exist');
   assert(LANGUAGE_REGISTRY.rkg && LANGUAGE_REGISTRY.rkg.fallbackLanguage === 'en', 'language registry should define Rukiga fallback');
   assert(languageRegistrySource.includes('Do not use Kinyarwanda for Rukiga or Runyankole'), 'language registry should guard against Kinyarwanda substitution');

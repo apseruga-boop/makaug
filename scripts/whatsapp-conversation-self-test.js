@@ -344,6 +344,28 @@ const scenarios = [
     ]
   },
   {
+    name: 'Amharic language search path works',
+    messages: ['Hello', '9', '8', '2', 'Kampala'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['Amharic', 'አማርኛ'] },
+      { step: 'main_menu', includes: ['makaug'] },
+      { step: 'search_type', includesAny: ['ምን ይፈልጋሉ', 'ለሽያጭ'], excludes: ['What are you looking for?', 'For sale'] },
+      { step: 'main_menu', includesAny: ['makaug Matchboard', 'በጣም የሚዛመዱ', 'request'], excludes: ['data:image', 'Best matching properties'] }
+    ]
+  },
+  {
+    name: 'Amharic listing path starts in Amharic',
+    messages: ['Hello', '9', '8', '1', '1'],
+    expect: [
+      { step: 'main_menu', includes: ['property assistant'] },
+      { step: 'choose_language', includesAny: ['Amharic', 'አማርኛ'] },
+      { step: 'main_menu', includes: ['makaug'] },
+      { step: 'listing_type', includesAny: ['ምን እየዘረዘሩ', 'ለሽያጭ'], excludes: ['What are you listing?'] },
+      { step: 'ownership', includesAny: ['ባለቤት', 'ወኪል'], excludes: ['owner', 'agent'] }
+    ]
+  },
+  {
     name: 'Property search with area returns results or saves no-match lead',
     messages: ['2', 'Muyenga'],
     expect: [
