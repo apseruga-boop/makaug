@@ -71,6 +71,24 @@ function cleanText(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function sourceVisualTextFromObject(source = {}) {
+  const values = [
+    source.source_visual_text,
+    source.visual_text,
+    source.video_text,
+    source.video_ocr_text,
+    source.frame_text,
+    source.frame_ocr_text,
+    source.image_text,
+    source.image_ocr_text,
+    source.screen_text,
+    source.overlay_text,
+    source.still_text,
+    source.ocr_text,
+  ].flatMap((value) => (Array.isArray(value) ? value : [value]));
+  return cleanText(values.filter(Boolean).join(' '));
+}
+
 function areaAliasPattern(alias = '') {
   return cleanText(alias)
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -399,6 +417,7 @@ function normalizeParsedTikTokFields(fields = {}) {
     contact_phone: fields.phone || fields.contact_phone || fields.whatsapp || '',
     contact_email: fields.email || fields.contact_email || '',
     image_urls: fields.images || fields.image_urls || fields.photos || fields.media_urls || '',
+    source_visual_text: sourceVisualTextFromObject(fields),
     pre_approved: fields.pre_approved || fields.preapproved || fields.agent_preapproved || '',
     consent_confirmed: fields.consent_confirmed || fields.agent_authorised || fields.agent_authorized || '',
     image_rights_confirmed: fields.image_rights_confirmed || fields.authorised_images || fields.authorized_images || '',
@@ -693,9 +712,10 @@ function buildTikTokExactPostImportRows({
       const handle = tiktokHandleFromUrl(sourceUrl);
       const sourceName = cleanText(seed.source_name || oembed.author_name || (handle ? `@${handle}` : 'TikTok property source'));
       const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
+      const visualText = sourceVisualTextFromObject(seed);
       const caption = cleanText(seed.caption || seed.description || oembed.title || seed.title || '');
       const title = cleanText(seed.title || oembed.title || caption || `TikTok property post ${index + 1}`);
-      const combinedText = cleanText(`${title} ${caption} ${commentEvidence}`);
+      const combinedText = cleanText(`${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
@@ -725,8 +745,14 @@ function buildTikTokExactPostImportRows({
         title,
         caption,
         comments: commentEvidence,
+        source_visual_text: visualText,
+        video_text: visualText,
         source_text: combinedText,
-        description: cleanText([caption || title, commentEvidence ? `Visible source comments add: ${commentEvidence}` : ''].filter(Boolean).join(' ')),
+        description: cleanText([
+          caption || title,
+          visualText ? `Visible video/still text adds: ${visualText}` : '',
+          commentEvidence ? `Visible source comments add: ${commentEvidence}` : '',
+        ].filter(Boolean).join(' ')),
         area,
         district,
         location: area || district,
@@ -753,6 +779,7 @@ function buildTikTokExactPostImportRows({
           ...seed,
           oembed,
           comments: commentEvidence,
+          source_visual_text: visualText,
           import_method: 'tiktok_exact_video_intake',
         },
       };
@@ -848,8 +875,9 @@ function buildExactSocialPostImportRows({
       );
       const title = cleanText(seed.title || page.title || oembed.title || `Found-online ${platform} property post ${index + 1}`);
       const commentEvidence = cleanText(seed.comments || seed.comment || seed.owner_comment || seed.owner_comments || seed.owner_response || seed.poster_reply || seed.poster_response || seed.reply || seed.replies || '');
+      const visualText = sourceVisualTextFromObject(seed);
       const caption = cleanText(seed.caption || seed.description || page.description || oembed.title || title);
-      const combinedText = cleanText(`${title} ${caption} ${commentEvidence}`);
+      const combinedText = cleanText(`${title} ${caption} ${visualText} ${commentEvidence}`);
       const rawArea = cleanText(seed.area || seed.location || '');
       const extractedRawArea = extractArea(rawArea);
       const areaPin = areaPinFromText(`${rawArea} ${combinedText}`);
@@ -895,8 +923,14 @@ function buildExactSocialPostImportRows({
         title,
         caption,
         comments: commentEvidence,
+        source_visual_text: visualText,
+        video_text: visualText,
         source_text: combinedText,
-        description: cleanText([caption || title, commentEvidence ? `Visible source comments add: ${commentEvidence}` : ''].filter(Boolean).join(' ')),
+        description: cleanText([
+          caption || title,
+          visualText ? `Visible video/still text adds: ${visualText}` : '',
+          commentEvidence ? `Visible source comments add: ${commentEvidence}` : '',
+        ].filter(Boolean).join(' ')),
         area,
         district,
         location: area || district,
@@ -923,6 +957,7 @@ function buildExactSocialPostImportRows({
           ...seed,
           no_api_metadata: metadata,
           comments: commentEvidence,
+          source_visual_text: visualText,
           import_method: 'no_api_exact_social_url_intake',
           date_confidence: seed.first_posted_at || seed.posted_at || seed.published_at
             ? 'operator_supplied'

@@ -302,6 +302,11 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('"Contact original poster": "Wasiliana na aliyechapisha awali"'), 'source disclosure should translate original-poster action');
   assert(frontend.includes('"Report fraud or incorrect information": "Ripoti udanganyifu au taarifa zisizo sahihi"'), 'source disclosure should translate report action');
   assert(frontend.includes('"Contact via source"'), 'source disclosure should translate contact-through-source action');
+  assert(frontend.includes('function propertyDescriptionHoverHtml'), 'public cards should expose a hover/focus description tooltip');
+  assert(frontend.includes('role="tooltip"') && frontend.includes('group-hover:block'), 'property description hover should be implemented as an accessible tooltip');
+  assert(frontend.includes('propertyDescriptionHoverHtml(p)'), 'sale/rent/land/commercial cards should render the pulled public description on hover');
+  assert(frontend.includes('getLocalizedPropertyDescription(p'), 'hover descriptions should use the same localized public description as detail pages');
+  assert(frontend.includes('extra.source_comments'), 'King extracted-detail helper should include creator/comment evidence from social posts');
   assert(frontend.includes('Original post date is being confirmed from the source platform'), 'source disclosure should explain when platform post date is not exposed');
   assert(frontend.includes('function selectDetailGalleryPhoto'), 'detail gallery thumbnails should switch the main image before opening the lightbox');
   assert(frontend.includes('detail-broker-profile-link'), 'detail contact card should make broker logo/name click through to the profile');
@@ -777,6 +782,22 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
   assert.strictEqual(noPriceIntake.price_upon_application, true, 'missing source price should be marked Price upon application');
   assert.strictEqual(noPriceIntake.price_label, PRICE_UPON_APPLICATION_LABEL, 'missing source price should use the public price label');
   assert.strictEqual(noPriceIntake.eligible, true, 'exact TikTok posts with location/contact/source evidence should queue even when price is missing');
+
+  const visualTextRows = buildTikTokExactPostImportRows({
+    rawText: [
+      'https://www.tiktok.com/@symopropertiesug/video/7330000000000000006',
+      'video_text: House On Sale 1 Acre Ready Title @95m Ugx in Kira',
+      'caption: Sparse caption from TikTok',
+    ].join('\n'),
+  });
+  const visualTextPost = normalizeFoundOnlineSourcePost(visualTextRows[0]);
+  assert.strictEqual(visualTextRows[0].area, 'Kira', 'TikTok importer should extract location from visible video-frame text');
+  assert.strictEqual(visualTextRows[0].price_text, '95m', 'TikTok importer should extract price from visible video-frame text');
+  assert.strictEqual(visualTextRows[0].listing_type, 'sale', 'TikTok importer should infer sale type from visible video-frame text');
+  assert.strictEqual(visualTextPost.price, 95000000, 'source-post normalizer should price listings from imported video-frame text');
+  assert(visualTextPost.sourceVisualText.includes('Ready Title'), 'source-post normalizer should keep visible video-frame text for King review');
+  assert(socialSearchServiceSource.includes('sourceVisualTextForRawPost'), 'source-post importer should treat video-frame/OCR text as extraction evidence');
+  assert(socialPlatformSweepServiceSource.includes('sourceVisualTextFromObject'), 'exact social importer should accept video_text/source_visual_text OCR evidence');
 
   const normalizedNdejje = normalizeFoundOnlineSourcePost(ndejjeRows[0]);
   assert.strictEqual(normalizedNdejje.district, 'Wakiso', 'source-post normalizer should preserve Ndejje as Wakiso for future imports');

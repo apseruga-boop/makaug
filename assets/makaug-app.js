@@ -10400,7 +10400,7 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
   const text = seedText || "";
   return `
     <div class="font-black text-violet-950">Quick Paste Import</div>
-    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. You can also paste copied caption text, the original poster's comments/replies, location, price, and phone number underneath. King previews the extracted property information below, then queues the eligible records.</div>
+    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. You can also paste copied caption text, visible video-frame text, the original poster's comments/replies, location, price, and phone number underneath. King previews the extracted property information below, then queues the eligible records.</div>
     <div class="mt-2 grid md:grid-cols-3 gap-2">
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">1. Paste link/text</div><div class="mt-1 text-[11px]">Use exact video/post URLs. Hashtag pages are discovery only; exact posts become property candidates.</div></div>
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">2. Preview extracted info</div><div class="mt-1 text-[11px]">The parser reads title, location, price, source, posted date, comments, and Uganda phone numbers.</div></div>
@@ -10413,7 +10413,7 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
       <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>
       <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
     </div>
-    <div class="mt-2 text-[11px] text-violet-900">Tip: when comments contain the original poster's extra details, paste those lines as <span class="font-mono">comments:</span>. If the text contains a valid Uganda mobile number, makaug stores it as the public contact route; otherwise the contact route stays as the source/profile link.</div>
+    <div class="mt-2 text-[11px] text-violet-900">Tip: when the video itself shows extra writing, paste it as <span class="font-mono">video_text:</span> or <span class="font-mono">source_visual_text:</span>. When comments contain the original poster's extra details, paste those lines as <span class="font-mono">comments:</span>. If the text contains a valid Uganda mobile number, makaug stores it as the public contact route; otherwise the contact route stays as the source/profile link.</div>
     <div id="admin-social-quick-paste-results" class="mt-3">${resultHtml || ""}</div>`;
 }
 
@@ -15234,6 +15234,23 @@ function adminReviewSourceText(review = {}) {
     extra.caption,
     extra.source_description,
     extra.source_text,
+    extra.source_comments,
+    extra.comments,
+    extra.owner_comments,
+    extra.owner_response,
+    extra.poster_reply,
+    extra.poster_response,
+    extra.source_visual_text,
+    extra.video_text,
+    extra.video_ocr_text,
+    extra.frame_text,
+    extra.frame_ocr_text,
+    extra.image_text,
+    extra.image_ocr_text,
+    extra.screen_text,
+    extra.overlay_text,
+    extra.still_text,
+    extra.ocr_text,
     extra.tiktok_caption,
     extra.whatsapp_share_card,
     review.whatsapp_share_card
@@ -27812,6 +27829,23 @@ async function shareBrokerBusinessCard(id, channel = "native") {
 	      return `${translateListingLabel("Available From")}: ${display}`;
 	    }
 
+function propertyCardDescriptionText(p = {}) {
+  const localized = getLocalizedPropertyDescription(p, Array.isArray(p.nearby_places) ? p.nearby_places : []);
+  return sanitizePublicListingCopyForUi(localized)
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 900);
+}
+
+function propertyDescriptionHoverHtml(p = {}) {
+  const description = propertyCardDescriptionText(p);
+  if (!description) return "";
+  return `
+    <div role="tooltip" class="pointer-events-none absolute left-3 right-3 top-3 z-30 hidden max-h-56 overflow-auto rounded-xl border border-emerald-100 bg-white/95 p-3 text-left text-xs leading-relaxed text-slate-800 shadow-2xl backdrop-blur group-hover:block group-focus-within:block">
+      ${adminEscape(description)}
+    </div>`;
+}
+
 	    function propCard(p) {
   const idArg = propertyIdArg(p.id);
   const saved = isPropertySaved(p.id);
@@ -27825,7 +27859,8 @@ async function shareBrokerBusinessCard(id, channel = "native") {
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
   return `
-    <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
+    <div class="group relative bg-white rounded-xl border border-gray-100 overflow-hidden property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
+      ${propertyDescriptionHoverHtml(p)}
       <div class="h-48 relative overflow-hidden">
         ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(displayTitle)}" class="w-full h-full object-cover">`}
         <div class="absolute top-2 left-2 flex flex-col gap-1.5">
@@ -27971,7 +28006,8 @@ function studentCard(p) {
   const bottomText = p.student_walk_text || "Near campus";
   const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
   return `
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
+    <div class="group relative bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
+      ${propertyDescriptionHoverHtml(p)}
       <div class="relative h-48 overflow-hidden">
         ${isThirdPartyResult ? foundOnlineSourceVisualHtml(p, { compact: true }) : `<img src="${adminAttr(photoSrc)}" alt="${adminAttr(p.title)}" class="w-full h-full object-cover">`}
         ${badge ? `<span class="absolute top-2 left-2 ${studentBadgeClass(badge)} text-white text-xs font-bold px-2.5 py-1 rounded">${badge}</span>` : ""}

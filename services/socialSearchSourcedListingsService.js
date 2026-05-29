@@ -592,6 +592,46 @@ function asTextArray(value = []) {
     .filter(Boolean);
 }
 
+function sourceVisualTextForRawPost(raw = {}) {
+  const values = [
+    raw.source_visual_text,
+    raw.visual_text,
+    raw.video_text,
+    raw.video_ocr_text,
+    raw.frame_text,
+    raw.frame_ocr_text,
+    raw.image_text,
+    raw.image_ocr_text,
+    raw.screen_text,
+    raw.overlay_text,
+    raw.still_text,
+    raw.ocr_text,
+  ].flatMap((value) => (Array.isArray(value) ? value : [value]));
+  return compactText(values.filter(Boolean).join(' '));
+}
+
+function sourceTextForRawPost(raw = {}) {
+  return [
+    raw.title,
+    raw.source_title,
+    raw.caption,
+    raw.description,
+    raw.summary,
+    raw.raw_text,
+    raw.source_text,
+    sourceVisualTextForRawPost(raw),
+    raw.comments,
+    raw.comment,
+    raw.owner_comment,
+    raw.owner_comments,
+    raw.owner_response,
+    raw.poster_reply,
+    raw.poster_response,
+    raw.reply,
+    raw.replies,
+  ].map((value) => compactText(value)).filter(Boolean).join(' ');
+}
+
 function itemBatchId(item = {}) {
   return String(item.sourceBatch || item.source_batch || SOCIAL_SEARCH_BATCH_ID).trim() || SOCIAL_SEARCH_BATCH_ID;
 }
@@ -1237,6 +1277,14 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_agent_name: agent.name || '',
     source_url: sourceUrl,
     source_post_url: sourceUrl,
+    source_title: item.sourceTitle || item.title || '',
+    source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
+    source_description: item.description || '',
+    source_text: item.sourceText || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || '',
+    source_comments: item.raw_source_post?.comments || item.rawSourcePost?.comments || item.comments || '',
+    source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || '',
+    video_ocr_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.video_ocr_text || item.rawSourcePost?.video_ocr_text || '',
+    frame_ocr_text: item.raw_source_post?.frame_ocr_text || item.rawSourcePost?.frame_ocr_text || '',
     source_post_window_start: LAUNCH_SOURCE_POST_WINDOW_START,
     source_post_date_status: sourceDateStatus,
     first_seen_online_at: SOCIAL_SEARCH_FIRST_SEEN_AT,
@@ -1693,24 +1741,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     || safeUrl(raw.source_post_url)
     || safeUrl(raw.permalink)
     || safeUrl(raw.url);
-  const sourceText = [
-    raw.title,
-    raw.source_title,
-    raw.caption,
-    raw.description,
-    raw.summary,
-    raw.raw_text,
-    raw.source_text,
-    raw.comments,
-    raw.comment,
-    raw.owner_comment,
-    raw.owner_comments,
-    raw.owner_response,
-    raw.poster_reply,
-    raw.poster_response,
-    raw.reply,
-    raw.replies,
-  ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+  const sourceVisualText = sourceVisualTextForRawPost(raw);
+  const sourceText = sourceTextForRawPost(raw);
   const extractedPhone = publicPhoneFromText(sourceText);
   const extractedEmail = publicEmailFromText(sourceText);
   const sourceName = String(raw.source_name || raw.agent_name || raw.lister_name || raw.page_name || raw.account_name || raw.sourceKey || raw.source_key || 'Found-online source').trim();
@@ -1741,6 +1773,11 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
   const address = String(raw.address || raw.location_label || raw.location || (area && district ? `${area}, ${district}` : area || district)).trim();
   const listingType = normalizeFoundOnlineListingType(raw.listing_type || raw.listingType || raw.property_type || raw.category || raw.title || raw.description);
   const title = String(raw.title || raw.source_title || raw.caption || `${listingType === 'land' ? 'Land' : 'Property'} in ${area}`).trim();
+  const baseDescription = compactText(raw.description || raw.caption || raw.summary || title);
+  const description = compactText([
+    baseDescription,
+    sourceVisualText ? `Visible video/still text adds: ${sourceVisualText}` : '',
+  ].filter(Boolean).join(' '));
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
   const sourceAgent = {
     key: sourceKey,
@@ -1772,7 +1809,10 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     importedFromSourcePost: true,
     title,
     sourceTitle: raw.source_title || raw.caption || title,
-    description: raw.description || raw.caption || raw.summary || title,
+    description,
+    sourceText,
+    sourceVisualText,
+    source_visual_text: sourceVisualText,
     sourceUrl,
     postUrl: sourceUrl,
     videoUrl: raw.video_url || raw.youtube_url || raw.tiktok_url || sourceUrl,
@@ -1818,7 +1858,11 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     consent_confirmed: raw.consent_confirmed ?? raw.consentConfirmed ?? raw.agent_authorised ?? raw.agentAuthorised ?? raw.pre_approved ?? raw.preApproved ?? false,
     image_rights_confirmed: raw.image_rights_confirmed ?? raw.imageRightsConfirmed ?? raw.authorised_images ?? raw.authorisedImages ?? raw.pre_approved ?? raw.preApproved ?? false,
     pre_approved: raw.pre_approved ?? raw.preApproved ?? raw.agent_preapproved ?? raw.agentPreapproved ?? false,
-    raw_source_post: raw,
+    raw_source_post: {
+      ...raw,
+      source_text: raw.source_text || sourceText,
+      source_visual_text: raw.source_visual_text || sourceVisualText,
+    },
   };
 }
 
