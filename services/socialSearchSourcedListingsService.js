@@ -1,4 +1,5 @@
 const { buildListingReference } = require('./listingReferenceService');
+const { buildSocialSourceTrustReview } = require('./socialSourceTrustService');
 const {
   createOwnerEditToken,
   getOwnerPreviewUrl,
@@ -1201,6 +1202,27 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
+  const trustReview = buildSocialSourceTrustReview({
+    ...item,
+    agent,
+    source_url: sourceUrl,
+    source_post_url: sourceUrl,
+    source_contact_url: sourceContactUrl,
+    source_platform: sourcePlatform,
+    source_name: agent.name,
+    source_published_at: sourcePublishedAt,
+    first_posted_online_at: sourcePublishedAt,
+    source_followers_label: agent.audienceLabel || item.audienceLabel || '',
+    source_account_created_at: item.source_account_created_at || item.account_created_at || agent.accountCreatedAt || '',
+    source_account_age_label: item.source_account_age_label || item.accountAgeLabel || agent.accountAgeLabel || '',
+    source_video_count: item.source_video_count || item.source_post_count || item.videoCount || item.postCount || '',
+    source_video_count_label: item.source_video_count_label || item.source_post_count_label || item.postingVolumeLabel || '',
+    price_label: sourcePriceLabelFor(item),
+    price_upon_application: !hasPublishedPriceOrGuidePrice(item),
+    contact_phone: agent.phone || agent.phoneAlt || item.contactPhone || item.phone || '',
+    email: agent.email || item.email || '',
+    raw_source_post: item.raw_source_post || item.rawSourcePost || {}
+  });
   return {
     found_online_candidate: true,
     social_search_candidate: true,
@@ -1238,6 +1260,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_contact_platform: sourcePlatform,
     source_contact_available_without_phone: sourceContactAvailableWithoutPhone,
     public_contact_path_available: hasAnyPublicContactPath(agent, item),
+    social_source_trust_review: trustReview,
+    social_source_trust_score: trustReview.score,
+    social_source_trust_level: trustReview.level,
     source_no_phone_policy: PUBLIC_SOURCE_CONTACT_POLICY,
     price_label: sourcePriceLabelFor(item),
     source_price_label: sourcePriceLabelFor(item),

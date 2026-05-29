@@ -15384,10 +15384,220 @@ function adminReviewFactBadgesHtml(facts = {}) {
   return `<div class="flex flex-wrap gap-1.5">${parts.map((part) => `<span class="rounded-full border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900">${adminEscape(part)}</span>`).join("")}</div>`;
 }
 
+function adminReviewCoordinateNumber(value) {
+  if (value == null || value === "") return null;
+  const raw = String(value).trim();
+  const normalized = raw.includes(",") && !raw.includes(".")
+    ? raw.replace(",", ".")
+    : raw.replace(/,/g, "");
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+function adminReviewExtraFields(review = {}) {
+  return review?.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
+}
+
+function adminReviewRegionOptionsHtml(selected = "") {
+  return [`<option value="">Choose region</option>`]
+    .concat(UG_REGIONS.map((region) => `<option value="${adminAttr(region)}" ${String(selected || "") === region ? "selected" : ""}>${adminEscape(region)}</option>`))
+    .join("");
+}
+
+function adminReviewDistrictOptionsHtml(region = "", selected = "") {
+  const districts = getDistrictsByRegion(region);
+  return [`<option value="">Choose district</option>`]
+    .concat(districts.map((district) => `<option value="${adminAttr(district)}" ${String(selected || "") === district ? "selected" : ""}>${adminEscape(district)}</option>`))
+    .join("");
+}
+
+function adminReviewCityOptionsHtml(district = "", selected = "") {
+  const tree = getDistrictLocationTree(district);
+  return [`<option value="">Select town / city</option>`]
+    .concat(tree.map((item) => `<option value="${adminAttr(item.city)}" ${String(selected || "") === item.city ? "selected" : ""}>${adminEscape(item.city)}</option>`))
+    .join("");
+}
+
+function adminReviewNeighborhoodOptionsHtml(district = "", city = "", selected = "") {
+  const tree = getDistrictLocationTree(district);
+  const cityNode = tree.find((item) => item.city === city);
+  const list = cityNode?.neighborhoods || [];
+  return [`<option value="">Select neighbourhood</option>`]
+    .concat(list.map((item) => `<option value="${adminAttr(item.name)}" ${String(selected || "") === item.name ? "selected" : ""}>${adminEscape(item.name)}</option>`))
+    .join("");
+}
+
+function adminReviewSetOptions(id, html, value = "") {
+  const el = document.getElementById(id);
+  if (!el) return "";
+  el.innerHTML = html;
+  const values = Array.from(el.options || []).map((option) => option.value);
+  el.value = values.includes(value) ? value : "";
+  return el.value || "";
+}
+
+function adminReviewCurrentLocationFields() {
+  return {
+    region: document.getElementById("admin-review-region-edit")?.value || "",
+    district: document.getElementById("admin-review-district-edit")?.value || "",
+    city: document.getElementById("admin-review-city-edit")?.value || "",
+    neighborhood: document.getElementById("admin-review-neighborhood-edit")?.value || "",
+    area: document.getElementById("admin-review-area-edit")?.value || "",
+    street_name: document.getElementById("admin-review-street-edit")?.value || "",
+    address: document.getElementById("admin-review-address-edit")?.value || ""
+  };
+}
+
+function adminReviewSetAreaFromNeighborhood() {
+  const areaEl = document.getElementById("admin-review-area-edit");
+  const neighborhood = document.getElementById("admin-review-neighborhood-edit")?.value || "";
+  if (areaEl && neighborhood && (!areaEl.value.trim() || areaEl.dataset.auto === "1")) {
+    areaEl.value = neighborhood;
+    areaEl.dataset.auto = "1";
+  }
+}
+
+function adminReviewRefreshHierarchyControls(options = {}) {
+  const { syncMap = true } = options;
+  const fields = adminReviewCurrentLocationFields();
+  const region = fields.region || (fields.district ? regionForDistrict(fields.district) : "");
+  if (region) adminSetReviewEditValue("admin-review-region-edit", region);
+  const district = adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, fields.district), fields.district);
+  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, fields.city), fields.city);
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, fields.neighborhood), fields.neighborhood);
+  if (syncMap) adminReviewScheduleLocationSync();
+}
+
+function adminReviewOnRegionChange() {
+  const region = document.getElementById("admin-review-region-edit")?.value || "";
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, ""), "");
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml("", ""), "");
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml("", "", ""), "");
+  adminReviewScheduleLocationSync();
+}
+
+function adminReviewOnDistrictChange() {
+  const district = document.getElementById("admin-review-district-edit")?.value || "";
+  const region = district ? regionForDistrict(district) : (document.getElementById("admin-review-region-edit")?.value || "");
+  adminSetReviewEditValue("admin-review-region-edit", region);
+  adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, ""), "");
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, "", ""), "");
+  adminReviewScheduleLocationSync();
+}
+
+function adminReviewOnCityChange() {
+  const district = document.getElementById("admin-review-district-edit")?.value || "";
+  const city = document.getElementById("admin-review-city-edit")?.value || "";
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, ""), "");
+  adminReviewScheduleLocationSync();
+}
+
+function adminReviewOnNeighborhoodChange() {
+  adminReviewSetAreaFromNeighborhood();
+  adminReviewScheduleLocationSync();
+}
+
+function adminReviewOnAreaInput() {
+  const areaEl = document.getElementById("admin-review-area-edit");
+  if (areaEl) areaEl.dataset.auto = "0";
+  adminReviewScheduleLocationSync();
+}
+
+function adminReviewApplyHierarchyFromText(label = "", point = null) {
+  const text = String(label || "").toLowerCase();
+  const pinPoint = Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
+    ? { lat: Number(point.lat), lng: Number(point.lng) }
+    : null;
+  const nearestDistrict = pinPoint ? findNearestDistrictFromCoords(pinPoint.lat, pinPoint.lng)?.district || "" : "";
+  const current = adminReviewCurrentLocationFields();
+  const district = DISTRICTS.find((item) => text.includes(item.toLowerCase()))
+    || current.district
+    || nearestDistrict;
+  if (!district) return;
+  const region = regionForDistrict(district);
+  adminSetReviewEditValue("admin-review-region-edit", region);
+  adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, district), district);
+  const tree = getDistrictLocationTree(district);
+  const nearest = findClosestLpHierarchyOption(district, pinPoint);
+  const cityNode = findLpLocationOptionByText(tree, (item) => item.city, text)
+    || (nearest?.city ? tree.find((item) => item.city === nearest.city) : null)
+    || tree[0]
+    || null;
+  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, cityNode?.city || ""), cityNode?.city || "");
+  const neighborhoods = (tree.find((item) => item.city === city)?.neighborhoods || []);
+  const neighborhoodMatch = findLpLocationOptionByText(neighborhoods, (item) => item.name, text)
+    || (nearest?.city === city && nearest?.neighborhood ? neighborhoods.find((item) => item.name === nearest.neighborhood) : null)
+    || neighborhoods[0]
+    || null;
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhoodMatch?.name || ""), neighborhoodMatch?.name || "");
+  adminReviewSetAreaFromNeighborhood();
+}
+
+function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
+  const el = document.getElementById("admin-review-address-search-status");
+  if (!el) return;
+  const palette = {
+    green: "mt-2 text-xs font-semibold text-green-800",
+    red: "mt-2 text-xs font-semibold text-red-700",
+    blue: "mt-2 text-xs font-semibold text-blue-900",
+    amber: "mt-2 text-xs font-semibold text-amber-900"
+  };
+  el.className = palette[tone] || palette.blue;
+  el.textContent = message || "Search a place, road, estate, town, or landmark, then confirm the pin.";
+}
+
+async function adminReviewFindAddressOrPlace() {
+  const input = document.getElementById("admin-review-address-search-edit");
+  const query = (input?.value || "").trim();
+  if (query.length < 3) {
+    adminReviewSetAddressSearchStatus("Type at least 3 characters to find a location.", "red");
+    return false;
+  }
+  adminReviewSetAddressSearchStatus("Finding the nearest matching place in Uganda...", "blue");
+  let point = null;
+  try {
+    point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
+    if (point) {
+      point.provider = "google";
+      point.confidence = 0.75;
+    }
+  } catch (error) {
+    point = null;
+  }
+  if (!point) point = await geocodeWithNominatim(query);
+  if (!point) {
+    const fallbackDistrict = guessDistrictFromText(query) || document.getElementById("admin-review-district-edit")?.value || "";
+    const fallback = getDistrictCenter(fallbackDistrict) || MAP_DEFAULT_CENTER;
+    adminReviewSetLocationInputs(fallback.lat, fallback.lng, "Approximate fallback pin");
+    adminReviewMoveLocationPin(fallback.lat, fallback.lng, { zoom: MAP_DISTRICT_ZOOM });
+    adminSetReviewEditValue("admin-review-address-edit", query);
+    adminReviewApplyHierarchyFromText(query, fallback);
+    adminReviewSetAddressSearchStatus("No exact match found. Fallback pin is ready; move it if needed.", "amber");
+    return false;
+  }
+  adminSetReviewEditValue("admin-review-address-edit", point.label || query);
+  adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "google");
+  adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
+  adminReviewApplyHierarchyFromText(point.label || query, point);
+  adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
+  adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
+  adminReviewSetAddressSearchStatus("Address found. Check the pin and use it before approval.", "green");
+  return true;
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
-  const districtOptions = ["", ...DISTRICTS].map((district) => `<option value="${adminAttr(district)}" ${String(review.district || "") === district ? "selected" : ""}>${adminEscape(district || "Choose district")}</option>`).join("");
+  const extra = adminReviewExtraFields(review);
+  const initialDistrict = review.district || facts.district || "";
+  const initialRegion = review.region || extra.region || (initialDistrict ? regionForDistrict(initialDistrict) : "");
+  const initialCity = review.city || extra.city || extra.town || "";
+  const initialNeighborhood = review.neighborhood || extra.neighborhood || "";
+  const initialStreet = review.street_name || extra.street_name || "";
+  const districtOptions = adminReviewDistrictOptionsHtml(initialRegion, initialDistrict);
+  const regionOptions = adminReviewRegionOptionsHtml(initialRegion);
+  const cityOptions = adminReviewCityOptionsHtml(initialDistrict, initialCity);
+  const neighborhoodOptions = adminReviewNeighborhoodOptionsHtml(initialDistrict, initialCity, initialNeighborhood);
   const typeOptions = [
     ["sale", "For sale"],
     ["rent", "To rent"],
@@ -15426,14 +15636,37 @@ function adminReviewListingEditPanel(review = {}) {
           <select id="admin-review-listing-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
-          <input id="admin-review-area-edit" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
+          <input id="admin-review-area-edit" oninput="adminReviewOnAreaInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Region
+          <select id="admin-review-region-edit" onchange="adminReviewOnRegionChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${regionOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">District
-          <select id="admin-review-district-edit" onchange="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${districtOptions}</select>
+          <select id="admin-review-district-edit" onchange="adminReviewOnDistrictChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${districtOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Town / city
+          <select id="admin-review-city-edit" onchange="adminReviewOnCityChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${cityOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Neighbourhood
+          <select id="admin-review-neighborhood-edit" onchange="adminReviewOnNeighborhoodChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${neighborhoodOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Street / landmark
+          <input id="admin-review-street-edit" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialStreet)}" placeholder="Road, estate, landmark, gate note">
         </label>
         <label class="block text-xs font-bold text-gray-700">Address / location note
           <input id="admin-review-address-edit" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.address || "")}" placeholder="Road, building, estate, or source location note">
         </label>
+        <div class="md:col-span-2 rounded-xl border border-amber-200 bg-white p-3">
+          <label class="block text-xs font-bold text-gray-700">Find address / place like the public listing flow
+            <div class="mt-1 flex gap-2">
+              <input id="admin-review-address-search-edit" onkeydown="if(event.key==='Enter'){event.preventDefault(); adminReviewFindAddressOrPlace();}" class="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.resolved_location_label || extra.resolved_location_label || "")}" placeholder="Search estate, road, town, landmark, or area">
+              <button type="button" onclick="adminReviewFindAddressOrPlace()" class="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white hover:bg-green-600">Find</button>
+            </div>
+          </label>
+          <div id="admin-review-address-search-status" class="mt-2 text-xs font-semibold text-blue-900">Search a place, road, estate, town, or landmark, then confirm the pin.</div>
+          <input id="admin-review-geocoding-provider-edit" type="hidden" value="${adminAttr(extra.geocoding_provider || "")}">
+          <input id="admin-review-location-confidence-edit" type="hidden" value="${adminAttr(extra.location_confidence || "")}">
+        </div>
         <label class="block text-xs font-bold text-gray-700">Property type
           <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
         </label>
@@ -15492,6 +15725,7 @@ function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
   adminSetReviewEditValue("admin-review-area-edit", facts.area || adminActiveReview.area || "");
   adminSetReviewEditValue("admin-review-district-edit", facts.district || adminActiveReview.district || "");
+  adminReviewApplyHierarchyFromText([facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "));
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
   adminSetReviewEditValue("admin-review-price-period-edit", facts.price_period || adminActiveReview.price_period || "");
@@ -15532,14 +15766,15 @@ function adminReviewLocationStatus(message, tone = "blue") {
 }
 
 let adminReviewLocationSyncTimer = null;
+let adminReviewLocationResolveSeq = 0;
 
 function adminReviewHasUsableCoordinates(lat, lng) {
   if (lat == null || lng == null) return false;
   const latText = String(lat).trim();
   const lngText = String(lng).trim();
   if (!latText || !lngText) return false;
-  const rawLat = Number(latText);
-  const rawLng = Number(lngText);
+  const rawLat = adminReviewCoordinateNumber(latText);
+  const rawLng = adminReviewCoordinateNumber(lngText);
   return Number.isFinite(rawLat)
     && Number.isFinite(rawLng)
     && isLikelyUgandaCoordinate(rawLat, rawLng);
@@ -15547,7 +15782,9 @@ function adminReviewHasUsableCoordinates(lat, lng) {
 
 function adminReviewNormalizeCoordinateInputs(latitude, longitude) {
   if (!adminReviewHasUsableCoordinates(latitude, longitude)) return { latitude: "", longitude: "", exact: false };
-  return { latitude: String(latitude).trim(), longitude: String(longitude).trim(), exact: true };
+  const lat = adminReviewCoordinateNumber(latitude);
+  const lng = adminReviewCoordinateNumber(longitude);
+  return { latitude: lat.toFixed(6), longitude: lng.toFixed(6), exact: true };
 }
 
 function adminReviewScheduleLocationSync() {
@@ -15559,26 +15796,27 @@ function adminReviewLocationDraft() {
   const latitude = document.getElementById("admin-review-latitude-edit")?.value;
   const longitude = document.getElementById("admin-review-longitude-edit")?.value;
   const coordinates = adminReviewNormalizeCoordinateInputs(latitude, longitude);
-  const area = document.getElementById("admin-review-area-edit")?.value;
-  const district = document.getElementById("admin-review-district-edit")?.value;
-  const address = document.getElementById("admin-review-address-edit")?.value;
+  const fields = adminReviewCurrentLocationFields();
   return {
     ...(adminActiveReview || {}),
     lat: coordinates.latitude,
     lng: coordinates.longitude,
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
-    area,
-    district,
-    address,
-    city: area || adminActiveReview?.city || ""
+    area: fields.area,
+    district: fields.district,
+    address: fields.address,
+    region: fields.region,
+    city: fields.city,
+    neighborhood: fields.neighborhood,
+    street_name: fields.street_name
   };
 }
 
 function adminReviewLocationPoint(review = adminActiveReview) {
   const draft = adminReviewLocationDraft();
-  const rawLat = Number(draft.latitude);
-  const rawLng = Number(draft.longitude);
+  const rawLat = adminReviewCoordinateNumber(draft.latitude);
+  const rawLng = adminReviewCoordinateNumber(draft.longitude);
   if (adminReviewHasUsableCoordinates(draft.latitude, draft.longitude)) {
     return { lat: rawLat, lng: rawLng, exact: true };
   }
@@ -15633,6 +15871,24 @@ function adminReviewSyncLocationMapFromInputs() {
     zoom: point.exact ? MAP_PROPERTY_ZOOM : MAP_DISTRICT_ZOOM
   });
   adminReviewLocationStatus(point.exact ? "Exact pin from fields" : "Approximate area pin - confirm exact pin before approval", point.exact ? "green" : "amber");
+  if (!point.exact) {
+    const draft = adminReviewLocationDraft();
+    const seq = ++adminReviewLocationResolveSeq;
+    resolveHierarchyMapAnchor({
+      region: draft.region,
+      district: draft.district,
+      city: draft.city,
+      neighborhood: draft.neighborhood,
+      area: draft.area
+    }).then((resolved) => {
+      if (seq !== adminReviewLocationResolveSeq) return;
+      if (!resolved || !Number.isFinite(Number(resolved.lat)) || !Number.isFinite(Number(resolved.lng))) return;
+      const latest = adminReviewLocationDraft();
+      if (adminReviewHasUsableCoordinates(latest.latitude, latest.longitude)) return;
+      adminReviewMoveLocationPin(resolved.lat, resolved.lng, { zoom: MAP_DISTRICT_ZOOM });
+      adminReviewLocationStatus("Closest hierarchy pin - move/confirm exact pin before approval", "amber");
+    }).catch(() => {});
+  }
 }
 
 function adminReviewUseMapPin() {
@@ -15752,8 +16008,12 @@ function collectAdminReviewListingPatch() {
     title: get("admin-review-title-edit"),
     description: get("admin-review-description-edit"),
     listing_type: get("admin-review-listing-type-edit"),
+    region: get("admin-review-region-edit"),
     district: get("admin-review-district-edit"),
+    city: get("admin-review-city-edit"),
+    neighborhood: get("admin-review-neighborhood-edit"),
     area: get("admin-review-area-edit"),
+    street_name: get("admin-review-street-edit"),
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
     price_period: get("admin-review-price-period-edit"),
@@ -15762,8 +16022,87 @@ function collectAdminReviewListingPatch() {
     bathrooms: get("admin-review-bathrooms-edit"),
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
+    geocoding_provider: get("admin-review-geocoding-provider-edit"),
+    location_confidence: get("admin-review-location-confidence-edit"),
+    map_pin_source: coordinates.exact ? "king_review" : "king_review_area",
     amenities
   };
+}
+
+function adminBuildFallbackSocialTrustReview(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  const platform = String(extra.source_platform || extra.source_contact_platform || "").trim();
+  const sourceUrl = String(extra.source_post_url || extra.source_url || extra.video_url || review.video_url || "").trim();
+  const sourceContactUrl = String(extra.source_contact_url || extra.source_channel_url || "").trim();
+  const sourceName = String(extra.source_name || extra.source_agent_name || extra.public_display_name || review.lister_name || "").trim();
+  const publishedAt = String(extra.first_posted_online_at || extra.source_published_at || extra.video_published_at || "").trim();
+  const location = [review.area, review.district, review.address].filter(Boolean).join(", ");
+  const priceEvidence = review.price ? fmtP(review.price, review.price_period || "") : (extra.price_upon_application ? "Price upon application" : "");
+  const contactPath = [review.lister_phone, review.lister_email, sourceContactUrl, sourceUrl].find((item) => String(item || "").trim()) || "";
+  const audience = String(extra.source_followers_label || extra.source_audience_label || "").trim();
+  const accountAge = String(extra.source_account_age_label || extra.source_account_created_at || extra.account_created_at || extra.channel_created_at || "").trim();
+  const postingVolume = String(extra.source_video_count_label || extra.source_post_count_label || extra.source_video_count || extra.source_post_count || "").trim();
+  const propertyFacts = [location, priceEvidence].filter(Boolean).join(" | ");
+  const checks = [
+    ["Exact social post URL", /(?:tiktok\.com\/@[^/]+\/video\/\d+|youtube\.com\/watch\?|youtu\.be\/|instagram\.com\/(?:p|reel)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/]+\/status\/\d+)/i.test(sourceUrl), sourceUrl],
+    ["Recognised social platform", Boolean(platform), platform],
+    ["Poster name or handle captured", Boolean(sourceName), sourceName],
+    ["Account age/history evidence", Boolean(accountAge), accountAge],
+    ["Posting/video volume evidence", Boolean(postingVolume), postingVolume],
+    ["Followers/following/subscriber metrics", Boolean(audience && !/confirm|unknown|pending/i.test(audience)), audience],
+    ["Platform posted date captured", Boolean(publishedAt), publishedAt],
+    ["Property facts captured", Boolean(location && priceEvidence), propertyFacts],
+    ["Public contact path captured", Boolean(contactPath), contactPath],
+    ["Engagement/comment responsiveness evidence", Boolean(extra.comment_evidence || extra.commentEvidence || extra.source_comment_evidence), extra.comment_evidence || extra.commentEvidence || ""]
+  ].map(([label, passed, evidence], index) => ({
+    key: `fallback_${index + 1}`,
+    label,
+    status: passed ? "pass" : "needs_evidence",
+    points: passed ? 10 : 0,
+    max_points: 10,
+    evidence: evidence || (passed ? "Captured" : "Not captured yet")
+  }));
+  const score = checks.reduce((sum, item) => sum + item.points, 0);
+  return {
+    score,
+    max_score: 100,
+    level: score >= 80 ? "high" : score >= 60 ? "medium" : "needs_review",
+    checks
+  };
+}
+
+function adminSocialSourceTrustHtml(review = {}) {
+  if (!adminIsSourcedInventoryCandidate(review)) return "";
+  const extra = adminReviewExtraFields(review);
+  const trust = extra.social_source_trust_review && typeof extra.social_source_trust_review === "object"
+    ? extra.social_source_trust_review
+    : adminBuildFallbackSocialTrustReview(review);
+  const checks = Array.isArray(trust.checks) ? trust.checks : [];
+  if (!checks.length) return "";
+  const score = Number(trust.score || 0);
+  const level = trust.level || (score >= 80 ? "high" : score >= 60 ? "medium" : "needs_review");
+  const scoreClass = score >= 80 ? "bg-green-100 text-green-800 border-green-200" : score >= 60 ? "bg-amber-100 text-amber-900 border-amber-200" : "bg-red-50 text-red-800 border-red-200";
+  return `
+    <div class="mt-3 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-xs text-indigo-950">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="font-black uppercase tracking-wide">Social source trust review</div>
+          <p class="mt-1">10-point source check from captured public evidence. Unknown platform metrics stay as review items until King captures them from the source.</p>
+        </div>
+        <span class="rounded-full border px-2 py-1 text-[11px] font-black ${scoreClass}">${score}/100 ${adminEscape(level.replace(/_/g, " "))}</span>
+      </div>
+      <div class="mt-3 grid sm:grid-cols-2 gap-2">
+        ${checks.map((item) => {
+          const passed = String(item.status || "").toLowerCase() === "pass";
+          return `
+            <div class="rounded-lg border ${passed ? "border-green-100 bg-white" : "border-amber-200 bg-amber-50"} p-2">
+              <div class="font-bold ${passed ? "text-green-800" : "text-amber-900"}">${passed ? "Pass" : "Needs evidence"} - ${adminEscape(item.label || item.key || "")}</div>
+              <div class="mt-1 break-words text-[11px] ${passed ? "text-gray-600" : "text-amber-800"}">${adminEscape(item.evidence || item.action || "Capture evidence before relying on this signal.")}</div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>`;
 }
 
 function renderAdminReviewPanel(review) {
@@ -15882,6 +16221,7 @@ function renderAdminReviewPanel(review) {
               <p class="text-sm text-gray-600 mt-1 max-h-36 overflow-auto rounded-lg bg-gray-50 p-2">${adminEscape(review.description || "")}</p>
               ${adminReviewListingEditPanel(review)}
               ${sourcedCandidateEvidenceHtml}
+              ${adminSocialSourceTrustHtml(review)}
             </div>
             <span class="text-xs font-semibold px-2 py-1 rounded ${meta.cls}">${meta.label}</span>
           </div>
@@ -16062,7 +16402,10 @@ function renderAdminReviewPanel(review) {
     </div>`;
   panel.classList.remove("hidden");
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  setTimeout(() => initAdminReviewLocationMap(review), 120);
+  setTimeout(() => {
+    adminReviewRefreshHierarchyControls({ syncMap: false });
+    initAdminReviewLocationMap(review);
+  }, 120);
 }
 
 async function openAdminListingReview(listingId) {
@@ -17369,7 +17712,7 @@ function parseIntSafe(v) {
 
 function parseFloatSafe(v) {
   if (v == null || v === "") return null;
-  const n = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+  const n = parseFloat(String(v).replace(/,/g, "").replace(/[^0-9.-]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 

@@ -1641,6 +1641,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const values = [propertyId];
   const errors = [];
   const correctedFields = [];
+  const extraPatch = {};
   let idx = 2;
 
   Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
@@ -1673,9 +1674,19 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     idx += 1;
   }
 
+  const toNullableCoordinate = (value) => {
+    if (value == null || value === '') return null;
+    const raw = String(value).trim().replace(/\s/g, '');
+    const normalized = raw.includes(',') && !raw.includes('.') && raw.split(',').length === 2
+      ? raw.replace(',', '.')
+      : raw.replace(/,/g, '');
+    const n = parseFloat(normalized);
+    return Number.isFinite(n) ? n : null;
+  };
+
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude')) {
-    const latitude = toNullableFloat(normalizedPatch.latitude);
-    const longitude = toNullableFloat(normalizedPatch.longitude);
+    const latitude = toNullableCoordinate(normalizedPatch.latitude);
+    const longitude = toNullableCoordinate(normalizedPatch.longitude);
     if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
     else if (latitude != null && (latitude < -90 || latitude > 90)) errors.push('latitude is out of range');
     setParts.push(`latitude = $${idx}`);
@@ -1685,8 +1696,8 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude')) {
-    const longitude = toNullableFloat(normalizedPatch.longitude);
-    const latitude = toNullableFloat(normalizedPatch.latitude);
+    const longitude = toNullableCoordinate(normalizedPatch.longitude);
+    const latitude = toNullableCoordinate(normalizedPatch.latitude);
     if (latitude != null && longitude != null && !isPointInUganda(latitude, longitude) && !errors.includes('map pin must be inside Uganda')) errors.push('map pin must be inside Uganda');
     else if (longitude != null && (longitude < -180 || longitude > 180)) errors.push('longitude is out of range');
     setParts.push(`longitude = $${idx}`);
@@ -1697,7 +1708,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (
     (Object.prototype.hasOwnProperty.call(normalizedPatch, 'latitude') || Object.prototype.hasOwnProperty.call(normalizedPatch, 'longitude'))
-    && ((toNullableFloat(normalizedPatch.latitude) == null) !== (toNullableFloat(normalizedPatch.longitude) == null))
+    && ((toNullableCoordinate(normalizedPatch.latitude) == null) !== (toNullableCoordinate(normalizedPatch.longitude) == null))
     && !errors.includes('latitude and longitude must be confirmed together')
   ) {
     errors.push('latitude and longitude must be confirmed together');
@@ -1711,6 +1722,22 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     idx += 1;
   }
 
+  const addExtraPatch = (bodyKey, extraKey = bodyKey) => {
+    if (!Object.prototype.hasOwnProperty.call(normalizedPatch, bodyKey)) return;
+    const value = cleanText(normalizedPatch[bodyKey]);
+    extraPatch[extraKey] = value || null;
+    correctedFields.push(extraKey);
+  };
+  addExtraPatch('region');
+  addExtraPatch('city');
+  addExtraPatch('neighborhood');
+  addExtraPatch('street_name');
+  addExtraPatch('location_name');
+  addExtraPatch('location_confidence');
+  addExtraPatch('geocoding_provider');
+  addExtraPatch('place_id');
+  addExtraPatch('map_pin_source');
+
   if (errors.length) {
     const err = new Error('Validation failed');
     err.status = 400;
@@ -1720,19 +1747,49 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
 
   if (!setParts.length) return null;
 
-  const latitude = toNullableFloat(normalizedPatch.latitude);
-  const longitude = toNullableFloat(normalizedPatch.longitude);
+  const latitude = toNullableCoordinate(normalizedPatch.latitude);
+  const longitude = toNullableCoordinate(normalizedPatch.longitude);
   const hasExactCoordinates = latitude != null && longitude != null && isPointInUganda(latitude, longitude);
-  const resolvedLocationLabel = [cleanText(normalizedPatch.area), cleanText(normalizedPatch.district)].filter(Boolean).join(', ');
+  const resolvedLocationLabel = [
+    cleanText(normalizedPatch.street_name),
+    cleanText(normalizedPatch.neighborhood) || cleanText(normalizedPatch.area),
+    cleanText(normalizedPatch.city),
+    cleanText(normalizedPatch.district)
+  ].filter(Boolean).join(', ');
   setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${idx}::jsonb`);
   values.push(JSON.stringify({
+    ...extraPatch,
     king_review_corrected_fields: Array.from(new Set(correctedFields)),
     king_review_corrected_at: new Date().toISOString(),
     king_review_facts_confirmed: true,
+    king_review_public_listing_facts: {
+      title: cleanText(normalizedPatch.title),
+      listing_type: cleanText(normalizedPatch.listing_type),
+      region: cleanText(normalizedPatch.region),
+      district: cleanText(normalizedPatch.district),
+      city: cleanText(normalizedPatch.city),
+      neighborhood: cleanText(normalizedPatch.neighborhood),
+      area: cleanText(normalizedPatch.area),
+      address: cleanText(normalizedPatch.address),
+      street_name: cleanText(normalizedPatch.street_name),
+      property_type: cleanText(normalizedPatch.property_type),
+      price: toNullableInt(normalizedPatch.price),
+      price_period: cleanText(normalizedPatch.price_period),
+      latitude,
+      longitude
+    },
+    review_location_hierarchy: {
+      region: cleanText(normalizedPatch.region),
+      district: cleanText(normalizedPatch.district),
+      city: cleanText(normalizedPatch.city),
+      neighborhood: cleanText(normalizedPatch.neighborhood),
+      area: cleanText(normalizedPatch.area),
+      street_name: cleanText(normalizedPatch.street_name)
+    },
     ...(resolvedLocationLabel ? { resolved_location_label: resolvedLocationLabel } : {}),
     ...(hasExactCoordinates ? {
       map_pin_confirmed: true,
-      map_pin_source: 'king_review',
+      map_pin_source: cleanText(normalizedPatch.map_pin_source) || 'king_review',
       map_pin_confirmed_at: new Date().toISOString()
     } : {})
   }));
