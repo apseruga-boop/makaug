@@ -633,6 +633,7 @@ const adminPhotoDeleteInFlight = new Set();
 let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
+let publicListingsApiTotal = null;
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -971,7 +972,19 @@ const I18N_UI = {
     navFraud: "Fraud",
     heroBadge: "Uganda's #1 Free Property Platform",
     heroTitleHtml: "Find your next home, land, rental, or student room",
-    heroSubtitle: "A property search engine for Uganda: homes, rentals, land, student rooms, and social-source listings.",
+    heroSubtitle: "Makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising property opportunities in one place.",
+    heroSubtitlePrefix: "Makaug uses AI-powered search algorithms to scan public online property sources across Uganda, organising",
+    heroSubtitleCountLabelSingular: "property opportunity",
+    heroSubtitleCountLabelPlural: "property opportunities",
+    heroSubtitleSuffix: "in one place.",
+    heroCounterBreakdownTitle: "Current public opportunities",
+    heroCounterForSale: "For sale",
+    heroCounterToRent: "To rent",
+    heroCounterStudent: "Student",
+    heroCounterCommercial: "Commercial",
+    heroCounterLand: "Land",
+    heroCounterSocial: "Social-source",
+    heroCounterTooltipNote: "Updated from live approved property data.",
     heroRent: "Rent",
     heroBuy: "Buy",
     heroCommercial: "Commercial",
@@ -1883,7 +1896,19 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   navFraud: "ማጭበርበር",
   heroBadge: "የኡጋንዳ ነፃ የንብረት መድረክ",
   heroTitleHtml: "ቀጣዩን ቤት፣ መሬት፣ ኪራይ ወይም የተማሪ ክፍል ያግኙ",
-  heroSubtitle: "ለኡጋንዳ የንብረት መፈለጊያ: ቤቶች፣ ኪራዮች፣ መሬት፣ የተማሪ ክፍሎች እና ከማህበራዊ ምንጮች የተገኙ ውጤቶች።",
+  heroSubtitle: "Makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ የንብረት እድሎችንም በአንድ ቦታ ያደራጃል።",
+  heroSubtitlePrefix: "Makaug በAI የተጎለበተ የፍለጋ ቴክኖሎጂን በመጠቀም በኡጋንዳ ያሉ የህዝብ የኦንላይን ንብረት ምንጮችን ይፈትሻል፣ ያደራጃል",
+  heroSubtitleCountLabelSingular: "የንብረት እድል",
+  heroSubtitleCountLabelPlural: "የንብረት እድሎች",
+  heroSubtitleSuffix: "በአንድ ቦታ።",
+  heroCounterBreakdownTitle: "አሁን ያሉ የህዝብ እድሎች",
+  heroCounterForSale: "ለሽያጭ",
+  heroCounterToRent: "ለኪራይ",
+  heroCounterStudent: "ተማሪ",
+  heroCounterCommercial: "ንግድ",
+  heroCounterLand: "መሬት",
+  heroCounterSocial: "ከማህበራዊ ምንጭ",
+  heroCounterTooltipNote: "ከተረጋገጡ ቀጥታ የንብረት መረጃዎች ዘምኗል።",
   heroRent: "ኪራይ",
   heroBuy: "ግዛ",
   heroCommercial: "ንግድ",
@@ -4355,6 +4380,97 @@ function applyFraudLanguageUI() {
   setTextById("fraud-example-4-sub", fraudTr("example4Sub"));
 }
 
+function getHeroPropertyOpportunityStats() {
+  let publicListings = [];
+  try {
+    publicListings = typeof getPublicListings === "function"
+      ? getPublicListings()
+      : PROPERTIES.filter((p) => isListingPublicVisible(p));
+  } catch (error) {
+    publicListings = [];
+  }
+  const stats = {
+    total: Number(publicListingsApiTotal ?? publicListings.length) || publicListings.length,
+    sale: 0,
+    rent: 0,
+    student: 0,
+    commercial: 0,
+    land: 0,
+    social: 0
+  };
+  publicListings.forEach((property) => {
+    const extra = property?.extra_fields && typeof property.extra_fields === "object" ? property.extra_fields : {};
+    const type = normalizeType(property?.type || property?.listing_type || property?.category || extra.listing_type || "");
+    const period = String(property?.period || property?.price_period || extra.price_period || "").toLowerCase();
+    const text = [
+      type,
+      property?.subtype,
+      property?.property_type,
+      property?.title,
+      property?.desc,
+      property?.description,
+      period
+    ].filter(Boolean).join(" ").toLowerCase();
+    if (type === "sale" || /\b(for sale|sale|selling|buy)\b/.test(text)) stats.sale += 1;
+    if (type === "rent" || ["mo", "month", "monthly", "per_month"].includes(period) || /\b(rent|rental|lease|per month|monthly)\b/.test(text)) stats.rent += 1;
+    if (type === "student" || /\b(student|hostel|university|campus|bedsitter)\b/.test(text)) stats.student += 1;
+    if (type === "commercial" || /\b(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)\b/.test(text)) stats.commercial += 1;
+    if (type === "land" || /\b(land|plot|acre|decimal|estate plots?)\b/.test(text)) stats.land += 1;
+    if (isFoundOnlineListing(property)) stats.social += 1;
+  });
+  return stats;
+}
+
+function heroOpportunityStatRow(labelKey, value) {
+  return `
+    <div class="flex items-center justify-between gap-3 rounded-lg bg-white/10 px-2.5 py-1.5">
+      <span class="text-white/80">${adminEscape(tr(labelKey))}</span>
+      <strong class="text-green-200">${Number(value || 0).toLocaleString()}</strong>
+    </div>`;
+}
+
+function renderHeroPropertyOpportunityCounter() {
+  const subtitle = document.getElementById("hero-subtitle");
+  if (!subtitle) return;
+  const prefix = document.getElementById("hero-subtitle-prefix");
+  const suffix = document.getElementById("hero-subtitle-suffix");
+  const counter = document.getElementById("hero-property-counter");
+  const count = document.getElementById("hero-property-count");
+  const countLabel = document.getElementById("hero-property-count-label");
+  const tooltip = document.getElementById("hero-property-counter-tooltip");
+  const stats = getHeroPropertyOpportunityStats();
+  const totalLabelKey = stats.total === 1 ? "heroSubtitleCountLabelSingular" : "heroSubtitleCountLabelPlural";
+  if (prefix) prefix.textContent = tr("heroSubtitlePrefix");
+  if (suffix) suffix.textContent = tr("heroSubtitleSuffix");
+  if (count) count.textContent = Number(stats.total || 0).toLocaleString();
+  if (countLabel) countLabel.textContent = tr(totalLabelKey);
+  const tooltipText = [
+    `${tr("heroCounterForSale")}: ${stats.sale}`,
+    `${tr("heroCounterToRent")}: ${stats.rent}`,
+    `${tr("heroCounterStudent")}: ${stats.student}`,
+    `${tr("heroCounterCommercial")}: ${stats.commercial}`,
+    `${tr("heroCounterLand")}: ${stats.land}`,
+    `${tr("heroCounterSocial")}: ${stats.social}`
+  ].join(" · ");
+  if (counter) {
+    counter.setAttribute("title", tooltipText);
+    counter.setAttribute("aria-label", `${Number(stats.total || 0).toLocaleString()} ${tr(totalLabelKey)}. ${tooltipText}`);
+  }
+  if (tooltip) {
+    tooltip.innerHTML = `
+      <div class="font-black text-green-100">${adminEscape(tr("heroCounterBreakdownTitle"))}</div>
+      <div class="mt-2 grid gap-1.5">
+        ${heroOpportunityStatRow("heroCounterForSale", stats.sale)}
+        ${heroOpportunityStatRow("heroCounterToRent", stats.rent)}
+        ${heroOpportunityStatRow("heroCounterStudent", stats.student)}
+        ${heroOpportunityStatRow("heroCounterCommercial", stats.commercial)}
+        ${heroOpportunityStatRow("heroCounterLand", stats.land)}
+        ${heroOpportunityStatRow("heroCounterSocial", stats.social)}
+      </div>
+      <div class="mt-2 text-[11px] text-white/65">${adminEscape(tr("heroCounterTooltipNote"))}</div>`;
+  }
+}
+
 function applyLanguageUI() {
   document.title = tr("siteTitle");
   setTextById("brand-subtitle", tr("brandSubtitle"));
@@ -4396,7 +4512,7 @@ function applyLanguageUI() {
   if (heroBadge) heroBadge.innerHTML = `<i class="fas fa-check-circle text-green-300"></i> ${tr("heroBadge")}`;
   const heroTitle = document.getElementById("hero-title");
   if (heroTitle) heroTitle.innerHTML = tr("heroTitleHtml");
-  setTextById("hero-subtitle", tr("heroSubtitle"));
+  renderHeroPropertyOpportunityCounter();
   setTextById("hero-tab-rent", tr("heroRent"));
   setTextById("hero-tab-buy", tr("heroBuy"));
   setTextById("hero-tab-commercial", tr("heroCommercial"));
@@ -27515,6 +27631,7 @@ function renderSaved() {
 
 function renderAll() {
   const publicListings = getPublicListings();
+  renderHeroPropertyOpportunityCounter();
   const featuredListings = publicFeaturedListingsFromApi.length ? publicFeaturedListingsFromApi : publicListings;
   renderGrid("home-grid", getFeaturedListings(featuredListings).slice(0, 3));
   renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
@@ -28263,6 +28380,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   try {
     const response = await apiRequest("/api/properties?status=approved&limit=1000&public_only=1", { skipAuth: true });
     const rows = Array.isArray(response?.data) ? response.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+    publicListingsApiTotal = Number(response?.pagination?.total || rows.length) || rows.length;
     let featuredRows = [];
     try {
       const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured", { skipAuth: true });
