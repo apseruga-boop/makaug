@@ -618,6 +618,18 @@
     }
     .property-card { transition: transform .2s ease, box-shadow .2s ease; }
     .property-card:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(0,0,0,.12); }
+    .property-description-tooltip {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(8px);
+      transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+    }
+    .property-card:hover .property-description-tooltip,
+    .property-card:focus-within .property-description-tooltip {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+    }
     .mortgage-result-pop {
       animation: mortgageResultPop .34s ease both;
       transform-style: preserve-3d;
