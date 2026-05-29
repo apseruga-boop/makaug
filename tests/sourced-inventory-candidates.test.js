@@ -305,6 +305,9 @@ test('public property cards keep NEW freshness and replace registered badge with
   assert(frontend.includes('function propertyDescriptionHoverHtml'), 'public cards should expose a hover/focus description tooltip');
   assert(frontend.includes('role="tooltip"') && frontend.includes('property-description-tooltip'), 'property description hover should be implemented as an accessible tooltip');
   assert(frontend.includes('propertyDescriptionHoverHtml(p)'), 'sale/rent/land/commercial cards should render the pulled public description on hover');
+  assert(frontend.includes('currentLang === "en" && isFoundOnlineListing(p) && sourceDescription'), 'found-online card hovers should use raw source excerpts only in English and localized generated copy in translated views');
+  assert(frontend.includes('const popupDescription = propertyCardDescriptionText(property);'), 'map listing popups should show the localized property description above the title');
+  assert(!frontend.includes('Third-party source result</div>'), 'map listing popups should not show the old third-party placeholder block');
   assert(frontend.includes('extra.source_hover_description'), 'hover descriptions should prefer the original social/source excerpt exposed by the API');
   assert(propertiesRoute.includes('source_hover_description: sourceHoverDescription'), 'public API should expose a safe source excerpt for found-online card hovers');
   assert(html.includes('.property-card:hover .property-description-tooltip'), 'hover tooltip should use a stable CSS hover selector');
