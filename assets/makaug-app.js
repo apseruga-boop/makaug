@@ -1381,7 +1381,7 @@ const I18N_UI = {
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
-    langBanner: "Tii ki makaug i lok 7 me Uganda",
+    langBanner: "Tii ki makaug i lok 8 me Uganda",
     areaOnly: "Kabedo manok",
     anyUniversity: "Yunivasiti weng",
     phSale: "Kibuga, kabedo",

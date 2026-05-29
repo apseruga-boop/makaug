@@ -287,7 +287,9 @@ function run() {
   assert.strictEqual(normalizeLanguageCode('rkg'), 'rn', 'Rukiga should preserve legacy rn code for current UI compatibility');
   assert.strictEqual(normalizeLanguageCode('rnynk'), 'ny', 'Runyankole should preserve legacy ny code for current UI compatibility');
   assert(sourceHtml.includes('value="am">Amharic</option>'), 'public language dropdowns should include Amharic');
+  assert(sourceHtml.includes('amharic-i18n-20260529'), 'public HTML should bump the app asset version when Amharic UI changes');
   assert(frontendSource.includes('I18N_UI.am'), 'frontend UI translations should include Amharic');
+  assert(!frontendSource.includes('Tii ki makaug i lok 7 me Uganda'), 'frontend language packs should not show stale seven-language copy');
   assert(frontendSource.includes('CONTENT_I18N.am'), 'content translations should include Amharic');
   assert(frontendSource.includes('PROPERTY_UI_I18N.am'), 'property page translations should include Amharic');
   assert(frontendSource.includes('LISTING_LABEL_I18N_SUPPLEMENTAL.am'), 'listing labels should include Amharic');
