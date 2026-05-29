@@ -30,6 +30,7 @@ function usage() {
     '  post_url/source_url, source_page_url, source_key, source_name, platform, title, description,',
     '  first_posted_at/published_at/posted_at, district, area/location, price/price_text,',
     '  listing_type, bedrooms, bathrooms, image_urls, contact_phone, contact_email, source_contact_url,',
+    '  source_visual_text/video_text/video_ocr_text/frame_text/image_text/screen_text/ocr_text,',
     '  pre_approved, consent_confirmed, image_rights_confirmed, permission_status',
     '',
     'TikTok minimum viable rows:',
@@ -37,6 +38,7 @@ function usage() {
     '  source_page_url can be the TikTok profile/contact path.',
     '  location or area is required before a property row is created.',
     '  missing price is accepted as Price upon application.',
+    '  paste visible video-frame/OCR text into source_visual_text or video_ocr_text when the caption is sparse.',
     '  missing dates show as being confirmed and missing images use a labelled makaug evidence card.',
     '  pre-approval and image rights are kept as review metadata; King can override non-location checks at approval.',
   ].join('\n'));
