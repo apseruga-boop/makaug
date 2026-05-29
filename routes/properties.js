@@ -221,6 +221,31 @@ function sourceTextFragments(value, depth = 0) {
   return [];
 }
 
+function collapseRepeatedSourceText(value = '') {
+  const words = cleanText(value).split(/\s+/).filter(Boolean);
+  if (words.length < 6) return words.join(' ');
+  let current = words;
+  const maxSize = Math.min(36, Math.floor(current.length / 2));
+  for (let size = maxSize; size >= 2; size -= 1) {
+    const next = [];
+    for (let i = 0; i < current.length;) {
+      const chunk = current.slice(i, i + size);
+      const key = chunk.join(' ').toLowerCase();
+      let repeats = 1;
+      while (
+        i + ((repeats + 1) * size) <= current.length
+        && current.slice(i + repeats * size, i + (repeats + 1) * size).join(' ').toLowerCase() === key
+      ) {
+        repeats += 1;
+      }
+      next.push(...chunk);
+      i += repeats * size;
+    }
+    current = next;
+  }
+  return current.join(' ').replace(/\s+/g, ' ').trim();
+}
+
 function buildPublicSourceHoverDescription(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
   const fragments = [
@@ -243,7 +268,7 @@ function buildPublicSourceHoverDescription(extraFields = {}) {
     seen.add(key);
     parts.push(cleaned);
   });
-  return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 900);
+  return collapseRepeatedSourceText(parts.join(' ')).slice(0, 900);
 }
 
 function publicAreaLabelFor(property = {}, extra = {}) {
