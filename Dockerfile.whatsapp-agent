@@ -1,0 +1,16 @@
+FROM mcr.microsoft.com/playwright:v1.59.1-noble
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    WHATSAPP_WEB_COPILOT_BASE_URL=https://makaug.com \
+    WHATSAPP_WEB_COPILOT_PROFILE_DIR=/var/data/whatsapp-profile
+
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+COPY . .
+RUN chmod +x scripts/start-whatsapp-agent-render.sh
+
+CMD ["bash", "scripts/start-whatsapp-agent-render.sh"]
