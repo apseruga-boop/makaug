@@ -173,6 +173,34 @@ const RECENTLY_SENT_REPLY_TTL_MS = Math.min(
   30000,
   Math.max(5000, Number.isFinite(configuredRecentlySentReplyTtlMs) ? configuredRecentlySentReplyTtlMs : 15000)
 );
+
+function resolveChromeExecutablePath() {
+  const candidates = [
+    CHROME_PATH,
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser'
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch (_error) {
+      // Try the next candidate.
+    }
+  }
+
+  try {
+    const playwrightPath = chromium.executablePath();
+    if (playwrightPath && fs.existsSync(playwrightPath)) return playwrightPath;
+  } catch (_error) {
+    // Fall through to the configured path so the launch error remains explicit.
+  }
+
+  return CHROME_PATH;
+}
+
 const VOICE_AUDIO_MAX_BYTES = 8_000_000;
 const seenBrowserMessageIds = new Set();
 const seenCallEventKeys = new Map();
@@ -1774,6 +1802,10 @@ async function typeAndSendReply(page, text) {
   let composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
   const composerText = normalizeReplyText(composerState.text || '');
   if (composerState.found && !composerText) {
+    if (TRUST_SEND_ON_COMPOSER_CLEAR) {
+      log('send bubble was not observed after composer cleared; trusting composer-clear send confirmation by override');
+      return true;
+    }
     log('send bubble was not observed after composer cleared; refusing to mark reply as sent');
     throw new Error('WhatsApp send was not confirmed after composer cleared');
   }
@@ -1787,6 +1819,10 @@ async function typeAndSendReply(page, text) {
 
   composerState = await getReplyComposerText(page).catch(() => ({ found: false, text: '' }));
   if (composerState.found && !normalizeReplyText(composerState.text || '')) {
+    if (TRUST_SEND_ON_COMPOSER_CLEAR) {
+      log('send bubble was not observed after Enter; trusting composer-clear send confirmation by override');
+      return true;
+    }
     log('send bubble was not observed after Enter; refusing to mark reply as sent');
     throw new Error('WhatsApp send was not confirmed after Enter');
   }
@@ -2063,15 +2099,16 @@ async function main() {
   }
 
   if (!context) {
-    if (!fs.existsSync(CHROME_PATH)) {
-      throw new Error(`Chrome executable not found at ${CHROME_PATH}`);
+    const executablePath = resolveChromeExecutablePath();
+    if (!fs.existsSync(executablePath)) {
+      throw new Error(`Chrome executable not found. Checked configured path and common Linux Chromium paths; configured path was ${CHROME_PATH}`);
     }
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       headless: false,
-      executablePath: CHROME_PATH,
+      executablePath,
       viewport: { width: 1440, height: 980 },
-      args: ['--disable-dev-shm-usage']
+      args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox']
     });
   }
 
