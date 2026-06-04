@@ -42,7 +42,6 @@ const {
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
-const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -63,6 +62,7 @@ const WHATSAPP_LANGUAGE_AI_MODE = String(process.env.WHATSAPP_LANGUAGE_AI_MODE |
 const WHATSAPP_NATURAL_SEARCH_AI_MODE = String(process.env.WHATSAPP_NATURAL_SEARCH_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_REPLY_AI_MODE = String(process.env.WHATSAPP_REPLY_AI_MODE || 'fast').trim().toLowerCase();
 const WHATSAPP_PROPERTY_RESULT_LIMIT = 10;
+const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000;
 
 // Language Translations
 const T = {
@@ -1351,6 +1351,33 @@ function deferWhatsappWork(label, task) {
   });
 }
 
+function captureWhatsappLearningAsync({
+  eventName,
+  phone,
+  inputText = '',
+  responseText = '',
+  language = 'en',
+  entities = {},
+  payload = {},
+  outcome = 'responded',
+  dedupeKey = ''
+}) {
+  deferWhatsappWork('WhatsApp learning capture', () => captureLearningEvent({
+    eventName,
+    source: 'whatsapp',
+    channel: 'whatsapp',
+    sessionId: phone,
+    externalUserId: phone,
+    language,
+    inputText,
+    responseText,
+    entities,
+    payload,
+    outcome,
+    dedupeKey: dedupeKey || `whatsapp:${eventName}:${phone}:${crypto.createHash('sha1').update(inputText || Date.now().toString()).digest('hex').slice(0, 12)}`
+  }));
+}
+
 function normalizeBridgeInboundKey(value) {
   const raw = normalizeInput(value);
   if (!raw) return '';
@@ -1429,6 +1456,13 @@ function normUpper(value) {
   return normalizeInput(value).toUpperCase();
 }
 
+function isDeletedWhatsappMessagePlaceholder(input) {
+  const clean = normalizeInput(input).toLowerCase();
+  if (!clean) return false;
+  return /^(?:this\s+)?message\s+was\s+deleted\.?$/i.test(clean)
+    || /^(?:this\s+)?message\s+was\s+deleted\s+by\s+the\s+sender\.?$/i.test(clean);
+}
+
 function mapListingTypeInput(input) {
   const key = normalizeInput(input).toLowerCase();
   const map = {
@@ -1471,6 +1505,117 @@ function inferListingTypeFromStartRequest(input, entities = {}) {
   return null;
 }
 
+function isNaturalSellerListingStatement(input) {
+  const text = normalizeInput(input).toLowerCase();
+  if (!text || isDeletedWhatsappMessagePlaceholder(text)) return false;
+  if (/\b(looking for|search(?:ing)? for|find me|need to buy|want to buy|want to rent|need rent|available rentals?)\b/i.test(text)) {
+    return false;
+  }
+
+  const propertyObject = '(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)';
+  return (
+    new RegExp(`\\b(?:am|i am|i'm|im|we are|we're)\\s+selling\\b.{0,140}\\b${propertyObject}\\b`, 'i').test(text)
+    || new RegExp(`\\b(?:selling|sell)\\s+(?:my|our|the|a|an)?\\s*.{0,100}\\b${propertyObject}\\b`, 'i').test(text)
+    || new RegExp(`\\b(?:my|our)\\s+${propertyObject}\\b.{0,100}\\b(?:for sale|on sale|available for sale)\\b`, 'i').test(text)
+    || /\b(?:owner|landlord|seller)\b.{0,120}\b(?:selling|sell|for sale|list|listing)\b/i.test(text)
+  );
+}
+
+function toSellerAreaTitle(value) {
+  return normalizeInput(value)
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((part) => {
+      if (!part) return part;
+      if (/^(of|and|the|near)$/i.test(part)) return part.toLowerCase();
+      return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+    })
+    .join(' ')
+    .replace(/\bRoad\b/g, 'Road')
+    .trim();
+}
+
+function parseSellerListingAreaHint(input) {
+  const clean = normalizeInput(input);
+  if (!clean) return null;
+  const match = clean.match(/\b(?:in|at|around|near|from|on)\s+([a-z][a-z\s'-]{2,80})/i);
+  if (!match?.[1]) return null;
+  const candidate = match[1]
+    .split(/\b(?:with|has|have|it's|its|price|selling|for sale|land title|title|decimals?|acres?|photos?|pictures?|call|phone|whatsapp)\b/i)[0]
+    .replace(/[^a-z\s'-]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!candidate || candidate.length < 2) return null;
+  if (/^(sale|rent|land|plot|property|house|home|uganda)$/i.test(candidate)) return null;
+  return toSellerAreaTitle(candidate);
+}
+
+function extractSellerListingDraftHints(input, entities = {}) {
+  const clean = normalizeInput(input);
+  const hints = {};
+  const listingType = inferListingTypeFromStartRequest(clean, entities);
+  if (listingType) hints.listing_type = listingType;
+
+  const area = parseSellerListingAreaHint(clean);
+  if (area) hints.area = area;
+
+  const sizeMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?|sqm|sq\s*m|square\s+meters?|square\s+metres?)\b/i);
+  if (sizeMatch) hints.land_size_text = `${sizeMatch[1]} ${sizeMatch[2]}`.trim();
+
+  if (/\b(?:land title|title deed|mailo|freehold|leasehold)\b/i.test(clean)) {
+    hints.land_title_mentioned = true;
+  }
+
+  if (clean.length >= 10) {
+    hints.source_description_hint = clean.slice(0, 700);
+    hints.whatsapp_seller_statement = clean.slice(0, 700);
+  }
+
+  if (Object.keys(hints).length) hints.whatsapp_listing_recovery = true;
+  return hints;
+}
+
+function listingStartReply(lang, listingType, hints = {}) {
+  const code = resolveLangCode(lang);
+  const savedBits = [];
+  if (hints.area) savedBits.push(`area: ${hints.area}`);
+  if (hints.land_size_text) savedBits.push(`size: ${hints.land_size_text}`);
+  if (hints.land_title_mentioned) savedBits.push('land title mentioned');
+  const savedLine = savedBits.length
+    ? `\nI have saved the details you sent (${savedBits.join(', ')}).`
+    : '';
+  return `Got it - I will help you list this ${typeLabel(listingType || 'sale', code).toLowerCase()}.${savedLine}\n\n${t(code, 'askOwnership')}`;
+}
+
+function isListingPhotoMedia(mediaType, mediaUrl) {
+  if (!mediaUrl) return false;
+  const type = String(mediaType || '').toLowerCase();
+  return !type
+    || type === 'image'
+    || type.startsWith('image/')
+    || String(mediaUrl || '').startsWith('whatsapp-web://inline-image-');
+}
+
+function appendIncomingListingPhotos(existingPhotos = [], mediaUrl = '', mediaCount = 1) {
+  const photos = Array.isArray(existingPhotos)
+    ? existingPhotos.filter(Boolean).slice(0, 10)
+    : [];
+  if (!mediaUrl) return { photos, added: 0 };
+
+  const incomingCount = Math.max(1, Math.min(10, Number(mediaCount || 0) || 1));
+  const availableSlots = Math.max(0, 10 - photos.length);
+  const toAdd = Math.min(incomingCount, availableSlots);
+  let added = 0;
+  for (let i = 0; i < toAdd; i += 1) {
+    const nextUrl = toAdd === 1 ? mediaUrl : `${mediaUrl}#${i + 1}`;
+    if (!photos.includes(nextUrl)) {
+      photos.push(nextUrl);
+      added += 1;
+    }
+  }
+  return { photos, added };
+}
+
 function isListingStartRequest(input, intentResult = {}) {
   const text = normalizeInput(input).toLowerCase();
   if (!text) return false;
@@ -1483,7 +1628,7 @@ function isListingStartRequest(input, intentResult = {}) {
     || /\b(list|post|submit|upload|add|create|advertise)\b.{0,90}\b(property|listing|house|home|land|plot|rental|room|apartment|commercial|student|for sale|to rent)\b/i.test(text)
     || /\b(property|house|home|land|plot|rental|room|apartment|commercial|student)\b.{0,90}\b(listing|listed|post|submit|upload)\b/i.test(text)
   );
-  return explicitListingRequest || (aiListingIntent && listingWords);
+  return isNaturalSellerListingStatement(text) || explicitListingRequest || (aiListingIntent && (listingWords || isNaturalSellerListingStatement(text)));
 }
 
 function mapSearchTypeInput(input) {
@@ -2190,9 +2335,9 @@ function parseNumberToken(rawNumber, suffix) {
   let amount = Number(String(rawNumber || '').replace(/[, ]+/g, ''));
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const tail = String(suffix || '').toLowerCase();
-  if (tail === 'k') amount *= 1_000;
-  if (tail === 'm') amount *= 1_000_000;
-  if (tail === 'b') amount *= 1_000_000_000;
+  if (tail === 'k' || tail.startsWith('thousand')) amount *= 1_000;
+  if (tail === 'm' || tail.startsWith('million')) amount *= 1_000_000;
+  if (tail === 'b' || tail === 'bn' || tail.startsWith('billion')) amount *= 1_000_000_000;
   return amount;
 }
 
@@ -2231,7 +2376,7 @@ function parseBudget(text) {
   const raw = stripLinksAndIdsForNumericParsing(text);
   if (!raw) return null;
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
-  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/gi;
+  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|ugx|ush|shs)?/gi;
   const candidates = [];
 
   let m;
@@ -2626,6 +2771,111 @@ function naturalSearchPrompt(lang, filters = {}, mode = 'area') {
   return copy[mode]?.[code] || copy[mode]?.en || copy.area.en;
 }
 
+const AFFORDABILITY_KEYWORDS = [
+  'cheapest', 'cheap', 'affordable', 'budget friendly', 'budget-friendly', 'lowest price', 'low cost',
+  'least expensive', 'inexpensive', 'economical', 'value area', 'best price', 'can i get',
+  'what area is cheap', 'which area is cheap', 'where is cheap', 'cheap area', 'cheap areas',
+  'bei nafuu', 'nafuu', 'gharama ndogo', 'rahisi', 'eneo gani ni nafuu',
+  'obuseere', 'cheap', 'ebbeeyi entono', 'ssente ntono', 'kitundu ki ekya cheap',
+  'abiso', 'marach', 'low price', 'ma piny', 'price piny', 'piny loyo',
+  'ahendutse', 'hihendutse', 'ahansi omu beeyi', 'beeyi', 'make', 'amafaranga make', 'igiciro gito',
+  'ዝቅተኛ', 'ርካሽ', 'በጀት', 'cheap'
+];
+
+function isAffordabilityAdviceQuestion(value) {
+  const clean = normalizeInput(value).toLowerCase();
+  if (!clean || clean.length < 3) return false;
+  if (/\b(?:sell|selling|list|listing|post|upload|advertise)\b/i.test(clean)) return false;
+  const budget = parseBudgetFromQuestion(clean);
+  if (/\b(?:cheapest|cheap|affordable|budget[-\s]?friendly|lowest\s+price|low[-\s]?cost|least\s+expensive|inexpensive|economical|best\s+price)\b/i.test(clean)) return true;
+  if (/\b(?:can\s+i\s+get|could\s+i\s+get|do\s+you\s+have|have\s+you\s+got|find\s+me|show\s+me)\b/i.test(clean) && budget.maxBudgetUgx > 0) return true;
+  if (
+    budget.maxBudgetUgx > 0
+    && /\b(?:house|houses|home|homes|apartment|apartments|flat|flats|room|rooms|rental|rentals|rent|land|plot|plots|property|properties|student|hostel|office|shop|commercial)\b/i.test(clean)
+    && /(?:\$|\bugx\b|\bush\b|\bshs\b|\bshillings?\b|\bthousand\b|\bthousands\b|\bmillion\b|\bmillions\b|\bbillion\b|\bbillions\b|\b\d+(?:\.\d+)?\s*[kmb]\b)/i.test(clean)
+  ) return true;
+  if (/\b(?:area|place|neighbourhood|neighborhood|district)\b/i.test(clean) && /\b(?:stay|live|rent|buy|house|room|student|hostel|land|plot)\b/i.test(clean) && /\b(?:budget|price|cost|cheap|afford)\b/i.test(clean)) return true;
+  return AFFORDABILITY_KEYWORDS.some((keyword) => keyword && clean.includes(keyword.toLowerCase()));
+}
+
+function parseBudgetFromQuestion(text) {
+  const fallback = { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
+  try {
+    const parsed = extractNaturalSearchFilters(text, {}, 'any', {});
+    return {
+      maxBudgetUgx: Number(parsed?.maxBudgetUgx || 0) || 0,
+      budgetPeriod: parsed?.budgetPeriod || null,
+      convertedFromUsd: Boolean(parsed?.convertedFromUsd)
+    };
+  } catch (_error) {
+    return fallback;
+  }
+}
+
+function inferAffordabilitySearchType(text, filters = {}) {
+  const existing = normalizeListingType(filters.searchType || 'any');
+  if (existing && existing !== 'any') return existing;
+  const clean = normalizeInput(text).toLowerCase();
+  if (/\b(student|hostel|campus|university|makerere|kyambogo|ucu|mubs)\b/i.test(clean)) return 'student';
+  if (/\b(office|shop|commercial|warehouse|retail|business)\b/i.test(clean)) return 'commercial';
+  if (/\b(land|plot|acre|acres)\b/i.test(clean)) return 'land';
+  if (/\b(buy|sale|purchase|own|for\s+sale)\b/i.test(clean)) return 'sale';
+  if (/\b(rent|rental|lease|stay|live|room|apartment|flat|house|home)\b/i.test(clean)) return 'rent';
+  return 'any';
+}
+
+function affordabilityExactLabel(lang, exactMatch = true) {
+  const code = resolveLangCode(lang);
+  const copy = {
+    en: exactMatch ? 'Here are the cheapest live makaug matches I found.' : 'I did not find an exact match inside that budget, so here are the cheapest live makaug options I can see.',
+    lg: exactMatch ? 'Zino ze live makaug matches ezisinga obuseere ze nfubye.' : 'Sirabye exact match mu budget eyo, naye zino ze live makaug options ezisinga obuseere ze ndaba.',
+    sw: exactMatch ? 'Hizi ndizo match za makaug za bei nafuu zaidi nilizopata.' : 'Sijapata match kamili ndani ya budget hiyo, kwa hiyo hizi ndizo chaguo za makaug za bei nafuu zaidi ninazoona.',
+    ac: exactMatch ? 'Man aye live makaug matches ma price piny loyo ma anongo.' : 'Pe anongo exact match i budget meno, ento man aye makaug options ma price piny loyo ma aneno.',
+    ny: exactMatch ? 'Ezi nizo live makaug matches ezirikukira ahansi omu beeyi ezi nabonye.' : 'Tinsangire exact match omu budget egyo, kwonka ezi nizo options za makaug ezirikukira ahansi omu beeyi.',
+    rn: exactMatch ? 'Izi ni live makaug matches zifise igiciro gito cane nabonye.' : 'Sinabonye exact match muri iyo budget, rero izi ni options za makaug zifise igiciro gito cane.',
+    sm: exactMatch ? 'Zino ze live makaug matches ezisinga obuseere ze nfubye.' : 'Sirabye exact match mu budget eyo, naye zino ze live makaug options ezisinga obuseere ze ndaba.',
+    am: exactMatch ? 'እነዚህ ያገኘኋቸው በዝቅተኛ ዋጋ ያሉ የ makaug ቀጥታ ውጤቶች ናቸው።' : 'በዚያ በጀት ውስጥ ትክክለኛ ውጤት አላገኘሁም፤ ስለዚህ ያየሁትን በዝቅተኛ ዋጋ ያሉ የ makaug አማራጮች እያሳየሁ ነው።'
+  };
+  return copy[code] || copy.en;
+}
+
+function formatCheapestAreasLine(lang, areaStats = []) {
+  if (!areaStats.length) return '';
+  const code = resolveLangCode(lang);
+  const heading = {
+    en: 'Cheapest areas from live listings',
+    lg: 'Ebitundu ebisinga obuseere mu live listings',
+    sw: 'Maeneo ya bei nafuu zaidi kutoka live listings',
+    ac: 'Areas ma price piny loyo i live listings',
+    ny: 'Ebitundu ebirikukira ahansi omu beeyi omu live listings',
+    rn: 'Ahantu hafise ibiciro bito cane muri live listings',
+    sm: 'Ebitundu ebisinga obuseere mu live listings',
+    am: 'ከቀጥታ listings ውስጥ በዝቅተኛ ዋጋ ያሉ አካባቢዎች'
+  }[code] || 'Cheapest areas from live listings';
+  const rows = areaStats.slice(0, 5).map((row, index) => {
+    const area = [row.area_label, row.district].filter(Boolean).join(', ');
+    return `${index + 1}. ${area || 'Uganda'} - from ${formatPrice(row.min_price, row.price_period || '')} (${row.listing_count} listing${Number(row.listing_count) === 1 ? '' : 's'})`;
+  });
+  return `\n${heading}:\n${rows.join('\n')}\n`;
+}
+
+function formatAffordabilityAdviceMessage(lang, rows = [], areaStats = [], filters = {}, { exactMatch = true } = {}) {
+  const searchType = normalizeListingType(filters.searchType || 'any');
+  const budget = Number(filters.maxBudgetUgx || 0) || 0;
+  const type = searchType && searchType !== 'any' ? typeLabel(searchType, lang) : typeLabel('any', lang);
+  const filterBits = [type];
+  if (budget > 0) filterBits.push(`up to ${formatPrice(budget, filters.budgetPeriod || '')}`);
+  if (Number(filters.bedsMin || 0) > 0) filterBits.push(`${Number(filters.bedsMin)}+ bed`);
+  if (filters.propertyType) filterBits.push(filters.propertyType);
+  const fxNote = filters.convertedFromUsd ? '\nUsing approx FX: 1 USD = 3,800 UGX for matching.\n' : '';
+  const header = `${whatsappBrandHeader('Affordability search')}\n${affordabilityExactLabel(lang, exactMatch)}\n🎯 ${filterBits.join(' • ')}${fxNote}`;
+  const areaLine = formatCheapestAreasLine(lang, areaStats);
+  if (!rows.length) {
+    return `${header}${areaLine}\nI do not have live approved listings to show for this yet. Reply with another budget, area, or property type and I will check again.\n${t(lang, 'menuHint')}`;
+  }
+  return `${header}${areaLine}\n${formatPropertySearchMessage(lang, rows, filters.area || 'Any area', searchType)}`;
+}
+
 function canonicalAreaText(value) {
   const clean = normalizeInput(value);
   if (!clean) return '';
@@ -2675,6 +2925,9 @@ function listingMatchesPropertyType(row, propertyType) {
 function addWhatsappPublicListingFilter(values, alias = 'p') {
   const safeAlias = /^[a-z_][a-z0-9_]*$/i.test(String(alias || '')) ? alias : 'p';
   const filters = [];
+
+  values.push(MIN_PUBLIC_WHATSAPP_PRICE_UGX);
+  filters.push(`(${safeAlias}.price IS NULL OR ${safeAlias}.price >= $${values.length})`);
 
   WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS.forEach((marker) => {
     values.push(`%${marker}%`);
@@ -2733,6 +2986,178 @@ function mergeSearchRows(primaryRows = [], websiteRows = [], limit = WHATSAPP_PR
     rows.push(row);
   });
   return rows;
+}
+
+function buildWhatsappAffordableWhere(filters = {}, { includeBudget = true } = {}) {
+  const values = ['approved'];
+  let where = 'WHERE p.status = $1 AND p.price IS NOT NULL AND p.price > 0';
+  where += addWhatsappPublicListingFilter(values, 'p');
+
+  const listingType = normalizeListingType(filters.searchType || 'any');
+  if (listingType !== 'any') {
+    if (listingType === 'student') {
+      where += ` AND (
+        p.listing_type = 'student'
+        OR p.students_welcome = TRUE
+        OR p.title ILIKE '%student%'
+        OR p.title ILIKE '%hostel%'
+        OR p.description ILIKE '%student%'
+        OR p.description ILIKE '%hostel%'
+        OR COALESCE(p.property_type, '') ILIKE '%hostel%'
+      )`;
+    } else {
+      values.push(listingType);
+      where += ` AND p.listing_type = $${values.length}`;
+    }
+  }
+
+  const area = normalizeInput(filters.area);
+  if (area && area.toLowerCase() !== 'any') {
+    const regionDistricts = getRegionDistricts(area);
+    if (regionDistricts.length) {
+      values.push(regionDistricts);
+      const regionIdx = values.length;
+      values.push(`%${area}%`);
+      const qIdx = values.length;
+      where += ` AND (
+        p.district = ANY($${regionIdx})
+        OR COALESCE(p.extra_fields->>'region', '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
+      )`;
+    } else {
+      values.push(`%${area}%`);
+      const qIdx = values.length;
+      where += ` AND (
+        p.district ILIKE $${qIdx}
+        OR p.area ILIKE $${qIdx}
+        OR p.title ILIKE $${qIdx}
+        OR COALESCE(p.address, '') ILIKE $${qIdx}
+        OR COALESCE(p.description, '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'city', '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'neighborhood', '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'street_name', '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'region', '') ILIKE $${qIdx}
+        OR COALESCE(p.extra_fields->>'resolved_location_label', '') ILIKE $${qIdx}
+      )`;
+    }
+  }
+
+  if (includeBudget && Number.isFinite(Number(filters.maxBudgetUgx)) && Number(filters.maxBudgetUgx) > 0) {
+    values.push(Number(filters.maxBudgetUgx));
+    where += ` AND p.price <= $${values.length}`;
+  }
+
+  if (Number.isFinite(Number(filters.bedsMin)) && Number(filters.bedsMin) > 0) {
+    values.push(Number(filters.bedsMin));
+    where += ` AND COALESCE(p.bedrooms, 0) >= $${values.length}`;
+  }
+
+  const propertyType = normalizeInput(filters.propertyType);
+  if (propertyType) {
+    values.push(`%${propertyType}%`);
+    const typeIdx = values.length;
+    where += ` AND (
+      COALESCE(p.property_type, '') ILIKE $${typeIdx}
+      OR p.title ILIKE $${typeIdx}
+      OR p.description ILIKE $${typeIdx}
+    )`;
+  }
+
+  return { where, values };
+}
+
+async function findAffordableWhatsappListings(filters = {}, { includeBudget = true } = {}) {
+  const { where, values } = buildWhatsappAffordableWhere(filters, { includeBudget });
+  values.push(WHATSAPP_PROPERTY_RESULT_LIMIT);
+  const limitIdx = values.length;
+
+  const result = await db.query(
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+            COUNT(*) OVER() AS total_count,
+            img.url AS primary_image_url
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
+       FROM property_images
+       WHERE property_id = p.id
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+       LIMIT 1
+     ) img ON TRUE
+     ${where}
+     ORDER BY p.price ASC NULLS LAST, p.created_at DESC
+     LIMIT $${limitIdx}`,
+    values
+  );
+
+  return result.rows;
+}
+
+async function findAffordableWhatsappAreaStats(filters = {}, { includeBudget = true } = {}) {
+  const { where, values } = buildWhatsappAffordableWhere(filters, { includeBudget });
+  values.push(5);
+  const limitIdx = values.length;
+  const result = await db.query(
+    `SELECT
+       COALESCE(NULLIF(TRIM(p.area), ''), NULLIF(TRIM(p.district), ''), 'Uganda') AS area_label,
+       NULLIF(TRIM(p.district), '') AS district,
+       MIN(p.price) AS min_price,
+       (ARRAY_AGG(NULLIF(p.price_period, '') ORDER BY p.price ASC NULLS LAST))[1] AS price_period,
+       COUNT(*)::int AS listing_count
+     FROM properties p
+     ${where}
+     GROUP BY area_label, district
+     ORDER BY MIN(p.price) ASC NULLS LAST, COUNT(*) DESC
+     LIMIT $${limitIdx}`,
+    values
+  );
+  return result.rows;
+}
+
+async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }) {
+  const normalizedFilters = {
+    ...filters,
+    searchType: inferAffordabilitySearchType(text, filters)
+  };
+  if (!Number(normalizedFilters.maxBudgetUgx || 0)) {
+    const parsedBudget = parseBudgetFromQuestion(text);
+    normalizedFilters.maxBudgetUgx = parsedBudget.maxBudgetUgx;
+    normalizedFilters.budgetPeriod = normalizedFilters.budgetPeriod || parsedBudget.budgetPeriod;
+    normalizedFilters.convertedFromUsd = Boolean(normalizedFilters.convertedFromUsd || parsedBudget.convertedFromUsd);
+  }
+
+  let rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: true });
+  let areaStats = await findAffordableWhatsappAreaStats(normalizedFilters, { includeBudget: true });
+  let exactMatch = true;
+
+  if (!rows.length && Number(normalizedFilters.maxBudgetUgx || 0) > 0) {
+    exactMatch = false;
+    rows = await findAffordableWhatsappListings(normalizedFilters, { includeBudget: false });
+    areaStats = await findAffordableWhatsappAreaStats(normalizedFilters, { includeBudget: false });
+  }
+
+  await logPropertySearchRequest({
+    userPhone: phone,
+    searchType: normalizedFilters.searchType || 'any',
+    queryText: text,
+    location: null,
+    resultRows: rows,
+    usedNearestFallback: !exactMatch,
+    fallbackReason: exactMatch ? null : 'affordability_budget_relaxed'
+  });
+
+  await patchSessionData(phone, {
+    last_affordability_search: {
+      search_type: normalizedFilters.searchType || 'any',
+      max_budget_ugx: normalizedFilters.maxBudgetUgx || null,
+      exact_match: exactMatch,
+      query: text,
+      created_at: new Date().toISOString()
+    },
+    pending_search_filters: null,
+    search_type: normalizedFilters.searchType || 'any'
+  });
+
+  return formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
 }
 
 async function findPropertiesByNaturalFilters(filters = {}) {
@@ -4940,14 +5365,21 @@ function contextualPageRouteFromMessage(text = '') {
   return '';
 }
 
-function isUgNlisLandVerificationIntent(text = '') {
+function isLandSafetyQuestion(text = '') {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return false;
-  if (/\b(ugnlis|national land information system|land title search|title search|search letter|official land search|verify (?:land|title)|land verification|track (?:land )?transaction|volume and folio|folio number|block and plot)\b/i.test(clean)) {
-    return true;
-  }
-  return /\b(?:land|plot|property|listing)\b.{0,120}\b(?:title|tenure|ownership|official search|verification|verify|search steps)\b/i.test(clean)
-    || /\b(?:title|tenure|ownership|official search|verification|verify|search steps)\b.{0,120}\b(?:land|plot|property|listing)\b/i.test(clean);
+  return /\b(?:land|plot|property|listing)\b.{0,120}\b(?:title|tenure|ownership|documents?|paperwork|fraud|safety|due diligence|lawyer|legal)\b/i.test(clean)
+    || /\b(?:title|tenure|ownership|documents?|paperwork|fraud|safety|due diligence|lawyer|legal)\b.{0,120}\b(?:land|plot|property|listing)\b/i.test(clean);
+}
+
+function landSafetyReply(lang) {
+  const code = resolveLangCode(lang);
+  const messages = {
+    en: `${whatsappBrandHeader('Land safety')}\nMakaug helps you search and list land on the marketplace. We do not provide official title checks or legal clearance.\n\nFor any land purchase, inspect the property, review documents with your own lawyer or trusted professional, and use traceable payments only.\n\nBrowse land: ${HOME_URL}/#page-land\nSafety guide: ${HOME_URL}/safety\n\n${t(code, 'menuHint')}`,
+    lg: `${whatsappBrandHeader('Obukuumi bw\'ettaka')}\nMakaug ekuyamba okunoonya n'okulaga ettaka ku marketplace. Tetukola kukakasa title okutongole oba legal clearance.\n\nNga ogula ettaka, laba ekifo, weetegereze ebiwandiiko n'omuwabuzi wo ow'amateeka oba omuntu gwe weesiga, era kozesa payments ezirondoolerwa zokka.\n\nLaba ettaka: ${HOME_URL}/#page-land\nSafety guide: ${HOME_URL}/safety\n\n${t(code, 'menuHint')}`,
+    sw: `${whatsappBrandHeader('Usalama wa ardhi')}\nMakaug hukusaidia kutafuta na kuweka ardhi kwenye marketplace. Hatufanyi ukaguzi rasmi wa hati au idhini ya kisheria.\n\nKabla ya kununua ardhi, tembelea eneo, kagua nyaraka na mwanasheria wako au mtaalamu unayemwamini, na tumia malipo yanayofuatilika tu.\n\nTazama ardhi: ${HOME_URL}/#page-land\nSafety guide: ${HOME_URL}/safety\n\n${t(code, 'menuHint')}`
+  };
+  return messages[code] || messages.en;
 }
 
 // Step machine
@@ -4978,7 +5410,16 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const globalRoute = contextualRoute || intentMenuRoute(intentResult?.intent);
   const globalIntentConfidence = contextualRoute ? 1 : Number(intentResult?.confidence || 0);
   const routeExplicitListingStart = async () => {
-    const inferredListingType = inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
+    const draftHints = extractSellerListingDraftHints(cleanBody, intentResult?.entities || {});
+    const inferredListingType = draftHints.listing_type || inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
+    const mediaPatch = isListingPhotoMedia(runtime.mediaType, mediaUrl)
+      ? appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1)
+      : { photos: draft.photos || [], added: 0 };
+    const draftPatch = {
+      ...draftHints,
+      ...(inferredListingType ? { listing_type: inferredListingType } : {}),
+      ...(mediaPatch.added > 0 ? { photos: mediaPatch.photos } : {})
+    };
     await patchSessionData(phone, {
       idle_resume_prompt: null,
       pending_search_filters: null,
@@ -4986,11 +5427,35 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       search_type: null,
       listing_start_captured_at: new Date().toISOString(),
       listing_start_source_step: step,
-      listing_start_text: cleanBody
+      listing_start_text: cleanBody,
+      listing_start_natural_seller: isNaturalSellerListingStatement(cleanBody),
+      listing_start_media_count: mediaPatch.added || 0
     });
+    if (Object.keys(draftPatch).length) {
+      await patchDraft(phone, draftPatch);
+    }
     if (inferredListingType) {
-      await patchDraft(phone, { listing_type: inferredListingType });
-      return respond(t(lang, 'askOwnership'), 'ownership');
+      const reply = listingStartReply(lang, inferredListingType, draftHints);
+      captureWhatsappLearningAsync({
+        eventName: 'whatsapp_listing_intent_recovered',
+        phone,
+        language: lang,
+        inputText: cleanBody,
+        responseText: reply,
+        entities: {
+          listing_type: inferredListingType,
+          area: draftHints.area || null,
+          land_size_text: draftHints.land_size_text || null,
+          media_count: mediaPatch.added || 0
+        },
+        payload: {
+          source_step: step,
+          natural_seller_statement: isNaturalSellerListingStatement(cleanBody),
+          route: 'listing_start'
+        },
+        dedupeKey: `whatsapp:listing-recovered:${phone}:${crypto.createHash('sha1').update(cleanBody).digest('hex').slice(0, 16)}`
+      });
+      return respond(reply, 'ownership');
     }
     return respond(t(lang, 'askListingType'), 'listing_type');
   };
@@ -5044,12 +5509,35 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond('✅ You are now subscribed for makaug updates. Reply MENU to continue.', 'main_menu');
   }
 
-  if (isUgNlisLandVerificationIntent(cleanBody)) {
+  if (isDeletedWhatsappMessagePlaceholder(cleanBody) && !mediaUrl && !sharedLocation) {
     await patchSessionData(phone, {
-      ugnlis_official_info_requested_at: new Date().toISOString(),
+      deleted_message_placeholder_ignored_at: new Date().toISOString(),
+      deleted_message_placeholder_step: step
+    });
+    captureWhatsappLearningAsync({
+      eventName: 'whatsapp_deleted_message_ignored',
+      phone,
+      language: lang,
+      inputText: cleanBody,
+      responseText: '',
+      entities: {
+        step
+      },
+      payload: {
+        reason: 'whatsapp_deleted_placeholder',
+        current_step: step
+      },
+      outcome: 'ignored'
+    });
+    return respond('', step);
+  }
+
+  if (!explicitListingStart && isLandSafetyQuestion(cleanBody)) {
+    await patchSessionData(phone, {
+      land_safety_requested_at: new Date().toISOString(),
       idle_resume_prompt: null
     });
-    return respond(buildUgNlisAssistantReply({ language: lang, baseUrl: HOME_URL }), 'main_menu');
+    return respond(landSafetyReply(lang), 'main_menu');
   }
 
   if (
@@ -5095,6 +5583,56 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   if (explicitListingStart) {
     return routeExplicitListingStart();
+  }
+
+  const listingFlowSteps = [
+    'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
+    'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
+    'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number',
+    'ask_phone', 'verify_otp'
+  ];
+  const hasListingContext = Boolean(
+    draft.listing_type
+    || sessionData.listing_start_captured_at
+    || sessionData.listing_start_text
+    || sessionData.last_listing_media_recovered_at
+  );
+  if (
+    isListingPhotoMedia(runtime.mediaType, mediaUrl)
+    && step !== 'photos'
+    && step !== 'ask_selfie'
+    && (listingFlowSteps.includes(step) || hasListingContext)
+  ) {
+    const mediaPatch = appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1);
+    if (mediaPatch.added > 0) {
+      await patchDraft(phone, { photos: mediaPatch.photos });
+      await patchSessionData(phone, {
+        last_listing_media_recovered_at: new Date().toISOString(),
+        last_listing_media_recovered_step: step,
+        last_listing_media_recovered_count: mediaPatch.added
+      });
+    }
+    const count = mediaPatch.photos.length;
+    const reply = `${tt(lang, 'photoReceived', { count })}\n\n${stepReminderMessage(lang, step)}`;
+    captureWhatsappLearningAsync({
+      eventName: 'whatsapp_listing_media_attached',
+      phone,
+      language: lang,
+      inputText: cleanBody || `[${runtime.mediaType || 'image'}]`,
+      responseText: reply,
+      entities: {
+        step,
+        photo_count: count,
+        added: mediaPatch.added
+      },
+      payload: {
+        route: 'listing_media_recovery',
+        current_step: step,
+        media_type: runtime.mediaType || null
+      },
+      dedupeKey: `whatsapp:listing-media:${phone}:${crypto.createHash('sha1').update(String(mediaUrl || '')).digest('hex').slice(0, 16)}`
+    });
+    return respond(reply, step);
   }
 
   let actionableStepReply = isActionableStepReply(step, cleanBody);
@@ -5186,6 +5724,29 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       return respond(formatAgentSearchMessage(lang, rows, keywords[0]), 'main_menu');
     }
     return respond(t(lang, 'askAgentArea'), 'agent_area');
+  }
+
+  if (
+    ['greeting', 'main_menu', 'search_type', 'search_area'].includes(step)
+    && cleanBody.length > 3
+    && isAffordabilityAdviceQuestion(cleanBody)
+  ) {
+    const affordabilityFilters = await resolveNaturalSearchFilters({
+      text: cleanBody,
+      entities: intentResult?.entities || {},
+      fallbackType: sessionData.search_type || 'any',
+      language: lang,
+      sessionData
+    });
+    const reply = await buildAffordabilityAdviceReply({
+      phone,
+      text: cleanBody,
+      lang,
+      filters: affordabilityFilters.hasSignal
+        ? affordabilityFilters
+        : { searchType: sessionData.search_type || 'any' }
+    });
+    return respond(reply, 'main_menu');
   }
 
   if (
@@ -7484,6 +8045,9 @@ module.exports.__test = {
   normalizeBridgeInboundKey,
   shouldRunWhatsappLanguageAi,
   shouldUseAiNaturalSearchExtraction,
+  isAffordabilityAdviceQuestion,
+  inferAffordabilitySearchType,
+  formatAffordabilityAdviceMessage,
   formatPropertySearchMessage,
   whatsappSearchResultsUrl,
   WHATSAPP_PROPERTY_RESULT_LIMIT
