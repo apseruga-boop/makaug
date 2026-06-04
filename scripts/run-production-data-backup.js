@@ -17,6 +17,19 @@ function required(name, fallback) {
   return value;
 }
 
+function requiredUrl(name) {
+  const raw = required(name);
+  try {
+    const parsed = new URL(raw);
+    if (!/^https?:$/.test(parsed.protocol) || !parsed.host) {
+      throw new Error('invalid protocol or host');
+    }
+    return parsed;
+  } catch {
+    throw new Error(`${name} must be a full URL, for example https://<account-id>.r2.cloudflarestorage.com`);
+  }
+}
+
 function optionalBool(name, fallback = false) {
   const value = process.env[name];
   if (!value) return fallback;
@@ -85,7 +98,7 @@ function canonicalHeaders(headers) {
 }
 
 async function uploadFile({ filePath, key, contentType }) {
-  const endpoint = new URL(required('S3_ENDPOINT'));
+  const endpoint = requiredUrl('S3_ENDPOINT');
   const region = process.env.S3_REGION || 'auto';
   const bucket = required('DATA_BACKUP_BUCKET', process.env.S3_BUCKET);
   const accessKey = required('S3_ACCESS_KEY_ID');
