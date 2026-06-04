@@ -68,6 +68,22 @@ function requireNames(area, names) {
   return true;
 }
 
+function validateUrl(area, name) {
+  if (!isSet(name)) return false;
+  try {
+    const parsed = new URL(value(name));
+    if (!/^https?:$/.test(parsed.protocol) || !parsed.host) {
+      throw new Error('invalid protocol or host');
+    }
+    return true;
+  } catch {
+    add(area, 'blocker', `${name} must be a full URL, for example https://<account-id>.r2.cloudflarestorage.com`, {
+      current_status: publicStatus(name)
+    });
+    return false;
+  }
+}
+
 function warnIfPlaceholder(area, names) {
   const placeholders = names.filter((name) => publicStatus(name) === 'placeholder');
   if (placeholders.length) {
@@ -98,7 +114,9 @@ function checkMediaStorage() {
     return;
   }
   if (requireNames('media_storage', ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])) {
-    add('media_storage', 'ok', 'S3-compatible media storage is configured.');
+    if (validateUrl('media_storage', 'S3_ENDPOINT')) {
+      add('media_storage', 'ok', 'S3-compatible media storage is configured.');
+    }
   }
   if (!isSet('S3_PUBLIC_BASE_URL')) {
     add('media_storage', 'warning', 'S3_PUBLIC_BASE_URL is not set. Public listing images may need signed/proxied URLs instead of direct CDN URLs.');
@@ -112,7 +130,9 @@ function checkBackups() {
     return;
   }
   if (requireNames('backups', ['DATA_BACKUP_BUCKET', 'DATA_BACKUP_PREFIX', 'DATA_BACKUP_LOCAL_PATHS', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])) {
-    add('backups', 'ok', 'Production backup target is configured.');
+    if (validateUrl('backups', 'S3_ENDPOINT')) {
+      add('backups', 'ok', 'Production backup target is configured.');
+    }
   }
   if (value('DATA_BACKUP_BUCKET') && value('S3_BUCKET') && value('DATA_BACKUP_BUCKET') === value('S3_BUCKET')) {
     add('backups', 'warning', 'Use a separate private bucket for backups instead of the public media bucket.');
