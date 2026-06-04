@@ -5,6 +5,7 @@ const path = require('path');
 const whatsappRouteSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'whatsapp.js'), 'utf8');
 
 assert(whatsappRouteSource.includes('const WHATSAPP_PROPERTY_RESULT_LIMIT = 10'), 'WhatsApp property search should cap customer replies at 10 listings');
+assert(whatsappRouteSource.includes('const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000'), 'WhatsApp public search should define a minimum plausible price guard');
 assert(whatsappRouteSource.includes('ORDER BY p.created_at DESC'), 'WhatsApp property searches should order listings by newest listed date first');
 assert(whatsappRouteSource.includes('COUNT(*) OVER() AS total_count'), 'WhatsApp property searches should know when more matches exist');
 assert(whatsappRouteSource.includes('LIMIT $'), 'WhatsApp property searches should bind the result limit instead of hard-coding five rows');
@@ -14,5 +15,6 @@ assert(whatsappRouteSource.includes('totalMatches > visibleRows.length'), 'Forma
 assert(whatsappRouteSource.includes('whatsappSearchResultsUrl(searchType, location)'), 'More-results message should link to filtered website results');
 assert(whatsappRouteSource.includes('`${HOME_URL}/#page-sale${query ? `?${query}` : \'\'}'), 'More-results URLs should open the public listings page');
 assert(whatsappRouteSource.includes('am: {') && whatsappRouteSource.includes("filter: 'ማጣሪያ'"), 'Formatter should have Amharic result-card copy instead of English-only copy');
+assert(whatsappRouteSource.includes('price IS NULL OR ${safeAlias}.price >= $'), 'Public WhatsApp result filters should suppress implausibly tiny scraped prices');
 
 console.log('WhatsApp search result limit tests passed');
