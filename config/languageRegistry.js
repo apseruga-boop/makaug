@@ -118,6 +118,21 @@ const LANGUAGE_REGISTRY = {
     translationStatus: 'partial',
     providerSupport: { humanTable: false, llm: true, externalApi: false },
     humanReviewRequired: true
+  },
+  ar: {
+    code: 'ar',
+    legacyCode: 'ar',
+    displayName: 'Arabic',
+    nativeName: 'العربية',
+    aliases: ['9', 'ar', 'ara', 'arabic', 'عربي', 'العربية'],
+    direction: 'rtl',
+    supportedInWeb: true,
+    supportedInWhatsApp: true,
+    supportedInAI: true,
+    fallbackLanguage: 'en',
+    translationStatus: 'partial',
+    providerSupport: { humanTable: false, llm: true, externalApi: false },
+    humanReviewRequired: true
   }
 };
 

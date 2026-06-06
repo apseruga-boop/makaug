@@ -1,4 +1,4 @@
-import { openai } from '../config/openai';
+import { getOpenAiClient } from '../config/openai';
 import { SUPPORTED_LANGUAGES, TOP_LEVEL_MENU } from '../utils/constants';
 import type { SupportedLanguage } from '../types/domain';
 
@@ -48,7 +48,7 @@ type PhraseKey =
 
 const ENGLISH: Record<PhraseKey, string> = {
   choose_language:
-    'Welcome to makaug WhatsApp Assistant. Choose your language:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    'Welcome to makaug WhatsApp Assistant. Choose your language:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic\n9. Arabic',
   language_set: 'Language saved. You can type "change language" any time.',
   main_menu: `What would you like to do?\n${TOP_LEVEL_MENU.join('\n')}`,
   unknown: 'I did not fully understand that. I can still help. Please choose from the menu below.',
@@ -138,6 +138,32 @@ const TRANSLATIONS: Record<SupportedLanguage, Record<PhraseKey, string>> = {
     main_menu: `Oyagala okukola ki?\n${TOP_LEVEL_MENU.join('\n')}`,
     unknown: 'Sikitegedde bulungi. Londa okuva ku menu.',
     support_intro: 'Support: +256 770 646 879 oba info@makaug.com'
+  }),
+  am: pack({
+    language_set: 'ቋንቋ ተቀምጧል። በማንኛውም ጊዜ "change language" ብለው መጻፍ ይችላሉ።',
+    main_menu: `ምን ማድረግ ይፈልጋሉ?\n${TOP_LEVEL_MENU.join('\n')}`,
+    unknown: 'ሙሉ በሙሉ አልተረዳሁም። አሁንም ልረዳዎ እችላለሁ። እባክዎ ከምናሌው ይምረጡ።',
+    ask_search_purpose: 'መግዛት፣ መከራየት ወይም መመልከት ይፈልጋሉ? (buy/rent/browse)',
+    support_intro: 'Support: +256 770 646 879 ወይም info@makaug.com'
+  }),
+  ar: pack({
+    choose_language:
+      'مرحباً بك في مساعد makaug على WhatsApp. اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic\n9. العربية',
+    language_set: 'تم حفظ اللغة. يمكنك كتابة "change language" في أي وقت.',
+    main_menu: `ماذا تريد أن تفعل؟\n${TOP_LEVEL_MENU.join('\n')}`,
+    unknown: 'لم أفهم ذلك بالكامل. ما زلت أستطيع المساعدة. يرجى الاختيار من القائمة.',
+    ask_search_purpose: 'هل تبحث عن شراء أو إيجار أو تصفح؟ (buy/rent/browse)',
+    ask_search_category: 'اختر الفئة: للبيع، للإيجار، طلاب، تجاري، أرض.',
+    ask_area_or_location: 'أرسل اسم المنطقة أو موقعك الحالي على WhatsApp.',
+    ask_budget: 'ما هي ميزانيتك بالشلن الأوغندي؟',
+    ask_listing_category: 'ما فئة العقار الذي تريد إدراجه؟ (For Sale, To Rent, Students, Commercial, Land)',
+    ask_title: 'أرسل عنواناً قصيراً للعقار.',
+    ask_district: 'في أي district يقع العقار؟',
+    ask_area: 'ما المنطقة أو الحي؟',
+    ask_price: 'ما السعر المطلوب بالشلن الأوغندي؟',
+    ask_description: 'اكتب وصفاً واضحاً للعقار، يشمل الميزات والحالة والمعالم القريبة.',
+    listing_submitted: 'تم إرسال إعلانك للمراجعة. سنتواصل معك على WhatsApp أو email خلال 24 ساعة. Ref: {ref}.',
+    support_intro: 'يمكنك التواصل مع الدعم على +256 770 646 879 أو info@makaug.com'
   })
 };
 
@@ -168,7 +194,19 @@ const languageMap: Record<string, SupportedLanguage> = {
   lus: 'sm',
   xog: 'sm',
   lusoga: 'sm',
-  sm: 'sm'
+  sm: 'sm',
+  '8': 'am',
+  amharic: 'am',
+  amharinya: 'am',
+  amhara: 'am',
+  'አማርኛ': 'am',
+  am: 'am',
+  '9': 'ar',
+  arabic: 'ar',
+  ar: 'ar',
+  ara: 'ar',
+  'عربي': 'ar',
+  'العربية': 'ar'
 };
 
 export class LanguageService {
@@ -195,6 +233,7 @@ export class LanguageService {
     const fromCache = this.dynamicCache.get(cacheKey);
     if (fromCache) return fromCache;
 
+    const openai = getOpenAiClient();
     if (!openai) return text;
 
     try {
@@ -204,7 +243,7 @@ export class LanguageService {
           {
             role: 'system',
             content:
-              'Translate the user text to the requested Ugandan language only. Keep formatting, links, and list numbering. Return translation only. Rukiga and Runyankole are not Kinyarwanda; do not substitute Kinyarwanda. If you cannot confidently translate to the requested language, return the original English text.'
+              'Translate the user text to the requested supported makaug language only. Keep formatting, links, and list numbering. Return translation only. Rukiga and Runyankole are not Kinyarwanda; do not substitute Kinyarwanda. Preserve right-to-left Arabic readability. If you cannot confidently translate to the requested language, return the original English text.'
           },
           {
             role: 'user',
