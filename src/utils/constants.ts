@@ -7,7 +7,9 @@ export const SUPPORTED_LANGUAGES: Array<{ code: SupportedLanguage; label: string
   { code: 'ac', label: 'Acholi' },
   { code: 'ny', label: 'Runyankole' },
   { code: 'rn', label: 'Rukiga' },
-  { code: 'sm', label: 'Lusoga' }
+  { code: 'sm', label: 'Lusoga' },
+  { code: 'am', label: 'Amharic' },
+  { code: 'ar', label: 'Arabic' }
 ];
 
 export const TOP_LEVEL_MENU = [

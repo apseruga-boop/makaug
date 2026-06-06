@@ -1078,7 +1078,7 @@ const I18N_UI = {
     pageSaved: "Saved Properties",
     pageAccount: "My Account",
     langLabel: "Language",
-    langBanner: "Use makaug in 8 languages",
+    langBanner: "Use makaug in 9 languages",
     areaOnly: "This area only",
     withinLabel: "Within",
     mileUnitSingular: "mile",
@@ -1229,7 +1229,7 @@ const I18N_UI = {
     pageSaved: "Property Zo Ezaterekedwa",
     pageAccount: "Akaawunti Yange",
     langLabel: "Olulimi",
-    langBanner: "Kozesa makaug mu nnimi 8",
+    langBanner: "Kozesa makaug mu nnimi 9",
     areaOnly: "Ekitundu kino kyokka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu oba landmark",
@@ -1357,7 +1357,7 @@ const I18N_UI = {
     pageSaved: "Mali Zilizohifadhiwa",
     pageAccount: "Akaunti Yangu",
     langLabel: "Lugha",
-    langBanner: "Tumia makaug kwa lugha 8",
+    langBanner: "Tumia makaug kwa lugha 9",
     areaOnly: "Eneo hili tu",
     anyUniversity: "Chuo chochote",
     phSale: "Jiji, eneo au alama maarufu",
@@ -1395,7 +1395,7 @@ const I18N_UI = {
     heroTitleHtml: "Nong <span class=\"text-green-300\">maka</span> ma ber",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Yeny",
-    langBanner: "Tii ki makaug i lok 8 me Uganda",
+    langBanner: "Tii ki makaug i lok 9 me Uganda",
     areaOnly: "Kabedo manok",
     anyUniversity: "Yunivasiti weng",
     phSale: "Kibuga, kabedo",
@@ -1427,7 +1427,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonya <span class=\"text-green-300\">maka</span> yo enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shanga",
-    langBanner: "Kozesa makaug omu ndimi 8",
+    langBanner: "Kozesa makaug omu ndimi 9",
     areaOnly: "Aho honyine",
     anyUniversity: "Yunivasite yona",
     phSale: "Ekibuga, ekitundu",
@@ -1459,7 +1459,7 @@ const I18N_UI = {
     heroTitleHtml: "Shaka <span class=\"text-green-300\">maka</span> yawe enungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Shaka",
-    langBanner: "Koresa makaug omu ndimi 8",
+    langBanner: "Koresa makaug omu ndimi 9",
     areaOnly: "Akarere aka gusa",
     anyUniversity: "Kaminuza yose",
     phSale: "Omujyi, akarere",
@@ -1491,7 +1491,7 @@ const I18N_UI = {
     heroTitleHtml: "Noonia <span class=\"text-green-300\">amaka</span> go amalungi",
     heroSubtitle: "Property search engine for Uganda: homes, rent, land, student rooms, and social-source listings.",
     heroSearch: "Noonia",
-    langBanner: "Kozesa makaug mu nnimi 8",
+    langBanner: "Kozesa makaug mu nnimi 9",
     areaOnly: "Ekitundu kino kyonka",
     anyUniversity: "Yunivasite yonna",
     phSale: "Ekibuga, ekitundu",
@@ -2065,7 +2065,7 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   pageSaved: "የተቀመጡ ንብረቶች",
   pageAccount: "መለያዬ",
   langLabel: "ቋንቋ",
-  langBanner: "makaugን በ8 ቋንቋዎች ይጠቀሙ",
+  langBanner: "makaugን በ9 ቋንቋዎች ይጠቀሙ",
   areaOnly: "ይህ አካባቢ ብቻ",
   withinLabel: "ውስጥ",
   mileUnitSingular: "ማይል",
@@ -2089,6 +2089,125 @@ I18N_UI.am = Object.assign({}, I18N_UI.en, {
   languageSet: "ቋንቋ ተቀይሯል"
 });
 
+I18N_UI.ar = Object.assign({}, I18N_UI.en, {
+  siteTitle: "makaug.com | بوابة عقارات أوغندا",
+  brandSubtitle: "عقارات أوغندا",
+  saved: "المحفوظات",
+  signIn: "تسجيل الدخول",
+  advertiseProperty: "أدرج عقاراً",
+  navSale: "للبيع",
+  navRent: "للإيجار",
+  navStudents: "الطلاب",
+  navCommercial: "تجاري",
+  navLand: "أرض",
+  navBrokers: "ابحث عن وسيط",
+  navMortgage: "حاسبة التمويل",
+  navAI: "اكتشف روبوت AI",
+  navFraud: "الاحتيال",
+  heroBadge: "منصة عقارات مجانية في أوغندا",
+  heroTitleHtml: "اعثر على بيتك أو أرضك أو إيجارك التالي",
+  heroSubtitle: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم الفرص في مكان واحد.",
+  heroSubtitlePrefix: "يستخدم makaug بحثاً مدعوماً بالذكاء الاصطناعي لفحص مصادر العقارات العامة على الإنترنت في أوغندا وتنظيم",
+  heroSubtitleCountLabelSingular: "فرصة عقارية",
+  heroSubtitleCountLabelPlural: "فرص عقارية",
+  heroSubtitleSuffix: "في مكان واحد.",
+  heroCounterBreakdownTitle: "الفرص العامة المتاحة الآن",
+  heroCounterForSale: "للبيع",
+  heroCounterToRent: "للإيجار",
+  heroCounterStudent: "طلاب",
+  heroCounterCommercial: "تجاري",
+  heroCounterLand: "أرض",
+  heroCounterOther: "أخرى",
+  heroCounterSocial: "من مصادر اجتماعية",
+  heroCounterTooltipNote: "أنواع الإعلانات تكوّن الرقم الإجمالي المعروض أعلاه.",
+  heroRent: "إيجار",
+  heroBuy: "شراء",
+  heroCommercial: "تجاري",
+  heroStudents: "طلاب",
+  heroLand: "أرض",
+  heroListFree: "أدرج عقاراً",
+  heroSearch: "بحث",
+  heroUseLocation: "استخدم موقعي",
+  heroLocationLabel: "الموقع",
+  heroLocationHelper: "يستخدم البحث بالموقع نطاق 10 أميال افتراضياً.",
+  heroLocationFinding: "نبحث عن عقارات قريبة منك...",
+  heroLocationActive: "الموقع نشط: نبحث ضمن 10 أميال منك.",
+  heroLocationDenied: "تم رفض إذن الموقع. ابحث باسم مدينة أو منطقة أو معلم.",
+  heroLocationUnavailable: "تعذر الحصول على موقعك. ابحث باسم مدينة أو منطقة أو معلم.",
+  heroLocationOutside: "يبدو أنك خارج أوغندا. اختر منطقة داخل أوغندا أو ابحث في كل أوغندا.",
+  heroPropertyType: "نوع العقار",
+  heroMinPrice: "أدنى سعر",
+  heroMaxPrice: "أعلى سعر",
+  heroBedrooms: "غرف النوم",
+  heroFilters: "فلاتر",
+  heroAny: "أي",
+  heroBedroomStudio: "استوديو",
+  heroTypeHouse: "بيت",
+  heroTypeApartment: "شقة",
+  heroTypeBungalow: "بنغل",
+  heroTypeStudio: "استوديو",
+  heroTypeRoom: "غرفة",
+  heroTypeHostel: "سكن",
+  heroTypeLand: "أرض",
+  heroTypeCommercialSpace: "مساحة تجارية",
+  heroTypeOffice: "مكتب",
+  heroTypeShop: "محل",
+  heroTypeWarehouse: "مستودع",
+  heroCommercialType: "نوع التجاري",
+  heroLandType: "نوع الأرض",
+  heroRoomType: "نوع الغرفة",
+  heroBathrooms: "حمامات",
+  heroAmenities: "المرافق",
+  heroStudentAmenities: "مرافق الطلاب",
+  heroCommercialFeatures: "ميزات تجارية",
+  heroLandFeatures: "ميزات الأرض",
+  heroRadius: "النطاق",
+  heroSortNewest: "الأحدث",
+  heroSortPriceAsc: "السعر من الأقل إلى الأعلى",
+  heroSortPriceDesc: "السعر من الأعلى إلى الأقل",
+  heroSortDistance: "المسافة",
+  heroApply: "تطبيق",
+  heroClear: "مسح",
+  homeFeatured: "عقارات مميزة",
+  homeMap: "استكشف على الخريطة",
+  homeBrokers: "وكلاء مميزون",
+  pageSale: "ابحث عن منزل للبيع",
+  pageRent: "ابحث عن عقار للإيجار",
+  pageStudents: "ابحث عن سكن طلاب",
+  pageCommercial: "ابحث عن عقار تجاري",
+  pageLand: "ابحث عن فرصة أرض",
+  pageBrokers: "ابحث عن وسيط",
+  pageMortgage: "حاسبة التمويل",
+  pageAI: "اكتشف روبوت AI",
+  pageList: "أدرج عقاراً",
+  pageAbout: "عن makaug",
+  pageSaved: "العقارات المحفوظة",
+  pageAccount: "حسابي",
+  langLabel: "اللغة",
+  langBanner: "استخدم makaug بتسع لغات",
+  areaOnly: "هذه المنطقة فقط",
+  withinLabel: "ضمن",
+  mileUnitSingular: "ميل",
+  mileUnitPlural: "أميال",
+  anyUniversity: "أي جامعة",
+  university: "جامعة",
+  phSale: "مدينة أو منطقة أو معلم",
+  phRent: "مدينة أو منطقة أو معلم",
+  phStudents: "مدينة أو منطقة أو معلم",
+  phCommercial: "مدينة أو منطقة أو معلم",
+  phLand: "مدينة أو منطقة أو معلم",
+  badgeSale: "للبيع",
+  badgeRent: "للإيجار",
+  badgeStudent: "طلاب",
+  badgeCommercial: "تجاري",
+  badgeLand: "أرض",
+  listingAgent: "مدرج بواسطة وسيط",
+  listingPrivate: "مدرج بواسطة مالك",
+  listingRegistered: "مسجل",
+  footerGrowth: "تم تفعيل مواضع الرعاية الداخلية وفهرسة SEO لحملات النمو.",
+  languageSet: "تم تغيير اللغة"
+});
+
 const LANG_FALLBACK = {
   en: "en",
   lg: "en",
@@ -2097,7 +2216,8 @@ const LANG_FALLBACK = {
   ny: "en",
   rn: "en",
   sm: "en",
-  am: "en"
+  am: "en",
+  ar: "en"
 };
 
 if (I18N_UI.rn) {
@@ -2138,16 +2258,16 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
     "about.searchRemovalTitle": "Claim or remove",
     "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
-    "about.landHubLabel": "Land verification support",
-    "about.landHubTitle": "Official UgNLIS land checks without duplicating government services",
-    "about.landHubText": "For land listings, makaug points buyers, owners, and brokers to Uganda's official National Land Information System. Official title searches, search letters, and transaction tracking remain on UgNLIS.",
-    "about.landHubPortal": "Open UgNLIS portal",
-    "about.landHubOfficialTitle": "Official source of truth",
-    "about.landHubOfficialText": "We link users to UgNLIS for official land search and transaction tracking instead of copying or replacing the Ministry system.",
-    "about.landHubEvidenceTitle": "Search-letter evidence",
-    "about.landHubEvidenceText": "King review can record title volume, folio, block, plot, search reference, and a search-letter link so the public listing shows clear evidence status.",
-    "about.landHubProcessTitle": "What to have ready",
-    "about.landHubProcessText": "Before opening UgNLIS, ask for the title volume and folio or the county, block and plot details. Transaction tracking needs the transaction number from the Ministry Zonal Office receipt.",
+    "about.landHubLabel": "Land marketplace support",
+    "about.landHubTitle": "Find and list land without pretending to clear titles",
+    "about.landHubText": "Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.",
+    "about.landHubPortal": "Browse land listings",
+    "about.landHubOfficialTitle": "Listing discovery",
+    "about.landHubOfficialText": "Makaug helps people discover land listings, map locations, photos, prices, and seller contact routes.",
+    "about.landHubEvidenceTitle": "Independent checks",
+    "about.landHubEvidenceText": "Buyers should inspect land, review documents with their own lawyer or trusted professional, and avoid untraceable payments.",
+    "about.landHubProcessTitle": "Safety first",
+    "about.landHubProcessText": "Use makaug safety guidance, meet carefully, confirm seller authority independently, and keep records of every step.",
     "about.helpLabel": "Who we help",
     "about.helpTitle": "Built for real property journeys",
     "about.ctaSafety": "Learn safety tips",
@@ -2235,16 +2355,16 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Awo data eva mu source teteekebwa live butereevu. King dashboard ekebera location, photos, contact details, duplicates, ownership signals, n'okukkiriza kwa agent nga approval tennaba.",
     "about.searchRemovalTitle": "Claim oba remove",
     "about.searchRemovalText": "Owners ne agents basobola oku-claim, okulongoosa, okukyusa photos, okutereeza details, oba okusaba listing eggyibweko. makaug ekuuma attribution ne review trail.",
-    "about.landHubLabel": "Obuyambi mu kukakasa ettaka",
-    "about.landHubTitle": "Okukakasa ettaka ku UgNLIS entongole nga tetuddiddemu mirimu gya gavumenti",
-    "about.landHubText": "Ku listings z'ettaka, makaug eraga buyers, owners, ne brokers ekkubo erigenda ku National Land Information System entongole eya Uganda. Official title search, search letters, n'okulondoola transactions bisigala ku UgNLIS.",
-    "about.landHubPortal": "Ggulawo portal ya UgNLIS",
-    "about.landHubOfficialTitle": "Ensibuko entongole",
-    "about.landHubOfficialText": "Tuyunga users ku UgNLIS okukola land search n'okulondoola transactions mu ngeri entongole, mu kifo ky'okukoppa oba okudda mu kifo kya system ya Ministry.",
-    "about.landHubEvidenceTitle": "Obujulizi bwa search letter",
-    "about.landHubEvidenceText": "King review esobola okutereka title volume, folio, block, plot, search reference, ne search-letter link listing ya public erage status y'obujulizi mu ngeri etegeerekeka.",
-    "about.landHubProcessTitle": "By'olina okutegeka",
-    "about.landHubProcessText": "Nga tonnaggulawo UgNLIS, saba title volume ne folio oba county, block ne plot details. Okulondoola transaction kwetaaga transaction number eri ku receipt ya Ministry Zonal Office.",
+    "about.landHubLabel": "Obuyambi bwa marketplace y'ettaka",
+    "about.landHubTitle": "Noonya oba listinga ettaka nga tetweyita abakakasa title",
+    "about.landHubText": "Laba listings z'ettaka, geraageranya details, era kozesa safety guidance. Makaug marketplace; si service ya title-checking oba legal clearance entongole.",
+    "about.landHubPortal": "Laba listings z'ettaka",
+    "about.landHubOfficialTitle": "Okuzuula listings",
+    "about.landHubOfficialText": "Makaug eyamba abantu okuzuula listings z'ettaka, map locations, photos, prices, n'amakubo g'okukwatagana n'omutunzi.",
+    "about.landHubEvidenceTitle": "Okukebera okwetongodde",
+    "about.landHubEvidenceText": "Buyers balina okulaba ettaka, okukebera ebiwandiiko n'omuwabuzi wabwe ow'amateeka oba professional gwe beesiga, era beewale payments ezitasobola kulondoolwa.",
+    "about.landHubProcessTitle": "Obukuumi busooka",
+    "about.landHubProcessText": "Kozesa safety guidance ya makaug, sisinkana n'obwegendereza, kakasa obuyinza bw'omutunzi mu ngeri yeetongodde, era kuuma records za buli mutendera.",
     "about.helpLabel": "Be tuyamba",
     "about.helpTitle": "Ekoleddwa ku property journeys ez'omu ddala",
     "about.ctaSafety": "Yiga safety tips",
@@ -2332,16 +2452,16 @@ const CONTENT_I18N = {
     "about.searchReviewText": "Data ya source haiwekwi live bila ukaguzi. King dashboard hukagua location, photos, contact details, duplicates, ownership signals, na ruhusa ya agent kabla ya approval.",
     "about.searchRemovalTitle": "Claim au remove",
     "about.searchRemovalText": "Wamiliki na agents wanaweza claim, update, kubadilisha photos, kusahihisha details, au kuomba removal. makaug huhifadhi attribution na review trail.",
-    "about.landHubLabel": "Msaada wa uhakiki wa ardhi",
-    "about.landHubTitle": "Ukaguzi rasmi wa ardhi kupitia UgNLIS bila kurudia huduma za serikali",
-    "about.landHubText": "Kwa listings za ardhi, makaug huwaelekeza wanunuzi, wamiliki, na brokers kwenye National Land Information System rasmi ya Uganda. Title searches, search letters, na transaction tracking rasmi hubaki kwenye UgNLIS.",
-    "about.landHubPortal": "Fungua portal ya UgNLIS",
-    "about.landHubOfficialTitle": "Chanzo rasmi cha ukweli",
-    "about.landHubOfficialText": "Tunawaelekeza users UgNLIS kwa land search rasmi na transaction tracking badala ya kunakili au kuchukua nafasi ya mfumo wa Ministry.",
-    "about.landHubEvidenceTitle": "Ushahidi wa search letter",
-    "about.landHubEvidenceText": "King review inaweza kuhifadhi title volume, folio, block, plot, search reference, na search-letter link ili public listing ionyeshe status ya ushahidi kwa uwazi.",
-    "about.landHubProcessTitle": "Taarifa za kuwa nazo",
-    "about.landHubProcessText": "Kabla ya kufungua UgNLIS, omba title volume na folio au county, block na plot details. Transaction tracking inahitaji transaction number kutoka risiti ya Ministry Zonal Office.",
+    "about.landHubLabel": "Msaada wa marketplace ya ardhi",
+    "about.landHubTitle": "Tafuta na orodhesha ardhi bila kujifanya tunakagua hati",
+    "about.landHubText": "Tazama listings za ardhi, linganisha details, na tumia safety guidance. Makaug ni marketplace, si huduma rasmi ya title-checking au legal clearance.",
+    "about.landHubPortal": "Tazama listings za ardhi",
+    "about.landHubOfficialTitle": "Ugunduzi wa listings",
+    "about.landHubOfficialText": "Makaug husaidia watu kugundua listings za ardhi, map locations, photos, prices, na njia za kuwasiliana na seller.",
+    "about.landHubEvidenceTitle": "Ukaguzi huru",
+    "about.landHubEvidenceText": "Buyers wanapaswa kutembelea ardhi, kukagua documents na lawyer wao au professional wanayemwamini, na kuepuka malipo yasiyofuatilika.",
+    "about.landHubProcessTitle": "Usalama kwanza",
+    "about.landHubProcessText": "Tumia makaug safety guidance, kutana kwa uangalifu, thibitisha seller authority kwa njia huru, na hifadhi records za kila hatua.",
     "about.helpLabel": "Tunasaidia nani",
     "about.helpTitle": "Imejengwa kwa safari halisi za mali",
     "about.ctaSafety": "Jifunze safety tips",
@@ -2443,6 +2563,47 @@ CONTENT_I18N.am = Object.assign({}, CONTENT_I18N.en, {
   "safety.reportBody": "ውይይቱን ያቁሙ፣ screenshots እና የክፍያ ዝርዝሮችን ያስቀምጡ፣ ከዚያ makaug.com ዝርዝሩን እንዲመረምር ሪፖርት ያድርጉ።"
 });
 
+CONTENT_I18N.ar = Object.assign({}, CONTENT_I18N.en, {
+  "about.heroLabel": "من نحن",
+  "about.title": "عن makaug",
+  "about.heroStatement": "العقار في أوغندا يجب أن يكون أسهل في البحث، وأسهل في الإدراج، وأكثر أماناً للثقة.",
+  "about.subtitle": "makaug يبني منصة عقارات لأوغندا أولاً للمستأجرين والمشترين والطلاب والباحثين عن الأرض والمالكين والوسطاء والشركات.",
+  "about.ctaSearch": "ابحث عن عقار",
+  "about.ctaList": "أدرج عقاراً",
+  "about.ctaWhatsapp": "اسأل makaug على WhatsApp",
+  "about.valueUgandaTitle": "أوغندا أولاً",
+  "about.valueUgandaText": "مبني حول الأماكن المحلية واحتياجات اللغة المحلية وعادات WhatsApp وسير عمل الإعلانات الحقيقي.",
+  "about.valueFreeTitle": "إدراج مجاني",
+  "about.valueFreeText": "يمكن للمالكين والوسطاء إدراج العقارات دون رسوم إدراج، بينما تبقى الإعلانات المدفوعة منفصلة.",
+  "about.valueWhatsappTitle": "الويب + WhatsApp",
+  "about.valueWhatsappText": "مصمم للاكتشاف عبر الويب المحمول، والتواصل عبر WhatsApp، ومتابعة dashboard، واتخاذ قرارات أكثر أماناً.",
+  "about.whoTitle": "من نحن",
+  "about.whoText": "makaug منصة عقارات لأوغندا أولاً للبحث على الموقع، والجوال، والتواصل عبر WhatsApp، والدعم متعدد اللغات، والإدراج المجاني الموجّه.",
+  "about.missionTitle": "مهمتنا",
+  "about.missionText": "مهمتنا أن نجعل اكتشاف العقارات أسهل، ونقلل الالتباس، ونحسن جودة الإعلانات، ونساعد الناس على الانتقال من البحث إلى المعاينة ثم القرار.",
+  "about.whyTitle": "لماذا يوجد makaug",
+  "about.whyText": "البحث عن العقار في أوغندا قد يكون موزعاً بين WhatsApp والوسطاء والمنشورات الاجتماعية والصفحات غير المكتملة. يجمع makaug البنية والبحث والسلامة والتواصل في مكان واحد.",
+  "about.searchEngineLabel": "محرك بحث عقاري",
+  "about.searchEngineTitle": "كيف يجد makaug معلومات العقارات",
+  "about.searchEngineText": "makaug يصبح أداة بحث للعقارات في أوغندا. نمزج إعلانات المالكين والوسطاء مع مصادر عامة تمت مراجعتها.",
+  "about.searchSourceTitle": "شفافية المصدر",
+  "about.searchSourceText": "الإعلانات التي تم العثور عليها على الإنترنت تعرض متى وجدها makaug أول مرة، ومن أي مصدر اجتماعي جاءت، وكيف يمكن مراجعة المنشور الأصلي.",
+  "about.searchReviewTitle": "مراجعة بشرية",
+  "about.searchReviewText": "لا يتم نشر بيانات المصدر مباشرة. يراجع King dashboard الموقع والصور وجهات الاتصال والتكرار وإشارات الإذن قبل الموافقة.",
+  "about.searchRemovalTitle": "المطالبة أو الإزالة",
+  "about.searchRemovalText": "يمكن للمالكين والوكلاء المطالبة بالإعلان أو تحديثه أو تصحيح التفاصيل أو طلب الإزالة. يحتفظ makaug بالإسناد وسجل المراجعة.",
+  "safety.eyebrow": "تحقق قبل أن تدفع",
+  "safety.title": "نصائح السلامة من makaug.com",
+  "safety.subtitle": "فحوصات بسيطة لكل رحلة عقارية: عاين بأمان، تحقق من الهوية، أكد الصلاحية، وادفع فقط عبر قنوات قابلة للتتبع.",
+  "safety.reportCta": "أبلغ عن إعلان مشبوه",
+  "safety.whatsappCta": "اسأل makaug.com على WhatsApp",
+  "safety.fraudCta": "اقرأ دليل مكافحة الاحتيال",
+  "safety.introTitle": "رحلة العقار الآمنة تبدأ قبل المعاينة",
+  "safety.introBody": "تعامل مع كل إعلان كشيء يجب التحقق منه. احفظ الرسائل، قارن الأسعار، عاين شخصياً، ولا تدفع لمن يضغط عليك للاستعجال.",
+  "safety.reportTitle": "رأيت شيئاً مريباً؟",
+  "safety.reportBody": "أوقف المحادثة، احفظ screenshots وتفاصيل الدفع، ثم أبلغ حتى يراجع makaug.com الإعلان."
+});
+
 function contentTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -2528,6 +2689,13 @@ const HOME_ASSISTANT_I18N = {
     sub: "Buuza mu lulimi lwo, tegeera listing bw'ekola, manya ebikeberebwa, era ofune obuyambi nga tonnatereka property oba okukubiriza lister.",
     detail: `${publicBrand()} eyamba abagula, abapangisa, brokers, n'abatunda okutambula nga tebasobeddwa era bafune eby'okuddamu amangu.`,
     discoverCta: "Zuula AI Chatbot"
+  },
+  ar: {
+    pill: "مساعد إدراج AI",
+    titleHtml: "روبوت AI يساعدك على الإدراج والبحث والتحقق من العقار بسرعة",
+    sub: "اسأل بلغتك، وافهم طريقة الإدراج والفحوصات، واحصل على إرشاد قبل نشر عقار أو التواصل مع المعلن.",
+    detail: `صُمم لمساعدة المشترين والمستأجرين والوسطاء والبائعين على استخدام ${publicBrand()} بوضوح وإجابات أسرع.`,
+    discoverCta: "اكتشف روبوت AI"
   }
 };
 
@@ -2762,6 +2930,39 @@ const FOOTER_I18N = {
     safety: "Amagezi g'obukuumi",
     growth: "Ebifo by'obulango ne SEO bya makaug.com bitegekeddwa okuyamba okukula.",
     copyright: `© 2026 ${publicBrand()}. Eddembe lyonna likuumiddwa.`
+  },
+  ar: {
+    brandCopy: `أول منصة عقارات مجانية بالكامل في أوغندا. أدرج، ابحث، وتواصل عبر الموقع أو WhatsApp. تغطي كل districts الـ146.`,
+    whatsapp: "WhatsApp",
+    email: "البريد الإلكتروني",
+    chatWhatsapp: "الدردشة على WhatsApp",
+    location: "Kampala, Uganda",
+    properties: "العقارات",
+    sale: "بيوت للبيع",
+    rent: "بيوت للإيجار",
+    students: "سكن الطلاب",
+    commercial: "تجاري",
+    land: "أرض للبيع",
+    mortgage: "حاسبة التمويل",
+    list: "أدرج عقاراً",
+    looking: "أبحث عن...",
+    company: "الشركة",
+    about: "من نحن",
+    how: "كيف يعمل",
+    broker: "ابحث عن وسيط",
+    registerBroker: "سجل كوسيط",
+    advertise: "أعلن معنا",
+    careers: "وظائف",
+    legal: "القانون والدعم",
+    terms: "الشروط والأحكام",
+    privacy: "سياسة الخصوصية",
+    cookies: "سياسة الكوكيز",
+    antiFraud: "سياسة مكافحة الاحتيال",
+    help: "مركز المساعدة",
+    report: "الإبلاغ عن إعلان",
+    safety: "نصائح السلامة",
+    growth: "تم تفعيل مواضع الرعاية الداخلية وفهرسة SEO لحملات النمو.",
+    copyright: `© 2026 ${publicBrand()}. جميع الحقوق محفوظة.`
   }
 };
 
@@ -3499,6 +3700,37 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   viewBankSource: "የባንክ ምንጭ ይመልከቱ"
 });
 
+MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
+  pageSub: "قارن دفعات mortgage التقريبية قبل التواصل مع البنك.",
+  summaryPrice: "سعر العقار",
+  summaryDepositLoan: "الدفعة الأولى / القرض",
+  healthAffordability: "فحص القدرة على الدفع",
+  bestCurrentMatch: "أفضل تطابق",
+  bestEstimatedMonthly: "القسط الشهري التقريبي",
+  rate: "الفائدة",
+  minDeposit: "أقل دفعة أولى",
+  maxTerm: "أطول مدة",
+  monthly: "شهري",
+  yearsWord: "سنوات",
+  monthWord: "شهر",
+  quoteRequired: "اطلب عرض سعر",
+  totalRepayment: "إجمالي السداد التقريبي",
+  arrangementFee: "رسوم الترتيب التقريبية",
+  bankSourceLabel: "مصدر عام",
+  viewBankSource: "عرض مصدر البنك",
+  leadTitle: "هل تريد أن يتصل بك مستشار mortgage؟",
+  leadSub: "أرسل بياناتك وسنوصلك بمستشار mortgage.",
+  leadNameLabel: "الاسم الكامل *",
+  leadPhoneLabel: "رقم الهاتف *",
+  leadEmailLabel: "Email",
+  leadContactLabel: "طريقة التواصل المفضلة",
+  leadAmountLabel: "مبلغ القرض المطلوب (UGX) *",
+  leadTermLabel: "المدة المطلوبة (سنوات)",
+  leadSubmit: "اطلب مكالمة mortgage",
+  leadSubmitted: "تم إرسال طلب mortgage. سيتواصل معك مستشار قريباً.",
+  leadSubmitFail: "تعذر إرسال طلب mortgage الآن."
+});
+
 function mortgageTr(key) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -3528,7 +3760,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "List a property with guided prompts and photo checklist.",
     benefit2: "Search properties by district, area, budget, beds, and purpose.",
     benefit3: "Get direct WhatsApp and call contacts for matching brokers.",
-    benefit4: "Use the chatbot in 8 languages with fast replies.",
+    benefit4: "Use the chatbot in 9 languages with fast replies.",
     cta: "Start Chatbot on WhatsApp"
   },
   lg: {
@@ -3550,7 +3782,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property ng’oyambibwako prompts n’elist y’ebifaananyi.",
     benefit2: "Noonya property nga osinziira ku district, kitundu, budget n’ebirala.",
     benefit3: "Funa WhatsApp ne call contacts za brokers ezikukwatako.",
-    benefit4: "Kozesa chatbot mu nnimi 8 n’okuddamu okw’amangu.",
+    benefit4: "Kozesa chatbot mu nnimi 9 n’okuddamu okw’amangu.",
     cta: "Tandika Chatbot ku WhatsApp"
   },
   sw: {
@@ -3572,7 +3804,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Orodhesha mali kwa prompts zinazoelekeza na checklist ya picha.",
     benefit2: "Tafuta mali kwa wilaya, eneo, budget, vyumba, na kusudi.",
     benefit3: "Pata namba za WhatsApp na simu za mawakala wanaofaa.",
-    benefit4: "Tumia chatbot kwa lugha 8 kwa majibu ya haraka.",
+    benefit4: "Tumia chatbot kwa lugha 9 kwa majibu ya haraka.",
     cta: "Anza Chatbot kwa WhatsApp"
   },
   ac: {
@@ -3594,7 +3826,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Tera listing ki prompts ma tye kony ki checklist pa poto.",
     benefit2: "Yenyo listing ki district, kabedo, budget, beds, ki purpose.",
     benefit3: "Nong namba me WhatsApp ki cim pa brokers ma rwatte.",
-    benefit4: "Tii ki chatbot i dhok 8 ki lagam mapiyo.",
+    benefit4: "Tii ki chatbot i dhok 9 ki lagam mapiyo.",
     cta: "Cak Chatbot i WhatsApp"
   },
   ny: {
@@ -3616,7 +3848,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property n'obufakazi obuyambiremu na checklist y'ebifaananyi.",
     benefit2: "Noonya properties na district, area, budget, beds, n'ekigendererwa.",
     benefit3: "Funa WhatsApp na call contacts za brokers abakuhika.",
-    benefit4: "Kozesa chatbot omu ndimi 8 n'okugarukamu mangu.",
+    benefit4: "Kozesa chatbot omu ndimi 9 n'okugarukamu mangu.",
     cta: "Tandika Chatbot omu WhatsApp"
   },
   rn: {
@@ -3638,7 +3870,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Tera property n'obuhabuzi obukurangira hamwe na checklist y'ebifaananyi.",
     benefit2: "Shaka properties ukoresheje district, area, budget, beds, n'ekigyendererwa.",
     benefit3: "Bona WhatsApp na call contacts za brokers abakuhika.",
-    benefit4: "Koresha chatbot omu ndimi 8 n'okugaruka bwangu.",
+    benefit4: "Koresha chatbot omu ndimi 9 n'okugaruka bwangu.",
     cta: "Tandika Chatbot kuri WhatsApp"
   },
   sm: {
@@ -3660,7 +3892,7 @@ const AI_CHATBOT_I18N = {
     benefit1: "Teka property ng'oyambibwa prompts n'ekipimo ky'ebifaananyi.",
     benefit2: "Noonia properties nga osinzira ku district, area, budget, beds n'ekigendererwa.",
     benefit3: "Funa WhatsApp ne call contacts za brokers abakukwataku.",
-    benefit4: "Kozesa chatbot mu nnimi 8 n'okuddamu okwangu.",
+    benefit4: "Kozesa chatbot mu nnimi 9 n'okuddamu okwangu.",
     cta: "Tandika Chatbot ku WhatsApp"
   }
 };
@@ -3684,8 +3916,31 @@ AI_CHATBOT_I18N.am = Object.assign({}, AI_CHATBOT_I18N.en, {
   benefit1: "በተመራ ጥያቄዎች እና የፎቶ ዝርዝር ንብረት ዘርዝር።",
   benefit2: "በዲስትሪክት፣ አካባቢ፣ በጀት፣ መኝታ ክፍሎች እና ዓላማ ንብረቶችን ፈልግ።",
   benefit3: "ለተዛማጅ ደላሎች ቀጥተኛ WhatsApp እና የስልክ እውቂያ ያግኙ።",
-  benefit4: "chatbotን በ8 ቋንቋዎች በፈጣን ምላሽ ይጠቀሙ።",
+  benefit4: "chatbotን በ9 ቋንቋዎች በፈጣን ምላሽ ይጠቀሙ።",
   cta: "Chatbotን በ WhatsApp ጀምር"
+});
+
+AI_CHATBOT_I18N.ar = Object.assign({}, AI_CHATBOT_I18N.en, {
+  title: "اكتشف روبوت AI",
+  sub: "استخدم WhatsApp لإدراج عقار، البحث حسب المنطقة، طلب جهات اتصال الوسطاء، واستلام روابط عقارات فورية بلغتك المفضلة.",
+  card1Title: "أدرج عقاراً خلال دقائق",
+  card1Sub: "أرسل تفاصيل العقار والصور على WhatsApp، ثم أكمل تحقق OTP في مسار واحد.",
+  card2Title: "ابحث بالموقع المشترك",
+  card2Sub: "شارك موقعك واحصل على إعلانات بيع أو إيجار قريبة بروابط مباشرة.",
+  card3Title: "ابحث عن وسيط موثق",
+  card3Sub: "اطلب جهات اتصال الوسطاء حسب district أو التخصص أو اللغة واحصل على خيارات فوراً.",
+  flowTitle: "كيف تسير محادثة الروبوت",
+  flow1: "مرحباً بك في makaug. أرسل 1 للإدراج، 2 للبحث، 3 للعثور على وسيط.",
+  flow2: "2 - ابحث بالقرب من موقعي",
+  flow3: "شارك الموقع والميزانية. سأرسل إعلانات مطابقة مع الروابط.",
+  flow4: "تمت مشاركة الموقع + ميزانية USh 1.5M إيجار",
+  flow5: "هذه 5 عقارات مطابقة في منطقتك. اضغط أي رابط لعرض التفاصيل.",
+  benefitsTitle: "ما يمكنك فعله الآن",
+  benefit1: "إدراج عقار بإرشادات واضحة وقائمة صور.",
+  benefit2: "البحث عن عقارات حسب district والمنطقة والميزانية والغرف والغرض.",
+  benefit3: "الحصول على أرقام WhatsApp واتصال مباشرة للوسطاء المناسبين.",
+  benefit4: "استخدم الروبوت بتسع لغات مع ردود سريعة.",
+  cta: "ابدأ الروبوت على WhatsApp"
 });
 
 function aiTr(key) {
@@ -4785,6 +5040,7 @@ function setCurrency(cur) {
 function setLang(lang, silent = false, rerender = true) {
   currentLang = lang || "en";
   document.documentElement.lang = currentLang;
+  document.documentElement.dir = currentLang === "ar" ? "rtl" : "ltr";
   const langSel = document.getElementById("lang-sel");
   if (langSel && langSel.value !== currentLang) langSel.value = currentLang;
   const langSelSpotlight = document.getElementById("lang-sel-spotlight");
@@ -4903,8 +5159,24 @@ function getAnalyticsClientId() {
   }
 }
 
+function currentAnalyticsPagePath() {
+  const path = window.location.pathname || "/";
+  const hash = window.location.hash || "";
+  return hash ? `${path}${hash}` : path;
+}
+
+function analyticsEventParams(params = {}) {
+  return {
+    page_path: currentAnalyticsPagePath(),
+    page_location: window.location.href,
+    page_title: document.title || "makaug.com",
+    ...params
+  };
+}
+
 async function trackEvent(eventName, params = {}) {
-  fireClientGaEvent(eventName, params);
+  const analyticsParams = analyticsEventParams(params);
+  fireClientGaEvent(eventName, analyticsParams);
   try {
     await apiRequest("/api/analytics/event", {
       method: "POST",
@@ -4912,10 +5184,10 @@ async function trackEvent(eventName, params = {}) {
         event_name: eventName,
         client_id: getAnalyticsClientId(),
         user_phone: authState?.user?.phone || "",
-        page_path: window.location.pathname || "/",
+        page_path: currentAnalyticsPagePath(),
         source: "web",
         params: {
-          ...params,
+          ...analyticsParams,
           user_id: authState?.user?.id || "",
           user_role: authState?.user?.role || ""
         }
@@ -4943,15 +5215,17 @@ async function initFrontendAnalytics() {
   try {
     const cfg = await apiRequest("/api/analytics/config");
     const id = cfg?.data?.ga4MeasurementId;
-    if (!id) return;
+    if (!id || cfg?.data?.ga4Enabled === false) return;
     gaMeasurementId = id;
     loadGaScriptOnce(id);
     window.dataLayer = window.dataLayer || [];
     window.gtag = window.gtag || function gtag() { window.dataLayer.push(arguments); };
     window.gtag("js", new Date());
     window.gtag("config", id, {
-      anonymize_ip: true
+      anonymize_ip: true,
+      send_page_view: false
     });
+    fireClientGaEvent("page_view", analyticsEventParams({ source: "initial_load" }));
   } catch (e) {}
 }
 
@@ -5721,7 +5995,8 @@ function languageDisplayName(code = "en") {
     ny: "Runyankole",
     rn: "Rukiga",
     sm: "Lusoga",
-    am: "Amharic"
+    am: "Amharic",
+    ar: "Arabic"
   }[code || "en"] || "English";
 }
 
@@ -9343,13 +9618,16 @@ function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
   if (!adminIsFoundOnlineSourcedListing(row)) return "";
   const extra = row?.extra_fields && typeof row.extra_fields === "object" ? row.extra_fields : {};
   const links = adminSourcedCandidateSourceLinks(row);
+  const dateNeedsConfirmation = sourcePostDateNeedsPlatformConfirmation(extra);
   const firstPosted = String(
-    extra.first_posted_online_label
-    || extra.source_published_label
-    || extra.youtube_source_published_label
-    || extra.first_seen_online_label
-    || extra.original_publish_date_status
-    || ""
+    dateNeedsConfirmation
+      ? (extra.original_publish_date_status || "Original post date is being confirmed from the source platform.")
+      : (extra.first_posted_online_label
+        || extra.source_published_label
+        || extra.youtube_source_published_label
+        || extra.first_seen_online_label
+        || extra.original_publish_date_status
+        || "")
   ).trim();
   const sourceName = String(extra.source_name || row.lister_name || "Found-online source").trim();
   const platform = String(extra.source_platform || extra.source_contact_platform || "").trim();
@@ -9427,7 +9705,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "actioned", "live", "accounts", "field-agents", "ads", "whatsapp", "notifications", "listings"];
+  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "field-agents", "ads", "whatsapp", "notifications", "listings"];
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -9639,9 +9917,12 @@ function ensureAdminFoundOnlineControls() {
     && document.getElementById("admin-seed-carnelian-listings-btn")
     && document.getElementById("admin-seed-social-search-listings-btn")
     && document.getElementById("admin-sweep-tiktok-posts-btn")
+    && document.getElementById("admin-sweep-student-housing-btn")
     && document.getElementById("admin-import-tiktok-posts-btn")
+    && document.getElementById("admin-import-youtube-posts-btn")
     && document.getElementById("admin-sweep-youtube-posts-btn")
     && document.getElementById("admin-sweep-x-posts-btn")
+    && document.getElementById("admin-sweep-all-social-posts-btn")
     && document.getElementById("admin-copy-social-capture-helper-btn")
     && document.getElementById("admin-import-exact-social-links-btn")
     && document.getElementById("admin-seed-source-registry-btn")
@@ -9663,8 +9944,14 @@ function ensureAdminFoundOnlineControls() {
   if (!document.getElementById("admin-sweep-tiktok-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-tiktok-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('tiktok')" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep TikTok Hashtags</button>`);
   }
+  if (!document.getElementById("admin-sweep-student-housing-btn")) {
+    missingButtons.push(`<button id="admin-sweep-student-housing-btn" type="button" onclick="adminSweepStudentHousingPosts()" title="Student Housing Sweep" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep Student Housing</button>`);
+  }
   if (!document.getElementById("admin-import-tiktok-posts-btn")) {
-    missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
+    missingButtons.push(`<button id="admin-import-tiktok-posts-btn" type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-3 py-2 rounded-lg text-xs font-bold">Import TikTok Videos</button>`);
+  }
+  if (!document.getElementById("admin-import-youtube-posts-btn")) {
+    missingButtons.push(`<button id="admin-import-youtube-posts-btn" type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Import YouTube Videos</button>`);
   }
   if (!document.getElementById("admin-sweep-youtube-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-youtube-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('youtube')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep YouTube Videos</button>`);
@@ -9672,11 +9959,14 @@ function ensureAdminFoundOnlineControls() {
   if (!document.getElementById("admin-sweep-x-posts-btn")) {
     missingButtons.push(`<button id="admin-sweep-x-posts-btn" type="button" onclick="adminSweepSocialPlatformPosts('x')" class="border border-slate-300 text-slate-700 hover:bg-slate-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep X Posts</button>`);
   }
+  if (!document.getElementById("admin-sweep-all-social-posts-btn")) {
+    missingButtons.push(`<button id="admin-sweep-all-social-posts-btn" type="button" onclick="adminSweepAllSocialPosts()" class="border border-gray-900 text-gray-900 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Sweep All Social Sources</button>`);
+  }
   if (!document.getElementById("admin-copy-social-capture-helper-btn")) {
-    missingButtons.push(`<button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>`);
+    missingButtons.push(`<button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>`);
   }
   if (!document.getElementById("admin-import-exact-social-links-btn")) {
-    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Quick Paste Import</button>`);
+    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>`);
   }
   if (!document.getElementById("admin-import-found-online-posts-btn")) {
     missingButtons.push(`<button id="admin-import-found-online-posts-btn" type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-3 py-2 rounded-lg text-xs font-bold">Import Source Posts</button>`);
@@ -9797,7 +10087,7 @@ async function adminSeedBakaimaAuthorisedListings() {
   }
   const ok = window.confirm("Create/rebuild the 33 authorised Bakaima estate-plot listings in the King review queue?");
   if (!ok) return;
-  const statusEl = document.getElementById("admin-found-online-status");
+  const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-seed-bakaima-listings-btn");
   if (button) {
     button.disabled = true;
@@ -9847,7 +10137,7 @@ async function adminSeedCarnelianAuthorisedListings() {
   }
   const ok = window.confirm("Create/rebuild the two authorised Carnelian YouTube house-tour listings in the King review queue?");
   if (!ok) return;
-  const statusEl = document.getElementById("admin-found-online-status");
+  const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-seed-carnelian-listings-btn");
   if (button) {
     button.disabled = true;
@@ -10062,12 +10352,19 @@ function adminSourceRegistryHtml(data = {}) {
     ${rows ? `<div class="mt-3 max-h-[560px] overflow-auto rounded-xl border border-emerald-100 bg-white"><table class="min-w-full text-left text-[11px]"><thead class="sticky top-0 bg-emerald-50 text-emerald-900"><tr><th class="py-2 pr-3 pl-2">Name</th><th class="py-2 pr-3">Platform</th><th class="py-2 pr-3">Record</th><th class="py-2 pr-3">Type</th><th class="py-2 pr-3">Contact</th><th class="py-2 pr-3">Direct</th><th class="py-2 pr-3">Status</th><th class="py-2 pr-2">Source page/feed</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3">No source records loaded yet.</div>`}`;
 }
 
+function adminSourceRegistryPanelElement() {
+  if (activeAdminWorkflowTab === "student-sweep" || activeAdminWorkflowTab === "youtube-sweep") {
+    return adminSocialStatusElement();
+  }
+  return document.getElementById("admin-source-registry-panel") || adminSocialStatusElement();
+}
+
 async function adminLoadPropertySourceRegistry() {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
     return;
   }
-  const panel = document.getElementById("admin-source-registry-panel");
+  const panel = adminSourceRegistryPanelElement();
   const button = document.getElementById("admin-load-source-registry-btn");
   if (button) {
     button.disabled = true;
@@ -10251,33 +10548,105 @@ function adminSocialCaptureHelperScript() {
     box.focus();
     box.select();
   }
-  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Quick Paste Import, and paste.");
+  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
 })();`;
 }
 
-async function adminCopySocialCaptureHelper() {
-  const helper = adminSocialCaptureHelperScript();
-  const statusEl = document.getElementById("admin-found-online-status");
-  let copied = false;
+function adminSocialCaptureBookmarkletUrl() {
+  return `javascript:${encodeURIComponent(adminSocialCaptureHelperScript())}`;
+}
+
+async function adminCopyTextToClipboard(text) {
   try {
-    await navigator.clipboard.writeText(helper);
-    copied = true;
+    await navigator.clipboard.writeText(text);
+    return true;
   } catch (error) {
-    copied = false;
+    return false;
   }
+}
+
+function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
+  const helper = adminSocialCaptureHelperScript();
+  const bookmarklet = adminSocialCaptureBookmarkletUrl();
+  return `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="font-black">One-click capture helper ready</div>
+        <div class="mt-1">Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
+        ${copiedLabel ? `<div class="mt-2 inline-flex rounded-full bg-indigo-100 px-2 py-1 text-[11px] font-bold text-indigo-800">${adminEscape(copiedLabel)}</div>` : ""}
+      </div>
+      <button type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 bg-white text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>
+    </div>
+    <div class="mt-3 grid md:grid-cols-4 gap-2">
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Save bookmark</div><div class="text-[11px] mt-1">Click Copy Bookmarklet, then create a browser bookmark named makaug Capture Posts and paste it into the bookmark URL.</div></div>
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Open source</div><div class="text-[11px] mt-1">Open a TikTok hashtag/profile, YouTube search/channel, Facebook group/page, Instagram tag/profile, or X search.</div></div>
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Click bookmark</div><div class="text-[11px] mt-1">Scroll until useful posts are visible, then click makaug Capture Posts in the bookmarks bar. The helper copies exact links.</div></div>
+      <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">4. Paste here</div><div class="text-[11px] mt-1">Return to makaug, click Paste Captured Links, preview, then Queue Found Online for King review.</div></div>
+    </div>
+    <div class="mt-3 rounded-xl border border-indigo-100 bg-white p-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="${adminAttr(bookmarklet)}" onclick="return false" class="inline-flex border border-indigo-300 bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-2 rounded-lg text-xs font-bold">makaug Capture Posts</a>
+        <button type="button" onclick="adminCopySocialCaptureBookmarklet()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Bookmarklet</button>
+        <button type="button" onclick="adminCopySocialCaptureConsoleCode()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Console Code</button>
+        <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
+      </div>
+      <div class="mt-2 text-[11px] text-indigo-900">Fastest setup: drag the dark makaug Capture Posts button to your browser bookmarks bar. If dragging is blocked, copy the bookmarklet and paste it into a new bookmark URL.</div>
+    </div>
+    <details class="mt-3 rounded-xl border border-gray-200 bg-white p-3">
+      <summary class="cursor-pointer text-xs font-black text-gray-800">Manual console fallback</summary>
+      <div class="mt-2 text-[11px] text-gray-600">Use this only if the bookmarklet is blocked. Open the source page console, paste this code, run it, then paste copied rows into makaug.</div>
+      <textarea class="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 p-2 text-[11px] font-mono" rows="7" readonly>${adminEscape(helper)}</textarea>
+    </details>`;
+}
+
+function adminSocialStatusElement() {
+  const preferredId = activeAdminWorkflowTab === "student-sweep"
+    ? "admin-student-sweep-status"
+    : activeAdminWorkflowTab === "youtube-sweep"
+      ? "admin-youtube-sweep-status"
+      : "admin-found-online-status";
+  return document.getElementById(preferredId)
+    || document.getElementById("admin-found-online-status")
+    || document.getElementById("admin-student-sweep-status")
+    || document.getElementById("admin-youtube-sweep-status");
+}
+
+async function adminCopySocialCaptureHelper() {
+  const bookmarklet = adminSocialCaptureBookmarkletUrl();
+  const statusEl = adminSocialStatusElement();
+  const copied = await adminCopyTextToClipboard(bookmarklet);
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = `
-      <div class="font-black">No-API social capture helper ready</div>
-      <div class="mt-1">This is the workaround for TikTok, Facebook, Instagram, X, and YouTube pages that do not give us API access: open a tracked source page, paste/run this helper on that page, then paste the copied links into Quick Paste Import.</div>
-      <div class="mt-2 grid md:grid-cols-3 gap-2">
-        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">1. Open source</div><div class="text-[11px] mt-1">Use a TikTok hashtag, YouTube search, Facebook group/page, Instagram tag, or X search from the source database.</div></div>
-        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">2. Run helper</div><div class="text-[11px] mt-1">Paste this helper in the source page console/bookmarklet. It copies exact post/video URLs visible in the page.</div></div>
-        <div class="rounded-lg border border-indigo-100 bg-white p-2"><div class="font-bold">3. Import</div><div class="text-[11px] mt-1">Return here, click Quick Paste Import, paste the rows, then King reviews location and evidence.</div></div>
-      </div>
-      <textarea class="mt-2 w-full rounded-lg border border-indigo-200 bg-white p-2 text-[11px] font-mono" rows="7" readonly>${adminEscape(helper)}</textarea>`;
+    statusEl.innerHTML = adminSocialCaptureHelperPanelHtml({
+      copiedLabel: copied ? "Bookmarklet copied" : "Copy blocked: use the buttons below"
+    });
+    adminScrollTo(`#${statusEl.id || "admin-found-online-status"}`);
   }
-  toast(copied ? "Capture helper copied." : "Capture helper is shown in the panel.");
+  toast(copied ? "Capture bookmarklet copied." : "Capture helper is shown in the panel.");
+}
+
+async function adminCopySocialCaptureBookmarklet() {
+  const copied = await adminCopyTextToClipboard(adminSocialCaptureBookmarkletUrl());
+  const statusEl = adminSocialStatusElement();
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = adminSocialCaptureHelperPanelHtml({
+      copiedLabel: copied ? "Bookmarklet copied" : "Copy blocked: drag the button or use manual fallback"
+    });
+  }
+  toast(copied ? "Capture bookmarklet copied." : "Could not copy bookmarklet.");
+}
+
+async function adminCopySocialCaptureConsoleCode() {
+  const copied = await adminCopyTextToClipboard(adminSocialCaptureHelperScript());
+  const statusEl = adminSocialStatusElement();
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = adminSocialCaptureHelperPanelHtml({
+      copiedLabel: copied ? "Console code copied" : "Copy blocked: select the fallback code manually"
+    });
+  }
+  toast(copied ? "Console capture code copied." : "Console code is shown in the panel.");
 }
 
 function adminTikTokExactImportPrompt(seedText = "") {
@@ -10365,7 +10734,7 @@ function adminExactSocialLinksImportPrompt(seedText = "") {
     "Paste exact social post links from YouTube, TikTok, X/Twitter, Instagram, or Facebook.",
     "",
     "This is the no-API workaround: makaug uses exact public URLs, oEmbed/public metadata where available, and King-supplied visible details.",
-    "Tip: click Copy Capture Helper, run it on a TikTok/YouTube/Facebook/Instagram/X source page, then paste the copied rows here.",
+    "Tip: click Set Up Capture Bookmark once, use the makaug Capture Posts bookmark on a TikTok/YouTube/Facebook/Instagram/X source page, then paste the copied rows here.",
     "",
     "One block per post is best:",
     "https://www.youtube.com/watch?v=abc123XYZ90",
@@ -10396,11 +10765,56 @@ function adminSocialQuickPasteExample() {
   ].join("\n");
 }
 
+function adminYouTubeQuickPasteExample() {
+  return [
+    "https://www.youtube.com/watch?v=abc123XYZ90",
+    "title: 3 bedroom apartment for rent in Ntinda",
+    "location: Ntinda, Kampala",
+    "price: USh 1.8M/month",
+    "source: Uganda Property YouTube",
+    "posted: 2026-05-20",
+    "phone: +256700000000",
+    "comments: Original poster confirmed viewing by appointment and WhatsApp contact route.",
+    "",
+    "https://www.youtube.com/shorts/short123ABC9 | 2 bedroom house for sale | Kira, Wakiso | USh 320M | 2026-05-21"
+  ].join("\n");
+}
+
+function adminStudentHousingQuickPasteExample() {
+  return [
+    "https://www.youtube.com/shorts/abc123XYZ90",
+    "title: Student hostel room near Makerere",
+    "location: Makerere, Kampala",
+    "price: USh 450k/month",
+    "source: Student Rooms UG",
+    "posted: 2026-05-20",
+    "phone: +256700000000",
+    "comments: Original poster confirmed rooms are available for semester intake.",
+    "",
+    "https://x.com/studentroomsug/status/1800000000000000000 | Kyambogo student hostel room with security and WiFi | Banda, Kampala | USh 400k/month | 2026-05-20"
+  ].join("\n");
+}
+
+function adminStudentHousingYouTubeQuickPasteExample() {
+  return [
+    "https://www.youtube.com/shorts/abc123XYZ90",
+    "title: Student hostel room near Makerere",
+    "location: Makerere, Kampala",
+    "price: USh 450k/month",
+    "source: Student Rooms UG",
+    "posted: 2026-05-20",
+    "phone: +256700000000",
+    "comments: Original poster confirmed rooms are available for semester intake.",
+    "",
+    "https://www.youtube.com/watch?v=studentUG1234 | Kyambogo student hostel room with security and WiFi | Banda, Kampala | USh 400k/month | 2026-05-20"
+  ].join("\n");
+}
+
 function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy = false } = {}) {
   const text = seedText || "";
   return `
-    <div class="font-black text-violet-950">Quick Paste Import</div>
-    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. You can also paste copied caption text, visible video-frame text, the original poster's comments/replies, location, price, and phone number underneath. King previews the extracted property information below, then queues the eligible records.</div>
+    <div class="font-black text-violet-950">Paste TikTok / YouTube / Social Links</div>
+    <div class="mt-1">Paste one exact TikTok, YouTube, X, Instagram, or Facebook post link per block. YouTube watch and Shorts links use the same preview-and-queue flow as TikTok videos: add copied caption text, visible video-frame text, original-poster comments/replies, location, price, and phone number underneath.</div>
     <div class="mt-2 grid md:grid-cols-3 gap-2">
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">1. Paste link/text</div><div class="mt-1 text-[11px]">Use exact video/post URLs. Hashtag pages are discovery only; exact posts become property candidates.</div></div>
       <div class="rounded-lg border border-violet-100 bg-white p-2"><div class="font-bold">2. Preview extracted info</div><div class="mt-1 text-[11px]">The parser reads title, location, price, source, posted date, comments, and Uganda phone numbers.</div></div>
@@ -10410,19 +10824,21 @@ function adminSocialQuickPastePanelHtml({ seedText = "", resultHtml = "", busy =
     <div class="mt-2 flex items-center gap-2 flex-wrap">
       <button id="admin-social-quick-preview-btn" type="button" onclick="adminPreviewSocialQuickPaste()" class="bg-violet-700 hover:bg-violet-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Preview Extracted Properties</button>
       <button id="admin-social-quick-queue-btn" type="button" onclick="adminQueueSocialQuickPaste()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded-lg text-xs font-bold ${busy ? "opacity-60 cursor-wait" : ""}" ${busy ? "disabled" : ""}>Queue Found Online</button>
-      <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Capture Helper</button>
-      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
+      <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>
+      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminYouTubeQuickPasteExample())" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-bold">Load YouTube Example</button>
+      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingYouTubeQuickPasteExample())" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-3 py-2 rounded-lg text-xs font-bold">Load Student Example</button>
+      <button type="button" onclick="adminOpenSocialQuickPastePanel(adminSocialQuickPasteExample())" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load TikTok Example</button>
     </div>
     <div class="mt-2 text-[11px] text-violet-900">Tip: when the video itself shows extra writing, paste it as <span class="font-mono">video_text:</span> or <span class="font-mono">source_visual_text:</span>. When comments contain the original poster's extra details, paste those lines as <span class="font-mono">comments:</span>. If the text contains a valid Uganda mobile number, makaug stores it as the public contact route; otherwise the contact route stays as the source/profile link.</div>
     <div id="admin-social-quick-paste-results" class="mt-3">${resultHtml || ""}</div>`;
 }
 
 function adminOpenSocialQuickPastePanel(seedText = "") {
-  const statusEl = document.getElementById("admin-found-online-status");
+  const statusEl = adminSocialStatusElement();
   if (!statusEl) return;
   statusEl.classList.remove("hidden");
   statusEl.innerHTML = adminSocialQuickPastePanelHtml({ seedText });
-  adminScrollTo("#admin-found-online-status");
+  adminScrollTo(`#${statusEl.id || "admin-found-online-status"}`);
 }
 
 function adminReadSocialQuickPasteText() {
@@ -10489,7 +10905,7 @@ async function adminSubmitSocialQuickPaste({ dryRun = false } = {}) {
     toast("Paste at least one exact social post link or copied source text.");
     return;
   }
-  const statusEl = document.getElementById("admin-found-online-status");
+  const statusEl = adminSocialStatusElement();
   const button = document.getElementById("admin-import-exact-social-links-btn");
   if (button) {
     button.disabled = true;
@@ -10558,16 +10974,24 @@ function adminImportExactSocialLinks(seedText = "") {
   return adminOpenSocialQuickPastePanel(seedText);
 }
 
+function adminImportYouTubeExactPosts(seedText = "") {
+  return adminOpenSocialQuickPastePanel(seedText || adminYouTubeQuickPasteExample());
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
   const youtube = data.youtube || {};
   const x = data.x || {};
+  const facebook = data.facebook || {};
+  const instagram = data.instagram || {};
   const importResult = data.import_result || {};
   const tiktokTasks = Array.isArray(tiktok.capture_tasks) ? tiktok.capture_tasks : [];
   const youtubeJobs = Array.isArray(youtube.search_jobs) ? youtube.search_jobs : [];
   const youtubeReports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
   const xJobs = Array.isArray(x.search_jobs) ? x.search_jobs : [];
   const xReports = Array.isArray(x.fetch_reports) ? x.fetch_reports : [];
+  const facebookTasks = Array.isArray(facebook.capture_tasks) ? facebook.capture_tasks : [];
+  const instagramTasks = Array.isArray(instagram.capture_tasks) ? instagram.capture_tasks : [];
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
@@ -10577,8 +11001,8 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="text-[11px] text-pink-800 mt-0.5">${adminEscape(task.source_record_kind || "source")} • exact video URL required before a property is queued</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-pink-200 text-pink-700 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Open TikTok source</a>` : ""}
-        <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
-        <button type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
+        <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Set Up Capture Bookmark</button>
+        <button type="button" onclick="adminImportTikTokExactPosts()" class="border border-pink-300 text-pink-800 hover:bg-pink-50 px-2 py-1 rounded text-[11px] font-bold">Import TikTok Videos</button>
       </div>
     </div>`).join("");
   const youtubeJobHtml = youtubeJobs.slice(0, 10).map((job) => `
@@ -10586,7 +11010,10 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
       <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
       <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || "2026-02-01")} • Shorts and long-form videos</div>
-      ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="inline-flex mt-1 border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
+      <div class="mt-1 flex gap-2 flex-wrap">
+        ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
+        <button type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
+      </div>
     </div>`).join("");
   const youtubeReportHtml = youtubeReports.slice(0, 10).map((report) => `
     <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
@@ -10604,14 +11031,26 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "X job")}</div>
       <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} posts fetched` : adminEscape(report.reason || "X API did not return posts")}</div>
     </div>`).join("");
+  const manualCaptureTaskHtml = [...facebookTasks, ...instagramTasks].slice(0, 16).map((task) => `
+    <div class="rounded-lg border border-purple-100 bg-white p-2">
+      <div class="font-bold text-purple-950">${adminEscape(task.source_name || "Student source")}</div>
+      <div class="text-[11px] text-purple-800 mt-0.5">${adminEscape(task.platform || "social")} • ${adminEscape(task.query || "source")} • exact post URL required</div>
+      <div class="mt-1 flex gap-2 flex-wrap">
+        ${task.source_url ? `<a href="${adminAttr(task.source_url)}" target="_blank" rel="noopener" class="border border-purple-200 text-purple-700 hover:bg-purple-50 px-2 py-1 rounded text-[11px] font-bold">Open source/feed</a>` : ""}
+        <button type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Set Up Capture Bookmark</button>
+        <button type="button" onclick="adminImportYouTubeExactPosts(adminStudentHousingYouTubeQuickPasteExample())" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Paste YouTube Student Videos</button>
+        <button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingQuickPasteExample())" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-2 py-1 rounded text-[11px] font-bold">Paste Student Links</button>
+      </div>
+    </div>`).join("");
   return `
     <div class="font-black">Social platform sweep finished</div>
     <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Source-only broker profiles are not created automatically; the source owner must register or claim one.")}</div>
+    ${data.focus === "students" ? `<div class="mt-2 rounded-xl border border-purple-100 bg-purple-50 p-3 text-purple-950"><div class="font-black">Student housing focus</div><div class="mt-1">This sweep only uses campus, hostel, student accommodation, university, and student-room signals. It prepares TikTok/Facebook/Instagram exact-link capture tasks and runs YouTube/X exact-post jobs when API keys are configured.</div><div class="mt-2 flex gap-2 flex-wrap"><button type="button" onclick="adminImportYouTubeExactPosts(adminStudentHousingYouTubeQuickPasteExample())" class="border border-red-200 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Paste YouTube Student Videos</button><button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingQuickPasteExample())" class="border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 px-2 py-1 rounded text-[11px] font-bold">Paste Student Source Links</button></div></div>` : ""}
     <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
       <div class="font-black">API-block workaround</div>
-      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture helper on the public source page. It copies the exact visible post/video URLs, then Quick Paste Import queues eligible properties, blocks duplicates, and keeps the poster as source attribution until they register or claim a broker profile.</div>
-      <button type="button" onclick="adminCopySocialCaptureHelper()" class="mt-2 border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Copy Capture Helper</button>
+      <div class="mt-1 text-[11px]">When a platform blocks search APIs, use the browser capture bookmark on the public source page. It copies the exact visible post/video URLs, then Paste Captured Links queues eligible properties, blocks duplicates, and keeps the poster as source attribution until they register or claim a broker profile.</div>
+      <button type="button" onclick="adminCopySocialCaptureHelper()" class="mt-2 border border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50 px-2 py-1 rounded text-[11px] font-bold">Set Up Capture Bookmark</button>
     </div>
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
     ${tiktok.capture_task_count ? `
@@ -10625,6 +11064,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         <div class="font-black">YouTube video sweep</div>
         <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || "2026-02-01")}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
         <div class="mt-1 text-[11px]">YouTube search returns Shorts and long-form videos. makaug stores the exact video URL and YouTube snippet published date as First posted online when the API returns it.</div>
+        <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
         ${youtubeReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${youtubeReportHtml}</div>` : ""}
         ${youtubeJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show YouTube search jobs</summary><div class="mt-2 space-y-2">${youtubeJobHtml}</div></details>` : ""}
       </div>` : ""}
@@ -10634,6 +11074,12 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         <div class="mt-1">${adminEscape(x.search_job_count)} X search jobs prepared. API configured: ${x.api_configured ? "Yes" : "No"}${x.skipped_reason ? ` • ${adminEscape(x.skipped_reason)}` : ""}</div>
         ${xReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${xReportHtml}</div>` : ""}
         ${xJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show X search jobs</summary><div class="mt-2 space-y-2">${xJobHtml}</div></details>` : ""}
+      </div>` : ""}
+    ${(facebookTasks.length || instagramTasks.length) ? `
+      <div class="mt-3 rounded-xl border border-purple-100 bg-purple-50 p-3 text-purple-950">
+        <div class="font-black">Facebook and Instagram student capture</div>
+        <div class="mt-1">${adminEscape(facebookTasks.length + instagramTasks.length)} source feeds are ready for exact-link capture. Open the source/feed, click the makaug Capture Posts bookmark, then paste exact public post or reel URLs into Paste Captured Links.</div>
+        <div class="mt-2 space-y-2">${manualCaptureTaskHtml}</div>
       </div>` : ""}
     ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Queued properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Posts needing source review</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
@@ -10645,41 +11091,56 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
     return;
   }
   const normalized = String(platform || "all").toLowerCase();
+  const studentFocus = normalized === "student" || normalized === "students" || normalized === "student_housing";
   const dryRun = normalized === "tiktok";
-  const confirmCopy = normalized === "tiktok"
+  const confirmCopy = studentFocus
+    ? "Run the dedicated student housing sweep across campus/hostel/student accommodation sources on TikTok, YouTube, X/Twitter, Facebook, and Instagram? YouTube/X imports require configured API keys; Facebook/Instagram stay exact-link capture tasks."
+    : normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
     : normalized === "youtube"
-      ? "Sweep tracked YouTube channels, searches, and hashtags from 1 February 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? YOUTUBE_API_KEY must be configured on the server."
-      : "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server.";
+      ? "Sweep tracked YouTube channels, searches, and hashtags from 1 February 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server."
+      : normalized === "x"
+        ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
+        : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
   const ok = window.confirm(confirmCopy);
   if (!ok) return;
-  const statusEl = document.getElementById("admin-found-online-status");
-  const button = document.getElementById(normalized === "x"
-    ? "admin-sweep-x-posts-btn"
-    : normalized === "youtube"
-      ? "admin-sweep-youtube-posts-btn"
-      : "admin-sweep-tiktok-posts-btn");
+  const statusEl = adminSocialStatusElement();
+  const buttonId = studentFocus
+    ? (activeAdminWorkflowTab === "student-sweep" ? "admin-student-suite-sweep-btn" : "admin-sweep-student-housing-btn")
+    : normalized === "x"
+      ? "admin-sweep-x-posts-btn"
+      : normalized === "youtube"
+        ? (activeAdminWorkflowTab === "youtube-sweep" ? "admin-youtube-suite-sweep-btn" : "admin-sweep-youtube-posts-btn")
+        : normalized === "all"
+          ? "admin-sweep-all-social-posts-btn"
+          : "admin-sweep-tiktok-posts-btn";
+  const button = document.getElementById(buttonId);
   if (button) {
     button.disabled = true;
     button.classList.add("opacity-60", "cursor-wait");
   }
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = normalized === "tiktok"
+    statusEl.innerHTML = studentFocus
+      ? "Sweeping student housing sources across campus/hostel feeds, YouTube, X/Twitter, Facebook, Instagram, and TikTok..."
+      : normalized === "tiktok"
       ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
       : normalized === "youtube"
         ? "Sweeping YouTube videos from 1 February 2026 and importing eligible exact videos..."
-        : "Sweeping X/Twitter sources and importing eligible exact posts...";
+        : normalized === "x"
+          ? "Sweeping X/Twitter sources and importing eligible exact posts..."
+          : "Sweeping all tracked social sources across TikTok, YouTube, and X/Twitter...";
   }
   try {
     const response = await apiRequest("/api/admin/social-platform-posts/sweep", {
       method: "POST",
       headers: adminAuthHeaders(),
       body: {
-        platform: normalized,
+        platform: studentFocus ? "student" : normalized,
+        focus: studentFocus ? "students" : "",
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 30000 : normalized === "youtube" ? 250 : 40,
-        max_results: normalized === "youtube" ? 50 : 25,
+        max_sources: normalized === "tiktok" ? 30000 : studentFocus ? 750 : normalized === "youtube" ? 250 : normalized === "all" ? 250 : 40,
+        max_results: (normalized === "youtube" || studentFocus || normalized === "all") ? 50 : 25,
         x_search_mode: "all",
         published_after: "2026-02-01T00:00:00.000Z"
       }
@@ -10691,7 +11152,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       await renderAdminDashboard();
       setAdminWorkflowTab("review");
     }
-    toast(normalized === "tiktok" ? "TikTok capture tasks are ready." : normalized === "youtube" ? "YouTube sweep finished." : "X sweep finished.");
+    toast(studentFocus ? "Student housing sweep finished." : normalized === "tiktok" ? "TikTok capture tasks are ready." : normalized === "youtube" ? "YouTube sweep finished." : normalized === "x" ? "X sweep finished." : "All social source sweep finished.");
   } catch (e) {
     if (statusEl) {
       statusEl.classList.remove("hidden");
@@ -10706,6 +11167,18 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   }
 }
 
+function adminSweepStudentHousingPosts() {
+  return adminSweepSocialPlatformPosts("student");
+}
+
+function adminSweepYouTubePosts() {
+  return adminSweepSocialPlatformPosts("youtube");
+}
+
+function adminSweepAllSocialPosts() {
+  return adminSweepSocialPlatformPosts("all");
+}
+
 async function adminSeedPropertySourceRegistry() {
   if (!canUseLiveAdminApi()) {
     toast("Sign in as admin or save ADMIN_API_KEY first.");
@@ -10713,7 +11186,7 @@ async function adminSeedPropertySourceRegistry() {
   }
   const ok = window.confirm("Create/update the 30,000-record public source database? This stores pages, channels, accounts, hashtag searches, and discovery feeds; it does not create property approvals by itself.");
   if (!ok) return;
-  const panel = document.getElementById("admin-source-registry-panel");
+  const panel = adminSourceRegistryPanelElement();
   const button = document.getElementById("admin-seed-source-registry-btn");
   if (button) {
     button.disabled = true;
@@ -12002,7 +12475,7 @@ const PUBLIC_WHATSAPP_CONTEXTS = Object.freeze({
   rent: "Hi makaug, I'm on the To Rent page and I'm looking for a rental. Please help me with area, budget, bedrooms, availability, and viewing options.",
   students: "Hi makaug, I'm looking for student accommodation. Please help me find safe rooms near campus, with price, distance, rules, and availability.",
   commercial: "Hi makaug, I'm looking for commercial property for my business. Please help me with location, size, rent or sale price, and viewing options.",
-  land: "Hi makaug, I'm looking for land or a plot. Please send the official UgNLIS portal link and the information needed for a title or parcel search.",
+  land: "Hi makaug, I'm looking for land or a plot. Please help me find available land listings, compare details, and contact the seller or broker safely.",
   brokers: "Hi makaug, I'm looking for a trusted broker or agent. Please help me find someone suitable for my area and property need.",
   mortgage: "Hi makaug, I need mortgage or affordability help. Please guide me on budget, deposit, monthly payments, and next steps.",
   "ai-chatbot": "Hi makaug, I want to use the AI WhatsApp chatbot. Please help me search property, list property, or get connected to support.",
@@ -13127,7 +13600,8 @@ function languageDisplayName(code) {
     ny: "Runyankole",
     rn: "Rukiga",
     sm: "Lusoga",
-    am: "Amharic"
+    am: "Amharic",
+    ar: "Arabic"
   }[String(code || "en").toLowerCase()] || "English";
 }
 
@@ -15114,115 +15588,6 @@ function adminOverrideWarningCheck(evidenceId, checkKey = "") {
   renderAdminReviewPanel(adminActiveReview);
 }
 
-function adminIsLandReviewListing(review = {}) {
-  const type = String(review.listing_type || review.type || review.category || "").toLowerCase();
-  const text = `${type} ${review.title || ""} ${review.property_type || ""} ${review.title_type || ""} ${review.extra_fields?.title_type || ""}`.toLowerCase();
-  return type === "land" || /\b(land|plot|mailo|freehold|leasehold|customary|acre|decimals?)\b/.test(text);
-}
-
-function adminUgNlisFieldValue(review, key) {
-  return review?.extra_fields?.[key] || "";
-}
-
-function renderAdminUgNlisReviewPanel(review = {}) {
-  if (!adminIsLandReviewListing(review)) return "";
-  const extra = review.extra_fields || {};
-  const status = extra.land_verification_status || "not_started";
-  return `
-    <div class="mt-4 border border-emerald-100 rounded-xl p-3 bg-emerald-50" id="admin-ugnlis-review-panel">
-      <div class="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <div class="text-xs uppercase tracking-wide text-emerald-800 font-semibold">UgNLIS Land Verification</div>
-          <p class="mt-1 text-xs text-emerald-950">Record official search details supplied by the owner, broker, or buyer. Official searches and transaction tracking stay on UgNLIS.</p>
-        </div>
-        <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener" class="text-xs font-bold text-emerald-800 underline">Open UgNLIS</a>
-      </div>
-      <div class="mt-3 grid sm:grid-cols-2 gap-2">
-        <label class="text-xs font-semibold text-emerald-950">Status
-          <select id="admin-ugnlis-status" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
-            ${["not_started", "details_collected", "search_letter_supplied", "official_verified", "issue_found"].map((item) => `<option value="${item}" ${item === status ? "selected" : ""}>${adminEscape(item.replaceAll("_", " "))}</option>`).join("")}
-          </select>
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Search letter URL
-          <input id="admin-ugnlis-search-letter-url" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_search_letter_url"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="https://...">
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Title volume
-          <input id="admin-ugnlis-title-volume" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_title_volume"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Title folio
-          <input id="admin-ugnlis-title-folio" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_title_folio"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">County
-          <input id="admin-ugnlis-county" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_county"))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Block / Plot
-          <div class="mt-1 grid grid-cols-2 gap-2">
-            <input id="admin-ugnlis-block" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_block"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Block">
-            <input id="admin-ugnlis-plot" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_plot"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Plot">
-          </div>
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Transaction / search ref
-          <div class="mt-1 grid grid-cols-2 gap-2">
-            <input id="admin-ugnlis-transaction-number" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_transaction_number"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Transaction">
-            <input id="admin-ugnlis-search-reference" value="${adminAttr(adminUgNlisFieldValue(review, "ugnlis_search_reference"))}" class="w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" placeholder="Search ref">
-          </div>
-        </label>
-        <label class="text-xs font-semibold text-emerald-950">Search date
-          <input id="admin-ugnlis-search-date" type="date" value="${adminAttr(String(adminUgNlisFieldValue(review, "ugnlis_search_date")).slice(0, 10))}" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs">
-        </label>
-      </div>
-      <label class="mt-2 block text-xs font-semibold text-emerald-950">Review notes
-        <textarea id="admin-ugnlis-notes" class="mt-1 w-full rounded-lg border border-emerald-200 bg-white px-2 py-2 text-xs" rows="3" placeholder="What was checked, what is still pending?">${adminEscape(adminUgNlisFieldValue(review, "ugnlis_search_notes"))}</textarea>
-      </label>
-      <div class="mt-3 flex gap-2 flex-wrap">
-        <button type="button" onclick="saveAdminLandVerificationReview()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-bold">Save Official Search Details</button>
-        <button type="button" onclick="copyAdminText('https://ugnlis.mlhud.go.ug/')" class="border border-emerald-200 text-emerald-800 hover:bg-white px-3 py-2 rounded-lg text-xs font-bold">Copy Portal Link</button>
-      </div>
-    </div>`;
-}
-
-function collectAdminLandVerificationPayload() {
-  return {
-    land_verification_status: document.getElementById("admin-ugnlis-status")?.value || "not_started",
-    ugnlis_search_letter_url: document.getElementById("admin-ugnlis-search-letter-url")?.value || "",
-    ugnlis_title_volume: document.getElementById("admin-ugnlis-title-volume")?.value || "",
-    ugnlis_title_folio: document.getElementById("admin-ugnlis-title-folio")?.value || "",
-    ugnlis_county: document.getElementById("admin-ugnlis-county")?.value || "",
-    ugnlis_block: document.getElementById("admin-ugnlis-block")?.value || "",
-    ugnlis_plot: document.getElementById("admin-ugnlis-plot")?.value || "",
-    ugnlis_transaction_number: document.getElementById("admin-ugnlis-transaction-number")?.value || "",
-    ugnlis_search_reference: document.getElementById("admin-ugnlis-search-reference")?.value || "",
-    ugnlis_search_date: document.getElementById("admin-ugnlis-search-date")?.value || "",
-    ugnlis_search_notes: document.getElementById("admin-ugnlis-notes")?.value || ""
-  };
-}
-
-async function copyAdminText(value) {
-  try {
-    await navigator.clipboard.writeText(String(value || ""));
-    toast("Copied.");
-  } catch (error) {
-    toast("Copy failed.");
-  }
-}
-
-async function saveAdminLandVerificationReview() {
-  if (!adminActiveReview?.id) return;
-  try {
-    const response = await apiFetch(`/api/admin/properties/${encodeURIComponent(adminActiveReview.id)}/land-verification`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(collectAdminLandVerificationPayload())
-    });
-    const updated = response?.data || {};
-    adminActiveReview.extra_fields = updated.extra_fields || adminActiveReview.extra_fields || {};
-    toast("UgNLIS land evidence saved.");
-    renderAdminReviewPanel(adminActiveReview);
-  } catch (error) {
-    toast(error.message || "Could not save UgNLIS evidence.");
-  }
-}
-
 function adminReviewSourceText(review = {}) {
   const extra = review.extra_fields && typeof review.extra_fields === "object" ? review.extra_fields : {};
   return [
@@ -16052,7 +16417,9 @@ function adminBuildFallbackSocialTrustReview(review = {}) {
   const sourceUrl = String(extra.source_post_url || extra.source_url || extra.video_url || review.video_url || "").trim();
   const sourceContactUrl = String(extra.source_contact_url || extra.source_channel_url || "").trim();
   const sourceName = String(extra.source_name || extra.source_agent_name || extra.public_display_name || review.lister_name || "").trim();
-  const publishedAt = String(extra.first_posted_online_at || extra.source_published_at || extra.video_published_at || "").trim();
+  const publishedAt = sourcePostDateNeedsPlatformConfirmation(extra)
+    ? ""
+    : String(extra.first_posted_online_at || extra.source_published_at || extra.video_published_at || "").trim();
   const location = [review.area, review.district, review.address].filter(Boolean).join(", ");
   const priceEvidence = review.price ? fmtP(review.price, review.price_period || "") : (extra.price_upon_application ? "Price upon application" : "");
   const contactPath = [review.lister_phone, review.lister_email, sourceContactUrl, sourceUrl].find((item) => String(item || "").trim()) || "";
@@ -20131,11 +20498,11 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   const studentsWelcome = type === "student" || extra.students_welcome === "yes";
   const fieldAgentAssisted = (lpVal("lp-field-agent-assisted") || "no") === "yes";
   const fieldAgentId = fieldAgentAssisted ? (normalizeFieldAgentCode(lpVal("lp-field-agent-id")) || lpVal("lp-field-agent-id") || null) : null;
+  const videoUrl = lpVal("lp-video-url");
+  const contactPref = lpVal("lp-contact-pref") || "both";
+  const availableFrom = lpVal("lp-available-from");
+  const inquiryReference = lpInquiryReference || generateListingInquiryRef();
   const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
-	      const videoUrl = lpVal("lp-video-url");
-	      const contactPref = lpVal("lp-contact-pref") || "both";
-	      const availableFrom = lpVal("lp-available-from");
-	      const inquiryReference = lpInquiryReference || generateListingInquiryRef();
   lpInquiryReference = inquiryReference;
   const newUntil = new Date(Date.now() + LISTING_NEW_WINDOW_MS).toISOString();
 
@@ -20283,15 +20650,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.land_size_value = landParsed.value;
     payload.land_size_unit = landParsed.unit;
     payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
-    payload.extra_fields.land_verification_status = extra.ugnlis_transaction_number ? "details_collected" : "not_started";
-    payload.extra_fields.ugnlis_title_volume = extra.ugnlis_title_volume || null;
-    payload.extra_fields.ugnlis_title_folio = extra.ugnlis_title_folio || null;
-    payload.extra_fields.ugnlis_county = extra.ugnlis_county || null;
-    payload.extra_fields.ugnlis_block = extra.ugnlis_block || null;
-    payload.extra_fields.ugnlis_plot = extra.ugnlis_plot || null;
-    payload.extra_fields.ugnlis_transaction_number = extra.ugnlis_transaction_number || null;
     payload.extra_fields.land_boundary_notes = extra.boundary_notes || null;
-    payload.extra_fields.ownership_verification_requested = ownerVerificationRequested;
   }
 
   if (type === "commercial") {
@@ -21803,7 +22162,7 @@ const ACCOUNT_ACCESS_SCREENING = {
     { key: "agent_specialities", label: "Main speciality?", options: ["Rentals", "Sales", "Land", "Student accommodation", "Commercial"] },
     { key: "agent_districts", label: "Main operating area?", options: ["Kampala", "Wakiso", "Mukono", "Entebbe", "Other"] },
     { key: "agent_company", label: "Agency status?", options: ["Independent broker", "Agency/company", "Developer", "Land specialist"] },
-    { key: "agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Other"] },
+    { key: "agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Arabic", "Other"] },
     { key: "active_listing_count", label: "Approximate active listings?", options: ["0-5", "6-20", "21-50", "50+"] }
   ],
   field_agent: [
@@ -21811,7 +22170,7 @@ const ACCOUNT_ACCESS_SCREENING = {
     { key: "field_agent_experience", label: "Field experience?", options: ["New", "Under 1 year", "1-3 years", "3+ years"] },
     { key: "field_agent_availability", label: "Availability?", options: ["Full time", "Part time", "Weekends", "Flexible"] },
     { key: "transport_access", label: "Transport access?", options: ["Walking/public transport", "Motorcycle", "Car", "Other"] },
-    { key: "field_agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Other"] }
+    { key: "field_agent_languages", label: "Languages spoken?", options: ["English", "Luganda", "Kiswahili", "Runyankole/Rukiga", "Acholi/Lusoga", "Amharic", "Arabic", "Other"] }
   ],
   advertiser: [
     { key: "campaign_interest", label: "Campaign goal?", options: ["Promote property", "Promote broker profile", "Promote student housing", "Promote mortgage/service", "General brand awareness"] },
@@ -23018,6 +23377,7 @@ function ensureAccountAccessDrawer() {
             <option value="rn">Rukiga</option>
             <option value="sm">Lusoga</option>
             <option value="am">Amharic</option>
+            <option value="ar">Arabic</option>
           </select>
         </div>
         <div id="account-access-role-list-wrap">
@@ -26725,6 +27085,28 @@ function listingFreshnessBadgeHtml(p = {}) {
   return "";
 }
 
+function sourcePostDateConfidence(extra = {}) {
+  const raw = extra?.raw_source_post && typeof extra.raw_source_post === "object" ? extra.raw_source_post : {};
+  return String(
+    extra.source_post_date_confidence
+      || extra.sourceDateConfidence
+      || extra.date_confidence
+      || raw.source_post_date_confidence
+      || raw.sourceDateConfidence
+      || raw.date_confidence
+      || ""
+  ).trim().toLowerCase();
+}
+
+function sourcePostDateNeedsPlatformConfirmation(extra = {}) {
+  const confidence = sourcePostDateConfidence(extra);
+  const raw = extra?.raw_source_post && typeof extra.raw_source_post === "object" ? extra.raw_source_post : {};
+  const importMethod = String(raw.import_method || extra.import_method || "").trim().toLowerCase();
+  const platform = String(extra.source_platform || "").trim().toLowerCase();
+  if (!confidence) return platform === "tiktok" && importMethod === "no_api_exact_social_url_intake";
+  return /inferred_from_public_post_id|inferred.*(?:video|status|post|id)|estimated|needs_.*date_confirmation/.test(confidence);
+}
+
 function foundOnlineSourceMeta(p = {}) {
   if (!isFoundOnlineListing(p)) return null;
   let extra = {};
@@ -26804,22 +27186,29 @@ function foundOnlineSourceMeta(p = {}) {
   ).trim();
   const sourceContactMethod = String(extra.source_contact_method || p.source_contact_method || "").trim();
   const followersLabel = String(extra.source_followers_label || extra.source_audience_label || "").trim();
-  const firstPosted = formatListingDate(
-    extra.first_posted_online_at
-    || extra.source_published_at
-    || extra.video_published_at
-    || extra.video_posted_at
-    || extra.post_published_at
-    || extra.post_posted_at
-    || extra.platform_posted_at
-    || extra.youtube_published_at
-    || extra.youtube_source_published_at
-    || extra.published_at
-    || extra.publishedAt
-    || extra.original_posted_at
-    || extra.source_posted_at
-  );
-  const firstPostedLabel = String(extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || extra.original_publish_date_status || "").trim();
+  const dateNeedsConfirmation = sourcePostDateNeedsPlatformConfirmation(extra);
+  const firstPosted = dateNeedsConfirmation
+    ? ""
+    : formatListingDate(
+      extra.first_posted_online_at
+      || extra.source_published_at
+      || extra.video_published_at
+      || extra.video_posted_at
+      || extra.post_published_at
+      || extra.post_posted_at
+      || extra.platform_posted_at
+      || extra.youtube_published_at
+      || extra.youtube_source_published_at
+      || extra.published_at
+      || extra.publishedAt
+      || extra.original_posted_at
+      || extra.source_posted_at
+    );
+  const firstPostedLabel = String(
+    dateNeedsConfirmation
+      ? (extra.original_publish_date_status || "Original post date is being confirmed from the source platform.")
+      : (extra.first_posted_online_label || extra.source_published_label || extra.youtube_source_published_label || extra.original_publish_date_status || "")
+  ).trim();
   const firstSeen = formatListingDate(extra.first_seen_online_at || extra.source_first_seen_at || extra.last_checked_at || p.created_at || p.createdAt);
   const firstSeenLabel = String(extra.first_seen_online_label || "").trim();
   const addedToMakaug = formatListingDate(extra.added_to_makaug_at || p.created_at || p.createdAt);
@@ -27093,108 +27482,6 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
         <div class="mt-2 text-xs text-slate-600 max-w-xs mx-auto">${translateListingLabel("Makaug shows facts and links back to the original source. Social media photos are not re-hosted here.")}</div>
       </div>
     </div>`;
-}
-
-const UGNLIS_PORTAL_URL = "https://ugnlis.mlhud.go.ug/";
-const UGNLIS_MINISTRY_PAGE_URL = "https://mlhud.go.ug/ugnlis/";
-const UGNLIS_SEARCH_FEE_UGX = 10000;
-const UGNLIS_SUPPORTED_ONLINE_SEARCH_DISTRICTS = ["Mukono", "Wakiso", "Kampala", "Moroto", "Arua", "Kabarole"];
-
-function getUgNlisVerificationPack(p = {}) {
-  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
-  const pack = p?.land_verification && typeof p.land_verification === "object" ? p.land_verification : extra.land_verification || {};
-  const titleRef = pack.title_reference
-    || [extra.ugnlis_title_volume && `Volume ${extra.ugnlis_title_volume}`, extra.ugnlis_title_folio && `Folio ${extra.ugnlis_title_folio}`].filter(Boolean).join(" / ");
-  const parcelRef = pack.parcel_reference
-    || [extra.ugnlis_county && `County ${extra.ugnlis_county}`, extra.ugnlis_block && `Block ${extra.ugnlis_block}`, extra.ugnlis_plot && `Plot ${extra.ugnlis_plot}`].filter(Boolean).join(" / ");
-  const status = pack.status || extra.land_verification_status || (extra.ugnlis_search_letter_url ? "search_letter_supplied" : "not_started");
-  const statusLabels = {
-    not_started: translatePropertyUi("Official search not supplied"),
-    details_collected: translatePropertyUi("Title details collected"),
-    search_letter_supplied: translatePropertyUi("Search letter supplied"),
-    official_verified: translatePropertyUi("Official search reviewed"),
-    issue_found: translatePropertyUi("Review needed")
-  };
-  return {
-    status,
-    status_label: pack.status_label || statusLabels[status] || statusLabels.not_started,
-    title_reference: titleRef || "",
-    parcel_reference: parcelRef || "",
-    search_letter_url: pack.search_letter_url || extra.ugnlis_search_letter_url || "",
-    transaction_number: pack.transaction_number || extra.ugnlis_transaction_number || "",
-    search_reference: pack.search_reference || extra.ugnlis_search_reference || "",
-    search_date: pack.search_date || extra.ugnlis_search_date || "",
-    notes: pack.notes || extra.ugnlis_search_notes || "",
-    official_portal_url: pack.official_portal_url || UGNLIS_PORTAL_URL,
-    ministry_page_url: pack.ministry_page_url || UGNLIS_MINISTRY_PAGE_URL,
-    search_fee_ugx: pack.search_fee_ugx || UGNLIS_SEARCH_FEE_UGX
-  };
-}
-
-function shouldShowUgNlisAdvisory(p = {}) {
-  const text = `${p.type || ""} ${p.listing_type || ""} ${p.category || ""} ${p.title || ""} ${p.property_type || ""} ${p.title_type || ""}`.toLowerCase();
-  const normalizedType = normalizeType(p.type || p.listing_type || p.category);
-  const titleSensitiveTypes = new Set(["land", "sale", "commercial"]);
-  return titleSensitiveTypes.has(normalizedType)
-    || /\b(land|plot|mailo|freehold|leasehold|customary|acre|acres|decimals?|title|tenure|commercial)\b/.test(text);
-}
-
-function isUgNlisLandListing(p = {}) {
-  return shouldShowUgNlisAdvisory(p);
-}
-
-function renderUgNlisVerificationCard(p = {}) {
-  if (!isUgNlisLandListing(p)) return "";
-  const pack = getUgNlisVerificationPack(p);
-  const evidence = [
-    pack.title_reference && [translatePropertyUi("Title details"), pack.title_reference],
-    pack.parcel_reference && [translatePropertyUi("Parcel details"), pack.parcel_reference],
-    pack.transaction_number && [translatePropertyUi("Transaction"), pack.transaction_number],
-    pack.search_reference && [translatePropertyUi("Search reference"), pack.search_reference],
-    pack.search_date && [translatePropertyUi("Search date"), formatListingDate(pack.search_date) || pack.search_date],
-  ].filter(Boolean);
-  const tooltipId = `ugnlis-portal-help-${String(p.id || p.listingId || "listing").replace(/[^a-z0-9_-]/gi, "") || "listing"}`;
-  const portalHelpTitle = translatePropertyUi("Before opening UgNLIS");
-  const portalHelpText = translatePropertyUi("UgNLIS process summary");
-  const portalHelpItems = [
-    translatePropertyUi("Title search: ask for title volume and folio, or county, block and plot."),
-    translatePropertyUi("Parcel search: ask for county/municipality/town council, plus block or road and plot number."),
-    translatePropertyUi("Transaction tracking: use the transaction number from the MZO receipt."),
-    translatePropertyUi("Public portal searches require UGX 10,000 per search.")
-  ];
-  return `
-    <section class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
-      <div class="flex items-start gap-3">
-        <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm">
-          <i class="fas fa-shield-halved"></i>
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <div class="text-xs uppercase tracking-wide font-black text-emerald-800">${translatePropertyUi("Official land verification")}</div>
-              <h3 class="mt-1 text-base font-black text-gray-900">${translatePropertyUi("Verify with UgNLIS")}</h3>
-            </div>
-            <span class="rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-bold text-emerald-800">${adminEscape(pack.status_label)}</span>
-          </div>
-          <p class="mt-2 text-sm text-emerald-950">${translatePropertyUi("Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.")}</p>
-          ${evidence.length ? `<div class="mt-3 grid gap-2 sm:grid-cols-2">${evidence.map(([label, value]) => `<div class="rounded-lg border border-emerald-100 bg-white p-2"><div class="text-[11px] uppercase tracking-wide text-emerald-700 font-bold">${adminEscape(label)}</div><div class="mt-0.5 text-sm font-semibold text-gray-800">${adminEscape(value)}</div></div>`).join("")}</div>` : ""}
-          <div class="mt-3 flex flex-wrap gap-2">
-            <span class="relative inline-flex group">
-              <a href="${UGNLIS_PORTAL_URL}" target="_blank" rel="noopener noreferrer" aria-describedby="${adminAttr(tooltipId)}" title="${adminAttr(`${portalHelpTitle}: ${portalHelpItems.join(" ")}`)}" class="inline-flex items-center gap-2 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-300">
-                <i class="fas fa-arrow-up-right-from-square"></i>${translatePropertyUi("Open UgNLIS portal")}
-              </a>
-              <span id="${adminAttr(tooltipId)}" role="tooltip" class="pointer-events-none absolute left-0 top-full z-30 mt-2 w-72 rounded-xl border border-emerald-200 bg-white p-3 text-left text-xs text-emerald-950 opacity-0 shadow-xl transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-                <span class="block font-black text-emerald-900">${adminEscape(portalHelpTitle)}</span>
-                <span class="mt-1 block">${adminEscape(portalHelpText)}</span>
-                <span class="mt-2 block space-y-1">${portalHelpItems.map((item) => `<span class="block">- ${adminEscape(item)}</span>`).join("")}</span>
-              </span>
-            </span>
-            ${pack.search_letter_url ? `<a href="${adminAttr(pack.search_letter_url)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-800 hover:bg-emerald-50"><i class="fas fa-file-shield"></i>${translatePropertyUi("Search letter")}</a>` : ""}
-          </div>
-          <p class="mt-3 text-xs text-emerald-800">${translatePropertyUi("User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.")}</p>
-        </div>
-      </div>
-    </section>`;
 }
 
 function formatListingDate(dateValue) {
@@ -28410,6 +28697,8 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/launch-control": { page: "admin-dashboard", tab: "review", selector: "#king-control-map", label: "Launch Control" },
   "/admin/moderation": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
   "/admin/review": { page: "admin-dashboard", tab: "review", selector: "#admin-review-queue-control", label: "Review Queue" },
+  "/admin/student-sweep": { page: "admin-dashboard", tab: "student-sweep", selector: "#admin-student-sweep-control", label: "Student Sweep" },
+  "/admin/youtube-sweep": { page: "admin-dashboard", tab: "youtube-sweep", selector: "#admin-youtube-sweep-control", label: "YouTube Sweep" },
   "/admin/rejected": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
   "/admin/actioned": { page: "admin-dashboard", tab: "actioned", selector: "#admin-actioned-listings-control", label: "Rejected / Actioned" },
   "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },
@@ -31895,26 +32184,16 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Open the public source page for contact details.": "Ggulawo omuko gw'ensibuko ey'olukale okulaba contact.",
       "No phone number is published. Use the source page to contact the lister.": "Tewali nnamba ya ssimu eteereddwawo. Kozesa omuko gw'ensibuko okukwatagana n'omulisi.",
       "Official platform embed. Makaug does not re-host social media photos or videos.": "Embed entongole eya platform. Makaug tedda ku server yaayo bifaananyi oba videos bya social media.",
-      "Official land verification": "Okukakasa ettaka mu nkola entongole",
-      "Verify with UgNLIS": "Kakasa ku UgNLIS",
-      "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Okunoonyereza okutongole kukolebwa ku UgNLIS. Kozesa portal ya gavumenti okukola title search n'okulondoola transactions; records za gavumenti ze nsibuko entuufu.",
-      "Open UgNLIS portal": "Ggulawo portal ya UgNLIS",
-      "Before opening UgNLIS": "Nga tonnaggulawo UgNLIS",
-      "UgNLIS process summary": "Tegeka ebikwata ku title oba parcel nga tonnatandika search entongole.",
       "Title search: ask for title volume and folio, or county, block and plot.": "Title search: saba title volume ne folio, oba county, block ne plot.",
       "Parcel search: ask for county/municipality/town council, plus block or road and plot number.": "Parcel search: saba county/municipality/town council, ne block oba road ne plot number.",
       "Transaction tracking: use the transaction number from the MZO receipt.": "Okulondoola transaction: kozesa transaction number eri ku receipt ya MZO.",
-      "Public portal searches require UGX 10,000 per search.": "Public portal search yetaaga UGX 10,000 buli search.",
       "Search letter": "Search letter",
       "Title details": "Ebikwata ku title",
       "Parcel details": "Ebikwata ku plot",
       "Transaction": "Transaction",
       "Search reference": "Search reference",
       "Search date": "Olunaku lw'okunoonyereza",
-      "Official search not supplied": "Search entongole tennaleetebwa",
       "Title details collected": "Ebikwata ku title bikuŋŋaanyiziddwa",
-      "Search letter supplied": "Search letter eleeteddwa",
-      "Official search reviewed": "Search entongole ekebereddwa",
       "Review needed": "Okukebera kwetaagisa",
       "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "Okumanyisa: okunoonyereza online kuyinza okubaawo ku Mukono, Wakiso, Kampala, Moroto, Arua, ne Kabarole ku UGX 10,000."
     },
@@ -32054,26 +32333,16 @@ const LISTING_LABEL_I18N_SUPPLEMENTAL = {
       "Open the public source page for contact details.": "Fungua ukurasa wa chanzo cha umma kupata mawasiliano.",
       "No phone number is published. Use the source page to contact the lister.": "Hakuna namba ya simu iliyochapishwa. Tumia ukurasa wa chanzo kuwasiliana na mtangazaji.",
       "Official platform embed. Makaug does not re-host social media photos or videos.": "Embed rasmi ya platform. Makaug haihost upya picha au video za mitandao ya kijamii.",
-      "Official land verification": "Uthibitishaji rasmi wa ardhi",
-      "Verify with UgNLIS": "Thibitisha kupitia UgNLIS",
-      "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "Utafutaji rasmi hufanyika kwenye UgNLIS. Tumia portal ya serikali kwa title search na transaction tracking; rekodi za serikali ndizo chanzo rasmi.",
-      "Open UgNLIS portal": "Fungua portal ya UgNLIS",
-      "Before opening UgNLIS": "Kabla ya kufungua UgNLIS",
-      "UgNLIS process summary": "Andaa taarifa za title au parcel kabla ya kuanza utafutaji rasmi.",
       "Title search: ask for title volume and folio, or county, block and plot.": "Title search: omba title volume na folio, au county, block na plot.",
       "Parcel search: ask for county/municipality/town council, plus block or road and plot number.": "Parcel search: omba county/municipality/town council, pamoja na block au road na plot number.",
       "Transaction tracking: use the transaction number from the MZO receipt.": "Transaction tracking: tumia transaction number kutoka risiti ya MZO.",
-      "Public portal searches require UGX 10,000 per search.": "Public portal search inahitaji UGX 10,000 kwa kila search.",
       "Search letter": "Search letter",
       "Title details": "Maelezo ya hati",
       "Parcel details": "Maelezo ya kiwanja",
       "Transaction": "Muamala",
       "Search reference": "Rejea ya utafutaji",
       "Search date": "Tarehe ya utafutaji",
-      "Official search not supplied": "Utafutaji rasmi haujatolewa",
       "Title details collected": "Maelezo ya hati yamekusanywa",
-      "Search letter supplied": "Search letter imetolewa",
-      "Official search reviewed": "Utafutaji rasmi umepitiwa",
       "Review needed": "Mapitio yanahitajika",
       "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "Taarifa: utafutaji online unaweza kupatikana kwa Mukono, Wakiso, Kampala, Moroto, Arua, na Kabarole kwa UGX 10,000."
     }
@@ -32144,11 +32413,6 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "Open the public source page for contact details.": "ለእውቂያ ዝርዝሮች የህዝብ ምንጭ ገጹን ይክፈቱ።",
   "No phone number is published. Use the source page to contact the lister.": "ስልክ ቁጥር አልታተመም። ዝርዝሩን ለማግኘት የምንጭ ገጹን ይጠቀሙ።",
   "Official platform embed. Makaug does not re-host social media photos or videos.": "ኦፊሴላዊ የመድረክ embed። Makaug የማህበራዊ ሚዲያ ፎቶዎችን ወይም ቪዲዮዎችን እንደገና አያስተናግድም።",
-  "Official land verification": "ኦፊሴላዊ የመሬት ማረጋገጫ",
-  "Verify with UgNLIS": "በ UgNLIS ያረጋግጡ",
-  "Official searches happen on UgNLIS. Use the government portal for title searches and transaction tracking; government records are the source of truth.": "ኦፊሴላዊ ፍለጋዎች በ UgNLIS ላይ ይካሄዳሉ። ለtitle search እና transaction tracking የመንግስት ፖርታልን ይጠቀሙ፤ የመንግስት መዝገቦች የእውነት ምንጭ ናቸው።",
-  "Open UgNLIS portal": "UgNLIS ፖርታል ክፈት",
-  "Official search not supplied": "ኦፊሴላዊ ፍለጋ አልቀረበም",
   "Review needed": "ግምገማ ያስፈልጋል",
   "Property": "ንብረት",
   "House": "ቤት",
@@ -32206,6 +32470,119 @@ Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.am ||= {}, {
   "suitable for development or long-term investment": "ለልማት ወይም ለረጅም ጊዜ ኢንቨስትመንት ተስማሚ ነው",
   "positioned for business operations and growth": "ለንግድ ስራዎች እና እድገት ጥሩ ቦታ ላይ ነው",
   "tailored for students and guardians seeking safe accommodation": "ደህንነቱ የተጠበቀ መኖሪያ ለሚፈልጉ ተማሪዎች እና አሳዳጊዎች የተዘጋጀ ነው"
+});
+
+Object.assign(LISTING_LABEL_I18N_SUPPLEMENTAL.ar ||= {}, {
+  "Drag & Drop Photos or Click to Browse": "اسحب الصور أو اضغط للاختيار",
+  "JPG, PNG or WEBP - up to 10MB each": "JPG أو PNG أو WEBP - حتى 10MB لكل صورة",
+  "Add one photo": "أضف صورة واحدة",
+  "Add multiple photos": "أضف عدة صور",
+  "Choose one image as the": "اختر صورة واحدة كـ",
+  "main photo": "الصورة الرئيسية",
+  "This will appear first in search results.": "ستظهر هذه أولاً في نتائج البحث.",
+  "Video tour": "جولة فيديو",
+  "Video preview": "معاينة الفيديو",
+  "This is how the video tour will appear after review.": "هكذا ستظهر جولة الفيديو بعد المراجعة.",
+  "This is how the video tour will appear after approval.": "هكذا ستظهر جولة الفيديو بعد الموافقة.",
+  "Play the walkthrough without leaving this page.": "شاهد الجولة دون مغادرة هذه الصفحة.",
+  "Open YouTube": "افتح YouTube",
+  "Open video link": "افتح رابط الفيديو",
+  "Add a YouTube walkthrough link to show an embedded preview here.": "أضف رابط جولة YouTube لعرض معاينة مدمجة هنا.",
+  "Field Agent assisted?": "هل ساعدك وكيل ميداني؟",
+  "Field Agent ID": "معرف الوكيل الميداني",
+  "A Field Agent is someone who helped you fill this form. Only select yes if makaug or a broker assistant supported you.": "الوكيل الميداني هو شخص ساعدك في تعبئة هذا النموذج. اختر نعم فقط إذا ساعدك makaug أو مساعد وسيط.",
+  "Only fill this if a Field Agent assisted you.": "املأ هذا فقط إذا ساعدك وكيل ميداني.",
+  "Confirm this location": "أكد هذا الموقع",
+  "Location confirmed": "تم تأكيد الموقع",
+  "No photos selected yet.": "لم يتم اختيار صور بعد.",
+  "Selected photos": "الصور المختارة",
+  "Photo quality check passed. Files are suitable for review.": "نجح فحص جودة الصور. الملفات مناسبة للمراجعة.",
+  "Third-party property result": "نتيجة عقار من طرف ثالث",
+  "This property was found from a public third-party source. Makaug provides a search and discovery preview only.": "تم العثور على هذا العقار من مصدر عام تابع لطرف ثالث. يقدم makaug معاينة بحث واكتشاف فقط.",
+  "Makaug has not verified ownership, availability, price, land title, seller authority, image rights, or contact details. Please check the original source and carry out independent verification before making any payment or arranging a viewing.": "لم يتحقق makaug من الملكية أو التوفر أو السعر أو سند الأرض أو صلاحية البائع أو حقوق الصور أو بيانات التواصل. يرجى فحص المصدر الأصلي والتحقق بشكل مستقل قبل أي دفع أو ترتيب معاينة.",
+  "Makaug does not claim ownership of third-party photos, videos, captions, descriptions, trademarks, or contact details. All third-party content remains the property of its original rights holder. Contact is handled through the original source.": "لا يدعي makaug ملكية صور أو فيديوهات أو تسميات أو أوصاف أو علامات تجارية أو بيانات تواصل خاصة بأطراف ثالثة. كل محتوى الطرف الثالث يبقى ملكاً لصاحب الحقوق الأصلي. يتم التواصل عبر المصدر الأصلي.",
+  "First posted online": "نشر أولاً على الإنترنت",
+  "First seen by makaug": "شوهد أولاً بواسطة makaug",
+  "First picked up by makaug": "التقطه makaug أولاً",
+  "Being confirmed from source": "يتم تأكيده من المصدر",
+  "Audience count to confirm from source": "عدد الجمهور يحتاج تأكيداً من المصدر",
+  "Original post date is being confirmed from the source platform.": "يتم تأكيد تاريخ النشر الأصلي من منصة المصدر.",
+  "Added to makaug": "أضيف إلى makaug",
+  "Source": "المصدر",
+  "source": "المصدر",
+  "Audience": "الجمهور",
+  "Open original source": "افتح المصدر الأصلي",
+  "Open source": "افتح المصدر",
+  "Contact original poster": "تواصل مع الناشر الأصلي",
+  "Claim this listing": "طالب بهذا الإعلان",
+  "Request correction": "اطلب تصحيحاً",
+  "Request removal": "اطلب الإزالة",
+  "Report fraud or incorrect information": "أبلغ عن احتيال أو معلومات غير صحيحة",
+  "Help us keep listings safe and accurate.": "ساعدنا في إبقاء الإعلانات آمنة ودقيقة.",
+  "Request submitted. makaug will review it.": "تم إرسال الطلب. سيراجعه makaug.",
+  "Please provide listing reference and reason.": "يرجى إضافة مرجع الإعلان والسبب.",
+  "Submit Report": "إرسال البلاغ",
+  "Details": "التفاصيل",
+  "Original source": "المصدر الأصلي",
+  "Public source contact": "تواصل المصدر العام",
+  "{platform} source contact": "تواصل مصدر {platform}",
+  "Contact via {platform} source": "تواصل عبر مصدر {platform}",
+  "Contact via source": "تواصل عبر المصدر",
+  "Contact through source": "تواصل عبر المصدر",
+  "Contact through the public social channel": "تواصل عبر القناة الاجتماعية العامة",
+  "Open source contact": "افتح تواصل المصدر",
+  "Open the public source page for contact details.": "افتح صفحة المصدر العامة لمعرفة بيانات التواصل.",
+  "No phone number is published. Use the source page to contact the lister.": "لم ينشر رقم هاتف. استخدم صفحة المصدر للتواصل مع المعلن.",
+  "Official platform embed. Makaug does not re-host social media photos or videos.": "تضمين رسمي من المنصة. لا يعيد makaug استضافة صور أو فيديوهات وسائل التواصل.",
+  "This is a third-party property result. Makaug is not the seller, broker, agent, land owner, or payment collector. Contact is handled through the original source.": "هذه نتيجة عقار من طرف ثالث. makaug ليس البائع أو الوسيط أو الوكيل أو مالك الأرض أو جامع المدفوعات. يتم التواصل عبر المصدر الأصلي.",
+  "Source contact is being confirmed by King review.": "يتم تأكيد تواصل المصدر عبر مراجعة King.",
+  "Source contact unavailable": "تواصل المصدر غير متاح",
+  "Original poster": "الناشر الأصلي",
+  "Makaug does not send enquiries to this lister. Use the original source to check availability, contact details, and payment instructions.": "لا يرسل makaug الاستفسارات إلى هذا المعلن. استخدم المصدر الأصلي لفحص التوفر وبيانات التواصل وتعليمات الدفع.",
+  "Property": "عقار",
+  "House": "منزل",
+  "Apartment": "شقة",
+  "Land": "أرض",
+  "Commercial": "تجاري",
+  "Student accommodation": "سكن طلاب",
+  "For Sale": "للبيع",
+  "To Rent": "للإيجار",
+  "Found online": "تم العثور عليه على الإنترنت",
+  "Sourced online": "مصدره الإنترنت",
+  "Price upon application": "السعر عند الطلب",
+  "Added": "أضيف",
+  "Added today": "أضيف اليوم",
+  "Added recently": "أضيف مؤخراً",
+  "Nearby": "بالقرب",
+  "Area": "المنطقة",
+  "District": "المديرية",
+  "Uganda": "أوغندا",
+  "Area Highlights": "أبرز مميزات المنطقة",
+  "Nearby Amenities": "المرافق القريبة",
+  "Property listing": "إعلان عقار",
+  "Commercial property": "عقار تجاري",
+  "Standalone House": "منزل مستقل",
+  "Office": "مكتب",
+  "bed": "غرفة نوم",
+  "beds": "غرف نوم",
+  "bath": "حمام",
+  "baths": "حمامات",
+  "Located in": "يقع في",
+  "Key facts": "حقائق رئيسية",
+  "Features include": "تشمل المميزات",
+  "Nearby highlights include": "تشمل أبرز الأماكن القريبة",
+  "Area summary": "ملخص المنطقة",
+  "Guide price": "السعر الإرشادي",
+  "Title Type": "نوع السند",
+  "Furnishing": "التأثيث",
+  "Minimum Contract": "أقل مدة عقد",
+  "Deposit": "العربون",
+  "Review needed": "تحتاج مراجعة",
+  "Private Preview": "معاينة خاصة",
+  "This listing is not live yet. You can edit the wording while it is pending review.": "هذا الإعلان ليس مباشراً بعد. يمكنك تعديل النص أثناء انتظار المراجعة.",
+  "Edit Title / Description": "تعديل العنوان / الوصف",
+  "Share Broker Card": "مشاركة بطاقة الوسيط",
+  "User notice: online searches may be available for Mukono, Wakiso, Kampala, Moroto, Arua, and Kabarole for UGX 10,000.": "تنبيه للمستخدم: قد تتوفر عمليات البحث عبر الإنترنت في Mukono وWakiso وKampala وMoroto وArua وKabarole مقابل UGX 10,000."
 });
 
 (() => {
@@ -32621,6 +32998,49 @@ PROPERTY_UI_I18N.am = Object.assign({}, PROPERTY_UI_I18N.sw, {
   "Open full Mortgage Finder": "ሙሉ Mortgage Finder ክፈት"
 });
 
+PROPERTY_UI_I18N.ar = Object.assign({}, PROPERTY_UI_I18N.sw, {
+  "AI Write Description": "اكتب الوصف بالذكاء الاصطناعي",
+  "AI description written. You can still edit it before submitting.": "تمت كتابة الوصف بالذكاء الاصطناعي. يمكنك تعديله قبل الإرسال.",
+  "Gallery": "المعرض",
+  "Location": "الموقع",
+  "Open Google Directions": "افتح اتجاهات Google",
+  "Directions unavailable": "الاتجاهات غير متاحة",
+  "Similar Properties": "عقارات مشابهة",
+  "Contact Lister": "تواصل مع المعلن",
+  "Contact Broker": "تواصل مع الوسيط",
+  "Public listing contact": "تواصل الإعلان العام",
+  "Call Contact": "اتصل بجهة التواصل",
+  "Call unavailable": "الاتصال غير متاح",
+  "WhatsApp Contact": "تواصل عبر WhatsApp",
+  "WhatsApp unavailable": "WhatsApp غير متاح",
+  "Call Broker": "اتصل بالوسيط",
+  "WhatsApp Broker": "WhatsApp الوسيط",
+  "View Broker": "عرض الوسيط",
+  "Send enquiry": "إرسال استفسار",
+  "Your name": "اسمك",
+  "Email optional": "البريد الإلكتروني اختياري",
+  "Message": "الرسالة",
+  "I am interested in {title}.": "أنا مهتم بـ {title}.",
+  "Your enquiry will go to {name}.": "سيصل استفسارك إلى {name}.",
+  "Save Property": "حفظ العقار",
+  "Saved to Profile": "تم الحفظ في الملف الشخصي",
+  "Sign in or create an account to keep it in your profile.": "سجل الدخول أو أنشئ حساباً للاحتفاظ به في ملفك الشخصي.",
+  "Save to your profile": "احفظ في ملفك الشخصي",
+  "Keep this property in your makaug account": "احتفظ بهذا العقار في حسابك على makaug",
+  "Create your free account or sign in to save {title}, track updates, and come back to it later.": "أنشئ حسابك المجاني أو سجل الدخول لحفظ {title} ومتابعة التحديثات والعودة إليه لاحقاً.",
+  "What happens next?": "ماذا يحدث بعد ذلك؟",
+  "The property will be saved straight to your personal profile after you sign in.": "سيتم حفظ العقار مباشرة في ملفك الشخصي بعد تسجيل الدخول.",
+  "You can review saved homes, compare options, and track your enquiries in one place.": "يمكنك مراجعة المنازل المحفوظة ومقارنة الخيارات ومتابعة استفساراتك في مكان واحد.",
+  "We will also send a welcome email when your account is created.": "سنرسل أيضاً بريداً ترحيبياً عند إنشاء حسابك.",
+  "Sign In": "تسجيل الدخول",
+  "No property is saved publicly. Saved homes stay inside the signed-in account only.": "لا يتم حفظ أي عقار بشكل عام. تبقى المنازل المحفوظة داخل الحساب المسجل فقط.",
+  "Mortgage Estimate": "تقدير الرهن",
+  "Deposit %": "نسبة العربون %",
+  "Term": "المدة",
+  "years": "سنوات",
+  "Open full Mortgage Finder": "افتح أداة Mortgage Finder كاملة"
+});
+
 function translatePropertyUi(text, vars = {}) {
   const lang = currentLang || "en";
   const fallback = LANG_FALLBACK[lang] || "en";
@@ -32781,15 +33201,9 @@ const LP_CONFIG = {
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
-      { key: "ugnlis_title_volume", label: "UgNLIS Title Volume", type: "text", placeholder: "Optional, if known" },
-      { key: "ugnlis_title_folio", label: "UgNLIS Title Folio", type: "text", placeholder: "Optional, if known" },
-      { key: "ugnlis_county", label: "County", type: "text", placeholder: "Optional, if known" },
-      { key: "ugnlis_block", label: "Block", type: "text", placeholder: "Optional, if known" },
-      { key: "ugnlis_plot", label: "Plot", type: "text", placeholder: "Optional, if known" },
-      { key: "ugnlis_transaction_number", label: "UgNLIS Transaction Number", type: "text", placeholder: "Optional, after official search" },
       { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
     ],
-    previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "ugnlis_plot", label: "UgNLIS Plot" }],
+    previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
     amenities: [
       { value: "road", label: "🛣️ Road Access" },
       { value: "water", label: "🌊 Water Nearby" },
@@ -33267,7 +33681,8 @@ function renderListingDescriptionTranslationPreview() {
     ny: "Runyankole",
     rn: "Rukiga",
     sm: "Lusoga",
-    am: "Amharic"
+    am: "Amharic",
+    ar: "Arabic"
   };
   if (!original) {
     copyEl.textContent = translateListingLabel("Add a description to preview it in another language.");
@@ -34416,7 +34831,6 @@ async function openDetail(id, options = {}) {
               ${renderPropertyShareActions(p, detailIdArg)}
             </div>
             ${listingOnlineSourceDisclosureHtml(p)}
-            ${renderUgNlisVerificationCard(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">${translateListingLabel("Private Preview")}</div>

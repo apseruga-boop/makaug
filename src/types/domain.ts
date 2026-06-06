@@ -1,4 +1,4 @@
-export type SupportedLanguage = 'en' | 'lg' | 'sw' | 'ac' | 'ny' | 'rn' | 'sm';
+export type SupportedLanguage = 'en' | 'lg' | 'sw' | 'ac' | 'ny' | 'rn' | 'sm' | 'am' | 'ar';
 
 export type TopLevelIntent =
   | 'property_search'

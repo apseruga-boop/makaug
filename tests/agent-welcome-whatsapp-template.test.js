@@ -31,7 +31,7 @@ assert(message.includes('team in Uganda'), 'Agent welcome message must sound Uga
 assert(message.includes('respectfully'), 'Agent welcome message must sound respectful, not arrogant');
 assert(message.includes('Free to list property'), 'Agent welcome message must call out free listing');
 assert(message.includes('No listing charge'), 'Agent welcome message must make the no-charge promise explicit');
-assert(message.includes('English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, or Amharic'), 'Agent welcome message must name the eight website languages');
+assert(message.includes('English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic, or Arabic'), 'Agent welcome message must name the nine website languages');
 assert(message.includes('reply LANG to change language'), 'Agent welcome message must explain language switching');
 assert(message.includes('Guide: the link above'), 'Agent welcome message must explain the click-through guide');
 assert(message.includes('WhatsApp'), 'Agent welcome message must mention WhatsApp listing help');
@@ -50,10 +50,11 @@ assert(cardHtml.includes('No listing charge'), 'Welcome page must make free list
 assert(cardHtml.includes('List free on makaug.com'), 'Welcome page must include a visible website listing CTA');
 assert(cardHtml.includes('agent-welcome-language'), 'Welcome page must include a visible language selector');
 assert(cardHtml.includes('AGENT_WELCOME_I18N'), 'Welcome page must include local language copy');
-['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am'].forEach((lang) => {
+['en', 'lg', 'sw', 'ac', 'ny', 'rn', 'sm', 'am', 'ar'].forEach((lang) => {
   assert(cardHtml.includes(`${lang}: {`), `Welcome page must include ${lang} translation copy`);
   assert(cardHtml.includes(`value="${lang}"`), `Welcome page must include ${lang} language option`);
 });
+assert(cardHtml.includes("document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'"), 'Welcome page must switch to RTL for Arabic');
 assert(cardHtml.includes('Agent welcome guide'), 'Welcome page must include the agent welcome guide');
 assert(cardHtml.includes('Use the website or WhatsApp'), 'Welcome page must explain website and WhatsApp listing capture');
 assert(cardHtml.includes('reply LANG to change language'), 'Welcome page must explain language switching');
@@ -69,7 +70,7 @@ assert(cardSvg.includes('Uganda agents,'), 'Welcome card must use a Uganda agent
 assert(cardSvg.includes('list property') && cardSvg.includes('for free'), 'Welcome card must include the grammatically correct free-listing promise');
 assert(cardSvg.includes('Built in Uganda'), 'Welcome card must sound Uganda-first');
 assert(cardSvg.includes('Free to list'), 'Welcome card must use free-list wording');
-assert(cardSvg.includes('8 languages'), 'Welcome card must include eight-language callout');
+assert(cardSvg.includes('9 languages'), 'Welcome card must include nine-language callout');
 assert(cardSvg.includes('WhatsApp help'), 'Welcome card must include WhatsApp help callout');
 assert(cardSvg.includes('makaug.com'), 'Welcome card must keep the makaug.com brand lowercase');
 assert(!cardSvg.includes('free today'), 'Welcome card must not say free today');

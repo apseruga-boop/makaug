@@ -307,6 +307,18 @@ function buildLocalizedAssistantFallbackText(languageCode, link) {
       'Nsobola okukuyamba okunoonya property, okulistinga, okunoonya agent, mortgage, ne account.',
       `🔗 ${link}`,
       'Support: 0760112587 oba info@makaug.com.'
+    ],
+    am: [
+      '🟩🟨 *makaug.com* | *Property help*',
+      'ንብረት መፈለግ፣ መዘርዘር፣ ወኪል ማግኘት፣ mortgage እና account እርዳታ ልረዳዎ እችላለሁ።',
+      `🔗 ${link}`,
+      'Support: 0760112587 ወይም info@makaug.com.'
+    ],
+    ar: [
+      '🟩🟨 *makaug.com* | *مساعدة العقارات*',
+      'أستطيع مساعدتك في البحث عن عقار، إدراج عقار، العثور على وكيل، إرشاد mortgage، ومساعدة الحساب.',
+      `🔗 ${link}`,
+      'الدعم: 0760112587 أو info@makaug.com.'
     ]
   };
   return (copy[code] || copy.en).join('\n');
@@ -379,7 +391,11 @@ function heuristicIntent(text) {
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
   }
-  if (/(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)) {
+  if (
+    /(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)
+    || /\b(?:am|i am|i'm|im|we are|we're)\s+selling\b.{0,140}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
+    || /\b(?:selling|sell)\s+(?:my|our|the|a|an)?\s*.{0,100}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
+  ) {
     return { intent: 'property_listing', confidence: 0.67, entities: {} };
   }
   if (/(support|human|call me|contact)/.test(t)) {
@@ -390,6 +406,9 @@ function heuristicIntent(text) {
   }
   if (/(save search|save this search|notify me|alert me|create alert|tell me when|let me know)/.test(t)) {
     return { intent: /(alert|notify|tell me|let me know)/.test(t) ? 'create_alert' : 'save_search', confidence: 0.7, entities: {} };
+  }
+  if (/(cheapest|cheap|affordable|budget[-\s]?friendly|lowest price|low cost|least expensive|bei nafuu|nafuu|gharama ndogo|ebbeeyi entono|ssente ntono|can i get|could i get|do you have).*(area|house|home|room|apartment|flat|property|rent|buy|stay|live|land|plot|student|hostel)?/.test(t)) {
+    return { intent: 'property_search', confidence: 0.72, entities: { affordability: true } };
   }
   if (/(filter|bedroom|bedrooms|min price|max price|under|above|house|apartment|studio|hostel|office|shop|warehouse|furnished|bathroom|amenit)/.test(t)) {
     return { intent: 'apply_filters', confidence: 0.66, entities: {} };
@@ -526,9 +545,9 @@ function parseAmountWithSuffix(rawNumber, suffix) {
   let amount = Number(String(rawNumber || '').replace(/[, ]+/g, ''));
   if (!Number.isFinite(amount) || amount <= 0) return null;
   const tail = String(suffix || '').toLowerCase();
-  if (tail === 'k') amount *= 1_000;
-  if (tail === 'm') amount *= 1_000_000;
-  if (tail === 'b') amount *= 1_000_000_000;
+  if (tail === 'k' || tail.startsWith('thousand')) amount *= 1_000;
+  if (tail === 'm' || tail.startsWith('million')) amount *= 1_000_000;
+  if (tail === 'b' || tail === 'bn' || tail.startsWith('billion')) amount *= 1_000_000_000;
   return amount;
 }
 
@@ -598,7 +617,7 @@ function parseBudgetHeuristic(text) {
   if (!raw) return { maxBudgetUgx: 0, budgetPeriod: null, convertedFromUsd: false };
 
   const lower = raw.toLowerCase().replace(/us dollars?/g, 'usd');
-  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*([kmb])?\s*(usd|ugx|ush|shs)?/gi;
+  const rx = /(?:(usd|\$|ugx|ush|shs)\s*)?(\d[\d,\s]*(?:\.\d+)?)\s*(thousand|thousands|million|millions|billion|billions|bn|k|m|b)?\s*(usd|ugx|ush|shs)?/gi;
   const candidates = [];
 
   let m;
@@ -770,14 +789,14 @@ async function detectWhatsappLanguage({ text = '', sessionLanguage = 'en', step 
 Supported languages: ${JSON.stringify(SUPPORTED_AI_LANGUAGES)}.
 Return strict JSON only:
 {
-  "language": "en|lg|sw|ac|ny|rn|sm|am",
+  "language": "en|lg|sw|ac|ny|rn|sm|am|ar",
   "confidence": number 0..1,
   "explicitSwitch": boolean,
   "reason": "short explanation"
 }
 Rules:
 - Detect the language the user is actually using, not the country, district, or property location.
-- If the user says "respond in English/Luganda/Kiswahili/Amharic/etc", set explicitSwitch true and use that requested language.
+- If the user says "respond in English/Luganda/Kiswahili/Amharic/Arabic/etc", set explicitSwitch true and use that requested language.
 - If text mixes languages, choose the language of the user's request.
 - Never treat a language name as a property search area.
 - Rukiga and Runyankole are Ugandan languages. Do not map them to Kinyarwanda.
@@ -876,7 +895,7 @@ Rules:
 - Detect Uganda language queries such as "Natafuta shamba Mbale", "Noonya enju eya rent e Kampala", and "Funa agent e Wakiso".
 - Convert USD to UGX using rate 1 USD = ${process.env.USD_TO_UGX_RATE || 3800}.
 - Treat Kampala, Wakiso, Mukono, Mbale, Jinja, Mbarara, Gulu, etc. as places, never as property types.
-- Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga/Amharic as languages, never as search areas.
+- Treat English/Luganda/Kiswahili/Acholi/Runyankole/Rukiga/Lusoga/Amharic/Arabic as languages, never as search areas.
 - Never invent impossible numbers.
 - If uncertain, set low confidence and leave field empty rather than hallucinating.`
         },
@@ -973,13 +992,15 @@ Return strict JSON only:
     - period: month | week | year | semester
     - bedrooms: number
     - property_type: house | villa | apartment | townhouse | bungalow | studio | office | warehouse | retail shop | hostel
-    - language: en | lg | sw | ac | ny | rn | sm | am
+    - language: en | lg | sw | ac | ny | rn | sm | am | ar
 }
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
-- Property listing must win when the user says they want to list, post, upload, submit, add, or create a listing/property, even when the same message says "for sale" or "to rent".
+- Property search also includes conversational affordability questions such as "what is the cheapest area to stay in?", "what is the cheapest area?", "can I get a house for $2 million?", "houses for 2 million", and equivalents in supported languages.
+- Property listing must win when the user says they want to list, post, upload, submit, add, create, advertise, or sell their own property/listing, including natural seller messages like "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent".
 - search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
-- apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, land title, or commercial type.
+- apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, title type, or commercial type.
+- Do not present makaug as an official title-checking, legal-clearance, or government records service. The assistant should mirror the website: search/list properties, contact sellers/brokers, use safety guidance, and recommend independent professional review before payment.
 - save_search and create_alert store location/radius when available. property_need_request is for no-results demand capture.
 - Agent search includes "find me an agent/broker" and equivalents in supported languages.
 - Language change requests like "respond in Luganda" should set entities.language and intent unknown unless another action is also requested.
@@ -1285,7 +1306,8 @@ Return strict JSON with this schema:
     "ny": {"title":"string","description":"string","area_highlights":"string"},
     "rn": {"title":"string","description":"string","area_highlights":"string"},
     "sm": {"title":"string","description":"string","area_highlights":"string"},
-    "am": {"title":"string","description":"string","area_highlights":"string"}
+    "am": {"title":"string","description":"string","area_highlights":"string"},
+    "ar": {"title":"string","description":"string","area_highlights":"string"}
   }
 }
 Rules:
