@@ -68,7 +68,7 @@ const MIN_PUBLIC_WHATSAPP_PRICE_UGX = 10000;
 const T = {
   en: {
     welcome: "🏠 Welcome to *makaug* - Uganda's free property platform!\n\nWhat would you like to do?\n1️⃣ List my property\n2️⃣ Search for a property\n3️⃣ Find an agent\n\nReply with 1, 2, or 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
     askFieldAgent: '🤝 Has a makaug.com Field Agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
@@ -150,7 +150,7 @@ const T = {
   },
   lg: {
     welcome: "🏠 Tukusuubiza ku *makaug* - eyitwa wangu ya property mu Uganda!\n\nOyagala kukola ki?\n1️⃣ Okwetayirira eby'ensi byange\n2️⃣ Okunoonyereza ensi\n3️⃣ Okunoonya musomesa\n\nSuula 1, 2 oba 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: "🏠 Kyoyetaagadde okutereka kya ki?\n1️⃣ Enju/Ensi okutunda\n2️⃣ Enju okusasula\n3️⃣ Ttaka\n4️⃣ Eby'okulala by'abayizi\n5️⃣ Ensi ez'ebikolwa",
     askOwnership: "✅ Ggwe nnyini ensi ono oba agent?\n1️⃣ Nze nnyini\n2️⃣ Nze agent",
     askFieldAgent: '🤝 Waliwo Field Agent wa makaug.com eyakuyambye ku listing eno?\n1️⃣ Yee\n2️⃣ Nedda',
@@ -277,28 +277,28 @@ const T = {
   },
   ac: {
     welcome: "🏠 Itye ber i *makaug* — kabedo me free property i Uganda!\n\nIn mito timo ngo?\n1️⃣ Keto ot megi\n2️⃣ Yeny ot\n3️⃣ Nong agent\n\nDwog 1, 2 onyo 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Pe atamo. Tim ber idwog ki namba me ayero.',
     languageUpdated: '✅ Dhok ma idiyo olokke.',
     restarted: '🔄 Session ocake manyen.'
   },
   ny: {
     welcome: "🏠 Kaza omu *makaug* — ahari free property platform ya Uganda!\n\nNoyenda kukora ki?\n1️⃣ Kuteeka property yangye\n2️⃣ Kushangisa property\n3️⃣ Kushanga agent\n\nGarukamu 1, 2 nari 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Tinkyetegire. Garukamu namba emwe omu zirikurondorwa.',
     languageUpdated: '✅ Orurimi ruhindukire.',
     restarted: '🔄 Session etandikire bupya.'
   },
   rn: {
     welcome: "🏠 Kaze kuri *makaug* — urubuga rw'ubuntu rw'imitungo muri Uganda!\n\nUshaka gukora iki?\n1️⃣ Kwandikisha umutungo\n2️⃣ Gushaka umutungo\n3️⃣ Gushaka agent\n\nSubiza 1, 2 canke 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Sinabitahura. Subiza nimero iri hejuru.',
     languageUpdated: '✅ Ururimi rwahinduwe.',
     restarted: '🔄 Session yatanguye bundi bushya.'
   },
   sm: {
     welcome: "🏠 Mirembe ku *makaug* — urubuga rwa property olwa bwerere mu Uganda!\n\nOyagala okukola ki?\n1️⃣ Okuteeka property yange\n2️⃣ Okunoonya property\n3️⃣ Okunoonya agent\n\nDdamu 1, 2 oba 3",
-    chooseLanguage: 'Choose your language / Gyenda mu lulimi lwo:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga',
+    chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     invalidInput: '❓ Tebinnyonnyodde bulungi. Ddamu namba emu ku ziri waggulu.',
     languageUpdated: '✅ Olulimi luhinduddwa.',
     restarted: '🔄 Session etandise bupya.'
@@ -497,7 +497,7 @@ Object.assign(T.sm, {
   voiceTranscriptEcho: '🎙️ Mpulidde nti: "{transcript}"'
 });
 
-const WHATSAPP_LANGUAGE_MENU = 'Choose your language / ቋንቋዎን ይምረጡ:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ';
+const WHATSAPP_LANGUAGE_MENU = 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية';
 
 T.am = Object.assign({}, T.en, {
   welcome: "🏠 ወደ *makaug* እንኳን በደህና መጡ - የኡጋንዳ ነፃ የንብረት መድረክ!\n\nምን ማድረግ ይፈልጋሉ?\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\n1፣ 2 ወይም 3 ብለው ይመልሱ",
@@ -579,6 +579,88 @@ T.am = Object.assign({}, T.en, {
   voiceTranscriptEcho: '🎙️ እንዲህ ብለዋል: "{transcript}"',
   genericSaveError: '❌ ዝርዝርዎን በማስቀመጥ ላይ ችግኝ ተፈጥሯል። እንደገና ይሞክሩ ወይም {url} ይጎብኙ።',
   genericWebhookError: 'ይቅርታ፣ ችግኝ ተፈጥሯል። እንደገና ይሞክሩ ወይም {url} ይጎብኙ።'
+});
+
+T.ar = Object.assign({}, T.en, {
+  welcome: "🏠 مرحباً بك في *makaug* - منصة العقارات المجانية في أوغندا!\n\nماذا تريد أن تفعل؟\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nأرسل 1 أو 2 أو 3",
+  chooseLanguage: WHATSAPP_LANGUAGE_MENU,
+  askListingType: '🏠 ماذا تريد أن تدرج؟\n1️⃣ بيت/عقار للبيع\n2️⃣ بيت/عقار للإيجار\n3️⃣ أرض/قطعة\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري',
+  askOwnership: '✅ هل أنت مالك هذا العقار أم وكيل يدرجه نيابة عن المالك؟\n1️⃣ أنا المالك\n2️⃣ أنا وكيل',
+  askFieldAgent: '🤝 هل ساعدك Field Agent من makaug.com في هذا الإعلان؟\n1️⃣ نعم\n2️⃣ لا',
+  askFieldAgentDetails: 'أرسل Field Agent ID، مثلاً FA-0001، حتى نعطي الشخص الصحيح credit.',
+  askTitle: '✏️ أعط العقار عنواناً قصيراً، مثل "3-bedroom house in Ntinda Kampala":',
+  askDistrict: '📍 في أي district يقع العقار؟ مثال: Kampala, Wakiso, Mukono',
+  askArea: '🗺️ ما المنطقة أو الحي؟',
+  askPrice: '💰 ما السعر المطلوب بالشلن الأوغندي؟ أرقام فقط، مثال 250000000',
+  askBedrooms: '🛏 كم عدد غرف النوم؟ اكتب رقماً، أو 0 إذا لا ينطبق.',
+  askDescription: '📝 اكتب وصفاً واضحاً للعقار: الموقع، الميزات، الحالة، والمعالم القريبة.',
+  askPhotos: '📸 أرسل أولاً صورة *front/outside*.',
+  askPublicName: '👤 ما الاسم الذي يجب أن يظهر علناً على الإعلان؟',
+  askContactMethod: '📲 كيف يجب أن يتواصل معك الجادون؟\n1️⃣ WhatsApp / phone\n2️⃣ Email',
+  askContactValuePhone: '📱 أرسل رقم WhatsApp/phone للاستفسارات.\nFormat: +256 7XX XXX XXX',
+  askContactValueEmail: '✉️ أرسل email للاستفسارات.',
+  askIDNumber: '🪪 للأمان نحتاج National ID Number (NIN). لن يظهر للعامة.\n\nاكتب NIN:',
+  askSelfie: '🤳 أرسل صورة واضحة لك وأنت تحمل National ID. لا ترسل PDF أو document file.',
+  askPhone: '📱 ما رقم هاتفك للتحقق؟\nFormat: +256 7XX XXX XXX',
+  otpSent: '📲 أرسلنا رمزاً من 6 أرقام عبر SMS. اكتب الرمز هنا:',
+  otpSentEmail: '✉️ أرسلنا رمزاً من 6 أرقام إلى email. اكتب الرمز هنا:',
+  listingSubmitted: "🎉 *تم إرسال إعلانك!*\n\nسيراجعه فريقنا ويجعله live خلال 24 ساعة.\n\nReference: #{ref}\n\n✅ الخطوة التالية: أنشئ profile لتتبع views و saves و enquiries.\n\nشكراً لاستخدام makaug! 🏠🇺🇬",
+  invalidInput: "❓ لم أفهم ذلك. يرجى الرد بأحد الخيارات أعلاه.",
+  verifyOTP: 'اكتب رمز الـ6 أرقام الذي أرسلناه عبر SMS:',
+  otpSuccess: '✅ تم التحقق من الهاتف!',
+  otpFailed: '❌ الرمز غير صحيح. حاول مرة أخرى أو اكتب RESEND.',
+  askDeposit: '💵 كم مبلغ deposit المطلوب؟ بالـUGX، أرقام فقط.',
+  askContract: '📅 ما أقل مدة للعقد بالأشهر؟',
+  askUniversity: '🎓 ما أقرب جامعة؟',
+  askDistance: '🚶 كم يبعد العقار عن الجامعة بالكيلومترات؟',
+  askSearchType: '🔎 ماذا تبحث عنه؟\n1️⃣ للبيع\n2️⃣ للإيجار\n3️⃣ أرض\n4️⃣ سكن طلاب\n5️⃣ عقار تجاري\n6️⃣ أي شيء',
+  askSearchArea: '📍 ما المنطقة أو district الذي تبحث فيه؟ يمكنك أيضاً مشاركة WhatsApp location.',
+  locationSharedReceived: '📍 تم استلام الموقع. سأبحث أولاً ضمن 10 أميال منك.',
+  locationSavedChooseSearch: '📍 تم استلام الموقع. ماذا تريد أن أبحث قرب هذا المكان؟',
+  outsideUgandaLocation: 'يبدو أن هذا الموقع خارج أوغندا، لذلك لا أستطيع البحث عن listings قريبة. اختر منطقة داخل أوغندا أو اكتب *all Uganda*.',
+  searchNoNearbyResults: 'لم أجد listings معتمدة ضمن 10 أميال. سأعرض أقرب الخيارات المتاحة.',
+  widenNearbySearch: 'اكتب *WIDEN* إذا أردت توسيع منطقة البحث.',
+  kmAway: 'كم بعيداً',
+  searchNoResults: 'لا يوجد حالياً listing معتمد مطابق لبحثك.',
+  askAgentArea: '👔 لأي district أو منطقة تحتاج وكيلاً؟',
+  noAgentsFound: 'لا يوجد حالياً وكيل موثق مطابق لتلك المنطقة.',
+  menuHint: 'اكتب MENU في أي وقت للعودة إلى القائمة الرئيسية.',
+  languageUpdated: '✅ تم تحديث اللغة.',
+  restarted: '🔄 تم بدء الجلسة من جديد.',
+  searchHeader: 'أفضل العقارات المطابقة',
+  agentHeader: 'وكلاء موثقون',
+  titleTooShort: 'العنوان قصير جداً. يرجى كتابة عنوان واضح.',
+  invalidPrice: '❌ أدخل سعراً صحيحاً بالـUGX، أرقام فقط.',
+  descriptionTooShort: 'يرجى كتابة وصف أطول قليلاً.',
+  needAtLeastOnePhoto: '❌ أرسل الصور الخمس المطلوبة قبل كتابة DONE.',
+  needExactlyFivePhotos: '❌ ارفع 5 صور بالضبط: front, sitting room, bedroom, kitchen, bathroom.',
+  photosUploaded: '📸 تم استلام {count} صور. اكتب *DONE* للمتابعة أو أرسل صوراً مفيدة إضافية.',
+  photoReceived: '✅ تم استلام صورة {count}.',
+  invalidNin: '❌ أدخل National ID Number (NIN) صحيحاً.',
+  sendSelfiePhotoOnly: '❌ أرسل صورة National ID/selfie فقط. لا ترسل PDF أو document file.',
+  invalidPhone: '❌ صيغة الهاتف غير صحيحة. جرّب: 0760112587',
+  visitMoreListings: 'شاهد المزيد من listings على {url}.',
+  seeAllAgents: 'شاهد كل الوكلاء: {url}',
+  nextPropertySearchActions: 'التالي: اضغط رابط listing لعرض الصور والخريطة أو طلب viewing/callback. أرسل *2* للبحث من جديد، *MENU* للقائمة، أو *WIDEN* إذا كان بحثاً قريباً.',
+  noMatchNextActions: 'التالي: أرسل منطقة أو district أو budget أو property type أو bedrooms أخرى، أو شارك موقعك. يمكنك أيضاً إرسال *2* أو *MENU*.',
+  replySearchAgain: 'أرسل 2 للبحث من جديد.',
+  replyAgentAgain: 'أرسل 3 للبحث عن وكيل آخر.',
+  areasLabel: 'المناطق',
+  ratingLabel: 'التقييم',
+  callLabel: 'اتصال',
+  whatsappLabel: 'WhatsApp',
+  profileLabel: 'Profile',
+  typeSale: 'للبيع',
+  typeRent: 'للإيجار',
+  typeLand: 'أرض',
+  typeStudent: 'طلاب',
+  typeCommercial: 'تجاري',
+  typeAny: 'أي',
+  voiceNotUnderstood: '🎙️ استلمت رسالتك الصوتية، لكن لم أفهمها بوضوح. أرسلها مرة أخرى بصوت واضح أو اكتب الرسالة.',
+  voiceTranscriptionUnavailable: '🎙️ استلمت رسالتك الصوتية، لكن transcription غير مفعل حالياً. يرجى كتابة الرسالة الآن.',
+  voiceTranscriptEcho: '🎙️ قلت: "{transcript}"',
+  genericSaveError: '❌ حدث خطأ أثناء حفظ listing. حاول مرة أخرى أو زر {url}',
+  genericWebhookError: 'عذراً، حدث خطأ. حاول مرة أخرى أو زر {url}'
 });
 
 Object.keys(T).forEach((lang) => {
@@ -715,7 +797,8 @@ function welcomeMessage(lang, sessionData = {}) {
     ny: `Toorana eki orikwenda:\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba.`,
     rn: `Hitamo ico ukeneye:\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe.`,
     sm: `Londa ky'oyagala:\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nOsobola n'okuwandika nga "ennyumba e Jinja".`,
-    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`
+    am: `የሚፈልጉትን ይምረጡ:\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ፣ ለምሳሌ "2 bedroom house in Kampala".`,
+    ar: `اختر ما تحتاجه:\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nيمكنك أيضاً الكتابة بشكل طبيعي، مثل "2 bedroom house in Kampala".`
   };
   return `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n\n${menus[code] || menus.en}\n\nBrowse makaug anytime: ${HOME_URL}`;
 }
@@ -732,6 +815,7 @@ function detectLanguageFromText(text) {
     { code: 'ny', confidence: 0.86, re: /\b(oraire|osiibire|webare|shaka|nyowe|runyankole)\b/ },
     { code: 'rn', confidence: 0.84, re: /\b(mwaramutse|mwiriwe|murakoze|shaka|rukiga)\b/ },
     { code: 'am', confidence: 0.9, re: /\b(ሰላም|እንደምን|አመሰግናለሁ|ቤት|መሬት|ኪራይ|ሽያጭ|ንብረት|ወኪል|ደላል|ፈልግ|አማርኛ)\b/ },
+    { code: 'ar', confidence: 0.9, re: /(?:\b(arabic)\b|[\u0600-\u06FF]{2,}|العربية|عربي|سلام|مرحبا|أبحث|ابحث|بيت|منزل|عقار|أرض|إيجار|للبيع|وكيل|دلال)/u },
     { code: 'en', confidence: 0.9, re: /\b(hello|hi|hey|good morning|good afternoon|good evening|search|looking|need|want|rent|buy|house|home|property|agent|broker|land|commercial|student|accommodation|hostel|apartment|flat)\b/ }
   ];
 
@@ -916,8 +1000,8 @@ function fastWhatsappRuntimeHints({
 function parseLanguageChange(text) {
   const clean = normalizeInput(text).toLowerCase();
   if (!clean) return '';
-  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry|respond|reply|answer|write)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+|with\s+)?(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ)\b/u);
-  const direct = clean.match(/^(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ)$/u);
+  const explicit = clean.match(/\b(?:change|switch|set|speak|use|talk|continue|carry on|carry|respond|reply|answer|write)\s+(?:the\s+conversation\s+)?(?:my\s+)?(?:language\s+)?(?:to\s+|in\s+|with\s+)?(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ|arabic|عربي|العربية)\b/u);
+  const direct = clean.match(/^(english|luganda|lugandan|lunganda|lugand|kiswahili|ki swahili|swahili|acholi|runyankole|rukiga|lusoga|amharic|amharinya|amhara|አማርኛ|arabic|عربي|العربية)$/u);
   const value = (explicit || direct || [])[1] || '';
   const map = {
     english: 'en',
@@ -935,7 +1019,10 @@ function parseLanguageChange(text) {
     amharic: 'am',
     amharinya: 'am',
     amhara: 'am',
-    'አማርኛ': 'am'
+    'አማርኛ': 'am',
+    arabic: 'ar',
+    'عربي': 'ar',
+    'العربية': 'ar'
   };
   return map[value] || '';
 }
@@ -969,7 +1056,12 @@ function normalizeTranscriptionLanguage(value) {
     amh: 'am',
     amharic: 'am',
     amharinya: 'am',
-    'አማርኛ': 'am'
+    'አማርኛ': 'am',
+    ar: 'ar',
+    ara: 'ar',
+    arabic: 'ar',
+    'عربي': 'ar',
+    'العربية': 'ar'
   };
   return map[clean] || map[clean.split(/[-_]/)[0]] || '';
 }
@@ -1093,7 +1185,8 @@ function friendlyGreetingReply(lang, sessionData = {}) {
     ny: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Toorana eki orikwenda*\n1️⃣ Handiika property yaawe\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nNoobaasa kuhandiika nk'omuntu arikugamba, ninga share location yaawe.`,
     rn: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Hitamo ico ukeneye*\n1️⃣ Shyira property yaaweho\n2️⃣ Shaka property\n3️⃣ Shaka agent\n\nMushobora kwandika bisanzwe cyangwa mugasangiza location.`,
     sm: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*Londa ky'oyagala*\n1️⃣ Listing y'ennyumba yo\n2️⃣ Noonya ennyumba\n3️⃣ Funa agent\n\nWandika nga: "ennyumba e Jinja", "abayizi okumpi nange", oba weereza location yo.`,
-    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*የሚፈልጉትን ይምረጡ*\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ: "2 bedroom house in Kampala", "student room near me", ወይም locationዎን ያጋሩ።`
+    am: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*የሚፈልጉትን ይምረጡ*\n1️⃣ ንብረቴን ዘርዝር\n2️⃣ ንብረት ፈልግ\n3️⃣ ወኪል ፈልግ\n\nበተፈጥሮ መጻፍም ይችላሉ: "2 bedroom house in Kampala", "student room near me", ወይም locationዎን ያጋሩ።`,
+    ar: `${whatsappBrandHeader('Property assistant')}\n${lead} 👋\n${assistantIntro(code)}\n${languageLine}\n\n*اختر ما تحتاجه*\n1️⃣ أدرج عقاري\n2️⃣ ابحث عن عقار\n3️⃣ ابحث عن وكيل\n\nيمكنك أيضاً الكتابة بشكل طبيعي: "2 bedroom house in Kampala"، "student room near me"، أو مشاركة location.`
   };
   return `${messages[code] || messages.en}\n\n${t(code, 'menuHint')}`;
 }
@@ -1101,14 +1194,15 @@ function friendlyGreetingReply(lang, sessionData = {}) {
 function languageComfortLine(lang) {
   const code = resolveLangCode(lang);
   const messages = {
-    en: 'Speak English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga or Amharic. I will reply in your language.',
-    lg: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga oba Amharic. Nja kuddamu mu lulimi lwo.',
-    sw: 'Tumia English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga au Amharic. Nitajibu kwa lugha yako.',
-    ac: 'Lok ki English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga onyo Amharic. Abino dwoko i leb mamegi.',
-    ny: 'Gamba omu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga nari Amharic. Ninyija kugarukamu omu rurimi rwawe.',
-    rn: 'Vuga mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga canke Amharic. Nzasubiza mu rurimi rwanyu.',
-    sm: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga oba Amharic. Nja kuddamu mu lulimi lwo.',
-    am: 'English፣ Luganda፣ Kiswahili፣ Acholi፣ Runyankole፣ Rukiga፣ Lusoga ወይም አማርኛ መጻፍ ይችላሉ። በቋንቋዎ እመልሳለሁ።'
+    en: 'Speak English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic or Arabic. I will reply in your language.',
+    lg: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic oba Arabic. Nja kuddamu mu lulimi lwo.',
+    sw: 'Tumia English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic au Arabic. Nitajibu kwa lugha yako.',
+    ac: 'Lok ki English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic onyo Arabic. Abino dwoko i leb mamegi.',
+    ny: 'Gamba omu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic nari Arabic. Ninyija kugarukamu omu rurimi rwawe.',
+    rn: 'Vuga mu English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic canke Arabic. Nzasubiza mu rurimi rwanyu.',
+    sm: 'Jogera English, Luganda, Kiswahili, Acholi, Runyankole, Rukiga, Lusoga, Amharic oba Arabic. Nja kuddamu mu lulimi lwo.',
+    am: 'English፣ Luganda፣ Kiswahili፣ Acholi፣ Runyankole፣ Rukiga፣ Lusoga፣ አማርኛ ወይም Arabic መጻፍ ይችላሉ። በቋንቋዎ እመልሳለሁ።',
+    ar: 'يمكنك الكتابة بالإنجليزية أو Luganda أو Kiswahili أو Acholi أو Runyankole أو Rukiga أو Lusoga أو Amharic أو العربية. سأرد بلغتك.'
   };
   return messages[code] || messages.en;
 }
@@ -4851,6 +4945,30 @@ function isFoundOnlineWhatsappRow(row = {}) {
     || ((sourceType.includes('social') || sourceType.includes('online') || looksSocial) && hasSourceTrail);
 }
 
+function foundOnlineSourceDateConfidence(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
+  return normalizeInput(
+    extra.source_post_date_confidence
+      || extra.sourceDateConfidence
+      || extra.date_confidence
+      || raw.source_post_date_confidence
+      || raw.sourceDateConfidence
+      || raw.date_confidence
+      || ''
+  ).toLowerCase();
+}
+
+function foundOnlineSourceDateNeedsConfirmation(row = {}) {
+  const confidence = foundOnlineSourceDateConfidence(row);
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
+  const importMethod = normalizeInput(raw.import_method || extra.import_method || '').toLowerCase();
+  const platform = normalizeInput(extra.source_platform || '').toLowerCase();
+  if (!confidence) return platform === 'tiktok' && importMethod === 'no_api_exact_social_url_intake';
+  return /inferred_from_public_post_id|inferred.*(?:video|status|post|id)|estimated|needs_.*date_confirmation/.test(confidence);
+}
+
 function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
   if (!isFoundOnlineWhatsappRow(row)) return '';
   const code = resolveLangCode(lang);
@@ -4865,19 +4983,21 @@ function formatFoundOnlineSourceLine(row = {}, lang = 'en') {
   const audience = normalizeInput(getExtraField(row, 'source_followers_label') || getExtraField(row, 'source_audience_label'));
   const firstSeenRaw = getExtraField(row, 'first_seen_online_at') || getExtraField(row, 'last_checked_at') || row.created_at;
   const firstSeen = firstSeenRaw ? String(firstSeenRaw).slice(0, 10) : '';
-  const firstPostedRaw = getExtraField(row, 'first_posted_online_at')
-    || getExtraField(row, 'source_published_at')
-    || getExtraField(row, 'video_published_at')
-    || getExtraField(row, 'video_posted_at')
-    || getExtraField(row, 'post_published_at')
-    || getExtraField(row, 'post_posted_at')
-    || getExtraField(row, 'platform_posted_at')
-    || getExtraField(row, 'youtube_published_at')
-    || getExtraField(row, 'youtube_source_published_at')
-    || getExtraField(row, 'published_at')
-    || getExtraField(row, 'publishedAt')
-    || getExtraField(row, 'original_posted_at')
-    || getExtraField(row, 'source_posted_at');
+  const firstPostedRaw = foundOnlineSourceDateNeedsConfirmation(row)
+    ? ''
+    : getExtraField(row, 'first_posted_online_at')
+      || getExtraField(row, 'source_published_at')
+      || getExtraField(row, 'video_published_at')
+      || getExtraField(row, 'video_posted_at')
+      || getExtraField(row, 'post_published_at')
+      || getExtraField(row, 'post_posted_at')
+      || getExtraField(row, 'platform_posted_at')
+      || getExtraField(row, 'youtube_published_at')
+      || getExtraField(row, 'youtube_source_published_at')
+      || getExtraField(row, 'published_at')
+      || getExtraField(row, 'publishedAt')
+      || getExtraField(row, 'original_posted_at')
+      || getExtraField(row, 'source_posted_at');
   const firstPosted = firstPostedRaw ? String(firstPostedRaw).slice(0, 10) : '';
   const addedRaw = getExtraField(row, 'added_to_makaug_at') || row.created_at;
   const added = addedRaw ? String(addedRaw).slice(0, 10) : '';
@@ -5139,6 +5259,17 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
       footer: 'ፎቶ፣ ካርታ እና የመጠየቂያ አማራጮች ያሉበትን ሙሉ የ makaug ገጽ ለመክፈት ማንኛውንም ሊንክ ይንኩ።',
       opensOnmakaug: 'እያንዳንዱ ውጤት በ makaug ላይ ፎቶ፣ ካርታ እና የመጠየቂያ አማራጮችን ይከፍታል።',
       moreResults: '{total} ተዛማጅ ንብረቶች ተገኝተዋል። አዲሶቹን {shown} አሳይቻለሁ። ተጨማሪ ይመልከቱ: {url}'
+    },
+    ar: {
+      filter: 'تصفية',
+      bed: 'غرفة نوم',
+      bath: 'حمام',
+      preview: 'معاينة',
+      open: 'افتح الصور والخريطة والاستفسار',
+      available: 'متاح',
+      footer: 'اضغط أي رابط لفتح صفحة makaug الكاملة مع الصور والخريطة وخيارات الاستفسار.',
+      opensOnmakaug: 'كل نتيجة تفتح على makaug مع الصور والخريطة وخيارات الاستفسار.',
+      moreResults: 'تم العثور على {total} عقارات مطابقة. عرضت أحدث {shown}. شاهد المزيد: {url}'
     }
   };
   const copy = cardCopy[code] || cardCopy.en;
@@ -5250,7 +5381,7 @@ function menuRouteReply(lang, route) {
   if (route === 'agent_area') return { message: t(lang, 'askAgentArea'), nextStep: 'agent_area' };
   if (route === 'agent_registration') {
     return {
-      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join makaug.com as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive WhatsApp leads, and use eight website languages.\n\n${t(lang, 'menuHint')}`,
+      message: `${whatsappBrandHeader('Broker sign-up')}\nIf you want to join makaug.com as an agent or broker, start here:\n${HOME_URL}/broker-signup\n\nAlready have an account? Log in here:\n${HOME_URL}/login\n\nYou can list properties free, receive WhatsApp leads, and use nine website languages.\n\n${t(lang, 'menuHint')}`,
       nextStep: 'main_menu'
     };
   }
@@ -5309,7 +5440,7 @@ function isActionableStepReply(step, value = '') {
 
   if (currentStep === 'greeting') return ['1', '2', '3'].includes(clean);
   if (currentStep === 'main_menu') return ['1', '2', '3', '9'].includes(clean);
-  if (currentStep === 'choose_language') return /^[1-8]$/.test(clean);
+  if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
   if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean);
@@ -5881,7 +6012,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
 
   // CHOOSE LANGUAGE
   if (step === 'choose_language') {
-    const langMap = { '1': 'en', '2': 'lg', '3': 'sw', '4': 'ac', '5': 'ny', '6': 'rn', '7': 'sm', '8': 'am' };
+    const langMap = { '1': 'en', '2': 'lg', '3': 'sw', '4': 'ac', '5': 'ny', '6': 'rn', '7': 'sm', '8': 'am', '9': 'ar' };
     const chosen = langMap[cleanBody] || 'en';
     await updateSession(phone, { language: chosen });
     await clearSessionData(phone);

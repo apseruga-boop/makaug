@@ -17,19 +17,21 @@ function between(source, start, end) {
 
 test("homepage AI assistant has translations for every supported public language", () => {
   const section = between(appJs, "const HOME_ASSISTANT_I18N =", "const FOOTER_I18N =");
-  ["en", "lg", "sw", "ac", "ny", "rn", "sm"].forEach((lang) => {
+  ["en", "lg", "sw", "ac", "ny", "rn", "sm", "ar"].forEach((lang) => {
     assert.match(section, new RegExp(`\\n\\s+${lang}: \\{`), `Missing home assistant language pack: ${lang}`);
   });
   assert.match(section, /Omuyambi wa AI mu Listing/);
   assert.match(section, /Msaidizi wa AI/);
+  assert.match(section, /مساعد إدراج AI/);
 });
 
 test("homepage footer uses a dedicated language dictionary instead of mixed listing labels", () => {
   const section = between(appJs, "const FOOTER_I18N =", "function homeAssistantTr");
-  ["en", "lg", "sw", "ac", "ny", "rn", "sm"].forEach((lang) => {
+  ["en", "lg", "sw", "ac", "ny", "rn", "sm", "ar"].forEach((lang) => {
     assert.match(section, new RegExp(`\\n\\s+${lang}: \\{`), `Missing footer language pack: ${lang}`);
   });
   assert.match(section, /sale: "Ennyumba ezitundibwa"/);
+  assert.match(section, /sale: "بيوت للبيع"/);
   assert.match(section, /properties: "Ebika bya property"/);
   assert.doesNotMatch(section, /lg: \{[\s\S]*sale: "Houses for Sale"/);
   assert.match(appJs, /function applyFooterLanguageUI\(\)/);
