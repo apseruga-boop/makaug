@@ -2339,15 +2339,17 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const platform = req.body?.platform || 'all';
     const dryRun = req.body?.dry_run === true || req.body?.dryRun === true;
     const maxSources = req.body?.max_sources || req.body?.maxSources || 40;
+    const sourceOffset = req.body?.source_offset || req.body?.sourceOffset || 0;
     const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
-    const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-02-01T00:00:00.000Z';
+    const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
     const result = await runSocialPlatformPostSweep({
       db,
       platform,
       dryRun,
       maxSources,
+      sourceOffset,
       maxResultsPerSource,
       searchMode,
       lookbackDays,

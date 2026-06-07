@@ -21,7 +21,7 @@ const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEA
 const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
-const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-02-01T00:00:00.000Z';
+const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
@@ -136,6 +136,12 @@ function cappedNumber(value, fallback, min = 1, max = 500) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(Math.round(parsed), max));
+}
+
+function cappedOffset(value, max = MAX_PLATFORM_SWEEP_SOURCES) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.min(Math.round(parsed), max);
 }
 
 function isoStartTimeForLookbackDays(days = 0) {
@@ -1127,15 +1133,49 @@ function buildYouTubeQueryForSource(source = {}) {
   return cleanText(`${discoveryTerms || 'Uganda property'} Uganda property house land rent hostel student accommodation commercial`);
 }
 
+function youtubeDiscoveryPriority(source = {}) {
+  const type = cleanText(source.source_type || source.sourceType || '').toLowerCase();
+  const url = sourceUrl(source);
+  const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
+  let score = 50;
+  if (type.includes('public_video_search_feed')) score = 0;
+  else if (type.includes('search_feed')) score = 10;
+  else if (type.includes('hashtag')) score = 20;
+  else if (/youtube\.com\/results\?/i.test(url)) score = 30;
+  else if (isDiscoveryFeed(source)) score = 40;
+  if (metadata.generated_source_discovery || metadata.generated_hashtag_discovery) score -= 5;
+  if (type.includes('creator_channel') || type.includes('media_channel')) score += 120;
+  if (/youtube\.com\/@/i.test(url)) score += 80;
+  return score;
+}
+
+function sortYouTubeSourcesForDiscovery(sources = []) {
+  return sources
+    .map((source, index) => ({
+      source,
+      index,
+      priority: youtubeDiscoveryPriority(source),
+    }))
+    .sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.index - b.index;
+    })
+    .map((item) => item.source);
+}
+
 function buildYouTubeSearchJobs({
   sources = sourcesForPlatform('youtube'),
   limit = DEFAULT_MAX_SOURCES,
+  offset = 0,
   publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
 } = {}) {
   const start = cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
-  return sources
+  const sortedSources = sortYouTubeSourcesForDiscovery(sources
     .filter((source) => normalizePlatform(source.platform) === 'youtube')
-    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
+  );
+  const startOffset = sortedSources.length ? cappedOffset(offset) % sortedSources.length : 0;
+  return sortedSources
+    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
     .map((source) => ({
       platform: 'youtube',
       source_key: sourceKey(source),
@@ -1143,6 +1183,7 @@ function buildYouTubeSearchJobs({
       source_type: source.source_type || source.sourceType || '',
       source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
       source_url: sourceUrl(source),
+      discovery_priority: youtubeDiscoveryPriority(source),
       query: buildYouTubeQueryForSource(source).slice(0, 500),
       endpoint: YOUTUBE_SEARCH_URL,
       published_after: start,
@@ -1535,6 +1576,7 @@ async function runSocialPlatformPostSweep({
   platform = 'all',
   dryRun = true,
   maxSources = DEFAULT_MAX_SOURCES,
+  sourceOffset = 0,
   maxResultsPerSource = DEFAULT_X_RESULTS_PER_SOURCE,
   searchMode = 'all',
   lookbackDays = 0,
@@ -1548,6 +1590,7 @@ async function runSocialPlatformPostSweep({
   const normalizedPlatform = normalizePlatform(platform || 'all');
   const requestedPlatforms = normalizedPlatform === 'all' ? ['tiktok', 'youtube', 'x'] : [normalizedPlatform];
   const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
+  const normalizedSourceOffset = cappedOffset(sourceOffset);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
@@ -1557,7 +1600,7 @@ async function runSocialPlatformPostSweep({
     ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
     : [];
   const youtubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, publishedAfter: youtubeStartTime })
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime })
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
@@ -1641,7 +1684,7 @@ async function runSocialPlatformPostSweep({
     platforms: requestedPlatforms,
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
-      youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 February 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
+      youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 January 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
     },
@@ -1653,6 +1696,7 @@ async function runSocialPlatformPostSweep({
     },
     youtube: {
       source_count: youtubeSources.length,
+      source_offset: normalizedSourceOffset,
       search_job_count: youtubeSearchJobs.length,
       api_configured: youtubeFetch.api_configured,
       api_key_env: youtubeFetch.api_key_env,
