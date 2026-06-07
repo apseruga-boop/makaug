@@ -2826,7 +2826,7 @@ const FOOTER_I18N = {
     about: "Ebikwata ku ffe",
     how: "Engeri gye kikola",
     broker: "Noonya broker",
-    registerBroker: "Wewandiise nga broker",
+    registerBroker: "Wewandiise nga agent",
     advertise: "Tangaza naffe",
     careers: "Emirimu",
     legal: "Amateeka n'obuyambi",
@@ -2859,7 +2859,7 @@ const FOOTER_I18N = {
     about: "Kuhusu sisi",
     how: "Jinsi inavyofanya kazi",
     broker: "Tafuta broker",
-    registerBroker: "Jisajili kama broker",
+    registerBroker: "Jisajili kama agent",
     advertise: "Tangaza nasi",
     careers: "Kazi",
     legal: "Sheria na msaada",
@@ -2892,7 +2892,7 @@ const FOOTER_I18N = {
     about: "Lok ikom wa",
     how: "Kit ma timo kwede",
     broker: "Yeny broker",
-    registerBroker: "Coye calo broker",
+    registerBroker: "Coye calo agent",
     advertise: "Mi jami pire botwa",
     careers: "Tic",
     legal: "Cik ki kony",
@@ -2925,7 +2925,7 @@ const FOOTER_I18N = {
     about: "Ebirikukwata ahariitwe",
     how: "Oku kikora",
     broker: "Sherura broker",
-    registerBroker: "Yeyandikise nka broker",
+    registerBroker: "Yeyandikise nka agent",
     advertise: "Ranga naitwe",
     careers: "Emirimo",
     legal: "Amateeka n'obuhwezi",
@@ -2958,7 +2958,7 @@ const FOOTER_I18N = {
     about: "Ebikwatireine naitwe",
     how: "Oku kikora",
     broker: "Sherura broker",
-    registerBroker: "Yeyandikise nka broker",
+    registerBroker: "Yeyandikise nka agent",
     advertise: "Ranga naitwe",
     careers: "Emirimo",
     legal: "Amateeka n'obuhwezi",
@@ -2991,7 +2991,7 @@ const FOOTER_I18N = {
     about: "Ebikwata ku ffe",
     how: "Engeri gye kikola",
     broker: "Noonya broker",
-    registerBroker: "Wewandiise nga broker",
+    registerBroker: "Wewandiise nga agent",
     advertise: "Tangaza naffe",
     careers: "Emirimu",
     legal: "Amateeka n'obuyambi",
@@ -3024,7 +3024,7 @@ const FOOTER_I18N = {
     about: "من نحن",
     how: "كيف يعمل",
     broker: "ابحث عن وسيط",
-    registerBroker: "سجل كوسيط",
+    registerBroker: "سجل كوكيل",
     advertise: "أعلن معنا",
     careers: "وظائف",
     legal: "القانون والدعم",
@@ -14324,22 +14324,39 @@ function renderAdminPropertyRequestRows(requests) {
     return;
   }
   wrap.innerHTML = rows.map((request) => {
+    const metadata = (() => {
+      if (request.metadata && typeof request.metadata === "object" && !Array.isArray(request.metadata)) return request.metadata;
+      if (typeof request.metadata === "string") {
+        try {
+          const parsed = JSON.parse(request.metadata);
+          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+        } catch (_error) {
+          return {};
+        }
+      }
+      return {};
+    })();
+    const noMatchRequest = String(request.source || "").toLowerCase() === "whatsapp_no_match" || metadata.whatsapp_no_match === true;
+    const matchStatus = String(request.match_status || metadata.match_status || "waiting_for_listing").replace(/_/g, " ");
+    const leadIdArg = request.lead_id ? JSON.stringify(String(request.lead_id)) : "";
     const digits = String(request.phone || "").replace(/\D/g, "");
     const whatsappUrl = digits ? `https://wa.me/${digits}?text=${encodeURIComponent(`Hello ${request.full_name || ""}, this is makaug. We received your request and can help you find a property that matches your brief.`)}` : "";
     const budget = request.max_budget ? fmtP(request.max_budget, "") : "Budget not set";
     const heading = [request.listing_type || "Any type", request.preferred_locations || "Any location"].filter(Boolean).join(" • ");
     return `
-      <div class="border border-gray-200 rounded-xl p-4 bg-white">
+      <div class="border ${noMatchRequest ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white"} rounded-xl p-4">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div class="min-w-0">
-            <div class="font-bold text-gray-900">${adminEscape(request.full_name || "Property request")}</div>
+            <div class="font-bold text-gray-900">${adminEscape(noMatchRequest ? "WhatsApp unavailable-property lead" : request.full_name || "Property request")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape([request.phone, request.email].filter(Boolean).join(" • ") || "-")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(heading)} • ${adminEscape(budget)}</div>
+            ${noMatchRequest ? `<div class="text-xs font-bold text-amber-800 mt-2">No exact match captured from WhatsApp. Match status: ${adminEscape(matchStatus)}. Keep open until customer contact or agent assignment.</div>` : ""}
           </div>
-          <span class="text-[11px] font-semibold px-2 py-1 rounded bg-green-100 text-green-700">${adminEscape(formatListingDate(request.created_at) || "New")}</span>
+          <span class="text-[11px] font-semibold px-2 py-1 rounded ${noMatchRequest ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-700"}">${adminEscape(formatListingDate(request.created_at) || "New")}</span>
         </div>
-        <div class="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">${adminEscape(request.requirements || "No extra requirements recorded.")}</div>
+        <div class="mt-3 rounded-xl border ${noMatchRequest ? "border-amber-100 bg-white" : "border-gray-100 bg-gray-50"} p-3 text-sm text-gray-700">${noMatchRequest ? `<span class="font-bold">Original WhatsApp:</span> ` : ""}${adminEscape(request.requirements || "No extra requirements recorded.")}</div>
         <div class="mt-3 flex flex-wrap gap-2">
+          ${noMatchRequest && leadIdArg ? `<button type="button" onclick="adminOpenLeadMatchMessage(${leadIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Message Match</button>` : ""}
           ${whatsappUrl ? `<a href="${adminAttr(whatsappUrl)}" target="_blank" rel="noopener noreferrer" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">WhatsApp</a>` : ""}
           ${request.email ? `<a href="mailto:${adminAttr(request.email)}?subject=${encodeURIComponent("makaug property request follow-up")}" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Email</a>` : ""}
         </div>
@@ -16232,6 +16249,151 @@ function adminReviewExtractedAmenities(text = "", facts = {}) {
   return amenities;
 }
 
+function adminReviewNormalizeUgandaPhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (/^0?7\d{8}$/.test(digits)) {
+    const local = digits.length === 9 ? `0${digits}` : digits;
+    return `+256${local.slice(1)}`;
+  }
+  if (/^2567\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^\+2567\d{8}$/.test(String(value || "").replace(/\s+/g, ""))) return String(value || "").replace(/\s+/g, "");
+  return normalizePhoneInput(value);
+}
+
+function adminReviewExtractedPhone(review = {}) {
+  const extra = adminReviewExtraFields(review);
+  const direct = [
+    review.lister_phone,
+    review.contact_phone,
+    review.phone,
+    extra.contact_phone,
+    extra.phone,
+    extra.whatsapp,
+    extra.source_phone,
+    extra.source_whatsapp,
+    extra.contact_phone_alt,
+    extra.public_contact_phone
+  ];
+  for (const value of direct) {
+    const normalized = adminReviewNormalizeUgandaPhone(value);
+    if (/^\+2567\d{8}$/.test(normalized)) return normalized;
+  }
+  const text = adminReviewSourceText(review);
+  const matches = String(text || "").match(/(?:\+?256|0)?[\s().-]*7[\d\s().-]{8,14}/g) || [];
+  for (const match of matches) {
+    const normalized = adminReviewNormalizeUgandaPhone(match);
+    if (/^\+2567\d{8}$/.test(normalized)) return normalized;
+  }
+  return "";
+}
+
+function adminReviewStudentAmenityOptions() {
+  return (LP_CONFIG?.student?.amenities || []).map((item) => ({
+    value: item.value,
+    label: String(item.label || item.value || "").replace(/^[^A-Za-z0-9]+/, "").trim() || item.value
+  }));
+}
+
+function adminReviewSplitCsv(value = "") {
+  return String(value || "")
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function adminReviewStudentAmenityValueSet(values = []) {
+  const options = adminReviewStudentAmenityOptions();
+  const lowered = new Set(values.map((item) => String(item || "").toLowerCase().trim()).filter(Boolean));
+  return new Set(options
+    .filter((option) => lowered.has(String(option.value).toLowerCase()) || lowered.has(String(option.label).toLowerCase()))
+    .map((option) => option.value));
+}
+
+function adminReviewSyncStudentAmenitiesFromText() {
+  const input = document.getElementById("admin-review-amenities-edit");
+  const selected = adminReviewStudentAmenityValueSet(adminReviewSplitCsv(input?.value || ""));
+  document.querySelectorAll("#admin-review-student-amenities input[type='checkbox']").forEach((box) => {
+    box.checked = selected.has(box.value);
+  });
+}
+
+function adminReviewOnStudentAmenityToggle() {
+  const input = document.getElementById("admin-review-amenities-edit");
+  if (!input) return;
+  const options = adminReviewStudentAmenityOptions();
+  const studentLabels = new Map(options.map((option) => [option.value, option.label]));
+  const studentValueOrLabel = new Set(options.flatMap((option) => [String(option.value).toLowerCase(), String(option.label).toLowerCase()]));
+  const current = adminReviewSplitCsv(input.value)
+    .filter((item) => !studentValueOrLabel.has(String(item).toLowerCase()));
+  const selected = Array.from(document.querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
+    .map((box) => studentLabels.get(box.value) || box.value);
+  input.value = [...new Set([...current, ...selected])].join(", ");
+}
+
+function adminReviewStudentFieldsHtml(review = {}, facts = {}, extra = {}, amenitiesText = "") {
+  const selectedType = normalizeType(review.listing_type || review.type || facts.listing_type || "");
+  const nearestUniversity = review.nearest_university || extra.nearest_university || extra.nearest_uni || extra.student_campus || "";
+  const distanceToUni = review.distance_to_uni_km ?? extra.distance_to_uni_km ?? extra.uni_distance ?? "";
+  const roomArrangement = review.room_arrangement || extra.room_arrangement || review.room_type || extra.room_type || "";
+  const genderPref = review.gender_pref || extra.gender_pref || extra.gender_preference || "";
+  const selectedAmenities = adminReviewStudentAmenityValueSet([
+    ...(Array.isArray(review.amenities) ? review.amenities : []),
+    ...adminReviewSplitCsv(amenitiesText),
+    ...(Array.isArray(extra.student_amenities) ? extra.student_amenities : [])
+  ]);
+  const universityOptions = [`<option value="">Select nearest university</option>`]
+    .concat(UGANDA_UNIVERSITIES.map((name) => `<option value="${adminAttr(name)}" ${String(nearestUniversity) === name ? "selected" : ""}>${adminEscape(name)}</option>`))
+    .join("");
+  const roomOptions = ["", "Private", "Shared", "Dormitory"].map((value) => {
+    const label = value || "Select room arrangement";
+    return `<option value="${adminAttr(value)}" ${String(roomArrangement) === value ? "selected" : ""}>${adminEscape(label)}</option>`;
+  }).join("");
+  const genderOptions = ["", "Mixed", "Female Only", "Male Only"].map((value) => {
+    const label = value || "Select gender preference";
+    return `<option value="${adminAttr(value)}" ${String(genderPref) === value ? "selected" : ""}>${adminEscape(label)}</option>`;
+  }).join("");
+  const amenityOptions = adminReviewStudentAmenityOptions().map((option) => `
+    <label class="inline-flex items-center gap-1.5 rounded-lg border border-purple-100 bg-white px-2 py-1.5 text-[11px] font-semibold text-purple-950">
+      <input type="checkbox" value="${adminAttr(option.value)}" class="accent-purple-700" onchange="adminReviewOnStudentAmenityToggle()" ${selectedAmenities.has(option.value) ? "checked" : ""}>
+      ${adminEscape(option.label)}
+    </label>
+  `).join("");
+  return `
+    <div id="admin-review-student-fields" class="md:col-span-2 rounded-xl border border-purple-200 bg-purple-50 p-3 ${selectedType === "student" ? "" : "hidden"}">
+      <div class="text-xs font-black uppercase tracking-wide text-purple-950">Student accommodation details</div>
+      <p class="mt-1 text-xs text-purple-900">These match the public student accommodation listing flow and are saved before approval.</p>
+      <div class="mt-3 grid md:grid-cols-2 gap-3">
+        <label class="block text-xs font-bold text-purple-950">Nearest university
+          <select id="admin-review-nearest-uni-edit" class="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm">${universityOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-purple-950">Distance to university (km)
+          <input id="admin-review-uni-distance-edit" type="number" min="0" step="0.1" class="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm" value="${adminAttr(distanceToUni)}" placeholder="e.g. 0.8">
+        </label>
+        <label class="block text-xs font-bold text-purple-950">Room arrangement
+          <select id="admin-review-room-arrangement-edit" class="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm">${roomOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-purple-950">Gender preference
+          <select id="admin-review-gender-pref-edit" class="mt-1 w-full rounded-lg border border-purple-200 bg-white px-3 py-2 text-sm">${genderOptions}</select>
+        </label>
+      </div>
+      <div class="mt-3">
+        <div class="text-xs font-bold text-purple-950">Student amenities</div>
+        <div id="admin-review-student-amenities" class="mt-2 flex flex-wrap gap-2">${amenityOptions}</div>
+      </div>
+    </div>`;
+}
+
+function adminReviewOnListingTypeChange() {
+  const type = normalizeType(document.getElementById("admin-review-listing-type-edit")?.value || "");
+  const studentPanel = document.getElementById("admin-review-student-fields");
+  if (studentPanel) studentPanel.classList.toggle("hidden", type !== "student");
+  const period = document.getElementById("admin-review-price-period-edit");
+  if (period && type === "student" && (!period.value || period.value === "once")) period.value = "sem";
+  if (period && type === "rent" && (!period.value || period.value === "once" || period.value === "sem")) period.value = "month";
+  if (period && (type === "sale" || type === "land" || type === "commercial") && !period.value) period.value = "once";
+  adminReviewSyncStudentAmenitiesFromText();
+}
+
 function adminReviewListingTypeFromText(text = "", facts = {}, review = {}) {
   const lower = String(text || "").toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|living room|sitting room)\b/.test(lower);
@@ -16274,11 +16436,12 @@ function adminExtractReviewFacts(review = {}) {
   const balconies = adminReviewFirstNumber(text, /(\d+)\s*balcon(?:y|ies)\b/i);
   const propertyType = adminReviewPropertyTypeFromText(text) || review.property_type || "";
   const location = adminReviewDetectedLocation(text, review);
+  const contactPhone = adminReviewExtractedPhone(review);
   const partial = { price, bedrooms, bathrooms, balconies, property_type: propertyType, ...location };
   const listingType = adminReviewListingTypeFromText(text, partial, review);
   const pricePeriod = listingType === "rent" ? "month" : (review.price_period || "once");
   const amenities = adminReviewExtractedAmenities(text, partial);
-  const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, title: "", land_title_available: getLandTitleAvailabilityValue({ ...review, description: text }) };
+  const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, contact_phone: contactPhone, title: "", land_title_available: getLandTitleAvailabilityValue({ ...review, description: text }) };
   const titleParts = [];
   if (bedrooms) titleParts.push(`${bedrooms}-Bed`);
   if (/luxury/i.test(text)) titleParts.push("Luxury");
@@ -16299,6 +16462,7 @@ function adminReviewFactBadgesHtml(facts = {}) {
     facts.area ? `Area: ${facts.area}` : "",
     facts.district ? `District: ${facts.district}` : "",
     facts.property_type ? `Property: ${facts.property_type}` : "",
+    facts.contact_phone ? `Phone: ${facts.contact_phone}` : "",
     facts.land_title_available ? `Land title: ${landTitleAvailabilityLabel(facts.land_title_available)}` : "",
     facts.bedrooms ? `${facts.bedrooms} bedrooms` : "",
     facts.bathrooms ? `${facts.bathrooms} washrooms` : "",
@@ -16671,6 +16835,7 @@ function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
   const extra = adminReviewExtraFields(review);
+  const extractedPhone = adminReviewExtractedPhone(review);
   const reviewPoint = adminReviewHasUsableCoordinates(review.latitude, review.longitude)
     ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
     : null;
@@ -16747,7 +16912,10 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-title-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.title || "")}">
         </label>
         <label class="block text-xs font-bold text-gray-700">Listing type
-          <select id="admin-review-listing-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
+          <select id="admin-review-listing-type-edit" onchange="adminReviewOnListingTypeChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${typeOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">WhatsApp / phone number
+          <input id="admin-review-lister-phone-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(extractedPhone || review.lister_phone || "")}" placeholder="+2567XXXXXXXX">
         </label>
         <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
           <input id="admin-review-area-edit" oninput="adminReviewOnAreaInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
@@ -16803,6 +16971,7 @@ function adminReviewListingEditPanel(review = {}) {
         <label class="block text-xs font-bold text-gray-700">Bathrooms / washrooms
           <input id="admin-review-bathrooms-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.bathrooms ?? "")}">
         </label>
+        ${adminReviewStudentFieldsHtml(review, facts, extra, amenities)}
         <label class="block text-xs font-bold text-gray-700">Latitude
           <input id="admin-review-latitude-edit" type="number" step="0.000001" oninput="adminReviewScheduleLocationSync()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.latitude ?? "")}">
         </label>
@@ -16844,6 +17013,8 @@ function adminApplyExtractedReviewFacts() {
   const facts = adminExtractReviewFacts(adminActiveReview);
   adminSetReviewEditValue("admin-review-title-edit", facts.title || adminActiveReview.title || "");
   adminSetReviewEditValue("admin-review-listing-type-edit", facts.listing_type || adminActiveReview.listing_type || "");
+  adminReviewOnListingTypeChange();
+  adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
   adminSetReviewEditValue("admin-review-area-edit", facts.area || adminActiveReview.area || "");
   adminSetReviewEditValue("admin-review-district-edit", facts.district || adminActiveReview.district || "");
   adminReviewApplyHierarchyFromText([facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "));
@@ -17118,6 +17289,7 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
 
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
+  const listingType = normalizeType(get("admin-review-listing-type-edit"));
   const coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")
@@ -17126,10 +17298,22 @@ function collectAdminReviewListingPatch() {
     .split(/[,;\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
+  const studentAmenities = listingType === "student"
+    ? Array.from(document.querySelectorAll("#admin-review-student-amenities input[type='checkbox']:checked"))
+      .map((box) => {
+        const option = adminReviewStudentAmenityOptions().find((item) => item.value === box.value);
+        return option?.label || box.value;
+      })
+      .filter(Boolean)
+    : [];
+  const mergedAmenities = [...new Set([...amenities, ...studentAmenities])];
+  const nearestUniversity = get("admin-review-nearest-uni-edit");
+  const roomArrangement = get("admin-review-room-arrangement-edit");
   return {
     title: get("admin-review-title-edit"),
     description: get("admin-review-description-edit"),
-    listing_type: get("admin-review-listing-type-edit"),
+    listing_type: listingType,
+    lister_phone: adminReviewNormalizeUgandaPhone(get("admin-review-lister-phone-edit")),
     region: get("admin-review-region-edit"),
     district: get("admin-review-district-edit"),
     city: get("admin-review-city-edit"),
@@ -17150,7 +17334,15 @@ function collectAdminReviewListingPatch() {
     place_id: get("admin-review-place-id-edit"),
     location_confidence: get("admin-review-location-confidence-edit"),
     map_pin_source: coordinates.exact ? "king_review" : "king_review_area",
-    amenities
+    amenities: mergedAmenities,
+    nearest_university: listingType === "student" ? nearestUniversity : "",
+    distance_to_uni_km: listingType === "student" ? get("admin-review-uni-distance-edit") : "",
+    room_arrangement: listingType === "student" ? roomArrangement : "",
+    room_type: listingType === "student" ? (get("admin-review-property-type-edit") || roomArrangement) : "",
+    gender_pref: listingType === "student" ? get("admin-review-gender-pref-edit") : "",
+    student_universities: listingType === "student" && nearestUniversity ? [nearestUniversity] : [],
+    student_room_label: listingType === "student" ? roomArrangement : "",
+    students_welcome: listingType === "student"
   };
 }
 
@@ -17530,6 +17722,7 @@ function renderAdminReviewPanel(review) {
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
   setTimeout(() => {
     adminReviewRefreshHierarchyControls({ syncMap: false });
+    adminReviewOnListingTypeChange();
     adminReviewAutoPopulateLocationFromSource(review);
     initAdminReviewLocationMap(review);
   }, 120);
