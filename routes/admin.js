@@ -1633,8 +1633,13 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     price_period: { column: 'price_period', value: cleanText(normalizedPatch.price_period) || null },
     property_type: { column: 'property_type', value: cleanText(normalizedPatch.property_type) || null },
     title_type: { column: 'title_type', value: cleanText(normalizedPatch.title_type) || null },
+    lister_phone: { column: 'lister_phone', value: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null },
     bedrooms: { column: 'bedrooms', value: toNullableInt(normalizedPatch.bedrooms) },
-    bathrooms: { column: 'bathrooms', value: toNullableInt(normalizedPatch.bathrooms) }
+    bathrooms: { column: 'bathrooms', value: toNullableInt(normalizedPatch.bathrooms) },
+    nearest_university: { column: 'nearest_university', value: cleanText(normalizedPatch.nearest_university) || null },
+    distance_to_uni_km: { column: 'distance_to_uni_km', value: toNullableFloat(normalizedPatch.distance_to_uni_km) },
+    room_type: { column: 'room_type', value: cleanText(normalizedPatch.room_type) || null },
+    students_welcome: { column: 'students_welcome', value: parseBooleanLike(normalizedPatch.students_welcome, false) }
   };
 
   const setParts = [];
@@ -1652,6 +1657,11 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     correctedFields.push(spec.column);
     idx += 1;
   });
+
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_phone')) {
+    const phone = cleanText(normalizeUgPhone(normalizedPatch.lister_phone));
+    if (phone && !isValidPhone(phone)) errors.push('lister_phone is invalid');
+  }
 
   if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'listing_type')) {
     const listingType = cleanText(normalizedPatch.listing_type).toLowerCase();
@@ -1737,6 +1747,28 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   addExtraPatch('geocoding_provider');
   addExtraPatch('place_id');
   addExtraPatch('map_pin_source');
+  addExtraPatch('nearest_university');
+  addExtraPatch('distance_to_uni_km');
+  addExtraPatch('room_type');
+  addExtraPatch('room_arrangement');
+  addExtraPatch('gender_pref');
+  addExtraPatch('student_room_label');
+
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'students_welcome')) {
+    extraPatch.students_welcome = parseBooleanLike(normalizedPatch.students_welcome, false);
+    correctedFields.push('students_welcome');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'lister_phone')) {
+    const phone = cleanText(normalizeUgPhone(normalizedPatch.lister_phone));
+    extraPatch.contact_phone = phone || null;
+    extraPatch.public_contact_phone = phone || null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'student_universities')) {
+    extraPatch.student_universities = asArray(normalizedPatch.student_universities).map((item) => cleanText(item)).filter(Boolean);
+    correctedFields.push('student_universities');
+  }
 
   if (errors.length) {
     const err = new Error('Validation failed');
@@ -1773,6 +1805,15 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
       address: cleanText(normalizedPatch.address),
       street_name: cleanText(normalizedPatch.street_name),
       property_type: cleanText(normalizedPatch.property_type),
+      title_type: cleanText(normalizedPatch.title_type),
+      lister_phone: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null,
+      nearest_university: cleanText(normalizedPatch.nearest_university),
+      distance_to_uni_km: toNullableFloat(normalizedPatch.distance_to_uni_km),
+      room_type: cleanText(normalizedPatch.room_type),
+      students_welcome: parseBooleanLike(normalizedPatch.students_welcome, false),
+      room_arrangement: cleanText(normalizedPatch.room_arrangement),
+      gender_pref: cleanText(normalizedPatch.gender_pref),
+      student_universities: asArray(normalizedPatch.student_universities).map((item) => cleanText(item)).filter(Boolean),
       price: toNullableInt(normalizedPatch.price),
       price_period: cleanText(normalizedPatch.price_period),
       latitude,
@@ -3736,41 +3777,100 @@ router.get('/field-agents/payouts', async (req, res, next) => {
 router.get('/property-requests', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
-    const search = String(req.query.search || '').trim().toLowerCase();
+    const search = String(req.query.search || '').trim();
     const filters = [];
     const values = [];
 
     if (search) {
       values.push(`%${search}%`);
       filters.push(`(
-        pr.full_name ILIKE $${values.length}
-        OR pr.phone ILIKE $${values.length}
-        OR COALESCE(pr.email, '') ILIKE $${values.length}
-        OR COALESCE(pr.preferred_locations, '') ILIKE $${values.length}
-        OR COALESCE(pr.listing_type, '') ILIKE $${values.length}
-        OR COALESCE(pr.requirements, '') ILIKE $${values.length}
+        dr.full_name ILIKE $${values.length}
+        OR COALESCE(dr.phone, '') ILIKE $${values.length}
+        OR COALESCE(dr.email, '') ILIKE $${values.length}
+        OR COALESCE(dr.preferred_locations, '') ILIKE $${values.length}
+        OR COALESCE(dr.listing_type, '') ILIKE $${values.length}
+        OR COALESCE(dr.requirements, '') ILIKE $${values.length}
+        OR COALESCE(dr.metadata->>'original_message', '') ILIKE $${values.length}
       )`);
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM property_requests pr ${where}`, values);
+    const demandRequestsCte = `
+      WITH demand_requests AS (
+        SELECT
+          pr.id::text AS id,
+          pr.id::text AS request_id,
+          NULL::text AS lead_id,
+          'property_request' AS source,
+          pr.full_name,
+          pr.phone,
+          pr.email,
+          pr.preferred_locations,
+          pr.listing_type,
+          pr.max_budget,
+          pr.requirements,
+          pr.created_at,
+          NULL::text AS lead_status,
+          NULL::text AS lifecycle_stage,
+          '{}'::jsonb AS metadata,
+          NULL::text AS match_status
+        FROM property_requests pr
+        UNION ALL
+        SELECT
+          ('lead:' || l.id::text) AS id,
+          NULL::text AS request_id,
+          l.id::text AS lead_id,
+          'whatsapp_no_match' AS source,
+          COALESCE(NULLIF(c.name, ''), 'WhatsApp property seeker') AS full_name,
+          COALESCE(NULLIF(c.whatsapp, ''), NULLIF(c.phone, '')) AS phone,
+          c.email,
+          COALESCE(NULLIF(l.location, ''), NULLIF(l.metadata->>'preferred_area', ''), 'Any area') AS preferred_locations,
+          COALESCE(NULLIF(l.category, ''), NULLIF(l.metadata->>'search_type', ''), NULLIF(l.lead_type, ''), 'property need') AS listing_type,
+          l.budget AS max_budget,
+          COALESCE(NULLIF(l.metadata->>'original_message', ''), NULLIF(l.message, ''), 'WhatsApp property request had no exact match.') AS requirements,
+          l.created_at,
+          l.lead_status,
+          l.lifecycle_stage,
+          COALESCE(l.metadata, '{}'::jsonb) AS metadata,
+          COALESCE(NULLIF(l.metadata->>'match_status', ''), 'waiting_for_listing') AS match_status
+        FROM leads l
+        LEFT JOIN contacts c ON c.id = l.contact_id
+        WHERE l.source = 'whatsapp_no_match'
+          AND l.lead_type = 'property_need_unavailable'
+          AND l.lead_status = 'open'
+      )`;
+    const countResult = await db.query(
+      `${demandRequestsCte}
+       SELECT COUNT(*)::int AS total
+       FROM demand_requests dr
+       ${where}`,
+      values
+    );
     const total = countResult.rows[0]?.total || 0;
 
     const listValues = [...values, limit, offset];
     const rows = await db.query(
-      `SELECT
-        pr.id,
-        pr.full_name,
-        pr.phone,
-        pr.email,
-        pr.preferred_locations,
-        pr.listing_type,
-        pr.max_budget,
-        pr.requirements,
-        pr.created_at
-       FROM property_requests pr
+      `${demandRequestsCte}
+       SELECT
+        dr.id,
+        dr.request_id,
+        dr.lead_id,
+        dr.source,
+        dr.full_name,
+        dr.phone,
+        dr.email,
+        dr.preferred_locations,
+        dr.listing_type,
+        dr.max_budget,
+        dr.requirements,
+        dr.created_at,
+        dr.lead_status,
+        dr.lifecycle_stage,
+        dr.metadata,
+        dr.match_status
+       FROM demand_requests dr
        ${where}
-       ORDER BY pr.created_at DESC
+       ORDER BY dr.created_at DESC
        LIMIT $${values.length + 1}
        OFFSET $${values.length + 2}`,
       listValues

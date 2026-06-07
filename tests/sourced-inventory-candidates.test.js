@@ -71,6 +71,7 @@ const {
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
   buildExactSocialPostImportRows,
+  buildManualSocialCaptureTasks,
   buildTikTokCaptureTasks,
   buildTikTokExactPostImportRows,
   buildYouTubeSearchJobs,
@@ -863,9 +864,20 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('adminSweepSocialPlatformPosts'), 'King dashboard should expose social platform sweep controls');
   assert(frontend.includes('adminImportExactSocialLinks'), 'King dashboard should expose no-API exact social link import controls');
   assert(frontend.includes('adminImportTikTokExactPosts'), 'King dashboard should expose exact TikTok video import controls');
-  assert(frontend.includes('Quick Paste Import'), 'King dashboard should expose the simplified exact social link import action');
+  assert(frontend.includes('adminImportYouTubeExactPosts'), 'King dashboard should expose exact YouTube video import controls');
+  assert(frontend.includes('adminSweepYouTubePosts'), 'King dashboard should implement the dedicated YouTube sweep wrapper');
+  assert(frontend.includes('adminSweepAllSocialPosts'), 'King dashboard should implement the all-social sweep wrapper');
+  assert(frontend.includes('adminSourceRegistryPanelElement'), 'source database results should render inside the active source sweep workspace');
+  assert(frontend.includes('adminStudentHousingYouTubeQuickPasteExample'), 'student sweep should provide a YouTube-specific quick-paste example');
+  assert(frontend.includes('Paste TikTok / YouTube / Social Links'), 'King dashboard should expose YouTube in the simplified exact social link import action');
+  assert(frontend.includes('Load YouTube Example'), 'King dashboard should make YouTube quick paste as direct as TikTok quick paste');
+  assert(frontend.includes('Set Up Capture Bookmark'), 'King dashboard should make the browser capture helper a one-time bookmark setup');
+  assert(frontend.includes('makaug Capture Posts'), 'King dashboard should provide a named capture bookmarklet');
+  assert(frontend.includes('Copy Bookmarklet'), 'King dashboard should let King copy the one-click capture bookmarklet');
+  assert(frontend.includes('Manual console fallback'), 'King dashboard should keep raw console code available only as a fallback');
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
+  assert(frontend.includes('Import YouTube Videos'), 'King dashboard should expose exact YouTube video import action');
   assert(frontend.includes('Sweep YouTube Videos'), 'King dashboard should expose YouTube video sweep action');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from January 2026 onward');
   assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
@@ -873,7 +885,25 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('safeVideoIsTikTok'), 'TikTok videos should be labelled separately from YouTube videos');
   assert(propertiesRoute.includes('tiktok_url: tiktokUrl || null'), 'public property API should expose exact TikTok source video URLs');
   assert(frontend.includes('Sweep X Posts'), 'King dashboard should expose X post sweep action');
+  assert(frontend.includes('Student Housing Sweep'), 'King dashboard should expose a dedicated student housing sweep action');
+  assert(html.includes('>Students Sweep<'), 'King dashboard should label the dedicated student source tab clearly');
+  assert(html.includes('>YouTube Sweep<'), 'King dashboard should label the dedicated YouTube source tab clearly');
+  assert(html.includes('admin-youtube-sweep-control'), 'King dashboard should render a dedicated YouTube source sweep panel');
+  assert(html.includes('admin-youtube-sweep-status'), 'YouTube sweep tab should have its own status/results panel');
+  assert(html.includes('admin-import-youtube-posts-btn'), 'King dashboard should render a direct YouTube import button');
+  assert(html.includes('Paste YouTube Student Videos'), 'student sweep tab should render a YouTube student quick-paste action');
+  assert(!html.includes('Students Own Sweep'), 'student source controls should use clear student housing wording');
+  assert(!frontend.includes('Students Own Sweep'), 'fallback student source controls should use clear student housing wording');
+  assert(frontend.includes('adminSweepStudentHousingPosts'), 'King dashboard should implement the dedicated student housing sweep action');
+  assert(frontend.includes('adminStudentHousingQuickPasteExample'), 'King dashboard should provide a student housing quick-paste example');
+  assert(html.includes('data-admin-tab-button="student-sweep"'), 'King dashboard should include a dedicated student sweep tab');
+  assert(html.includes('data-admin-tab-button="youtube-sweep"'), 'King dashboard should include a dedicated YouTube sweep tab');
+  assert(frontend.includes('"/admin/youtube-sweep"'), 'King dashboard should expose a direct YouTube sweep route');
+  assert(html.includes('admin-student-sweep-status'), 'student sweep tab should have its own status/results panel');
+  assert(adminRoute.includes('focus'), 'admin social sweep endpoint should accept a student sweep focus flag');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_API_KEY'), 'YouTube sweep should use an explicit API key env var');
+  assert(socialPlatformSweepServiceSource.includes('student_housing_focus'), 'platform sweep policy should describe the student housing focus');
+  assert(socialPlatformSweepServiceSource.includes('buildManualSocialCaptureTasks'), 'student sweep should prepare manual Facebook/Instagram capture tasks');
   assert.strictEqual(YOUTUBE_OEMBED_URL, 'https://www.youtube.com/oembed', 'no-API YouTube imports should use public oEmbed metadata');
   assert(socialPlatformSweepServiceSource.includes('no_api_exact_social_url_intake'), 'exact social link import should provide a no-API workaround path');
   assert(socialPlatformSweepServiceSource.includes('inferTikTokPostedAtFromVideoId'), 'TikTok exact-link import should infer visible-date evidence from public video IDs when no API exists');
@@ -929,7 +959,72 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(noApiRows[0].area, 'Makerere');
   assert.strictEqual(noApiRows[0].listing_type, 'students');
   assert.strictEqual(noApiRows[0].source_contact_url, 'https://www.tiktok.com/@agentug');
-  assert(noApiRows[0].first_posted_at.startsWith('2026-'), 'TikTok public video ID should infer a 2026 first-posted timestamp');
+  assert.strictEqual(noApiRows[0].first_posted_at, '', 'TikTok public video ID inference must not be shown as a confirmed first-posted date');
+  assert(noApiRows[0].raw_source_post.inferred_platform_posted_at.startsWith('2026-'), 'TikTok public video ID inference should stay available as reviewer evidence');
+  assert.strictEqual(noApiRows[0].raw_source_post.date_confidence, 'inferred_from_public_post_id_needs_confirmation');
+  const normalizedNoApiTikTok = normalizeFoundOnlineSourcePost(noApiRows[0]);
+  assert.strictEqual(
+    sourcePostMeetsLaunchIntakeRule(normalizedNoApiTikTok, normalizedNoApiTikTok.sourceAgent).date_status,
+    'needs_source_platform_date_confirmation',
+    'inferred TikTok dates should remain platform-date-confirmation pending'
+  );
+
+  const youtubeQuickPasteRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://www.youtube.com/shorts/abc123XYZ90',
+      'title: Student hostel room near Makerere USh 450k',
+      'location: Makerere, Kampala',
+      'source: Student Rooms UG',
+      'posted: 2026-05-20',
+      'phone: +256700000000',
+    ].join('\n'),
+    metadataByUrl: {
+      'https://www.youtube.com/watch?v=abc123XYZ90': {
+        oembed: {
+          title: 'Student hostel room near Makerere USh 450k',
+          author_name: 'Student Rooms UG',
+          author_url: 'https://www.youtube.com/@studentroomsug',
+          thumbnail_url: 'https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg',
+        },
+        page: {
+          published_at: '2026-05-20T08:00:00.000Z',
+          channel_url: 'https://www.youtube.com/@studentroomsug',
+        },
+      },
+    },
+  });
+  assert.strictEqual(youtubeQuickPasteRows.length, 1, 'YouTube Shorts/watch quick paste should create one normalized row');
+  assert.strictEqual(youtubeQuickPasteRows[0].source_url, 'https://www.youtube.com/watch?v=abc123XYZ90');
+  assert.strictEqual(youtubeQuickPasteRows[0].platform, 'YouTube');
+  assert.strictEqual(youtubeQuickPasteRows[0].listing_type, 'students');
+  assert.strictEqual(youtubeQuickPasteRows[0].area, 'Makerere');
+  assert.strictEqual(youtubeQuickPasteRows[0].source_contact_url, 'https://www.youtube.com/@studentroomsug');
+  assert.strictEqual(youtubeQuickPasteRows[0].first_posted_at, '2026-05-20', 'operator-supplied YouTube posted date should be retained');
+  const normalizedYoutubeQuickPaste = normalizeFoundOnlineSourcePost(youtubeQuickPasteRows[0]);
+  assert.strictEqual(normalizedYoutubeQuickPaste.listingType, 'students', 'YouTube student hostel quick paste should stay student inventory');
+
+  const xQuickPasteRows = buildExactSocialPostImportRows({
+    rawText: [
+      'https://twitter.com/studentroomsug/status/1800000000000000000 | Kyambogo student hostel room with security and WiFi | Banda, Kampala | USh 400k/month | 2026-05-20',
+    ].join('\n'),
+  });
+  assert.strictEqual(xQuickPasteRows.length, 1, 'X/Twitter quick paste should create one normalized row');
+  assert.strictEqual(xQuickPasteRows[0].source_url, 'https://x.com/studentroomsug/status/1800000000000000000');
+  assert.strictEqual(xQuickPasteRows[0].platform, 'X');
+  assert.strictEqual(xQuickPasteRows[0].listing_type, 'students');
+  assert.strictEqual(xQuickPasteRows[0].area, 'Banda');
+  assert.strictEqual(xQuickPasteRows[0].district, 'Kampala');
+  assert.strictEqual(xQuickPasteRows[0].source_contact_url, 'https://x.com/studentroomsug');
+
+  const normalizedStudentForRent = normalizeFoundOnlineSourcePost({
+    source_url: 'https://x.com/studentroomsug/status/1800000000000000001',
+    title: 'Student hostel for rent near Makerere',
+    location: 'Makerere, Kampala',
+    source_name: 'Student Rooms UG',
+    platform: 'x',
+    source_contact_url: 'https://x.com/studentroomsug',
+  });
+  assert.strictEqual(normalizedStudentForRent.listingType, 'students', 'student hostel wording should win over rent wording in found-online normalizer');
 
   const mansionRows = buildExactSocialPostImportRows({
     rawText: [
@@ -987,6 +1082,64 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(youtubeJobs.length, 1);
   assert.strictEqual(youtubeJobs[0].published_after, '2026-02-01T00:00:00.000Z', 'YouTube jobs should start from the requested February window');
   assert.strictEqual(youtubeJobs[0].includes_shorts_and_long_form, true, 'YouTube jobs should not exclude Shorts or long-form videos');
+  const broadYoutubeJobs = buildYouTubeSearchJobs({
+    sources: [
+      {
+        key: 'youtube-old-agent-channel',
+        name: 'Old Agent Channel',
+        platform: 'youtube',
+        sourceType: 'creator_channel',
+        url: 'https://www.youtube.com/@OldAgentUg',
+      },
+      {
+        key: 'youtube-kira-homes-discovery',
+        name: 'YouTube discovery: Kira homes for rent',
+        platform: 'youtube',
+        sourceType: 'public_video_search_feed',
+        url: 'https://www.youtube.com/results?search_query=Kira+homes+for+rent+Uganda',
+        listingTypes: ['rent'],
+        metadata: { generated_source_discovery: true },
+      },
+      {
+        key: 'youtube-uganda-realestate-hashtag',
+        name: 'YouTube hashtag: #UgandaRealEstate',
+        platform: 'youtube',
+        sourceType: 'hashtag_search_feed',
+        url: 'https://www.youtube.com/hashtag/ugandarealestate',
+        hashtags: ['UgandaRealEstate'],
+        metadata: { generated_hashtag_discovery: true },
+      },
+    ],
+    limit: 2,
+    publishedAfter: '2026-02-01T00:00:00.000Z',
+  });
+  assert.deepStrictEqual(
+    broadYoutubeJobs.map((job) => job.source_key),
+    ['youtube-kira-homes-discovery', 'youtube-uganda-realestate-hashtag'],
+    'small YouTube dry runs should prioritise broad search/hashtag discovery before old creator channels'
+  );
+  assert(broadYoutubeJobs.every((job) => job.includes_shorts_and_long_form), 'broad YouTube discovery jobs should include Shorts and long-form content');
+  assert(!broadYoutubeJobs[0].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
+  const firstYoutubeBatch = buildYouTubeSearchJobs({
+    sources: [
+      { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
+      { key: 'yt-search-2', name: 'Search 2', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Wakiso+land+Uganda', metadata: { generated_source_discovery: true } },
+      { key: 'yt-search-3', name: 'Search 3', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Mukono+rentals+Uganda', metadata: { generated_source_discovery: true } },
+    ],
+    limit: 1,
+    offset: 0,
+  });
+  const secondYoutubeBatch = buildYouTubeSearchJobs({
+    sources: [
+      { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
+      { key: 'yt-search-2', name: 'Search 2', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Wakiso+land+Uganda', metadata: { generated_source_discovery: true } },
+      { key: 'yt-search-3', name: 'Search 3', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Mukono+rentals+Uganda', metadata: { generated_source_discovery: true } },
+    ],
+    limit: 1,
+    offset: 1,
+  });
+  assert.strictEqual(firstYoutubeBatch[0].source_key, 'yt-search-1', 'first YouTube source batch should start at offset zero');
+  assert.strictEqual(secondYoutubeBatch[0].source_key, 'yt-search-2', 'second YouTube source batch should advance using source offset');
   const normalizedYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'abc123XYZ90' },
     snippet: {
@@ -1031,6 +1184,22 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
     startTime: '2026-05-12T00:00:00.000Z',
   });
   assert.strictEqual(xLookbackJobs[0].start_time, '2026-05-12T00:00:00.000Z', 'X full archive jobs should accept a 14-day lookback start time');
+
+  const facebookStudentTasks = buildManualSocialCaptureTasks({
+    platform: 'facebook',
+    sources: [{
+      key: 'facebook-makerere-hostel-groups',
+      name: 'Facebook search: Makerere hostels',
+      platform: 'facebook',
+      sourceType: 'group_search_feed',
+      url: 'https://www.facebook.com/search/groups/?q=Makerere%20hostels',
+      listingTypes: ['students', 'rent'],
+    }],
+    limit: 1,
+  });
+  assert.strictEqual(facebookStudentTasks.length, 1, 'student sweep should prepare Facebook exact-link capture tasks');
+  assert.strictEqual(facebookStudentTasks[0].exact_post_url_required, true);
+  assert(facebookStudentTasks[0].exact_post_url_pattern.includes('facebook.com'), 'Facebook capture task should name public post/video URL patterns');
 
   const normalized = normalizeXApiPost({
     id: '1800000000000000000',
@@ -1172,9 +1341,17 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(frontend.includes('listing: listingPatch'), 'King review save should send listing edits through the review endpoint');
   assert(frontend.includes('adminPersistActiveReviewEditsBeforeStatus'), 'King approval should persist edited facts before changing live status');
   assert(frontend.includes('admin-review-listing-type-edit'), 'King review should allow changing sale/rent type');
+  assert(frontend.includes('admin-review-lister-phone-edit') && frontend.includes('adminReviewExtractedPhone'), 'King review should let King capture a WhatsApp/phone number from source text');
   assert(frontend.includes('admin-review-area-edit') && frontend.includes('admin-review-district-edit'), 'King review should allow location correction');
+  assert(frontend.includes('admin-review-student-fields') && frontend.includes('admin-review-nearest-uni-edit') && frontend.includes('admin-review-student-amenities'), 'King review should show public-flow student accommodation fields when listing type is student');
+  assert(frontend.includes('adminReviewOnListingTypeChange') && frontend.includes('adminReviewOnStudentAmenityToggle'), 'King review should update student fields when the listing type/amenities change');
+  assert(frontend.includes('nearest_university: listingType === "student"') && frontend.includes('student_universities: listingType === "student"'), 'King review save should collect student accommodation metadata');
   assert(frontend.includes('admin-review-region-edit') && frontend.includes('admin-review-city-edit') && frontend.includes('admin-review-neighborhood-edit'), 'King review should mirror the public guided region/city/neighbourhood location flow');
   assert(frontend.includes('adminReviewFindAddressOrPlace'), 'King review should reuse address/place search before approval');
+  assert(frontend.includes('function adminReviewInferHierarchyFromText'), 'King review should infer town/city and neighbourhood from the same guided location tree used by public search/listing');
+  assert(frontend.includes('adminReviewAutoPopulateLocationFromSource(review)'), 'King review should auto-populate missing guided location fields when a review record opens');
+  assert(frontend.includes('adminReviewOnAddressSearchInput') && frontend.includes('getGooglePlacePredictions(query)'), 'King review address search should offer the same local/online suggestions as the public listing flow');
+  assert(frontend.includes('admin-review-place-id-edit') && frontend.includes('place_id: get("admin-review-place-id-edit")'), 'King review should persist online place lookup IDs with edited location facts');
   assert(frontend.includes('adminReviewCoordinateNumber'), 'King review should parse comma decimal coordinates pasted from local formats');
   assert(adminRoute.includes('toNullableCoordinate') && adminRoute.includes("raw.replace(',', '.')"), 'backend should accept comma decimal map coordinates only on the admin coordinate path');
   assert(frontend.includes('adminReviewLocationProvider = "google"'), 'King review map should use Google Maps when available');
@@ -1198,6 +1375,8 @@ test('King review can correct sourced listing facts before approval', () => {
   assert(adminRoute.includes('review_location_hierarchy'), 'admin review edits should persist the guided location hierarchy');
   assert(adminRoute.includes('king_review_public_listing_facts'), 'admin review edits should keep a single source of truth snapshot');
   assert(adminRoute.includes('street_name'), 'admin review edits should store granular street/landmark context in extra fields');
+  assert(adminRoute.includes("lister_phone: { column: 'lister_phone'") && adminRoute.includes("nearest_university: { column: 'nearest_university'"), 'admin review backend should persist King-edited phone and student columns');
+  assert(adminRoute.includes('extraPatch.contact_phone') && adminRoute.includes('extraPatch.student_universities'), 'admin review backend should mirror contact/student data into extra fields for public/search metadata');
   assert(socialSearchServiceSource.includes('social_source_trust_review'), 'social-source imported listings should carry a 10-point trust review');
 });
 
