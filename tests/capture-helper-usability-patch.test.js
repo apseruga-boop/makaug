@@ -12,6 +12,8 @@ test('capture helper usability patch is served and cache-busted by the server', 
   assert.match(serverSource, /app\.get\('\/assets\/makaug-app\.js'/);
   assert.match(serverSource, /applyCaptureHelperUsabilityIndexPatch/);
   assert.match(serverSource, /window\\\.__makaugAppVersion/);
+  assert.match(serverSource, /adminPasteSocialCapturedLinks/);
+  assert.match(serverSource, /adminOpenSocialQuickPastePanel/);
   assert.match(serverSource, /admin-social-capture-bookmarklet-url/);
   assert.match(serverSource, /Copied means the long bookmark code is in your computer clipboard/);
   assert.match(serverSource, /Simplest no-bookmark option/);
