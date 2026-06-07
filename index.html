@@ -666,6 +666,9 @@
       position: relative;
       z-index: 7001;
     }
+    #broker-reg-modal .broker-reg-modal-box {
+      max-width: 720px;
+    }
     .admin-evidence-box {
       max-width: min(920px, calc(100vw - 32px));
     }
@@ -1314,6 +1317,19 @@
         padding: 18px;
         border-radius: 14px;
         max-height: calc(100vh - 20px);
+      }
+      #broker-reg-modal {
+        align-items: stretch;
+        justify-content: stretch;
+        padding: 0;
+      }
+      #broker-reg-modal .broker-reg-modal-box {
+        max-width: none !important;
+        width: 100%;
+        min-height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+        padding: 20px;
       }
       .rm-sugg-panel { max-height: 220px; }
       .toast {
@@ -2027,7 +2043,7 @@
       </div>
     </section>
     <section class="max-w-7xl mx-auto px-4 pb-8">
-      <div class="rounded-3xl bg-white border border-purple-100 p-5" data-howto-video-grid="students"></div>
+      <div class="hidden rounded-3xl bg-white border border-purple-100 p-5" data-howto-video-grid="students"></div>
     </section>
   </div>
 
@@ -2260,7 +2276,7 @@
               <option value="registered">Registered Brokers</option>
             </select>
             <button onclick="openModal('broker-reg-modal')" class="md:ml-auto shrink-0 bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-xl text-sm font-semibold">
-              + Register as Broker
+              + Register as an Agent
             </button>
           </div>
           <div id="brokers-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -2338,12 +2354,13 @@
                 <p id="mortgage-calc-tip" class="text-sm text-gray-600 mt-1">Edit the assumptions below. makaug shows an estimate only, not a bank approval.</p>
               </div>
               <div class="flex flex-wrap gap-2" aria-label="Mortgage calculator tabs">
-                <button type="button" class="rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20">Repayment</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Affordability</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Extra Payment</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Fees &amp; Transfer</button>
+                <button id="mortgage-tab-repayment" type="button" onclick="setMortgageTab('repayment')" class="rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20">Repayment</button>
+                <button id="mortgage-tab-affordability" type="button" onclick="setMortgageTab('affordability')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Affordability</button>
+                <button id="mortgage-tab-extra" type="button" onclick="setMortgageTab('extra')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Extra Payment</button>
+                <button id="mortgage-tab-fees" type="button" onclick="setMortgageTab('fees')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Fees &amp; Transfer</button>
               </div>
             </div>
+            <div id="mortgage-tab-panel" class="mb-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-emerald-950"></div>
             <div class="grid lg:grid-cols-[1fr_0.9fr] gap-5">
               <div class="rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-white to-emerald-50/60 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_18px_45px_rgba(20,83,45,0.08)]">
                 <div class="grid sm:grid-cols-2 gap-4">
@@ -2357,7 +2374,7 @@
                     <span id="mortgage-deposit-value" class="sr-only">20%</span>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Interest Rate (%)</label>
+                    <label id="mortgage-label-rate" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Interest Rate (%)</label>
                     <input id="mortgage-rate" type="number" value="16" min="0" max="45" step="0.1" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" oninput="renderMortgageFinder()">
                   </div>
                   <div>
@@ -2374,7 +2391,7 @@
                     </select>
                   </div>
                   <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Currency</label>
+                    <label id="mortgage-label-currency" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Currency</label>
                     <select id="mortgage-currency" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white" onchange="renderMortgageFinder()">
                       <option value="UGX">UGX</option>
                       <option value="USD">USD</option>
@@ -2386,8 +2403,8 @@
                   </div>
                 </div>
                 <div class="grid sm:grid-cols-2 gap-3 mt-4">
-                  <button type="button" onclick="renderMortgageFinder()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-black">Calculate</button>
-                  <button type="button" onclick="resetMortgageCalculator()" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-sm font-black">Reset</button>
+                  <button id="mortgage-calc-button" type="button" onclick="renderMortgageFinder()" class="bg-green-700 hover:bg-green-600 text-white rounded-xl px-4 py-3 text-sm font-black">Calculate</button>
+                  <button id="mortgage-reset-button" type="button" onclick="resetMortgageCalculator()" class="border border-green-200 text-green-800 hover:bg-green-50 rounded-xl px-4 py-3 text-sm font-black">Reset</button>
                 </div>
               </div>
               <div id="mortgage-professional-results" class="mortgage-result-pop rounded-[1.75rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-5 min-h-[360px] shadow-[0_28px_65px_rgba(20,83,45,0.18)]">
@@ -2469,6 +2486,11 @@
             <div class="mt-4 border border-green-100 rounded-xl p-4 bg-green-50">
               <div id="mortgage-lead-title" class="text-sm font-bold text-gray-900">Need a mortgage consultant call-back?</div>
               <p id="mortgage-lead-sub" class="text-xs text-gray-600 mt-1">Share your details and we will connect you to a mortgage consultant for guidance.</p>
+              <label id="mortgage-lead-provider-label" class="block text-xs font-semibold text-gray-600 mt-3 mb-1">Preferred Bank</label>
+              <select id="mortgage-lead-provider" onchange="setMortgageLeadProvider(this.value)" class="w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white">
+                <option value="">General makaug mortgage consultant</option>
+              </select>
+              <div id="mortgage-lead-provider-context" class="mt-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900">No bank selected yet. Use a bank comparison call button to route this lead to a specific lender.</div>
               <div class="grid sm:grid-cols-2 gap-2 mt-3">
                 <div>
                   <label id="mortgage-lead-name-label" class="block text-xs font-semibold text-gray-600 mb-1">Full Name *</label>
@@ -2610,7 +2632,7 @@
         </form>
         <div id="ai-chatbot-response" class="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">AI responses appear here. Provider-missing states are shown safely.</div>
       </div>
-      <section class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
+      <section class="hidden rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="ai-chatbot"></section>
     </div>
   </div>
 
@@ -3396,7 +3418,7 @@
           <span id="lp-wa-btn-label">📲 List on WhatsApp Instead</span>
         </a>
       </div>
-      <section class="mt-7 rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="list-property"></section>
+      <section class="hidden mt-7 rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="list-property"></section>
     </div>
   </div>
 
@@ -3769,10 +3791,11 @@
             <div id="finder-callbacks" class="mt-3 space-y-2 text-sm"></div>
           </div>
 		          <div class="bg-white border border-gray-200 rounded-2xl p-5">
-		            <h2 id="finder-budget-title" class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
-	            <p id="finder-budget-copy" class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
-	            <button id="finder-budget-btn" onclick="showPage('mortgage')" class="mt-3 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Mortgage Finder</button>
-	          </div>
+			            <h2 id="finder-budget-title" class="text-xl font-bold text-gray-800 mb-2">Mortgage/Budget Centre</h2>
+		            <p id="finder-budget-copy" class="text-sm text-gray-500">Mortgage estimates, rent affordability, deposits, and budget guidance will be grouped here.</p>
+		            <div id="finder-mortgage-calculations" class="mt-3 space-y-2 text-sm"></div>
+		            <button id="finder-budget-btn" onclick="showPage('mortgage')" class="mt-3 border border-green-700 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Open Mortgage Finder</button>
+		          </div>
 		          <div class="bg-white border border-gray-200 rounded-2xl p-5">
 		            <h2 id="finder-safety-title" class="text-xl font-bold text-gray-800 mb-2">Safety Tips</h2>
 		            <p id="finder-safety-copy" class="text-sm text-gray-500">Practical safety prompts for renters, buyers, students, land seekers, owners, brokers, and diaspora buyers.</p>
@@ -5440,123 +5463,216 @@
   </div>
 
   <div id="page-about" class="page">
-    <div class="bg-gradient-to-br from-green-950 via-green-900 to-emerald-800 py-14 text-white">
-      <div class="max-w-6xl mx-auto px-4 about-reveal">
-        <p class="text-green-200 text-sm font-bold uppercase tracking-wide" data-content-i18n="about.heroLabel">About Us</p>
-        <h1 class="text-4xl md:text-5xl font-black serif mt-2" data-content-i18n="about.title">About makaug</h1>
-        <p class="text-2xl md:text-3xl font-black leading-tight mt-5 max-w-4xl" data-content-i18n="about.heroStatement">Property in Uganda should be easier to find, easier to list, and safer to trust.</p>
-        <p class="text-green-50 mt-4 max-w-3xl" data-content-i18n="about.subtitle">
-          makaug is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.
-        </p>
-        <div class="flex flex-wrap gap-2 mt-6">
-          <a href="/for-sale" class="about-cta bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
-          <a href="/list-property" class="about-cta bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List Property</a>
-          <a href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">Ask makaug on WhatsApp</a>
+    <section class="bg-gradient-to-br from-green-950 via-green-900 to-emerald-800 py-14 md:py-20 text-white overflow-hidden">
+      <div class="max-w-6xl mx-auto px-4 about-reveal grid lg:grid-cols-[1.08fr,0.92fr] gap-8 items-center">
+        <div>
+          <p class="text-green-200 text-sm font-bold uppercase tracking-wide" data-content-i18n="about.heroLabel">About makaug</p>
+          <h1 class="text-4xl md:text-6xl font-black serif mt-2 leading-tight" data-content-i18n="about.title">About makaug</h1>
+          <p class="text-2xl md:text-3xl font-black leading-tight mt-5 max-w-4xl" data-content-i18n="about.heroStatement">Property in Uganda should be easier to find, easier to list, and safer to trust.</p>
+          <p class="text-green-50 mt-4 max-w-3xl text-base md:text-lg" data-content-i18n="about.subtitle">
+            makaug is a Uganda-first property search engine and marketplace. We bring direct listings, public and authorised source signals, AI-assisted organisation, and human moderation into one clearer place.
+          </p>
+          <div class="flex flex-wrap gap-2 mt-7">
+            <a href="/for-sale" class="about-cta bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaSearch">Search property</a>
+            <a href="/list-property" class="about-cta bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaList">List Property</a>
+            <a href="https://wa.me/256760112587?text=Hello%20makaug,%20I%20need%20property%20help" target="_blank" rel="noopener" class="about-cta border border-white/40 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.ctaWhatsapp" data-public-whatsapp-link data-whatsapp-context="about">Ask makaug on WhatsApp</a>
+          </div>
+        </div>
+        <div class="rounded-3xl bg-white/10 border border-white/15 p-5 md:p-6 shadow-2xl backdrop-blur">
+          <p class="text-xs font-black uppercase tracking-wide text-amber-200" data-content-i18n="about.searchEngineLabel">Property search engine</p>
+          <h2 class="text-2xl font-black serif mt-2" data-content-i18n="about.searchEngineTitle">How makaug finds property information</h2>
+          <div class="mt-5 space-y-3">
+            <div class="flex gap-3 rounded-2xl bg-white/10 border border-white/10 p-3">
+              <i class="fas fa-satellite-dish text-amber-200 mt-1"></i>
+              <div><strong data-content-i18n="about.sourceNetworkTitle">30,000+ source registry</strong><p class="text-sm text-green-50 mt-1" data-content-i18n="about.sourceNetworkText">We monitor a growing registry of property pages, accounts, channels, searches, and partner routes across Uganda.</p></div>
+            </div>
+            <div class="flex gap-3 rounded-2xl bg-white/10 border border-white/10 p-3">
+              <i class="fas fa-wand-magic-sparkles text-amber-200 mt-1"></i>
+              <div><strong data-content-i18n="about.aiAssistTitle">AI-assisted organisation</strong><p class="text-sm text-green-50 mt-1" data-content-i18n="about.aiAssistText">AI helps sort categories, locations, duplicates, language signals, and risk flags before review.</p></div>
+            </div>
+            <div class="flex gap-3 rounded-2xl bg-white/10 border border-white/10 p-3">
+              <i class="fas fa-user-shield text-amber-200 mt-1"></i>
+              <div><strong data-content-i18n="about.humanReviewTitle">Human moderation</strong><p class="text-sm text-green-50 mt-1" data-content-i18n="about.humanReviewText">People still check source evidence, contact routes, ownership signals, photos, and safety concerns.</p></div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+
     <div class="max-w-6xl mx-auto px-4 py-12">
-      <div class="grid md:grid-cols-3 gap-4 mb-8">
+      <div class="grid md:grid-cols-4 gap-4 mb-10">
         <div class="about-card bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
-          <i class="fas fa-location-dot text-green-700 text-2xl"></i>
-          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueUgandaTitle">Uganda-first</div>
-          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueUgandaText">Built around local places, local language needs, WhatsApp habits, and real listing workflows.</p>
+          <i class="fas fa-database text-green-700 text-2xl"></i>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.statSourcesTitle">30,000+ sources</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.statSourcesText">A source registry for public pages, social channels, discovery feeds, and authorised partner paths.</p>
         </div>
         <div class="about-card bg-white border border-amber-100 rounded-3xl p-5 shadow-sm">
-          <i class="fas fa-hand-holding-heart text-amber-600 text-2xl"></i>
+          <i class="fas fa-brain text-amber-600 text-2xl"></i>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.statAiTitle">AI + people</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.statAiText">AI helps organise information, while human review protects quality before listings go live.</p>
+        </div>
+        <div class="about-card bg-white border border-blue-100 rounded-3xl p-5 shadow-sm">
+          <i class="fas fa-language text-blue-700 text-2xl"></i>
+          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.statLanguageTitle">9 languages</div>
+          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.statLanguageText">Built for multilingual discovery across web, WhatsApp, support, and safety guidance.</p>
+        </div>
+        <div class="about-card bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
+          <i class="fas fa-hand-holding-heart text-green-700 text-2xl"></i>
           <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueFreeTitle">Free listing</div>
           <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueFreeText">Owners and brokers can list property without a listing fee while paid advertising stays separate.</p>
         </div>
-        <div class="about-card bg-white border border-green-100 rounded-3xl p-5 shadow-sm">
-          <i class="fab fa-whatsapp text-green-600 text-2xl"></i>
-          <div class="text-2xl font-black text-gray-900 mt-3" data-content-i18n="about.valueWhatsappTitle">Web + WhatsApp</div>
-          <p class="text-sm text-gray-600 mt-2" data-content-i18n="about.valueWhatsappText">Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.</p>
-        </div>
       </div>
 
-      <div class="grid lg:grid-cols-[0.95fr,1.05fr] gap-6 mb-8">
+      <div class="grid lg:grid-cols-[0.95fr,1.05fr] gap-6 mb-10">
         <section class="about-card bg-white border border-gray-200 rounded-3xl p-6 shadow-sm">
-          <h2 class="text-2xl font-black text-gray-900 serif" data-content-i18n="about.whoTitle">Who we are</h2>
+          <p class="text-xs font-black uppercase tracking-wide text-green-700" data-content-i18n="about.valueUgandaTitle">Uganda-first</p>
+          <h2 class="text-2xl font-black text-gray-900 serif mt-2" data-content-i18n="about.whoTitle">Who we are</h2>
           <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.whoText">
-            makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda’s property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.
+            makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.
           </p>
         </section>
         <section class="about-card bg-green-50 border border-green-100 rounded-3xl p-6">
-          <h2 class="text-2xl font-black text-green-950 serif" data-content-i18n="about.missionTitle">Our mission</h2>
+          <p class="text-xs font-black uppercase tracking-wide text-green-700" data-content-i18n="about.missionLabel">Our Mission</p>
+          <h2 class="text-2xl font-black text-green-950 serif mt-2" data-content-i18n="about.missionTitle">Our mission</h2>
           <p class="text-green-900 mt-3 leading-relaxed" data-content-i18n="about.missionText">
-            Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda’s property market with better information.
+            Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.
           </p>
         </section>
       </div>
 
-      <section class="about-card bg-white border border-gray-200 rounded-3xl p-6 mb-8">
-        <h2 class="text-2xl font-black text-gray-900 serif" data-content-i18n="about.whyTitle">Why makaug exists</h2>
-        <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.whyText">
-          Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.
-        </p>
-      </section>
-
-      <section class="about-card bg-white border border-blue-100 rounded-3xl p-6 mb-8 shadow-sm">
-        <p class="text-xs font-black uppercase tracking-wide text-blue-700" data-content-i18n="about.searchEngineLabel">Property search engine</p>
-        <h2 class="text-2xl font-black text-gray-900 serif mt-2" data-content-i18n="about.searchEngineTitle">How makaug finds property information</h2>
-        <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.searchEngineText">
-          makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through King review before it can appear as a trusted live listing.
-        </p>
-        <div class="grid md:grid-cols-3 gap-4 mt-5">
-          <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4">
-            <div class="font-black text-blue-950" data-content-i18n="about.searchSourceTitle">Source visibility</div>
-            <p class="text-sm text-blue-900 mt-2" data-content-i18n="about.searchSourceText">Found-online listings show when makaug first found them, the social source they came from, and the route buyers can use to check the original post.</p>
+      <section class="about-card bg-white border border-gray-200 rounded-3xl p-6 mb-10 shadow-sm">
+        <div class="grid lg:grid-cols-[0.8fr,1.2fr] gap-6">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-amber-700" data-content-i18n="about.whyLabel">Why this matters</p>
+            <h2 class="text-2xl font-black text-gray-900 serif mt-2" data-content-i18n="about.whyTitle">Why makaug exists</h2>
+            <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.whyText">
+              Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.
+            </p>
           </div>
-          <div class="rounded-2xl bg-green-50 border border-green-100 p-4">
-            <div class="font-black text-green-950" data-content-i18n="about.searchReviewTitle">Human review</div>
-            <p class="text-sm text-green-900 mt-2" data-content-i18n="about.searchReviewText">Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.</p>
-          </div>
-          <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4">
-            <div class="font-black text-amber-950" data-content-i18n="about.searchRemovalTitle">Claim or remove</div>
-            <p class="text-sm text-amber-900 mt-2" data-content-i18n="about.searchRemovalText">Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.</p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="rounded-2xl bg-green-50 border border-green-100 p-4"><strong data-content-i18n="about.challengeScatteredTitle">Scattered channels</strong><p class="text-sm text-green-900 mt-2" data-content-i18n="about.challengeScatteredText">Useful property information may sit in posts, groups, calls, WhatsApp, pages, and offline networks.</p></div>
+            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4"><strong data-content-i18n="about.challengeQualityTitle">Uneven quality</strong><p class="text-sm text-amber-950 mt-2" data-content-i18n="about.challengeQualityText">Photos, prices, location, title signals, and contact permission are often incomplete or unclear.</p></div>
+            <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4"><strong data-content-i18n="about.challengeLanguageTitle">Language and access</strong><p class="text-sm text-blue-950 mt-2" data-content-i18n="about.challengeLanguageText">People search in different languages and many prefer mobile web or WhatsApp over long forms.</p></div>
+            <div class="rounded-2xl bg-slate-50 border border-slate-200 p-4"><strong data-content-i18n="about.challengeTrustTitle">Trust before payment</strong><p class="text-sm text-slate-700 mt-2" data-content-i18n="about.challengeTrustText">Searchers need practical checks, traceable contact, and a way to report pressure or suspicious details.</p></div>
           </div>
         </div>
       </section>
 
-      <section class="about-card bg-emerald-950 text-white rounded-3xl p-6 mb-8 shadow-sm">
-        <div class="flex flex-col lg:flex-row lg:items-start gap-6">
-          <div class="lg:w-1/3">
-            <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-content-i18n="about.landHubLabel">Land marketplace support</p>
-            <h2 class="text-2xl font-black serif mt-2" data-content-i18n="about.landHubTitle">Find and list land without pretending to clear titles</h2>
-            <p class="text-emerald-50 mt-3 leading-relaxed" data-content-i18n="about.landHubText">
+      <section class="about-card bg-amber-50 border border-amber-100 rounded-3xl p-6 mb-10 shadow-sm">
+        <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-6">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-amber-700" data-content-i18n="about.adsLabel">Advertising revenue</p>
+            <h2 class="text-2xl font-black text-gray-900 serif mt-2" data-content-i18n="about.adsTitle">Paid advertising is transparent and separate from free listing</h2>
+            <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.adsText">
+              Businesses can buy sponsored homepage, search, property-detail, broker, student, commercial, land, and WhatsApp placements. Prices are published in UGX with USD guide pricing on the Advertise page, and every paid campaign is reviewed before going live.
+            </p>
+            <a href="/advertise" class="about-cta inline-flex mt-5 bg-green-700 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.adsCta">View advertising prices</a>
+          </div>
+          <div class="grid md:grid-cols-3 gap-4">
+            <div class="rounded-2xl bg-white border border-amber-100 p-4">
+              <i class="fas fa-table-list text-amber-700"></i>
+              <div class="font-black mt-3" data-content-i18n="about.adsRateTitle">Public rate card</div>
+              <p class="text-sm text-gray-700 mt-2" data-content-i18n="about.adsRateText">Day, week, month, and CPM options are shown publicly so advertisers can plan spend before contacting makaug.</p>
+            </div>
+            <div class="rounded-2xl bg-white border border-green-100 p-4">
+              <i class="fab fa-paypal text-green-700"></i>
+              <div class="font-black mt-3" data-content-i18n="about.adsPayTitle">PayPal launch payments</div>
+              <p class="text-sm text-gray-700 mt-2" data-content-i18n="about.adsPayText">After makaug confirms a campaign, the advertiser receives a PayPal payment link. The King dashboard tracks invoice, payment reference, approval, live dates, impressions, clicks, and leads.</p>
+            </div>
+            <div class="rounded-2xl bg-white border border-green-100 p-4">
+              <i class="fab fa-whatsapp text-green-700"></i>
+              <div class="font-black mt-3" data-content-i18n="about.adsWhatsappTitle">WhatsApp advertising</div>
+              <p class="text-sm text-gray-700 mt-2" data-content-i18n="about.adsWhatsappText">Sponsored WhatsApp matches and approved opt-in bulk audience campaigns are available, with exact bulk pricing confirmed by segment, template approval, and volume.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-blue-700" data-content-i18n="about.searchEngineLabel">Property search engine</p>
+            <h2 class="text-3xl font-black text-gray-900 serif" data-content-i18n="about.searchEngineTitle">How makaug finds property information</h2>
+          </div>
+          <a href="/discover-ai-chatbot" class="text-sm font-bold text-green-700" data-content-i18n="about.aiCta">Try AI property help</a>
+        </div>
+        <p class="text-gray-700 max-w-4xl leading-relaxed mb-5" data-content-i18n="about.searchEngineText">
+          makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through AI-assisted checks and human review before it can appear as a trusted live listing.
+        </p>
+        <div class="grid md:grid-cols-5 gap-3">
+          <article class="about-card rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-radar text-green-700"></i><h3 class="font-black mt-3" data-content-i18n="about.flowFindTitle">Find signals</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.flowFindText">We monitor direct listings, authorised feeds, public source pages, social posts, and channel updates.</p></article>
+          <article class="about-card rounded-3xl border border-amber-100 bg-amber-50 p-5 shadow-sm"><i class="fas fa-filter text-amber-700"></i><h3 class="font-black mt-3" data-content-i18n="about.flowOrganiseTitle">Organise with AI</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.flowOrganiseText">AI helps classify property type, area, likely price fields, duplicates, language, and missing details.</p></article>
+          <article class="about-card rounded-3xl border border-blue-100 bg-blue-50 p-5 shadow-sm"><i class="fas fa-clipboard-check text-blue-700"></i><h3 class="font-black mt-3" data-content-i18n="about.flowReviewTitle">Review carefully</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.flowReviewText">Human checks look at source evidence, contact routes, images, permission, location, and risk flags.</p></article>
+          <article class="about-card rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-tags text-green-700"></i><h3 class="font-black mt-3" data-content-i18n="about.flowAttributeTitle">Attribute clearly</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.flowAttributeText">Found-online information keeps source context. Owners and agents can claim, correct, or request removal.</p></article>
+          <article class="about-card rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm"><i class="fas fa-comments text-slate-700"></i><h3 class="font-black mt-3" data-content-i18n="about.flowConnectTitle">Connect safely</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.flowConnectText">Searchers can save, enquire, use WhatsApp, request callbacks, report issues, and follow safety guidance.</p></article>
+        </div>
+      </section>
+
+      <section class="about-card bg-emerald-950 text-white rounded-3xl p-6 mb-10 shadow-sm">
+        <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-6">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-emerald-200" data-content-i18n="about.ownershipLabel">Ownership and attribution</p>
+            <h2 class="text-2xl font-black serif mt-2" data-content-i18n="about.ownershipTitle">We organise information. We do not pretend to own it.</h2>
+            <p class="text-emerald-50 mt-3 leading-relaxed" data-content-i18n="about.ownershipText">
+              Property information belongs to the owners, agents, tenants, publishers, and source channels that created it. makaug aggregates, structures, attributes, reviews, and routes property information so people can find it in one place.
+            </p>
+          </div>
+          <div class="grid sm:grid-cols-3 gap-3">
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><i class="fas fa-link text-emerald-200"></i><div class="font-black mt-3" data-content-i18n="about.searchSourceTitle">Source visibility</div><p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.searchSourceText">Found-online listings show when makaug first found them, the source they came from, and the route buyers can use to check the original post.</p></div>
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><i class="fas fa-user-pen text-emerald-200"></i><div class="font-black mt-3" data-content-i18n="about.searchRemovalTitle">Claim or remove</div><p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.searchRemovalText">Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.</p></div>
+            <div class="rounded-2xl bg-white/10 border border-white/10 p-4"><i class="fas fa-bullhorn text-emerald-200"></i><div class="font-black mt-3" data-content-i18n="about.adSeparationTitle">Ads stay separate</div><p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.adSeparationText">Free listing is open to owners and brokers. Paid advertising is labelled and managed separately from listing moderation.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="mb-10">
+        <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-green-700" data-content-i18n="about.safetyLabel">Safety and clarity</p>
+            <h2 class="text-3xl font-black text-gray-900 serif" data-content-i18n="about.trustTitle">How we support trust and safety</h2>
+          </div>
+          <a href="/safety" class="text-sm font-bold text-green-700" data-content-i18n="about.ctaSafety">Learn safety tips</a>
+        </div>
+        <div class="grid md:grid-cols-3 gap-4">
+          <details class="about-card rounded-3xl bg-white border border-green-100 p-5 shadow-sm" open>
+            <summary class="cursor-pointer list-none font-black text-gray-900"><i class="fas fa-mobile-screen text-green-700 mr-2"></i><span data-content-i18n="about.trustOtpTitle">OTP and contact checks</span></summary>
+            <p class="text-sm text-gray-600 mt-3" data-content-i18n="about.trustOtpText">Contact verification helps reduce fake submissions and missed follow-up.</p>
+          </details>
+          <details class="about-card rounded-3xl bg-white border border-amber-100 p-5 shadow-sm">
+            <summary class="cursor-pointer list-none font-black text-gray-900"><i class="fas fa-shield-halved text-amber-700 mr-2"></i><span data-content-i18n="about.trustReviewTitle">Review before publishing</span></summary>
+            <p class="text-sm text-gray-600 mt-3" data-content-i18n="about.trustReviewText">Listing details, photos, location, and fraud signals are checked before approval.</p>
+          </details>
+          <details class="about-card rounded-3xl bg-white border border-red-100 p-5 shadow-sm">
+            <summary class="cursor-pointer list-none font-black text-gray-900"><i class="fas fa-triangle-exclamation text-red-600 mr-2"></i><span data-content-i18n="about.trustFraudTitle">Fraud reporting</span></summary>
+            <p class="text-sm text-gray-600 mt-3" data-content-i18n="about.trustFraudText">Users can report suspicious listings, land/title concerns, and payment pressure.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="about-card bg-white border border-green-100 rounded-3xl p-6 mb-10 shadow-sm">
+        <div class="grid lg:grid-cols-[0.9fr,1.1fr] gap-6">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-emerald-700" data-content-i18n="about.landHubLabel">Land marketplace support</p>
+            <h2 class="text-2xl font-black text-gray-900 serif mt-2" data-content-i18n="about.landHubTitle">Find and list land without pretending to clear titles</h2>
+            <p class="text-gray-700 mt-3 leading-relaxed" data-content-i18n="about.landHubText">
               Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.
             </p>
-            <div class="flex flex-wrap gap-2 mt-5">
-              <a href="/land" class="about-cta bg-white text-emerald-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.landHubPortal">Browse land listings</a>
-            </div>
+            <a href="/land" class="about-cta inline-flex mt-5 bg-green-800 text-white rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.landHubPortal">Browse land listings</a>
           </div>
-          <div class="grid md:grid-cols-3 gap-4 lg:flex-1">
-            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
-              <i class="fas fa-map-location-dot text-emerald-200"></i>
-              <div class="font-black mt-3" data-content-i18n="about.landHubOfficialTitle">Listing discovery</div>
-              <p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.landHubOfficialText">Makaug helps people discover land listings, map locations, photos, prices, and seller contact routes.</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
-              <i class="fas fa-scale-balanced text-emerald-200"></i>
-              <div class="font-black mt-3" data-content-i18n="about.landHubEvidenceTitle">Independent checks</div>
-              <p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.landHubEvidenceText">Buyers should inspect land, review documents with their own lawyer or trusted professional, and avoid untraceable payments.</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 border border-white/10 p-4">
-              <i class="fas fa-shield-heart text-emerald-200"></i>
-              <div class="font-black mt-3" data-content-i18n="about.landHubProcessTitle">Safety first</div>
-              <p class="text-sm text-emerald-50 mt-2" data-content-i18n="about.landHubProcessText">Use makaug safety guidance, meet carefully, confirm seller authority independently, and keep records of every step.</p>
-            </div>
+          <div class="grid sm:grid-cols-3 gap-3">
+            <div class="rounded-2xl bg-green-50 border border-green-100 p-4"><i class="fas fa-map-location-dot text-green-700"></i><div class="font-black mt-3" data-content-i18n="about.landHubOfficialTitle">Listing discovery</div><p class="text-sm text-green-900 mt-2" data-content-i18n="about.landHubOfficialText">Makaug helps people discover land listings, map locations, photos, prices, and seller contact routes.</p></div>
+            <div class="rounded-2xl bg-amber-50 border border-amber-100 p-4"><i class="fas fa-scale-balanced text-amber-700"></i><div class="font-black mt-3" data-content-i18n="about.landHubEvidenceTitle">Independent checks</div><p class="text-sm text-amber-950 mt-2" data-content-i18n="about.landHubEvidenceText">Buyers should inspect land, review documents with their own lawyer or trusted professional, and avoid untraceable payments.</p></div>
+            <div class="rounded-2xl bg-blue-50 border border-blue-100 p-4"><i class="fas fa-shield-heart text-blue-700"></i><div class="font-black mt-3" data-content-i18n="about.landHubProcessTitle">Safety first</div><p class="text-sm text-blue-950 mt-2" data-content-i18n="about.landHubProcessText">Use makaug safety guidance, meet carefully, confirm seller authority independently, and keep records of every step.</p></div>
           </div>
         </div>
       </section>
 
-      <section>
+      <section class="mb-10">
         <div class="flex items-end justify-between gap-3 flex-wrap mb-4">
           <div>
             <p class="text-xs font-black uppercase tracking-wide text-green-700" data-content-i18n="about.helpLabel">Who we help</p>
             <h2 class="text-3xl font-black text-gray-900 serif" data-content-i18n="about.helpTitle">Built for real property journeys</h2>
           </div>
-          <a href="/safety" class="text-sm font-bold text-green-700" data-content-i18n="about.ctaSafety">Learn safety tips</a>
         </div>
         <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           <article class="about-card rounded-3xl border border-green-100 bg-white p-5 shadow-sm"><i class="fas fa-key text-green-700"></i><h3 class="font-black mt-3" data-content-i18n="about.rentersTitle">Renters</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.rentersText">Search by area and budget, save properties, create alerts, contact safely, book viewings, request callbacks, and report suspicious listings.</p></article>
@@ -5564,20 +5680,25 @@
           <article class="about-card rounded-3xl border border-blue-100 bg-blue-50 p-5 shadow-sm"><i class="fas fa-graduation-cap text-blue-700"></i><h3 class="font-black mt-3" data-content-i18n="about.studentsTitle">Students and parents</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.studentsText">Search by campus, budget, room type, security, water, Wi-Fi, meals, callbacks, viewings, and student alerts.</p></article>
           <article class="about-card rounded-3xl border border-amber-100 bg-amber-50 p-5 shadow-sm"><i class="fas fa-sign-hanging text-amber-700"></i><h3 class="font-black mt-3" data-content-i18n="about.ownersTitle">Owners and sellers</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.ownersText">List property free with guided fields, map location, photo prompts, OTP/contact verification, review before publishing, enquiries, and callbacks.</p></article>
           <article class="about-card rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"><i class="fas fa-briefcase text-gray-700"></i><h3 class="font-black mt-3" data-content-i18n="about.brokersTitle">Brokers</h3><p class="text-sm text-gray-600 mt-2" data-content-i18n="about.brokersText">Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.</p></article>
-          <article class="about-card rounded-3xl border border-purple-100 bg-purple-50 p-5 shadow-sm"><i class="fas fa-building text-purple-700"></i><h3 class="font-black mt-3" data-content-i18n="about.commercialTitle">Commercial users</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.commercialText">Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.</p></article>
+          <article class="about-card rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm"><i class="fas fa-building text-slate-700"></i><h3 class="font-black mt-3" data-content-i18n="about.commercialTitle">Commercial users</h3><p class="text-sm text-gray-700 mt-2" data-content-i18n="about.commercialText">Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.</p></article>
         </div>
       </section>
 
-      <section class="mt-8 bg-green-950 text-white rounded-3xl p-6">
-        <h2 class="text-2xl font-black serif" data-content-i18n="about.trustTitle">How we support trust and safety</h2>
-        <div class="grid md:grid-cols-3 gap-4 mt-4 text-sm text-green-50">
-          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustOtpTitle">OTP and contact checks</strong><br><span data-content-i18n="about.trustOtpText">Contact verification helps reduce fake submissions and missed follow-up.</span></div>
-          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustReviewTitle">Review before publishing</strong><br><span data-content-i18n="about.trustReviewText">Listing details, photos, location, and fraud signals are checked before approval.</span></div>
-          <div class="about-card rounded-2xl bg-white/10 border border-white/10 p-4"><strong data-content-i18n="about.trustFraudTitle">Fraud reporting</strong><br><span data-content-i18n="about.trustFraudText">Users can report suspicious listings, land/title concerns, and payment pressure.</span></div>
+      <section class="about-card rounded-3xl bg-gradient-to-br from-green-950 to-green-800 text-white p-6 shadow-sm">
+        <div class="grid lg:grid-cols-[1fr,auto] gap-5 items-center">
+          <div>
+            <p class="text-xs font-black uppercase tracking-wide text-amber-200" data-content-i18n="about.contactLabel">Contact and connect</p>
+            <h2 class="text-2xl font-black serif mt-2" data-content-i18n="about.contactTitle">Need help with property information?</h2>
+            <p class="text-green-50 mt-3 max-w-3xl" data-content-i18n="about.contactText">Search the site, list property for free, ask makaug on WhatsApp, or report suspicious information so the review team can look at it.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href="/help" class="about-cta bg-white text-green-900 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.helpCentreCta">Help Centre</a>
+            <a href="/report-fraud" class="about-cta bg-amber-300 text-green-950 rounded-xl px-4 py-2 text-sm font-bold" data-content-i18n="about.reportCta">Report a listing</a>
+          </div>
         </div>
       </section>
 
-      <section class="mt-8 rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="about"></section>
+      <section class="hidden mt-8 rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="about"></section>
     </div>
   </div>
 
@@ -5744,7 +5865,7 @@
             <a id="footer-link-about" href="/about" onclick="showPage('about')" class="block cursor-pointer hover:text-white">About Us</a>
             <a id="footer-link-how" href="/how-it-works" onclick="showPage('how-it-works')" class="block cursor-pointer hover:text-white">How It Works</a>
             <a id="footer-link-broker" href="/brokers" onclick="showPage('brokers')" class="block cursor-pointer hover:text-white">Find a Broker</a>
-            <a id="footer-link-register-broker" href="/broker-signup" onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as Broker</a>
+            <a id="footer-link-register-broker" href="/broker-signup" onclick="openModal('broker-reg-modal')" class="block cursor-pointer hover:text-white">Register as an Agent</a>
             <a id="footer-link-advertise" href="/advertise" onclick="handleAdvertisePropertyCta(event)" class="block cursor-pointer hover:text-white">Advertise with Us</a>
             <a id="footer-link-careers" href="/careers" onclick="showPage('careers')" class="block cursor-pointer hover:text-white">Careers</a>
           </div>
@@ -6319,22 +6440,49 @@
   </div>
 
   <div id="broker-reg-modal" class="modal-overlay">
-    <div class="modal-box" style="max-width:640px">
+    <div class="modal-box broker-reg-modal-box">
       <button onclick="closeModal('broker-reg-modal')" class="absolute top-4 right-4 w-9 h-9 rounded-full border border-green-200 text-green-400 hover:bg-green-50">✕</button>
-      <h2 class="text-2xl font-bold text-gray-800 serif">Register as a Broker</h2>
-      <p class="text-sm text-gray-500 mt-1 mb-5">Submit your broker profile for review. makaug admin controls public verification after document, AREA, and ownership checks.</p>
+      <h2 class="text-2xl font-bold text-gray-800 serif">Register as an Agent</h2>
+      <p class="text-sm text-gray-500 mt-1 mb-4">Submit your agent profile for makaug review. You need a clear photo of yourself, a photo of your National ID, ID details, areas you operate in, experience, and phone OTP verification.</p>
 
-      <div class="space-y-4">
+      <div class="grid sm:grid-cols-2 gap-3 mb-5">
+        <div class="rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-950">
+          <div class="font-black text-green-900">What you need</div>
+          <ul class="mt-2 space-y-1 text-xs">
+            <li>• Your full legal name</li>
+            <li>• Profile photo</li>
+            <li>• National ID number, expiry date, and ID photo</li>
+            <li>• Phone number verified by SMS OTP</li>
+            <li>• Operating areas and years of experience</li>
+          </ul>
+        </div>
+        <div class="rounded-2xl border border-emerald-100 bg-white p-4 text-sm">
+          <div class="font-black text-gray-900">Prefer WhatsApp?</div>
+          <p class="text-xs text-gray-600 mt-1">Open WhatsApp and makaug will ask for your name, photos, ID details, phone OTP, operating areas, and experience step by step.</p>
+          <a href="https://wa.me/256760112587?text=Hi%20makaug%2C%20I%20want%20to%20register%20as%20an%20agent.%20Please%20guide%20me%20through%20profile%20photo%2C%20National%20ID%2C%20phone%20OTP%2C%20areas%2C%20and%20experience." target="_blank" rel="noopener noreferrer" data-public-whatsapp-link data-whatsapp-context="agent_registration" class="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-bold text-white hover:bg-green-600">
+            <i class="fab fa-whatsapp"></i> Register on WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <div id="agent-application-success" class="hidden rounded-2xl border border-green-200 bg-green-50 p-5 text-green-950">
+        <div class="text-xs font-black uppercase tracking-wide text-green-700">Application received</div>
+        <h3 class="mt-1 text-xl font-black text-gray-900">Thank you. Your information has been sent for verification.</h3>
+        <p id="agent-application-success-copy" class="mt-2 text-sm text-green-900">makaug will review your agent profile within 24 hours and let you know once it is set up so you can start submitting properties.</p>
+        <button type="button" onclick="closeModal('broker-reg-modal')" class="mt-4 w-full rounded-xl bg-green-800 px-4 py-3 text-sm font-bold text-white hover:bg-green-700">Done</button>
+      </div>
+
+      <div id="agent-registration-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-800 mb-2">Verification review</label>
+          <label class="block text-sm font-medium text-gray-800 mb-2">Agent verification review</label>
           <div class="border border-green-100 rounded-xl px-3 py-2.5 text-sm bg-green-50 text-green-900">
             Public verification is not self-declared. If you already have AREA documents, add them below; otherwise the team can contact you about the verification process.
           </div>
-          <p id="agent-status-note" class="text-xs text-green-700 mt-2">This broker profile will be reviewed before approval.</p>
+          <p id="agent-status-note" class="text-xs text-green-700 mt-2">This agent profile will be reviewed before approval.</p>
         </div>
 
         <div id="agent-registered-note" class="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-700">
-          Verification badges are added by admin after supporting checks are complete.
+          Agent badges are added by admin after supporting checks are complete.
         </div>
 
         <div id="agent-not-registered-note" class="hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
@@ -6357,7 +6505,7 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-800 mb-2">Broker Profile Photo</label>
+          <label class="block text-sm font-medium text-gray-800 mb-2">Agent Profile Photo *</label>
           <div class="grid sm:grid-cols-[120px,1fr] gap-3 items-center border border-green-100 rounded-2xl p-3 bg-green-50/50">
             <div id="agent-profile-photo-preview" class="w-24 h-24 rounded-full border-2 border-white bg-white shadow-sm overflow-hidden flex items-center justify-center text-green-800 font-bold">
               Photo
@@ -6372,7 +6520,7 @@
                   Remove
                 </button>
               </div>
-              <p id="agent-profile-photo-help" class="text-xs text-gray-500 mt-2">Square headshot or logo recommended. JPG/PNG, max 5MB before compression.</p>
+              <p id="agent-profile-photo-help" class="text-xs text-gray-500 mt-2">Use a clear headshot. JPG/PNG, max 5MB before compression.</p>
             </div>
           </div>
         </div>
@@ -6400,7 +6548,6 @@
             <label class="block text-sm font-medium text-gray-800 mb-2">Receive OTP via *</label>
             <select id="agent-otp-channel" onchange="setAgentOtpChannel(this.value)" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm bg-white">
               <option value="phone">Phone</option>
-              <option value="email">Email</option>
             </select>
           </div>
           <div class="sm:col-span-2">
@@ -6417,6 +6564,17 @@
         <div>
           <label class="block text-sm font-medium text-gray-800 mb-2">Areas Specialised In *</label>
           <input id="agent-areas" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. Kampala, Wakiso, Mukono">
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-800 mb-2">Property Speciality</label>
+            <input id="agent-specializations" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="e.g. rentals, land, sales">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-800 mb-2">Years of Experience *</label>
+            <input id="agent-experience-years" type="number" min="0" max="80" inputmode="numeric" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="0, 1, 5...">
+          </div>
         </div>
 
         <div class="bg-gray-50 border border-gray-200 rounded-xl p-3">
@@ -6444,6 +6602,12 @@
           <label class="block text-sm font-medium text-gray-800 mb-2">National ID Number *</label>
           <input id="agent-nin" oninput="onAgentNinInput()" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm" placeholder="NIN — e.g. CMXXXXXXXXXXXX">
           <p id="agent-nin-msg" class="text-xs text-gray-500 mt-1">Format check enabled for Uganda NIN style (CM/CF...).</p>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-800 mb-2">National ID Expiry Date *</label>
+          <input id="agent-id-expiry" type="date" class="w-full border border-green-100 rounded-xl px-4 py-3 text-sm">
+          <p class="text-xs text-gray-500 mt-1">Use the expiry date printed on the ID card.</p>
         </div>
 
         <div>
@@ -6484,7 +6648,7 @@
           <p class="text-xs text-green-800">You can request access, correction, export, or deletion of your data by contacting makaug support.</p>
         </div>
 
-        <button id="agent-submit-btn" onclick="submitAgentApplication()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Application</button>
+        <button id="agent-submit-btn" onclick="submitAgentApplication()" class="w-full bg-green-800 hover:bg-green-700 text-white py-3 rounded-xl font-semibold">Submit Agent Application</button>
       </div>
     </div>
   </div>
@@ -6537,7 +6701,8 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606";
+        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-jan-broad-batch-sweep-20260607-king-review-location-autofill-20260607-mortgage-bank-leads-i18n-20260607-whatsapp-no-match-leadgen-20260607-land-title-availability-20260607";
+        window.__makaugAppVersion += "-agent-registration-mobile-20260607";
         var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;

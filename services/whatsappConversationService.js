@@ -16,6 +16,7 @@ const WHATSAPP_CONVERSATION_CATEGORIES = [
   'property_search',
   'property_listing',
   'broker_help',
+  'advertising',
   'mortgage',
   'account',
   'support',
@@ -60,6 +61,7 @@ function mapIntentToConversationCategory(intent = '') {
   const raw = String(intent || '').trim().toLowerCase();
   if (raw === 'property_search' || raw === 'looking_for_property_lead') return 'property_search';
   if (raw === 'property_listing') return 'property_listing';
+  if (raw === 'advertising_campaign') return 'advertising';
   if (raw === 'agent_search' || raw === 'agent_registration') return 'broker_help';
   if (raw === 'mortgage_help') return 'mortgage';
   if (raw === 'account_help' || raw === 'saved_properties') return 'account';

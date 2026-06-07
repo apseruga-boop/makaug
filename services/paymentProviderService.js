@@ -7,15 +7,66 @@ function clean(value) {
 }
 
 function paymentProviderConfigured() {
-  return Boolean(process.env.PAYMENT_LINK_BASE_URL || process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET || process.env.PAYMENT_PROVIDER_API_KEY);
+  return Boolean(
+    process.env.PAYMENT_LINK_BASE_URL
+    || process.env.PAYPAL_PAYMENT_LINK_BASE_URL
+    || process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET
+    || process.env.PAYMENT_PROVIDER_API_KEY
+    || (process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET)
+  );
 }
 
 function normalizePaymentStatus(value) {
   const status = clean(value).toLowerCase();
+  if (status.includes('payment.capture.completed') || status.includes('checkout.order.completed')) return 'paid';
+  if (status.includes('payment.capture.denied') || status.includes('payment.capture.declined')) return 'failed';
   if (['paid', 'success', 'successful', 'completed'].includes(status)) return 'paid';
   if (['failed', 'declined', 'cancelled', 'canceled'].includes(status)) return 'failed';
   if (['expired'].includes(status)) return 'expired';
   return 'pending';
+}
+
+function firstClean(...values) {
+  for (const value of values) {
+    const cleaned = clean(value);
+    if (cleaned) return cleaned;
+  }
+  return '';
+}
+
+function extractPaymentWebhookReference(payload = {}) {
+  const resource = payload.resource && typeof payload.resource === 'object' ? payload.resource : {};
+  const purchaseUnit = Array.isArray(resource.purchase_units) ? resource.purchase_units[0] || {} : {};
+  const related = Array.isArray(resource.supplementary_data?.related_ids)
+    ? resource.supplementary_data.related_ids[0] || {}
+    : {};
+  return {
+    reference: firstClean(
+      payload.providerReference,
+      payload.provider_reference,
+      payload.reference,
+      payload.invoice_number,
+      payload.invoiceNumber,
+      resource.invoice_id,
+      resource.invoice_number,
+      resource.custom_id,
+      resource.custom,
+      purchaseUnit.invoice_id,
+      purchaseUnit.custom_id,
+      purchaseUnit.reference_id,
+      related.order_id
+    ),
+    invoiceId: firstClean(payload.invoiceId, payload.invoice_id),
+    statusValue: firstClean(
+      payload.status,
+      payload.payment_status,
+      payload.event,
+      payload.event_type,
+      resource.status,
+      resource.state
+    ),
+    providerOrderId: firstClean(resource.id, payload.orderID, payload.order_id, related.order_id)
+  };
 }
 
 async function updateCampaignPayment(db, campaignId, status, reference = null) {
@@ -102,9 +153,10 @@ async function handlePaymentWebhook(db, {
   req = null
 } = {}) {
   const safePayload = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
-  const reference = clean(safePayload.providerReference || safePayload.provider_reference || safePayload.reference || safePayload.invoice_number || safePayload.invoiceNumber);
-  const invoiceId = clean(safePayload.invoiceId || safePayload.invoice_id);
-  const status = normalizePaymentStatus(safePayload.status || safePayload.payment_status || safePayload.event);
+  const extracted = extractPaymentWebhookReference(safePayload);
+  const reference = extracted.reference;
+  const invoiceId = extracted.invoiceId;
+  const status = normalizePaymentStatus(extracted.statusValue);
   const values = [];
   let where = '';
   if (invoiceId) {
@@ -145,7 +197,7 @@ async function handlePaymentWebhook(db, {
          paid_at = CASE WHEN $2 = 'paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END,
          updated_at = NOW()
      WHERE invoice_id = $1`,
-    [invoice.id, status, reference || null, JSON.stringify({ provider, signature_present: Boolean(signature), payload: safePayload })]
+    [invoice.id, status, reference || extracted.providerOrderId || null, JSON.stringify({ provider, signature_present: Boolean(signature), provider_order_id: extracted.providerOrderId || null, payload: safePayload })]
   ).catch(() => {});
   if (invoice.campaign_id) {
     await updateCampaignPayment(db, invoice.campaign_id, status, reference || invoice.invoice_number);

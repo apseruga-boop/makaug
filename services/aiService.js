@@ -17,6 +17,10 @@ const {
   languageGuardrail,
   shouldUseEnglishFallback
 } = require('../config/languageRegistry');
+const {
+  landTitleAvailabilityLabel,
+  normalizeLandTitleAvailability
+} = require('../utils/landTitleAvailability');
 
 const INTENTS = [
   'property_search',
@@ -27,6 +31,7 @@ const INTENTS = [
   'create_alert',
   'property_need_request',
   'property_listing',
+  'advertising_campaign',
   'agent_search',
   'agent_registration',
   'mortgage_help',
@@ -391,8 +396,11 @@ function heuristicIntent(text) {
   if (/(agent|broker|find agent|realtor|wakala|musomesa)/.test(t)) {
     return { intent: 'agent_search', confidence: 0.65, entities: {} };
   }
+  if (/(advertis|sponsor|boost|promote|campaign|paid ad|ad slot|ad space|rate card|homepage banner|brand campaign|whatsapp campaign|bulk message|paypal)/.test(t)) {
+    return { intent: 'advertising_campaign', confidence: 0.76, entities: {} };
+  }
   if (
-    /(list|advertise|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)
+    /(list|post|submit|upload|my property|teeka|kwandika|orodhesha|listing)/.test(t)
     || /\b(?:am|i am|i'm|im|we are|we're)\s+selling\b.{0,140}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
     || /\b(?:selling|sell)\s+(?:my|our|the|a|an)?\s*.{0,100}\b(?:property|house|home|land|plot|plots|farm|apartment|flat|room|rental|hostel|commercial|shop|office|building)\b/.test(t)
   ) {
@@ -441,6 +449,7 @@ function shouldUseFastIntentPath({ text = '', step = '', fallback = {} } = {}) {
   const flowOwnedSteps = new Set([
     'listing_type',
     'ownership',
+    'ask_land_title_available',
     'title',
     'district',
     'area',
@@ -992,14 +1001,16 @@ Return strict JSON only:
     - period: month | week | year | semester
     - bedrooms: number
     - property_type: house | villa | apartment | townhouse | bungalow | studio | office | warehouse | retail shop | hostel
+    - land_title_available: yes | no | unknown
     - language: en | lg | sw | ac | ny | rn | sm | am | ar
 }
 Rules:
 - Property search includes natural requests in any supported language, e.g. "2 bed in Kampala", "Natafuta shamba Mbale", "Noonya enju eya rent".
 - Property search also includes conversational affordability questions such as "what is the cheapest area to stay in?", "what is the cheapest area?", "can I get a house for $2 million?", "houses for 2 million", and equivalents in supported languages.
-- Property listing must win when the user says they want to list, post, upload, submit, add, create, advertise, or sell their own property/listing, including natural seller messages like "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent".
+- advertising_campaign is for paid ad space, sponsored placements, boosts, brand campaigns, homepage banners, WhatsApp bulk advertising, rate-card questions, PayPal ad payment questions, or the /advertise page.
+- Property listing must win when the user says they want to list, post, upload, submit, add, create, or sell their own property/listing for the marketplace, including natural seller messages like "am selling my land with a land title" or "hello am selling the land on Entebbe main road", even when the same message says "for sale" or "to rent". If the message says boost, paid, sponsor, campaign, brand, homepage ad, WhatsApp campaign, or rate card, use advertising_campaign instead.
 - search_near_me means the user wants the compact website Location control or WhatsApp shared location search. shared_location_search means a WhatsApp latitude/longitude was provided. Default radius is 10 miles / 16.1 km.
-- apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, title type, or commercial type.
+- apply_filters means the user is refining by property type, min price, max price, bedrooms, bathrooms, amenities, campus, title type, land title availability, or commercial type.
 - Do not present makaug as an official title-checking, legal-clearance, or government records service. The assistant should mirror the website: search/list properties, contact sellers/brokers, use safety guidance, and recommend independent professional review before payment.
 - save_search and create_alert store location/radius when available. property_need_request is for no-results demand capture.
 - Agent search includes "find me an agent/broker" and equivalents in supported languages.
@@ -1185,11 +1196,14 @@ function buildFallbackListingIntelligence({ listing = {}, targetLanguage = 'en',
   const baths = safeNumber(listing.bathrooms, 0);
   const propertyType = cleanText(listing.property_type, 80) || typeLabel;
   const amenities = toArray(listing.amenities).map((x) => cleanText(x, 60)).filter(Boolean).slice(0, 8);
+  const landTitleAvailable = normalizeLandTitleAvailability(listing.land_title_available || listing.extra_fields?.land_title_available);
+  const landTitleLabel = landTitleAvailabilityLabel(landTitleAvailable);
 
   const canonicalDescription = [
     `${title} is available in ${area || district || 'Uganda'} at ${priceText}.`,
     beds > 0 ? `It offers ${beds} bedroom${beds > 1 ? 's' : ''}` : '',
     baths > 0 ? `and ${baths} bathroom${baths > 1 ? 's' : ''}` : '',
+    landTitleLabel ? `Land title status: ${landTitleLabel}. Buyers should verify documents independently before payment.` : '',
     `with ${propertyType.toLowerCase()} features suited for Uganda property seekers.`,
     amenities.length ? `Highlights include ${amenities.join(', ')}.` : ''
   ].filter(Boolean).join(' ');
@@ -1248,6 +1262,17 @@ async function generateListingIntelligence({
     amenities: toArray(listing.amenities).map((x) => cleanText(x, 80)).filter(Boolean).slice(0, 20),
     nearest_university: cleanText(listing.nearest_university, 120),
     commercial_intent: cleanText(listing.commercial_intent, 80),
+    title_type: cleanText(listing.title_type || listing.extra_fields?.title_type, 80),
+    land_title_available: normalizeLandTitleAvailability(
+      listing.land_title_available
+        ?? listing.extra_fields?.land_title_available
+        ?? listing.extra_fields?.landTitleAvailable
+        ?? listing.extra_fields?.title_available,
+      listing.title,
+      listing.description,
+      listing.extra_fields?.source_text,
+      listing.extra_fields?.source_caption
+    ),
     land_size_value: listing.land_size_value,
     land_size_unit: cleanText(listing.land_size_unit, 30)
   };
@@ -1312,6 +1337,7 @@ Return strict JSON with this schema:
 }
 Rules:
 - Keep claims factual and conservative.
+- If land_title_available is present, describe it as lister/source-stated title status and tell buyers to verify documents independently. Do not imply makaug verified the title.
 - Do not invent exact distances unless provided.
 - Keep rewritten_description between 80 and 220 words.
 - Keep area_highlights between 35 and 90 words.

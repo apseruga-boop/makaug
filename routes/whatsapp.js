@@ -24,6 +24,10 @@ const {
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
 const {
+  landTitleAvailabilityLabel,
+  normalizeLandTitleAvailability
+} = require('../utils/landTitleAvailability');
+const {
   getWhatsappConversationControl,
   syncWhatsappConversationState,
   updateWhatsappConversationControl
@@ -42,6 +46,10 @@ const {
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
+const {
+  buildAdvertisingQuoteBreakdown,
+  buildWhatsAppAdvertisingSummary
+} = require('../services/advertisingCatalogService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -71,8 +79,10 @@ const T = {
     chooseLanguage: 'Choose your language / ቋንቋዎን ይምረጡ / اختر لغتك:\n1. English\n2. Luganda\n3. Kiswahili\n4. Acholi\n5. Runyankole\n6. Rukiga\n7. Lusoga\n8. Amharic / አማርኛ\n9. Arabic / العربية',
     askListingType: '🏠 What are you listing?\n1️⃣ House/Property for SALE\n2️⃣ House/Property for RENT\n3️⃣ Land/Plot\n4️⃣ Student accommodation\n5️⃣ Commercial property',
     askOwnership: '✅ Are you the owner of this property, or an agent listing on behalf of an owner?\n1️⃣ I am the owner\n2️⃣ I am an agent',
+    askAgentNumber: 'Please send your makaug agent number (for example MKA-AG-12345). If you are not registered yet, reply SKIP.',
     askFieldAgent: '🤝 Has a makaug.com Field Agent helped you with this listing?\n1️⃣ Yes\n2️⃣ No',
     askFieldAgentDetails: 'Please send the Field Agent ID, for example FA-0001, so we can credit the right person.',
+    askLandTitleAvailable: '📄 Is the land title available for this sale/listing?\n1️⃣ Yes, land title is available\n2️⃣ No / not yet\n3️⃣ Not sure / to confirm',
     askTitle: '✏️ Give your property a short title (e.g. "3-bedroom house in Ntinda Kampala"):',
     askDistrict: '📍 Which district is the property in? (e.g. Kampala, Wakiso, Mukono, Jinja...)',
     askArea: '🗺️ What area or neighbourhood? (e.g. Kololo, Ntinda, Bugolobi...)',
@@ -1213,6 +1223,8 @@ function stepPromptFor(lang, step) {
     choose_language: t(code, 'chooseLanguage'),
     listing_type: t(code, 'askListingType'),
     ownership: t(code, 'askOwnership'),
+    ask_agent_number: t(code, 'askAgentNumber'),
+    ask_land_title_available: t(code, 'askLandTitleAvailable'),
     title: t(code, 'askTitle'),
     district: t(code, 'askDistrict'),
     area: t(code, 'askArea'),
@@ -1656,8 +1668,13 @@ function extractSellerListingDraftHints(input, entities = {}) {
   const sizeMatch = clean.match(/\b(\d+(?:\.\d+)?)\s*(decimals?|acres?|hectares?|sqm|sq\s*m|square\s+meters?|square\s+metres?)\b/i);
   if (sizeMatch) hints.land_size_text = `${sizeMatch[1]} ${sizeMatch[2]}`.trim();
 
-  if (/\b(?:land title|title deed|mailo|freehold|leasehold)\b/i.test(clean)) {
-    hints.land_title_mentioned = true;
+  const landTitleAvailable = normalizeLandTitleAvailability(
+    entities.land_title_available ?? entities.landTitleAvailable ?? entities.title_available,
+    clean
+  );
+  if (landTitleAvailable) {
+    hints.land_title_available = landTitleAvailable;
+    hints.land_title_available_label = landTitleAvailabilityLabel(landTitleAvailable);
   }
 
   if (clean.length >= 10) {
@@ -1674,11 +1691,23 @@ function listingStartReply(lang, listingType, hints = {}) {
   const savedBits = [];
   if (hints.area) savedBits.push(`area: ${hints.area}`);
   if (hints.land_size_text) savedBits.push(`size: ${hints.land_size_text}`);
-  if (hints.land_title_mentioned) savedBits.push('land title mentioned');
+  if (hints.land_title_available) savedBits.push(`land title: ${landTitleAvailabilityLabel(hints.land_title_available)}`);
   const savedLine = savedBits.length
     ? `\nI have saved the details you sent (${savedBits.join(', ')}).`
     : '';
   return `Got it - I will help you list this ${typeLabel(listingType || 'sale', code).toLowerCase()}.${savedLine}\n\n${t(code, 'askOwnership')}`;
+}
+
+function mapLandTitleAvailabilityInput(input = '') {
+  const clean = normalizeInput(input).toLowerCase();
+  if (clean === '1' || /^(yes|y|available|title ready|land title available|has title|with title)$/.test(clean)) return 'yes';
+  if (clean === '2' || /^(no|n|not yet|no title|without title|not available)$/.test(clean)) return 'no';
+  if (clean === '3' || /^(unknown|not sure|pending|to confirm|confirm)$/.test(clean)) return 'unknown';
+  return normalizeLandTitleAvailability(clean);
+}
+
+function shouldAskLandTitleAvailability(draft = {}) {
+  return ['sale', 'land', 'commercial'].includes(normalizeInput(draft.listing_type).toLowerCase()) && !normalizeLandTitleAvailability(draft.land_title_available);
 }
 
 function isListingPhotoMedia(mediaType, mediaUrl) {
@@ -1713,13 +1742,14 @@ function appendIncomingListingPhotos(existingPhotos = [], mediaUrl = '', mediaCo
 function isListingStartRequest(input, intentResult = {}) {
   const text = normalizeInput(input).toLowerCase();
   if (!text) return false;
+  if (isAdvertisingCampaignRequest(text, intentResult)) return false;
   const confidence = Number(intentResult?.confidence || 0);
   const aiListingIntent = intentResult?.intent === 'property_listing' && confidence >= 0.45;
-  const listingWords = /\b(list|listing|listed|post|submit|upload|add|create|advertise)\b/i.test(text);
+  const listingWords = /\b(list|listing|listed|post|submit|upload|add|create)\b/i.test(text);
   const explicitListingRequest = (
     /\b(i|we)\b.{0,40}\b(want|need|would like|am looking|are looking|wanting)\b.{0,50}\b(to )?(list|post|submit|upload|add|create)\b/i.test(text)
     || /\b(help me|please help|can you|kindly)\b.{0,60}\b(list|post|submit|upload|add|create)\b/i.test(text)
-    || /\b(list|post|submit|upload|add|create|advertise)\b.{0,90}\b(property|listing|house|home|land|plot|rental|room|apartment|commercial|student|for sale|to rent)\b/i.test(text)
+    || /\b(list|post|submit|upload|add|create)\b.{0,90}\b(property|listing|house|home|land|plot|rental|room|apartment|commercial|student|for sale|to rent)\b/i.test(text)
     || /\b(property|house|home|land|plot|rental|room|apartment|commercial|student)\b.{0,90}\b(listing|listed|post|submit|upload)\b/i.test(text)
   );
   return isNaturalSellerListingStatement(text) || explicitListingRequest || (aiListingIntent && (listingWords || isNaturalSellerListingStatement(text)));
@@ -1913,7 +1943,7 @@ async function findBrokerAgentByContact({ phone = '', email = '' } = {}) {
   const emailValue = String(email || '').trim().toLowerCase();
   if (!phoneDigits && !emailValue) return null;
   const result = await db.query(
-    `SELECT id, status, registration_status, full_name, phone, whatsapp, email
+    `SELECT id, makaug_agent_number, status, registration_status, full_name, phone, whatsapp, email
      FROM agents
      WHERE ($1::text <> '' AND regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1)
         OR ($1::text <> '' AND regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $1)
@@ -1921,6 +1951,29 @@ async function findBrokerAgentByContact({ phone = '', email = '' } = {}) {
      ORDER BY status = 'approved' DESC, updated_at DESC
      LIMIT 1`,
     [phoneDigits, emailValue]
+  );
+  return result.rows[0] || null;
+}
+
+function normalizeMakaugAgentNumberInput(value = '') {
+  const compact = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const match = compact.match(/^(?:MAKAUG|MKAUG|MK)?AG?(\d{4,8})$/);
+  if (match) return `MKA-AG-${match[1]}`;
+  const alreadyFormatted = String(value || '').trim().toUpperCase();
+  if (/^MKA-AG-\d{4,8}$/.test(alreadyFormatted)) return alreadyFormatted;
+  return '';
+}
+
+async function findBrokerAgentByNumber(agentNumber = '') {
+  const normalized = normalizeMakaugAgentNumberInput(agentNumber);
+  if (!normalized) return null;
+  const result = await db.query(
+    `SELECT id, makaug_agent_number, status, registration_status, full_name, phone, whatsapp, email
+     FROM agents
+     WHERE makaug_agent_number = $1
+     ORDER BY status = 'approved' DESC, updated_at DESC
+     LIMIT 1`,
+    [normalized]
   );
   return result.rows[0] || null;
 }
@@ -3250,6 +3303,18 @@ async function buildAffordabilityAdviceReply({ phone, text, lang, filters = {} }
     pending_search_filters: null,
     search_type: normalizedFilters.searchType || 'any'
   });
+
+  if (!rows.length) {
+    await createNoMatchLead({
+      userPhone: phone,
+      searchType: normalizedFilters.searchType || 'any',
+      preferredArea: normalizedFilters.area || 'any',
+      queryText: text,
+      filters: normalizedFilters,
+      notes: `No approved affordability match found for WhatsApp query: ${text}`
+    });
+    rows = await findBroaderPropertyFallback(normalizedFilters);
+  }
 
   return formatAffordabilityAdviceMessage(lang, rows, areaStats, normalizedFilters, { exactMatch });
 }
@@ -4877,23 +4942,299 @@ async function createNoMatchLead({
   userPhone,
   searchType = 'any',
   preferredArea = '',
+  queryText = '',
+  filters = {},
   notes = ''
 }) {
-  await db.query(
-    `INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload)
-     VALUES ($1, $2, 'search', $3, $4, $5::jsonb)`,
-    [
-      userPhone,
-      preferredArea || null,
-      searchType || 'any',
-      notes || 'Auto-captured from WhatsApp no-match search.',
-      JSON.stringify({
-        source: 'whatsapp',
-        search_type: searchType || 'any',
-        preferred_area: preferredArea || null
-      })
-    ]
-  );
+  const cleanPhone = normalizeInput(userPhone);
+  if (!cleanPhone) return null;
+  const cleanSearchType = normalizeListingType(searchType || filters.searchType || 'any');
+  const cleanArea = normalizeInput(preferredArea || filters.area || '') || 'any';
+  const cleanQuery = normalizeInput(queryText);
+  const safeFilters = filters && typeof filters === 'object' && !Array.isArray(filters) ? filters : {};
+  const searchFingerprint = crypto
+    .createHash('sha256')
+    .update(JSON.stringify({
+      phone: cleanPhone,
+      search_type: cleanSearchType,
+      area: cleanArea.toLowerCase(),
+      max_budget_ugx: Number(safeFilters.maxBudgetUgx || 0) || 0,
+      beds_min: Number(safeFilters.bedsMin || 0) || 0,
+      property_type: normalizeInput(safeFilters.propertyType || '').toLowerCase()
+    }))
+    .digest('hex');
+  const leadMetadata = {
+    whatsapp_no_match: true,
+    source: 'whatsapp',
+    original_message: cleanQuery || notes || null,
+    search_type: cleanSearchType,
+    preferred_area: cleanArea,
+    search_fingerprint: searchFingerprint,
+    exact_match_available: false,
+    match_status: 'waiting_for_listing',
+    resolution_policy: 'keep_open_until_admin_contacts_customer_or_assigns_agent',
+    filters: {
+      ...safeFilters,
+      searchType: cleanSearchType,
+      area: cleanArea
+    }
+  };
+
+  let legacyLeadId = null;
+  try {
+    const legacy = await db.query(
+      `INSERT INTO property_leads (phone, preferred_area, purpose, category, notes, payload)
+       VALUES ($1, $2, 'search', $3, $4, $5::jsonb)
+       RETURNING id`,
+      [
+        cleanPhone,
+        cleanArea === 'any' ? null : cleanArea,
+        cleanSearchType || 'any',
+        notes || cleanQuery || 'Auto-captured from WhatsApp no-match search.',
+        JSON.stringify(leadMetadata)
+      ]
+    );
+    legacyLeadId = legacy.rows[0]?.id || null;
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('Legacy property lead creation failed for WhatsApp no-match', { phone: cleanPhone, error: error.message });
+    }
+  }
+
+  try {
+    const existing = await db.query(
+      `SELECT l.id
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       WHERE l.source = 'whatsapp_no_match'
+         AND l.lead_type = 'property_need_unavailable'
+         AND l.lead_status = 'open'
+         AND COALESCE(l.metadata->>'search_fingerprint', '') = $1
+         AND ($2 = '' OR c.phone = $2 OR c.whatsapp = $2)
+       ORDER BY l.created_at DESC
+       LIMIT 1`,
+      [searchFingerprint, cleanPhone]
+    );
+    const existingLeadId = existing.rows[0]?.id || null;
+    if (existingLeadId) {
+      await db.query(
+        `UPDATE leads
+         SET message = $2,
+             lifecycle_stage = 'waiting_for_match',
+             lead_status = 'open',
+             priority = 'high',
+             next_follow_up_at = COALESCE(next_follow_up_at, NOW() + INTERVAL '30 minutes'),
+             metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
+             updated_at = NOW()
+         WHERE id = $1`,
+        [
+          existingLeadId,
+          noMatchLeadMessage({ cleanSearchType, cleanArea, cleanQuery }),
+          JSON.stringify({
+            ...leadMetadata,
+            legacy_property_lead_id: legacyLeadId,
+            last_seen_at: new Date().toISOString()
+          })
+        ]
+      );
+      await addLeadActivity(db, {
+        leadId: existingLeadId,
+        actorType: 'customer',
+        activityType: 'whatsapp_no_match_repeated',
+        message: cleanQuery || notes || 'Customer repeated an unavailable property request.',
+        metadata: leadMetadata
+      });
+      return { id: existingLeadId, reused: true };
+    }
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('Open WhatsApp no-match lead lookup failed', { phone: cleanPhone, error: error.message });
+    }
+  }
+
+  const lead = await createLead(db, {
+    source: 'whatsapp_no_match',
+    leadType: 'property_need_unavailable',
+    category: cleanSearchType,
+    location: cleanArea === 'any' ? null : cleanArea,
+    budget: Number(safeFilters.maxBudgetUgx || 0) || null,
+    message: noMatchLeadMessage({ cleanSearchType, cleanArea, cleanQuery }),
+    lifecycleStage: 'waiting_for_match',
+    leadStatus: 'open',
+    priority: 'high',
+    nextFollowUpAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    slaStatus: 'open',
+    activityType: 'whatsapp_no_match_created',
+    activityMessage: cleanQuery || notes || 'WhatsApp property request had no exact match.',
+    contact: {
+      name: 'WhatsApp property seeker',
+      phone: cleanPhone,
+      whatsapp: cleanPhone,
+      preferredContactChannel: 'whatsapp',
+      roleType: 'property_seeker',
+      whatsappConsent: true,
+      consentStatus: 'legitimate_interest'
+    },
+    metadata: {
+      ...leadMetadata,
+      legacy_property_lead_id: legacyLeadId,
+      created_from: 'whatsapp_no_exact_match'
+    }
+  });
+  if (lead?.id) {
+    await createLeadFollowUpTask({
+      leadId: lead.id,
+      title: `Find match for WhatsApp request: ${cleanSearchType} ${cleanArea}`,
+      dueMinutes: 30
+    });
+  }
+  return lead;
+}
+
+function isAdvertisingCampaignRequest(text = '', intentResult = {}) {
+  const clean = normalizeInput(text).toLowerCase();
+  if (!clean) return false;
+  if (intentResult?.intent === 'advertising_campaign') return true;
+  return /\b(?:advertis(?:e|ing)?|sponsor|boost|promote|campaign|paid ad|ad slot|ad space|homepage banner|brand campaign|rate card|paypal|whatsapp bulk|bulk message)\b/i.test(clean)
+    || /makaug\.com\/advertise/i.test(clean);
+}
+
+function inferAdvertisingProductInterests(text = '') {
+  const clean = normalizeInput(text).toLowerCase();
+  const interests = new Set();
+  if (/\b(home|homepage|hero|banner)\b/i.test(clean)) interests.add('homepage_banner');
+  if (/\b(whatsapp|chatbot|bulk|message|broadcast)\b/i.test(clean)) interests.add(/\b(bulk|broadcast|message)\b/i.test(clean) ? 'email_whatsapp_blast' : 'whatsapp_chatbot_sponsor');
+  if (/\b(property|listing|boost)\b/i.test(clean)) interests.add('featured_property_boost');
+  if (/\b(agent|broker|agency)\b/i.test(clean)) interests.add('agent_spotlight');
+  if (/\b(student|hostel|university)\b/i.test(clean)) interests.add('student_accommodation_push');
+  if (/\b(commercial|office|shop|warehouse|land|plot)\b/i.test(clean)) interests.add('commercial_land_sponsor');
+  if (!interests.size) {
+    interests.add('homepage_banner');
+    interests.add('featured_property_boost');
+  }
+  return Array.from(interests);
+}
+
+async function createWhatsappAdvertisingInquiry({ phone, text, lang, intentResult = {} } = {}) {
+  const productInterests = inferAdvertisingProductInterests(text);
+  const quote = buildAdvertisingQuoteBreakdown({ packageKeys: productInterests });
+  const message = normalizeInput(text) || 'WhatsApp user wants makaug advertising options.';
+  let inquiry = null;
+
+  try {
+    const inserted = await db.query(
+      `INSERT INTO advertising_inquiries (
+        full_name, business_name, email, phone, preferred_contact_channel,
+        product_interests, target_locations, target_listing_types, audience_segments,
+        budget_ugx, desired_duration_days, message, source, estimated_value_ugx
+      )
+      VALUES ($1,$2,NULL,$3,'whatsapp',$4::jsonb,'[]'::jsonb,'[]'::jsonb,$5::jsonb,NULL,NULL,$6,'whatsapp_advertising',$7)
+      RETURNING *`,
+      [
+        'WhatsApp advertiser',
+        'WhatsApp advertising inquiry',
+        normalizeInput(phone),
+        JSON.stringify(productInterests),
+        JSON.stringify(['whatsapp_advertising_intent', `language:${resolveLangCode(lang)}`]),
+        message,
+        quote.total_ugx || 0
+      ]
+    );
+    inquiry = inserted.rows[0] || null;
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('WhatsApp advertising inquiry insert failed', { phone, error: error.message });
+    }
+  }
+
+  try {
+    const lead = await createLead(db, {
+      source: 'whatsapp_advertising',
+      leadType: 'advertiser',
+      category: productInterests.join(', '),
+      budget: quote.total_ugx || null,
+      message: `WhatsApp advertising inquiry: ${message}`,
+      lifecycleStage: 'new',
+      leadStatus: 'open',
+      priority: 'high',
+      nextFollowUpAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      contact: {
+        name: 'WhatsApp advertiser',
+        phone: normalizeInput(phone),
+        whatsapp: normalizeInput(phone),
+        preferredContactChannel: 'whatsapp',
+        preferredLanguage: resolveLangCode(lang),
+        roleType: 'advertiser',
+        whatsappConsent: true,
+        consentStatus: 'legitimate_interest'
+      },
+      metadata: {
+        advertising_inquiry_id: inquiry?.id || null,
+        product_interests: productInterests,
+        quote,
+        original_message: message,
+        intent: intentResult?.intent || null
+      }
+    });
+    if (lead?.id) {
+      await createLeadFollowUpTask({
+        leadId: lead.id,
+        title: `Prepare advertising quote for WhatsApp lead ${normalizeInput(phone)}`,
+        dueMinutes: 30
+      });
+    }
+  } catch (error) {
+    if (!['42P01', '42703'].includes(error.code)) {
+      logger.warn('WhatsApp advertising lead creation failed', { phone, error: error.message });
+    }
+  }
+
+  try {
+    await sendSupportEmail({
+      to: getSupportEmail(),
+      subject: '[makaug Ads] WhatsApp advertising inquiry',
+      text: [
+        'A WhatsApp user asked about makaug advertising.',
+        '',
+        `Phone: ${phone || '-'}`,
+        `Inquiry ID: ${inquiry?.id || '-'}`,
+        `Estimated value: ${quote.total_label || '-'}`,
+        `Products: ${productInterests.join(', ')}`,
+        '',
+        `Message: ${message}`,
+        '',
+        'Admin action: open Advertising Desk, create proposal, issue PayPal payment link, and mark paid/live after approval.'
+      ].join('\n')
+    });
+  } catch (error) {
+    logger.warn('WhatsApp advertising support email failed', { phone, error: error.message });
+  }
+
+  captureWhatsappLearningAsync({
+    eventName: 'whatsapp_advertising_inquiry',
+    phone,
+    language: resolveLangCode(lang),
+    inputText: message,
+    responseText: 'Advertising rate card shared and lead captured.',
+    entities: { product_interests: productInterests, quote_ugx: quote.total_ugx },
+    payload: { inquiry_id: inquiry?.id || null, quote },
+    dedupeKey: `whatsapp:advertising:${phone}:${crypto.createHash('sha1').update(message).digest('hex').slice(0, 16)}`
+  });
+
+  return { inquiry, quote, productInterests };
+}
+
+async function advertisingWhatsAppReply({ phone, text, lang, intentResult = {} } = {}) {
+  const result = await createWhatsappAdvertisingInquiry({ phone, text, lang, intentResult });
+  const reference = result.inquiry?.id ? `\n\nReference: ${result.inquiry.id}` : '';
+  return `${buildWhatsAppAdvertisingSummary()}${reference}`;
+}
+
+function noMatchLeadMessage({ cleanSearchType = 'any', cleanArea = 'any', cleanQuery = '' } = {}) {
+  const bits = [`WhatsApp user is looking for ${cleanSearchType || 'property'}`];
+  if (cleanArea && cleanArea !== 'any') bits.push(`in ${cleanArea}`);
+  const base = `${bits.join(' ')} but no exact approved listing was available.`;
+  return cleanQuery ? `${base}\nOriginal message: ${cleanQuery}` : base;
 }
 
 function safePublicPreviewUrl(value) {
@@ -5099,6 +5440,8 @@ async function formatNoMatchOrFallbackReply({
     userPhone,
     searchType: normalizedSearchType,
     preferredArea,
+    queryText,
+    filters,
     notes
   });
   await patchSessionData(userPhone, {
@@ -5443,6 +5786,7 @@ function isActionableStepReply(step, value = '') {
   if (currentStep === 'choose_language') return /^[1-9]$/.test(clean);
   if (currentStep === 'listing_type') return Boolean(mapListingTypeInput(clean));
   if (currentStep === 'ownership') return Boolean(mapListingTypeInput(clean)) || ['1', '2', 'owner', 'agent'].includes(clean);
+  if (currentStep === 'ask_agent_number') return clean.length >= 2;
   if (currentStep === 'ask_field_agent') return isAffirmativeReply(clean) || isNegativeReply(clean);
   if (currentStep === 'ask_contact_method') return ['1', '2', 'phone', 'whatsapp', 'sms', 'call', 'email', 'mail', 'e-mail'].includes(clean);
   if (currentStep === 'search_type') return Boolean(mapSearchTypeInput(clean)) || isAnyAreaReply(clean);
@@ -5515,7 +5859,7 @@ function landSafetyReply(lang) {
 
 // Step machine
 const STEPS = [
-  'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
+  'greeting', 'choose_language', 'main_menu', 'listing_type', 'ownership', 'ask_agent_number', 'ask_field_agent', 'ask_field_agent_details', 'ask_land_title_available', 'title', 'district',
   'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract',
   'ask_university', 'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value',
   'ask_id_number', 'ask_selfie', 'ask_phone', 'search_type', 'search_area', 'agent_area',
@@ -5663,6 +6007,19 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     return respond('', step);
   }
 
+  if (
+    !explicitListingStart
+    && ['greeting', 'main_menu', 'submitted', 'search_type', 'search_area', 'agent_area'].includes(step)
+    && isAdvertisingCampaignRequest(cleanBody, intentResult)
+  ) {
+    await patchSessionData(phone, {
+      advertising_inquiry_requested_at: new Date().toISOString(),
+      advertising_inquiry_text: cleanBody,
+      idle_resume_prompt: null
+    });
+    return respond(await advertisingWhatsAppReply({ phone, text: cleanBody, lang, intentResult }), 'main_menu');
+  }
+
   if (!explicitListingStart && isLandSafetyQuestion(cleanBody)) {
     await patchSessionData(phone, {
       land_safety_requested_at: new Date().toISOString(),
@@ -5717,7 +6074,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   }
 
   const listingFlowSteps = [
-    'listing_type', 'ownership', 'ask_field_agent', 'ask_field_agent_details', 'title', 'district',
+    'listing_type', 'ownership', 'ask_agent_number', 'ask_field_agent', 'ask_field_agent_details', 'ask_land_title_available', 'title', 'district',
     'area', 'price', 'bedrooms', 'description', 'ask_deposit', 'ask_contract', 'ask_university',
     'ask_distance', 'ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number',
     'ask_phone', 'verify_otp'
@@ -5964,7 +6321,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     && !(globalRoute === 'search_type' && ['search_type', 'search_area', 'agent_area'].includes(step))
     && !['verify_otp', 'ask_id_number', 'ask_selfie'].includes(step)
     && (
-      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract', 'ask_university', 'ask_distance', 'ask_field_agent', 'ask_field_agent_details'].includes(step)
+      !['title', 'district', 'area', 'price', 'bedrooms', 'description', 'photos', 'ask_deposit', 'ask_contract', 'ask_university', 'ask_distance', 'ask_agent_number', 'ask_field_agent', 'ask_field_agent_details', 'ask_land_title_available'].includes(step)
       && !['ask_public_name', 'ask_contact_method', 'ask_contact_value', 'ask_id_number', 'ask_selfie'].includes(step)
       || ['agent_area', 'support', 'account_help', 'report_listing', 'mortgage_help'].includes(globalRoute)
     )
@@ -6736,7 +7093,34 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     const chosen = ownershipReply;
     if (!chosen) return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askOwnership'), 'ownership');
     await patchDraft(phone, { lister_type: chosen });
+    if (chosen === 'agent') {
+      return respond(t(lang, 'askAgentNumber'), 'ask_agent_number');
+    }
     return respond(t(lang, 'askFieldAgent'), 'ask_field_agent');
+  }
+
+  if (step === 'ask_agent_number') {
+    if (/^(skip|no|not registered|none)$/i.test(cleanBody)) {
+      await patchDraft(phone, { agent_number_skipped: true });
+      return respond(t(lang, 'askFieldAgent'), 'ask_field_agent');
+    }
+    const matchedAgent = await findBrokerAgentByNumber(cleanBody);
+    if (!matchedAgent?.id) {
+      return respond(`I could not confirm that makaug agent number. Please check it and send it again, or reply SKIP if you are not registered yet.\n\n${t(lang, 'askAgentNumber')}`, 'ask_agent_number');
+    }
+    await patchDraft(phone, {
+      agent_number: matchedAgent.makaug_agent_number,
+      confirmed_agent_id: matchedAgent.id,
+      confirmed_agent_name: matchedAgent.full_name,
+      confirmed_agent_phone: matchedAgent.phone || matchedAgent.whatsapp || '',
+      confirmed_agent_email: matchedAgent.email || '',
+      lister_type: 'agent',
+      lister_name: matchedAgent.full_name,
+      owner_phone: matchedAgent.phone || matchedAgent.whatsapp || '',
+      lister_phone: matchedAgent.phone || matchedAgent.whatsapp || '',
+      lister_email: matchedAgent.email || ''
+    });
+    return respond(`Confirmed agent: ${matchedAgent.full_name} (${matchedAgent.makaug_agent_number}). You can continue listing this property without another OTP.\n\n${t(lang, 'askFieldAgent')}`, 'ask_field_agent');
   }
 
   // FIELD AGENT CREDIT
@@ -6747,6 +7131,7 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     }
     if (isNegativeReply(cleanBody)) {
       await patchDraft(phone, { assisted_by_field_agent: false });
+      if (shouldAskLandTitleAvailability(draft)) return respond(t(lang, 'askLandTitleAvailable'), 'ask_land_title_available');
       return respond(t(lang, 'askTitle'), 'title');
     }
     return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askFieldAgent'), 'ask_field_agent');
@@ -6760,6 +7145,17 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     await patchDraft(phone, {
       assisted_by_field_agent: true,
       field_agent_reference: fieldAgentReference
+    });
+    if (shouldAskLandTitleAvailability(draft)) return respond(t(lang, 'askLandTitleAvailable'), 'ask_land_title_available');
+    return respond(t(lang, 'askTitle'), 'title');
+  }
+
+  if (step === 'ask_land_title_available') {
+    const landTitleAvailable = mapLandTitleAvailabilityInput(cleanBody);
+    if (!landTitleAvailable) return respond(t(lang, 'invalidInput') + '\n\n' + t(lang, 'askLandTitleAvailable'), 'ask_land_title_available');
+    await patchDraft(phone, {
+      land_title_available: landTitleAvailable,
+      land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable)
     });
     return respond(t(lang, 'askTitle'), 'title');
   }
@@ -6946,6 +7342,70 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   if (step === 'ask_public_name') {
     if (cleanBody.length < 2) return respond(t(lang, 'askPublicName'), 'ask_public_name');
     await patchDraft(phone, { lister_name: cleanBody, contact_display_name: cleanBody });
+    if (draft.lister_type === 'agent' && draft.confirmed_agent_id) {
+      try {
+        const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+        const d = {
+          ...draft,
+          lister_name: cleanBody,
+          contact_display_name: cleanBody
+        };
+        const result = await db.query(
+          `INSERT INTO properties (
+            listing_type, title, description, district, area, price,
+            deposit_amount, contract_months, bedrooms,
+            nearest_university, distance_to_uni_km,
+            lister_name, lister_phone, lister_email, lister_type, agent_id, extra_fields,
+            status, listed_via, source, expires_at
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'agent',$15,$16,'pending','whatsapp','whatsapp',$17)
+          RETURNING id`,
+          [
+            d.listing_type, d.title, d.description, d.district, d.area, d.price,
+            d.deposit_amount || null, d.contract_months || null, d.bedrooms || null,
+            d.nearest_university || null, d.distance_to_uni_km || null,
+            d.confirmed_agent_name || d.lister_name || d.contact_display_name || null,
+            d.confirmed_agent_phone || d.owner_phone || d.lister_phone || null,
+            d.confirmed_agent_email || d.lister_email || null,
+            d.confirmed_agent_id,
+            {
+              contact_display_name: d.contact_display_name || d.confirmed_agent_name || null,
+              preferred_contact_channel: 'agent_profile',
+              whatsapp_listing_flow: true,
+              broker_submission: true,
+              broker_agent_id: d.confirmed_agent_id,
+              broker_agent_number: d.agent_number || null,
+              whatsapp_broker_fast_track: true,
+              whatsapp_agent_number_confirmed: true,
+              verification_channel: 'agent_number',
+              assisted_by_field_agent: d.assisted_by_field_agent === true,
+              field_agent_reference: normalizeFieldAgentCode(d.field_agent_reference) || null
+            },
+            expiresAt
+          ]
+        );
+        const propertyId = result.rows[0].id;
+        if (d.photos && d.photos.length) {
+          const photos = d.photos.slice(0, 5);
+          const labels = ['front/outside', 'sitting room/main room', 'bedroom', 'kitchen', 'bathroom'];
+          const slots = ['front', 'sitting_room', 'bedroom', 'kitchen', 'bathroom'];
+          for (let i = 0; i < photos.length; i += 1) {
+            await db.query(
+              'INSERT INTO property_images (property_id, url, is_primary, sort_order, slot_key, room_label) VALUES ($1, $2, $3, $4, $5, $6)',
+              [propertyId, photos[i], i === 0, i, slots[i] || `extra_${i + 1}`, labels[i] || 'extra photo']
+            );
+          }
+        }
+        await db.query(
+          "UPDATE whatsapp_sessions SET current_step = 'submitted', listing_draft = '{}', session_data = '{}' WHERE phone = $1",
+          [phone]
+        );
+        const refCode = String(propertyId).substring(0, 8).toUpperCase();
+        return respond(`Confirmed agent ${d.confirmed_agent_name || ''}. Your property has been submitted for upload and makaug admin review. We will let you know once it is live.\n\nReference: #${refCode}\n🔗 Once approved: ${HOME_URL}/property/${propertyId}`, 'submitted');
+      } catch (err) {
+        logger.error('WhatsApp confirmed-agent listing save error:', err);
+        return respond(tt(lang, 'genericSaveError', { url: HOME_URL }), 'submitted');
+      }
+    }
     return respond(t(lang, 'askContactMethod'), 'ask_contact_method');
   }
 
@@ -7048,6 +7508,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
           {
             contact_display_name: d.contact_display_name || d.lister_name || null,
             preferred_contact_channel: d.preferred_contact_channel || 'phone',
+            land_title_available: normalizeLandTitleAvailability(d.land_title_available) || null,
+            land_title_available_label: landTitleAvailabilityLabel(d.land_title_available) || null,
             whatsapp_listing_flow: true,
             verification_channel: d.otp_channel || 'phone',
             assisted_by_field_agent: d.assisted_by_field_agent === true,
@@ -7058,10 +7520,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       );
 
       const propertyId = result.rows[0].id;
-      const matchedBroker = await findBrokerAgentByContact({
-        phone: d.owner_phone || d.lister_phone || phone,
-        email: d.lister_email || ''
-      });
+      const matchedBroker = await findBrokerAgentByNumber(d.agent_number || d.confirmed_agent_number || '')
+        || await findBrokerAgentByContact({
+          phone: d.owner_phone || d.lister_phone || phone,
+          email: d.lister_email || ''
+        });
       if (matchedBroker?.id) {
         await db.query(
           `UPDATE properties
@@ -7083,7 +7546,8 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
               broker_submission: true,
               broker_agent_id: matchedBroker.id,
               broker_status: matchedBroker.status || 'pending',
-              broker_matched_by: d.lister_email ? 'email_or_phone' : 'phone',
+              broker_agent_number: matchedBroker.makaug_agent_number || d.agent_number || null,
+              broker_matched_by: d.agent_number ? 'agent_number' : (d.lister_email ? 'email_or_phone' : 'phone'),
               whatsapp_broker_fast_track: true
             })
           ]
