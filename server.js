@@ -127,12 +127,163 @@ app.get('/config.js', (_req, res) => {
 const staticRoot = __dirname;
 const indexPath = path.join(staticRoot, 'index.html');
 const isProduction = process.env.NODE_ENV === 'production';
+const captureHelperUsabilityVersion = 'capture-helper-usability-20260607';
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 
+function applyCaptureHelperUsabilityIndexPatch(html) {
+  if (!html || html.includes(captureHelperUsabilityVersion)) return html;
+  return html.replace(
+    /(assets\/makaug-app\.js\?v=)([^"'<\s]+)/g,
+    `$1$2-${captureHelperUsabilityVersion}`
+  );
+}
+
+const captureHelperUsabilityScriptPatch = `
+;(() => {
+  const version = "${captureHelperUsabilityVersion}";
+  const escapeHtml = (value = "") => String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+  const attr = escapeHtml;
+
+  window.adminSocialCaptureHelperScript = function adminSocialCaptureHelperScript() {
+    return \`(async function(){
+  var clean=function(value){return String(value||"").replace(/\\\\s+/g," ").trim();};
+  var normalize=function(href){
+    try {
+      var u=new URL(href,location.href);
+      var host=u.hostname.replace(/^www\\\\./,"").toLowerCase();
+      var path=u.pathname || "";
+      if (host==="youtu.be") {
+        var shortId=path.replace(/^\\\\/+/, "").split("/")[0];
+        return shortId ? "https://www.youtube.com/watch?v="+shortId : "";
+      }
+      if (host.endsWith("youtube.com")) {
+        if (path==="/watch" && u.searchParams.get("v")) return "https://www.youtube.com/watch?v="+u.searchParams.get("v");
+        if (path.indexOf("/shorts/")===0) return "https://www.youtube.com/shorts/"+path.split("/")[2];
+      }
+      if (host.endsWith("tiktok.com")) {
+        var tik=path.match(/^\\\\/@[^/]+\\\\/video\\\\/\\\\d+/);
+        if (tik) return "https://www.tiktok.com"+tik[0];
+      }
+      if (host.endsWith("instagram.com")) {
+        var insta=path.match(/^\\\\/(p|reel|tv)\\\\/[^/]+/);
+        if (insta) return "https://www.instagram.com"+insta[0]+"/";
+      }
+      if (host==="x.com" || host==="twitter.com" || host.endsWith(".x.com") || host.endsWith(".twitter.com")) {
+        var x=path.match(/^\\\\/[^/]+\\\\/status\\\\/\\\\d+/);
+        if (x) return "https://x.com"+x[0];
+      }
+      if (host.endsWith("facebook.com") || host.endsWith("fb.watch")) {
+        if (host.endsWith("fb.watch")) return u.origin+path;
+        if (path.indexOf("/watch/")===0 && u.searchParams.get("v")) return "https://www.facebook.com/watch/?v="+u.searchParams.get("v");
+        if (path.indexOf("/reel/")===0) return "https://www.facebook.com"+path.split("/").slice(0,3).join("/");
+        if (path.indexOf("/groups/")===0 && path.indexOf("/posts/")>0) return "https://www.facebook.com"+path.split("/").slice(0,5).join("/");
+        if (/\\\\/posts\\\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
+        if (/\\\\/videos\\\\//.test(path)) return "https://www.facebook.com"+path.split("/").slice(0,4).join("/");
+        if (path==="/story.php" && u.searchParams.get("story_fbid")) return u.href;
+        if (path==="/permalink.php" && u.searchParams.get("story_fbid")) return u.href;
+      }
+      return "";
+    } catch (error) {
+      return "";
+    }
+  };
+  var seen={};
+  var rows=[];
+  Array.prototype.slice.call(document.querySelectorAll("a[href]")).forEach(function(anchor){
+    var url=normalize(anchor.href);
+    if (!url || seen[url]) return;
+    seen[url]=true;
+    var card=anchor.closest("article,[data-e2e*=video],[data-testid*=tweet],li,div") || anchor;
+    var text=clean(card.innerText || anchor.innerText || anchor.getAttribute("aria-label") || document.title || "").slice(0,220);
+    rows.push(url+(text ? " | "+text : ""));
+  });
+  if (!rows.length) {
+    alert("No exact social post links found on this visible page. Open a video/post/grid source page first, then run the helper again.");
+    return;
+  }
+  var output=rows.join("\\\\n");
+  try {
+    await navigator.clipboard.writeText(output);
+  } catch (error) {
+    var box=document.createElement("textarea");
+    box.value=output;
+    box.style.position="fixed";
+    box.style.left="8px";
+    box.style.top="8px";
+    box.style.width="80vw";
+    box.style.height="40vh";
+    box.style.zIndex="2147483647";
+    document.body.appendChild(box);
+    box.focus();
+    box.select();
+  }
+  alert("makaug copied "+rows.length+" exact social post link(s). Go back to King, click Paste Captured Links, and paste.");
+})();\`;
+  };
+
+  window.adminSocialCaptureBookmarkletUrl = function adminSocialCaptureBookmarkletUrl() {
+    return \`javascript:\${encodeURIComponent(window.adminSocialCaptureHelperScript())}\`;
+  };
+
+  window.adminSocialCaptureHelperPanelHtml = function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
+    const bookmarklet = window.adminSocialCaptureBookmarkletUrl();
+    return \`
+    <div class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 space-y-3 text-sm text-indigo-950">
+      <div><div class="font-black">Capture helper setup</div><div>Use this once to create a browser bookmark. After that, open TikTok, YouTube, Facebook, Instagram, or X source pages and click the bookmark. It copies visible exact post/video links so you can paste them into makaug.</div>
+        \${copiedLabel ? \`<div class="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-950"><div class="font-black">\${escapeHtml(copiedLabel)}</div><div class="mt-1 text-[11px]">Copied means the long bookmark code is in your computer clipboard. Nothing opens by itself. The next step is to paste it into a new browser bookmark URL field.</div></div>\` : ""}
+      </div>
+      <button type="button" onclick="adminPasteSocialCapturedLinks()" class="bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Open Paste Box</button>
+      <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-emerald-950">
+        <div class="font-black text-violet-950">Simplest no-bookmark option</div>
+        <div class="mt-1 text-xs">If bookmark setup feels annoying, open one exact YouTube, TikTok, Facebook, Instagram, or X post, copy the address bar link, then click Open Paste Box here and paste it. This works one link at a time.</div>
+      </div>
+      <div class="grid md:grid-cols-4 gap-2">
+        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>1. Show bookmarks bar</b><br><span class="text-xs">Press Cmd+Shift+B in Chrome if you cannot see the bookmarks bar.</span></div>
+        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>2. Save helper</b><br><span class="text-xs">Drag the purple makaug Capture Posts button to the bookmarks bar. If dragging is blocked, copy the Bookmark URL below into a new bookmark URL field.</span></div>
+        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>3. Capture links</b><br><span class="text-xs">Open a source page, scroll until useful posts are visible, then click the bookmark. The helper copies exact links.</span></div>
+        <div class="bg-white border border-indigo-100 rounded-xl p-3"><b>4. Paste into King</b><br><span class="text-xs">Return to makaug, click Open Paste Box, preview, then Queue Found Online for King review.</span></div>
+      </div>
+      <div class="rounded-xl border border-indigo-100 bg-white p-3">
+        <div class="flex flex-wrap gap-2">
+          <a href="\${attr(bookmarklet)}" onclick="return false" title="Drag this link to your browser bookmarks bar" class="inline-flex border border-indigo-300 bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-2 rounded-lg text-xs font-bold">Drag to bookmarks: makaug Capture Posts</a>
+          <button type="button" onclick="adminCopySocialCaptureBookmarklet()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Bookmarklet URL</button>
+          <button type="button" onclick="adminSelectSocialCaptureBookmarkletCode()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Select Bookmarklet URL</button>
+          <button type="button" onclick="adminShowSocialCaptureConsoleCode()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Copy Console Code</button>
+          <button type="button" onclick="adminLoadSocialCaptureExample()" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-bold">Load Example</button>
+        </div>
+        <label class="mt-2 block text-[11px] font-black text-indigo-950" for="admin-social-capture-bookmarklet-url">Bookmark URL to paste</label>
+        <textarea id="admin-social-capture-bookmarklet-url" class="mt-1 w-full rounded-lg border border-indigo-100 bg-indigo-50 p-2 text-[11px] font-mono text-indigo-950" rows="3" readonly>\${escapeHtml(bookmarklet)}</textarea>
+        <div class="mt-2 text-xs">Fastest setup: drag the purple makaug Capture Posts button to your browser bookmarks bar. If dragging is blocked, copy the bookmark URL, create a new browser bookmark named makaug Capture Posts, then paste this text into the bookmark URL field.</div>
+      </div>
+      <details class="bg-white rounded-xl border border-indigo-100 p-3"><summary class="font-bold cursor-pointer">Manual console fallback</summary><pre class="mt-2 whitespace-pre-wrap text-xs text-gray-700">\${escapeHtml(window.adminSocialCaptureHelperScript())}</pre></details>
+    </div>\`;
+  };
+
+  window.adminSelectSocialCaptureBookmarkletCode = function adminSelectSocialCaptureBookmarkletCode() {
+    const textarea = document.getElementById("admin-social-capture-bookmarklet-url");
+    if (!textarea) return;
+    textarea.focus();
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      if (typeof toast === "function") toast("Bookmark URL selected and copied");
+    } catch (error) {
+      if (typeof toast === "function") toast("Bookmark URL selected");
+    }
+  };
+
+  window.__makaugCaptureHelperUsabilityPatch = version;
+})();`;
+
 function readIndexHtml() {
   if (isProduction && cachedIndexHtml) return cachedIndexHtml;
-  const html = fs.readFileSync(indexPath, 'utf8');
+  const html = applyCaptureHelperUsabilityIndexPatch(fs.readFileSync(indexPath, 'utf8'));
   if (isProduction) cachedIndexHtml = html;
   return html;
 }
@@ -212,6 +363,18 @@ function shouldServeIndex(req) {
 app.use((req, res, next) => {
   if (!shouldServeIndex(req)) return next();
   return sendPublicIndex(req, res, next);
+});
+
+app.get('/assets/makaug-app.js', (req, res, next) => {
+  const appAssetPath = path.join(staticRoot, 'assets', 'makaug-app.js');
+  fs.readFile(appAssetPath, 'utf8', (error, source) => {
+    if (error) return next(error);
+    const alreadyPatched = source.includes('admin-social-capture-bookmarklet-url')
+      && source.includes('Simplest no-bookmark option');
+    res.type('application/javascript');
+    res.set('Cache-Control', 'no-store');
+    return res.send(alreadyPatched ? source : `${source}\n${captureHelperUsabilityScriptPatch}`);
+  });
 });
 
 app.use(express.static(staticRoot, {
