@@ -14,6 +14,12 @@ Set these in Render Web Service -> Environment:
 | `SUPER_ADMIN_EMAIL` | yes for bootstrap | Owner email address. |
 | `SUPER_ADMIN_INITIAL_PASSWORD` | yes for bootstrap only | One-time password, at least 12 chars with uppercase, lowercase, and a number. Never commit or print it. |
 | `SUPER_ADMIN_PHONE` | optional | Owner phone/WhatsApp. If omitted, the script uses an internal placeholder phone. |
+| `PAYMENT_PROVIDER` | yes for paid ads | Set to `paypal` for launch advertising checkout. |
+| `PAYPAL_PAYMENT_LINK_BASE_URL` | yes for live PayPal links | Hosted checkout/payment-link base used by `/api/advertising/campaigns/:id/payment-link`. |
+| `PAYPAL_CLIENT_ID` | yes for PayPal API/webhook proof | PayPal app client ID for live checkout integration. |
+| `PAYPAL_CLIENT_SECRET` | yes for PayPal API/webhook proof | PayPal app secret. Store only in Render secrets. |
+| `PAYMENT_PROVIDER_WEBHOOK_SECRET` | recommended | Secret used to verify provider webhook requests when the PayPal webhook verifier is enabled. |
+| `ADVERTISING_USD_RATE` | optional | UGX per USD guide rate shown on the public rate card. Defaults to `3800`. |
 
 ## Generate Safe Secrets
 

@@ -8,8 +8,12 @@ const { getSupportEmail, getSupportWhatsappUrl, sendSupportEmail } = require('..
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { createLead } = require('../services/leadService');
 const {
+  buildAdvertisingQuoteBreakdown,
   estimateAdvertisingQuote,
+  getAdvertisingPlacements,
   getAdvertisingPackages,
+  getAdvertisingRateCard,
+  mergePlacementWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const {
@@ -68,9 +72,13 @@ function buildInvoiceNumber(date = new Date()) {
 }
 
 function buildProviderPaymentUrl(paymentLinkId) {
-  const base = String(process.env.PAYMENT_LINK_BASE_URL || '').replace(/\/$/, '');
+  const base = String(process.env.PAYPAL_PAYMENT_LINK_BASE_URL || process.env.PAYMENT_LINK_BASE_URL || '').replace(/\/$/, '');
   if (!base) return null;
   return `${base}/pay/${paymentLinkId}`;
+}
+
+function preferredPaymentProvider() {
+  return cleanText(process.env.PAYMENT_PROVIDER || 'paypal').toLowerCase() || 'paypal';
 }
 
 function normalizeList(value) {
@@ -99,6 +107,13 @@ router.get('/packages', (_req, res) => {
   });
 });
 
+router.get('/rate-card', (_req, res) => {
+  return res.json({
+    ok: true,
+    data: getAdvertisingRateCard()
+  });
+});
+
 router.get('/placements', async (_req, res, next) => {
   try {
     const rows = await db.query(
@@ -107,13 +122,30 @@ router.get('/placements', async (_req, res, next) => {
        WHERE is_active = true
        ORDER BY sort_order ASC, label ASC`
     );
-    return res.json({ ok: true, data: rows.rows });
+    const data = rows.rows.length ? rows.rows.map((row) => mergePlacementWithCatalog(row)) : getAdvertisingPlacements();
+    return res.json({ ok: true, data });
   } catch (error) {
     if (String(error.message || '').includes('advertising_placements')) {
-      return res.json({ ok: true, data: [] });
+      return res.json({ ok: true, data: getAdvertisingPlacements() });
     }
     return next(error);
   }
+});
+
+router.post('/quote', async (req, res) => {
+  const packageKeys = asArray(req.body.package_keys || req.body.product_interests || req.body.packages)
+    .map((item) => cleanText(item).toLowerCase())
+    .filter(Boolean);
+  const placementKeys = asArray(req.body.placement_keys || req.body.placements)
+    .map((item) => cleanText(item).toLowerCase())
+    .filter(Boolean);
+  const quote = buildAdvertisingQuoteBreakdown({
+    packageKeys,
+    placementKeys,
+    durationDays: toNullableInt(req.body.duration_days || req.body.desired_duration_days) || 7,
+    impressions: toNullableInt(req.body.impressions) || 0
+  });
+  return res.json({ ok: true, data: quote });
 });
 
 router.get('/dashboard', requireAdvertiserAuth, async (req, res, next) => {
@@ -333,7 +365,7 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         cleanText(req.body.due_date) || null
       ]
     );
-    const paymentProvider = cleanText(process.env.PAYMENT_PROVIDER || 'manual');
+    const paymentProvider = preferredPaymentProvider();
     const link = await db.query(
       `INSERT INTO payment_links (
         provider, amount, currency, purpose, related_campaign_id, advertiser_id,
@@ -372,8 +404,8 @@ router.post('/campaigns/:id/payment-link', requireAdvertiserAuth, async (req, re
         providerConfigured: Boolean(link.rows[0].checkout_url),
         providerMissing: !link.rows[0].checkout_url,
         message: link.rows[0].checkout_url
-          ? 'Payment link created.'
-          : 'Payment provider is not configured. makaug has logged the invoice and admin can mark manual payment.'
+          ? 'PayPal payment link created.'
+          : 'PayPal checkout is not configured. makaug has logged the invoice and admin can mark manual payment.'
       }
     });
   } catch (error) {
@@ -436,7 +468,8 @@ router.post('/inquiries', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
-    const estimatedValue = estimateAdvertisingQuote(productInterests);
+    const quoteBreakdown = buildAdvertisingQuoteBreakdown({ packageKeys: productInterests });
+    const estimatedValue = quoteBreakdown.total_ugx || estimateAdvertisingQuote(productInterests);
     const inserted = await db.query(
       `INSERT INTO advertising_inquiries (
         full_name,
@@ -495,6 +528,7 @@ router.post('/inquiries', async (req, res, next) => {
         target_listing_types: targetListingTypes,
         audience_segments: audienceSegments,
         estimated_value_ugx: estimatedValue,
+        quote_breakdown: quoteBreakdown,
         preferred_contact_channel: preferredContactChannel
       },
       entities: {
@@ -523,8 +557,9 @@ router.post('/inquiries', async (req, res, next) => {
           `Email: ${email || '-'}`,
           `Phone: ${phone || '-'}`,
           `Preferred Contact: ${preferredContactChannel}`,
-          `Estimated Package Value: UGX ${Number(estimatedValue || 0).toLocaleString('en-UG')}`,
-          `Budget: ${budgetUgx ? `UGX ${Number(budgetUgx).toLocaleString('en-UG')}` : '-'}`,
+        `Estimated Package Value: UGX ${Number(estimatedValue || 0).toLocaleString('en-UG')}`,
+        `Estimated USD Equivalent: USD ${Number(quoteBreakdown.total_usd || 0).toLocaleString('en-US')}`,
+        `Budget: ${budgetUgx ? `UGX ${Number(budgetUgx).toLocaleString('en-UG')}` : '-'}`,
           `Target Locations: ${targetLocations.join(', ') || '-'}`,
           `Listing Types: ${targetListingTypes.join(', ') || '-'}`,
           `Audience Segments: ${audienceSegments.join(', ') || '-'}`,
@@ -534,7 +569,7 @@ router.post('/inquiries', async (req, res, next) => {
           '',
           message ? `Message: ${message}` : '',
           '',
-          'Admin action: open Advertising Inquiries, prepare creative/package proposal, then mark the campaign paid/live when ready.'
+        'Admin action: open Advertising Inquiries, prepare creative/package proposal, issue PayPal payment link, then mark the campaign paid/live when ready.'
         ].filter(Boolean).join('\n'),
         replyTo: email || undefined
       });
@@ -553,8 +588,9 @@ router.post('/inquiries', async (req, res, next) => {
             `Preferred contact: ${preferredContactChannel}`,
             `Selected products: ${labels.join(', ') || 'Advertising package'}`,
             targetLocations.length ? `Target locations: ${targetLocations.join(', ')}` : '',
+            `Estimated value: ${quoteBreakdown.total_label}`,
             '',
-            'Next step: our team will confirm the package, prepare a preview, and send payment details before the ad goes live.',
+            'Next step: our team will confirm the package, prepare a preview, and send a PayPal payment link before the ad goes live.',
             '',
             `WhatsApp makaug: ${whatsappUrl}`,
             `Email: ${supportEmail}`
@@ -573,6 +609,7 @@ router.post('/inquiries', async (req, res, next) => {
       data: {
         ...inquiry,
         selected_packages: summarizeAdvertisingPackageKeys(productInterests),
+        quote_breakdown: quoteBreakdown,
         support_email: supportEmail,
         whatsapp_url: whatsappUrl
       }

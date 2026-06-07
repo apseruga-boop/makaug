@@ -1,0 +1,35 @@
+INSERT INTO advertising_placements (
+  key,
+  label,
+  page_key,
+  slot_type,
+  size_label,
+  is_premium,
+  base_price_ugx,
+  preview_image_url,
+  notes,
+  sort_order
+) VALUES
+  ('sitewide_top_leaderboard','Sitewide Top Leaderboard','all','leaderboard','970x250 desktop / 320x100 mobile',true,650000,'https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=1200&q=80','Premium banner across the main homepage, rent, sale, land, commercial, student, and broker discovery journeys.',10),
+  ('homepage_hero_sponsor','Homepage Hero Sponsor','home','hero','1600x520 / 970x250 fallback / 1080x1080 mobile',true,350000,'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=1200&q=80','High-visibility homepage sponsor placement for property, brand, lender, agency, or launch offer.',20),
+  ('sale_inline_native','For Sale Inline Sponsored Card','sale','native_card','Listing grid card / 1200x800 image',false,180000,'https://images.unsplash.com/photo-1568605114967-8130f3a36994?w=1200&q=80','Native sponsored card in for-sale search results.',30),
+  ('rent_inline_native','Rental Inline Sponsored Card','rent','native_card','Listing grid card / 1200x800 image',false,180000,'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=1200&q=80','Native sponsored card in rental search results.',40),
+  ('students_leaderboard','Student Page Leaderboard','students','leaderboard','970x250 desktop / 320x100 mobile',true,220000,'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=1200&q=80','Student accommodation sponsor and university targeting.',50),
+  ('commercial_leaderboard','Commercial Page Leaderboard','commercial','leaderboard','970x250 desktop / 320x100 mobile',true,240000,'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&q=80','Business, office, retail, and commercial investor sponsor.',60),
+  ('land_leaderboard','Land Page Leaderboard','land','leaderboard','970x250 desktop / 320x100 mobile',true,240000,'https://images.unsplash.com/photo-1500382017468-9049fed747ef?w=1200&q=80','Land buyers, surveyors, legal support, and developers.',70),
+  ('brokers_spotlight','Broker Directory Spotlight','brokers','spotlight','Profile spotlight / 1200x800 image',false,160000,'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1200&q=80','Featured broker or agency promotion.',80),
+  ('property_detail_mpu','Property Detail MPU','property_detail','mpu','300x250 desktop / responsive',false,120000,'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=1200&q=80','Contextual ad on property detail pages.',90),
+  ('whatsapp_sponsored_match','WhatsApp Sponsored Match','whatsapp','chatbot_native','Assistant result card / 1080x1080 creative',true,200000,'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&q=80','Sponsored result inside WhatsApp AI property, agent, and campaign journeys.',100),
+  ('whatsapp_bulk_audience','WhatsApp Bulk Audience Campaign','whatsapp','broadcast','Approved text plus 1080x1080 image',true,300000,'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=1200&q=80','Bulk WhatsApp advertising to approved opt-in audience segments. Exact quote depends on segment, compliance approval, and send volume.',110)
+ON CONFLICT (key) DO UPDATE SET
+  label = EXCLUDED.label,
+  page_key = EXCLUDED.page_key,
+  slot_type = EXCLUDED.slot_type,
+  size_label = EXCLUDED.size_label,
+  is_premium = EXCLUDED.is_premium,
+  base_price_ugx = EXCLUDED.base_price_ugx,
+  preview_image_url = EXCLUDED.preview_image_url,
+  notes = EXCLUDED.notes,
+  sort_order = EXCLUDED.sort_order,
+  is_active = true,
+  updated_at = NOW();

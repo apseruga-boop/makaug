@@ -3,6 +3,7 @@ export type SupportedLanguage = 'en' | 'lg' | 'sw' | 'ac' | 'ny' | 'rn' | 'sm' |
 export type TopLevelIntent =
   | 'property_search'
   | 'property_listing'
+  | 'advertising_campaign'
   | 'agent_search'
   | 'agent_registration'
   | 'mortgage_help'

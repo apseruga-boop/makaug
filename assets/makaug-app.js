@@ -173,6 +173,7 @@ function mapRemoteAgentForUi(agent = {}) {
   const socials = normalizeBrokerSocialLinks(agent);
   return {
     id: String(agent.id || ""),
+    makaug_agent_number: agent.makaug_agent_number || agent.agent_number || "",
     name: agent.full_name || agent.name || "makaug agent",
     company: agent.company_name || agent.company || "makaug",
     phone: agent.phone || "",
@@ -190,7 +191,8 @@ function mapRemoteAgentForUi(agent = {}) {
     photo: agent.profile_photo_url || "",
     profile_photo_url: agent.profile_photo_url || "",
     registration_status: String(agent.registration_status || "not_registered").toLowerCase(),
-    experience: agent.experience || "",
+    experience: agent.experience || (agent.experience_years || agent.experience_years === 0 ? `${agent.experience_years} year${Number(agent.experience_years) === 1 ? "" : "s"}` : ""),
+    experience_years: Number(agent.experience_years || 0) || 0,
     licence: agent.licence_number || agent.licence || "",
     languages: Array.isArray(agent.languages) ? agent.languages.filter(Boolean) : ["English"],
     specialties: specializations,
@@ -208,6 +210,7 @@ function mapRemoteAgentForUi(agent = {}) {
     facebook_url: agent.facebook_url || socials.find((item) => item.key === "facebook")?.url || "",
     user_id: agent.user_id || "",
     nin: agent.nin || "",
+    id_expiry_date: agent.id_expiry_date || "",
     identity_document_name: agent.identity_document_name || "",
     identity_document_url: agent.identity_document_url || "",
     identity_document_type: agent.identity_document_type || "",
@@ -217,6 +220,8 @@ function mapRemoteAgentForUi(agent = {}) {
     privacy_consent_at: agent.privacy_consent_at || "",
     data_retention_notice_accepted: agent.data_retention_notice_accepted === true,
     data_retention_notice_at: agent.data_retention_notice_at || "",
+    contact_phone_verified_at: agent.contact_phone_verified_at || "",
+    agent_application_channel: agent.agent_application_channel || "",
     approved_at: agent.approved_at || ""
   };
 }
@@ -481,23 +486,27 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: 16.5,
     commercialRate: 16.5,
     landRate: null,
-    minDepositPct: { default: 20 },
+    minDepositPct: { residential: 10, commercial: 20, land: 10, default: 10 },
     maxYears: { default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: "Stanbic mortgages and home loans",
-    sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans"
+    sourceLabel: "Stanbic home loan public pages",
+    sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan",
+    sourceNote: "Stanbic publishes home loan costs and public rate guidance; final pricing is confirmed by the bank.",
+    sourceVerifiedAt: "2026-06-07"
   },
   {
     id: "hfb",
     name: "Housing Finance Bank",
-    residentialRate: 16.0,
-    commercialRate: 18.0,
-    landRate: 18.0,
-    minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
-    maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
-    arrangementFeePct: 1.5,
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 40, default: 20 },
+    maxYears: { residential: 20, commercial: 20, land: 5, default: 20 },
+    arrangementFeePct: 1.25,
     sourceLabel: "Housing Finance mortgage terms and conditions",
-    sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/mortgage-products/housing-finance-bank-mortgages-terms-and-conditions/"
+    sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
+    sourceNote: "Housing Finance publishes LTV, term, facility fee, and gross-income guidance; rate is variable and requires bank confirmation.",
+    sourceVerifiedAt: "2026-06-07"
   },
   {
     id: "dfcu",
@@ -509,7 +518,9 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     maxYears: { default: 20 },
     arrangementFeePct: 2.0,
     sourceLabel: "dfcu home loans",
-    sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/"
+    sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
+    sourceNote: "dfcu publishes UGX calculator rate guidance and affordability/term rules on its home-loans page.",
+    sourceVerifiedAt: "2026-06-07"
   },
   {
     id: "kcb",
@@ -521,7 +532,9 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 20, default: 20 },
     arrangementFeePct: 1.5,
     sourceLabel: "KCB mortgage overview",
-    sourceUrl: "https://ug.kcbgroup.com/products/mortgage"
+    sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
+    sourceNote: "KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance term guidance, and LTV rules.",
+    sourceVerifiedAt: "2026-06-07"
   },
   {
     id: "baroda",
@@ -531,9 +544,11 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     landRate: null,
     minDepositPct: { default: 20 },
     maxYears: { default: 15 },
-    arrangementFeePct: 1.5,
-    sourceLabel: "Baroda housing loan",
-    sourceUrl: "https://www.bankofbaroda.ug/personal-banking/loans/housing-loan"
+    arrangementFeePct: 1.0,
+    sourceLabel: "Baroda housing loan and interest rates",
+    sourceUrl: "https://www.bankofbaroda.ug/rates-and-charges/interest-rates",
+    sourceNote: "Baroda publishes housing loan pricing as 2% below UGX PLR; with PLR 20%, this gives an indicative 18% UGX rate.",
+    sourceVerifiedAt: "2026-06-07"
   },
   {
     id: "absa",
@@ -545,13 +560,18 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     maxYears: { default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: "Absa Uganda home loans",
-    sourceUrl: "https://www.absa.co.ug/personal/home-loans/"
+    sourceUrl: "https://www.absa.co.ug/personal/home-loans/",
+    sourceNote: "Absa publishes home-loan availability in UGX/USD with competitive rates, but does not publish a fixed public rate on the page.",
+    sourceVerifiedAt: "2026-06-07"
   }
 ];
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
 let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
+let activeMortgageTab = "repayment";
+let selectedMortgageProviderKey = "";
+let mortgageExtraPaymentAmount = 0;
 
 const HOW_TO_VIDEO_SLOTS = [
   { key: "what-is-makaug", title: "What is makaug?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore makaug", ctaUrl: "/about" },
@@ -2230,10 +2250,10 @@ if (I18N_UI.rn) {
 
 const CONTENT_I18N = {
   en: {
-    "about.heroLabel": "About Us",
+    "about.heroLabel": "About makaug",
     "about.title": "About makaug",
     "about.heroStatement": "Property in Uganda should be easier to find, easier to list, and safer to trust.",
-    "about.subtitle": "makaug is building a Uganda-first property platform for renters, buyers, students, land seekers, property owners, brokers, and businesses.",
+    "about.subtitle": "makaug is a Uganda-first property search engine and marketplace. We bring direct listings, public and authorised source signals, AI-assisted organisation, and human moderation into one clearer place.",
     "about.ctaSearch": "Search property",
     "about.ctaList": "List Property",
     "about.ctaWhatsapp": "Ask makaug on WhatsApp",
@@ -2245,19 +2265,67 @@ const CONTENT_I18N = {
     "about.valueWhatsappText": "Designed for mobile web discovery, WhatsApp contact, dashboard follow-up, and safer decisions.",
     "about.whoTitle": "Who we are",
     "about.whoText": "makaug is a Uganda-first property platform for public website search, mobile web, WhatsApp-first contact, multilingual support, and guided free listings. We are built around the practical realities of Uganda's property market: scattered information, incomplete listings, heavy WhatsApp use, and the need for trust before people view or pay.",
+    "about.missionLabel": "Our Mission",
     "about.missionTitle": "Our mission",
     "about.missionText": "Our mission is to make property easier to discover, reduce confusion, improve listing quality, help people move from search to viewing to decision, and support Uganda's property market with better information.",
+    "about.whyLabel": "Why this matters",
     "about.whyTitle": "Why makaug exists",
     "about.whyText": "Property search in Uganda can be scattered across WhatsApp, brokers, social posts, word of mouth, and incomplete listing pages. Fraud risk exists, students and land seekers need clearer information, and many owners need a guided way to list properly. makaug brings structure, search, safety, and communication together.",
+    "about.adsLabel": "Advertising revenue",
+    "about.adsTitle": "Paid advertising is transparent and separate from free listing",
+    "about.adsText": "Businesses can buy sponsored homepage, search, property-detail, broker, student, commercial, land, and WhatsApp placements. Prices are published in UGX with USD guide pricing on the Advertise page, and every paid campaign is reviewed before going live.",
+    "about.adsRateTitle": "Public rate card",
+    "about.adsRateText": "Day, week, month, and CPM options are shown publicly so advertisers can plan spend before contacting makaug.",
+    "about.adsPayTitle": "PayPal launch payments",
+    "about.adsPayText": "After makaug confirms a campaign, the advertiser receives a PayPal payment link. The King dashboard tracks invoice, payment reference, approval, live dates, impressions, clicks, and leads.",
+    "about.adsWhatsappTitle": "WhatsApp advertising",
+    "about.adsWhatsappText": "Sponsored WhatsApp matches and approved opt-in bulk audience campaigns are available, with exact bulk pricing confirmed by segment, template approval, and volume.",
+    "about.adsCta": "View advertising prices",
     "about.searchEngineLabel": "Property search engine",
     "about.searchEngineTitle": "How makaug finds property information",
-    "about.searchEngineText": "makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through King review before it can appear as a trusted live listing.",
+    "about.searchEngineText": "makaug is becoming a search engine for Uganda property. We combine direct owner and broker listings with reviewed public or authorised online sources, then route every candidate through AI-assisted checks and human review before it can appear as a trusted live listing.",
+    "about.sourceNetworkTitle": "30,000+ source registry",
+    "about.sourceNetworkText": "We monitor a growing registry of property pages, accounts, channels, searches, and partner routes across Uganda.",
+    "about.aiAssistTitle": "AI-assisted organisation",
+    "about.aiAssistText": "AI helps sort categories, locations, duplicates, language signals, and risk flags before review.",
+    "about.humanReviewTitle": "Human moderation",
+    "about.humanReviewText": "People still check source evidence, contact routes, ownership signals, photos, and safety concerns.",
+    "about.statSourcesTitle": "30,000+ sources",
+    "about.statSourcesText": "A source registry for public pages, social channels, discovery feeds, and authorised partner paths.",
+    "about.statAiTitle": "AI + people",
+    "about.statAiText": "AI helps organise information, while human review protects quality before listings go live.",
+    "about.statLanguageTitle": "9 languages",
+    "about.statLanguageText": "Built for multilingual discovery across web, WhatsApp, support, and safety guidance.",
+    "about.challengeScatteredTitle": "Scattered channels",
+    "about.challengeScatteredText": "Useful property information may sit in posts, groups, calls, WhatsApp, pages, and offline networks.",
+    "about.challengeQualityTitle": "Uneven quality",
+    "about.challengeQualityText": "Photos, prices, location, title signals, and contact permission are often incomplete or unclear.",
+    "about.challengeLanguageTitle": "Language and access",
+    "about.challengeLanguageText": "People search in different languages and many prefer mobile web or WhatsApp over long forms.",
+    "about.challengeTrustTitle": "Trust before payment",
+    "about.challengeTrustText": "Searchers need practical checks, traceable contact, and a way to report pressure or suspicious details.",
+    "about.aiCta": "Try AI property help",
+    "about.flowFindTitle": "Find signals",
+    "about.flowFindText": "We monitor direct listings, authorised feeds, public source pages, social posts, and channel updates.",
+    "about.flowOrganiseTitle": "Organise with AI",
+    "about.flowOrganiseText": "AI helps classify property type, area, likely price fields, duplicates, language, and missing details.",
+    "about.flowReviewTitle": "Review carefully",
+    "about.flowReviewText": "Human checks look at source evidence, contact routes, images, permission, location, and risk flags.",
+    "about.flowAttributeTitle": "Attribute clearly",
+    "about.flowAttributeText": "Found-online information keeps source context. Owners and agents can claim, correct, or request removal.",
+    "about.flowConnectTitle": "Connect safely",
+    "about.flowConnectText": "Searchers can save, enquire, use WhatsApp, request callbacks, report issues, and follow safety guidance.",
+    "about.ownershipLabel": "Ownership and attribution",
+    "about.ownershipTitle": "We organise information. We do not pretend to own it.",
+    "about.ownershipText": "Property information belongs to the owners, agents, tenants, publishers, and source channels that created it. makaug aggregates, structures, attributes, reviews, and routes property information so people can find it in one place.",
     "about.searchSourceTitle": "Source visibility",
-    "about.searchSourceText": "Found-online listings show when makaug first found them, the social source they came from, and the route buyers can use to check the original post.",
+    "about.searchSourceText": "Found-online listings show when makaug first found them, the source they came from, and the route buyers can use to check the original post.",
     "about.searchReviewTitle": "Human review",
-    "about.searchReviewText": "Source data is not posted blindly. The King dashboard checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
+    "about.searchReviewText": "Source data is not posted blindly. The review desk checks location, photos, contact details, duplicates, ownership signals, and agent permission before approval.",
     "about.searchRemovalTitle": "Claim or remove",
     "about.searchRemovalText": "Owners and agents can claim, update, replace photos, correct details, or request removal. makaug keeps attribution and a review trail so listings stay accountable.",
+    "about.adSeparationTitle": "Ads stay separate",
+    "about.adSeparationText": "Free listing is open to owners and brokers. Paid advertising is labelled and managed separately from listing moderation.",
     "about.landHubLabel": "Land marketplace support",
     "about.landHubTitle": "Find and list land without pretending to clear titles",
     "about.landHubText": "Browse land listings, compare details, and use safety guidance. Makaug is a marketplace, not an official title-checking or legal-clearance service.",
@@ -2283,6 +2351,7 @@ const CONTENT_I18N = {
     "about.brokersText": "Build a broker profile, manage listings, track leads, handle WhatsApp enquiries, manage viewings, and strengthen broker trust.",
     "about.commercialTitle": "Commercial users",
     "about.commercialText": "Find business space, offices, shops, warehouses, direct enquiries, and saved commercial searches.",
+    "about.safetyLabel": "Safety and clarity",
     "about.trustTitle": "How we support trust and safety",
     "about.trustOtpTitle": "OTP and contact checks",
     "about.trustOtpText": "Contact verification helps reduce fake submissions and missed follow-up.",
@@ -2290,6 +2359,11 @@ const CONTENT_I18N = {
     "about.trustReviewText": "Listing details, photos, location, and fraud signals are checked before approval.",
     "about.trustFraudTitle": "Fraud reporting",
     "about.trustFraudText": "Users can report suspicious listings, land/title concerns, and payment pressure.",
+    "about.contactLabel": "Contact and connect",
+    "about.contactTitle": "Need help with property information?",
+    "about.contactText": "Search the site, list property for free, ask makaug on WhatsApp, or report suspicious information so the review team can look at it.",
+    "about.helpCentreCta": "Help Centre",
+    "about.reportCta": "Report a listing",
     "safety.eyebrow": "Verify before paying",
     "safety.title": "makaug.com Safety Tips",
     "safety.subtitle": "Simple, practical checks for every property journey: view safely, verify identity, confirm authority, use traceable payments, and report suspicious pressure quickly.",
@@ -2322,7 +2396,7 @@ const CONTENT_I18N = {
     "safety.check5": "Report pressure, fake documents, or suspicious payment requests.",
     "safety.videoLabel": "Safety video guides",
     "safety.videoTitle": "Two-minute safety walkthroughs",
-    "safety.videoCopy": "Video slots are ready for viewing safety, fraud reporting, land/title checks, and safe WhatsApp contact.",
+    "safety.videoCopy": "Short safety guides for viewings, fraud reporting, land/title checks, and safe WhatsApp contact.",
     "safety.reportTitle": "See something suspicious?",
     "safety.reportBody": "Stop the conversation, keep screenshots and payment details, then report it so makaug.com can review the listing."
   },
@@ -2419,7 +2493,7 @@ const CONTENT_I18N = {
     "safety.check5": "Loopa pressure, fake documents, oba payment requests eziteeberezebwa.",
     "safety.videoLabel": "Safety video guides",
     "safety.videoTitle": "Safety walkthroughs ez'eddakiika bbiri",
-    "safety.videoCopy": "Video slots zitegekeddwa ku viewing safety, fraud reporting, land/title checks, ne WhatsApp contact ey'obukuumi.",
+    "safety.videoCopy": "Guides ennyimpi ku viewing safety, fraud reporting, land/title checks, ne WhatsApp contact ey'obukuumi.",
     "safety.reportTitle": "Olaba ekintu ekiteeberezebwa?",
     "safety.reportBody": "Yimiriza conversation, kuuma screenshots ne payment details, olyoke oloope makaug.com ekebere listing."
   },
@@ -2516,7 +2590,7 @@ const CONTENT_I18N = {
     "safety.check5": "Ripoti pressure, fake documents, au suspicious payment requests.",
     "safety.videoLabel": "Video za mwongozo wa usalama",
     "safety.videoTitle": "Safety walkthroughs za dakika mbili",
-    "safety.videoCopy": "Video slots ziko tayari kwa viewing safety, fraud reporting, land/title checks, na safe WhatsApp contact.",
+    "safety.videoCopy": "Miongozo mifupi ya viewing safety, fraud reporting, land/title checks, na safe WhatsApp contact.",
     "safety.reportTitle": "Unaona kitu cha shaka?",
     "safety.reportBody": "Simamisha mazungumzo, hifadhi screenshots na payment details, kisha ripoti ili makaug.com ikague listing."
   }
@@ -2719,7 +2793,7 @@ const FOOTER_I18N = {
     about: "About Us",
     how: "How It Works",
     broker: "Find a Broker",
-    registerBroker: "Register as Broker",
+    registerBroker: "Register as an Agent",
     advertise: "Advertise with Us",
     careers: "Careers",
     legal: "Legal & Support",
@@ -3050,6 +3124,51 @@ const MORTGAGE_I18N = {
     purposeResidential: "Residential Home",
     purposeCommercial: "Commercial Property",
     purposeLand: "Land / Plot Financing",
+    tabRepayment: "Repayment",
+    tabAffordability: "Affordability",
+    tabExtraPayment: "Extra Payment",
+    tabFeesTransfer: "Fees & Transfer",
+    tabRepaymentTitle: "Monthly repayment",
+    tabRepaymentBody: "Calculate the estimated monthly instalment from price, deposit, interest rate, and loan term.",
+    tabAffordabilityTitle: "Affordability",
+    tabAffordabilityBody: "Compare the repayment with household income using a 35% gross-income guide before speaking to a lender.",
+    tabExtraTitle: "Extra payment",
+    tabExtraBody: "Add an optional extra monthly payment to estimate how much interest and time it may save.",
+    tabFeesTitle: "Fees and transfer",
+    tabFeesBody: "Review deposit, arrangement fee, valuation, registration, transfer, and stamp-duty style costs before applying.",
+    labelRate: "Interest Rate (%)",
+    labelCurrency: "Currency",
+    calculate: "Calculate",
+    reset: "Reset",
+    extraPaymentLabel: "Extra monthly payment (optional)",
+    extraPaymentPlaceholder: "e.g. 500000",
+    extraPaymentSavingsLine: "Extra payment could save about {interest} interest and shorten the loan by about {months} months.",
+    extraPaymentNoSavings: "Add an extra monthly payment to see possible savings.",
+    estimatedMonthlyRepayment: "Estimated monthly repayment",
+    basedOnRateTerm: "Based on {rate}% over {years} years.",
+    onceOffCosts: "Once-off costs",
+    depositLabel: "Deposit",
+    bankRegistrationEstimate: "Bank/registration estimate",
+    transferStampDutyEstimate: "Transfer/stamp duty estimate",
+    grossMonthlyIncomeRequired: "Gross Monthly Income Required",
+    loanAmount: "Loan Amount",
+    totalInterestEstimate: "Total interest estimate",
+    requestMortgageHelp: "Request Mortgage Help",
+    saveCalculation: "Save Calculation",
+    signInToSave: "Sign in to save",
+    calculationSaved: "Calculation saved to your Property Finder Dashboard.",
+    saveCalculationFail: "Could not save calculation now.",
+    estimateDisclaimer: "This is an estimate only. Actual rates, fees, repayments, and approvals depend on the lender.",
+    emailValidation: "Enter a valid email address.",
+    resetDone: "Mortgage calculator reset.",
+    preferredBankLabel: "Preferred Bank",
+    genericProviderOption: "General makaug mortgage consultant",
+    providerContextNone: "No bank selected yet. Use a bank comparison call button to route this lead to a specific lender.",
+    providerContextSelected: "Selected lender: {bank}. This lead will be marked for bank handoff in King dashboard.",
+    setUpBankCall: "Set up call",
+    sourceNoteLabel: "Source note",
+    publicRecordDisclosure: "Pulled from public bank pages and public market records. Terms can change without notice; confirm with the lender before applying.",
+    leadSubmitBank: "Request {bank} Call",
     resultsTitle: "Best Match & Bank Comparison",
     ratesFootnote: "Indicative public rates. Confirm with bank before applying.",
     refresh: "Refresh",
@@ -3682,11 +3801,105 @@ MORTGAGE_I18N.rn = Object.assign({}, MORTGAGE_I18N.en, {
 });
 
 MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
+  pageSub: "ከባንክ ጋር ከመነጋገርዎ በፊት የወር ክፍያን፣ ቅድመ ክፍያን እና የብድር ሁኔታን ያነጻጽሩ።",
+  pill1Title: "ባንኮችን በፍጥነት ያነጻጽሩ",
+  pill1Sub: "የወር ክፍያ ግምቶችን ከጎን ለጎን ይመልከቱ።",
+  pill2Title: "የባለሙያ ማስሊያ",
+  pill2Sub: "ዋጋ፣ ቅድመ ክፍያ፣ ወለድ እና ጊዜ ያስገቡ።",
+  pill3Title: "የዕለት ዋጋ ግምገማ",
+  pill3Sub: "ይህ ገጽ እንዲዘምን የባንክ መረጃ በየቀኑ ይፈተሻል።",
+  calcTitle: "የክፍያ ማስሊያ",
+  calcTip: "ከመጠየቅዎ በፊት ይገምቱ",
+  labelPrice: "የንብረት ዋጋ (UGX)",
+  labelPurpose: "የምርት አይነት",
+  labelDeposit: "ቅድመ ክፍያ (%)",
+  labelYears: "የብድር ጊዜ (ዓመታት)",
+  labelIncome: "የቤተሰብ ወርሃዊ ገቢ (UGX፣ አማራጭ)",
+  labelRate: "የወለድ መጠን (%)",
+  labelCurrency: "ምንዛሬ",
+  incomePlaceholder: "ለምሳሌ 6000000",
+  purposeResidential: "የመኖሪያ ቤት",
+  purposeCommercial: "የንግድ ንብረት",
+  purposeLand: "የመሬት / ፕሎት ብድር",
+  tabRepayment: "ክፍያ",
+  tabAffordability: "የመክፈል አቅም",
+  tabExtraPayment: "ተጨማሪ ክፍያ",
+  tabFeesTransfer: "ክፍያዎች እና ዝውውር",
+  tabRepaymentTitle: "የወር ክፍያ",
+  tabRepaymentBody: "ከዋጋ፣ ቅድመ ክፍያ፣ ወለድ እና ጊዜ መሠረት የወር ክፍያን ይገምቱ።",
+  tabAffordabilityTitle: "የመክፈል አቅም",
+  tabAffordabilityBody: "ከባንክ ጋር ከመነጋገርዎ በፊት ክፍያውን ከጠቅላላ ወርሃዊ ገቢ 35% መመሪያ ጋር ያነጻጽሩ።",
+  tabExtraTitle: "ተጨማሪ ክፍያ",
+  tabExtraBody: "በየወሩ ተጨማሪ ክፍያ በመጨመር ሊቆጠብ የሚችለውን ወለድ እና ጊዜ ይገምቱ።",
+  tabFeesTitle: "ክፍያዎች እና ዝውውር",
+  tabFeesBody: "ቅድመ ክፍያ፣ የአዘጋጅት ክፍያ፣ ግምገማ፣ ምዝገባ፣ ዝውውር እና የስታምፕ ግዴታ ግምቶችን ይመልከቱ።",
+  calculate: "አስላ",
+  reset: "ዳግም አስጀምር",
+  extraPaymentLabel: "ተጨማሪ ወርሃዊ ክፍያ (አማራጭ)",
+  extraPaymentPlaceholder: "ለምሳሌ 500000",
+  extraPaymentSavingsLine: "ተጨማሪ ክፍያው በግምት {interest} ወለድ ሊቆጥብ እና ብድሩን በ {months} ወራት ሊያሳጥር ይችላል።",
+  extraPaymentNoSavings: "ሊኖር የሚችለውን ቁጠባ ለማየት ተጨማሪ ወርሃዊ ክፍያ ያስገቡ።",
+  estimatedMonthlyRepayment: "የተገመተ ወርሃዊ ክፍያ",
+  basedOnRateTerm: "በ {rate}% ወለድ እና {years} ዓመታት ላይ የተመሠረተ።",
+  onceOffCosts: "የአንድ ጊዜ ወጪዎች",
+  depositLabel: "ቅድመ ክፍያ",
+  bankRegistrationEstimate: "የባንክ / ምዝገባ ግምት",
+  transferStampDutyEstimate: "የዝውውር / ስታምፕ ግዴታ ግምት",
+  grossMonthlyIncomeRequired: "የሚፈለገው ጠቅላላ ወርሃዊ ገቢ",
+  loanAmount: "የብድር መጠን",
+  totalInterestEstimate: "የጠቅላላ ወለድ ግምት",
+  requestMortgageHelp: "የቤት ብድር እርዳታ ይጠይቁ",
+  saveCalculation: "ስሌቱን አስቀምጥ",
+  signInToSave: "ለማስቀመጥ ይግቡ",
+  calculationSaved: "ስሌቱ በ Property Finder Dashboard ተቀምጧል።",
+  saveCalculationFail: "ስሌቱን አሁን ማስቀመጥ አልተቻለም።",
+  estimateDisclaimer: "ይህ ግምት ብቻ ነው። ትክክለኛ ወለድ፣ ክፍያዎች፣ ክፍያ እና ፈቃድ በባንኩ ምርመራ ይወሰናሉ።",
+  emailValidation: "ትክክለኛ ኢሜይል ያስገቡ።",
+  resetDone: "የቤት ብድር ማስሊያው ዳግም ተጀምሯል።",
+  preferredBankLabel: "የሚመርጡት ባንክ",
+  genericProviderOption: "አጠቃላይ የmakaug የቤት ብድር አማካሪ",
+  providerContextNone: "እስካሁን ባንክ አልተመረጠም። የባንክ የጥሪ አዝራር በመጠቀም መሪውን ወደ ተወሰነ ባንክ ያመሩ።",
+  providerContextSelected: "የተመረጠ ባንክ፦ {bank}። ይህ መሪ በKing dashboard ለባንክ ርክክብ ይሰየማል።",
+  setUpBankCall: "ጥሪ ያዘጋጁ",
+  sourceNoteLabel: "የምንጭ ማስታወሻ",
+  publicRecordDisclosure: "መረጃው ከሕዝባዊ የባንክ ገጾች እና ከሕዝባዊ መዝገቦች የተገኘ ነው። ሁኔታዎች ሊለወጡ ይችላሉ፤ ከመጠየቅዎ በፊት ከባንኩ ጋር ያረጋግጡ።",
+  leadSubmitBank: "የ{bank} ጥሪ ይጠይቁ",
+  resultsTitle: "ምርጥ ተዛማጅ እና የባንክ ንጽጽር",
+  ratesFootnote: "ሕዝባዊ ግምታዊ መረጃ። ከመጠየቅዎ በፊት ከባንክ ጋር ያረጋግጡ።",
+  refresh: "አድስ",
+  whatTitle: "የቤት ብድር ምንድነው?",
+  whatBody: "የቤት ብድር ንብረት ለመግዛት የሚወሰድ የረጅም ጊዜ ብድር ነው። መጀመሪያ ቅድመ ክፍያ ይከፍላሉ፣ ባንኩ ቀሪውን ይሸፍናል፣ ከዚያ በወለድ ጋር በየወሩ ይከፍላሉ።",
+  whatDeposit: "<strong>ቅድመ ክፍያ፦</strong> መጀመሪያ የሚከፍሉት የእርስዎ ድርሻ።",
+  whatLtv: "<strong>LTV፦</strong> ብድር-ለ-ዋጋ። ከፍ ያለ LTV ብዙ ጊዜ ጥብቅ ምርመራ ይፈልጋል።",
+  whatTerm: "<strong>ጊዜ፦</strong> ብድሩን የሚከፍሉበት ዓመታት።",
+  termsTitle: "የቤት ብድር ቃላት ትርጉም",
+  termInterestTitle: "የወለድ መጠን",
+  termInterestBody: "ባንኩ በቀሪ ብድር ላይ የሚያስከፍለው ዓመታዊ ወጪ።",
+  termAmortTitle: "የክፍያ መከፋፈል",
+  termAmortBody: "የወር ክፍያዎ በዋና ብድር እና በወለድ መካከል እንዴት እንደሚከፈል።",
+  termFeeTitle: "የአዘጋጅት ክፍያ",
+  termFeeBody: "ብድሩ ሲጀምር ብዙ ጊዜ ከተፈቀደው ብድር መጠን በመቶኛ የሚከፈል አንድ ጊዜ ክፍያ።",
+  termEarlyTitle: "ቀደም ብሎ መክፈል",
+  termEarlyBody: "አንዳንድ ባንኮች ብድሩን ቀደም ብለው ካጠናቀቁ ክፍያ ሊያስከፍሉ ይችላሉ።",
+  dailyTitle: "የዕለት ዝመና ሂደት",
+  dailyNote: "ዋጋዎች ከAPI ይመጣሉ እና በየቀኑ ይገመገማሉ። አዲሱን መረጃ ለማየት አድስ ይጫኑ።",
   summaryPrice: "የንብረት ዋጋ",
   summaryDepositLoan: "ቅድመ ክፍያ / ብድር",
+  summaryUpdated: "ዋጋዎች ተዘምነዋል",
   healthAffordability: "የመክፈል አቅም ምርመራ",
+  healthSuggestedIncome: "የተመከረ ገቢ (35% መመሪያ)",
+  healthLoanShare: "የብድር ድርሻ",
   bestCurrentMatch: "ምርጥ ተዛማጅ",
+  bestRateLine: "ወለድ፦ {rate}% • ጊዜ፦ {years} ዓመታት • ዝቅተኛ ቅድመ ክፍያ፦ {deposit}%",
   bestEstimatedMonthly: "የወር ግምት",
+  bestTotalRepayment: "የተገመተ ጠቅላላ ክፍያ፦ {amount}",
+  fitsIncome: "ከገቢዎ ግምት ጋር ይስማማል",
+  highIncomeWarning: "የወር ክፍያው ከፍ ሊሆን ይችላል",
+  noMatch: "ከዚህ ቅድመ ክፍያ እና ጊዜ ጋር የሚስማማ አቅራቢ አልተገኘም። ቅድመ ክፍያን ያሳድጉ፣ ጊዜን ያሳጥሩ ወይም ቀጥታ ዋጋ ይጠይቁ።",
+  statusEligible: "ብቁ",
+  statusDeposit: "ቅድመ ክፍያ ያሳድጉ",
+  statusTerm: "ጊዜ ያሳጥሩ",
+  statusQuote: "ዋጋ ይጠይቁ",
   rate: "ወለድ",
   minDeposit: "ዝቅተኛ ቅድመ ክፍያ",
   maxTerm: "ከፍተኛ ጊዜ",
@@ -3696,17 +3909,135 @@ MORTGAGE_I18N.am = Object.assign({}, MORTGAGE_I18N.en, {
   quoteRequired: "ዋጋ ይጠይቁ",
   totalRepayment: "የተገመተ ጠቅላላ ክፍያ",
   arrangementFee: "የአዘጋጅት ክፍያ ግምት",
-  bankSourceLabel: "የህዝብ ምንጭ",
-  viewBankSource: "የባንክ ምንጭ ይመልከቱ"
+  bankSourceLabel: "የሕዝብ ምንጭ",
+  viewBankSource: "የባንክ ምንጭ ይመልከቱ",
+  dataRefreshed: "የቤት ብድር መረጃ ታድሷል።",
+  dataRefreshFail: "መረጃውን አሁን ማደስ አልተቻለም።",
+  leadTitle: "የቤት ብድር አማካሪ እንዲደውልልዎ ይፈልጋሉ?",
+  leadSub: "ዝርዝሮችዎን ይላኩ፣ ከብድር አማካሪ ጋር እናገናኝዎታለን።",
+  leadNameLabel: "ሙሉ ስም *",
+  leadPhoneLabel: "ስልክ ቁጥር *",
+  leadEmailLabel: "ኢሜይል",
+  leadContactLabel: "የሚመርጡት የመገናኛ መንገድ",
+  leadAmountLabel: "የሚፈልጉት የብድር መጠን (UGX) *",
+  leadTermLabel: "የሚመርጡት ጊዜ (ዓመታት)",
+  leadSubmit: "የብድር ጥሪ ይጠይቁ",
+  leadNote: "ይህ የመሪ ጥያቄ ነው፣ የባንክ ፈቃድ አይደለም። ዋጋ እና ፈቃድ በባንክ ምርመራ ይወሰናሉ።",
+  leadContactPhone: "የስልክ ጥሪ",
+  leadContactWhatsapp: "WhatsApp",
+  leadContactEmail: "ኢሜይል",
+  leadNamePlaceholder: "ስምዎ",
+  leadPhonePlaceholder: "+256 7XX XXX XXX",
+  leadEmailPlaceholder: "your@email.com",
+  leadAmountPlaceholder: "ለምሳሌ 150000000",
+  leadTermPlaceholder: "ለምሳሌ 20",
+  leadValidationName: "ለመደወል ሙሉ ስምዎን ያስገቡ።",
+  leadValidationPhone: "ትክክለኛ የኡጋንዳ ስልክ ቁጥር ያስገቡ።",
+  leadValidationAmount: "ሊበደሩት የሚፈልጉትን መጠን ያስገቡ።",
+  leadSubmitted: "የቤት ብድር መሪ ተልኳል። አማካሪ በቅርቡ ይገናኛል።",
+  leadSubmitFail: "የቤት ብድር ጥያቄን አሁን መላክ አልተቻለም።"
 });
 
 MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
-  pageSub: "قارن دفعات mortgage التقريبية قبل التواصل مع البنك.",
+  pageSub: "قارن أقساط التمويل العقاري التقريبية قبل التواصل مع البنك.",
+  pill1Title: "قارن البنوك بسرعة",
+  pill1Sub: "شاهد تقديرات السداد جنباً إلى جنب فوراً.",
+  pill2Title: "حاسبة احترافية",
+  pill2Sub: "أدخل السعر والدفعة الأولى والفائدة والمدة لتقدير السداد.",
+  pill3Title: "مراجعة يومية للأسعار",
+  pill3Sub: "تتم مراجعة البيانات يومياً للحفاظ على تحديث الصفحة.",
+  calcTitle: "حاسبة السداد",
+  calcTip: "قدّر التكلفة قبل التقديم",
+  labelPrice: "سعر العقار (UGX)",
+  labelPurpose: "نوع المنتج",
+  labelDeposit: "الدفعة الأولى (%)",
+  labelYears: "مدة القرض (سنوات)",
+  labelIncome: "دخل الأسرة الشهري التقريبي (UGX، اختياري)",
+  labelRate: "نسبة الفائدة (%)",
+  labelCurrency: "العملة",
+  incomePlaceholder: "مثلاً 6000000",
+  purposeResidential: "منزل سكني",
+  purposeCommercial: "عقار تجاري",
+  purposeLand: "تمويل أرض / قطعة",
+  tabRepayment: "السداد",
+  tabAffordability: "القدرة على الدفع",
+  tabExtraPayment: "دفعة إضافية",
+  tabFeesTransfer: "الرسوم والتحويل",
+  tabRepaymentTitle: "القسط الشهري",
+  tabRepaymentBody: "احسب القسط الشهري التقريبي من السعر والدفعة الأولى والفائدة ومدة القرض.",
+  tabAffordabilityTitle: "القدرة على الدفع",
+  tabAffordabilityBody: "قارن القسط بدخل الأسرة باستخدام قاعدة 35% من الدخل الإجمالي قبل الحديث مع المقرض.",
+  tabExtraTitle: "الدفعة الإضافية",
+  tabExtraBody: "أضف دفعة شهرية اختيارية لتقدير مقدار الفائدة والوقت الذي يمكن توفيره.",
+  tabFeesTitle: "الرسوم والتحويل",
+  tabFeesBody: "راجع الدفعة الأولى ورسوم الترتيب والتقييم والتسجيل والتحويل ورسوم الطابع قبل التقديم.",
+  calculate: "احسب",
+  reset: "إعادة ضبط",
+  extraPaymentLabel: "دفعة شهرية إضافية (اختياري)",
+  extraPaymentPlaceholder: "مثلاً 500000",
+  extraPaymentSavingsLine: "قد توفر الدفعة الإضافية حوالي {interest} من الفائدة وتقصّر القرض بنحو {months} شهراً.",
+  extraPaymentNoSavings: "أضف دفعة شهرية إضافية لرؤية التوفير المحتمل.",
+  estimatedMonthlyRepayment: "القسط الشهري التقريبي",
+  basedOnRateTerm: "بناءً على {rate}% لمدة {years} سنة.",
+  onceOffCosts: "تكاليف تدفع مرة واحدة",
+  depositLabel: "الدفعة الأولى",
+  bankRegistrationEstimate: "تقدير البنك / التسجيل",
+  transferStampDutyEstimate: "تقدير التحويل / رسوم الطابع",
+  grossMonthlyIncomeRequired: "الدخل الشهري الإجمالي المطلوب",
+  loanAmount: "مبلغ القرض",
+  totalInterestEstimate: "تقدير إجمالي الفائدة",
+  requestMortgageHelp: "اطلب مساعدة التمويل العقاري",
+  saveCalculation: "حفظ الحساب",
+  signInToSave: "سجل الدخول للحفظ",
+  calculationSaved: "تم حفظ الحساب في لوحة Property Finder.",
+  saveCalculationFail: "تعذر حفظ الحساب الآن.",
+  estimateDisclaimer: "هذا تقدير فقط. الأسعار والرسوم والسداد والموافقات الفعلية تعتمد على فحص المقرض.",
+  emailValidation: "أدخل بريداً إلكترونياً صالحاً.",
+  resetDone: "تمت إعادة ضبط حاسبة التمويل العقاري.",
+  preferredBankLabel: "البنك المفضل",
+  genericProviderOption: "مستشار تمويل عقاري عام من makaug",
+  providerContextNone: "لم يتم اختيار بنك بعد. استخدم زر الاتصال في مقارنة البنوك لتوجيه هذا العميل المحتمل إلى مقرض محدد.",
+  providerContextSelected: "المقرض المحدد: {bank}. سيتم وسم هذا العميل المحتمل للتسليم البنكي في King dashboard.",
+  setUpBankCall: "رتب مكالمة",
+  sourceNoteLabel: "ملاحظة المصدر",
+  publicRecordDisclosure: "المعلومات مأخوذة من صفحات بنكية عامة وسجلات سوقية عامة. قد تتغير الشروط دون إشعار؛ أكد مع المقرض قبل التقديم.",
+  leadSubmitBank: "اطلب مكالمة {bank}",
+  resultsTitle: "أفضل تطابق ومقارنة البنوك",
+  ratesFootnote: "أسعار عامة إرشادية. أكد مع البنك قبل التقديم.",
+  refresh: "تحديث",
+  whatTitle: "ما هو التمويل العقاري؟",
+  whatBody: "التمويل العقاري قرض طويل الأجل لشراء عقار. تدفع دفعة أولى، ويمول البنك الرصيد، ثم تسدد شهرياً مع الفائدة خلال مدة متفق عليها.",
+  whatDeposit: "<strong>الدفعة الأولى:</strong> مساهمتك المقدمة.",
+  whatLtv: "<strong>نسبة القرض إلى القيمة:</strong> كلما زادت النسبة قلّت الدفعة الأولى غالباً، لكن قد تكون شروط التأهيل أشد.",
+  whatTerm: "<strong>المدة:</strong> عدد السنوات التي تسدد خلالها القرض.",
+  termsTitle: "شرح مصطلحات التمويل العقاري",
+  termInterestTitle: "نسبة الفائدة",
+  termInterestBody: "التكلفة السنوية التي يفرضها البنك على رصيد القرض القائم.",
+  termAmortTitle: "توزيع السداد",
+  termAmortBody: "كيفية تقسيم القسط الشهري بين أصل القرض والفائدة مع مرور الوقت.",
+  termFeeTitle: "رسوم الترتيب",
+  termFeeBody: "رسوم تدفع مرة واحدة عند إعداد القرض، غالباً كنسبة من مبلغ القرض الموافق عليه.",
+  termEarlyTitle: "السداد المبكر",
+  termEarlyBody: "بعض المقرضين يفرضون رسوماً إذا سددت القرض مبكراً. تحقق من ذلك قبل توقيع العرض.",
+  dailyTitle: "تدفق التحديث اليومي",
+  dailyNote: "تسحب الأسعار من API وتراجع يومياً. استخدم زر التحديث لأحدث بيانات متاحة.",
   summaryPrice: "سعر العقار",
   summaryDepositLoan: "الدفعة الأولى / القرض",
+  summaryUpdated: "تحديث الأسعار",
   healthAffordability: "فحص القدرة على الدفع",
-  bestCurrentMatch: "أفضل تطابق",
+  healthSuggestedIncome: "الدخل المقترح (قاعدة 35%)",
+  healthLoanShare: "حصة القرض",
+  bestCurrentMatch: "أفضل تطابق حالي",
+  bestRateLine: "الفائدة: {rate}% • المدة: {years} سنة • أقل دفعة أولى: {deposit}%",
   bestEstimatedMonthly: "القسط الشهري التقريبي",
+  bestTotalRepayment: "إجمالي السداد التقريبي: {amount}",
+  fitsIncome: "يناسب تقدير دخلك",
+  highIncomeWarning: "قد يكون القسط الشهري مرتفعاً",
+  noMatch: "لا يوجد مزود يطابق هذه الدفعة الأولى وهذه المدة حالياً. زد الدفعة الأولى أو قلل المدة أو اطلب عرضاً مباشراً.",
+  statusEligible: "مؤهل",
+  statusDeposit: "زد الدفعة الأولى",
+  statusTerm: "قلل المدة",
+  statusQuote: "عرض مطلوب",
   rate: "الفائدة",
   minDeposit: "أقل دفعة أولى",
   maxTerm: "أطول مدة",
@@ -3715,20 +4046,34 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   monthWord: "شهر",
   quoteRequired: "اطلب عرض سعر",
   totalRepayment: "إجمالي السداد التقريبي",
-  arrangementFee: "رسوم الترتيب التقريبية",
+  arrangementFee: "تقدير رسوم الترتيب",
   bankSourceLabel: "مصدر عام",
   viewBankSource: "عرض مصدر البنك",
-  leadTitle: "هل تريد أن يتصل بك مستشار mortgage؟",
-  leadSub: "أرسل بياناتك وسنوصلك بمستشار mortgage.",
+  dataRefreshed: "تم تحديث بيانات التمويل العقاري.",
+  dataRefreshFail: "تعذر تحديث البيانات الآن.",
+  leadTitle: "هل تريد أن يتصل بك مستشار تمويل عقاري؟",
+  leadSub: "أرسل بياناتك وسنوصلك بمستشار تمويل عقاري.",
   leadNameLabel: "الاسم الكامل *",
   leadPhoneLabel: "رقم الهاتف *",
-  leadEmailLabel: "Email",
+  leadEmailLabel: "البريد الإلكتروني",
   leadContactLabel: "طريقة التواصل المفضلة",
   leadAmountLabel: "مبلغ القرض المطلوب (UGX) *",
   leadTermLabel: "المدة المطلوبة (سنوات)",
-  leadSubmit: "اطلب مكالمة mortgage",
-  leadSubmitted: "تم إرسال طلب mortgage. سيتواصل معك مستشار قريباً.",
-  leadSubmitFail: "تعذر إرسال طلب mortgage الآن."
+  leadSubmit: "اطلب مكالمة تمويل عقاري",
+  leadNote: "هذا طلب عميل محتمل وليس موافقة بنكية. الأسعار والموافقات تخضع لفحص المقرض.",
+  leadContactPhone: "مكالمة هاتفية",
+  leadContactWhatsapp: "WhatsApp",
+  leadContactEmail: "البريد الإلكتروني",
+  leadNamePlaceholder: "اسمك",
+  leadPhonePlaceholder: "+256 7XX XXX XXX",
+  leadEmailPlaceholder: "your@email.com",
+  leadAmountPlaceholder: "مثلاً 150000000",
+  leadTermPlaceholder: "مثلاً 20",
+  leadValidationName: "أدخل اسمك الكامل لطلب الاتصال.",
+  leadValidationPhone: "أدخل رقم هاتف أوغندي صالحاً.",
+  leadValidationAmount: "أدخل المبلغ الذي تريد اقتراضه.",
+  leadSubmitted: "تم إرسال طلب التمويل العقاري. سيتواصل معك مستشار قريباً.",
+  leadSubmitFail: "تعذر إرسال طلب التمويل العقاري الآن."
 });
 
 function mortgageTr(key) {
@@ -4582,8 +4927,16 @@ function applyMortgageLanguageUI() {
   setTextById("mortgage-label-price", mortgageTr("labelPrice"));
   setTextById("mortgage-label-purpose", mortgageTr("labelPurpose"));
   setTextById("mortgage-label-deposit", mortgageTr("labelDeposit"));
+  setTextById("mortgage-label-rate", mortgageTr("labelRate"));
   setTextById("mortgage-label-years", mortgageTr("labelYears"));
+  setTextById("mortgage-label-currency", mortgageTr("labelCurrency"));
   setTextById("mortgage-label-income", mortgageTr("labelIncome"));
+  setTextById("mortgage-calc-button", mortgageTr("calculate"));
+  setTextById("mortgage-reset-button", mortgageTr("reset"));
+  setTextById("mortgage-tab-repayment", mortgageTr("tabRepayment"));
+  setTextById("mortgage-tab-affordability", mortgageTr("tabAffordability"));
+  setTextById("mortgage-tab-extra", mortgageTr("tabExtraPayment"));
+  setTextById("mortgage-tab-fees", mortgageTr("tabFeesTransfer"));
   setTextById("mortgage-results-title", mortgageTr("resultsTitle"));
   setTextById("mortgage-rates-footnote", mortgageTr("ratesFootnote"));
   setTextById("mortgage-refresh-btn-text", mortgageTr("refresh"));
@@ -4603,7 +4956,8 @@ function applyMortgageLanguageUI() {
   setTextById("mortgage-lead-contact-label", mortgageTr("leadContactLabel"));
   setTextById("mortgage-lead-amount-label", mortgageTr("leadAmountLabel"));
   setTextById("mortgage-lead-term-label", mortgageTr("leadTermLabel"));
-  setTextById("mortgage-lead-submit", mortgageTr("leadSubmit"));
+  setTextById("mortgage-lead-provider-label", mortgageTr("preferredBankLabel"));
+  setTextById("mortgage-lead-submit", selectedMortgageProviderKey ? mortgageTr("leadSubmitBank").replace("{bank}", mortgageProviderByKey(selectedMortgageProviderKey)?.name || mortgageTr("preferredBankLabel")) : mortgageTr("leadSubmit"));
   setTextById("mortgage-lead-note", mortgageTr("leadNote"));
 
   const whatBody = document.getElementById("mortgage-what-body");
@@ -4653,6 +5007,9 @@ function applyMortgageLanguageUI() {
       if (value === "email") optionEl.textContent = mortgageTr("leadContactEmail");
     });
   }
+  hydrateMortgageProviderSelect();
+  renderMortgageTabs();
+  renderMortgageLeadProviderContext();
 }
 
 function applyAiChatbotLanguageUI() {
@@ -5098,6 +5455,7 @@ let leafletLoadPromise = null;
 let googleGeocoderInstance = null;
 let googlePlacesAutocompleteService = null;
 let lpPlacesSuggestTimer = null;
+let adminReviewPlacesSuggestTimer = null;
 const mapProviders = {};
 const PUBLIC_MAP_IDS = ["map-home", "map-sale", "map-rent", "map-students", "map-commercial", "map-land", "map-brokers"];
 const PUBLIC_MAP_SELECTOR = PUBLIC_MAP_IDS.map((id) => `#${id}`).join(", ");
@@ -5546,6 +5904,7 @@ const FINDER_DASHBOARD_I18N = {
     budgetTitle: "Mortgage/Budget Centre",
     budgetCopy: "Mortgage estimates, rent affordability, deposits, and budget guidance are grouped here.",
     budgetButton: "Open Mortgage Finder",
+    noMortgageCalculations: "No saved mortgage calculations yet.",
     safetyTitle: "Safety Tips",
     safetyCopy: "Practical safety prompts for renters, buyers, students, land seekers, owners, brokers, and diaspora buyers.",
     safetyButton: "Open Safety Tips",
@@ -7315,10 +7674,11 @@ async function renderFinderDashboard() {
     .map((id) => getPublicListings().find((p) => String(p.id) === String(id) || String(p.backend_id || "") === String(id)))
     .filter(Boolean)
     .slice(0, 6);
-  const savedSearches = Array.isArray(payload?.savedSearches) ? payload.savedSearches : [];
-  const viewings = Array.isArray(payload?.viewings) ? payload.viewings : [];
-  const callbacks = Array.isArray(payload?.callbacks) ? payload.callbacks : [];
-  const needs = Array.isArray(payload?.needRequests) ? payload.needRequests : [];
+	  const savedSearches = Array.isArray(payload?.savedSearches) ? payload.savedSearches : [];
+	  const viewings = Array.isArray(payload?.viewings) ? payload.viewings : [];
+	  const callbacks = Array.isArray(payload?.callbacks) ? payload.callbacks : [];
+	  const needs = Array.isArray(payload?.needRequests) ? payload.needRequests : [];
+	  const mortgageCalculations = Array.isArray(payload?.mortgageCalculations) ? payload.mortgageCalculations : [];
 
   const savedStat = document.getElementById("finder-stat-saved");
   const viewedStat = document.getElementById("finder-stat-viewed");
@@ -7381,14 +7741,27 @@ async function renderFinderDashboard() {
 	          <div class="font-bold text-gray-900">${adminEscape(item.title || "Viewing request")}</div>
 	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_date || "date pending")} ${adminEscape(item.preferred_time || "")}</div>
 	        </div>`);
-	      renderCompactDashboardRows("finder-callbacks", callbacks, dashboardText("noCallbacks"), (item) => `
-	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-	          <div class="font-bold text-gray-900">${adminEscape(item.title || "Callback request")}</div>
-	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_callback_time || "time pending")}</div>
-	        </div>`);
-	      renderCompactDashboardRows("finder-contact-history", needs, dashboardText("noContactHistory"), (item) => `
-	        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
-	          <div class="font-bold text-gray-900">${adminEscape(item.category || "Property need")}</div>
+		      renderCompactDashboardRows("finder-callbacks", callbacks, dashboardText("noCallbacks"), (item) => `
+		        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+		          <div class="font-bold text-gray-900">${adminEscape(item.title || "Callback request")}</div>
+		          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.status || "requested")} • ${adminEscape(item.preferred_callback_time || "time pending")}</div>
+		        </div>`);
+		      renderCompactDashboardRows("finder-mortgage-calculations", mortgageCalculations, dashboardText("noMortgageCalculations"), (item) => {
+		        const currency = item.currency || "UGX";
+		        const provider = item.preferred_provider_name || mortgageTr("genericProviderOption");
+		        const monthly = formatMortgageAmount(item.monthly_repayment, currency);
+		        const loan = formatMortgageAmount(item.loan_amount, currency);
+		        const term = item.term_years ? `${adminEscape(item.term_years)} ${mortgageTr("yearsWord")}` : mortgageTr("quoteRequired");
+		        const savedAt = item.updated_at || item.created_at ? formatListingDate(item.updated_at || item.created_at) : "";
+		        return `<div class="rounded-xl border border-green-100 bg-green-50 p-3">
+		          <div class="font-bold text-green-900">${adminEscape(monthly)} / ${adminEscape(mortgageTr("monthWord"))}</div>
+		          <div class="text-xs text-green-800 mt-1">${adminEscape(provider)} • ${adminEscape(loan)} • ${term}</div>
+		          <div class="text-[11px] text-green-700 mt-1">${adminEscape(savedAt || mortgageTr("saveCalculation"))}</div>
+		        </div>`;
+		      });
+		      renderCompactDashboardRows("finder-contact-history", needs, dashboardText("noContactHistory"), (item) => `
+		        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+		          <div class="font-bold text-gray-900">${adminEscape(item.category || "Property need")}</div>
 	          <div class="text-xs text-gray-500 mt-1">${adminEscape(item.location || "Any area")} • ${adminEscape(item.status || "new")}</div>
 	        </div>`);
 }
@@ -10978,6 +11351,60 @@ function adminImportYouTubeExactPosts(seedText = "") {
   return adminOpenSocialQuickPastePanel(seedText || adminYouTubeQuickPasteExample());
 }
 
+const ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z";
+const ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50;
+const ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS = {
+  youtube: "makaug.admin.youtubeSweepSourceOffset",
+  student: "makaug.admin.studentYoutubeSweepSourceOffset",
+  all: "makaug.admin.allSocialYoutubeSweepSourceOffset",
+};
+
+function adminSocialSweepOffsetKey(normalized = "youtube", studentFocus = false) {
+  if (studentFocus) return ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS.student;
+  if (normalized === "all") return ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS.all;
+  return ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS.youtube;
+}
+
+function adminStoredNumber(key, fallback = 0) {
+  try {
+    const parsed = Number(localStorage.getItem(key));
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function adminStoreNumber(key, value = 0) {
+  try {
+    localStorage.setItem(key, String(Math.max(0, Math.round(Number(value) || 0))));
+  } catch (_) {}
+}
+
+function adminYouTubeQuotaExceeded(youtube = {}) {
+  const reports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
+  return reports.some((report) => /quota exceeded|search queries.*per day|quota metric/i.test(String(report.reason || report.error || "")));
+}
+
+function adminYouTubeQuotaReportIndex(youtube = {}) {
+  const reports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
+  return reports.findIndex((report) => /quota exceeded|search queries.*per day|quota metric/i.test(String(report.reason || report.error || "")));
+}
+
+function adminAdvanceYouTubeSourceOffsetIfUseful(data = {}, normalized = "youtube", studentFocus = false, currentOffset = 0) {
+  const youtube = data.youtube || {};
+  const searchJobCount = Number(youtube.search_job_count || 0);
+  if (!searchJobCount || !youtube.api_configured) return currentOffset;
+  const quotaIndex = adminYouTubeQuotaReportIndex(youtube);
+  const completedJobCount = quotaIndex >= 0 ? quotaIndex : searchJobCount;
+  if (completedJobCount <= 0) return currentOffset;
+  const sourceCount = Number(youtube.source_count || 0);
+  const nextOffset = sourceCount > 0
+    ? (Number(currentOffset || 0) + completedJobCount) % sourceCount
+    : Number(currentOffset || 0) + completedJobCount;
+  adminStoreNumber(adminSocialSweepOffsetKey(normalized, studentFocus), nextOffset);
+  return nextOffset;
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
   const youtube = data.youtube || {};
@@ -10995,6 +11422,10 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+  const youtubeSourceOffset = Number(youtube.source_offset || data.dashboard_youtube_source_offset || 0);
+  const youtubeNextSourceOffset = Number(data.dashboard_next_youtube_source_offset || youtubeSourceOffset);
+  const youtubeBatchSize = Number(data.dashboard_youtube_batch_size || ADMIN_YOUTUBE_SWEEP_BATCH_SIZE);
+  const youtubeQuotaExceeded = adminYouTubeQuotaExceeded(youtube);
   const tiktokTaskHtml = tiktokTasks.slice(0, 16).map((task) => `
     <div class="rounded-lg border border-pink-100 bg-white p-2">
       <div class="font-bold text-pink-950">${adminEscape(task.query || task.source_name || "TikTok source")}</div>
@@ -11009,7 +11440,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="rounded-lg border border-red-100 bg-white p-2">
       <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
       <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
-      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || "2026-02-01")} • Shorts and long-form videos</div>
+      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)} • Shorts and long-form videos</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -11062,8 +11493,9 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     ${youtube.search_job_count ? `
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
-        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || "2026-02-01")}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
-        <div class="mt-1 text-[11px]">YouTube search returns Shorts and long-form videos. makaug stores the exact video URL and YouTube snippet published date as First posted online when the API returns it.</div>
+        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
+        <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
+        ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
         ${youtubeReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${youtubeReportHtml}</div>` : ""}
         ${youtubeJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show YouTube search jobs</summary><div class="mt-2 space-y-2">${youtubeJobHtml}</div></details>` : ""}
@@ -11093,12 +11525,17 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   const normalized = String(platform || "all").toLowerCase();
   const studentFocus = normalized === "student" || normalized === "students" || normalized === "student_housing";
   const dryRun = normalized === "tiktok";
+  const usesYouTubeSweep = normalized === "youtube" || normalized === "all" || studentFocus;
+  const youtubeSourceOffset = usesYouTubeSweep
+    ? adminStoredNumber(adminSocialSweepOffsetKey(normalized, studentFocus), 0)
+    : 0;
+  const youtubeBatchSize = usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_BATCH_SIZE : 40;
   const confirmCopy = studentFocus
     ? "Run the dedicated student housing sweep across campus/hostel/student accommodation sources on TikTok, YouTube, X/Twitter, Facebook, and Instagram? YouTube/X imports require configured API keys; Facebook/Instagram stay exact-link capture tasks."
     : normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
     : normalized === "youtube"
-      ? "Sweep tracked YouTube channels, searches, and hashtags from 1 February 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server."
+      ? `Sweep the next broad YouTube batch from 1 January 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? This click starts at source offset ${youtubeSourceOffset} and uses ${youtubeBatchSize} jobs to avoid burning the whole daily YouTube quota on the same old channels. YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server.`
       : normalized === "x"
         ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
         : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
@@ -11126,7 +11563,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       : normalized === "tiktok"
       ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
       : normalized === "youtube"
-        ? "Sweeping YouTube videos from 1 February 2026 and importing eligible exact videos..."
+        ? `Sweeping YouTube videos from 1 January 2026, batch offset ${youtubeSourceOffset}, and importing eligible exact videos...`
         : normalized === "x"
           ? "Sweeping X/Twitter sources and importing eligible exact posts..."
           : "Sweeping all tracked social sources across TikTok, YouTube, and X/Twitter...";
@@ -11139,13 +11576,19 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         platform: studentFocus ? "student" : normalized,
         focus: studentFocus ? "students" : "",
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 30000 : studentFocus ? 750 : normalized === "youtube" ? 250 : normalized === "all" ? 250 : 40,
+        max_sources: normalized === "tiktok" ? 30000 : usesYouTubeSweep ? youtubeBatchSize : 40,
+        source_offset: youtubeSourceOffset,
         max_results: (normalized === "youtube" || studentFocus || normalized === "all") ? 50 : 25,
         x_search_mode: "all",
-        published_after: "2026-02-01T00:00:00.000Z"
+        published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START
       }
     });
     const data = response?.data || {};
+    if (usesYouTubeSweep) {
+      data.dashboard_youtube_source_offset = youtubeSourceOffset;
+      data.dashboard_youtube_batch_size = youtubeBatchSize;
+      data.dashboard_next_youtube_source_offset = adminAdvanceYouTubeSourceOffsetIfUseful(data, normalized, studentFocus, youtubeSourceOffset);
+    }
     if (statusEl) statusEl.innerHTML = adminSocialPlatformSweepHtml(data, normalized);
     if (!dryRun && (data.import_result?.created_properties || data.import_result?.existing_properties)) {
       adminPendingQueueFilter = "found_online";
@@ -11566,19 +12009,83 @@ function renderAdminCrmLeadsRows(leads = []) {
     const score = Number(lead.lead_score || 0);
     const hot = score >= 50 || String(lead.priority || "").toLowerCase() === "urgent";
     const missedCall = String(lead.source || "").toLowerCase() === "whatsapp_missed_call";
-    return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
+	    const metadata = (() => {
+	      if (lead.metadata && typeof lead.metadata === "object" && !Array.isArray(lead.metadata)) return lead.metadata;
+	      if (typeof lead.metadata === "string") {
+	        try {
+	          const parsed = JSON.parse(lead.metadata);
+	          return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+	        } catch (_error) {
+	          return {};
+	        }
+	      }
+	      return {};
+	    })();
+	    const noMatchLead = String(lead.source || "").toLowerCase() === "whatsapp_no_match" || metadata.whatsapp_no_match === true;
+	    const noMatchStatus = String(metadata.match_status || "waiting_for_listing").replace(/_/g, " ");
+	    const originalMessage = String(metadata.original_message || "").trim();
+	    const mortgageProviderName = metadata.preferred_provider_name || metadata.preferred_bank || "";
+	    const mortgageProviderKey = metadata.preferred_provider_key || "";
+	    const bankHandoffStatus = metadata.bank_handoff_status || "";
+	    const isMortgageBankLead = String(lead.source || "").toLowerCase() === "mortgage_bank_callback" || String(metadata.lead_context || "").toLowerCase() === "bank_provider";
+	    const leadIdArg = JSON.stringify(String(lead.id || ""));
+	    return `<div class="border border-gray-200 rounded-xl p-4 bg-white">
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <div class="font-bold text-gray-800">${missedCall ? "Missed WhatsApp call" : adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
+          <div class="font-bold text-gray-800">${noMatchLead ? "Unavailable WhatsApp property request" : missedCall ? "Missed WhatsApp call" : adminEscape(lead.category || lead.lead_type || "Lead")} ${lead.location ? `• ${adminEscape(lead.location)}` : ""}</div>
           <div class="text-xs text-gray-500 mt-1">${adminEscape(lead.contact_name || "Unknown contact")} • ${adminEscape(lead.contact_phone || lead.contact_email || "-")}</div>
-          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
-          ${missedCall ? `<div class="text-xs font-bold text-red-700 mt-2">Callback path: WhatsApp bot asked for the need, then escalates here if unresolved.</div>` : ""}
+	          <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(lead.source || "-")} • Stage: ${adminEscape(lead.lifecycle_stage || "-")} • Status: ${adminEscape(lead.lead_status || "-")}</div>
+	          ${isMortgageBankLead ? `<div class="mt-2 inline-flex flex-wrap items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-xs font-bold text-green-800">Mortgage bank lead: ${adminEscape(mortgageProviderName || mortgageProviderKey || "Selected lender")} ${bankHandoffStatus ? `• ${adminEscape(String(bankHandoffStatus).replace(/_/g, " "))}` : ""}</div>` : ""}
+	          ${missedCall ? `<div class="text-xs font-bold text-red-700 mt-2">Callback path: WhatsApp bot asked for the need, then escalates here if unresolved.</div>` : ""}
+          ${noMatchLead ? `<div class="text-xs font-bold text-amber-800 mt-2">No exact match trigger captured. Match status: ${adminEscape(noMatchStatus)}. Lead stays open until customer contact or agent assignment.</div>` : ""}
+          ${originalMessage ? `<div class="text-xs text-gray-700 mt-2"><span class="font-bold">Original WhatsApp:</span> ${adminEscape(originalMessage).slice(0, 220)}</div>` : ""}
           ${lead.message ? `<div class="text-xs text-gray-700 mt-2">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
         </div>
         <span class="text-xs font-bold px-2 py-1 rounded-full ${hot ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}">Score ${adminEscape(score)}</span>
       </div>
+      ${noMatchLead ? `<div class="mt-3 flex gap-2 flex-wrap">
+        <button type="button" onclick="adminOpenLeadMatchMessage(${leadIdArg})" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Message Match</button>
+        <button type="button" onclick="adminOpenDecision('whatsapp', '#admin-whatsapp-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Open Inbox</button>
+      </div>` : ""}
     </div>`;
   }).join("");
+}
+
+async function adminOpenLeadMatchMessage(leadId) {
+  if (!leadId) return;
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or save ADMIN_API_KEY first.");
+    return;
+  }
+  try {
+    const headers = adminAuthHeaders();
+    const matchesResponse = await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}/matches`, { headers });
+    const matches = Array.isArray(matchesResponse?.data?.matches) ? matchesResponse.data.matches : [];
+    if (!matches.length) {
+      toast("No live approved listing matches this lead yet.");
+      return;
+    }
+    const selected = matches[0];
+    const response = await apiRequest(`/api/admin/leads/${encodeURIComponent(leadId)}/match-message`, {
+      method: "POST",
+      headers,
+      body: {
+        property_id: selected.id,
+        reviewed: true
+      }
+    });
+    const data = response?.data || {};
+    openAdminWhatsAppMessageModal({
+      title: "Message property match",
+      listingLabel: `${data.property?.title || selected.title || "Matched property"} • ${data.property?.match_strength || selected.match_strength || "match"}`,
+      phone: data.phone || "",
+      message: data.message || "",
+      manualUrl: data.manual_url || ""
+    });
+    toast(`Match message ready. ${Number(data.exact_match_count || 0) ? "Exact match found." : "Showing the closest live option."} Lead remains open.`);
+  } catch (e) {
+    toast(`Could not prepare match message: ${e.message || "error"}`);
+  }
 }
 
 function renderAdminCrmTasksRows(tasks = []) {
@@ -13082,7 +13589,7 @@ function renderAdminAdvertisingPlacements(placements) {
     builder.innerHTML = rows.map((slot) => `
       <label class="border border-green-100 bg-white rounded-xl px-3 py-2 flex items-start gap-2">
         <input type="checkbox" name="admin-ad-builder-placement" value="${adminAttr(slot.key)}" class="mt-0.5 accent-green-700" ${slot.is_active ? "" : "disabled"}>
-        <span><strong>${adminEscape(slot.label)}</strong><br><span class="text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(adMoney(slot.base_price_ugx))}</span></span>
+        <span><strong>${adminEscape(slot.label)}</strong><br><span class="text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.primary_size || slot.size_label || "")} • ${adminEscape(slot.price_labels?.week || adMoney(slot.base_price_ugx))}/week</span></span>
       </label>
     `).join("");
   }
@@ -13099,10 +13606,17 @@ function renderAdminAdvertisingPlacements(placements) {
           <span class="text-[11px] rounded-full px-2 py-1 ${slot.is_premium ? "bg-amber-100 text-amber-800" : "bg-white text-gray-600"}">${slot.is_premium ? "Premium" : "Standard"}</span>
         </div>
         ${slot.preview_image_url ? `<img src="${adminAttr(slot.preview_image_url)}" alt="${adminAttr(slot.label)}" class="mt-2 w-full h-20 object-cover rounded-lg border border-white">` : ""}
-        <div class="mt-2 text-sm font-black text-green-800">${adminEscape(adMoney(slot.base_price_ugx))}</div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-[11px]">
+          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Day</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div></div>
+          <div class="rounded-lg bg-white border border-green-100 p-2"><div class="text-gray-500">Week</div><div class="font-black text-green-800">${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div></div>
+          <div class="rounded-lg bg-white border border-amber-100 p-2"><div class="text-gray-500">Month</div><div class="font-black text-amber-800">${adminEscape(slot.price_labels?.month || "-")}</div></div>
+          <div class="rounded-lg bg-white border border-gray-200 p-2"><div class="text-gray-500">CPM</div><div class="font-black text-gray-800">${adminEscape(slot.price_labels?.cpm || "-")}</div></div>
+        </div>
+        <div class="mt-2 text-[11px] text-gray-500">Creative: ${adminEscape(slot.primary_size || slot.size_label || "-")} • Mobile: ${adminEscape(slot.mobile_size || "responsive")} • ${adminEscape((slot.accepted_formats || ["JPG","PNG","WebP"]).join(", "))}</div>
         <div class="mt-1 text-xs text-gray-500">${adminEscape(slot.notes || "")}</div>
         <div class="mt-3 flex gap-2 flex-wrap">
           <button onclick="adminUpdateAdPlacementPrice(${keyArg})" class="border border-green-300 text-green-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Change Price</button>
+          <button onclick="adminCopyAdPrompt(${keyArg})" class="border border-amber-300 text-amber-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">Copy Prompt</button>
           <button onclick="adminToggleAdPlacement(${keyArg}, ${slot.is_active ? "false" : "true"})" class="border border-gray-300 text-gray-700 hover:bg-white px-3 py-1.5 rounded-lg text-xs font-semibold">${slot.is_active ? "Pause Slot" : "Activate Slot"}</button>
         </div>
       </div>
@@ -13121,8 +13635,9 @@ function renderAdminAdvertisingPackages(packages) {
     <div class="rounded-xl border border-gray-200 bg-white p-3">
       <div class="font-bold text-gray-900">${adminEscape(pkg.label)}</div>
       <div class="text-sm font-black text-green-700 mt-1">${adminEscape(adMoney(pkg.price_ugx))}${pkg.duration_days ? ` / ${adminEscape(pkg.duration_days)} days` : ""}</div>
+      <div class="text-[11px] text-gray-500 mt-1">USD guide: ${adminEscape(pkg.price_usd ? `USD ${Number(pkg.price_usd).toLocaleString("en-US")}` : "-")}</div>
       <div class="text-xs text-gray-500 mt-2">${adminEscape(pkg.description || "")}</div>
-      <div class="text-[11px] text-gray-500 mt-2">Placements: ${adminEscape(adListText(pkg.placements || []))}</div>
+      <div class="text-[11px] text-gray-500 mt-2">Placements: ${adminEscape(adListText(pkg.placement_keys || pkg.placements || []))}</div>
     </div>
   `).join("");
 }
@@ -13344,6 +13859,21 @@ async function adminToggleAdPlacement(placementKey, isActive) {
   } catch (e) {
     toast(`Placement update failed: ${e.message || "error"}`);
   }
+}
+
+async function adminCopyAdPrompt(placementKey) {
+  const slot = adminAdvertisingPlacements.find((item) => String(item.key) === String(placementKey)) || {};
+  const promptText = slot.creative_prompt || `Create a polished makaug.com display advert for [brand/property]. Placement: ${slot.label || placementKey}. Required size: ${slot.primary_size || slot.size_label || "970x250"}. Mobile size: ${slot.mobile_size || "320x100"}. Audience: [target locations]. Offer: [offer]. Style: Uganda property marketplace, clean, premium, trustworthy, high-contrast CTA.`;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(promptText);
+      toast("Creative prompt copied.");
+      return;
+    }
+  } catch (_error) {
+    // Browser clipboard permission may be blocked; fall through to prompt.
+  }
+  window.prompt("Creative prompt", promptText);
 }
 
 async function adminSetAdCampaignApproval(campaignId, advertiser_approval_status) {
@@ -13697,6 +14227,13 @@ function renderAdminBrokerRows(agents) {
     const whatsappUrl = agent.phone ? buildWhatsAppUrl(agent.phone, `Hello ${agent.name || "there"}, this is makaug. We are following up on your broker account.`) : "";
     const idDocumentUploaded = Boolean(agent.identity_document_url);
     const hasPrivacyConsent = agent.privacy_consent_accepted === true && agent.data_retention_notice_accepted === true;
+    const makaugAgentNumber = agent.makaug_agent_number || "Pending number";
+    const phoneVerified = Boolean(agent.contact_phone_verified_at);
+    const expiryLabel = agent.id_expiry_date ? formatDateShort(agent.id_expiry_date) : "missing";
+    const experienceLabel = agent.experience_years || agent.experience_years === 0
+      ? `${agent.experience_years} year${Number(agent.experience_years) === 1 ? "" : "s"}`
+      : "missing";
+    const channelLabel = agent.agent_application_channel ? String(agent.agent_application_channel).replace(/_/g, " ") : "web";
     const approveLabel = status === "approved" ? "Move to Pending" : "Approve & send access";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
@@ -13705,7 +14242,8 @@ function renderAdminBrokerRows(agents) {
             <div class="font-bold text-gray-900">${adminEscape(agent.name || "Broker")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.company || "makaug")} • ${adminEscape(contact)}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(agent.area || "Uganda")} • ${adminEscape(agent.licence || "No licence recorded")}</div>
-            <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}${agent.user_id ? ` • User linked: ${adminEscape(agent.user_id)}` : ""}</div>
+            <div class="text-[11px] text-gray-500 mt-1">Agent No: <strong>${adminEscape(makaugAgentNumber)}</strong> • Channel: ${adminEscape(channelLabel)}${agent.user_id ? ` • User linked: ${adminEscape(agent.user_id)}` : ""}</div>
+            <div class="text-[11px] text-gray-500 mt-1">NIN: ${adminEscape(agent.nin ? "provided" : "missing")} • ID expiry: ${adminEscape(expiryLabel)} • ID photo: ${idDocumentUploaded ? "uploaded" : "missing"} • Profile photo: ${agent.profile_photo_url ? "uploaded" : "missing"} • Phone OTP: ${phoneVerified ? "verified" : "missing"} • Experience: ${adminEscape(experienceLabel)} • Privacy: ${hasPrivacyConsent ? "accepted" : "missing"}</div>
           </div>
           <div class="flex gap-1.5 flex-wrap justify-end">
             <span class="text-[11px] font-semibold px-2 py-1 rounded ${statusMeta.cls}">${statusMeta.label}</span>
@@ -14863,6 +15401,7 @@ function adminWhatsappCategoryLabel(category) {
     property_search: "Property Search",
     property_listing: "Property Listing",
     broker_help: "Broker Help",
+    advertising: "Advertising",
     mortgage: "Mortgage",
     account: "Account",
     support: "Support",
@@ -15075,6 +15614,7 @@ function renderAdminWhatsappDetail(detail = null) {
                 <option value="property_search"${convo.category === "property_search" ? " selected" : ""}>Property Search</option>
                 <option value="property_listing"${convo.category === "property_listing" ? " selected" : ""}>Property Listing</option>
                 <option value="broker_help"${convo.category === "broker_help" ? " selected" : ""}>Broker Help</option>
+                <option value="advertising"${convo.category === "advertising" ? " selected" : ""}>Advertising</option>
                 <option value="mortgage"${convo.category === "mortgage" ? " selected" : ""}>Mortgage</option>
                 <option value="account"${convo.category === "account" ? " selected" : ""}>Account</option>
                 <option value="support"${convo.category === "support" ? " selected" : ""}>Support</option>
@@ -15717,11 +16257,13 @@ function adminReviewBuildConciseDescription(review = {}, facts = {}) {
     facts.balconies ? `${facts.balconies} balconies` : ""
   ].filter(Boolean);
   const amenityText = (facts.amenities || []).filter((item) => !/balcon/i.test(item)).slice(0, 5);
+  const landTitleText = landTitleAvailabilityLabel(facts.land_title_available);
   const introType = type === "rent" ? "for rent" : type === "sale" ? "for sale" : type === "student" ? "for student accommodation" : type === "commercial" ? "for commercial use" : "available";
   const sentenceOne = `${propertyType}${rooms.length ? ` with ${rooms.join(", ")}` : ""} ${introType} around ${location}${price ? ` at ${fmtP(price, period)}` : ""}.`;
   const sentenceTwo = amenityText.length ? `Source details mention ${amenityText.join(", ")}.` : "";
+  const sentenceTitle = landTitleText ? `Source details state: ${landTitleText}.` : "";
   const sentenceThree = "Confirm exact location, availability, and viewing details through the source contact before approval.";
-  return [sentenceOne, sentenceTwo, sentenceThree].filter(Boolean).join(" ");
+  return [sentenceOne, sentenceTwo, sentenceTitle, sentenceThree].filter(Boolean).join(" ");
 }
 
 function adminExtractReviewFacts(review = {}) {
@@ -15736,7 +16278,7 @@ function adminExtractReviewFacts(review = {}) {
   const listingType = adminReviewListingTypeFromText(text, partial, review);
   const pricePeriod = listingType === "rent" ? "month" : (review.price_period || "once");
   const amenities = adminReviewExtractedAmenities(text, partial);
-  const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, title: "" };
+  const facts = { ...partial, listing_type: listingType, price_period: pricePeriod, amenities, title: "", land_title_available: getLandTitleAvailabilityValue({ ...review, description: text }) };
   const titleParts = [];
   if (bedrooms) titleParts.push(`${bedrooms}-Bed`);
   if (/luxury/i.test(text)) titleParts.push("Luxury");
@@ -15757,6 +16299,7 @@ function adminReviewFactBadgesHtml(facts = {}) {
     facts.area ? `Area: ${facts.area}` : "",
     facts.district ? `District: ${facts.district}` : "",
     facts.property_type ? `Property: ${facts.property_type}` : "",
+    facts.land_title_available ? `Land title: ${landTitleAvailabilityLabel(facts.land_title_available)}` : "",
     facts.bedrooms ? `${facts.bedrooms} bedrooms` : "",
     facts.bathrooms ? `${facts.bathrooms} washrooms` : "",
     facts.balconies ? `${facts.balconies} balconies` : "",
@@ -15885,33 +16428,79 @@ function adminReviewOnAreaInput() {
   adminReviewScheduleLocationSync();
 }
 
-function adminReviewApplyHierarchyFromText(label = "", point = null) {
+function adminReviewHierarchyMatchInDistrict(district = "", text = "", point = null) {
+  const tree = getDistrictLocationTree(district);
+  if (!district || !tree.length) return null;
+  const haystack = String(text || "").toLowerCase();
+  const cityTextMatch = haystack ? findLpLocationOptionByText(tree, (item) => item.city, haystack) : null;
+  let neighborhoodTextMatch = null;
+  for (const cityNode of tree) {
+    const matchedNeighborhood = haystack
+      ? findLpLocationOptionByText(cityNode.neighborhoods || [], (item) => item.name, haystack)
+      : null;
+    if (matchedNeighborhood?.name) {
+      neighborhoodTextMatch = { city: cityNode.city, neighborhood: matchedNeighborhood.name };
+      break;
+    }
+  }
+  const nearest = findClosestLpHierarchyOption(district, point);
+  const city = cityTextMatch?.city || neighborhoodTextMatch?.city || nearest?.city || "";
+  const cityNode = tree.find((item) => item.city === city) || null;
+  const neighborhood = neighborhoodTextMatch?.neighborhood
+    || (nearest?.city === city ? nearest.neighborhood : "")
+    || "";
+  return {
+    district,
+    region: regionForDistrict(district),
+    city: cityNode?.city || city,
+    neighborhood
+  };
+}
+
+function adminReviewInferHierarchyFromText(label = "", point = null, districtHint = "") {
   const text = String(label || "").toLowerCase();
   const pinPoint = Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
     ? { lat: Number(point.lat), lng: Number(point.lng) }
     : null;
   const nearestDistrict = pinPoint ? findNearestDistrictFromCoords(pinPoint.lat, pinPoint.lng)?.district || "" : "";
+  const districtFromText = text
+    ? DISTRICTS.find((item) => text.includes(item.toLowerCase())) || ""
+    : "";
+  const preferredDistrict = districtFromText
+    || (DISTRICTS.includes(districtHint) ? districtHint : "")
+    || nearestDistrict
+    || "";
+  let match = preferredDistrict ? adminReviewHierarchyMatchInDistrict(preferredDistrict, text, pinPoint) : null;
+  if ((!match?.city && !match?.neighborhood) && text) {
+    for (const district of DISTRICTS) {
+      const candidate = adminReviewHierarchyMatchInDistrict(district, text, pinPoint);
+      if (candidate?.city || candidate?.neighborhood) {
+        match = candidate;
+        break;
+      }
+    }
+  }
+  if (!match && preferredDistrict) {
+    match = {
+      district: preferredDistrict,
+      region: regionForDistrict(preferredDistrict),
+      city: "",
+      neighborhood: ""
+    };
+  }
+  return match || { district: "", region: "", city: "", neighborhood: "" };
+}
+
+function adminReviewApplyHierarchyFromText(label = "", point = null) {
   const current = adminReviewCurrentLocationFields();
-  const district = DISTRICTS.find((item) => text.includes(item.toLowerCase()))
-    || current.district
-    || nearestDistrict;
+  const inferred = adminReviewInferHierarchyFromText(label, point, current.district);
+  const district = inferred.district || current.district;
   if (!district) return;
-  const region = regionForDistrict(district);
+  const region = inferred.region || regionForDistrict(district);
   adminSetReviewEditValue("admin-review-region-edit", region);
   adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, district), district);
-  const tree = getDistrictLocationTree(district);
-  const nearest = findClosestLpHierarchyOption(district, pinPoint);
-  const cityNode = findLpLocationOptionByText(tree, (item) => item.city, text)
-    || (nearest?.city ? tree.find((item) => item.city === nearest.city) : null)
-    || tree[0]
-    || null;
-  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, cityNode?.city || ""), cityNode?.city || "");
-  const neighborhoods = (tree.find((item) => item.city === city)?.neighborhoods || []);
-  const neighborhoodMatch = findLpLocationOptionByText(neighborhoods, (item) => item.name, text)
-    || (nearest?.city === city && nearest?.neighborhood ? neighborhoods.find((item) => item.name === nearest.neighborhood) : null)
-    || neighborhoods[0]
-    || null;
-  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, neighborhoodMatch?.name || ""), neighborhoodMatch?.name || "");
+  const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, inferred.city || ""), inferred.city || "");
+  adminReviewSetOptions("admin-review-neighborhood-edit", adminReviewNeighborhoodOptionsHtml(district, city, inferred.neighborhood || ""), inferred.neighborhood || "");
   adminReviewSetAreaFromNeighborhood();
 }
 
@@ -15928,14 +16517,49 @@ function adminReviewSetAddressSearchStatus(message = "", tone = "blue") {
   el.textContent = message || "Search a place, road, estate, town, or landmark, then confirm the pin.";
 }
 
-async function adminReviewFindAddressOrPlace() {
+function adminReviewOnAddressSearchInput() {
+  const input = document.getElementById("admin-review-address-search-edit");
+  const query = (input?.value || "").trim();
+  if (query.length >= 2) {
+    renderTypeahead(input, getLocationSuggestionPool(true), (value) => {
+      if (input) input.value = value;
+      adminReviewFindAddressOrPlace();
+    });
+  }
+  if (query.length >= 3) {
+    if (adminReviewPlacesSuggestTimer) window.clearTimeout(adminReviewPlacesSuggestTimer);
+    adminReviewPlacesSuggestTimer = window.setTimeout(async () => {
+      if (!input || document.activeElement !== input || (input.value || "").trim() !== query) return;
+      const predictions = await getGooglePlacePredictions(query);
+      if (!predictions.length || document.activeElement !== input) return;
+      renderTypeahead(input, predictions.concat(getLocationSuggestionPool(true)), (value) => {
+        if (input) input.value = value;
+        adminReviewFindAddressOrPlace();
+      });
+      adminReviewSetAddressSearchStatus("Choose a Google Places suggestion or keep typing a landmark, road, area, town, or district.", "blue");
+    }, 250);
+  } else if (adminReviewPlacesSuggestTimer) {
+    window.clearTimeout(adminReviewPlacesSuggestTimer);
+  }
+}
+
+function adminReviewAddressSearchKeydown(event) {
+  handleTypeaheadKeydown(event, () => getLocationSuggestionPool(true), () => adminReviewFindAddressOrPlace());
+  if (event.key === "Enter" && !event.defaultPrevented) {
+    event.preventDefault();
+    adminReviewFindAddressOrPlace();
+  }
+}
+
+async function adminReviewFindAddressOrPlace(options = {}) {
   const input = document.getElementById("admin-review-address-search-edit");
   const query = (input?.value || "").trim();
   if (query.length < 3) {
     adminReviewSetAddressSearchStatus("Type at least 3 characters to find a location.", "red");
     return false;
   }
-  adminReviewSetAddressSearchStatus("Finding the nearest matching place in Uganda...", "blue");
+  const auto = options?.auto === true;
+  adminReviewSetAddressSearchStatus(auto ? "Auto-filling the closest matching place in Uganda..." : "Finding the nearest matching place in Uganda...", "blue");
   let point = null;
   try {
     point = await geocodeWithGoogle(uniqueTextParts([query, "Uganda"]).join(", "));
@@ -15957,9 +16581,14 @@ async function adminReviewFindAddressOrPlace() {
     adminReviewSetAddressSearchStatus("No exact match found. Fallback pin is ready; move it if needed.", "amber");
     return false;
   }
+  if (input && point.label) input.value = point.label;
   adminSetReviewEditValue("admin-review-address-edit", point.label || query);
+  if (point.streetName && !document.getElementById("admin-review-street-edit")?.value?.trim()) {
+    adminSetReviewEditValue("admin-review-street-edit", point.streetName);
+  }
   adminSetReviewEditValue("admin-review-geocoding-provider-edit", point.provider || "google");
   adminSetReviewEditValue("admin-review-location-confidence-edit", point.confidence != null ? String(point.confidence) : "0.65");
+  adminSetReviewEditValue("admin-review-place-id-edit", point.placeId || "");
   adminReviewApplyHierarchyFromText(point.label || query, point);
   adminReviewSetLocationInputs(point.lat, point.lng, "Address pin found");
   adminReviewMoveLocationPin(point.lat, point.lng, { zoom: MAP_PROPERTY_ZOOM });
@@ -15967,14 +16596,105 @@ async function adminReviewFindAddressOrPlace() {
   return true;
 }
 
+function adminReviewLocationAutofillText(review = {}, facts = {}) {
+  const extra = adminReviewExtraFields(review);
+  return uniqueTextParts([
+    review.resolved_location_label,
+    extra.resolved_location_label,
+    review.address,
+    extra.source_location,
+    extra.location_label,
+    extra.source_area,
+    extra.location_town,
+    review.neighborhood,
+    extra.neighborhood,
+    review.area,
+    facts.area,
+    review.district,
+    facts.district,
+    adminReviewSourceText(review)
+  ]).join(", ");
+}
+
+function adminReviewAutoPopulateLocationFromSource(review = {}) {
+  const facts = adminExtractReviewFacts(review);
+  const reviewPoint = adminReviewHasUsableCoordinates(review.latitude, review.longitude)
+    ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
+    : null;
+  const seedText = adminReviewLocationAutofillText(review, facts);
+  if (seedText || reviewPoint) {
+    adminReviewApplyHierarchyFromText(seedText, reviewPoint);
+  }
+  const latest = adminReviewCurrentLocationFields();
+  const areaEl = document.getElementById("admin-review-area-edit");
+  const autoArea = latest.neighborhood || facts.area || review.area || "";
+  if (areaEl && autoArea && !areaEl.value.trim()) {
+    areaEl.value = autoArea;
+    areaEl.dataset.auto = "1";
+  }
+  const searchEl = document.getElementById("admin-review-address-search-edit");
+  const addressEl = document.getElementById("admin-review-address-edit");
+  const query = uniqueTextParts([
+    latest.street_name,
+    latest.address,
+    latest.neighborhood || autoArea,
+    latest.city,
+    latest.district,
+    latest.region
+  ]).join(", ");
+  if (searchEl && !searchEl.value.trim() && query) searchEl.value = query;
+  if (addressEl && !addressEl.value.trim() && query) addressEl.value = query;
+  adminReviewScheduleLocationSync();
+
+  const coordinates = adminReviewNormalizeCoordinateInputs(
+    document.getElementById("admin-review-latitude-edit")?.value,
+    document.getElementById("admin-review-longitude-edit")?.value
+  );
+  const shouldTryOnlineAutofill = !coordinates.exact && searchEl?.value?.trim()?.length >= 3;
+  if (!shouldTryOnlineAutofill) return;
+  const reviewId = String(review.id || "");
+  window.setTimeout(() => {
+    if (reviewId && String(adminActiveReview?.id || "") !== reviewId) return;
+    const latestCoordinates = adminReviewNormalizeCoordinateInputs(
+      document.getElementById("admin-review-latitude-edit")?.value,
+      document.getElementById("admin-review-longitude-edit")?.value
+    );
+    const latestQuery = (document.getElementById("admin-review-address-search-edit")?.value || "").trim();
+    if (latestCoordinates.exact || latestQuery.length < 3) return;
+    adminReviewFindAddressOrPlace({ auto: true }).catch(() => {
+      adminReviewSetAddressSearchStatus("Online place lookup was not available. Use the hierarchy fields and map pin.", "amber");
+    });
+  }, 500);
+}
+
 function adminReviewListingEditPanel(review = {}) {
   const facts = adminExtractReviewFacts(review);
   const amenities = Array.isArray(review.amenities) ? review.amenities.join(", ") : "";
   const extra = adminReviewExtraFields(review);
-  const initialDistrict = review.district || facts.district || "";
-  const initialRegion = review.region || extra.region || (initialDistrict ? regionForDistrict(initialDistrict) : "");
-  const initialCity = review.city || extra.city || extra.town || "";
-  const initialNeighborhood = review.neighborhood || extra.neighborhood || "";
+  const reviewPoint = adminReviewHasUsableCoordinates(review.latitude, review.longitude)
+    ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
+    : null;
+  const locationSeedText = uniqueTextParts([
+    review.resolved_location_label,
+    extra.resolved_location_label,
+    review.address,
+    extra.source_location,
+    extra.location_label,
+    extra.source_area,
+    extra.location_town,
+    review.neighborhood,
+    extra.neighborhood,
+    review.area,
+    facts.area,
+    review.district,
+    facts.district,
+    adminReviewSourceText(review)
+  ]).join(", ");
+  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, reviewPoint, review.district || facts.district || "");
+  const initialDistrict = review.district || facts.district || inferredHierarchy.district || "";
+  const initialRegion = review.region || extra.region || inferredHierarchy.region || (initialDistrict ? regionForDistrict(initialDistrict) : "");
+  const initialCity = review.city || extra.city || extra.town || inferredHierarchy.city || "";
+  const initialNeighborhood = review.neighborhood || extra.neighborhood || inferredHierarchy.neighborhood || "";
   const initialStreet = review.street_name || extra.street_name || "";
   const districtOptions = adminReviewDistrictOptionsHtml(initialRegion, initialDistrict);
   const regionOptions = adminReviewRegionOptionsHtml(initialRegion);
@@ -15994,6 +16714,18 @@ function adminReviewListingEditPanel(review = {}) {
     ["night", "Per night"],
     ["sem", "Per semester"]
   ].map(([value, label]) => `<option value="${value}" ${String(review.price_period || "") === value ? "selected" : ""}>${label}</option>`).join("");
+  const currentTitleType = review.title_type || extra.title_type || "";
+  const titleTypeOptions = ["", "Freehold", "Leasehold", "Mailo", "Private Mailo", "Customary"].map((value) => {
+    const label = value || "Not stated";
+    return `<option value="${adminAttr(value)}" ${String(currentTitleType) === value ? "selected" : ""}>${label}</option>`;
+  }).join("");
+  const currentLandTitleAvailable = getLandTitleAvailabilityValue(review) || facts.land_title_available || "";
+  const landTitleAvailabilityOptions = [
+    ["", "Not stated"],
+    ["unknown", "To confirm"],
+    ["yes", "Land title available"],
+    ["no", "No title stated"]
+  ].map(([value, label]) => `<option value="${value}" ${currentLandTitleAvailable === value ? "selected" : ""}>${label}</option>`).join("");
   return `
     <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -16041,16 +16773,23 @@ function adminReviewListingEditPanel(review = {}) {
         <div class="md:col-span-2 rounded-xl border border-amber-200 bg-white p-3">
           <label class="block text-xs font-bold text-gray-700">Find address / place like the public listing flow
             <div class="mt-1 flex gap-2">
-              <input id="admin-review-address-search-edit" onkeydown="if(event.key==='Enter'){event.preventDefault(); adminReviewFindAddressOrPlace();}" class="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.resolved_location_label || extra.resolved_location_label || "")}" placeholder="Search estate, road, town, landmark, or area">
+              <input id="admin-review-address-search-edit" oninput="adminReviewOnAddressSearchInput()" onkeydown="adminReviewAddressSearchKeydown(event)" class="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.resolved_location_label || extra.resolved_location_label || "")}" placeholder="Search estate, road, town, landmark, or area">
               <button type="button" onclick="adminReviewFindAddressOrPlace()" class="shrink-0 rounded-lg bg-green-700 px-3 py-2 text-xs font-bold text-white hover:bg-green-600">Find</button>
             </div>
           </label>
           <div id="admin-review-address-search-status" class="mt-2 text-xs font-semibold text-blue-900">Search a place, road, estate, town, or landmark, then confirm the pin.</div>
+          <input id="admin-review-place-id-edit" type="hidden" value="${adminAttr(extra.place_id || "")}">
           <input id="admin-review-geocoding-provider-edit" type="hidden" value="${adminAttr(extra.geocoding_provider || "")}">
           <input id="admin-review-location-confidence-edit" type="hidden" value="${adminAttr(extra.location_confidence || "")}">
         </div>
         <label class="block text-xs font-bold text-gray-700">Property type
           <input id="admin-review-property-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.property_type || "")}" placeholder="Apartment, House, Land, Office">
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Title type
+          <select id="admin-review-title-type-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${titleTypeOptions}</select>
+        </label>
+        <label class="block text-xs font-bold text-gray-700">Land title available
+          <select id="admin-review-land-title-available-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${landTitleAvailabilityOptions}</select>
         </label>
         <label class="block text-xs font-bold text-gray-700">Price
           <input id="admin-review-price-edit" type="number" min="0" step="1" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.price || "")}">
@@ -16109,6 +16848,7 @@ function adminApplyExtractedReviewFacts() {
   adminSetReviewEditValue("admin-review-district-edit", facts.district || adminActiveReview.district || "");
   adminReviewApplyHierarchyFromText([facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "));
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
+  adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
   adminSetReviewEditValue("admin-review-price-edit", facts.price || adminActiveReview.price || "");
   adminSetReviewEditValue("admin-review-price-period-edit", facts.price_period || adminActiveReview.price_period || "");
   adminSetReviewEditValue("admin-review-bedrooms-edit", facts.bedrooms ?? adminActiveReview.bedrooms ?? "");
@@ -16400,11 +17140,14 @@ function collectAdminReviewListingPatch() {
     price: get("admin-review-price-edit"),
     price_period: get("admin-review-price-period-edit"),
     property_type: get("admin-review-property-type-edit"),
+    title_type: get("admin-review-title-type-edit"),
+    land_title_available: get("admin-review-land-title-available-edit"),
     bedrooms: get("admin-review-bedrooms-edit"),
     bathrooms: get("admin-review-bathrooms-edit"),
     latitude: coordinates.latitude,
     longitude: coordinates.longitude,
     geocoding_provider: get("admin-review-geocoding-provider-edit"),
+    place_id: get("admin-review-place-id-edit"),
     location_confidence: get("admin-review-location-confidence-edit"),
     map_pin_source: coordinates.exact ? "king_review" : "king_review_area",
     amenities
@@ -16631,7 +17374,6 @@ function renderAdminReviewPanel(review) {
               </div>
             </div>
           </div>
-          ${renderAdminUgNlisReviewPanel(review)}
           <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
             <div class="flex items-center justify-between gap-2 mb-2">
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">National ID Document</div>
@@ -16788,6 +17530,7 @@ function renderAdminReviewPanel(review) {
   panel.scrollIntoView({ behavior: "smooth", block: "start" });
   setTimeout(() => {
     adminReviewRefreshHierarchyControls({ syncMap: false });
+    adminReviewAutoPopulateLocationFromSource(review);
     initAdminReviewLocationMap(review);
   }, 120);
 }
@@ -19000,7 +19743,9 @@ async function geocodeWithGoogle(query, options = {}) {
       resolve({
         lat: loc.lat(),
         lng: loc.lng(),
-        label: results[0].formatted_address || query
+        label: results[0].formatted_address || query,
+        placeId: results[0].place_id || "",
+        streetName
       });
     });
   });
@@ -19037,6 +19782,7 @@ async function geocodeWithNominatim(query) {
       lng,
       label: row?.display_name || query,
       placeId: row?.place_id ? `osm:${row.place_id}` : "",
+      streetName,
       provider: "nominatim",
       confidence: row?.importance ? Math.min(0.95, Math.max(0.35, Number(row.importance))) : 0.45
     };
@@ -20453,6 +21199,12 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   const area = lpVal("lp-area") || neighborhood || city;
   const description = lpVal("lp-description");
   const price = parseIntSafe(lpVal("lp-price"));
+  const landTitleAvailability = normalizeLandTitleAvailabilityValue(extra.land_title_available)
+    || inferLandTitleAvailabilityFromText(title, description, extra.title_type);
+  if (landTitleAvailability) {
+    extra.land_title_available = landTitleAvailability;
+    extra.land_title_available_label = landTitleAvailabilityLabel(landTitleAvailability);
+  }
 
   const bedsRaw = lpVal("lp-beds");
   const bedsNumeric = parseIntSafe(bedsRaw);
@@ -20502,7 +21254,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   const contactPref = lpVal("lp-contact-pref") || "both";
   const availableFrom = lpVal("lp-available-from");
   const inquiryReference = lpInquiryReference || generateListingInquiryRef();
-  const ownerVerificationRequested = !!document.getElementById("lp-owner-verification-requested")?.checked;
+  const ownerVerificationRequested = !!document.getElementById("lp-authority-review-requested")?.checked;
   lpInquiryReference = inquiryReference;
   const newUntil = new Date(Date.now() + LISTING_NEW_WINDOW_MS).toISOString();
 
@@ -20634,8 +21386,9 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
 	    };
 	  }
 
-	  if (type === "sale") {
+  if (type === "sale") {
     payload.title_type = extra.title_type || null;
+    payload.land_title_available = extra.land_title_available || null;
     payload.year_built = parseIntSafe(extra.year_built);
   }
 
@@ -20647,6 +21400,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
 
   if (type === "land") {
     payload.title_type = extra.title_type || null;
+    payload.land_title_available = extra.land_title_available || null;
     payload.land_size_value = landParsed.value;
     payload.land_size_unit = landParsed.unit;
     payload.extra_fields.land_owner_confirmed = extra.owner_confirmed || null;
@@ -20659,6 +21413,7 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
     payload.usable_size_sqm = parseFloatSafe(extra.floor_area);
     payload.parking_bays = parseIntSafe(extra.parking_bays);
     payload.title_type = extra.title_type || null;
+    payload.land_title_available = extra.land_title_available || null;
     payload.deposit_amount = parseIntSafe(extra.deposit);
     payload.contract_months = parseIntSafe(extra.contract_months);
   }
@@ -20696,6 +21451,7 @@ function renderListReviewSummary() {
   const fieldAgentTag = fieldAgentAssisted
     ? `${translateListingLabel("Yes")} (${payload?.extra_fields?.field_agent_id || "-"})`
     : translateListingLabel("No");
+  const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(payload)) || translateListingLabel("Not set");
   wrap.innerHTML = `
     <div class="grid md:grid-cols-2 gap-3">
       <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
@@ -20729,6 +21485,7 @@ function renderListReviewSummary() {
               : "Phone Call"
         )}</div>
         <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Field Agent assisted?")}: ${fieldAgentTag}</div>
+        <div class="text-xs text-gray-500 mt-1">${translateListingLabel("Land title")}: ${landTitleLabel}</div>
       </div>
     </div>
     ${payload.video_url ? `<div class="mt-3">${renderVideoEmbedCard(payload.video_url, {
@@ -20781,6 +21538,9 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     video_url: payload.video_url || payload.extra_fields?.video_url || "",
     youtube_url: payload.extra_fields?.youtube_url || "",
     amenities: payload.amenities || [],
+    extra_fields: payload.extra_fields || {},
+    title_type: payload.title_type || payload.extra_fields?.title_type || "",
+    land_title_available: payload.land_title_available || payload.extra_fields?.land_title_available || "",
     area_highlights: payload?.extra_fields?.area_highlights || "",
     nearby_places: Array.isArray(payload?.extra_fields?.nearby_facilities) ? payload.extra_fields.nearby_facilities : [],
     contact_display_name: payload?.lister_display_name || payload?.extra_fields?.public_display_name || payload?.lister_name || "",
@@ -21243,16 +22003,15 @@ function setAgentOtpStatus(tone, message) {
 }
 
 function setAgentOtpChannel(channel) {
-  const next = String(channel || "phone").toLowerCase();
-  agentOtpChannel = next === "email" ? "email" : "phone";
+  agentOtpChannel = "phone";
+  const channelEl = document.getElementById("agent-otp-channel");
+  if (channelEl) channelEl.value = "phone";
   agentRegistrationOtpToken = "";
   agentOtpVerifiedPhone = "";
   agentOtpVerifiedEmail = "";
   const otpInput = document.getElementById("agent-otp-code");
   if (otpInput) otpInput.value = "";
-  setAgentOtpStatus("neutral", agentOtpChannel === "email"
-    ? "Email OTP pending verification."
-    : "SMS OTP pending verification.");
+  setAgentOtpStatus("neutral", "SMS OTP pending verification.");
 }
 
 function resetAgentRegistrationOtpState() {
@@ -21516,6 +22275,10 @@ async function submitAgentApplication() {
   const whatsapp = normalizePhoneInput(document.getElementById("agent-whatsapp")?.value || "");
   const email = (document.getElementById("agent-email")?.value || "").trim().toLowerCase();
   const districtsCovered = (document.getElementById("agent-areas")?.value || "").trim();
+  const specializations = (document.getElementById("agent-specializations")?.value || "").trim();
+  const idExpiryDate = (document.getElementById("agent-id-expiry")?.value || "").trim();
+  const experienceYearsRaw = (document.getElementById("agent-experience-years")?.value || "").trim();
+  const experienceYears = Number.parseInt(experienceYearsRaw, 10);
   const nin = normalizeNinInput((document.getElementById("agent-nin")?.value || "").trim());
   const verificationReason = (document.getElementById("agent-verification-reason")?.value || "").trim();
   const privacyConsentAccepted = document.getElementById("agent-privacy-consent")?.checked === true;
@@ -21526,12 +22289,16 @@ async function submitAgentApplication() {
   const otpChannel = agentOtpChannel === "email" ? "email" : "phone";
   const resolvedLicenceNumber = licenceNumber || `PENDING-${Date.now()}`;
 
-  if (!fullName || !phone || !email || !districtsCovered || !nin) {
-    toast("Please complete all required broker fields.");
+  if (!fullName || !phone || !email || !districtsCovered || !nin || !idExpiryDate || experienceYearsRaw === "") {
+    toast("Please complete all required agent fields.");
+    return;
+  }
+  if (!Number.isFinite(experienceYears) || experienceYears < 0 || experienceYears > 80) {
+    toast("Please enter valid years of experience.");
     return;
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    toast("Please enter a valid email address for broker registration.");
+    toast("Please enter a valid email address for agent registration.");
     return;
   }
   if (!(/^\+2567\d{8}$/.test(phone) || /^\+256\d{9}$/.test(phone))) {
@@ -21542,8 +22309,12 @@ async function submitAgentApplication() {
     toast("Please enter a valid Uganda NIN.");
     return;
   }
+  if (!agentProfilePhotoDataUrl) {
+    toast("Please upload a clear photo of yourself for your agent profile.");
+    return;
+  }
   if (!agentIdentityPhotoDataUrl) {
-    toast("Please upload a clear National ID photo for broker review.");
+    toast("Please upload a clear National ID photo for agent review.");
     return;
   }
   if (!verificationReason) {
@@ -21574,7 +22345,7 @@ async function submitAgentApplication() {
 
   setButtonLoading("agent-submit-btn", true);
   try {
-    await apiRequest("/api/agents/register", {
+    const response = await apiRequest("/api/agents/register", {
       method: "POST",
       body: {
         full_name: fullName,
@@ -21584,33 +22355,67 @@ async function submitAgentApplication() {
         whatsapp: whatsapp || phone,
         email,
         districts_covered: districtsCovered,
+        specializations,
         nin,
+        id_expiry_date: idExpiryDate,
+        experience_years: experienceYears,
         registration_status: registrationStatus,
         registration_request: "admin_review",
         otp_channel: otpChannel,
         listing_otp_token: agentRegistrationOtpToken,
+        agent_application_channel: "web",
         verification_reason: verificationReason,
         privacy_consent_accepted: privacyConsentAccepted,
         data_retention_notice_accepted: retentionNoticeAccepted,
+        profile_photo: {
+          name: agentProfilePhotoFileName || "agent-profile-photo.jpg",
+          type: "image/jpeg",
+          size: Math.round((agentProfilePhotoDataUrl || "").length * 0.75),
+          data_url: agentProfilePhotoDataUrl
+        },
         identity_document: {
           name: agentIdentityPhotoFileName || "national-id.jpg",
           type: "image/jpeg",
           size: Math.round((agentIdentityPhotoDataUrl || "").length * 0.75),
           data_url: agentIdentityPhotoDataUrl
         },
-        profile_photo_url: agentProfilePhotoDataUrl || undefined,
         bio: fieldAgentAssisted ? `Onboarded with Field Agent ${fieldAgentId}` : undefined
       }
     });
     await trackEvent("agent_register_submit", { district_scope: districtsCovered });
-    toast("Application submitted. Broker verification will be reviewed by admin.");
+    const makaugAgentNumber = response?.data?.makaug_agent_number || "";
+    showAgentApplicationSuccess(makaugAgentNumber);
+    toast("Application submitted. Agent verification will be reviewed by admin.");
     resetAgentProfilePhoto();
     resetAgentIdentityPhoto();
-    closeModal("broker-reg-modal");
   } catch (error) {
     toast(error.message || "Could not submit application.");
   } finally {
-    setButtonLoading("agent-submit-btn", false, "Submit Application");
+    setButtonLoading("agent-submit-btn", false, "Submit Agent Application");
+  }
+}
+
+function showAgentApplicationSuccess(makaugAgentNumber = "") {
+  const form = document.getElementById("agent-registration-form");
+  const success = document.getElementById("agent-application-success");
+  const copy = document.getElementById("agent-application-success-copy");
+  if (form) form.classList.add("hidden");
+  if (success) success.classList.remove("hidden");
+  if (copy) {
+    copy.textContent = makaugAgentNumber
+      ? `Your makaug agent number is ${makaugAgentNumber}. makaug will review your agent profile within 24 hours and let you know once it is set up so you can start submitting properties.`
+      : "makaug will review your agent profile within 24 hours and let you know once it is set up so you can start submitting properties.";
+  }
+}
+
+function resetAgentApplicationSuccessState() {
+  const form = document.getElementById("agent-registration-form");
+  const success = document.getElementById("agent-application-success");
+  const copy = document.getElementById("agent-application-success-copy");
+  if (form) form.classList.remove("hidden");
+  if (success) success.classList.add("hidden");
+  if (copy) {
+    copy.textContent = "makaug will review your agent profile within 24 hours and let you know once it is set up so you can start submitting properties.";
   }
 }
 
@@ -24490,6 +25295,10 @@ function howToVideosForContext(context = "all") {
   return selected.length ? selected : HOW_TO_VIDEO_SLOTS.slice(0, 4);
 }
 
+function isPublishedHowToVideo(video) {
+  return Boolean(String(video?.youtubeVideoId || "").trim() || String(video?.youtubeUrl || "").trim());
+}
+
 function renderHowToVideoCard(video) {
   const title = video.title || "makaug how-to video";
   const thumbnail = video.thumbnailUrl || (video.youtubeVideoId
@@ -24516,12 +25325,20 @@ function renderHowToVideoCard(video) {
 function renderHowToVideoSections() {
   document.querySelectorAll("[data-howto-video-grid]").forEach((container) => {
     const context = container.getAttribute("data-howto-video-grid") || "all";
-    const videos = howToVideosForContext(context).slice(0, 6);
+    const videos = howToVideosForContext(context).filter(isPublishedHowToVideo).slice(0, 6);
+    if (!videos.length) {
+      container.innerHTML = "";
+      container.classList.add("hidden");
+      container.setAttribute("aria-hidden", "true");
+      return;
+    }
+    container.classList.remove("hidden");
+    container.removeAttribute("aria-hidden");
     container.innerHTML = `<div class="flex items-end justify-between gap-3 flex-wrap mb-4">
       <div>
         <p class="text-xs font-black uppercase tracking-wide text-green-700">${publicBrand()} video guides</p>
-        <h2 class="text-2xl font-black text-gray-900 serif mt-1">One-minute how-to videos</h2>
-        <p class="text-sm text-gray-600 mt-1">Video slots are ready. Add YouTube IDs in the how-to video config when the videos are published.</p>
+        <h2 class="text-2xl font-black text-gray-900 serif mt-1">Short property guides</h2>
+        <p class="text-sm text-gray-600 mt-1">Watch quick walkthroughs for searching, listing, safety, WhatsApp contact, and AI property help.</p>
       </div>
       <a href="https://youtube.com/@makaug" target="_blank" rel="noopener" class="text-sm font-bold text-green-700">YouTube channel</a>
     </div>
@@ -24626,7 +25443,7 @@ const PAGE_CONTENT = {
     <div class="grid md:grid-cols-2 gap-3 mb-6">
       ${["Search property","Use filters","Save properties/searches","Create alerts","Contact on WhatsApp","Book viewing/request callback","List Property","Review and safety checks","Use dashboard","Report suspicious listings"].map((step, idx) => `<div class="rounded-2xl border border-green-100 bg-white p-4 flex gap-3"><span class="w-9 h-9 shrink-0 rounded-full bg-green-700 text-white grid place-items-center font-black">${idx + 1}</span><div><h3 class="font-black text-gray-900">${step}</h3><p class="text-sm text-gray-600 mt-1">makaug keeps the journey clear, logged, and connected to support where needed.</p></div></div>`).join("")}
     </div>
-    <div class="rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
+    <div class="hidden rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="how-it-works"></div>`,
   terms: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Terms & Conditions</h2>
     <p class="text-xs text-gray-500 mb-4">Last updated: 28 May 2026</p>
@@ -24843,7 +25660,7 @@ const PAGE_CONTENT = {
       <div id="help-request-status" class="hidden rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800"></div>
       <button type="submit" class="w-full bg-green-700 hover:bg-green-600 text-white py-3 rounded-xl font-bold">Send help request</button>
     </form>
-    <div class="mt-6 rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="help"></div>`,
+    <div class="hidden mt-6 rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="help"></div>`,
   safety: `
     <div class="rounded-3xl bg-gradient-to-br from-green-900 via-green-800 to-emerald-700 text-white p-6 mb-6 overflow-hidden relative">
       <div class="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-white/10"></div>
@@ -24922,17 +25739,13 @@ const PAGE_CONTENT = {
         </div>
       </section>
     </div>
-    <section class="rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="safety">
-      <p class="text-green-700 text-xs font-black uppercase tracking-wide" data-content-i18n="safety.videoLabel">Safety video guides</p>
-      <h3 class="text-2xl font-black text-gray-900 mt-1" data-content-i18n="safety.videoTitle">Two-minute safety walkthroughs</h3>
-      <p class="text-sm text-gray-600 mt-1" data-content-i18n="safety.videoCopy">Video slots are ready for viewing safety, fraud reporting, land/title checks, and safe WhatsApp contact.</p>
-    </section>`,
+    <section class="hidden rounded-3xl bg-white border border-green-100 p-5" data-howto-video-grid="safety"></section>`,
   advertise: `
     <h2 class="text-2xl font-bold text-gray-800 mb-1">Advertise with Us</h2>
-    <p class="text-xs text-gray-500 mb-4">Grow through makaug search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
+    <p class="text-xs text-gray-500 mb-4">Choose an advertising package or a standard display slot to grow through makaug search, district pages, property cards, broker discovery, and WhatsApp assistant journeys.</p>
     <div class="grid md:grid-cols-4 gap-3 mb-5">
       <div class="rounded-xl border border-green-100 bg-green-50 p-3 text-sm"><strong>1. Send inquiry</strong><br><span class="text-gray-600">Tell us your audience, area, product, and campaign goal.</span></div>
-      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm"><strong>2. Pay & brief</strong><br><span class="text-gray-600">Send a logo, offer, images, or a property/profile to boost.</span></div>
+      <div class="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm"><strong>2. Pay & brief</strong><br><span class="text-gray-600">Confirm the quote, receive a PayPal payment link, then send your logo, offer, images, or property/profile to boost.</span></div>
       <div class="rounded-xl border border-green-100 bg-white p-3 text-sm"><strong>3. Preview</strong><br><span class="text-gray-600">makaug creates the ad and shares a preview for approval.</span></div>
       <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm"><strong>4. Go live</strong><br><span class="text-gray-600">Approved ads go live with daily, weekly, and post-campaign reporting options.</span></div>
     </div>
@@ -24980,7 +25793,12 @@ const PAGE_CONTENT = {
           <p class="text-xs text-gray-500 mt-2">Paid dashboard access gives real-time graphs, campaign exports, and performance history.</p>
         </div>
       </div>
-      <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. makaug prepares the creative, shares the preview, and publishes only after approval.</p>
+      <p class="text-xs text-gray-500 mt-3">You only need to send your logo and campaign details. makaug prepares the creative, shares the preview, issues a PayPal payment link, and publishes only after approval and payment confirmation.</p>
+    </div>
+    <div class="rounded-2xl border border-amber-100 bg-amber-50 p-4 mb-5">
+      <div class="text-xs font-black uppercase tracking-wide text-amber-800">Launch payment flow</div>
+      <h3 class="font-black text-gray-900 mt-1">How ad payments are tracked</h3>
+      <p class="text-sm text-gray-700 mt-2">makaug confirms the package, creates an invoice, sends a PayPal payment link, then tracks the payment reference before the ad can be set live in the Advertising Desk. Manual payment marking is available only to admin users with a reason and audit log.</p>
     </div>
     <form id="advertising-inquiry-form" onsubmit="submitAdvertisingInquiry(event)" class="space-y-4">
       <div id="advertising-live-rate-card" class="rounded-2xl border border-gray-200 bg-gray-50 p-3 text-sm">
@@ -25006,11 +25824,12 @@ const PAGE_CONTENT = {
         <div class="grid md:grid-cols-2 gap-2 text-sm">
           <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="featured_property_boost"> Featured property boost - UGX 75,000</label>
           <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="regional_search_boost"> Regional search boost - UGX 150,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="homepage_banner"> Homepage banner - UGX 250,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="agent_spotlight"> Agent spotlight - UGX 120,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="student_accommodation_push"> Student accommodation push - UGX 180,000</label>
-          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="commercial_land_sponsor"> Commercial / land sponsor - UGX 220,000</label>
+          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="homepage_banner"> Homepage banner - UGX 350,000</label>
+          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="agent_spotlight"> Agent spotlight - UGX 160,000</label>
+          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="student_accommodation_push"> Student accommodation push - UGX 220,000</label>
+          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="commercial_land_sponsor"> Commercial / land sponsor - UGX 240,000</label>
           <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="whatsapp_chatbot_sponsor"> WhatsApp chatbot sponsor - UGX 200,000</label>
+          <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="email_whatsapp_blast"> Opt-in WhatsApp bulk audience campaign - from UGX 300,000</label>
           <label class="border border-gray-200 rounded-xl px-3 py-2"><input type="checkbox" name="product_interests" value="haymaker_all_platform"> Haymaker all-platform package - UGX 950,000</label>
         </div>
       </div>
@@ -25136,22 +25955,41 @@ async function hydrateAdvertisePricingPreview() {
   const wrap = document.getElementById("advertising-live-rate-card");
   if (!wrap) return;
   try {
-    const res = await apiRequest("/api/advertising/placements");
-    const rows = Array.isArray(res?.data) ? res.data : [];
+    const res = await apiRequest("/api/advertising/rate-card");
+    const rows = Array.isArray(res?.data?.placements) ? res.data.placements : [];
     if (!rows.length) {
       wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Ask makaug for current placement availability and pricing.</div>`;
       return;
     }
+    const creative = res?.data?.creative_guidelines || {};
+    const fx = Number(res?.data?.ugx_per_usd || 3800);
     wrap.innerHTML = `
-      <div class="font-bold text-gray-800">Live placement menu</div>
-      <div class="grid sm:grid-cols-2 gap-2 mt-2">
-        ${rows.slice(0, 8).map((slot) => `
-          <div class="rounded-xl border border-white bg-white p-2">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <div class="font-bold text-gray-800">Live placement menu</div>
+          <div class="text-xs text-gray-500 mt-1">Prices shown in UGX with USD guide at about UGX ${Number(fx).toLocaleString("en-UG")} per USD.</div>
+        </div>
+        <a href="mailto:info@makaug.com?subject=makaug%20advertising%20campaign" class="text-xs font-black text-green-700 hover:underline">info@makaug.com</a>
+      </div>
+      <div class="grid lg:grid-cols-2 gap-2 mt-3">
+        ${rows.slice(0, 10).map((slot) => `
+          <div class="rounded-xl border border-white bg-white p-3">
             <div class="text-xs font-bold text-gray-900">${adminEscape(slot.label)}</div>
             <div class="text-[11px] text-gray-500">${adminEscape(slot.page_key)} • ${adminEscape(slot.size_label || slot.slot_type || "")}</div>
-            <div class="text-xs font-black text-green-700 mt-1">From ${adminEscape(adMoney(slot.base_price_ugx))}</div>
+            <div class="grid grid-cols-2 gap-1 mt-2 text-[11px]">
+              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Day</strong><br>${adminEscape(slot.price_labels?.day || adMoney(slot.daily_price_ugx || slot.base_price_ugx))}</div>
+              <div class="rounded-lg bg-green-50 px-2 py-1"><strong>Week</strong><br>${adminEscape(slot.price_labels?.week || adMoney(slot.weekly_price_ugx || slot.base_price_ugx))}</div>
+              <div class="rounded-lg bg-amber-50 px-2 py-1"><strong>Month</strong><br>${adminEscape(slot.price_labels?.month || "-")}</div>
+              <div class="rounded-lg bg-gray-50 px-2 py-1"><strong>CPM</strong><br>${adminEscape(slot.price_labels?.cpm || "-")}</div>
+            </div>
+            <div class="text-[11px] text-gray-500 mt-2">USD guide: ${adminEscape(slot.usd_labels?.week || "")} / week</div>
           </div>
         `).join("")}
+      </div>
+      <div class="mt-3 rounded-xl border border-amber-100 bg-white p-3">
+        <div class="text-xs font-black uppercase tracking-wide text-amber-700">Creative prompt starter</div>
+        <p class="text-xs text-gray-600 mt-1">Accepted formats: ${(creative.accepted_formats || ["JPG", "PNG", "WebP"]).join(", ")}. Max file size: ${adminEscape(creative.max_file_size_mb || 2)}MB. Keep logo, headline, and CTA inside the central safe area.</p>
+        <div class="mt-2 rounded-lg bg-gray-50 border border-gray-200 p-2 text-[11px] text-gray-700">Create a polished makaug.com display advert for [brand/property]. Required size: [placement size]. Audience: [target locations]. Offer: [offer]. Style: Uganda property marketplace, clean, premium, trustworthy, high-contrast CTA. Include readable headline and CTA. Leave room for a makaug sponsored label.</div>
       </div>`;
   } catch (error) {
     wrap.innerHTML = `<div class="font-bold text-gray-800">Live placement menu</div><div class="text-xs text-gray-500 mt-1">Current prices can be confirmed by makaug after inquiry.</div>`;
@@ -25697,6 +26535,8 @@ function improveLpDescription() {
   if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
   if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${extra.furnished}`);
   if (extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${extra.title_type}`);
+  const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue({ extra_fields: extra, title, description: lpVal("lp-description") }));
+  if (landTitleLabel) factBits.push(`${translateListingLabel("Land title")}: ${landTitleLabel}`);
   if (extra.contract_months) factBits.push(`${translateListingLabel("Minimum Contract")}: ${extra.contract_months} ${translateListingLabel("months")}`);
   if (extra.deposit) factBits.push(`${translateListingLabel("Deposit")}: ${fmtP(parseIntSafe(extra.deposit) || 0)}`);
   const amenitiesText = amenities.length ? amenities.slice(0, 6).join(", ") : translateListingLabel("standard amenities");
@@ -26560,6 +27400,8 @@ function getPropertySearchText(property = {}) {
     property.subtype,
     property.property_type,
     property.title_type,
+    landTitleAvailabilityLabel(getLandTitleAvailabilityValue(property)),
+    property.land_title_available,
     property.land_type,
     property.road_access,
     property.size,
@@ -26577,6 +27419,8 @@ function getPropertySearchText(property = {}) {
     extra.location_town,
     extra.resolved_location_label,
     extra.area_highlights,
+    extra.land_title_available,
+    extra.land_title_available_label,
     nearbyText
   ];
   return pieces.filter(Boolean).join(" ").toLowerCase();
@@ -27487,7 +28331,7 @@ function foundOnlineSourceVisualHtml(p = {}, options = {}) {
 function formatListingDate(dateValue) {
   const date = parseDateSafe(dateValue);
   if (!date) return "";
-  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET" };
+  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET", ar: "ar" };
   return date.toLocaleDateString(localeMap[currentLang] || "en-GB", {
     day: "2-digit",
     month: "short",
@@ -28000,6 +28844,8 @@ function buildLocalizedPropertyNarrative(property = {}, nearby = []) {
   if (baths) factBits.push(`${baths} ${countLabel(baths, "bath", "baths")}`);
   if (extra.year_built) factBits.push(`${translateListingLabel("Built in")} ${extra.year_built}`);
   if (property?.title_type || extra.title_type) factBits.push(`${translateListingLabel("Title Type")}: ${translateListingLabel(property.title_type || extra.title_type)}`);
+  const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(property));
+  if (landTitleLabel) factBits.push(`${translateListingLabel("Land title")}: ${landTitleLabel}`);
   if (extra.furnished) factBits.push(`${translateListingLabel("Furnishing")}: ${translateListingLabel(extra.furnished)}`);
   if (extra.contract_months) factBits.push(`${translateListingLabel("Minimum Contract")}: ${extra.contract_months} ${translateListingLabel("months")}`);
   if (extra.deposit) factBits.push(`${translateListingLabel("Deposit")}: ${fmtP(parseIntSafe(extra.deposit) || 0)}`);
@@ -28214,6 +29060,76 @@ async function shareBrokerBusinessCard(id, channel = "native") {
   }
 }
 
+function normalizeLandTitleAvailabilityValue(value) {
+  if (typeof value === "boolean") return value ? "yes" : "no";
+  if (typeof value === "number") return value === 1 ? "yes" : value === 0 ? "no" : "";
+  const raw = String(value == null ? "" : value).trim().replace(/\s+/g, " ").toLowerCase();
+  if (!raw) return "";
+  if (/^(yes|y|true|1|available|title available|land title available|has title|with title|ready|title ready|titled|private mailo|mailo title|freehold title|leasehold title)$/.test(raw)) return "yes";
+  if (/^(no|n|false|0|not available|no title|without title|title not available|not titled|untitled)$/.test(raw)) return "no";
+  if (/^(unknown|not sure|pending|to confirm|confirm|not stated|n\/a|na|not applicable)$/.test(raw)) return "unknown";
+  if (/\b(no|not|without)\b.{0,24}\b(land\s*)?title\b|\btitle\b.{0,24}\b(not available|pending|missing)\b/.test(raw)) return raw.includes("pending") ? "unknown" : "no";
+  if (/\b(land\s*)?title\b.{0,30}\b(available|ready|included|present|in hand|on table)\b|\b(with|has|have)\b.{0,20}\b(land\s*)?title\b/.test(raw)) return "yes";
+  if (/\b(private mailo|mailo title|freehold title|leasehold title|title deed)\b/.test(raw)) return "yes";
+  return "";
+}
+
+function inferLandTitleAvailabilityFromText(...parts) {
+  const text = parts.map((part) => String(part == null ? "" : part).replace(/\s+/g, " ").trim()).filter(Boolean).join(" ").toLowerCase();
+  if (!text) return "";
+  if (/\b(no|not|without)\b.{0,35}\b(?:land\s*)?title\b|\b(?:land\s*)?title\b.{0,35}\b(not available|missing|not yet|pending|processing|in process)\b/.test(text)) {
+    return /\b(pending|process|not yet)\b/.test(text) ? "unknown" : "no";
+  }
+  if (/\b(?:land\s*)?title\b.{0,40}\b(available|ready|included|present|in hand|on table|intact)\b|\b(with|has|have)\b.{0,25}\b(?:land\s*)?title\b|\b(private mailo|mailo title|freehold title|leasehold title|title deed)\b/.test(text)) return "yes";
+  if (/\b(?:land\s*)?title\b/.test(text)) return "unknown";
+  return "";
+}
+
+function getLandTitleAvailabilityValue(source = {}) {
+  const extra = source?.extra_fields && typeof source.extra_fields === "object" ? source.extra_fields : {};
+  return normalizeLandTitleAvailabilityValue(
+    source.land_title_available
+      ?? source.landTitleAvailable
+      ?? source.title_available
+      ?? extra.land_title_available
+      ?? extra.landTitleAvailable
+      ?? extra.title_available
+      ?? extra.land_title_status
+  ) || inferLandTitleAvailabilityFromText(
+    source.title,
+    source.description,
+    source.desc,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text,
+    extra.video_ocr_text,
+    extra.frame_ocr_text
+  );
+}
+
+function landTitleAvailabilityLabel(value) {
+  const normalized = normalizeLandTitleAvailabilityValue(value);
+  if (normalized === "yes") return translateListingLabel("Land title available");
+  if (normalized === "no") return translateListingLabel("No land title stated");
+  if (normalized === "unknown") return translateListingLabel("Land title status pending");
+  return "";
+}
+
+function landTitleAvailabilityBadgeHtml(property = {}, options = {}) {
+  const value = getLandTitleAvailabilityValue(property);
+  const label = landTitleAvailabilityLabel(value);
+  if (!label) return "";
+  const tone = value === "yes"
+    ? "bg-emerald-700 text-white"
+    : value === "no"
+      ? "bg-amber-600 text-white"
+      : "bg-gray-800 text-white";
+  const compact = options.compact === true;
+  return `<span class="${tone} ${compact ? "text-[11px] px-2 py-1 rounded font-semibold" : "text-xs font-semibold px-2 py-1 rounded"} inline-flex items-center gap-1"><i class="fas fa-file-signature text-[10px]"></i>${adminEscape(label)}</span>`;
+}
+
 	    function propertyAvailabilityText(p) {
 	      const value = p?.available_from || p?.extra_fields?.available_from || "";
 	      if (!value) return "";
@@ -28252,6 +29168,7 @@ function propertyDescriptionHoverHtml(p = {}) {
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
 	      const nearDistance = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
+  const landTitleBadge = landTitleAvailabilityBadgeHtml(p, { compact: true });
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=900&q=80");
   const displayTitle = getLocalizedPropertyTitle(p);
@@ -28269,6 +29186,7 @@ function propertyDescriptionHoverHtml(p = {}) {
           ${registration ? `<div class="${registration.cls} text-white text-[11px] px-2 py-1 rounded font-semibold inline-flex items-center gap-1">
             <i class="${registration.icon} text-[10px]"></i> ${registration.label}
           </div>` : ""}
+          ${landTitleBadge}
         </div>
         <button onclick="event.stopPropagation(); toggleSave(${idArg})" aria-pressed="${saved ? "true" : "false"}" title="${adminAttr(getCardSaveButtonTitle(p.id))}" class="${getCardSaveButtonClasses(p.id)}">
           <i class="${getCardSaveButtonIconClasses(p.id)}"></i>
@@ -29218,6 +30136,8 @@ function mapRemotePropertyForUi(p, options = {}) {
     title: p?.title || "Untitled listing",
     type: normalizeType(p?.listing_type || p?.type),
     subtype: p?.property_type || p?.subtype || "Property",
+    title_type: p?.title_type || p?.extra_fields?.title_type || "",
+    land_title_available: getLandTitleAvailabilityValue(p),
     beds: p?.bedrooms,
     baths: p?.bathrooms,
     price: Number(p?.price || 0),
@@ -29960,7 +30880,7 @@ function mountSectionSearchShell(page) {
   shell.setAttribute("data-section-search-shell", config.key);
   const locationButton = config.locationButtonId
     ? `<button type="button" class="section-search-location" data-section-search-location="1"><i class="fas fa-location-crosshairs"></i>Use my location</button>`
-    : `<button type="button" class="section-search-location" data-section-search-register="1"><i class="fas fa-id-card"></i>Register</button>`;
+    : `<button type="button" class="section-search-location" data-section-search-register="1"><i class="fas fa-id-card"></i>Register as agent</button>`;
   shell.innerHTML = `
     <div class="section-search-inner">
       <form class="section-search-form">
@@ -33089,9 +34009,10 @@ const LP_CONFIG = {
     continueLabel: "Continue to Photos →",
     extras: [
       { key: "title_type", label: "Title Type", type: "select", options: ["Freehold", "Leasehold", "Mailo", "Customary"], info: "title_types" },
+      { key: "land_title_available", label: "Land title available?", type: "select", options: [{ value: "unknown", label: "Not sure / to confirm" }, { value: "yes", label: "Yes - land title available" }, { value: "no", label: "No / not yet" }], info: "land_title_available" },
       { key: "year_built", label: "Year Built", type: "number", placeholder: "e.g. 2018" }
     ],
-    previewExtras: [{ key: "title_type", label: "Title" }, { key: "year_built", label: "Built" }],
+    previewExtras: [{ key: "title_type", label: "Title" }, { key: "land_title_available", label: "Land title" }, { key: "year_built", label: "Built" }],
     amenities: [
       { value: "parking", label: "🚗 Parking" },
       { value: "security", label: "🔐 Security" },
@@ -33198,12 +34119,13 @@ const LP_CONFIG = {
     continueLabel: "Continue to Photos →",
     extras: [
       { key: "title_type", label: "Title Type", type: "select", options: ["Freehold", "Leasehold", "Mailo", "Customary"], info: "title_types" },
+      { key: "land_title_available", label: "Land title available?", type: "select", options: [{ value: "unknown", label: "Not sure / to confirm" }, { value: "yes", label: "Yes - land title available" }, { value: "no", label: "No / not yet" }], info: "land_title_available" },
       { key: "road_access", label: "Road Access", type: "select", options: ["Tarmac", "Murram", "Earth Road"] },
       { key: "zoning", label: "Zoning", type: "select", options: ["Residential", "Commercial", "Mixed Use", "Agricultural"] },
       { key: "owner_confirmed", label: "Can you confirm you are the owner or authorised representative?", type: "select", options: [{ value: "yes", label: "Yes" }, { value: "agent", label: "Authorised broker/agent" }, { value: "no", label: "Not yet" }] },
       { key: "boundary_notes", label: "Boundary / coordinates notes", type: "text", placeholder: "e.g. 30 acres, road frontage, survey points, nearest landmark" }
     ],
-    previewExtras: [{ key: "title_type", label: "Title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
+    previewExtras: [{ key: "title_type", label: "Title" }, { key: "land_title_available", label: "Land title" }, { key: "road_access", label: "Access" }, { key: "owner_confirmed", label: "Owner" }, { key: "boundary_notes", label: "Boundary notes" }],
     amenities: [
       { value: "road", label: "🛣️ Road Access" },
       { value: "water", label: "🌊 Water Nearby" },
@@ -33251,6 +34173,7 @@ const LP_CONFIG = {
       { key: "parking_bays", label: "Parking Bays", type: "number", placeholder: "e.g. 12" },
       { key: "use_class", label: "Use Class", type: "select", options: ["Office", "Retail", "Warehouse", "Mixed Use"] },
       { key: "title_type", label: "Title Type", type: "select", options: ["Freehold", "Leasehold", "Mailo", "Customary"], dependsOn: "commercial_mode", dependsValues: ["sale"], info: "title_types" },
+      { key: "land_title_available", label: "Land title available?", type: "select", options: [{ value: "unknown", label: "Not sure / to confirm" }, { value: "yes", label: "Yes - land title available" }, { value: "no", label: "No / not yet" }], dependsOn: "commercial_mode", dependsValues: ["sale"], info: "land_title_available" },
       { key: "deposit", label: "Deposit Required (USh)", type: "number", placeholder: "e.g. 3000000", dependsOn: "commercial_mode", dependsValues: ["rent"] },
       { key: "contract_months", label: "Contract Minimum (months)", type: "select", options: ["3", "6", "12", "24"], dependsOn: "commercial_mode", dependsValues: ["rent"] },
       { key: "students_welcome", label: "Students Welcome?", type: "select", options: [{ value: "no", label: "No" }, { value: "yes", label: "Yes - include in student discovery" }], dependsOn: "commercial_mode", dependsValues: ["rent"] },
@@ -33264,6 +34187,7 @@ const LP_CONFIG = {
       { key: "floor_area", label: "Area" },
       { key: "parking_bays", label: "Parking" },
       { key: "title_type", label: "Title" },
+      { key: "land_title_available", label: "Land title" },
       { key: "deposit", label: "Deposit" },
       { key: "contract_months", label: "Contract" },
       { key: "students_welcome", label: "Students" },
@@ -33371,7 +34295,9 @@ function renderLpExtraFields(type, preserveExisting = true) {
     const dependsAttr = field.dependsOn ? ` data-depends-on="${field.dependsOn}" data-depends-values="${(field.dependsValues || []).join(",")}"` : "";
     const infoHtml = field.info === "title_types"
       ? `<details class="mt-1 text-xs text-gray-500"><summary class="cursor-pointer text-green-700 font-semibold">${translateListingLabel("What do Freehold, Leasehold, Mailo & Customary mean?")}</summary><div class="mt-2 space-y-1"><p><strong>${translateListingLabel("Freehold")}:</strong> ${translateListingLabel("Full ownership of land/building with no expiry date.")}</p><p><strong>${translateListingLabel("Leasehold")}:</strong> ${translateListingLabel("Right to use land/building for a fixed term (e.g. 49/99 years).")}</p><p><strong>${translateListingLabel("Mailo")}:</strong> ${translateListingLabel("Registered ownership tenure common in central Uganda, sometimes with occupants on kibanja.")}</p><p><strong>${translateListingLabel("Customary")}:</strong> ${translateListingLabel("Community/family-held land under customary rules, often requires formalization for transfer.")}</p></div></details>`
-      : "";
+      : field.info === "land_title_available"
+        ? `<p class="mt-1 text-xs text-gray-500">${translateListingLabel("Record what the lister or source states. Buyers must verify title documents independently before payment.")}</p>`
+        : "";
     if (field.type === "select") {
       const normalized = (field.options || []).map((opt) => (typeof opt === "string" ? { value: opt, label: opt } : opt));
       const opts = normalized.map((opt) => `<option value="${opt.value}">${translateListingLabel(opt.label)}</option>`).join("");
@@ -33768,6 +34694,10 @@ function updateListPreview() {
     }
     if (item.key === "commercial_mode") {
       metaParts.push(`${itemLabel}: ${translateListingLabel(raw === "rent" ? "For Rent" : "For Sale")}`);
+      return;
+    }
+    if (item.key === "land_title_available") {
+      metaParts.push(`${itemLabel}: ${landTitleAvailabilityLabel(raw) || translateListingLabel("Not set")}`);
       return;
     }
     if (item.key === "students_welcome") {
@@ -34175,7 +35105,7 @@ function formatMortgageUpdatedAtLabel(value) {
   if (!value) return DEFAULT_MORTGAGE_RATE_UPDATED_AT;
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return String(value);
-  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET" };
+  const localeMap = { en: "en-GB", lg: "en-UG", sw: "sw-KE", ac: "en-UG", ny: "en-UG", rn: "en-UG", sm: "en-UG", am: "am-ET", ar: "ar" };
   const hasTime = String(value).includes("T");
   return dt.toLocaleString(localeMap[currentLang] || "en-GB", {
     day: "2-digit",
@@ -34220,7 +35150,9 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     },
     arrangementFeePct: provider.arrangementFeePct ?? provider.arrangement_fee_pct ?? 1.5,
     sourceLabel: provider.sourceLabel ?? provider.source_label ?? "Mortgage source",
-    sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#"
+    sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#",
+    sourceNote: provider.sourceNote ?? provider.source_note ?? "",
+    sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
   }));
 
   MORTGAGE_PROVIDERS = normalized;
@@ -34244,18 +35176,284 @@ async function loadMortgageRates(showToastOnRefresh = false) {
   }
 }
 
+function mortgageProviderKey(provider = {}) {
+  return String(provider.id || provider.key || provider.providerKey || provider.name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function mortgageProviderByKey(key = "") {
+  const normalized = mortgageProviderKey({ id: key });
+  return MORTGAGE_PROVIDERS.find((provider) => mortgageProviderKey(provider) === normalized) || null;
+}
+
+function hydrateMortgageProviderSelect() {
+  const select = document.getElementById("mortgage-lead-provider");
+  if (!select) return;
+  const current = selectedMortgageProviderKey || select.value || "";
+  select.innerHTML = [
+    `<option value="">${adminEscape(mortgageTr("genericProviderOption"))}</option>`,
+    ...MORTGAGE_PROVIDERS.map((provider) => {
+      const key = mortgageProviderKey(provider);
+      return `<option value="${adminAttr(key)}">${adminEscape(provider.name || key)}</option>`;
+    })
+  ].join("");
+  if (current && mortgageProviderByKey(current)) {
+    select.value = mortgageProviderKey({ id: current });
+  } else {
+    select.value = "";
+    selectedMortgageProviderKey = "";
+  }
+}
+
+function renderMortgageLeadProviderContext() {
+  const context = document.getElementById("mortgage-lead-provider-context");
+  if (!context) return;
+  const provider = mortgageProviderByKey(selectedMortgageProviderKey);
+  context.textContent = provider
+    ? mortgageTr("providerContextSelected").replace("{bank}", provider.name)
+    : mortgageTr("providerContextNone");
+  context.className = provider
+    ? "mt-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs text-emerald-900 font-semibold"
+    : "mt-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900";
+  const submit = document.getElementById("mortgage-lead-submit");
+  if (submit && !submit.disabled) {
+    submit.textContent = provider
+      ? mortgageTr("leadSubmitBank").replace("{bank}", provider.name)
+      : mortgageTr("leadSubmit");
+  }
+}
+
+function setMortgageLeadProvider(key = "", options = {}) {
+  selectedMortgageProviderKey = mortgageProviderByKey(key) ? mortgageProviderKey({ id: key }) : "";
+  const select = document.getElementById("mortgage-lead-provider");
+  if (select) select.value = selectedMortgageProviderKey;
+  renderMortgageLeadProviderContext();
+  if (options.focusForm) {
+    const leadTitle = document.getElementById("mortgage-lead-title");
+    if (leadTitle) leadTitle.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => document.getElementById("mortgage-lead-name")?.focus(), 250);
+  }
+}
+
+function setMortgageTab(tab = "repayment") {
+  activeMortgageTab = ["repayment", "affordability", "extra", "fees"].includes(tab) ? tab : "repayment";
+  renderMortgageFinder();
+  trackEvent("mortgage_calculator_tab_click", { tab: activeMortgageTab, language: currentLang || "en" });
+}
+
+function setMortgageExtraPayment(value = 0) {
+  const parsed = Number(value);
+  mortgageExtraPaymentAmount = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  renderMortgageFinder();
+}
+
+function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMonthly, extraMonthly) {
+  const principal = Math.max(0, Number(loanAmount) || 0);
+  const rate = Math.max(0, Number(annualRate) || 0) / 100 / 12;
+  const baselinePayment = Math.max(0, Number(baselineMonthly) || 0);
+  const extra = Math.max(0, Number(extraMonthly) || 0);
+  const baselineMonths = Math.max(1, Math.round((Number(years) || 0) * 12));
+  if (!principal || !baselinePayment || !extra) {
+    return { monthsSaved: 0, interestSaved: 0 };
+  }
+  let balance = principal;
+  let months = 0;
+  let paid = 0;
+  const payment = baselinePayment + extra;
+  while (balance > 1 && months < baselineMonths && months < 900) {
+    const interest = balance * rate;
+    const principalPayment = Math.max(0, payment - interest);
+    if (principalPayment <= 0) break;
+    balance = Math.max(0, balance - principalPayment);
+    paid += Math.min(payment, balance + principalPayment + interest);
+    months += 1;
+  }
+  if (balance > 1 || !months) return { monthsSaved: 0, interestSaved: 0 };
+  const baselineTotal = baselinePayment * baselineMonths;
+  const interestSaved = Math.max(0, baselineTotal - paid);
+  return {
+    monthsSaved: Math.max(0, baselineMonths - months),
+    interestSaved
+  };
+}
+
+function currentMortgageCalculation() {
+  const price = Number(document.getElementById("mortgage-price")?.value || 0) || 0;
+  const depositPct = clampMortgageValue(document.getElementById("mortgage-deposit")?.value, 0, 90, 20);
+  const years = clampMortgageValue(document.getElementById("mortgage-years")?.value, 5, 30, 20);
+  const purpose = (document.getElementById("mortgage-purpose")?.value || "residential").trim();
+  const currency = document.getElementById("mortgage-currency")?.value || "UGX";
+  const income = Math.max(0, Number(document.getElementById("mortgage-income")?.value || 0));
+  const result = buildMortgageComparison(price, depositPct, years, purpose);
+  const selectedRate = Math.max(0, Number(document.getElementById("mortgage-rate")?.value || result.best?.rate || 0));
+  const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, years) || result.best?.monthlyRepayment || 0;
+  const selectedProvider = mortgageProviderByKey(selectedMortgageProviderKey);
+  const bestProvider = result.best?.provider || null;
+  const provider = selectedProvider || bestProvider || null;
+  const extraImpact = calculateExtraMortgageImpact(result.loanAmount, selectedRate, years, monthly, mortgageExtraPaymentAmount);
+  return {
+    result,
+    price,
+    depositPct,
+    years,
+    purpose,
+    currency,
+    income,
+    selectedRate,
+    monthly,
+    suggestedIncome: monthly ? monthly / 0.35 : 0,
+    provider,
+    providerKey: provider ? mortgageProviderKey(provider) : "",
+    providerName: provider?.name || "",
+    extraPaymentAmount: mortgageExtraPaymentAmount,
+    extraImpact
+  };
+}
+
+function renderMortgageTabs(context = currentMortgageCalculation()) {
+  const tabs = [
+    ["repayment", "mortgage-tab-repayment"],
+    ["affordability", "mortgage-tab-affordability"],
+    ["extra", "mortgage-tab-extra"],
+    ["fees", "mortgage-tab-fees"]
+  ];
+  tabs.forEach(([key, id]) => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    const active = key === activeMortgageTab;
+    button.className = active
+      ? "rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20"
+      : "rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold hover:bg-green-50";
+  });
+  const panel = document.getElementById("mortgage-tab-panel");
+  if (!panel) return;
+  const { result, selectedRate, monthly, income, suggestedIncome, extraImpact } = context;
+  const bankRegistrationEstimate = result.loanAmount * 0.015;
+  const transferEstimate = result.price * 0.01;
+  const arrangementEstimate = result.loanAmount * (((context.provider?.arrangementFeePct) || 1.5) / 100);
+  const title = {
+    repayment: mortgageTr("tabRepaymentTitle"),
+    affordability: mortgageTr("tabAffordabilityTitle"),
+    extra: mortgageTr("tabExtraTitle"),
+    fees: mortgageTr("tabFeesTitle")
+  }[activeMortgageTab] || mortgageTr("tabRepaymentTitle");
+  const body = {
+    repayment: mortgageTr("tabRepaymentBody"),
+    affordability: mortgageTr("tabAffordabilityBody"),
+    extra: mortgageTr("tabExtraBody"),
+    fees: mortgageTr("tabFeesBody")
+  }[activeMortgageTab] || mortgageTr("tabRepaymentBody");
+  const dynamic = activeMortgageTab === "affordability"
+    ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthSuggestedIncome")}</strong><br>${formatMortgageAmount(suggestedIncome, context.currency)}</div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthAffordability")}</strong><br>${income ? (monthly <= income * 0.35 ? mortgageTr("fitsIncome") : mortgageTr("highIncomeWarning")) : mortgageTr("quoteRequired")}</div>
+      </div>`
+    : activeMortgageTab === "extra"
+      ? `<div class="mt-3 grid sm:grid-cols-[1fr,1.2fr] gap-2 items-end">
+          <label class="block text-xs font-bold text-emerald-900">${mortgageTr("extraPaymentLabel")}
+            <input id="mortgage-extra-payment" type="number" min="0" step="100000" value="${adminAttr(mortgageExtraPaymentAmount || "")}" oninput="setMortgageExtraPayment(this.value)" class="mt-1 w-full border border-emerald-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="${adminAttr(mortgageTr("extraPaymentPlaceholder"))}">
+          </label>
+          <div class="rounded-xl bg-white border border-emerald-100 p-3 text-xs font-semibold">
+            ${extraImpact.monthsSaved ? mortgageTr("extraPaymentSavingsLine").replace("{interest}", formatMortgageAmount(extraImpact.interestSaved, context.currency)).replace("{months}", extraImpact.monthsSaved) : mortgageTr("extraPaymentNoSavings")}
+          </div>
+        </div>`
+      : activeMortgageTab === "fees"
+        ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("depositLabel")}</strong><br>${formatMortgageAmount(result.depositAmount, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("arrangementFee")}</strong><br>${formatMortgageAmount(arrangementEstimate, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("transferStampDutyEstimate")}</strong><br>${formatMortgageAmount(transferEstimate + bankRegistrationEstimate, context.currency)}</div>
+          </div>`
+        : `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("loanAmount")}</strong><br>${formatMortgageAmount(result.loanAmount, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("rate")}</strong><br>${selectedRate.toFixed(2)}%</div>
+          </div>`;
+  panel.innerHTML = `
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <div class="text-sm font-black text-emerald-950">${adminEscape(title)}</div>
+        <div class="mt-1 text-xs text-emerald-800">${adminEscape(body)}</div>
+      </div>
+      <div class="text-[11px] text-emerald-700 font-bold">${adminEscape(mortgageTr("publicRecordDisclosure"))}</div>
+    </div>
+    ${dynamic}`;
+}
+
+function requestMortgageHelp(providerKey = "") {
+  setMortgageLeadProvider(providerKey, { focusForm: true });
+  const calc = currentMortgageCalculation();
+  const amount = document.getElementById("mortgage-lead-amount");
+  const term = document.getElementById("mortgage-lead-term");
+  if (amount && !amount.value && calc.result?.loanAmount) amount.value = String(Math.round(calc.result.loanAmount));
+  if (term && !term.value && calc.years) term.value = String(calc.years);
+  const provider = mortgageProviderByKey(providerKey);
+  trackEvent("mortgage_help_request_click", {
+    provider_key: provider ? mortgageProviderKey(provider) : "general",
+    provider_name: provider?.name || "",
+    language: currentLang || "en"
+  });
+}
+
+async function saveMortgageCalculation() {
+  if (!authState?.token) {
+    openAuthSignIn("finder");
+    return;
+  }
+  const calc = currentMortgageCalculation();
+  try {
+    await apiRequest("/api/property-seeker/mortgage-calculations", {
+      method: "POST",
+      body: {
+        property_price: calc.price,
+        deposit_percent: calc.depositPct,
+        loan_amount: calc.result.loanAmount,
+        annual_rate: calc.selectedRate,
+        term_years: calc.years,
+        monthly_repayment: calc.monthly,
+        household_income: calc.income,
+        currency: calc.currency,
+        product_type: calc.purpose,
+        preferred_provider_key: calc.providerKey || null,
+	        preferred_provider_name: calc.providerName || null,
+	        extra_monthly_payment: calc.extraPaymentAmount || 0,
+	        estimated_interest_saved: calc.extraImpact.interestSaved || 0,
+	        estimated_months_saved: calc.extraImpact.monthsSaved || 0,
+	        source: "mortgage_finder",
+	        language: currentLang || "en",
+	        source_note: calc.provider?.sourceNote || null,
+	        public_record_disclosure: mortgageTr("publicRecordDisclosure")
+	      }
+	    });
+    toast(mortgageTr("calculationSaved"));
+    trackEvent("mortgage_calculation_saved", {
+      provider_key: calc.providerKey || "none",
+      product_type: calc.purpose,
+      language: currentLang || "en"
+    });
+    renderFinderDashboard();
+  } catch (error) {
+    toast(error.message || mortgageTr("saveCalculationFail"));
+  }
+}
+
 async function submitMortgageLead() {
+  const calc = currentMortgageCalculation();
   const name = (document.getElementById("mortgage-lead-name")?.value || "").trim();
   const phoneRaw = (document.getElementById("mortgage-lead-phone")?.value || "").trim();
   const email = (document.getElementById("mortgage-lead-email")?.value || "").trim().toLowerCase();
   const contactMethod = (document.getElementById("mortgage-lead-contact")?.value || "phone").trim();
-  const amountToBorrow = Number(document.getElementById("mortgage-lead-amount")?.value || 0);
+  const amountToBorrow = Number(document.getElementById("mortgage-lead-amount")?.value || calc.result.loanAmount || 0);
   const preferredTermYears = Number(document.getElementById("mortgage-lead-term")?.value || 0) || null;
-  const propertyPrice = Number(document.getElementById("mortgage-price")?.value || 0) || null;
-  const propertyPurpose = (document.getElementById("mortgage-purpose")?.value || "residential").trim();
-  const depositPercent = Number(document.getElementById("mortgage-deposit")?.value || 0) || null;
-  const termYears = Number(document.getElementById("mortgage-years")?.value || 0) || null;
-  const householdIncome = Number(document.getElementById("mortgage-income")?.value || 0) || null;
+  const propertyPrice = calc.price || null;
+  const propertyPurpose = calc.purpose || "residential";
+  const depositPercent = calc.depositPct || null;
+  const termYears = calc.years || null;
+  const householdIncome = calc.income || null;
+  const provider = mortgageProviderByKey(selectedMortgageProviderKey);
 
   if (!name) {
     toast(mortgageTr("leadValidationName"));
@@ -34272,7 +35470,7 @@ async function submitMortgageLead() {
     return;
   }
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    toast("Enter a valid email address.");
+    toast(mortgageTr("emailValidation"));
     return;
   }
 
@@ -34291,15 +35489,28 @@ async function submitMortgageLead() {
         property_purpose: propertyPurpose,
         deposit_percent: depositPercent,
         term_years: termYears,
-        household_income: householdIncome
-      }
-    });
+        household_income: householdIncome,
+        annual_rate: calc.selectedRate,
+        monthly_repayment: calc.monthly,
+        preferred_provider_key: provider ? mortgageProviderKey(provider) : null,
+        preferred_provider_name: provider?.name || null,
+        lead_context: provider ? "bank_provider" : "general_mortgage_callback",
+        language: currentLang || "en",
+	        extra_monthly_payment: calc.extraPaymentAmount || 0,
+	        estimated_interest_saved: calc.extraImpact.interestSaved || 0,
+	        estimated_months_saved: calc.extraImpact.monthsSaved || 0,
+	        source_note: calc.provider?.sourceNote || null,
+	        public_record_disclosure: mortgageTr("publicRecordDisclosure")
+	      }
+	    });
     const ref = res?.data?.reference || "";
     const msg = ref ? `${mortgageTr("leadSubmitted")} Ref: ${ref}` : mortgageTr("leadSubmitted");
     toast(msg, 3800);
     trackEvent("mortgage_lead_submit", {
       contact_method: contactMethod || "phone",
-      property_purpose: propertyPurpose || "residential"
+      property_purpose: propertyPurpose || "residential",
+      provider_key: provider ? mortgageProviderKey(provider) : "general",
+      lead_context: provider ? "bank_provider" : "general_mortgage_callback"
     });
     ["mortgage-lead-name", "mortgage-lead-phone", "mortgage-lead-email", "mortgage-lead-amount", "mortgage-lead-term"].forEach((id) => {
       const el = document.getElementById(id);
@@ -34310,7 +35521,7 @@ async function submitMortgageLead() {
   } catch (error) {
     toast(error.message || mortgageTr("leadSubmitFail"));
   } finally {
-    setButtonLoading("mortgage-lead-submit", false, mortgageTr("leadSubmit"));
+    setButtonLoading("mortgage-lead-submit", false, provider ? mortgageTr("leadSubmitBank").replace("{bank}", provider.name) : mortgageTr("leadSubmit"));
   }
 }
 
@@ -34470,12 +35681,16 @@ function resetMortgageCalculator() {
     "mortgage-purpose": "residential",
     "mortgage-currency": "UGX"
   };
-  Object.entries(defaults).forEach(([id, value]) => {
-    const el = document.getElementById(id);
-    if (el) el.value = value;
-  });
-  renderMortgageFinder();
-}
+	  Object.entries(defaults).forEach(([id, value]) => {
+	    const el = document.getElementById(id);
+	    if (el) el.value = value;
+	  });
+	  mortgageExtraPaymentAmount = 0;
+	  selectedMortgageProviderKey = "";
+	  activeMortgageTab = "repayment";
+	  renderMortgageFinder();
+	  toast(mortgageTr("resetDone"));
+	}
 
 function renderMortgageFinder() {
   const priceEl = document.getElementById("mortgage-price");
@@ -34521,32 +35736,32 @@ function renderMortgageFinder() {
     professionalResultsEl.className = "mortgage-result-pop rounded-[1.75rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-5 min-h-[360px] shadow-[0_28px_65px_rgba(20,83,45,0.18)]";
     professionalResultsEl.innerHTML = `
       <div class="flex items-center justify-between gap-3">
-        <div class="text-sm text-green-800 font-bold uppercase tracking-wide">Estimated monthly repayment</div>
+        <div class="text-sm text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
         <div class="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-xs font-black text-green-800 shadow-sm" aria-label="Deposit percent">${normalizedDeposit}%</div>
       </div>
       <div class="text-4xl font-black mt-2">${formatMortgageAmount(monthly, currency)}</div>
-      <div class="text-xs text-gray-600 mt-2">Based on ${selectedRate.toFixed(2)}% over ${normalizedYears} ${mortgageTr("yearsWord")}.</div>
+      <div class="text-xs text-gray-600 mt-2">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
       <div class="mt-5 grid gap-3">
         <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">Once-off Costs</div>
+          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("onceOffCosts")}</div>
           <div class="text-lg font-black mt-1">${formatMortgageAmount(onceOffCosts, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">Deposit ${formatMortgageAmount(result.depositAmount, currency)} • Bank/registration estimate ${formatMortgageAmount(bankRegistrationEstimate, currency)} • Transfer/stamp duty estimate ${formatMortgageAmount(transferEstimate, currency)}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("bankRegistrationEstimate")} ${formatMortgageAmount(bankRegistrationEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(transferEstimate, currency)}</div>
         </div>
         <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">Gross Monthly Income Required</div>
+          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
           <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
         </div>
         <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">Loan Amount</div>
+          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("loanAmount")}</div>
           <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">Total interest estimate: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("totalInterestEstimate")}: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
         </div>
       </div>
       <div class="mt-5 grid gap-2">
-        <a href="#mortgage-lead-title" class="bg-green-700 text-white hover:bg-green-600 rounded-xl px-4 py-3 text-sm font-black text-center shadow-lg shadow-green-700/20">Request Mortgage Help</a>
-        ${authState?.user ? '<button type="button" onclick="toast(\'Calculation saved to your makaug dashboard.\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Save Calculation</button>' : '<button type="button" onclick="openAuthSignIn(\'finder\')" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">Sign in to save</button>'}
+        <button type="button" onclick="requestMortgageHelp('')" class="bg-green-700 text-white hover:bg-green-600 rounded-xl px-4 py-3 text-sm font-black text-center shadow-lg shadow-green-700/20">${mortgageTr("requestMortgageHelp")}</button>
+        <button type="button" onclick="saveMortgageCalculation()" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">${authState?.user ? mortgageTr("saveCalculation") : mortgageTr("signInToSave")}</button>
       </div>
-      <p class="text-[11px] text-gray-600 mt-4">This is an estimate only. Actual rates, fees, repayments, and approvals depend on the lender.</p>`;
+      <p class="text-[11px] text-gray-600 mt-4">${mortgageTr("estimateDisclaimer")}</p>`;
   }
   const leadAmountEl = document.getElementById("mortgage-lead-amount");
   if (leadAmountEl && !leadAmountEl.value) leadAmountEl.placeholder = String(Math.round(result.loanAmount || 0));
@@ -34601,6 +35816,7 @@ function renderMortgageFinder() {
             <div class="text-xs text-gray-500 uppercase font-semibold">${mortgageTr("bestEstimatedMonthly")}</div>
             <div class="text-2xl font-black text-green-800">${formatUgxAmount(bestMonthly)}</div>
             <div class="text-xs text-gray-500 mt-1">${mortgageTr("bestTotalRepayment").replace("{amount}", formatUgxAmount(result.best.totalRepayment || 0))}</div>
+            <button type="button" onclick="requestMortgageHelp('${adminAttr(mortgageProviderKey(result.best.provider))}')" class="mt-2 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-black text-white hover:bg-green-600">${mortgageTr("setUpBankCall")}</button>
           </div>
         </div>
         <div class="mt-3 flex items-center justify-between gap-2 flex-wrap">
@@ -34616,12 +35832,14 @@ function renderMortgageFinder() {
     const status = providerStatusMeta(row.status);
     const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
     const repay = row.totalRepayment ? formatUgxAmount(row.totalRepayment) : "-";
+    const providerKey = mortgageProviderKey(row.provider);
+    const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div class="font-bold text-gray-900">${row.provider.name}</div>
-            <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}</div>
+            <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
           </div>
           <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}">${status.label}</span>
         </div>
@@ -34632,9 +35850,32 @@ function renderMortgageFinder() {
           <div><span class="text-gray-500">${mortgageTr("monthly")}</span><div class="font-semibold text-gray-800">${monthly}</div></div>
         </div>
         <div class="mt-2 text-xs text-gray-500">${mortgageTr("totalRepayment")}: <strong class="text-gray-700">${repay}</strong> • ${mortgageTr("arrangementFee")}: <strong class="text-gray-700">${formatUgxAmount(row.arrangementFee || 0)}</strong></div>
-        <a href="${row.provider.sourceUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:underline mt-2">${mortgageTr("viewBankSource")} <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>
+        ${sourceNote}
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="requestMortgageHelp('${adminAttr(providerKey)}')" class="inline-flex items-center gap-1 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-black text-white hover:bg-green-600">${mortgageTr("setUpBankCall")}</button>
+          <a href="${adminAttr(row.provider.sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-xs font-semibold text-green-700 hover:underline">${mortgageTr("viewBankSource")} <i class="fas fa-arrow-up-right-from-square text-[10px]"></i></a>
+        </div>
       </div>`;
   }).join("");
+  hydrateMortgageProviderSelect();
+  renderMortgageLeadProviderContext();
+  renderMortgageTabs({
+    result,
+    price: result.price,
+    depositPct: normalizedDeposit,
+    years: normalizedYears,
+    purpose: purposeEl.value,
+    currency,
+    income,
+    selectedRate,
+    monthly,
+    suggestedIncome,
+    provider: mortgageProviderByKey(selectedMortgageProviderKey) || result.best?.provider || null,
+    providerKey: selectedMortgageProviderKey || (result.best?.provider ? mortgageProviderKey(result.best.provider) : ""),
+    providerName: mortgageProviderByKey(selectedMortgageProviderKey)?.name || result.best?.provider?.name || "",
+    extraPaymentAmount: mortgageExtraPaymentAmount,
+    extraImpact: calculateExtraMortgageImpact(result.loanAmount, selectedRate, normalizedYears, monthly, mortgageExtraPaymentAmount)
+  });
 }
 
 function openMortgageFinderWithPrefill(price, listingType = "sale") {
@@ -34710,6 +35951,8 @@ async function openDetail(id, options = {}) {
   const localizedHighlights = getLocalizedPropertyHighlights(p, detailNearby);
 	      const addedMeta = listingDateMeta(p);
 	      const availability = propertyAvailabilityText(p);
+	      const landTitleBadge = landTitleAvailabilityBadgeHtml(p);
+	      const landTitleLabel = landTitleAvailabilityLabel(getLandTitleAvailabilityValue(p));
 	      const ownerDisplayName = p.contact_display_name || p.lister_display_name || p.lister_name || translateListingLabel("Private Owner");
   const isSoldListing = normalizeModerationStatus(p.status) === "sold";
   const thirdPartyDetail = isFoundOnlineListing(p);
@@ -34815,6 +36058,7 @@ async function openDetail(id, options = {}) {
                   ${isSoldListing ? `<span class="bg-blue-600 text-white text-xs font-bold px-2 py-1 rounded">SOLD</span>` : ""}
                   ${source ? `<span class="${source.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${source.icon} text-[10px]"></i>${source.label}</span>` : ""}
                   ${registration ? `<span class="${registration.cls} text-white text-xs font-semibold px-2 py-1 rounded inline-flex items-center gap-1"><i class="${registration.icon} text-[10px]"></i>${registration.label}</span>` : ""}
+                  ${landTitleBadge}
                 </div>
                 <h1 class="text-3xl font-bold text-gray-800 mt-2 serif">${adminEscape(displayTitle)}</h1>
                 <p class="text-gray-500 mt-1"><i class="fas fa-map-marker-alt text-green-600"></i> ${detailLocation || [p.area, p.district].filter(Boolean).join(", ")}</p>
@@ -34867,6 +36111,7 @@ async function openDetail(id, options = {}) {
               ${p.baths ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.baths}</strong> ${countLabel(p.baths, "bath", "baths")}</div>` : ""}
               ${p.size ? `<div class="bg-green-50 rounded-lg p-2"><strong>${p.size}</strong></div>` : ""}
               <div class="bg-green-50 rounded-lg p-2"><strong>${translateListingLabel(p.subtype || p.property_type || "Property")}</strong></div>
+              ${landTitleLabel ? `<div class="bg-green-50 rounded-lg p-2"><strong>${adminEscape(landTitleLabel)}</strong><div class="text-[11px] text-gray-500 mt-0.5">${translateListingLabel("Source or lister stated")}</div></div>` : ""}
             </div>
           </div>
         </div>
@@ -35770,6 +37015,7 @@ function openModal(id) {
   }
   if (id === "broker-reg-modal") {
     syncAgentRegistrationForm();
+    resetAgentApplicationSuccessState();
     resetAgentRegistrationOtpState();
     resetAgentProfilePhoto();
     resetAgentIdentityPhoto();
@@ -35785,6 +37031,7 @@ function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.remove("open");
   if (id === "broker-reg-modal") {
+    resetAgentApplicationSuccessState();
     resetAgentRegistrationOtpState();
     resetAgentProfilePhoto();
     resetAgentIdentityPhoto();
