@@ -133,9 +133,13 @@ const publicHtmlCache = new Map();
 
 function applyCaptureHelperUsabilityIndexPatch(html) {
   if (!html || html.includes(captureHelperUsabilityVersion)) return html;
-  return html.replace(
+  const withDirectAssetUrls = html.replace(
     /(assets\/makaug-app\.js\?v=)([^"'<\s]+)/g,
     `$1$2-${captureHelperUsabilityVersion}`
+  );
+  return withDirectAssetUrls.replace(
+    /(window\.__makaugAppVersion\s*=\s*")([^"]+)(")/g,
+    `$1$2-${captureHelperUsabilityVersion}$3`
   );
 }
 
