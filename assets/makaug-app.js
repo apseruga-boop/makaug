@@ -9966,7 +9966,7 @@ function ensureAdminFoundOnlineControls() {
     missingButtons.push(`<button id="admin-copy-social-capture-helper-btn" type="button" onclick="adminCopySocialCaptureHelper()" class="border border-indigo-200 text-indigo-700 hover:bg-indigo-50 px-3 py-2 rounded-lg text-xs font-bold">Set Up Capture Bookmark</button>`);
   }
   if (!document.getElementById("admin-import-exact-social-links-btn")) {
-    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Paste Captured Links</button>`);
+    missingButtons.push(`<button id="admin-import-exact-social-links-btn" type="button" onclick="adminOpenSocialQuickPastePanel()" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-bold">Quick Paste Import</button>`);
   }
   if (!document.getElementById("admin-import-found-online-posts-btn")) {
     missingButtons.push(`<button id="admin-import-found-online-posts-btn" type="button" onclick="adminImportFoundOnlineSourcePosts()" class="border border-cyan-200 text-cyan-700 hover:bg-cyan-50 px-3 py-2 rounded-lg text-xs font-bold">Import Source Posts</button>`);
@@ -10978,6 +10978,49 @@ function adminImportYouTubeExactPosts(seedText = "") {
   return adminOpenSocialQuickPastePanel(seedText || adminYouTubeQuickPasteExample());
 }
 
+const ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z";
+const ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50;
+const ADMIN_YOUTUBE_SWEEP_OFFSET_KEY = "makaug.admin.youtubeSweepSourceOffset";
+
+function adminStoredNumber(key, fallback = 0) {
+  try {
+    const parsed = Number(localStorage.getItem(key));
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function adminStoreNumber(key, value = 0) {
+  try {
+    localStorage.setItem(key, String(Math.max(0, Math.round(Number(value) || 0))));
+  } catch (_) {}
+}
+
+function adminYouTubeQuotaReportIndex(youtube = {}) {
+  const reports = Array.isArray(youtube.fetch_reports) ? youtube.fetch_reports : [];
+  return reports.findIndex((report) => /quota exceeded|search queries.*per day|quota metric/i.test(String(report.reason || report.error || "")));
+}
+
+function adminYouTubeQuotaExceeded(youtube = {}) {
+  return adminYouTubeQuotaReportIndex(youtube) >= 0;
+}
+
+function adminAdvanceYouTubeSourceOffsetIfUseful(data = {}, currentOffset = 0) {
+  const youtube = data.youtube || {};
+  const searchJobCount = Number(youtube.search_job_count || 0);
+  if (!searchJobCount || !youtube.api_configured) return currentOffset;
+  const quotaIndex = adminYouTubeQuotaReportIndex(youtube);
+  const completedJobCount = quotaIndex >= 0 ? quotaIndex : searchJobCount;
+  if (completedJobCount <= 0) return currentOffset;
+  const sourceCount = Number(youtube.source_count || 0);
+  const nextOffset = sourceCount > 0
+    ? (Number(currentOffset || 0) + completedJobCount) % sourceCount
+    : Number(currentOffset || 0) + completedJobCount;
+  adminStoreNumber(ADMIN_YOUTUBE_SWEEP_OFFSET_KEY, nextOffset);
+  return nextOffset;
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
   const youtube = data.youtube || {};
@@ -10995,6 +11038,10 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
+  const youtubeSourceOffset = Number(youtube.source_offset || data.dashboard_youtube_source_offset || 0);
+  const youtubeNextSourceOffset = Number(data.dashboard_next_youtube_source_offset || youtubeSourceOffset);
+  const youtubeBatchSize = Number(data.dashboard_youtube_batch_size || ADMIN_YOUTUBE_SWEEP_BATCH_SIZE);
+  const youtubeQuotaExceeded = adminYouTubeQuotaExceeded(youtube);
   const tiktokTaskHtml = tiktokTasks.slice(0, 16).map((task) => `
     <div class="rounded-lg border border-pink-100 bg-white p-2">
       <div class="font-bold text-pink-950">${adminEscape(task.query || task.source_name || "TikTok source")}</div>
@@ -11009,7 +11056,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="rounded-lg border border-red-100 bg-white p-2">
       <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
       <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
-      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || "2026-02-01")} • Shorts and long-form videos</div>
+      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)} • Shorts and long-form videos</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -11062,8 +11109,9 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     ${youtube.search_job_count ? `
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
-        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || "2026-02-01")}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
-        <div class="mt-1 text-[11px]">YouTube search returns Shorts and long-form videos. makaug stores the exact video URL and YouTube snippet published date as First posted online when the API returns it.</div>
+        <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
+        <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
+        ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
         ${youtubeReportHtml ? `<div class="mt-2 grid md:grid-cols-2 gap-2">${youtubeReportHtml}</div>` : ""}
         ${youtubeJobHtml ? `<details class="mt-2"><summary class="cursor-pointer font-bold text-xs">Show YouTube search jobs</summary><div class="mt-2 space-y-2">${youtubeJobHtml}</div></details>` : ""}
@@ -11093,12 +11141,15 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
   const normalized = String(platform || "all").toLowerCase();
   const studentFocus = normalized === "student" || normalized === "students" || normalized === "student_housing";
   const dryRun = normalized === "tiktok";
+  const usesYouTubeSweep = normalized === "youtube" || normalized === "all" || studentFocus;
+  const youtubeSourceOffset = usesYouTubeSweep ? adminStoredNumber(ADMIN_YOUTUBE_SWEEP_OFFSET_KEY, 0) : 0;
+  const youtubeBatchSize = usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_BATCH_SIZE : 40;
   const confirmCopy = studentFocus
     ? "Run the dedicated student housing sweep across campus/hostel/student accommodation sources on TikTok, YouTube, X/Twitter, Facebook, and Instagram? YouTube/X imports require configured API keys; Facebook/Instagram stay exact-link capture tasks."
     : normalized === "tiktok"
     ? "Sweep tracked TikTok hashtags/profiles into exact-video capture tasks? This does not create properties until exact TikTok video URLs are imported."
     : normalized === "youtube"
-      ? "Sweep tracked YouTube channels, searches, and hashtags from 1 February 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server."
+      ? `Sweep the next broad YouTube batch from 1 January 2026 onward, including Shorts and long-form videos, then queue every eligible exact video as a found-online property candidate? This click starts at source offset ${youtubeSourceOffset} and uses ${youtubeBatchSize} jobs to avoid burning the whole daily YouTube quota on the same old channels. YOUTUBE_API_KEY, GOOGLE_YOUTUBE_API_KEY, or GOOGLE_API_KEY must be configured on the server.`
       : normalized === "x"
         ? "Sweep tracked X/Twitter sources through the X API and queue every eligible exact 2026+ post as found-online property candidates? X_BEARER_TOKEN must be configured on the server."
         : "Sweep all tracked social sources across TikTok, YouTube, and X/Twitter? TikTok becomes exact-video capture tasks; YouTube/X queue eligible exact posts when API keys are configured.";
@@ -11126,7 +11177,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       : normalized === "tiktok"
       ? "Sweeping TikTok hashtags/profiles and preparing exact-video capture tasks..."
       : normalized === "youtube"
-        ? "Sweeping YouTube videos from 1 February 2026 and importing eligible exact videos..."
+        ? `Sweeping YouTube videos from 1 January 2026, batch offset ${youtubeSourceOffset}, and importing eligible exact videos...`
         : normalized === "x"
           ? "Sweeping X/Twitter sources and importing eligible exact posts..."
           : "Sweeping all tracked social sources across TikTok, YouTube, and X/Twitter...";
@@ -11139,13 +11190,19 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         platform: studentFocus ? "student" : normalized,
         focus: studentFocus ? "students" : "",
         dry_run: dryRun,
-        max_sources: normalized === "tiktok" ? 30000 : studentFocus ? 750 : normalized === "youtube" ? 250 : normalized === "all" ? 250 : 40,
+        max_sources: normalized === "tiktok" ? 30000 : usesYouTubeSweep ? youtubeBatchSize : 40,
+        source_offset: youtubeSourceOffset,
         max_results: (normalized === "youtube" || studentFocus || normalized === "all") ? 50 : 25,
         x_search_mode: "all",
-        published_after: "2026-02-01T00:00:00.000Z"
+        published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START
       }
     });
     const data = response?.data || {};
+    if (usesYouTubeSweep) {
+      data.dashboard_youtube_source_offset = youtubeSourceOffset;
+      data.dashboard_youtube_batch_size = youtubeBatchSize;
+      data.dashboard_next_youtube_source_offset = adminAdvanceYouTubeSourceOffsetIfUseful(data, youtubeSourceOffset);
+    }
     if (statusEl) statusEl.innerHTML = adminSocialPlatformSweepHtml(data, normalized);
     if (!dryRun && (data.import_result?.created_properties || data.import_result?.existing_properties)) {
       adminPendingQueueFilter = "found_online";
@@ -16631,7 +16688,6 @@ function renderAdminReviewPanel(review) {
               </div>
             </div>
           </div>
-          ${renderAdminUgNlisReviewPanel(review)}
           <div class="mt-4 border border-gray-100 rounded-xl p-3 bg-gray-50">
             <div class="flex items-center justify-between gap-2 mb-2">
               <div class="text-xs uppercase tracking-wide text-gray-500 font-semibold">National ID Document</div>

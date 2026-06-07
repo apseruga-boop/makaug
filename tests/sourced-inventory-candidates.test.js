@@ -827,7 +827,7 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
 test('social platform sweeps promote TikTok hashtags, YouTube videos, and X posts to import rows', () => {
   assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
   assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 30000);
-  assert.strictEqual(YOUTUBE_SOURCE_POST_WINDOW_START, '2026-02-01T00:00:00.000Z');
+  assert.strictEqual(YOUTUBE_SOURCE_POST_WINDOW_START, '2026-01-01T00:00:00.000Z');
   assert(propertySourceRegistrySource.includes("'CommercialPropertyKampala'"), 'TikTok/social watchlist should include commercial Kampala property hashtags');
   assert(propertySourceRegistrySource.includes("'StudentAccommodationMakerere'"), 'TikTok/social watchlist should include student accommodation hashtags');
   assert(propertySourceRegistrySource.includes("'StudentAccommodationUganda2026'"), 'TikTok/social watchlist should include 2026 student accommodation hashtags');
@@ -851,7 +851,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(pkg.scripts['inventory:sweep-social-platforms'], 'node scripts/sweep-social-platform-posts.js');
   assert(socialPlatformSweepScript.includes('--platform=tiktok --dry-run'), 'social sweep script should expose TikTok hashtag capture mode');
   assert(socialPlatformSweepScript.includes('--platform=youtube --confirm'), 'social sweep script should expose YouTube API import mode');
-  assert(socialPlatformSweepScript.includes('--published-after=2026-02-01T00:00:00.000Z'), 'social sweep script should expose the February YouTube start date');
+  assert(socialPlatformSweepScript.includes('--published-after=2026-01-01T00:00:00.000Z'), 'social sweep script should expose the January YouTube start date');
   assert(socialPlatformSweepScript.includes('--platform=x --confirm'), 'social sweep script should expose X import mode');
   assert(socialPlatformSweepScript.includes('--lookback-days'), 'social sweep script should support two-week X/Twitter lookback sweeps');
   assert(adminRoute.includes("router.post('/social-platform-posts/sweep'"), 'admin should expose a protected social platform sweep endpoint');
@@ -867,7 +867,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(frontend.includes('Sweep TikTok Hashtags'), 'King dashboard should expose TikTok hashtag sweep action');
   assert(frontend.includes('Import TikTok Videos'), 'King dashboard should expose exact TikTok video import action');
   assert(frontend.includes('Sweep YouTube Videos'), 'King dashboard should expose YouTube video sweep action');
-  assert(frontend.includes('published_after: "2026-02-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from February 2026 onward');
+  assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z"'), 'King dashboard should sweep YouTube from January 2026 onward');
   assert(frontend.includes('getTikTokEmbedUrl'), 'public property detail should support TikTok video embeds');
   assert(frontend.includes('https://www.tiktok.com/embed/v2/'), 'TikTok source videos should render with TikTok embed URLs');
   assert(frontend.includes('safeVideoIsTikTok'), 'TikTok videos should be labelled separately from YouTube videos');
@@ -881,7 +881,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('snippet.publishedAt'), 'YouTube sweep policy should explain the source publish date comes from YouTube snippet.publishedAt');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
-  assert(frontend.includes('max_sources: normalized === "tiktok" ? 30000 : normalized === "youtube" ? 250 : 40'), 'TikTok sweep should request every tracked TikTok source and YouTube should use a Render-safe API batch');
+  assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50'), 'King dashboard should use quota-safe 50-source YouTube batches');
+  assert(frontend.includes('source_offset: youtubeSourceOffset'), 'King dashboard should advance through YouTube source batches instead of repeating the first sources');
   assert(socialSearchServiceSource.includes('defer_until_agent_claims_profile'), 'source-post import should defer source profiles until the source owner registers or claims them');
 
   const tiktokTasks = buildTikTokCaptureTasks({
