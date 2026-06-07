@@ -235,6 +235,25 @@ const captureHelperUsabilityScriptPatch = `
     return \`javascript:\${encodeURIComponent(window.adminSocialCaptureHelperScript())}\`;
   };
 
+  window.adminPasteSocialCapturedLinks = function adminPasteSocialCapturedLinks(seedText = "") {
+    if (typeof window.adminOpenSocialQuickPastePanel === "function") {
+      return window.adminOpenSocialQuickPastePanel(seedText);
+    }
+    const statusEl = document.getElementById("admin-found-online-status")
+      || document.getElementById("admin-social-source-status");
+    if (statusEl && typeof window.adminSocialQuickPastePanelHtml === "function") {
+      statusEl.classList.remove("hidden");
+      statusEl.innerHTML = window.adminSocialQuickPastePanelHtml({ seedText });
+      if (typeof window.adminScrollTo === "function") {
+        window.adminScrollTo(\`#\${statusEl.id || "admin-found-online-status"}\`);
+      }
+      return;
+    }
+    if (typeof toast === "function") {
+      toast("Paste box is still loading. Use Paste Captured Links at the top of the dashboard.");
+    }
+  };
+
   window.adminSocialCaptureHelperPanelHtml = function adminSocialCaptureHelperPanelHtml({ copiedLabel = "" } = {}) {
     const bookmarklet = window.adminSocialCaptureBookmarkletUrl();
     return \`
