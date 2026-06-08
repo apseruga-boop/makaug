@@ -16,6 +16,14 @@ const whatsappWebBridgeServiceSource = fs.readFileSync(
   path.join(__dirname, '..', 'services', 'whatsappWebBridgeService.js'),
   'utf8'
 );
+const whatsappBridgeReadinessSource = fs.readFileSync(
+  path.join(__dirname, '..', 'services', 'whatsappBridgeReadiness.js'),
+  'utf8'
+);
+const adminRouteSource = fs.readFileSync(
+  path.join(__dirname, '..', 'routes', 'admin.js'),
+  'utf8'
+);
 const llmProviderSource = fs.readFileSync(
   path.join(__dirname, '..', 'services', 'llmProvider.js'),
   'utf8'
@@ -78,6 +86,15 @@ async function run() {
     whatsappWebCopilotSource.includes('POLL_MS = Math.min(150, Math.max(40'),
     'WhatsApp Web sender must poll the active chat on a sub-100ms default path'
   );
+
+  assert(
+    whatsappBridgeReadinessSource.includes('evaluateHostedWhatsappBridgeReadiness')
+      && whatsappBridgeReadinessSource.includes('hosted_agent_online')
+      && whatsappBridgeReadinessSource.includes('only_local_laptop_bridge_is_online')
+      && adminRouteSource.includes('evaluateHostedWhatsappBridgeReadiness')
+      && adminRouteSource.includes('webBridge: {'),
+    'Admin WhatsApp health must expose hosted/live bridge readiness, not only raw bridge clients'
+  );
   assert(
     whatsappWebCopilotSource.includes('RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60'),
     'WhatsApp Web sender must sweep recent chats several times per second'
@@ -122,6 +139,11 @@ async function run() {
   assert(
     whatsappWebCopilotSource.includes("WHATSAPP_WEB_COPILOT_TRUST_SEND_ON_COMPOSER_CLEAR || 'false'"),
     'WhatsApp Web sender must not mark a reply sent from composer-clear alone by default'
+  );
+  assert(
+    whatsappWebCopilotSource.includes('send bubble was not observed after composer cleared; trusting composer-clear send confirmation by override')
+      && whatsappWebCopilotSource.includes('send bubble was not observed after Enter; trusting composer-clear send confirmation by override'),
+    'WhatsApp Web sender must honor the explicit composer-clear trust override in its send fallback branches'
   );
   assert(
     whatsappWebCopilotSource.includes('matchedNewText')

@@ -129,15 +129,15 @@ const scenarios = [
     ]
   },
   {
-    name: 'Land title search property URL routes to official UgNLIS information without UUID budget',
+    name: 'Land title question routes to marketplace land safety guidance without UUID budget',
     messages: [
-      "Hi makaug, I'm looking for land or a plot. Please send the official UgNLIS title search steps. Page: makaug.com/property/a314682b-a329-4862-9343-2e73f5b81448"
+      "Hi makaug, I'm looking for land or a plot. Please send the official title search steps. Page: makaug.com/property/a314682b-a329-4862-9343-2e73f5b81448"
     ],
     expect: [
       {
         step: 'main_menu',
-        includes: ['UgNLIS', 'Have ready', 'Title search'],
-        excludes: ['max USh', '314682', 'Filters:', 'Send the area or district']
+        includes: ['Land safety', 'do not provide official title checks', 'legal clearance', '/#page-land'],
+        excludes: ['UgNLIS', 'max USh', '314682', 'Filters:', 'Send the area or district']
       }
     ]
   },
@@ -200,6 +200,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'Family house in Kololo',
       'Kampala',
       'Kololo',
@@ -497,11 +498,12 @@ const scenarios = [
   },
   {
     name: 'Mid-flow intent switch to agent',
-    messages: ['1', '1', '1', '2', 'Nice house in Ntinda', 'I need to find an agent'],
+    messages: ['1', '1', '1', '2', 'yes', 'Nice house in Ntinda', 'I need to find an agent'],
     expect: [
       { step: 'listing_type' },
       { step: 'ownership' },
       { step: 'ask_field_agent' },
+      { step: 'ask_land_title_available' },
       { step: 'title' },
       { step: 'district' },
       { step: 'agent_area', includesAny: ['agent', 'district', 'kitundu'] }
@@ -514,6 +516,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       '3 bedroom house in Ntinda',
       'Kampala',
       'Ntinda',
@@ -536,6 +539,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'House in Kololo',
       'Wakiso',
       'Kololo',
@@ -556,6 +560,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'House in Kololo',
       'Wakiso',
       'Kololo',
@@ -573,6 +578,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'Family house in Kololo',
       'Kampala',
       'Kololo',
@@ -590,6 +596,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'Family house in Kololo',
       'Kampala',
       'Kololo',
@@ -616,6 +623,7 @@ const scenarios = [
       '1',
       '1',
       '2',
+      'yes',
       'Family house in Kololo',
       'Kampala',
       'Kololo',
@@ -667,6 +675,7 @@ const scenarios = [
       '5',
       '1',
       '2',
+      'yes',
       'Retail shop in Kampala',
       'Kampala',
       'Kololo',

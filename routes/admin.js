@@ -8,6 +8,10 @@ const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
+const {
+  landTitleAvailabilityLabel,
+  normalizeLandTitleAvailability
+} = require('../utils/landTitleAvailability');
 const { processPendingCampaignQueue, refreshCampaignStatus } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy, suggestWhatsappAssistantReply } = require('../services/aiService');
 const { sendWhatsAppText } = require('../services/whatsappNotificationService');
@@ -44,6 +48,7 @@ const {
   isWhatsappWebBridgeEnabled,
   queueWhatsappWebBridgeMessage
 } = require('../services/whatsappWebBridgeService');
+const { evaluateHostedWhatsappBridgeReadiness } = require('../services/whatsappBridgeReadiness');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
   getDefaultEmailFrom,
@@ -53,9 +58,14 @@ const {
   sendSupportEmail
 } = require('../services/emailService');
 const {
+  buildAdvertisingQuoteBreakdown,
   estimateAdvertisingQuote,
   findAdvertisingPackage,
+  findAdvertisingPlacement,
+  getAdvertisingPlacements,
   getAdvertisingPackages,
+  getAdvertisingRateCard,
+  mergePlacementWithCatalog,
   summarizeAdvertisingPackageKeys
 } = require('../services/advertisingCatalogService');
 const { addLeadActivity, createLead } = require('../services/leadService');
@@ -105,10 +115,6 @@ const {
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
-const {
-  buildUgNlisLandVerificationPack,
-  sanitizeUgNlisLandVerificationFields
-} = require('../services/ugnlisLandVerificationService');
 const { isPointInUganda } = require('../services/locationSearchService');
 const {
   retryEmailLog,
@@ -129,6 +135,34 @@ const ADMIN_LISTING_IMAGE_MAX_BYTES = 6 * 1024 * 1024;
 const ADMIN_LISTING_IMAGE_MAX_COUNT = 20;
 const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
+const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
+const LEAD_PROPERTY_MATCH_LIMIT = 10;
+const ADMIN_PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'];
+const ADMIN_FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
+
+function adminSqlList(values = []) {
+  return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
+}
+
+function adminColumn(alias, column) {
+  return alias ? `${alias}.${column}` : column;
+}
+
+function adminLowerColumn(alias, column) {
+  return `LOWER(COALESCE(${adminColumn(alias, column)}, ''))`;
+}
+
+function adminPendingReviewWhere(alias = 'p') {
+  const statusExpr = adminLowerColumn(alias, 'status');
+  const stageExpr = adminLowerColumn(alias, 'moderation_stage');
+  const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
+  const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+  return `(
+    ${statusExpr} NOT IN (${final})
+    AND ${stageExpr} NOT IN (${final})
+    AND (${statusExpr} IN (${pending}) OR ${stageExpr} IN (${pending}))
+  )`;
+}
 
 function adminLaunchTestListingCondition(alias = 'p') {
   const a = alias;
@@ -154,6 +188,199 @@ function adminPublicLiveListingCondition(alias = 'p') {
 
 function adminPublicLiveListingWhere(alias = 'p') {
   return `${alias}.status = 'approved' AND ${adminPublicLiveListingCondition(alias)}`;
+}
+
+function safeJsonObject(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === 'object' && !Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : fallback;
+    } catch (_error) {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+function normalizeLeadListingType(value = 'any') {
+  const clean = cleanText(value).toLowerCase().replace(/[\s-]+/g, '_');
+  if (['sale', 'sell', 'buy', 'for_sale', 'purchase'].includes(clean)) return 'sale';
+  if (['rent', 'rental', 'to_rent', 'lease'].includes(clean)) return 'rent';
+  if (['land', 'plot'].includes(clean)) return 'land';
+  if (['student', 'students', 'hostel', 'student_accommodation'].includes(clean)) return 'student';
+  if (['commercial', 'office', 'shop', 'business'].includes(clean)) return 'commercial';
+  return 'any';
+}
+
+function numberOrNull(value) {
+  if (value == null || value === '') return null;
+  const parsed = Number(String(value).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function leadSearchCriteria(lead = {}) {
+  const metadata = safeJsonObject(lead.metadata);
+  const filters = safeJsonObject(metadata.filters);
+  const searchType = normalizeLeadListingType(metadata.search_type || filters.searchType || filters.search_type || lead.category || lead.lead_type);
+  const area = cleanText(metadata.preferred_area || filters.area || lead.location);
+  const maxBudget = numberOrNull(filters.maxBudgetUgx || filters.max_budget_ugx || metadata.max_budget_ugx || lead.budget);
+  const bedsMin = numberOrNull(filters.bedsMin || filters.beds_min || metadata.beds_min);
+  const propertyType = cleanText(filters.propertyType || filters.property_type || metadata.property_type);
+  return {
+    searchType,
+    area: area && area.toLowerCase() !== 'any' ? area : '',
+    maxBudget,
+    bedsMin,
+    propertyType,
+    originalMessage: cleanText(metadata.original_message || lead.message),
+    metadata
+  };
+}
+
+function addLeadPropertyMatchFilters(values, criteria = {}, relax = {}) {
+  let where = `WHERE ${adminPublicLiveListingWhere('p')}`;
+  const searchType = normalizeLeadListingType(criteria.searchType || 'any');
+  if (!relax.searchType && searchType !== 'any') {
+    if (searchType === 'student') {
+      where += ` AND (
+        p.listing_type = 'student'
+        OR p.students_welcome = TRUE
+        OR p.title ILIKE '%student%'
+        OR p.title ILIKE '%hostel%'
+        OR p.description ILIKE '%student%'
+        OR p.description ILIKE '%hostel%'
+        OR COALESCE(p.property_type, '') ILIKE '%hostel%'
+      )`;
+    } else {
+      values.push(searchType);
+      where += ` AND p.listing_type = $${values.length}`;
+    }
+  }
+
+  const area = cleanText(criteria.area);
+  if (!relax.area && area) {
+    values.push(`%${area}%`);
+    const idx = values.length;
+    where += ` AND (
+      p.district ILIKE $${idx}
+      OR p.area ILIKE $${idx}
+      OR p.title ILIKE $${idx}
+      OR COALESCE(p.address, '') ILIKE $${idx}
+      OR COALESCE(p.description, '') ILIKE $${idx}
+      OR COALESCE(p.extra_fields->>'city', '') ILIKE $${idx}
+      OR COALESCE(p.extra_fields->>'neighborhood', '') ILIKE $${idx}
+      OR COALESCE(p.extra_fields->>'region', '') ILIKE $${idx}
+      OR COALESCE(p.extra_fields->>'resolved_location_label', '') ILIKE $${idx}
+    )`;
+  }
+
+  const maxBudget = numberOrNull(criteria.maxBudget);
+  if (!relax.budget && maxBudget) {
+    values.push(maxBudget);
+    where += ` AND p.price IS NOT NULL AND p.price <= $${values.length}`;
+  }
+
+  const bedsMin = numberOrNull(criteria.bedsMin);
+  if (!relax.beds && bedsMin) {
+    values.push(bedsMin);
+    where += ` AND COALESCE(p.bedrooms, 0) >= $${values.length}`;
+  }
+
+  const propertyType = cleanText(criteria.propertyType);
+  if (!relax.propertyType && propertyType) {
+    values.push(`%${propertyType}%`);
+    const idx = values.length;
+    where += ` AND (
+      COALESCE(p.property_type, '') ILIKE $${idx}
+      OR p.title ILIKE $${idx}
+      OR p.description ILIKE $${idx}
+    )`;
+  }
+  return where;
+}
+
+async function queryLeadPropertyMatches(criteria = {}, strength = 'exact', relax = {}, limit = LEAD_PROPERTY_MATCH_LIMIT) {
+  const values = [];
+  const where = addLeadPropertyMatchFilters(values, criteria, relax);
+  values.push(Math.max(1, Math.min(LEAD_PROPERTY_MATCH_LIMIT, Number(limit) || LEAD_PROPERTY_MATCH_LIMIT)));
+  const limitIdx = values.length;
+  const result = await db.query(
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period,
+            p.bedrooms, p.bathrooms, p.property_type, p.inquiry_reference, p.created_at,
+            img.url AS primary_image_url
+     FROM properties p
+     LEFT JOIN LATERAL (
+       SELECT CASE WHEN url ~* '^https?://' AND length(url) < 500 THEN url ELSE NULL END AS url
+       FROM property_images
+       WHERE property_id = p.id
+       ORDER BY is_primary DESC, sort_order ASC, created_at ASC
+       LIMIT 1
+     ) img ON TRUE
+     ${where}
+     ORDER BY
+       CASE WHEN p.price IS NULL THEN 1 ELSE 0 END ASC,
+       p.created_at DESC
+     LIMIT $${limitIdx}`,
+    values
+  );
+  return result.rows.map((row) => ({
+    ...row,
+    match_strength: strength,
+    public_url: `${PUBLIC_SITE_URL}/property/${row.id}`
+  }));
+}
+
+async function findLeadPropertyMatches(lead = {}, limit = LEAD_PROPERTY_MATCH_LIMIT) {
+  const criteria = leadSearchCriteria(lead);
+  const attempts = [
+    { strength: 'exact', relax: {} },
+    { strength: 'similar_area', relax: { budget: true, beds: true, propertyType: true } },
+    { strength: 'similar_type', relax: { area: true, budget: true, beds: true, propertyType: true } },
+    { strength: 'broader_live', relax: { searchType: true, area: true, budget: true, beds: true, propertyType: true } }
+  ];
+  const seen = new Set();
+  const matches = [];
+  let exactCount = 0;
+  for (const attempt of attempts) {
+    if (matches.length >= limit) break;
+    const rows = await queryLeadPropertyMatches(criteria, attempt.strength, attempt.relax, limit);
+    rows.forEach((row) => {
+      const id = String(row.id || '');
+      if (!id || seen.has(id) || matches.length >= limit) return;
+      seen.add(id);
+      if (attempt.strength === 'exact') exactCount += 1;
+      matches.push(row);
+    });
+  }
+  return { criteria, exactCount, matches };
+}
+
+function formatLeadMatchPrice(row = {}) {
+  const price = numberOrNull(row.price);
+  if (!price) return '';
+  const period = cleanText(row.price_period);
+  return `USh ${Math.round(price).toLocaleString('en-UG')}${period ? ` ${period}` : ''}`;
+}
+
+function buildLeadMatchWhatsappMessage({ lead = {}, property = {}, criteria = {} } = {}) {
+  const title = cleanText(property.title) || 'a makaug property';
+  const location = [property.area, property.district].map(cleanText).filter(Boolean).join(', ') || cleanText(criteria.area) || 'Uganda';
+  const price = formatLeadMatchPrice(property);
+  const original = cleanText(criteria.originalMessage || lead.message);
+  const url = property.public_url || `${PUBLIC_SITE_URL}/property/${property.id}`;
+  return [
+    'Hi, this is makaug.com.',
+    original ? `You previously asked us for: "${original.slice(0, 180)}"` : 'You previously asked us to help find a property.',
+    'We found a live property that may match what you were looking for:',
+    `${title}`,
+    `Location: ${location}`,
+    price ? `Price: ${price}` : '',
+    `View photos, map, and enquiry options: ${url}`,
+    'Reply here if you would like help booking a viewing or requesting a callback.',
+    'Reply STOP if you no longer want makaug.com property follow-ups.'
+  ].filter(Boolean).join('\n');
 }
 
 function numberOrZero(value) {
@@ -558,11 +785,14 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     broker_review_status: 'approved',
     broker_account_status: 'approved',
     broker_agent_id: agent.id,
+    makaug_agent_number: agent.makaug_agent_number || '',
     broker_company: agent.company_name || '',
     agent_company: agent.company_name || '',
     agent_districts: Array.isArray(agent.districts_covered) ? agent.districts_covered.join(', ') : '',
     agent_specialities: Array.isArray(agent.specializations) ? agent.specializations.join(', ') : '',
+    agent_experience_years: Number(agent.experience_years || 0) || 0,
     national_id_number: agent.nin || existingProfile.national_id_number || '',
+    national_id_expiry_date: agent.id_expiry_date || existingProfile.national_id_expiry_date || '',
     broker_identity_document_uploaded: Boolean(agent.identity_document_url),
     broker_identity_document_name: agent.identity_document_name || '',
     broker_identity_document_uploaded_at: agent.identity_document_uploaded_at || '',
@@ -685,6 +915,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
     failureReason: emailDelivery.error || emailDelivery.reason || null,
     payloadSummary: {
       agent_id: agent.id,
+      makaug_agent_number: agent.makaug_agent_number || null,
       temporary_password_issued: Boolean(temporaryPassword),
       provider_configured: emailProviderConfigured(),
       dashboard_url: dashboardUrl
@@ -692,6 +923,7 @@ async function provisionApprovedBrokerAccount(agent = {}, req = null) {
   });
   await writeAudit('broker_account_provisioned', {
     agent_id: agent.id,
+    makaug_agent_number: agent.makaug_agent_number || null,
     user_id: saved.id,
     temporary_password_issued: Boolean(temporaryPassword),
     email_status: emailStatus
@@ -877,6 +1109,35 @@ function missingSmsEnv() {
   return missing;
 }
 
+function mediaStorageProvider() {
+  return String(process.env.MEDIA_STORAGE_PROVIDER || 'local').trim().toLowerCase();
+}
+
+function mediaStorageRequiredEnv(provider = mediaStorageProvider()) {
+  if (provider === 's3') {
+    return ['MEDIA_STORAGE_PROVIDER', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+  }
+  if (provider === 's3_presigned') {
+    return ['MEDIA_STORAGE_PROVIDER', 'S3_PRESIGN_ENDPOINT'];
+  }
+  if (provider === 'supabase') {
+    return ['MEDIA_STORAGE_PROVIDER', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_STORAGE_BUCKET'];
+  }
+  return ['MEDIA_STORAGE_PROVIDER', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+}
+
+function missingMediaStorageEnv() {
+  const provider = mediaStorageProvider();
+  if (provider === 'local') return mediaStorageRequiredEnv('s3');
+  if (!['s3', 's3_presigned', 'supabase'].includes(provider)) return ['MEDIA_STORAGE_PROVIDER'];
+  return missingEnv(mediaStorageRequiredEnv(provider));
+}
+
+function mediaStorageConfigured() {
+  const provider = mediaStorageProvider();
+  return ['s3', 's3_presigned', 'supabase'].includes(provider) && missingMediaStorageEnv().length === 0;
+}
+
 function providerConfigured(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
@@ -887,6 +1148,7 @@ function providerConfigured(provider) {
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
   if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
+  if (provider === 'media_storage') return mediaStorageConfigured();
   return anyEnv(keyGroups[provider] || []);
 }
 
@@ -895,6 +1157,7 @@ function providerEnvKeys(provider) {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'],
     whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN'],
     sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME'],
+    media_storage: mediaStorageRequiredEnv(),
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
@@ -910,6 +1173,7 @@ function missingEnv(keys = []) {
 
 function missingProviderEnv(provider) {
   if (provider === 'sms') return missingSmsEnv();
+  if (provider === 'media_storage') return missingMediaStorageEnv();
   return missingEnv(providerEnvKeys(provider));
 }
 
@@ -1381,7 +1645,6 @@ async function loadWhatsappConversationDetail(phone) {
 
 function publicPreviewExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
-  const landVerification = buildUgNlisLandVerificationPack(extra);
   return {
     city: extra.city || null,
     neighborhood: extra.neighborhood || null,
@@ -1394,17 +1657,6 @@ function publicPreviewExtraFields(extraFields = {}) {
     youtube_url: extra.youtube_url || null,
     area_highlights: extra.area_highlights || '',
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
-    land_verification: landVerification,
-    ugnlis_title_volume: extra.ugnlis_title_volume || null,
-    ugnlis_title_folio: extra.ugnlis_title_folio || null,
-    ugnlis_county: extra.ugnlis_county || null,
-    ugnlis_block: extra.ugnlis_block || null,
-    ugnlis_plot: extra.ugnlis_plot || null,
-    ugnlis_transaction_number: extra.ugnlis_transaction_number || null,
-    ugnlis_search_reference: extra.ugnlis_search_reference || null,
-    ugnlis_search_date: extra.ugnlis_search_date || null,
-    ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
-    land_verification_status: landVerification.status,
     translations: extra.translations && typeof extra.translations === 'object' ? extra.translations : {},
     size_raw: extra.size_raw || '',
     featured: extra.featured === true,
@@ -1623,6 +1875,10 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     const lngAlias = normalizedPatch.lng ?? normalizedPatch.lon ?? normalizedPatch.long;
     if (lngAlias != null) normalizedPatch.longitude = lngAlias;
   }
+  if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'land_title_available')) {
+    const landTitleAlias = normalizedPatch.landTitleAvailable ?? normalizedPatch.title_available ?? normalizedPatch.titleAvailable;
+    if (landTitleAlias != null) normalizedPatch.land_title_available = landTitleAlias;
+  }
 
   const fieldMap = {
     title: { column: 'title', value: cleanText(normalizedPatch.title), required: true },
@@ -1770,6 +2026,13 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     correctedFields.push('student_universities');
   }
 
+  if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'land_title_available')) {
+    const landTitleAvailable = normalizeLandTitleAvailability(normalizedPatch.land_title_available);
+    extraPatch.land_title_available = landTitleAvailable || null;
+    extraPatch.land_title_available_label = landTitleAvailabilityLabel(landTitleAvailable) || null;
+    correctedFields.push('land_title_available');
+  }
+
   if (errors.length) {
     const err = new Error('Validation failed');
     err.status = 400;
@@ -1777,7 +2040,7 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
     throw err;
   }
 
-  if (!setParts.length) return null;
+  if (!setParts.length && !Object.keys(extraPatch).length) return null;
 
   const latitude = toNullableCoordinate(normalizedPatch.latitude);
   const longitude = toNullableCoordinate(normalizedPatch.longitude);
@@ -1806,6 +2069,8 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
       street_name: cleanText(normalizedPatch.street_name),
       property_type: cleanText(normalizedPatch.property_type),
       title_type: cleanText(normalizedPatch.title_type),
+      land_title_available: extraPatch.land_title_available || null,
+      land_title_available_label: extraPatch.land_title_available_label || null,
       lister_phone: cleanText(normalizeUgPhone(normalizedPatch.lister_phone)) || null,
       nearest_university: cleanText(normalizedPatch.nearest_university),
       distance_to_uni_km: toNullableFloat(normalizedPatch.distance_to_uni_km),
@@ -1866,7 +2131,7 @@ router.get('/summary', async (req, res, next) => {
       db.query(
         `SELECT
           COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+          COUNT(*) FILTER (WHERE ${adminPendingReviewWhere('')})::int AS pending,
           COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
           COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
@@ -1992,7 +2257,7 @@ router.get('/command-centre', async (_req, res, next) => {
       testUsers,
       propertyRequests
     ] = await Promise.all([
-      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
@@ -2196,6 +2461,94 @@ router.get('/recent', async (req, res, next) => {
   }
 });
 
+router.get('/properties/review-queue', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
+    const filters = [adminPendingReviewWhere('p')];
+    const values = [];
+    const search = cleanText(req.query.search || req.query.q);
+    const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+
+    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingCondition('p')}`);
+    if (listingType && LISTING_TYPES.includes(listingType)) {
+      values.push(listingType);
+      filters.push(`p.listing_type = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      const idx = values.length;
+      filters.push(`(
+        p.title ILIKE $${idx}
+        OR p.area ILIKE $${idx}
+        OR p.district ILIKE $${idx}
+        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
+        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
+      )`);
+    }
+
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
+    const total = countResult.rows[0]?.total || 0;
+
+    const rows = await db.query(
+      `SELECT
+         p.id,
+         p.title,
+         p.listing_type,
+         p.property_type,
+         p.district,
+         p.area,
+         p.price,
+         p.price_period,
+         p.status,
+         p.moderation_stage,
+         p.moderation_notes,
+         p.moderation_reason,
+         p.inquiry_reference,
+         p.source,
+         p.listed_via,
+         p.lister_name,
+         p.lister_phone,
+         p.lister_email,
+         p.created_at,
+         p.updated_at,
+         p.extra_fields,
+         CONCAT('/property/', p.id::text) AS property_url,
+         img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT i.url
+         FROM property_images i
+         WHERE i.property_id = p.id
+         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+         LIMIT 1
+       ) img ON true
+       ${where}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+
+    return res.json({
+      ok: true,
+      data: rows.rows,
+      pagination: toPagination(total, page, limit),
+      meta: {
+        status: 'review_queue',
+        include_test_like: includeTestLike,
+        pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
+        final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get('/properties/live', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query);
@@ -2385,9 +2738,11 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
     const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
+    const focus = req.body?.focus || req.body?.sweep_focus || req.body?.sweepFocus || '';
     const result = await runSocialPlatformPostSweep({
       db,
       platform,
+      focus,
       dryRun,
       maxSources,
       sourceOffset,
@@ -2400,8 +2755,11 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       source: SOURCED_INVENTORY_CANDIDATE_SOURCE,
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       platform,
+      focus,
       dry_run: dryRun,
       tiktok_capture_task_count: result.tiktok?.capture_task_count || 0,
+      facebook_capture_task_count: result.facebook?.capture_task_count || 0,
+      instagram_capture_task_count: result.instagram?.capture_task_count || 0,
       youtube_search_job_count: result.youtube?.search_job_count || 0,
       youtube_api_configured: result.youtube?.api_configured === true,
       x_search_job_count: result.x?.search_job_count || 0,
@@ -3198,67 +3556,6 @@ router.patch('/properties/:id/review', async (req, res, next) => {
   }
 });
 
-router.patch('/properties/:id/land-verification', async (req, res, next) => {
-  try {
-    const existing = await db.query(
-      'SELECT id, listing_type, extra_fields FROM properties WHERE id = $1 LIMIT 1',
-      [req.params.id]
-    );
-    if (!existing.rows.length) {
-      return res.status(404).json({ ok: false, error: 'Property not found' });
-    }
-
-    const patch = sanitizeUgNlisLandVerificationFields(req.body || {});
-    const notes = cleanText(req.body?.notes || req.body?.ugnlis_search_notes || '');
-    if (notes) patch.ugnlis_search_notes = notes;
-    if (!Object.keys(patch).length) {
-      return res.status(400).json({ ok: false, error: 'No land verification fields supplied' });
-    }
-    patch.land_verification_updated_at = new Date().toISOString();
-
-    const updated = await db.query(
-      `UPDATE properties
-       SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING id, listing_type, status, extra_fields, updated_at`,
-      [req.params.id, JSON.stringify(patch)]
-    );
-
-    await db.query(
-      `INSERT INTO property_moderation_events (property_id, actor_id, action, notes, delivery)
-       VALUES ($1, $2, $3, $4, $5::jsonb)`,
-      [
-        req.params.id,
-        adminActorId(req),
-        'land_verification_updated',
-        notes || null,
-        JSON.stringify({
-          provider: 'ugnlis',
-          status: patch.land_verification_status || null,
-          search_letter_url_present: !!patch.ugnlis_search_letter_url
-        })
-      ]
-    );
-
-    await writeAudit('admin_land_verification_updated', {
-      property_id: req.params.id,
-      field_count: Object.keys(patch).length,
-      status: patch.land_verification_status || null
-    }, adminActorId(req));
-
-    return res.json({
-      ok: true,
-      data: {
-        ...updated.rows[0],
-        land_verification: buildUgNlisLandVerificationPack(updated.rows[0])
-      }
-    });
-  } catch (error) {
-    return next(error);
-  }
-});
-
 router.post('/properties/:id/review-token', async (req, res, next) => {
   try {
     const property = await db.query(
@@ -3970,6 +4267,10 @@ router.get('/advertising/packages', (_req, res) => {
   return res.json({ ok: true, data: getAdvertisingPackages() });
 });
 
+router.get('/advertising/rate-card', (_req, res) => {
+  return res.json({ ok: true, data: getAdvertisingRateCard() });
+});
+
 router.get('/advertising/placements', async (_req, res, next) => {
   try {
     const rows = await db.query(
@@ -3977,10 +4278,11 @@ router.get('/advertising/placements', async (_req, res, next) => {
        FROM advertising_placements
        ORDER BY sort_order ASC, label ASC`
     );
-    return res.json({ ok: true, data: rows.rows });
+    const data = rows.rows.length ? rows.rows.map((row) => mergePlacementWithCatalog(row)) : getAdvertisingPlacements();
+    return res.json({ ok: true, data });
   } catch (error) {
     if (String(error.message || '').includes('advertising_placements')) {
-      return res.json({ ok: true, data: [] });
+      return res.json({ ok: true, data: getAdvertisingPlacements() });
     }
     return next(error);
   }
@@ -4189,10 +4491,31 @@ router.post('/advertising/campaigns', async (req, res, next) => {
     if (!advertiserName) return res.status(400).json({ ok: false, error: 'advertiser_name is required' });
     if (!campaignName) return res.status(400).json({ ok: false, error: 'campaign_name is required' });
 
-    const placements = normalizeJsonList(req.body.placements).length
-      ? normalizeJsonList(req.body.placements)
-      : (pkg?.placements || []);
-    const targetPages = normalizeJsonList(req.body.target_pages || req.body.pages);
+    const selectedPlacements = normalizeJsonList(req.body.placements);
+    const placements = selectedPlacements.length
+      ? selectedPlacements
+      : (pkg?.placement_keys || pkg?.placements || []);
+    const inferredTargetPages = placements
+      .map((key) => findAdvertisingPlacement(key)?.page_key)
+      .filter(Boolean);
+    const targetPages = normalizeJsonList(req.body.target_pages || req.body.pages).length
+      ? normalizeJsonList(req.body.target_pages || req.body.pages)
+      : inferredTargetPages;
+    const placementQuote = buildAdvertisingQuoteBreakdown({
+      placementKeys: placements,
+      durationDays: req.body.duration_days || pkg?.duration_days || inquiry?.desired_duration_days || 7
+    });
+    const packageQuote = buildAdvertisingQuoteBreakdown({
+      packageKeys: pkg?.key ? [pkg.key] : safeJsonb(inquiry?.product_interests, [])
+    });
+    const quotedAmount = Math.max(
+      0,
+      parseInt(req.body.quoted_amount_ugx, 10)
+        || Number(packageQuote.total_ugx || 0)
+        || Number(placementQuote.total_ugx || 0)
+        || Number(pkg?.price_ugx || estimateAdvertisingQuote(safeJsonb(inquiry?.product_interests, [])))
+        || 0
+    );
     const targetLocations = normalizeJsonList(req.body.target_locations).length
       ? normalizeJsonList(req.body.target_locations)
       : safeJsonb(inquiry?.target_locations, []);
@@ -4202,7 +4525,6 @@ router.post('/advertising/campaigns', async (req, res, next) => {
     const audienceSegments = normalizeJsonList(req.body.audience_segments).length
       ? normalizeJsonList(req.body.audience_segments)
       : safeJsonb(inquiry?.audience_segments, []);
-    const quotedAmount = Math.max(0, parseInt(req.body.quoted_amount_ugx, 10) || Number(pkg?.price_ugx || estimateAdvertisingQuote(safeJsonb(inquiry?.product_interests, []))) || 0);
     const durationDays = Math.max(0, parseInt(req.body.duration_days, 10) || Number(pkg?.duration_days || inquiry?.desired_duration_days || 7));
     const reportCadence = ['none', 'daily', 'weekly', 'post_campaign', 'dashboard'].includes(String(req.body.report_cadence || '').trim())
       ? String(req.body.report_cadence).trim()
@@ -5190,6 +5512,7 @@ router.get('/agents', async (req, res, next) => {
     const rows = await db.query(
       `SELECT
         a.id,
+        a.makaug_agent_number,
         a.full_name,
         a.company_name,
         a.phone,
@@ -5198,16 +5521,21 @@ router.get('/agents', async (req, res, next) => {
         a.registration_status,
         a.user_id,
         a.nin,
+        a.id_expiry_date,
+        a.experience_years,
         a.identity_document_name,
         a.identity_document_url,
         a.identity_document_type,
         a.identity_document_uploaded_at,
+        a.profile_photo_url,
         a.verification_reason,
         a.privacy_consent_accepted,
         a.privacy_consent_at,
         a.data_retention_notice_accepted,
         a.data_retention_notice_at,
         a.approved_at,
+        a.contact_phone_verified_at,
+        a.agent_application_channel,
         a.featured_homepage,
         a.featured_at,
         a.rating,
@@ -5292,6 +5620,7 @@ router.patch('/agents/:id/status', async (req, res, next) => {
        WHERE id = $1
        RETURNING
          id,
+         makaug_agent_number,
          full_name,
          company_name,
          phone,
@@ -5302,6 +5631,8 @@ router.patch('/agents/:id/status', async (req, res, next) => {
          districts_covered,
          specializations,
          nin,
+         id_expiry_date,
+         experience_years,
          identity_document_name,
          identity_document_url,
          identity_document_type,
@@ -5313,6 +5644,8 @@ router.patch('/agents/:id/status', async (req, res, next) => {
          data_retention_notice_at,
          user_id,
          approved_at,
+         contact_phone_verified_at,
+         agent_application_channel,
          status,
          updated_at`,
       [req.params.id, status]
@@ -5612,6 +5945,10 @@ router.get('/whatsapp/insights', async (req, res, next) => {
       getWhatsappWebBridgeStatus()
     ]);
 
+    const readiness = evaluateHostedWhatsappBridgeReadiness(bridgeStatus?.clients || [], {
+      freshSeconds: Number(process.env.WHATSAPP_WEB_BRIDGE_FRESH_SECONDS || 180) || 180
+    });
+
     return res.json({
       ok: true,
       data: {
@@ -5621,7 +5958,10 @@ router.get('/whatsapp/insights', async (req, res, next) => {
         queue: queueCounts.rows[0],
         topIntents: topIntents.rows,
         transcriptions: transcriptionCounts.rows[0],
-        webBridge: bridgeStatus
+        webBridge: {
+          ...bridgeStatus,
+          readiness
+        }
       }
     });
   } catch (error) {
@@ -7014,6 +7354,133 @@ router.get('/leads', async (req, res, next) => {
   }
 });
 
+router.get('/leads/:id/matches', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const found = await db.query(
+      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email,
+              c.whatsapp AS contact_whatsapp
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       WHERE l.id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!found.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const { criteria, exactCount, matches } = await findLeadPropertyMatches(found.rows[0], LEAD_PROPERTY_MATCH_LIMIT);
+    return res.json({
+      ok: true,
+      data: {
+        lead: found.rows[0],
+        criteria,
+        exact_match_count: exactCount,
+        matches,
+        keep_open_until_contacted: true
+      }
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.status(503).json({ ok: false, error: 'CRM matching tables are not ready' });
+    }
+    return next(error);
+  }
+});
+
+router.post('/leads/:id/match-message', async (req, res, next) => {
+  try {
+    const leadId = req.params.id;
+    const selectedPropertyId = cleanText(req.body.property_id || req.body.propertyId);
+    const found = await db.query(
+      `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email,
+              c.whatsapp AS contact_whatsapp
+       FROM leads l
+       LEFT JOIN contacts c ON c.id = l.contact_id
+       WHERE l.id = $1
+       LIMIT 1`,
+      [leadId]
+    );
+    if (!found.rows.length) return res.status(404).json({ ok: false, error: 'Lead not found' });
+    const lead = found.rows[0];
+    const phone = normalizeConversationPhone(lead.contact_whatsapp || lead.contact_phone);
+    if (!phone) return res.status(400).json({ ok: false, error: 'Lead does not have a WhatsApp/phone number' });
+
+    const { criteria, exactCount, matches } = await findLeadPropertyMatches(lead, LEAD_PROPERTY_MATCH_LIMIT);
+    const property = selectedPropertyId
+      ? matches.find((row) => String(row.id) === selectedPropertyId)
+      : matches[0];
+    if (!property) return res.status(404).json({ ok: false, error: 'No approved matching property is available for this lead yet' });
+
+    const message = buildLeadMatchWhatsappMessage({ lead, property, criteria });
+    const manualUrl = buildManualWhatsAppUrl(phone, message);
+    await db.query(
+      `UPDATE leads
+       SET lifecycle_stage = 'matched_property_available',
+           lead_status = 'open',
+           metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [
+        leadId,
+        JSON.stringify({
+          match_status: 'matched_waiting_customer_contact',
+          last_matched_listing_id: property.id,
+          last_match_strength: property.match_strength || null,
+          last_match_message_created_at: new Date().toISOString(),
+          exact_match_count: exactCount,
+          lead_status_policy: 'kept_open_until_customer_contact_or_agent_assignment'
+        })
+      ]
+    );
+    await addLeadActivity(db, {
+      leadId,
+      actorUserId: req.adminAuth?.userId || null,
+      actorType: 'admin',
+      activityType: 'whatsapp_no_match_property_matched',
+      message: `Prepared WhatsApp match follow-up for ${property.title || property.id}`,
+      metadata: {
+        listing_id: property.id,
+        match_strength: property.match_strength || null,
+        manual_url_created: Boolean(manualUrl),
+        lead_status_after_action: 'open'
+      }
+    });
+    await logWhatsAppMessage(db, {
+      recipientPhone: phone,
+      templateKey: 'whatsapp_no_match_property_available',
+      messageType: 'freeform',
+      status: 'logged',
+      relatedListingId: property.id,
+      relatedLeadId: leadId
+    });
+    await writeAudit('crm_no_match_property_match_message_prepared', {
+      lead_id: leadId,
+      listing_id: property.id,
+      match_strength: property.match_strength || null,
+      exact_match_count: exactCount,
+      recipient_last4: phoneLastDigits(phone),
+      lead_status_after_action: 'open'
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        lead_id: leadId,
+        property,
+        phone,
+        message,
+        manual_url: manualUrl,
+        exact_match_count: exactCount,
+        lead_status: 'open'
+      }
+    });
+  } catch (error) {
+    if (['42P01', '42703'].includes(error.code)) {
+      return res.status(503).json({ ok: false, error: 'CRM matching tables are not ready' });
+    }
+    return next(error);
+  }
+});
+
 router.get('/leads/:id', async (req, res, next) => {
   try {
     const leadId = req.params.id;
@@ -7290,6 +7757,7 @@ async function buildSetupStatus() {
     ['email', 'Email'],
     ['whatsapp', 'WhatsApp'],
     ['sms', 'SMS'],
+    ['media_storage', 'Media storage / Cloudflare R2'],
     ['google_places', 'Google Maps/Places'],
     ['openai_llm', 'OpenAI/LLM'],
     ['payment_link', 'Payment provider'],
@@ -7305,7 +7773,7 @@ async function buildSetupStatus() {
   const llmMeta = getProviderMeta();
   const counts = {
     leads: await safeCount('SELECT COUNT(*)::int AS total FROM leads'),
-    listingsPending: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+    listingsPending: await safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
     listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),
     listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
     failedEmails: await safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
@@ -7399,6 +7867,14 @@ async function buildSetupStatus() {
       wrongLanguageGuard: 'Rukiga/Runyankole never map to Kinyarwanda; English fallback is used when unreviewed translations are missing.',
       providerStatus: translation
     },
+    mediaStorage: {
+      provider: mediaStorageProvider(),
+      durableCloudConfigured: mediaStorageConfigured(),
+      requiredEnv: providerEnvKeys('media_storage'),
+      missingEnv: missingProviderEnv('media_storage'),
+      publicBaseUrlConfigured: envSet('S3_PUBLIC_BASE_URL') || envSet('SUPABASE_URL'),
+      productionRequirement: 'Use MEDIA_STORAGE_PROVIDER=s3 with Cloudflare R2/S3-compatible credentials for live listing and WhatsApp media.'
+    },
     locationSystem: {
       geolocation: 'browser_permission_plus_manual_fallback',
       backendRadiusSearch: true,
@@ -7423,7 +7899,7 @@ router.get('/setup-status', async (_req, res, next) => {
 router.post('/setup-status/provider-test', async (req, res, next) => {
   try {
     const provider = cleanText(req.body.provider || req.body.type);
-    const allowed = ['email', 'whatsapp', 'sms', 'google_places', 'openai_llm', 'payment_link'];
+    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link'];
     if (!allowed.includes(provider)) {
       return res.status(400).json({ ok: false, error: 'Unsupported provider test' });
     }

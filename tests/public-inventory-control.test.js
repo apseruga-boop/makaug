@@ -39,6 +39,11 @@ test('public listings are backend-controlled, not frontend seed inventory', () =
 
 test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /async function fetchAdminPaginatedRows\(path, headers, options = \{\}\)/);
+  assert.match(adminRouteSource, /router\.get\('\/properties\/review-queue'/);
+  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/review-queue", headers, \{ maxPages: 500 \}\)/);
+  assert.match(appSource, /ADMIN_PENDING_QUEUE_RENDER_STEP = 150/);
+  assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
+  assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
   assert.match(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]\)/);
