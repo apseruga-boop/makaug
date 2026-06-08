@@ -137,8 +137,44 @@ const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DEL
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 const LEAD_PROPERTY_MATCH_LIMIT = 10;
-const ADMIN_PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'];
-const ADMIN_FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
+const ADMIN_PENDING_REVIEW_STATUSES = [
+  'pending',
+  'pending_review',
+  'test_pending_review',
+  'pending_review_hidden',
+  'draft',
+  'submitted',
+  'resubmitted',
+  'in_review',
+  'under_review',
+  'needs_review',
+  'awaiting_review',
+  'queued',
+  'source_review',
+  'source_review_required',
+  'pending_king_source_review',
+  'king_review'
+];
+const ADMIN_FINAL_REVIEW_STATUSES = [
+  'approved',
+  'live',
+  'published',
+  'sold',
+  'hidden',
+  'deleted',
+  'rejected',
+  'declined',
+  'fraud',
+  'archived',
+  'off_market',
+  'paused',
+  'inactive',
+  'expired',
+  'removed',
+  'unavailable',
+  'duplicate',
+  'actioned'
+];
 
 function adminSqlList(values = []) {
   return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
@@ -155,12 +191,10 @@ function adminLowerColumn(alias, column) {
 function adminPendingReviewWhere(alias = 'p') {
   const statusExpr = adminLowerColumn(alias, 'status');
   const stageExpr = adminLowerColumn(alias, 'moderation_stage');
-  const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
   const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
   return `(
     ${statusExpr} NOT IN (${final})
     AND ${stageExpr} NOT IN (${final})
-    AND (${statusExpr} IN (${pending}) OR ${stageExpr} IN (${pending}))
   )`;
 }
 
