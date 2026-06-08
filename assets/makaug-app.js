@@ -10139,6 +10139,15 @@ function hydrateAdminAllListingsInBackground(headers) {
     });
 }
 
+async function adminSafeSnapshotRequest(label, requestFn, fallback) {
+  try {
+    return await requestFn();
+  } catch (error) {
+    console.warn(`Admin dashboard ${label} unavailable`, error?.message || error);
+    return fallback;
+  }
+}
+
 async function fetchRemoteAdminSnapshot() {
   if (!canUseLiveAdminApi()) return null;
   const headers = adminAuthHeaders();
@@ -10161,30 +10170,30 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
   const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
-    apiRequest("/api/admin/summary", { headers }),
-    apiRequest("/api/admin/command-centre", { headers }),
-    apiRequest("/api/admin/recent", { headers }),
-    fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }),
-    fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }),
-    apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
-    apiRequest("/api/admin/agents?limit=100", { headers }),
-    apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
-    apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }),
-    apiRequest("/api/admin/campaigns?limit=20", { headers }),
-    apiRequest("/api/admin/advertising/packages", { headers }),
-    apiRequest("/api/admin/advertising/placements", { headers }),
-    apiRequest("/api/admin/advertising/summary", { headers }),
-    apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }),
-    apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }),
-    apiRequest("/api/admin/whatsapp/insights", { headers }),
-    apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }),
-    apiRequest("/api/admin/crm/summary", { headers }),
-    apiRequest("/api/admin/leads?limit=50", { headers }),
-    apiRequest("/api/admin/notifications?limit=50", { headers }),
-    apiRequest("/api/admin/emails?limit=50", { headers }),
-    apiRequest("/api/admin/outlook-agent/status", { headers }).catch(() => ({ data: {} })),
-    apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }).catch(() => ({ data: [] })),
-    apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
+    adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }), []),
+    adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []),
+    adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("property requests", () => apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("field agents", () => apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("campaigns", () => apiRequest("/api/admin/campaigns?limit=20", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising packages", () => apiRequest("/api/admin/advertising/packages", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising placements", () => apiRequest("/api/admin/advertising/placements", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising summary", () => apiRequest("/api/admin/advertising/summary", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("advertising inquiries", () => apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising campaigns", () => apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("whatsapp insights", () => apiRequest("/api/admin/whatsapp/insights", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }),
+    adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] })
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
   const liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
