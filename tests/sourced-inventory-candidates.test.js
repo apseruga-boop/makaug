@@ -257,7 +257,7 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(frontend.includes('No pending found-online records need review in this run'), 'pending panel should explain when only approved/live matches remain');
   assert(frontend.includes('data-admin-seed-final'), 'seed summaries should expose final-state metadata for UI regression checks');
   assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
-  assert(frontend.includes('fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 500 })'), 'dashboard should fetch enough pending pages for launch sweep volume');
+  assert(frontend.includes('fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 })'), 'dashboard should fetch enough protected review-queue pages for launch sweep volume');
   assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
   assert(html.includes('source-fishing-policy-20260523'), 'index should bump the app asset version so production browsers fetch the source-fishing policy UI');

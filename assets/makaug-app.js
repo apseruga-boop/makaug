@@ -638,6 +638,8 @@ let adminActiveReview = null;
 let activeAdminWorkflowTab = "review";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
+const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
+let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
 let adminReviewEvidence = {};
 let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
@@ -10014,12 +10016,14 @@ function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
     </div>`;
 }
 
-function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
+function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows = filteredRows) {
   const counts = adminPendingQueueCounts(rows);
   const isFoundOnlineView = adminPendingQueueFilter === "found_online";
+  const visibleCount = Array.isArray(visibleRows) ? visibleRows.length : Number(visibleRows || 0);
+  const hasMore = filteredRows.length > visibleCount;
   const statusText = isFoundOnlineView
-    ? `${adminEscape(filteredRows.length)} found-online source property records are pending review. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
-    : `${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
+    ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
+    : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} matching records shown from ${adminEscape(rows.length)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -10031,6 +10035,7 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
           ${adminPendingQueueFilterButton("all", "All", counts.all)}
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
+          ${hasMore ? `<button type="button" onclick="adminShowMorePendingQueueRows()" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black">Show more</button>` : ""}
         </div>
       </div>
     </div>`;
@@ -10039,6 +10044,12 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
 function adminSetPendingQueueFilter(filter = "all") {
   const allowed = new Set(["all", "found_online", "student"]);
   adminPendingQueueFilter = allowed.has(String(filter)) ? String(filter) : "all";
+  adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
+  renderAdminPendingRows(adminCurrentPendingListings);
+}
+
+function adminShowMorePendingQueueRows() {
+  adminPendingQueueVisibleLimit += ADMIN_PENDING_QUEUE_RENDER_STEP;
   renderAdminPendingRows(adminCurrentPendingListings);
 }
 
@@ -10109,6 +10120,24 @@ async function fetchAdminPaginatedRows(path, headers, options = {}) {
   return rows;
 }
 
+let adminAllListingsHydrationInFlight = null;
+
+function hydrateAdminAllListingsInBackground(headers) {
+  if (adminAllListingsHydrationInFlight || !canUseLiveAdminApi()) return;
+  adminAllListingsHydrationInFlight = fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 })
+    .then((rows) => {
+      const allListings = (rows || []).map(normalizeRemoteAdminListing);
+      if (!allListings.length) return;
+      adminRemoteListings = allListings;
+      renderAdminActionedRows(allListings);
+      renderAdminAllListingsRows(allListings);
+    })
+    .catch(() => {})
+    .finally(() => {
+      adminAllListingsHydrationInFlight = null;
+    });
+}
+
 async function fetchRemoteAdminSnapshot() {
   if (!canUseLiveAdminApi()) return null;
   const headers = adminAuthHeaders();
@@ -10130,12 +10159,12 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, allRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     apiRequest("/api/admin/summary", { headers }),
     apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
-    fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 500 }),
-    fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 }),
+    fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }),
+    fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }),
     apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
     apiRequest("/api/admin/agents?limit=100", { headers }),
     apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
@@ -10157,14 +10186,11 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
-  const allListings = (allRows || []).map(normalizeRemoteAdminListing);
-  let liveListings = allListings.filter(adminIsPublicLiveAdminListing);
-  try {
-    const liveRows = await fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 });
-    liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
-  } catch (e) {}
+  const liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
+  const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings]);
   adminRemoteListings = allListings;
   adminLiveListings = liveListings;
+  hydrateAdminAllListingsInBackground(headers);
   adminRemoteAgents = Array.isArray(agentsRes?.data) ? agentsRes.data.map(mapRemoteAgentForUi) : [];
   adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
   adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
@@ -10226,7 +10252,8 @@ function renderAdminPendingRows(listings) {
   const cleanListings = adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem);
   adminCurrentPendingListings = cleanListings;
   const filteredListings = adminFilterPendingQueueRows(cleanListings);
-  const toolbarHtml = adminPendingQueueToolbarHtml(cleanListings, filteredListings);
+  const visibleListings = filteredListings.slice(0, adminPendingQueueVisibleLimit);
+  const toolbarHtml = adminPendingQueueToolbarHtml(cleanListings, filteredListings, visibleListings);
   if (!cleanListings.length && !filteredListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
     return;
@@ -10235,7 +10262,7 @@ function renderAdminPendingRows(listings) {
     wrap.innerHTML = `${toolbarHtml}<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No ${adminEscape(adminPendingQueueFilterLabel().toLowerCase())} records match the current pending queue.</div>`;
     return;
   }
-  wrap.innerHTML = `${toolbarHtml}${filteredListings.map((p) => {
+  wrap.innerHTML = `${toolbarHtml}${visibleListings.map((p) => {
     const statusMeta = adminStatusBadge(p.status);
     const locationText = [p.area, p.district].filter(Boolean).join(", ") || "-";
     const createdText = listingDateMeta(p);
@@ -12425,6 +12452,7 @@ function renderAdminSetupProof(status = {}) {
   const rows = [
     ["DATABASE_URL", dbStatus.databaseUrlConnected ? "connected" : "not proven"],
     ["Migrations", (dbStatus.missingMigrations || []).length ? `missing ${(dbStatus.missingMigrations || []).join(", ")}` : "033 and 034 applied"],
+    ["Media storage", status.mediaStorage?.durableCloudConfigured ? `${status.mediaStorage.provider || "cloud"} configured` : `${status.mediaStorage?.provider || "local"} needs Cloudflare R2/S3 env`],
     ["Property submission tests", counts.listingTests || 0],
     ["Saved searches / alert matches", `${counts.savedSearches || 0} / ${counts.alertMatches || 0}`],
     ["Property need requests", `${counts.unresolvedPropertyNeedRequests || 0} unresolved / ${counts.resolvedPropertyNeedRequests || 0} resolved`],
@@ -15446,6 +15474,11 @@ function renderAdminWhatsappOverview(summary = {}) {
   const wrap = document.getElementById("admin-whatsapp-overview");
   if (!wrap) return;
   const bridgeSummary = summary?.webBridge?.summary || {};
+  const bridgeReadiness = summary?.webBridge?.readiness || {};
+  const liveAgentReady = bridgeReadiness.ok === true;
+  const liveAgentLabel = liveAgentReady
+    ? "Ready"
+    : (bridgeReadiness.status ? String(bridgeReadiness.status).replace(/_/g, " ") : "Not ready");
   const cards = [
     { label: "Conversations", value: summary.total_conversations || 0, cls: "text-gray-900" },
     { label: "Active 7d", value: summary.active_7d || 0, cls: "text-green-700" },
@@ -15453,14 +15486,21 @@ function renderAdminWhatsappOverview(summary = {}) {
     { label: "Resolved", value: summary.resolved || 0, cls: "text-green-700" },
     { label: "Autopilot", value: summary.autopilot || 0, cls: "text-emerald-700" },
     { label: "Manual / Copilot", value: Number(summary.copilot || 0) + Number(summary.manual_only || 0), cls: "text-indigo-700" },
-    { label: "Web Bridge Online", value: bridgeSummary.online_clients || 0, cls: Number(bridgeSummary.online_clients || 0) > 0 ? "text-green-700" : "text-amber-700" }
+    { label: "Web Bridge Online", value: bridgeSummary.online_clients || 0, cls: Number(bridgeSummary.online_clients || 0) > 0 ? "text-green-700" : "text-amber-700" },
+    { label: "Live Agent", value: liveAgentLabel, cls: liveAgentReady ? "text-green-700" : "text-amber-700" }
   ];
-  wrap.innerHTML = cards.map((card) => `
+  const readinessReason = String(bridgeReadiness.reason || "").replace(/_/g, " ");
+  const readinessHtml = bridgeReadiness.reason ? `
+    <div class="md:col-span-2 xl:col-span-4 rounded-2xl border ${liveAgentReady ? "border-green-100 bg-green-50 text-green-900" : "border-amber-100 bg-amber-50 text-amber-900"} p-4 text-sm">
+      <div class="font-black">WhatsApp live agent: ${adminEscape(liveAgentLabel)}</div>
+      <div class="mt-1 text-xs">Reason: ${adminEscape(readinessReason)}${bridgeReadiness.selected_client?.last_seen_at ? ` • Last seen: ${adminEscape(adminWhatsappTimeText(bridgeReadiness.selected_client.last_seen_at))}` : ""}</div>
+    </div>` : "";
+  wrap.innerHTML = `${cards.map((card) => `
     <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
       <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">${adminEscape(card.label)}</div>
       <div class="text-2xl font-black mt-2 ${card.cls}">${adminEscape(card.value)}</div>
     </div>
-  `).join("");
+  `).join("")}${readinessHtml}`;
 }
 
 function renderAdminWhatsappConversationList(conversations = []) {

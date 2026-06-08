@@ -1,0 +1,80 @@
+const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
+const envExample = read('.env.example');
+const packageJson = JSON.parse(read('package.json'));
+const envConfig = read('src/config/env.ts');
+const storageIndex = read('src/adapters/storage/index.ts');
+const s3Adapter = read('src/adapters/storage/s3CompatibleAdapter.ts');
+const backupScript = read('scripts/run-production-data-backup.js');
+const adminRoute = read('routes/admin.js');
+const setupDoc = read('docs/production-data-setup.md');
+
+assert(
+  envExample.includes('# local | supabase | s3_presigned | s3')
+    && envExample.includes('S3_ENDPOINT=')
+    && envExample.includes('S3_REGION=auto')
+    && envExample.includes('S3_BUCKET=makaug-prod-media')
+    && envExample.includes('DATA_BACKUP_BUCKET=makaug-db-backups'),
+  'env example must document direct S3/R2 media and backup storage'
+);
+
+assert(
+  envConfig.includes("'s3_presigned' | 's3'")
+    && envConfig.includes('s3Endpoint')
+    && envConfig.includes('s3PublicBaseUrl'),
+  'typed env config must expose the direct S3 provider and public base URL'
+);
+
+assert(
+  storageIndex.includes("import { S3CompatibleAdapter } from './s3CompatibleAdapter'")
+    && storageIndex.includes("if (env.mediaStorageProvider === 's3') return new S3CompatibleAdapter()"),
+  'storage adapter factory must route MEDIA_STORAGE_PROVIDER=s3 to the direct S3 adapter'
+);
+
+assert(
+  s3Adapter.includes('AWS4-HMAC-SHA256')
+    && s3Adapter.includes('x-amz-content-sha256')
+    && s3Adapter.includes("provider: 's3'")
+    && s3Adapter.includes('S3 storage env vars are missing'),
+  'direct S3 adapter must sign and upload objects without a presign side service'
+);
+
+assert(
+  adminRoute.includes('media_storage')
+    && adminRoute.includes('durableCloudConfigured')
+    && adminRoute.includes('MEDIA_STORAGE_PROVIDER=s3')
+    && adminRoute.includes("router.post('/setup-status/provider-test'"),
+  'admin setup status must expose durable cloud media storage readiness'
+);
+
+assert.strictEqual(
+  packageJson.scripts['data:backup'],
+  'node scripts/run-production-data-backup.js',
+  'package.json must expose npm run data:backup'
+);
+
+assert(
+  backupScript.includes("process.env.PG_DUMP_BIN || 'pg_dump'")
+    && backupScript.includes("run('tar'")
+    && backupScript.includes('DATA_BACKUP_LOCAL_PATHS')
+    && backupScript.includes('manifest')
+    && backupScript.includes('DATA_BACKUP_BUCKET'),
+  'backup script must dump Postgres, archive local data, and upload a manifest'
+);
+
+assert(
+  setupDoc.includes('makaug-prod-media')
+    && setupDoc.includes('makaug-private-evidence')
+    && setupDoc.includes('makaug-db-backups')
+    && setupDoc.includes('npm run data:backup')
+    && setupDoc.includes('Restore Drill')
+    && setupDoc.includes('The app server should never be the long-term home'),
+  'production data setup doc must cover buckets, backup command, restore drill, and server disk rule'
+);
+
+console.log('production data setup surface ok');

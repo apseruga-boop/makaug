@@ -48,6 +48,7 @@ const {
   isWhatsappWebBridgeEnabled,
   queueWhatsappWebBridgeMessage
 } = require('../services/whatsappWebBridgeService');
+const { evaluateHostedWhatsappBridgeReadiness } = require('../services/whatsappBridgeReadiness');
 const {
   emailProviderConfigured: emailProviderConfiguredByService,
   getDefaultEmailFrom,
@@ -136,6 +137,32 @@ const LAUNCH_TEST_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DEL
 const LAUNCH_TEST_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
 const LEAD_PROPERTY_MATCH_LIMIT = 10;
+const ADMIN_PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'];
+const ADMIN_FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
+
+function adminSqlList(values = []) {
+  return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
+}
+
+function adminColumn(alias, column) {
+  return alias ? `${alias}.${column}` : column;
+}
+
+function adminLowerColumn(alias, column) {
+  return `LOWER(COALESCE(${adminColumn(alias, column)}, ''))`;
+}
+
+function adminPendingReviewWhere(alias = 'p') {
+  const statusExpr = adminLowerColumn(alias, 'status');
+  const stageExpr = adminLowerColumn(alias, 'moderation_stage');
+  const pending = adminSqlList(ADMIN_PENDING_REVIEW_STATUSES);
+  const final = adminSqlList(ADMIN_FINAL_REVIEW_STATUSES);
+  return `(
+    ${statusExpr} NOT IN (${final})
+    AND ${stageExpr} NOT IN (${final})
+    AND (${statusExpr} IN (${pending}) OR ${stageExpr} IN (${pending}))
+  )`;
+}
 
 function adminLaunchTestListingCondition(alias = 'p') {
   const a = alias;
@@ -1082,6 +1109,35 @@ function missingSmsEnv() {
   return missing;
 }
 
+function mediaStorageProvider() {
+  return String(process.env.MEDIA_STORAGE_PROVIDER || 'local').trim().toLowerCase();
+}
+
+function mediaStorageRequiredEnv(provider = mediaStorageProvider()) {
+  if (provider === 's3') {
+    return ['MEDIA_STORAGE_PROVIDER', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+  }
+  if (provider === 's3_presigned') {
+    return ['MEDIA_STORAGE_PROVIDER', 'S3_PRESIGN_ENDPOINT'];
+  }
+  if (provider === 'supabase') {
+    return ['MEDIA_STORAGE_PROVIDER', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_STORAGE_BUCKET'];
+  }
+  return ['MEDIA_STORAGE_PROVIDER', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+}
+
+function missingMediaStorageEnv() {
+  const provider = mediaStorageProvider();
+  if (provider === 'local') return mediaStorageRequiredEnv('s3');
+  if (!['s3', 's3_presigned', 'supabase'].includes(provider)) return ['MEDIA_STORAGE_PROVIDER'];
+  return missingEnv(mediaStorageRequiredEnv(provider));
+}
+
+function mediaStorageConfigured() {
+  const provider = mediaStorageProvider();
+  return ['s3', 's3_presigned', 'supabase'].includes(provider) && missingMediaStorageEnv().length === 0;
+}
+
 function providerConfigured(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
@@ -1092,6 +1148,7 @@ function providerConfigured(provider) {
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
   if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
+  if (provider === 'media_storage') return mediaStorageConfigured();
   return anyEnv(keyGroups[provider] || []);
 }
 
@@ -1100,6 +1157,7 @@ function providerEnvKeys(provider) {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_FROM'],
     whatsapp: ['WHATSAPP_PROVIDER', 'WHATSAPP_WEB_BRIDGE_ENABLED', 'WHATSAPP_WEB_BRIDGE_TOKEN', 'TWILIO_ACCOUNT_SID', 'META_WHATSAPP_TOKEN'],
     sms: ['SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'AFRICASTALKING_API_KEY', 'AFRICASTALKING_USERNAME'],
+    media_storage: mediaStorageRequiredEnv(),
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
@@ -1115,6 +1173,7 @@ function missingEnv(keys = []) {
 
 function missingProviderEnv(provider) {
   if (provider === 'sms') return missingSmsEnv();
+  if (provider === 'media_storage') return missingMediaStorageEnv();
   return missingEnv(providerEnvKeys(provider));
 }
 
@@ -2072,7 +2131,7 @@ router.get('/summary', async (req, res, next) => {
       db.query(
         `SELECT
           COUNT(*)::int AS total,
-          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+          COUNT(*) FILTER (WHERE ${adminPendingReviewWhere('')})::int AS pending,
           COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
           COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
@@ -2198,7 +2257,7 @@ router.get('/command-centre', async (_req, res, next) => {
       testUsers,
       propertyRequests
     ] = await Promise.all([
-      safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+      safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
       safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPublicLiveListingWhere('p')}`),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'deleted'"),
       safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'hidden'"),
@@ -2395,6 +2454,94 @@ router.get('/recent', async (req, res, next) => {
         recentReports: recentReports.rows,
         recentUsers: recentUsers.rows,
         recentPropertyRequests: recentPropertyRequests.rows
+      }
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/properties/review-queue', async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query);
+    const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
+    const filters = [adminPendingReviewWhere('p')];
+    const values = [];
+    const search = cleanText(req.query.search || req.query.q);
+    const listingType = cleanText(req.query.listing_type || req.query.type).toLowerCase();
+
+    if (!includeTestLike) filters.push(`NOT ${adminLaunchTestListingCondition('p')}`);
+    if (listingType && LISTING_TYPES.includes(listingType)) {
+      values.push(listingType);
+      filters.push(`p.listing_type = $${values.length}`);
+    }
+    if (search) {
+      values.push(`%${search}%`);
+      const idx = values.length;
+      filters.push(`(
+        p.title ILIKE $${idx}
+        OR p.area ILIKE $${idx}
+        OR p.district ILIKE $${idx}
+        OR COALESCE(p.inquiry_reference, '') ILIKE $${idx}
+        OR COALESCE(p.lister_phone, '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_name', '') ILIKE $${idx}
+        OR COALESCE(p.extra_fields->>'source_platform', '') ILIKE $${idx}
+      )`);
+    }
+
+    const where = `WHERE ${filters.join(' AND ')}`;
+    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
+    const total = countResult.rows[0]?.total || 0;
+
+    const rows = await db.query(
+      `SELECT
+         p.id,
+         p.title,
+         p.listing_type,
+         p.property_type,
+         p.district,
+         p.area,
+         p.price,
+         p.price_period,
+         p.status,
+         p.moderation_stage,
+         p.moderation_notes,
+         p.moderation_reason,
+         p.inquiry_reference,
+         p.source,
+         p.listed_via,
+         p.lister_name,
+         p.lister_phone,
+         p.lister_email,
+         p.created_at,
+         p.updated_at,
+         p.extra_fields,
+         CONCAT('/property/', p.id::text) AS property_url,
+         img.url AS primary_image_url
+       FROM properties p
+       LEFT JOIN LATERAL (
+         SELECT i.url
+         FROM property_images i
+         WHERE i.property_id = p.id
+         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
+         LIMIT 1
+       ) img ON true
+       ${where}
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $${values.length + 1}
+       OFFSET $${values.length + 2}`,
+      [...values, limit, offset]
+    );
+
+    return res.json({
+      ok: true,
+      data: rows.rows,
+      pagination: toPagination(total, page, limit),
+      meta: {
+        status: 'review_queue',
+        include_test_like: includeTestLike,
+        pending_statuses: ADMIN_PENDING_REVIEW_STATUSES,
+        final_statuses_excluded: ADMIN_FINAL_REVIEW_STATUSES
       }
     });
   } catch (error) {
@@ -5798,6 +5945,10 @@ router.get('/whatsapp/insights', async (req, res, next) => {
       getWhatsappWebBridgeStatus()
     ]);
 
+    const readiness = evaluateHostedWhatsappBridgeReadiness(bridgeStatus?.clients || [], {
+      freshSeconds: Number(process.env.WHATSAPP_WEB_BRIDGE_FRESH_SECONDS || 180) || 180
+    });
+
     return res.json({
       ok: true,
       data: {
@@ -5807,7 +5958,10 @@ router.get('/whatsapp/insights', async (req, res, next) => {
         queue: queueCounts.rows[0],
         topIntents: topIntents.rows,
         transcriptions: transcriptionCounts.rows[0],
-        webBridge: bridgeStatus
+        webBridge: {
+          ...bridgeStatus,
+          readiness
+        }
       }
     });
   } catch (error) {
@@ -7603,6 +7757,7 @@ async function buildSetupStatus() {
     ['email', 'Email'],
     ['whatsapp', 'WhatsApp'],
     ['sms', 'SMS'],
+    ['media_storage', 'Media storage / Cloudflare R2'],
     ['google_places', 'Google Maps/Places'],
     ['openai_llm', 'OpenAI/LLM'],
     ['payment_link', 'Payment provider'],
@@ -7618,7 +7773,7 @@ async function buildSetupStatus() {
   const llmMeta = getProviderMeta();
   const counts = {
     leads: await safeCount('SELECT COUNT(*)::int AS total FROM leads'),
-    listingsPending: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'pending'"),
+    listingsPending: await safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
     listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),
     listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
     failedEmails: await safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
@@ -7712,6 +7867,14 @@ async function buildSetupStatus() {
       wrongLanguageGuard: 'Rukiga/Runyankole never map to Kinyarwanda; English fallback is used when unreviewed translations are missing.',
       providerStatus: translation
     },
+    mediaStorage: {
+      provider: mediaStorageProvider(),
+      durableCloudConfigured: mediaStorageConfigured(),
+      requiredEnv: providerEnvKeys('media_storage'),
+      missingEnv: missingProviderEnv('media_storage'),
+      publicBaseUrlConfigured: envSet('S3_PUBLIC_BASE_URL') || envSet('SUPABASE_URL'),
+      productionRequirement: 'Use MEDIA_STORAGE_PROVIDER=s3 with Cloudflare R2/S3-compatible credentials for live listing and WhatsApp media.'
+    },
     locationSystem: {
       geolocation: 'browser_permission_plus_manual_fallback',
       backendRadiusSearch: true,
@@ -7736,7 +7899,7 @@ router.get('/setup-status', async (_req, res, next) => {
 router.post('/setup-status/provider-test', async (req, res, next) => {
   try {
     const provider = cleanText(req.body.provider || req.body.type);
-    const allowed = ['email', 'whatsapp', 'sms', 'google_places', 'openai_llm', 'payment_link'];
+    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link'];
     if (!allowed.includes(provider)) {
       return res.status(400).json({ ok: false, error: 'Unsupported provider test' });
     }

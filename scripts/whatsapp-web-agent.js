@@ -26,8 +26,10 @@ function readTextFileWithRetry(filePath, label, attempts = 8) {
       if (error?.code === 'ENOENT') return null;
       const message = String(error?.message || error || '');
       const retryable = error?.code === 'EAGAIN'
+        || error?.code === 'ETIMEDOUT'
         || error?.errno === -11
-        || message.includes('Unknown system error -11');
+        || message.includes('Unknown system error -11')
+        || message.includes('ETIMEDOUT');
       if (!retryable || attempt >= attempts) {
         console.error(new Date().toISOString(), '[whatsapp-web-agent]', `failed to read ${label}: ${message}`);
         return null;

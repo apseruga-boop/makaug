@@ -51,12 +51,18 @@ export const env = {
   rateLimitPerMinute: toNumber(process.env.RATE_LIMIT_PER_MINUTE, 120),
   maxUploadBytes: toNumber(process.env.MAX_UPLOAD_BYTES, 10 * 1024 * 1024),
   queuePollSeconds: toNumber(process.env.QUEUE_POLL_SECONDS, 20),
-  mediaStorageProvider: (process.env.MEDIA_STORAGE_PROVIDER ?? 'local') as 'local' | 'supabase' | 's3_presigned',
+  mediaStorageProvider: (process.env.MEDIA_STORAGE_PROVIDER ?? 'local') as 'local' | 'supabase' | 's3_presigned' | 's3',
   supabaseUrl: readOptional('SUPABASE_URL'),
   supabaseServiceRoleKey: readOptional('SUPABASE_SERVICE_ROLE_KEY'),
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'makaug-media',
   s3PresignEndpoint: readOptional('S3_PRESIGN_ENDPOINT'),
-  s3PresignToken: readOptional('S3_PRESIGN_TOKEN')
+  s3PresignToken: readOptional('S3_PRESIGN_TOKEN'),
+  s3Endpoint: readOptional('S3_ENDPOINT'),
+  s3Region: process.env.S3_REGION ?? 'auto',
+  s3Bucket: readOptional('S3_BUCKET'),
+  s3AccessKeyId: readOptional('S3_ACCESS_KEY_ID'),
+  s3SecretAccessKey: readOptional('S3_SECRET_ACCESS_KEY'),
+  s3PublicBaseUrl: readOptional('S3_PUBLIC_BASE_URL')
 };
 
 export type Env = typeof env;
