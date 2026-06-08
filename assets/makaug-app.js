@@ -9793,11 +9793,12 @@ async function askAiCeoCommand() {
 }
 
 function adminAuthHeaders() {
-  if (adminApiKey) return { "x-api-key": adminApiKey };
+  const headers = {};
+  if (adminApiKey) headers["x-api-key"] = adminApiKey;
   if (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin") {
-    return { Authorization: `Bearer ${authState.token}` };
+    headers.Authorization = `Bearer ${authState.token}`;
   }
-  return {};
+  return headers;
 }
 
 function canUseLiveAdminApi() {
