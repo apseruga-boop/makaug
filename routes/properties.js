@@ -20,6 +20,9 @@ const {
   sendOwnerListingStatusNotifications,
   sendOwnerListingSubmissionNotifications
 } = require('../services/listingModerationService');
+const {
+  recordRejectedListingSourceUrls
+} = require('../services/rejectedListingSourceBlocklistService');
 const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { buildListingReference } = require('../services/listingReferenceService');
@@ -244,6 +247,59 @@ function collapseRepeatedSourceText(value = '') {
     current = next;
   }
   return current.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function shouldPurgePropertyRecordForStatus(status = '') {
+  const normalized = cleanText(status).toLowerCase();
+  return normalized === 'rejected' || normalized === 'deleted';
+}
+
+async function purgeRejectedOrDeletedPropertyRecord({
+  propertyId,
+  listing = {},
+  current = {},
+  status = '',
+  reason = '',
+  actorId = ''
+} = {}) {
+  if (!propertyId || !shouldPurgePropertyRecordForStatus(status)) {
+    return { purged: false, blocked_source_urls: [] };
+  }
+
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const blockRows = await recordRejectedListingSourceUrls(client, {
+      listing: {
+        ...current,
+        ...listing,
+        extra_fields: {
+          ...(current.extra_fields || {}),
+          ...(listing.extra_fields || {})
+        }
+      },
+      reason,
+      actorId,
+      action: status
+    });
+    const deleted = await client.query(
+      `DELETE FROM properties
+       WHERE id = $1
+       RETURNING id::text AS id`,
+      [propertyId]
+    );
+    await client.query('COMMIT');
+    return {
+      purged: deleted.rowCount > 0,
+      blocked_source_urls: blockRows,
+      deleted_property_id: deleted.rows[0]?.id || String(propertyId)
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function buildPublicSourceHoverDescription(extraFields = {}) {
@@ -3005,6 +3061,18 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
       approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
     }
 
+    let purgeResult = null;
+    if (shouldPurgePropertyRecordForStatus(nextStatus)) {
+      purgeResult = await purgeRejectedOrDeletedPropertyRecord({
+        propertyId: listing.id,
+        listing,
+        current,
+        status: nextStatus,
+        reason: moderationReason,
+        actorId
+      });
+    }
+
     let alertMatching = null;
     if (nextStatus === 'approved' && current.status !== 'approved') {
       alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
@@ -3017,6 +3085,9 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         moderation_reason: moderationReason || listing?.extra_fields?.moderation_reason || null,
         lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent),
         notification,
+        purge: purgeResult || undefined,
+        purged: purgeResult?.purged === true || undefined,
+        blocked_source_urls: purgeResult?.blocked_source_urls || undefined,
         alert_matching: alertMatching,
         warnings: approvalWarnings,
         automated_review: automatedReview || undefined

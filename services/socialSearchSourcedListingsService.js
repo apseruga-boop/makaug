@@ -6,6 +6,10 @@ const {
   hashOwnerEditToken,
   ownerEditTokenExpiry,
 } = require('./listingModerationService');
+const {
+  findRejectedListingSourceUrlBlocks,
+  normalizeSourceUrlForBlocklist
+} = require('./rejectedListingSourceBlocklistService');
 const { SOURCE } = require('../scripts/seed-sourced-inventory-candidates');
 
 const SOCIAL_SEARCH_BATCH_ID = 'social_search_authorised_20260520';
@@ -1901,6 +1905,25 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
     if (row.source_post_url) existing.set(row.source_post_url, payload);
     if (row.source_url) existing.set(row.source_url, payload);
   }
+  const blocked = await findRejectedListingSourceUrlBlocks(client, urls);
+  for (const [normalizedUrl, row] of blocked) {
+    const payload = {
+      id: row.id,
+      title: 'Previously rejected source URL',
+      status: 'blocked',
+      moderation_stage: 'rejected_source_url_blocklist',
+      source_listing_key: row.source_listing_key || '',
+      source_post_url: row.source_url,
+      source_url: row.source_url,
+      property_url: '',
+      blocked_reimport: true,
+      reason: 'previously_rejected_source_url',
+      rejection_reason: row.rejection_reason || ''
+    };
+    existing.set(normalizedUrl, payload);
+    if (row.source_url) existing.set(row.source_url, payload);
+    if (row.source_listing_key) existing.set(row.source_listing_key, payload);
+  }
   return existing;
 }
 
@@ -2063,7 +2086,7 @@ async function queueFoundOnlineSourcePostListings({
 
     for (const { item, agent, intake } of evaluated) {
       const sourceUrl = sourceUrlForItem(item);
-      const existingRow = existing.get(item.key) || existing.get(sourceUrl);
+      const existingRow = existing.get(item.key) || existing.get(sourceUrl) || existing.get(normalizeSourceUrlForBlocklist(sourceUrl));
       if (existingRow) {
         alreadyPresent.push({
           key: item.key,
@@ -2075,8 +2098,10 @@ async function queueFoundOnlineSourcePostListings({
           moderation_stage: existingRow.moderation_stage || '',
           property_url: existingRow.property_url || '',
           source_url: sourceUrl,
-          reason: 'already_queued',
+          reason: existingRow.blocked_reimport ? 'previously_rejected_source_url' : 'already_queued',
           already_present: true,
+          blocked_reimport: existingRow.blocked_reimport === true,
+          rejection_reason: existingRow.rejection_reason || '',
         });
         continue;
       }
@@ -2101,8 +2126,10 @@ async function queueFoundOnlineSourcePostListings({
 
     await client.query('COMMIT');
     const duplicateWarnings = alreadyPresent.map((item) => ({
-      type: 'exact_source_url_duplicate',
-      message: 'This exact social/source link has already been imported to makaug.',
+      type: item.blocked_reimport ? 'rejected_source_url_blocked' : 'exact_source_url_duplicate',
+      message: item.blocked_reimport
+        ? 'This exact social/source link was rejected before and is blocked from re-import.'
+        : 'This exact social/source link has already been imported to makaug.',
       key: item.key,
       id: item.id,
       title: item.title,
@@ -2111,6 +2138,8 @@ async function queueFoundOnlineSourcePostListings({
       property_url: item.property_url || '',
       source_url: item.source_url || '',
       agent_name: item.agent_name || '',
+      reason: item.reason || '',
+      rejection_reason: item.rejection_reason || '',
     }));
     const reviewQueueListings = [
       ...created,
