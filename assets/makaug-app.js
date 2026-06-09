@@ -5124,6 +5124,11 @@ function getHeroPropertyOpportunityStats() {
     if (isFoundOnlineListing(property)) stats.social += 1;
   });
   stats.total = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  const apiTotal = Number(publicListingsApiTotal);
+  if (publicListingsFromApiLoaded && Number.isFinite(apiTotal) && apiTotal > stats.total) {
+    stats.other += apiTotal - stats.total;
+    stats.total = apiTotal;
+  }
   if (!stats.total) stats.total = Number(publicListingsApiTotal ?? publicListings.length) || publicListings.length;
   return stats;
 }
@@ -18163,9 +18168,14 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
             remote_source: "api"
           });
         }
+        await refreshPublicListingsFromApi({ silent: true });
       } else if (normalizedStatus !== "approved") {
-        const existingPublic = PROPERTIES.find((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
-        if (existingPublic) existingPublic.status = normalizedStatus;
+        if (statusResponse?.purged === true || statusResponse?.purge?.purged === true) {
+          removePropertyForUiById(backendId);
+        } else {
+          const existingPublic = PROPERTIES.find((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+          if (existingPublic) existingPublic.status = normalizedStatus;
+        }
       }
     } catch (e) {
       const details = Array.isArray(e.response?.details)
@@ -30454,6 +30464,27 @@ function upsertPropertyForUi(property) {
     PROPERTIES.push(mapped);
   }
   return mapped;
+}
+
+function removePropertyForUiById(propertyId) {
+  const id = String(propertyId || "");
+  if (!id) return;
+  const removeFrom = (items) => {
+    if (!Array.isArray(items)) return;
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const item = items[i] || {};
+      if (String(item.id || "") === id || String(item.backend_id || "") === id) {
+        items.splice(i, 1);
+      }
+    }
+  };
+  removeFrom(PROPERTIES);
+  removeFrom(adminRemoteListings);
+  removeFrom(adminLiveListings);
+  publicFeaturedListingsFromApi = (publicFeaturedListingsFromApi || []).filter((item) => {
+    const itemId = String(item?.backend_id || item?.id || "");
+    return itemId !== id;
+  });
 }
 
 async function loadRemotePropertyDetailForUi(id, options = {}) {
