@@ -229,7 +229,7 @@ function adminPublicLiveListingCondition(alias = 'p') {
 }
 
 function adminPublicLiveListingWhere(alias = 'p') {
-  return `${adminColumn(alias, 'status')} = 'approved' AND ${adminPublicLiveListingCondition(alias)}`;
+  return `(${adminColumn(alias, 'status')} = 'approved' OR (${adminColumn(alias, 'status')} = 'sold' AND ${adminColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days')) AND ${adminPublicLiveListingCondition(alias)}`;
 }
 
 function safeJsonObject(value, fallback = {}) {

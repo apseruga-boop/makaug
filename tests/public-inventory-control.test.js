@@ -132,6 +132,7 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(adminRouteSource, /function adminLaunchTestListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingWhere/);
+  assert.match(adminRouteSource, /status'\)} = 'approved' OR \(\$\{adminColumn\(alias, 'status'\)\} = 'sold' AND \$\{adminColumn\(alias, 'sold_at'\)\} >= NOW\(\) - INTERVAL '7 days'\)/);
   assert.match(adminRouteSource, /function adminFeaturedListingCondition/);
   assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminPublicLiveListingWhere\(''\)\}\)::int AS public_live/);
   assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminPublicLiveListingWhere\(''\)\} AND \$\{adminFeaturedListingCondition\(''\)\}\)::int AS public_featured/);
@@ -158,6 +159,13 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(appSource, /adminCleanupLiveTestListings/);
   assert.match(appSource, /\/api\/admin\/test-listings\/cleanup-live/);
   assert.match(htmlSource, /admin-clean-live-tests-btn/);
+});
+
+test('homepage opportunity counter uses the public API total as the visible source of truth', () => {
+  assert.match(appSource, /const apiTotal = Number\(publicListingsApiTotal \?\? 0\) \|\| 0/);
+  assert.match(appSource, /if \(bucketTotal < apiTotal\) stats\.other \+= apiTotal - bucketTotal/);
+  assert.match(appSource, /stats\.total = apiTotal/);
+  assert.match(htmlSource, /hero-public-total-parity-20260610/);
 });
 
 test('property detail enquiries are routed to the listing contact, not the signed-in admin viewer', () => {

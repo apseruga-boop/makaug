@@ -5124,8 +5124,14 @@ function getHeroPropertyOpportunityStats() {
     stats[bucket] = (stats[bucket] || 0) + 1;
     if (isFoundOnlineListing(property)) stats.social += 1;
   });
-  stats.total = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
-  if (!stats.total) stats.total = Number(publicListingsApiTotal ?? publicListings.length) || publicListings.length;
+  const bucketTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  const apiTotal = Number(publicListingsApiTotal ?? 0) || 0;
+  if (apiTotal > 0) {
+    if (bucketTotal < apiTotal) stats.other += apiTotal - bucketTotal;
+    stats.total = apiTotal;
+  } else {
+    stats.total = bucketTotal || publicListings.length;
+  }
   return stats;
 }
 
