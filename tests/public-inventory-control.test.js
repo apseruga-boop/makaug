@@ -163,9 +163,13 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
 
 test('homepage opportunity counter uses the public API total as the visible source of truth', () => {
   assert.match(appSource, /const apiTotal = Number\(publicListingsApiTotal \?\? 0\) \|\| 0/);
-  assert.match(appSource, /if \(bucketTotal < apiTotal\) stats\.other \+= apiTotal - bucketTotal/);
-  assert.match(appSource, /stats\.total = apiTotal/);
+  assert.match(appSource, /const unresolvedPublicListings = Math\.max\(0, authoritativeTotal - bucketTotal\)/);
+  assert.match(appSource, /if \(unresolvedPublicListings\) stats\.sale \+= unresolvedPublicListings/);
+  assert.match(appSource, /stats\.other = 0/);
   assert.match(htmlSource, /hero-public-total-parity-20260610/);
+  assert.match(htmlSource, /hero-route-classification-20260610/);
+  assert.match(appSource, /const publicListingType = normalizedListingType \|\| getHeroPropertyOpportunityBucket\(p\)/);
+  assert.match(appSource, /return "sale";\s*\}\s*function heroOpportunityStatRow/);
 });
 
 test('property detail enquiries are routed to the listing contact, not the signed-in admin viewer', () => {

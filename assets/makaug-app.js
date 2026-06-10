@@ -5124,14 +5124,13 @@ function getHeroPropertyOpportunityStats() {
     stats[bucket] = (stats[bucket] || 0) + 1;
     if (isFoundOnlineListing(property)) stats.social += 1;
   });
-  const bucketTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  const bucketTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land;
   const apiTotal = Number(publicListingsApiTotal ?? 0) || 0;
-  if (apiTotal > 0) {
-    if (bucketTotal < apiTotal) stats.other += apiTotal - bucketTotal;
-    stats.total = apiTotal;
-  } else {
-    stats.total = bucketTotal || publicListings.length;
-  }
+  const authoritativeTotal = apiTotal || publicListings.length || bucketTotal;
+  const unresolvedPublicListings = Math.max(0, authoritativeTotal - bucketTotal);
+  if (unresolvedPublicListings) stats.sale += unresolvedPublicListings;
+  stats.other = 0;
+  stats.total = authoritativeTotal;
   return stats;
 }
 
@@ -5158,7 +5157,7 @@ function getHeroPropertyOpportunityBucket(property) {
   if (/\b(land|plot|acre|decimal|estate plots?)\b/.test(text)) return "land";
   if (["mo", "month", "monthly", "per_month"].includes(period) || /\b(rent|rental|lease|per month|monthly)\b/.test(text)) return "rent";
   if (/\b(for sale|sale|selling|buy)\b/.test(text)) return "sale";
-  return "other";
+  return "sale";
 }
 
 function heroOpportunityStatRow(labelKey, value) {
@@ -30423,12 +30422,14 @@ function mapRemotePropertyForUi(p, options = {}) {
   const id = String(p?.id || "");
   const thirdPartyDiscovery = isFoundOnlineListing(p);
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
+  const normalizedListingType = normalizeType(p?.listing_type || p?.type);
+  const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
   return {
     ...p,
     id,
     backend_id: id,
     title: p?.title || "Untitled listing",
-    type: normalizeType(p?.listing_type || p?.type),
+    type: publicListingType,
     subtype: p?.property_type || p?.subtype || "Property",
     title_type: p?.title_type || p?.extra_fields?.title_type || "",
     land_title_available: getLandTitleAvailabilityValue(p),
