@@ -901,7 +901,6 @@ function buildExactSocialPostImportRows({
         || seed.platform_posted_at
         || seed.published_at
         || page.published_at
-        || inferredPostedAt
       );
       const imageUrls = [
         ...String(seed.image_urls || seed.images || seed.photo_urls || seed.media_urls || '')
@@ -964,13 +963,14 @@ function buildExactSocialPostImportRows({
           no_api_metadata: metadata,
           comments: commentEvidence,
           source_visual_text: visualText,
+          inferred_platform_posted_at: inferredPostedAt || '',
           import_method: 'no_api_exact_social_url_intake',
           date_confidence: seed.first_posted_at || seed.posted_at || seed.published_at
             ? 'operator_supplied'
             : page.published_at
               ? 'public_page_metadata'
               : inferredPostedAt
-                ? 'inferred_from_public_post_id'
+                ? 'inferred_from_public_post_id_needs_confirmation'
                 : 'needs_platform_date_confirmation',
         },
       };
@@ -1110,6 +1110,41 @@ function buildTikTokCaptureTasks({ sources = sourcesForPlatform('tiktok'), limit
           'screenshot/still/thumbnail evidence is captured or a labelled evidence card is used',
         ],
         next_action: `Open ${sourceUrl(source) || query}, collect every 2026+ property video URL, then import with inventory:import-source-posts.`,
+      };
+    });
+}
+
+function buildManualSocialCaptureTasks({ sources = [], platform = 'social', limit = DEFAULT_MAX_SOURCES } = {}) {
+  const normalizedPlatform = normalizePlatform(platform);
+  return sources
+    .filter((source) => normalizedPlatform === 'social' || normalizePlatform(source.platform) === normalizedPlatform)
+    .slice(0, cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
+    .map((source) => {
+      const hashtag = sourceHashtag(source);
+      const query = hashtag ? `#${hashtag}` : sourceName(source);
+      const sourcePlatform = normalizePlatform(source.platform || platform);
+      return {
+        platform: sourcePlatform,
+        source_key: sourceKey(source),
+        source_name: sourceName(source),
+        source_type: source.source_type || source.sourceType || '',
+        source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+        source_url: sourceUrl(source),
+        query,
+        exact_post_url_required: true,
+        exact_post_url_pattern: sourcePlatform === 'facebook'
+          ? 'https://www.facebook.com/{page_or_group}/posts/{post_id} or https://www.facebook.com/watch/?v={video_id}'
+          : sourcePlatform === 'instagram'
+            ? 'https://www.instagram.com/p/{shortcode}/ or https://www.instagram.com/reel/{shortcode}/'
+            : 'public social post URL',
+        student_housing_focus: true,
+        import_ready_when: [
+          'exact public post, reel, or video URL is captured',
+          'campus, hostel, student accommodation, university, or student-room signal is visible',
+          'location or area is visible',
+          'source contact path is available',
+        ],
+        next_action: `Open ${sourceUrl(source) || query}, capture exact student housing post URLs, then paste them into the King exact-link import panel.`,
       };
     });
 }
@@ -1574,6 +1609,7 @@ function uniquePosts(posts = []) {
 async function runSocialPlatformPostSweep({
   db,
   platform = 'all',
+  focus = '',
   dryRun = true,
   maxSources = DEFAULT_MAX_SOURCES,
   sourceOffset = 0,
@@ -1588,12 +1624,25 @@ async function runSocialPlatformPostSweep({
   fetchImpl = fetch,
 } = {}) {
   const normalizedPlatform = normalizePlatform(platform || 'all');
-  const requestedPlatforms = normalizedPlatform === 'all' ? ['tiktok', 'youtube', 'x'] : [normalizedPlatform];
+  const normalizedFocus = cleanText(focus).toLowerCase();
+  const studentHousingFocus = normalizedFocus === 'students'
+    || normalizedFocus === 'student'
+    || normalizedFocus === 'student_housing'
+    || normalizedPlatform === 'student'
+    || normalizedPlatform === 'students'
+    || normalizedPlatform === 'student_housing';
+  const requestedPlatforms = studentHousingFocus
+    ? ['tiktok', 'youtube', 'x', 'facebook', 'instagram']
+    : normalizedPlatform === 'all'
+      ? ['tiktok', 'youtube', 'x']
+      : [normalizedPlatform];
   const sourceLimit = cappedNumber(maxSources, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
   const normalizedSourceOffset = cappedOffset(sourceOffset);
   const tiktokSources = requestedPlatforms.includes('tiktok') ? sourcesForPlatform('tiktok') : [];
   const youtubeSources = requestedPlatforms.includes('youtube') ? sourcesForPlatform('youtube') : [];
   const xSources = requestedPlatforms.includes('x') ? sourcesForPlatform('x') : [];
+  const facebookSources = requestedPlatforms.includes('facebook') ? sourcesForPlatform('facebook') : [];
+  const instagramSources = requestedPlatforms.includes('instagram') ? sourcesForPlatform('instagram') : [];
   const archiveStartTime = isoStartTimeForLookbackDays(lookbackDays);
   const youtubeStartTime = cleanText(publishedAfter || youtubePublishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
@@ -1604,6 +1653,12 @@ async function runSocialPlatformPostSweep({
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
+    : [];
+  const facebookCaptureTasks = requestedPlatforms.includes('facebook')
+    ? buildManualSocialCaptureTasks({ sources: facebookSources, platform: 'facebook', limit: sourceLimit })
+    : [];
+  const instagramCaptureTasks = requestedPlatforms.includes('instagram')
+    ? buildManualSocialCaptureTasks({ sources: instagramSources, platform: 'instagram', limit: sourceLimit })
     : [];
   const youtubeApi = envYouTubeApiKey(env);
   let youtubeFetch = {
@@ -1682,10 +1737,12 @@ async function runSocialPlatformPostSweep({
     import_batch_id: FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
     dry_run: dryRun,
     platforms: requestedPlatforms,
+    focus: studentHousingFocus ? 'students' : normalizedFocus,
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 January 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
+      student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
     },
     tiktok: {
@@ -1718,6 +1775,16 @@ async function runSocialPlatformPostSweep({
       fetch_reports: xFetch.reports,
       fetched_posts_count: xFetch.posts.length,
     },
+    facebook: {
+      source_count: facebookSources.length,
+      capture_task_count: facebookCaptureTasks.length,
+      capture_tasks: facebookCaptureTasks,
+    },
+    instagram: {
+      source_count: instagramSources.length,
+      capture_task_count: instagramCaptureTasks.length,
+      capture_tasks: instagramCaptureTasks,
+    },
     discovered_posts_count: discoveredPosts.length,
     discovered_posts: discoveredPosts.slice(0, 50),
     import_result: importResult,
@@ -1741,6 +1808,7 @@ module.exports = {
   extractTikTokVideoUrls,
   buildExactSocialPostImportRows,
   buildTikTokCaptureTasks,
+  buildManualSocialCaptureTasks,
   buildTikTokExactPostImportRows,
   buildYouTubeSearchJobs,
   buildXSearchJobs,

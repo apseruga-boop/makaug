@@ -612,6 +612,7 @@ let authSignUpOtpChannel = "phone";
 let adminApiKey = "";
 let adminRemoteListings = [];
 let adminLiveListings = [];
+let adminPublicInventoryParity = {};
 let adminRemoteAgents = [];
 let adminPropertyRequests = [];
 let adminFieldAgents = [];
@@ -9384,7 +9385,7 @@ function buildAdminAiSnapshot(remoteSnap, localSnap, sourceLabel = "") {
     weeklyTips: Number(users.weekly_tips_opt_in ?? (localSnap?.recentUsers || []).filter((u) => u.weekly_tips_opt_in !== false).length ?? 0),
     totalUsers: Number(users.total ?? localSummary.totalUsers ?? 0),
     pendingListings: Number(summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
-    approvedListings: Number(summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+    approvedListings: Number(summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
     topAreas,
     topListingTypes
   };
@@ -9439,7 +9440,7 @@ function adminBuildCommandCentre(remoteSnap, localSnap) {
   const whatsapp = remoteSnap?.whatsappSummary || {};
   const fallbackMetrics = {
     pending_listings: Number(summary?.properties?.pending ?? localSummary.pendingListings ?? 0),
-    live_listings: Number(summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
+    live_listings: Number(summary?.properties?.public_live ?? summary?.properties?.approved ?? localSummary.approvedListings ?? 0),
     hidden_listings: Number(summary?.properties?.hidden ?? localSummary.hiddenListings ?? 0),
     deleted_listings: Number(summary?.properties?.deleted ?? localSummary.deletedListings ?? 0),
     broker_pending: Number(summary?.agents?.pending ?? localSummary.notRegisteredAgents ?? 0),
@@ -10111,13 +10112,22 @@ async function fetchAdminPaginatedRows(path, headers, options = {}) {
   const rows = [];
   let page = 1;
   let totalPages = 1;
+  let firstResponse = null;
+  let lastResponse = null;
   do {
     const separator = path.includes("?") ? "&" : "?";
     const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { headers });
+    if (!firstResponse) firstResponse = response;
+    lastResponse = response;
     rows.push(...(Array.isArray(response?.data) ? response.data : []));
     totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
     page += 1;
   } while (page <= totalPages && page <= maxPages);
+  Object.defineProperties(rows, {
+    adminPagination: { value: lastResponse?.pagination || null },
+    adminSummary: { value: lastResponse?.summary || firstResponse?.summary || null },
+    adminMeta: { value: lastResponse?.meta || firstResponse?.meta || null }
+  });
   return rows;
 }
 
@@ -10197,6 +10207,7 @@ async function fetchRemoteAdminSnapshot() {
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
   const liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
+  adminPublicInventoryParity = liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory || {};
   const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings]);
   adminRemoteListings = allListings;
   adminLiveListings = liveListings;
@@ -10230,6 +10241,7 @@ async function fetchRemoteAdminSnapshot() {
     recent: recentRes?.data || {},
     pendingListings,
     liveListings,
+    publicInventoryParity: adminPublicInventoryParity,
     allListings,
     users: usersRes?.data || [],
     agents: adminRemoteAgents,
@@ -11773,6 +11785,37 @@ function buildAdminFollowUpWhatsAppMessage(p = {}) {
   ].join("\n");
 }
 
+function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
+  const parity = snapshot?.publicInventoryParity || adminPublicInventoryParity || {};
+  const safeNumber = (value, fallback = 0) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+  const liveFallback = Array.isArray(listings) ? listings.filter(adminIsPublicLiveAdminListing).length : 0;
+  const featuredFallback = Array.isArray(listings) ? listings.filter((p) => adminIsPublicLiveAdminListing(p) && isFeaturedListing(p)).length : 0;
+  const liveTotal = safeNumber(parity.public_visible_total ?? snapshot?.summary?.properties?.public_live, liveFallback);
+  const featuredTotal = safeNumber(parity.featured_total ?? snapshot?.summary?.properties?.public_featured, featuredFallback);
+  const loadedRows = safeNumber(parity.page_rows, Array.isArray(listings) ? listings.length : 0);
+  const totalRows = safeNumber(parity.total_rows, liveTotal);
+  const parityOk = parity.same_as_public_api !== false;
+  const statusClass = parityOk ? "border-green-100 bg-green-50 text-green-900" : "border-amber-100 bg-amber-50 text-amber-900";
+  const statusText = parityOk ? "Dashboard matches the public listing API." : "Dashboard count differs from the public listing API.";
+  const html = `
+    <div class="mb-4 rounded-xl border ${statusClass} p-3">
+      <div class="text-xs font-black uppercase tracking-wide">${adminEscape(statusText)}</div>
+      <div class="mt-2 grid sm:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Online public listings</span><strong class="text-lg">${adminEscape(liveTotal)}</strong></div>
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Featured online</span><strong class="text-lg">${adminEscape(featuredTotal)}</strong></div>
+        <div class="rounded-lg bg-white/70 border border-white p-2"><span class="block text-gray-500">Rows loaded here</span><strong class="text-lg">${adminEscape(loadedRows)}</strong><span class="text-gray-500"> / ${adminEscape(totalRows)}</span></div>
+      </div>
+      <div class="mt-2 text-[11px] text-gray-600 break-words">Public: ${adminEscape(parity.public_api_endpoint || "/api/properties?status=approved&public_only=1")} • Featured: ${adminEscape(parity.featured_api_endpoint || "/api/properties?status=approved&featured=true&public_only=1&sort=featured")}</div>
+    </div>`;
+  ["admin-live-parity-summary", "admin-featured-parity-summary"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
@@ -12277,7 +12320,7 @@ async function renderAdminDashboard() {
   const summary = remoteSnap?.summary || {};
   const totalListings = summary?.properties?.total ?? localSnap.summary.totalListings;
   const pendingListings = summary?.properties?.pending ?? localSnap.summary.pendingListings;
-  const approvedListings = summary?.properties?.approved ?? localSnap.summary.approvedListings;
+  const approvedListings = summary?.properties?.public_live ?? summary?.properties?.approved ?? localSnap.summary.approvedListings;
   const rejectedListings = summary?.properties?.rejected ?? localSnap.summary.rejectedListings;
   const hiddenListings = summary?.properties?.hidden ?? localSnap.summary.hiddenListings;
   const deletedListings = summary?.properties?.deleted ?? localSnap.summary.deletedListings;
@@ -12332,8 +12375,10 @@ async function renderAdminDashboard() {
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
   renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
   renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
-  renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
-  renderAdminFeaturedRows(remoteSnap?.liveListings || localSnap.liveListings || []);
+  const adminLiveRows = remoteSnap?.liveListings || localSnap.liveListings || [];
+  renderAdminLiveParitySummary(remoteSnap || localSnap, adminLiveRows);
+  renderAdminLiveListingsRows(adminLiveRows);
+  renderAdminFeaturedRows(adminLiveRows);
   renderAdminOutreachOverview({
     summary,
     users: adminUsers,
@@ -36159,6 +36204,59 @@ function renderDetailMortgageWidget(propertyId) {
     </div>`;
 }
 
+function shouldShowUgNlisAdvisory(property = {}) {
+  const titleSensitiveTypes = ["land", "plot", "mailo", "freehold", "leasehold"];
+  const haystack = [
+    property.type,
+    property.listing_type,
+    property.property_type,
+    property.title_type,
+    property.title,
+    property.description
+  ].filter(Boolean).join(" ").toLowerCase();
+  return titleSensitiveTypes.some((item) => haystack.includes(item));
+}
+
+function renderUgNlisVerificationCard(property = {}) {
+  if (!shouldShowUgNlisAdvisory(property)) return "";
+  const landVerification = property.land_verification || property.extra_fields?.land_verification || {};
+  const status = landVerification.status || property.land_verification_status || property.extra_fields?.land_verification_status || "not_started";
+  return `
+    <div class="mt-4 rounded-xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-950">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="font-black">Official searches happen on UgNLIS</div>
+          <div class="mt-1 text-emerald-900">Makaug helps you discover and compare land listings, but title search, parcel search, and transaction tracking must be checked on Uganda's official UgNLIS portal.</div>
+        </div>
+        <span class="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-emerald-800">${adminEscape(status)}</span>
+      </div>
+      <div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
+        <div class="rounded-lg bg-white/80 border border-white p-2"><strong>Before opening UgNLIS</strong><br>Have volume and folio, or county/block/plot ready.</div>
+        <div class="rounded-lg bg-white/80 border border-white p-2">Use the official portal for search results and transaction status.</div>
+        <div class="rounded-lg bg-white/80 border border-white p-2">Keep independent legal and survey checks before payment.</div>
+      </div>
+      <div class="mt-3 flex gap-2 flex-wrap">
+        <a href="https://ugnlis.mlhud.go.ug/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Open UgNLIS</a>
+        <a href="/safety" class="inline-flex items-center rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-bold text-emerald-800">Land safety guide</a>
+        <span role="tooltip" class="inline-flex items-center rounded-lg border border-emerald-100 bg-white/80 px-3 py-2 text-[11px] text-emerald-900">UgNLIS is operated by Uganda's land ministry, not makaug.</span>
+      </div>
+    </div>`;
+}
+
+async function saveAdminLandVerificationReview(propertyId, fields = {}) {
+  if (!canUseLiveAdminApi()) {
+    toast("Admin access is required to save land verification notes.");
+    return null;
+  }
+  const response = await apiRequest(`/api/admin/properties/${encodeURIComponent(propertyId)}/land-verification`, {
+    method: "PATCH",
+    headers: adminAuthHeaders(),
+    body: fields
+  });
+  toast("Land verification review saved.");
+  return response?.data || null;
+}
+
 async function openDetail(id, options = {}) {
   let p = findPropertyForUi(id);
   if (!p) return false;
@@ -36318,6 +36416,7 @@ async function openDetail(id, options = {}) {
               ${renderPropertyShareActions(p, detailIdArg)}
             </div>
             ${listingOnlineSourceDisclosureHtml(p)}
+            ${renderUgNlisVerificationCard(p)}
             ${isOwnerPreviewViewer ? `
             <div class="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3">
               <div class="text-xs uppercase tracking-wide text-amber-700 font-semibold mb-1">${translateListingLabel("Private Preview")}</div>

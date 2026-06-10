@@ -12,6 +12,10 @@ const {
   landTitleAvailabilityLabel,
   normalizeLandTitleAvailability
 } = require('../utils/landTitleAvailability');
+const {
+  buildUgNlisLandVerificationPack,
+  sanitizeUgNlisLandVerificationFields
+} = require('../services/ugnlisLandVerificationService');
 const { processPendingCampaignQueue, refreshCampaignStatus } = require('../services/whatsappCampaignService');
 const { generateCampaignCopy, suggestWhatsappAssistantReply } = require('../services/aiService');
 const { sendWhatsAppText } = require('../services/whatsappNotificationService');
@@ -199,21 +203,25 @@ function adminPendingReviewWhere(alias = 'p') {
 }
 
 function adminLaunchTestListingCondition(alias = 'p') {
-  const a = alias;
+  const col = (column) => adminColumn(alias, column);
   return `(
-    ${LAUNCH_TEST_LISTING_MARKERS.map((marker) => `(COALESCE(${a}.title, '') ILIKE '%${marker}%' OR COALESCE(${a}.description, '') ILIKE '%${marker}%')`).join(' OR ')}
-    OR LOWER(TRIM(COALESCE(${a}.title, ''))) IN (${LAUNCH_TEST_DUMMY_TITLES.map((title) => `'${title}'`).join(', ')})
-    OR COALESCE(${a}.source, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
-    OR COALESCE(${a}.listed_via, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
-    OR COALESCE(${a}.lister_name, '') ~* '(qa test delete|qa owner|dummy|sample)'
-    OR COALESCE(${a}.lister_email, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
-    OR COALESCE(${a}.inquiry_reference, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
-    OR COALESCE(${a}.extra_fields->>'is_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${a}.extra_fields->>'qa_test_delete', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${a}.extra_fields->>'soft_launch_test', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${a}.extra_fields->>'launch_proof', '') ~* '^(true|1|yes)$'
-    OR COALESCE(${a}.extra_fields->>'non_public_test', '') ~* '^(true|1|yes)$'
+    ${LAUNCH_TEST_LISTING_MARKERS.map((marker) => `(COALESCE(${col('title')}, '') ILIKE '%${marker}%' OR COALESCE(${col('description')}, '') ILIKE '%${marker}%')`).join(' OR ')}
+    OR LOWER(TRIM(COALESCE(${col('title')}, ''))) IN (${LAUNCH_TEST_DUMMY_TITLES.map((title) => `'${title}'`).join(', ')})
+    OR COALESCE(${col('source')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${col('listed_via')}, '') ~* '(qa|test|demo|soft_launch|launch_proof)'
+    OR COALESCE(${col('lister_name')}, '') ~* '(qa test delete|qa owner|dummy|sample)'
+    OR COALESCE(${col('lister_email')}, '') ~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    OR COALESCE(${col('inquiry_reference')}, '') ~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    OR COALESCE(${col('extra_fields')}->>'is_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'qa_test_delete', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'soft_launch_test', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'launch_proof', '') ~* '^(true|1|yes)$'
+    OR COALESCE(${col('extra_fields')}->>'non_public_test', '') ~* '^(true|1|yes)$'
   )`;
+}
+
+function adminFeaturedListingCondition(alias = 'p') {
+  return `(COALESCE(${adminColumn(alias, 'extra_fields')}->>'featured', 'false') IN ('true', '1', 'yes'))`;
 }
 
 function adminPublicLiveListingCondition(alias = 'p') {
@@ -221,7 +229,7 @@ function adminPublicLiveListingCondition(alias = 'p') {
 }
 
 function adminPublicLiveListingWhere(alias = 'p') {
-  return `${alias}.status = 'approved' AND ${adminPublicLiveListingCondition(alias)}`;
+  return `${adminColumn(alias, 'status')} = 'approved' AND ${adminPublicLiveListingCondition(alias)}`;
 }
 
 function safeJsonObject(value, fallback = {}) {
@@ -2167,6 +2175,8 @@ router.get('/summary', async (req, res, next) => {
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE ${adminPendingReviewWhere('')})::int AS pending,
           COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')})::int AS public_live,
+          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')} AND ${adminFeaturedListingCondition('')})::int AS public_featured,
           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
           COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
           COUNT(*) FILTER (WHERE status = 'deleted')::int AS deleted,
@@ -2596,6 +2606,16 @@ router.get('/properties/live', async (req, res, next) => {
        WHERE ${publicLiveCondition}`
     );
     const total = countResult.rows[0]?.total || 0;
+    const parityResult = await db.query(
+      `SELECT
+        COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('p')})::int AS public_visible_total,
+        COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('p')} AND ${adminFeaturedListingCondition('p')})::int AS featured_total
+       FROM properties p`
+    );
+    const publicInventory = {
+      public_visible_total: Number(parityResult.rows[0]?.public_visible_total || 0),
+      featured_total: Number(parityResult.rows[0]?.featured_total || 0)
+    };
 
     const rows = await db.query(
       `SELECT
@@ -2644,7 +2664,26 @@ router.get('/properties/live', async (req, res, next) => {
     return res.json({
       ok: true,
       data: rows.rows,
-      pagination: toPagination(total, page, limit)
+      pagination: toPagination(total, page, limit),
+      summary: {
+        public_inventory: {
+          ...publicInventory,
+          page_rows: rows.rows.length,
+          total_rows: total
+        }
+      },
+      meta: {
+        status: 'live',
+        include_test_like: includeTestLike,
+        public_parity: {
+          ...publicInventory,
+          page_rows: rows.rows.length,
+          total_rows: total,
+          same_as_public_api: !includeTestLike && total === publicInventory.public_visible_total,
+          public_api_endpoint: '/api/properties?status=approved&public_only=1',
+          featured_api_endpoint: '/api/properties?status=approved&featured=true&public_only=1&sort=featured'
+        }
+      }
     });
   } catch (error) {
     return next(error);
@@ -3586,6 +3625,46 @@ router.patch('/properties/:id/review', async (req, res, next) => {
         details: error.details || undefined
       });
     }
+    return next(error);
+  }
+});
+
+router.patch('/properties/:id/land-verification', async (req, res, next) => {
+  try {
+    const patch = sanitizeUgNlisLandVerificationFields(req.body || {});
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'No land verification fields supplied' });
+    }
+    const updated = await db.query(
+      `UPDATE properties
+       SET extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $2::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, title, listing_type, extra_fields, updated_at`,
+      [req.params.id, JSON.stringify(patch)]
+    );
+    if (!updated.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Property not found' });
+    }
+    const actorId = adminActorId(req);
+    await db.query(
+      `INSERT INTO property_moderation_events (property_id, actor_id, action, notes)
+       VALUES ($1, $2, $3, $4)`,
+      [req.params.id, actorId, 'land_verification_updated', cleanText(req.body?.ugnlis_search_notes || req.body?.verification_notes || '') || null]
+    );
+    await writeAudit('admin_land_verification_updated', {
+      property_id: req.params.id,
+      fields: Object.keys(patch)
+    }, actorId);
+    const row = updated.rows[0];
+    return res.json({
+      ok: true,
+      data: {
+        ...row,
+        land_verification: buildUgNlisLandVerificationPack({ extra_fields: row.extra_fields || {} })
+      }
+    });
+  } catch (error) {
     return next(error);
   }
 });

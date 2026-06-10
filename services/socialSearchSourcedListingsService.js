@@ -1726,8 +1726,8 @@ function publicEmailFromText(text = '') {
 function normalizeFoundOnlineListingType(value = '') {
   const raw = String(value || '').toLowerCase();
   const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
-  if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
   if (raw.includes('student') || raw.includes('hostel') || raw.includes('campus')) return 'students';
+  if (raw.includes('rent') || raw.includes('rental') || raw.includes('let')) return 'rent';
   if (raw.includes('commercial') || raw.includes('shop') || raw.includes('office') || raw.includes('warehouse')) return 'commercial';
   if (hasDwelling && (raw.includes('sale') || raw.includes('selling') || raw.includes('buy'))) return 'sale';
   if ((raw.includes('land') || raw.includes('plot') || raw.includes('acre') || raw.includes('decimal') || raw.includes('mailo')) && !hasDwelling) return 'land';

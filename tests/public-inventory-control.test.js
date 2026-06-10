@@ -54,7 +54,10 @@ test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
-  assert.match(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]\)/);
+  assert.match(appSource, /Object\.defineProperties\(rows, \{/);
+  assert.match(appSource, /adminSummary: \{ value: lastResponse\?\.summary \|\| firstResponse\?\.summary \|\| null \}/);
+  assert.match(appSource, /const adminLiveRows = remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]/);
+  assert.match(appSource, /renderAdminFeaturedRows\(adminLiveRows\)/);
   assert.doesNotMatch(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.allListings \|\| localSnap\.allListings/);
 });
 
@@ -91,6 +94,7 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
   assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
   assert.match(routeSource, /COALESCE\(p\.extra_fields->>'soft_launch_test', ''\) !~\*/);
+  assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
   assert.match(appSource, /apiRequest\("\/api\/properties\?status=approved&limit=1000&public_only=1", \{ skipAuth: true \}\)/);
@@ -128,10 +132,26 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(adminRouteSource, /function adminLaunchTestListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingWhere/);
+  assert.match(adminRouteSource, /function adminFeaturedListingCondition/);
+  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminPublicLiveListingWhere\(''\)\}\)::int AS public_live/);
+  assert.match(adminRouteSource, /COUNT\(\*\) FILTER \(WHERE \$\{adminPublicLiveListingWhere\(''\)\} AND \$\{adminFeaturedListingCondition\(''\)\}\)::int AS public_featured/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/live'/);
   assert.match(adminRouteSource, /WHERE \$\{publicLiveCondition\}/);
+  assert.match(adminRouteSource, /summary: \{\s*public_inventory:/);
+  assert.match(adminRouteSource, /public_visible_total/);
+  assert.match(adminRouteSource, /featured_total/);
+  assert.match(adminRouteSource, /public_parity/);
+  assert.match(adminRouteSource, /same_as_public_api/);
   assert.match(adminRouteSource, /CONCAT\('\/property\/', p\.id::text\) AS property_url/);
   assert.match(appSource, /function adminIsPublicLiveAdminListing/);
+  assert.match(appSource, /let adminPublicInventoryParity = \{\}/);
+  assert.match(appSource, /publicInventoryParity: adminPublicInventoryParity/);
+  assert.match(appSource, /function renderAdminLiveParitySummary/);
+  assert.match(appSource, /Online public listings/);
+  assert.match(appSource, /Featured online/);
+  assert.match(appSource, /summary\?\.properties\?\.public_live \?\? summary\?\.properties\?\.approved/);
+  assert.match(htmlSource, /admin-live-parity-summary/);
+  assert.match(htmlSource, /admin-featured-parity-summary/);
   assert.match(appSource, /Open Public Listing/);
   assert.match(adminRouteSource, /router\.post\('\/test-listings\/cleanup-live'/);
   assert.match(adminRouteSource, /live_test_listing_cleanup/);
@@ -220,4 +240,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /broker-profile-share-links-20260519/);
   assert.match(htmlSource, /direct-agent-profile-20260519/);
   assert.match(htmlSource, /public-featured-feed-fix-20260525/);
+  assert.match(htmlSource, /king-live-public-parity-20260609/);
 });

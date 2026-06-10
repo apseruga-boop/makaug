@@ -42,6 +42,7 @@ const {
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
+const { buildUgNlisAssistantReply } = require('../services/ugnlisLandVerificationService');
 
 const router = express.Router();
 const HOME_URL = (process.env.PUBLIC_BASE_URL || 'https://makaug.com').replace(/\/+$/, '');
@@ -2464,6 +2465,11 @@ function stripLinksAndIdsForNumericParsing(text = '') {
     .replace(/\bhttps?:\/\/\S+/gi, ' ')
     .replace(/\bwww\.\S+/gi, ' ')
     .replace(/\b[a-f0-9]{8}-[a-f0-9-]{12,}\b/gi, ' ');
+}
+
+function isUgNlisLandVerificationIntent(text = '') {
+  const clean = stripLinksAndIdsForNumericParsing(text).toLowerCase();
+  return /\bugnlis\b|official land title|title search|land title search|land verification|verify land title|check land title|transaction number|title volume|title folio|block and plot|county block plot/.test(clean);
 }
 
 function parseBudget(text) {
@@ -5543,12 +5549,12 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
   const routeExplicitListingStart = async () => {
     const draftHints = extractSellerListingDraftHints(cleanBody, intentResult?.entities || {});
     const inferredListingType = draftHints.listing_type || inferListingTypeFromStartRequest(cleanBody, intentResult?.entities || {});
+    const { listing_type: _listingTypeHint, ...draftHintPatch } = draftHints;
     const mediaPatch = isListingPhotoMedia(runtime.mediaType, mediaUrl)
       ? appendIncomingListingPhotos(draft.photos || [], mediaUrl, runtime.mediaCount || 1)
       : { photos: draft.photos || [], added: 0 };
     const draftPatch = {
-      ...draftHints,
-      ...(inferredListingType ? { listing_type: inferredListingType } : {}),
+      ...draftHintPatch,
       ...(mediaPatch.added > 0 ? { photos: mediaPatch.photos } : {})
     };
     await patchSessionData(phone, {
@@ -5564,6 +5570,9 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
     });
     if (Object.keys(draftPatch).length) {
       await patchDraft(phone, draftPatch);
+    }
+    if (inferredListingType) {
+      await patchDraft(phone, { listing_type: inferredListingType });
     }
     if (inferredListingType) {
       const reply = listingStartReply(lang, inferredListingType, draftHints);
@@ -5638,6 +5647,11 @@ async function processMessage(phone, body, mediaUrl, sharedLocation = null, runt
       optInSource: 'whatsapp_keyword_start'
     });
     return respond('✅ You are now subscribed for makaug updates. Reply MENU to continue.', 'main_menu');
+  }
+
+  if (isUgNlisLandVerificationIntent(cleanBody)) {
+    await patchSessionData(phone, { ugnlis_official_info_requested_at: new Date().toISOString() });
+    return respond(buildUgNlisAssistantReply({ language: lang, baseUrl: HOME_URL }), 'main_menu');
   }
 
   if (isDeletedWhatsappMessagePlaceholder(cleanBody) && !mediaUrl && !sharedLocation) {
