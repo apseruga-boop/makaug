@@ -7688,7 +7688,7 @@ router.post('/webhook', async (req, res) => {
 });
 
 // POST /api/whatsapp/web-bridge/heartbeat
-router.post('/web-bridge/heartbeat', async (req, res) => {
+router.post('/web-bridge/heartbeat', asyncRoute(async (req, res) => {
   if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
 
   const client = await upsertWhatsappWebBridgeClient({
@@ -7706,7 +7706,7 @@ router.post('/web-bridge/heartbeat', async (req, res) => {
   });
 
   return res.json({ ok: true, data: client });
-});
+}));
 
 // POST /api/whatsapp/web-bridge/call
 router.post('/web-bridge/call', asyncRoute(async (req, res) => {

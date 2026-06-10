@@ -167,6 +167,11 @@ async function run() {
     'WhatsApp Web bridge claim lease must recover quickly if the browser send path stalls'
   );
   assert(
+    whatsappWebBridgeServiceSource.includes("'browser_database_error'")
+      && whatsappRouteSource.includes("router.post('/web-bridge/heartbeat', asyncRoute(async (req, res) => {"),
+    'WhatsApp Web bridge heartbeat must accept browser database error status without crashing the process'
+  );
+  assert(
     whatsappWebBridgeServiceSource.includes('Math.min(\n    20,\n    Math.max(5, Number(process.env.WHATSAPP_WEB_BRIDGE_CLAIM_SECONDS || 8))'),
     'WhatsApp Web bridge claim lease must be capped below one minute'
   );
