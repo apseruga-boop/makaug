@@ -216,6 +216,13 @@ function checkAiDataExports() {
   } else {
     add('ai_learning_storage', 'ok', 'AI learning export scripts are present.');
   }
+  if (isTruthy('REQUIRE_CLOUD_AI_EXPORTS')) {
+    if (requireNames('ai_learning_storage', ['AI_EXPORT_BUCKET', 'AI_EXPORT_PREFIX', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])) {
+      add('ai_learning_storage', 'ok', 'AI learning exports are configured to write to S3/R2.');
+    }
+  } else {
+    add('ai_learning_storage', 'warning', 'REQUIRE_CLOUD_AI_EXPORTS is not enabled; AI exports can fall back to Render disk paths.');
+  }
 }
 
 checkDatabase();

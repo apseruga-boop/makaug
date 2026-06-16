@@ -49,6 +49,8 @@ async function run() {
   logger.info(`Samples: ${result.totalExported}`);
   logger.info(`JSONL: ${result.jsonlPath}`);
   logger.info(`CSV: ${result.csvPath}`);
+  if (result.cloud?.jsonl?.internalRef) logger.info(`Cloud JSONL: ${result.cloud.jsonl.internalRef}`);
+  if (result.cloud?.csv?.internalRef) logger.info(`Cloud CSV: ${result.cloud.csv.internalRef}`);
 
   await db.pool.end();
 }
