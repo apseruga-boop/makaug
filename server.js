@@ -128,18 +128,23 @@ const staticRoot = __dirname;
 const indexPath = path.join(staticRoot, 'index.html');
 const isProduction = process.env.NODE_ENV === 'production';
 const captureHelperUsabilityVersion = 'capture-helper-usability-20260607';
+const studentNearestUniversityVersion = 'student-nearest-university-20260616';
+const publicAppVersionSuffixes = [captureHelperUsabilityVersion, studentNearestUniversityVersion];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 
 function applyCaptureHelperUsabilityIndexPatch(html) {
-  if (!html || html.includes(captureHelperUsabilityVersion)) return html;
+  if (!html) return html;
+  const missingSuffixes = publicAppVersionSuffixes.filter((version) => !html.includes(version));
+  if (!missingSuffixes.length) return html;
+  const suffix = missingSuffixes.map((version) => `-${version}`).join('');
   const withDirectAssetUrls = html.replace(
     /(assets\/makaug-app\.js\?v=)([^"'<\s]+)/g,
-    `$1$2-${captureHelperUsabilityVersion}`
+    `$1$2${suffix}`
   );
   return withDirectAssetUrls.replace(
     /(window\.__makaugAppVersion\s*=\s*")([^"]+)(")/g,
-    `$1$2-${captureHelperUsabilityVersion}$3`
+    `$1$2${suffix}$3`
   );
 }
 
