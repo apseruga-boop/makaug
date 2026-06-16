@@ -24,6 +24,10 @@ const {
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
 const {
+  inferNearestUniversityFromListing,
+  normalizeUniversityName
+} = require('../utils/universityMatcher');
+const {
   getWhatsappConversationControl,
   syncWhatsappConversationState,
   updateWhatsappConversationControl
@@ -3172,7 +3176,8 @@ async function findAffordableWhatsappListings(filters = {}, { includeBudget = tr
   const limitIdx = values.length;
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
             COUNT(*) OVER() AS total_count,
             img.url AS primary_image_url
      FROM properties p
@@ -3339,7 +3344,8 @@ async function findPropertiesByNaturalFilters(filters = {}) {
   const limitIdx = values.length;
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
             COUNT(*) OVER() AS total_count,
             img.url AS primary_image_url
      FROM properties p
@@ -4457,7 +4463,8 @@ async function findPropertiesForWhatsapp(searchType, location) {
   const limitIdx = values.length;
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.extra_fields,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
             COUNT(*) OVER() AS total_count,
             img.url AS primary_image_url
      FROM properties p
@@ -4492,7 +4499,8 @@ async function findPropertiesNearWhatsapp(searchType, sharedLocation, radiusMile
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.latitude, p.longitude, p.extra_fields,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.latitude, p.longitude,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
             p.bedrooms, p.bathrooms, p.property_type, img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -4609,7 +4617,8 @@ async function findPropertiesNearWhatsappWithFilters(baseSearchType, sharedLocat
   }
 
   const result = await db.query(
-    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.latitude, p.longitude, p.extra_fields,
+    `SELECT p.id, p.title, p.listing_type, p.district, p.area, p.price, p.price_period, p.bedrooms, p.bathrooms, p.property_type, p.latitude, p.longitude,
+            p.nearest_university, p.distance_to_uni_km, p.room_type, p.room_arrangement, p.students_welcome, p.extra_fields,
             img.url AS primary_image_url
      FROM properties p
      LEFT JOIN LATERAL (
@@ -4912,6 +4921,46 @@ function safePublicPreviewUrl(value) {
 function getExtraField(row, key) {
   const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   return extra[key];
+}
+
+function whatsappRowLooksStudent(row = {}) {
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  const type = String(row.listing_type || extra.listing_type || '').trim().toLowerCase();
+  return type === 'student'
+    || type === 'students'
+    || row.students_welcome === true
+    || extra.students_welcome === true
+    || /\b(student|hostel|campus)\b/i.test([
+      row.title,
+      row.property_type,
+      row.room_type,
+      row.room_arrangement,
+      extra.student_campus,
+      extra.nearest_university,
+      extra.source_title
+    ].filter(Boolean).join(' '));
+}
+
+function nearestUniversityForWhatsappRow(row = {}) {
+  if (!whatsappRowLooksStudent(row)) return '';
+  const extra = row?.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return normalizeUniversityName(
+    row.nearest_university
+    || extra.nearest_university
+    || extra.student_campus
+    || extra.student_university
+    || extra.nearest_uni
+    || extra.university
+    || extra.campus
+  ) || inferNearestUniversityFromListing(row);
+}
+
+function studentUniversityLineForWhatsapp(row = {}) {
+  const nearestUniversity = nearestUniversityForWhatsappRow(row);
+  if (!nearestUniversity) return '';
+  const distance = Number(row.distance_to_uni_km || getExtraField(row, 'distance_to_uni_km'));
+  const distanceText = Number.isFinite(distance) && distance > 0 ? ` • ${distance.toFixed(1)} km away` : '';
+  return `Nearest university: ${nearestUniversity}${distanceText}`;
 }
 
 function isFoundOnlineWhatsappRow(row = {}) {
@@ -5302,6 +5351,8 @@ function formatPropertySearchMessage(lang, rows, location, searchType) {
     lines.push(`${idx + 1}. ${sponsor ? '⭐' : '🏡'} *${r.title}*`);
     if (sponsor) lines.push(`   ${sponsoredBadge(lang)}`);
     lines.push(`   📍 ${[r.area, r.district].filter(Boolean).join(', ')}`);
+    const studentUniversityLine = studentUniversityLineForWhatsapp(r);
+    if (studentUniversityLine) lines.push(`   🎓 ${studentUniversityLine}`);
     lines.push(`   🏷️ ${typeLabel(r.listing_type, lang)}${meta ? ` • ${meta}` : ''}`);
     lines.push(`   💰 ${formatPrice(r.price, r.price_period)}`);
     const availability = normalizeInput(getExtraField(r, 'available_from') || getExtraField(r, 'availability'));

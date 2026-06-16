@@ -24,6 +24,7 @@ const UNIVERSITIES = [
   'Kabale University',
   'Lira University',
   'Muni University',
+  'Makerere University Business School (MUBS)',
   'Uganda Christian University (UCU)',
   'Nkumba University',
   'Kampala International University (KIU)',

@@ -1,6 +1,11 @@
 const { buildListingReference } = require('./listingReferenceService');
 const { buildSocialSourceTrustReview } = require('./socialSourceTrustService');
 const {
+  inferNearestUniversityFromListing,
+  normalizeUniversityList,
+  normalizeUniversityName
+} = require('../utils/universityMatcher');
+const {
   createOwnerEditToken,
   getOwnerPreviewUrl,
   hashOwnerEditToken,
@@ -1225,6 +1230,40 @@ function sourcePublishedLabelFor(item = {}) {
   return dateText ? `First posted online on ${dateText}` : 'Original post date is being confirmed from the source platform.';
 }
 
+function isStudentSourceListing(item = {}) {
+  const type = String(item.listingType || item.listing_type || item.type || '').trim().toLowerCase();
+  return type === 'student' || type === 'students';
+}
+
+function nearestUniversityForSourceItem(item = {}) {
+  if (!isStudentSourceListing(item)) return '';
+  const extra = item.extra_fields && typeof item.extra_fields === 'object' ? item.extra_fields : {};
+  return normalizeUniversityName(
+    item.nearest_university
+    || item.nearestUniversity
+    || item.nearest_uni
+    || item.university
+    || item.campus
+    || extra.nearest_university
+    || extra.nearestUniversity
+    || extra.student_campus
+    || extra.student_university
+  ) || inferNearestUniversityFromListing({
+    ...item,
+    listing_type: item.listingType || item.listing_type,
+    extra_fields: {
+      ...extra,
+      source_title: item.sourceTitle || item.source_title || item.title || extra.source_title || '',
+      source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || extra.source_caption || '',
+      source_description: item.description || extra.source_description || '',
+      source_text: item.sourceText || item.source_text || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || extra.source_text || '',
+      source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || extra.source_visual_text || '',
+      resolved_location_label: item.address || item.location_label || extra.resolved_location_label || '',
+      map_pin_label: item.address || item.location_label || extra.map_pin_label || ''
+    }
+  });
+}
+
 function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl = '') {
   const agent = sourceAgentForItem(item);
   const sourceUrl = sourceUrlForItem(item);
@@ -1242,6 +1281,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
+  const nearestUniversity = nearestUniversityForSourceItem(item);
   const trustReview = buildSocialSourceTrustReview({
     ...item,
     agent,
@@ -1281,6 +1321,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     source_caption: item.caption || item.raw_source_post?.caption || item.rawSourcePost?.caption || '',
     source_description: item.description || '',
     source_text: item.sourceText || item.raw_source_post?.source_text || item.rawSourcePost?.source_text || '',
+    nearest_university: nearestUniversity || null,
+    student_campus: nearestUniversity || null,
+    student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : [],
     source_comments: item.raw_source_post?.comments || item.rawSourcePost?.comments || item.comments || '',
     source_visual_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.source_visual_text || item.rawSourcePost?.source_visual_text || '',
     video_ocr_text: item.sourceVisualText || item.source_visual_text || item.raw_source_post?.video_ocr_text || item.rawSourcePost?.video_ocr_text || '',
@@ -1394,6 +1437,8 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
 function buildSocialSearchListing(item, agentId = null) {
   const agent = sourceAgentForItem(item);
   const listingType = item.listingType || 'sale';
+  const studentListing = isStudentSourceListing({ ...item, listingType });
+  const nearestUniversity = studentListing ? nearestUniversityForSourceItem({ ...item, listingType }) : '';
   return {
     listing_type: listingType,
     title: item.title,
@@ -1416,14 +1461,14 @@ function buildSocialSearchListing(item, agentId = null) {
     floor_area_sqm: null,
     usable_size_sqm: null,
     parking_bays: null,
-    nearest_university: null,
+    nearest_university: nearestUniversity || null,
     distance_to_uni_km: null,
     room_type: null,
     room_arrangement: null,
     commercial_intent: null,
     latitude: item.lat,
     longitude: item.lng,
-    students_welcome: false,
+    students_welcome: studentListing,
     verification_terms_accepted: false,
     inquiry_reference: buildListingReference(),
     id_number: null,
@@ -1778,6 +1823,18 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     baseDescription,
     sourceVisualText ? `Visible video/still text adds: ${sourceVisualText}` : '',
   ].filter(Boolean).join(' '));
+  const nearestUniversity = nearestUniversityForSourceItem({
+    ...raw,
+    listingType,
+    title,
+    sourceTitle: raw.source_title || raw.caption || title,
+    description,
+    sourceText,
+    sourceVisualText,
+    area,
+    district,
+    address
+  });
   const youtubeId = raw.youtube_id || raw.youtubeId || raw.youtube_video_id || raw.youtubeVideoId || youtubeIdFromUrl(sourceUrl);
   const sourceAgent = {
     key: sourceKey,
@@ -1843,6 +1900,8 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     priceText: raw.price_text || raw.price_label || '',
     price_period: raw.price_period || raw.pricePeriod || raw.period || ((listingType === 'rent' || listingType === 'students' || listingType === 'commercial') ? 'month' : 'once'),
     listingType,
+    nearest_university: nearestUniversity || null,
+    student_universities: nearestUniversity ? normalizeUniversityList([nearestUniversity]) : [],
     subtype: raw.subtype || raw.property_type || null,
     beds: numberOrNull(raw.bedrooms ?? raw.beds),
     baths: numberOrNull(raw.bathrooms ?? raw.baths),

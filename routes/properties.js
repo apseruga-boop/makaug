@@ -60,6 +60,11 @@ const {
   buildUgNlisLandVerificationPack,
   sanitizeUgNlisLandVerificationFields
 } = require('../services/ugnlisLandVerificationService');
+const {
+  inferNearestUniversityFromListing,
+  normalizeUniversityList,
+  normalizeUniversityName
+} = require('../utils/universityMatcher');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -185,6 +190,45 @@ function cleanPublicListingCopy(value = '') {
     .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, '')
     .replace(/\s*Pending King review[^.]*\.?/gi, '')
     .trim();
+}
+
+function listingLooksStudentLike(row = {}) {
+  const text = [
+    row.listing_type,
+    row.category,
+    row.property_type,
+    row.title,
+    row.description
+  ].filter(Boolean).join(' ').toLowerCase();
+  return row.students_welcome === true
+    || row.students_welcome === 'true'
+    || /\b(student|students|hostel|campus|university|dorm|dormitory)\b/i.test(text);
+}
+
+function studentUniversityContextFor(row = {}, safeExtra = null) {
+  const extra = safeExtra || (row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {});
+  const explicit = normalizeUniversityName(
+    row.nearest_university
+    || extra.nearest_university
+    || extra.nearest_uni
+    || extra.student_campus
+    || extra.student_university
+    || extra.university
+  );
+  const nearestUniversity = explicit || (listingLooksStudentLike(row)
+    ? inferNearestUniversityFromListing({ ...row, extra_fields: extra })
+    : '');
+  const distanceRaw = row.distance_to_uni_km ?? extra.distance_to_uni_km ?? extra.uni_distance ?? null;
+  const distance = toNullableFloat(distanceRaw);
+  const universities = normalizeUniversityList([
+    ...(Array.isArray(extra.student_universities) ? extra.student_universities : []),
+    nearestUniversity
+  ]);
+  return {
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: distance,
+    student_universities: universities
+  };
 }
 
 function redactThirdPartyPublicText(value = '') {
@@ -590,6 +634,17 @@ function publicExtraFields(extraFields = {}) {
     || inferPublicSourcePlatform(sourceContactUrl);
   const sourceContactLabel = cleanText(extra.source_contact_label)
     || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  const nearestUniversity = normalizeUniversityName(
+    extra.nearest_university
+    || extra.nearest_uni
+    || extra.student_campus
+    || extra.student_university
+    || extra.university
+  );
+  const studentUniversities = normalizeUniversityList([
+    ...(Array.isArray(extra.student_universities) ? extra.student_universities : []),
+    nearestUniversity
+  ]);
   const tiktokUrl = safePublicSourceUrl(
     extra.tiktok_url
       || extra.tiktok_video_url
@@ -615,6 +670,10 @@ function publicExtraFields(extraFields = {}) {
     resolved_location_label: extra.resolved_location_label || null,
     public_display_name: extra.public_display_name || null,
     preferred_contact_method: extra.preferred_contact_method || null,
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: toNullableFloat(extra.distance_to_uni_km ?? extra.uni_distance),
+    student_campus: nearestUniversity || extra.student_campus || null,
+    student_universities: studentUniversities,
     video_url: videoUrl || null,
     youtube_url: youtubeUrl || null,
     tiktok_url: tiktokUrl || null,
@@ -713,6 +772,16 @@ function publicPropertyRow(property, images = []) {
   const publicDescription = foundOnlinePublic
     ? buildThirdPartyPublicSummary(safeProperty, safeExtra)
     : cleanPublicListingCopy(safeProperty.description || '');
+  const studentContext = studentUniversityContextFor(safeProperty, safeExtra);
+  const extraWithStudentContext = {
+    ...safeExtra,
+    ...(studentContext.nearest_university ? {
+      nearest_university: studentContext.nearest_university,
+      student_campus: studentContext.nearest_university,
+      student_universities: studentContext.student_universities
+    } : {}),
+    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+  };
   return {
     ...safeProperty,
     title: publicTitle,
@@ -720,7 +789,10 @@ function publicPropertyRow(property, images = []) {
     district: locationOverride?.district || safeProperty.district,
     latitude: !hasUsablePublicPin && locationOverride ? locationOverride.latitude : safeProperty.latitude,
     longitude: !hasUsablePublicPin && locationOverride ? locationOverride.longitude : safeProperty.longitude,
-    extra_fields: safeExtra,
+    nearest_university: studentContext.nearest_university || safeProperty.nearest_university || null,
+    distance_to_uni_km: studentContext.distance_to_uni_km,
+    student_universities: studentContext.student_universities,
+    extra_fields: extraWithStudentContext,
     land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),
     featured: safeProperty.featured === true || String(safeExtra?.featured || '').toLowerCase() === 'true',
     featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
@@ -1218,7 +1290,7 @@ async function listPropertiesHandler(req, res, next) {
       addFilter(
         filters,
         values,
-        "(COALESCE(p.extra_fields->>'nearest_university', '') ILIKE ? OR COALESCE(p.extra_fields->>'student_campus', '') ILIKE ? OR COALESCE(p.description, '') ILIKE ?)",
+        "(COALESCE(p.nearest_university, p.extra_fields->>'nearest_university', '') ILIKE ? OR COALESCE(p.extra_fields->>'student_campus', '') ILIKE ? OR COALESCE(p.description, '') ILIKE ?)",
         `%${studentCampus}%`,
         `%${studentCampus}%`,
         `%${studentCampus}%`
@@ -1349,6 +1421,10 @@ async function listPropertiesHandler(req, res, next) {
         p.bedrooms,
         p.bathrooms,
         p.property_type,
+        p.nearest_university,
+        p.distance_to_uni_km,
+        p.room_type,
+        p.room_arrangement,
         p.title_type,
         p.status,
         p.moderation_stage,
@@ -1478,6 +1554,16 @@ async function listPropertiesHandler(req, res, next) {
         const publicDescription = foundOnlinePublic
           ? buildThirdPartyPublicSummary(row, safeExtra)
           : cleanPublicListingCopy(publicRow.description || '');
+        const studentContext = studentUniversityContextFor(row, safeExtra);
+        const publicExtra = {
+          ...safeExtra,
+          ...(studentContext.nearest_university ? {
+            nearest_university: studentContext.nearest_university,
+            student_campus: studentContext.nearest_university,
+            student_universities: studentContext.student_universities
+          } : {}),
+          ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+        };
         const responseRow = {
           ...publicRow,
           title: publicTitle,
@@ -1501,7 +1587,10 @@ async function listPropertiesHandler(req, res, next) {
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
           distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
-          extra_fields: safeExtra,
+          nearest_university: studentContext.nearest_university || null,
+          distance_to_uni_km: studentContext.distance_to_uni_km,
+          student_universities: studentContext.student_universities,
+          extra_fields: publicExtra,
           third_party_discovery_result: foundOnlinePublic
         };
         if (adminAccess) {
@@ -2079,6 +2168,37 @@ router.post('/', async (req, res, next) => {
       extraFields.broker_listing_review = 'Admin approval required before this broker listing goes live.';
       extraFields.skip_owner_identity_recheck = true;
     }
+    const nearestUniversity = normalizeUniversityName(
+      body.nearest_university
+      || extraFields.nearest_university
+      || extraFields.nearest_uni
+      || extraFields.student_campus
+      || extraFields.student_university
+      || extraFields.university
+    ) || ((listingType === 'student' || studentsWelcome)
+      ? inferNearestUniversityFromListing({
+        ...body,
+        listing_type: listingType,
+        title,
+        description,
+        district,
+        area,
+        address: cleanText(body.address) || '',
+        extra_fields: extraFields
+      })
+      : '');
+    const distanceToUniversityKm = toNullableFloat(body.distance_to_uni_km ?? extraFields.distance_to_uni_km ?? extraFields.uni_distance);
+    if (nearestUniversity) {
+      extraFields.nearest_university = nearestUniversity;
+      extraFields.student_campus = nearestUniversity;
+      extraFields.student_universities = normalizeUniversityList([
+        ...(Array.isArray(extraFields.student_universities) ? extraFields.student_universities : []),
+        nearestUniversity
+      ]);
+    }
+    if (distanceToUniversityKm != null) {
+      extraFields.distance_to_uni_km = distanceToUniversityKm;
+    }
 
     const insertResult = await db.query(
       `INSERT INTO properties (
@@ -2159,8 +2279,8 @@ router.post('/', async (req, res, next) => {
         toNullableFloat(body.floor_area_sqm),
         toNullableFloat(body.usable_size_sqm),
         toNullableInt(body.parking_bays),
-        cleanText(body.nearest_university) || null,
-        toNullableFloat(body.distance_to_uni_km),
+        nearestUniversity || null,
+        distanceToUniversityKm,
         cleanText(body.room_type) || null,
         cleanText(body.room_arrangement) || null,
         cleanText(body.commercial_intent) || null,

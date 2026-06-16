@@ -21712,10 +21712,21 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   }
 
   if (type === "student") {
-    payload.nearest_university = extra.nearest_uni || null;
+    const nearestUniversity = normalizeStudentUniversityName(extra.nearest_uni) || inferStudentNearestUniversity({
+      ...payload,
+      type,
+      desc: description,
+      extra_fields: extra
+    });
+    payload.nearest_university = nearestUniversity || null;
     payload.distance_to_uni_km = parseFloatSafe(extra.uni_distance);
     payload.room_arrangement = extra.room_arrangement || null;
     payload.room_type = lpVal("lp-subtype") || null;
+    if (nearestUniversity) {
+      payload.extra_fields.nearest_university = nearestUniversity;
+      payload.extra_fields.student_campus = nearestUniversity;
+      payload.extra_fields.student_universities = normalizeStudentUniversityList([nearestUniversity]);
+    }
   }
 
   return payload;
@@ -21805,6 +21816,12 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     is_main: idx === lpMainPhotoIndex
   }));
   const mainPhoto = galleryPhotos.find((item) => item.is_main) || galleryPhotos[0];
+  const nearestUniversity = inferStudentNearestUniversity({
+    ...payload,
+    type,
+    desc: payload.description || "",
+    extra_fields: payload.extra_fields || {}
+  });
   const local = {
     id: localId,
     backend_id: apiData.id || null,
@@ -21837,9 +21854,12 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     area_highlights: payload?.extra_fields?.area_highlights || "",
     nearby_places: Array.isArray(payload?.extra_fields?.nearby_facilities) ? payload.extra_fields.nearby_facilities : [],
     contact_display_name: payload?.lister_display_name || payload?.extra_fields?.public_display_name || payload?.lister_name || "",
-    nearest_university: payload.nearest_university || null,
+    nearest_university: nearestUniversity || null,
     distance_to_uni_km: payload.distance_to_uni_km || null,
-    student_universities: payload.nearest_university ? [payload.nearest_university] : [],
+    student_universities: normalizeStudentUniversityList([
+      ...(Array.isArray(payload.student_universities) ? payload.student_universities : []),
+      nearestUniversity
+    ]),
     student_verified: normalizeType(type) === "student" || !!payload.students_welcome,
     students_welcome: !!payload.students_welcome,
     created_at: nowIso,
@@ -29603,15 +29623,22 @@ function studentCard(p) {
 	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
-  const uniTags = (p.student_universities && p.student_universities.length)
-    ? p.student_universities.slice(0, 3)
-    : (p.nearest_university ? [p.nearest_university] : []);
+  const nearestUniversity = inferStudentNearestUniversity(p);
+  const uniTags = normalizeStudentUniversityList([
+    ...(Array.isArray(p.student_universities) ? p.student_universities : []),
+    nearestUniversity
+  ]).slice(0, 3);
   const amenities = (p.amenities || []).slice(0, 3);
-  const distanceText = p.nearest_university
-    ? `${p.area}, ${p.distance_to_uni_km || "?"}km from ${p.nearest_university}`
+  const universityDistance = Number(p.distance_to_uni_km);
+  const universityDistanceText = Number.isFinite(universityDistance) && universityDistance > 0
+    ? `${universityDistance.toFixed(universityDistance < 10 ? 1 : 0)}km from ${nearestUniversity}`
+    : nearestUniversity;
+  const distanceText = nearestUniversity
+    ? [p.area, universityDistanceText].filter(Boolean).join(", ")
     : `${p.area}, ${p.district}`;
   const nearDistanceText = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
-  const bottomText = p.student_walk_text || "Near campus";
+  const walkText = String(p.student_walk_text || "").trim();
+  const bottomText = nearestUniversity || (!/near\s+campus/i.test(walkText) ? walkText : "") || "Nearest university to confirm";
   const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
   return `
     <div class="group relative bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
@@ -30410,6 +30437,7 @@ function returnToLastPageFromDetail() {
 
 function mapRemotePropertyForUi(p, options = {}) {
   const images = Array.isArray(p?.images) ? p.images : [];
+  const extraFields = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const imageItems = images.map((item, index) => ({
     url: item.url || item,
     is_main: item.is_primary === true || index === 0,
@@ -30424,6 +30452,12 @@ function mapRemotePropertyForUi(p, options = {}) {
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
   const normalizedListingType = normalizeType(p?.listing_type || p?.type);
   const publicListingType = normalizedListingType || getHeroPropertyOpportunityBucket(p);
+  const nearestUniversity = inferStudentNearestUniversity({ ...p, type: publicListingType, extra_fields: extraFields });
+  const studentUniversities = normalizeStudentUniversityList([
+    ...(Array.isArray(p?.student_universities) ? p.student_universities : []),
+    ...(Array.isArray(extraFields.student_universities) ? extraFields.student_universities : []),
+    nearestUniversity
+  ]);
   return {
     ...p,
     id,
@@ -30467,6 +30501,9 @@ function mapRemotePropertyForUi(p, options = {}) {
     nearby_places: normalizeNearbyPlacesForUi(
       Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
     ),
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: parseFloatSafe(p?.distance_to_uni_km ?? extraFields.distance_to_uni_km ?? extraFields.uni_distance),
+    student_universities: studentUniversities,
     images: publicImageItems,
     third_party_discovery_result: thirdPartyDiscovery,
     detail_loaded: options.detailLoaded === true || publicImageItems.length > 0,
@@ -31843,6 +31880,106 @@ const UGANDA_UNIVERSITIES = [
   "Uganda Management Institute (UMI)",
   "Other / Not Listed"
 ];
+
+const STUDENT_UNIVERSITY_ALIAS_GROUPS = [
+  { name: "Makerere University", aliases: ["makerere", "makerere university", "muk", "kikoni", "wandegeya", "mulago"] },
+  { name: "Makerere University Business School (MUBS)", aliases: ["mubs", "makerere university business school", "nakawa campus", "nakawa"] },
+  { name: "Kyambogo University", aliases: ["kyambogo", "kyambogo university", "banda", "ntinda"] },
+  { name: "Uganda Christian University (UCU)", aliases: ["ucu", "uganda christian university", "bishop tucker", "mukono campus", "mukono town", "mukono"] },
+  { name: "Kampala International University (KIU)", aliases: ["kiu", "kampala international university", "kansanga", "kabalagala"] },
+  { name: "Nkumba University", aliases: ["nkumba", "nkumba university", "entebbe"] },
+  { name: "Ndejje University", aliases: ["ndejje", "ndejje university"] },
+  { name: "Uganda Martyrs University (UMU)", aliases: ["umu", "uganda martyrs university", "nkozi"] },
+  { name: "Mbarara University of Science and Technology (MUST)", aliases: ["must", "mbarara university", "mbarara university of science and technology", "mbarara"] },
+  { name: "Gulu University", aliases: ["gulu university", "gulu"] },
+  { name: "Kabale University", aliases: ["kabale university", "kabale"] },
+  { name: "Lira University", aliases: ["lira university", "lira"] },
+  { name: "Busitema University", aliases: ["busitema", "busitema university"] },
+  { name: "Soroti University", aliases: ["soroti university", "soroti"] },
+  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] }
+];
+
+function simplifyStudentUniversityText(value = "") {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeStudentUniversityName(value = "") {
+  const raw = String(value || "").trim();
+  const key = simplifyStudentUniversityText(raw);
+  if (!key || ["other", "not listed", "other not listed", "near campus", "campus", "university"].includes(key)) return "";
+  const canonical = [...UGANDA_UNIVERSITIES, ...STUDENT_UNIVERSITY_ALIAS_GROUPS.map((group) => group.name)].find((name) => {
+    const nameKey = simplifyStudentUniversityText(name);
+    return nameKey === key || key === nameKey.replace(/\s+university$/, "") || nameKey.includes(key);
+  });
+  if (canonical) return canonical;
+  const aliasMatch = STUDENT_UNIVERSITY_ALIAS_GROUPS.find((group) => group.aliases.some((alias) => simplifyStudentUniversityText(alias) === key));
+  return aliasMatch ? aliasMatch.name : "";
+}
+
+function normalizeStudentUniversityList(values = []) {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(values) ? values : [values]).forEach((value) => {
+    const normalized = normalizeStudentUniversityName(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  });
+  return out;
+}
+
+function inferStudentNearestUniversity(p = {}) {
+  const extra = p.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const explicit = normalizeStudentUniversityName(
+    p.nearest_university
+      || p.nearest_uni
+      || p.university
+      || p.campus
+      || extra.nearest_university
+      || extra.nearest_uni
+      || extra.student_campus
+      || extra.student_university
+      || extra.university
+      || extra.campus
+  );
+  if (explicit) return explicit;
+  if (!isStudentDiscoverable(p)) return "";
+  const text = simplifyStudentUniversityText([
+    p.title,
+    p.desc,
+    p.description,
+    p.area,
+    p.address,
+    p.district,
+    p.resolved_location_label,
+    extra.resolved_location_label,
+    extra.map_pin_label,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text
+  ].filter(Boolean).join(" "));
+  if (!text) return "";
+  const aliases = STUDENT_UNIVERSITY_ALIAS_GROUPS
+    .flatMap((group) => group.aliases.map((alias) => ({ name: group.name, alias })))
+    .sort((a, b) => simplifyStudentUniversityText(b.alias).length - simplifyStudentUniversityText(a.alias).length);
+  for (const item of aliases) {
+    const pattern = simplifyStudentUniversityText(item.alias).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    if (pattern && new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(text)) return item.name;
+  }
+  return "";
+}
 
 const UG_AMENITY_POINTS = [
   { name: "Mulago National Referral Hospital", kind: "Hospital", district: "Kampala", lat: 0.338, lng: 32.576 },
