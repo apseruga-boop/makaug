@@ -42,6 +42,10 @@ DATA_BACKUP_BUCKET=makaug-db-backups
 DATA_BACKUP_PREFIX=makaug
 DATA_BACKUP_LOCAL_PATHS=exports,reports,outputs,assets/sourced,assets/marketing
 DATA_BACKUP_KEEP_LOCAL=false
+
+AI_EXPORT_BUCKET=makaug-admin-exports
+AI_EXPORT_PREFIX=makaug/ai-exports
+REQUIRE_CLOUD_AI_EXPORTS=true
 ```
 
 Use separate access keys for production app uploads and backups. The backup key should only write to `makaug-db-backups`.
@@ -78,7 +82,29 @@ The script creates:
 
 Schedule it nightly after low-traffic hours. On Render, create a cron job using the same environment variables as production plus `PG_DUMP_BIN` if `pg_dump` is not on the default path.
 
-### 4. Local Second Copy
+### 4. AI Learning Exports
+
+Set `AI_EXPORT_BUCKET` and `AI_EXPORT_PREFIX` so `npm run ai:export-foundation` uploads JSONL and CSV training exports to private R2/S3 storage. Keep `REQUIRE_CLOUD_AI_EXPORTS=true` in production so an export fails instead of silently recording only a Render disk path.
+
+Run:
+
+```bash
+npm run ai:export-foundation -- --site=makaug-web
+```
+
+The latest export in `/api/ai-core/stats` should show an `s3://...` `output_path`, not `/opt/render/...`.
+
+### 5. Cloud Storage Proof
+
+Run:
+
+```bash
+npm run cloud:verify-storage
+```
+
+This writes tiny canary objects to the media bucket and backup bucket. In the admin setup dashboard, the `backups` provider proof button writes the same kind of backup canary and records the cloud reference in audit/log payloads.
+
+### 6. Local Second Copy
 
 If you buy a NAS, use it for a second copy:
 

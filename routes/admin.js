@@ -125,6 +125,11 @@ const {
   retryNotification,
   retryWhatsAppLog
 } = require('../services/notificationRetryService');
+const {
+  normalizeObjectKey,
+  storageEnvConfigured,
+  uploadBufferToS3
+} = require('../services/s3ObjectStorageService');
 
 const router = express.Router();
 
@@ -1180,6 +1185,22 @@ function mediaStorageConfigured() {
   return ['s3', 's3_presigned', 'supabase'].includes(provider) && missingMediaStorageEnv().length === 0;
 }
 
+function backupStorageProvider() {
+  return process.env.DATA_BACKUP_BUCKET ? 's3' : 'missing';
+}
+
+function backupStorageRequiredEnv() {
+  return ['DATA_BACKUP_BUCKET', 'DATA_BACKUP_PREFIX', 'DATA_BACKUP_LOCAL_PATHS', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+}
+
+function missingBackupStorageEnv() {
+  return missingEnv(backupStorageRequiredEnv());
+}
+
+function backupStorageConfigured() {
+  return storageEnvConfigured({ bucket: process.env.DATA_BACKUP_BUCKET }) && missingBackupStorageEnv().length === 0;
+}
+
 function providerConfigured(provider) {
   const keyGroups = {
     email: ['RESEND_API_KEY', 'SMTP_HOST', 'MAIL_WEBHOOK_URL', 'MS_GRAPH_CLIENT_ID'],
@@ -1187,10 +1208,12 @@ function providerConfigured(provider) {
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
+    backups: ['DATA_BACKUP_BUCKET', 'DATA_BACKUP_PREFIX', 'DATA_BACKUP_LOCAL_PATHS', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'],
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
   if (provider === 'sms') return africasTalkingSmsConfigured() || twilioSmsConfigured();
   if (provider === 'media_storage') return mediaStorageConfigured();
+  if (provider === 'backups') return backupStorageConfigured();
   return anyEnv(keyGroups[provider] || []);
 }
 
@@ -1203,6 +1226,7 @@ function providerEnvKeys(provider) {
     google_places: ['GOOGLE_MAPS_API_KEY', 'PUBLIC_GOOGLE_MAPS_API_KEY'],
     openai_llm: ['OPENAI_API_KEY', 'LLM_PROVIDER', 'LLM_API_KEY', 'OLLAMA_BASE_URL'],
     payment_link: ['PAYMENT_LINK_BASE_URL', 'PAYMENT_PROVIDER_API_KEY', 'PAYMENT_PROVIDER_WEBHOOK_SECRET'],
+    backups: backupStorageRequiredEnv(),
     super_admin: ['SUPER_ADMIN_EMAIL', 'SUPER_ADMIN_INITIAL_PASSWORD', 'DATABASE_URL', 'JWT_SECRET'],
     public_base_url: ['PUBLIC_BASE_URL', 'APP_BASE_URL']
   };
@@ -1216,6 +1240,7 @@ function missingEnv(keys = []) {
 function missingProviderEnv(provider) {
   if (provider === 'sms') return missingSmsEnv();
   if (provider === 'media_storage') return missingMediaStorageEnv();
+  if (provider === 'backups') return missingBackupStorageEnv();
   return missingEnv(providerEnvKeys(provider));
 }
 
@@ -1262,6 +1287,25 @@ function adminTestPhone() {
 
 function launchTimestamp() {
   return new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+}
+
+async function uploadBackupStorageCanary() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const prefix = normalizeObjectKey(process.env.DATA_BACKUP_PREFIX || 'makaug');
+  const payload = Buffer.from(`${JSON.stringify({
+    app: 'makaug',
+    kind: 'admin_backup_storage_canary',
+    created_at: new Date().toISOString(),
+    data_backup_local_paths: process.env.DATA_BACKUP_LOCAL_PATHS || null
+  }, null, 2)}\n`, 'utf8');
+
+  return uploadBufferToS3({
+    bucket: process.env.DATA_BACKUP_BUCKET,
+    key: `${prefix}/canary/${stamp}-admin-backup-storage.json`,
+    bytes: payload,
+    mimeType: 'application/json',
+    isPrivate: true
+  });
 }
 
 async function createSafeLaunchProperty(req, overrides = {}) {
@@ -7850,6 +7894,7 @@ async function buildSetupStatus() {
        'provider_test_google_places',
        'provider_test_openai_llm',
        'provider_test_payment_link',
+       'provider_test_backups',
        'ai_chatbot_smoke_test',
        'alert_matching_manual_run',
        'viewing_callback_launch_test',
@@ -7874,6 +7919,7 @@ async function buildSetupStatus() {
     ['google_places', 'Google Maps/Places'],
     ['openai_llm', 'OpenAI/LLM'],
     ['payment_link', 'Payment provider'],
+    ['backups', 'Backup storage / Cloudflare R2'],
     ['public_base_url', 'PUBLIC_BASE_URL']
   ].map(([key, label]) => ({
     key,
@@ -7988,6 +8034,14 @@ async function buildSetupStatus() {
       publicBaseUrlConfigured: envSet('S3_PUBLIC_BASE_URL') || envSet('SUPABASE_URL'),
       productionRequirement: 'Use MEDIA_STORAGE_PROVIDER=s3 with Cloudflare R2/S3-compatible credentials for live listing and WhatsApp media.'
     },
+    backupStorage: {
+      provider: backupStorageProvider(),
+      durableCloudConfigured: backupStorageConfigured(),
+      requiredEnv: providerEnvKeys('backups'),
+      missingEnv: missingProviderEnv('backups'),
+      bucketConfigured: envSet('DATA_BACKUP_BUCKET'),
+      productionRequirement: 'Use DATA_BACKUP_BUCKET with S3/R2 credentials so database backups, restore manifests, and AI export artifacts are not stored only on Render disk.'
+    },
     locationSystem: {
       geolocation: 'browser_permission_plus_manual_fallback',
       backendRadiusSearch: true,
@@ -8012,7 +8066,7 @@ router.get('/setup-status', async (_req, res, next) => {
 router.post('/setup-status/provider-test', async (req, res, next) => {
   try {
     const provider = cleanText(req.body.provider || req.body.type);
-    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link'];
+    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link', 'backups'];
     if (!allowed.includes(provider)) {
       return res.status(400).json({ ok: false, error: 'Unsupported provider test' });
     }
@@ -8068,6 +8122,32 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
       base.status = deliveryStatus;
       base.deliveryChannel = 'sms';
       base.attempts = deliveryResult.attempts || [];
+    } else if (provider === 'backups') {
+      let canary = null;
+      if (configured) {
+        canary = await uploadBackupStorageCanary();
+        base.status = 'uploaded';
+        base.cloudRef = canary.internalRef;
+        base.bytes = canary.bytes;
+        base.sha256 = canary.sha256;
+      }
+      log = await logNotification(db, {
+        recipientEmail: adminTestEmail(),
+        channel: 'in_app',
+        type: 'provider_test_backups',
+        status: configured ? 'logged' : 'provider_missing',
+        payloadSummary: {
+          provider,
+          configured,
+          launch_proof: true,
+          cloud_ref: canary?.internalRef || null,
+          bucket: canary?.bucket || null,
+          key: canary?.key || null,
+          bytes: canary?.bytes || null,
+          sha256: canary?.sha256 || null
+        },
+        failureReason: configured ? null : 'backups_provider_missing'
+      });
     } else {
       log = await logNotification(db, {
         recipientPhone: provider === 'sms' ? adminTestPhone() : null,
@@ -8082,7 +8162,8 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
     await createLaunchAudit(req, `provider_test_${provider}`, {
       configured,
       log_id: log?.id || null,
-      missing_env: base.missingEnv
+      missing_env: base.missingEnv,
+      cloud_ref: base.cloudRef || null
     });
     return res.json({ ok: true, data: { ...base, logId: log?.id || null } });
   } catch (error) {

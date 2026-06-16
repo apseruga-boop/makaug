@@ -2,6 +2,11 @@ const fs = require('fs');
 const path = require('path');
 
 const db = require('../config/database');
+const {
+  normalizeObjectKey,
+  storageEnvConfigured,
+  uploadBufferToS3
+} = require('./s3ObjectStorageService');
 
 function cleanText(value, max = 4000) {
   return String(value == null ? '' : value)
@@ -22,6 +27,33 @@ function csvEscape(value) {
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function envValue(name) {
+  return String(process.env[name] || '').trim();
+}
+
+function truthyEnv(name) {
+  return ['1', 'true', 'yes', 'on'].includes(envValue(name).toLowerCase());
+}
+
+function aiExportBucket() {
+  return envValue('AI_EXPORT_BUCKET') || envValue('DATA_BACKUP_BUCKET') || envValue('S3_BUCKET');
+}
+
+function aiExportPrefix() {
+  const prefix = envValue('AI_EXPORT_PREFIX') || `${envValue('DATA_BACKUP_PREFIX') || 'makaug'}/ai-exports`;
+  return normalizeObjectKey(prefix || 'makaug/ai-exports');
+}
+
+async function uploadExportToCloud({ filePath, bucket, key, mimeType }) {
+  return uploadBufferToS3({
+    bucket,
+    key,
+    bytes: fs.readFileSync(filePath),
+    mimeType,
+    isPrivate: true
+  });
 }
 
 function isoStamp() {
@@ -246,6 +278,34 @@ async function runFoundationExport({
       'utf8'
     );
 
+    const bucket = aiExportBucket();
+    const shouldUploadToCloud = Boolean(bucket);
+    const requireCloudExport = truthyEnv('REQUIRE_CLOUD_AI_EXPORTS');
+    const cloud = { jsonl: null, csv: null };
+
+    if (shouldUploadToCloud) {
+      if (!storageEnvConfigured({ bucket })) {
+        throw new Error('AI export cloud storage is configured with a bucket but missing S3 endpoint or credentials');
+      }
+      const prefix = aiExportPrefix();
+      cloud.jsonl = await uploadExportToCloud({
+        filePath: jsonlPath,
+        bucket,
+        key: `${prefix}/${baseName}.jsonl`,
+        mimeType: 'application/x-ndjson; charset=utf-8'
+      });
+      cloud.csv = await uploadExportToCloud({
+        filePath: csvPath,
+        bucket,
+        key: `${prefix}/${baseName}.csv`,
+        mimeType: 'text/csv; charset=utf-8'
+      });
+    } else if (requireCloudExport) {
+      throw new Error('REQUIRE_CLOUD_AI_EXPORTS is enabled but AI_EXPORT_BUCKET/DATA_BACKUP_BUCKET/S3_BUCKET is missing');
+    }
+
+    const primaryOutputPath = cloud.jsonl?.internalRef || jsonlPath;
+
     await db.query(
       `
         UPDATE ai_export_runs
@@ -256,7 +316,7 @@ async function runFoundationExport({
             finished_at = NOW()
         WHERE id = $1
       `,
-      [runId, samples.length, jsonlPath]
+      [runId, samples.length, primaryOutputPath]
     );
 
     return {
@@ -265,7 +325,9 @@ async function runFoundationExport({
       siteCode: tenantSite.site_code,
       totalExported: samples.length,
       jsonlPath,
-      csvPath
+      csvPath,
+      outputPath: primaryOutputPath,
+      cloud
     };
   } catch (error) {
     await db.query(
