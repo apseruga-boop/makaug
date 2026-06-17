@@ -547,13 +547,36 @@ function maskPhoneNumber(value) {
   return `${digits.slice(0, Math.min(4, digits.length))}...${digits.slice(-4)}`;
 }
 
+async function clickWhatsappPhoneLoginLink(page) {
+  const locators = [
+    page.getByRole('link', { name: /log in with phone number/i }).first(),
+    page.getByRole('button', { name: /log in with phone number/i }).first(),
+    page.getByText(/log in with phone number/i).first(),
+    page.locator('a, button, [role="button"], [tabindex]').filter({ hasText: /log in with phone number/i }).first()
+  ];
+
+  for (const locator of locators) {
+    if (await clickVisibleLocator(locator, 1200)) {
+      await page.waitForTimeout(2500);
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function startWhatsappPhonePairingIfConfigured(page) {
   if (!page || page.isClosed()) return { attempted: false, reason: 'page_unavailable' };
   if (!PAIRING_PHONE_NUMBER) return { attempted: false, reason: 'phone_pairing_not_configured' };
   if (LOGIN_METHOD === 'qr' || LOGIN_METHOD === 'qr_only') return { attempted: false, reason: 'qr_login_forced' };
 
   try {
-    const result = await page.evaluate(async ({ phone }) => {
+    const clickedPhoneLogin = await clickWhatsappPhoneLoginLink(page);
+    if (clickedPhoneLogin) {
+      log('clicked WhatsApp "Log in with phone number" link with Playwright locator.');
+    }
+
+    const result = await page.evaluate(async ({ phone, clickedPhoneLogin }) => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
       const normalizedLower = (value) => normalize(value).toLowerCase();
@@ -625,10 +648,13 @@ async function startWhatsappPhonePairingIfConfigured(page) {
       if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
 
       if (!state.phoneFormVisible) {
+        if (clickedPhoneLogin) {
+          return { attempted: true, state: 'phone_login_clicked', reason: 'phone_form_not_visible_after_click' };
+        }
         const phoneLogin = visibleControls().find(({ label }) => (
           label.includes('log in with phone number')
           || label.includes('link with phone number')
-          || label.includes('phone number')
+          || label === 'phone number'
         ));
         const clickable = phoneLogin?.el?.closest('button, [role="button"], a, [tabindex]') || phoneLogin?.el;
         if (!clickable || !isVisible(clickable)) return { attempted: false, reason: 'phone_login_link_missing' };
@@ -638,13 +664,18 @@ async function startWhatsappPhonePairingIfConfigured(page) {
       }
 
       if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+      if (!state.phoneFormVisible) return { attempted: true, state: 'phone_login_clicked', reason: 'phone_form_not_visible' };
 
       const inputs = visibleInputs();
       const phoneInput = inputs.find((input) => normalizedLower([
         input.getAttribute('aria-label'),
         input.getAttribute('placeholder'),
         input.getAttribute('title')
-      ].filter(Boolean).join(' ')).includes('phone')) || inputs[inputs.length - 1];
+      ].filter(Boolean).join(' ')).includes('phone')) || inputs.find((input) => {
+        const tag = normalizedLower(input.tagName);
+        const type = normalizedLower(input.getAttribute('type') || 'text');
+        return tag === 'input' && !['checkbox', 'radio', 'hidden', 'submit', 'button'].includes(type);
+      });
       if (!phoneInput) return { attempted: true, state: 'phone_form_visible', reason: 'phone_input_missing' };
 
       setValue(phoneInput, phone.replace(/^\+/, ''));
@@ -654,7 +685,6 @@ async function startWhatsappPhonePairingIfConfigured(page) {
         label === 'next'
         || label.includes('next')
         || label.includes('continue')
-        || label.includes('link')
       ));
       const nextClickable = next?.el?.closest('button, [role="button"], a, [tabindex]') || next?.el;
       if (!nextClickable || !isVisible(nextClickable)) {
@@ -668,7 +698,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
         attempted: true,
         state: state.codeVisible ? 'pairing_code_visible' : (state.phoneFormVisible ? 'phone_form_visible' : 'submitted_phone_number')
       };
-    }, { phone: PAIRING_PHONE_NUMBER });
+    }, { phone: PAIRING_PHONE_NUMBER, clickedPhoneLogin });
 
     if (result?.attempted) {
       log(`attempted WhatsApp phone-number pairing (${result.state || result.reason || 'unknown'}).`);
