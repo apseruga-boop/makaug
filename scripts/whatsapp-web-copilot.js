@@ -137,6 +137,9 @@ const LOGIN_POLL_MS = Math.min(
   Math.max(1000, Number.isFinite(configuredLoginPollMs) ? configuredLoginPollMs : 2500)
 );
 const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEARTBEAT_MS || 30000));
+const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
+);
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 60);
 const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
@@ -2132,7 +2135,7 @@ async function main() {
     }
     fs.mkdirSync(PROFILE_DIR, { recursive: true });
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
-      headless: false,
+      headless: HEADLESS_BROWSER,
       executablePath,
       viewport: { width: 1440, height: 980 },
       args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox']
