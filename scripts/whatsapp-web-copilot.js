@@ -143,6 +143,12 @@ const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
 const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
 );
+const LOGIN_METHOD = String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_METHOD || 'auto').trim().toLowerCase();
+const PAIRING_PHONE_NUMBER = String(
+  process.env.WHATSAPP_WEB_COPILOT_PAIRING_PHONE
+    || process.env.WHATSAPP_WEB_COPILOT_PHONE_NUMBER
+    || ''
+).replace(/[^\d+]/g, '').trim();
 const BROWSER_USER_AGENT = String(
   process.env.WHATSAPP_WEB_COPILOT_USER_AGENT
     || 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -532,6 +538,150 @@ async function refreshWhatsappLoginQrIfNeeded(page) {
   } catch (error) {
     log(`failed to refresh WhatsApp login QR code: ${error?.message || error}`);
     return { refreshed: false, reason: 'refresh_error' };
+  }
+}
+
+function maskPhoneNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return `${digits.slice(0, Math.min(4, digits.length))}...${digits.slice(-4)}`;
+}
+
+async function startWhatsappPhonePairingIfConfigured(page) {
+  if (!page || page.isClosed()) return { attempted: false, reason: 'page_unavailable' };
+  if (!PAIRING_PHONE_NUMBER) return { attempted: false, reason: 'phone_pairing_not_configured' };
+  if (LOGIN_METHOD === 'qr' || LOGIN_METHOD === 'qr_only') return { attempted: false, reason: 'qr_login_forced' };
+
+  try {
+    const result = await page.evaluate(async ({ phone }) => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
+      const normalizedLower = (value) => normalize(value).toLowerCase();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 12 && rect.height > 12;
+      };
+      const clickCenter = (el) => {
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+          el.dispatchEvent(new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            view: window
+          }));
+        }
+      };
+      const visibleControls = () => Array.from(document.querySelectorAll('button, [role="button"], [tabindex], a, div, span'))
+        .filter(isVisible)
+        .map((el) => ({
+          el,
+          label: normalizedLower([
+            el.getAttribute('aria-label'),
+            el.getAttribute('title'),
+            el.textContent
+          ].filter(Boolean).join(' '))
+        }));
+      const visibleInputs = () => Array.from(document.querySelectorAll('input, [role="textbox"], [contenteditable="true"]'))
+        .filter(isVisible);
+      const inspectPairingState = () => {
+        const text = normalizedLower(document.body?.innerText || '');
+        const codeVisible = (text.includes('enter this code') || text.includes('enter code') || text.includes('link with phone number'))
+          && (text.includes('linked devices') || text.includes('on your phone') || text.includes('your phone'));
+        const phoneFormVisible = text.includes('enter phone number')
+          || text.includes('phone number')
+          || visibleInputs().some((input) => normalizedLower([
+            input.getAttribute('aria-label'),
+            input.getAttribute('placeholder'),
+            input.getAttribute('title')
+          ].filter(Boolean).join(' ')).includes('phone'));
+        return { text, codeVisible, phoneFormVisible };
+      };
+      const setValue = (input, value) => {
+        input.focus();
+        if (input.matches?.('[contenteditable="true"]')) {
+          input.textContent = '';
+          document.execCommand?.('insertText', false, value);
+        } else {
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.value = value;
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      };
+
+      let state = inspectPairingState();
+      if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+
+      if (!state.phoneFormVisible) {
+        const phoneLogin = visibleControls().find(({ label }) => (
+          label.includes('log in with phone number')
+          || label.includes('link with phone number')
+          || label.includes('phone number')
+        ));
+        const clickable = phoneLogin?.el?.closest('button, [role="button"], a, [tabindex]') || phoneLogin?.el;
+        if (!clickable || !isVisible(clickable)) return { attempted: false, reason: 'phone_login_link_missing' };
+        clickCenter(clickable);
+        await sleep(1800);
+        state = inspectPairingState();
+      }
+
+      if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+
+      const inputs = visibleInputs();
+      const phoneInput = inputs.find((input) => normalizedLower([
+        input.getAttribute('aria-label'),
+        input.getAttribute('placeholder'),
+        input.getAttribute('title')
+      ].filter(Boolean).join(' ')).includes('phone')) || inputs[inputs.length - 1];
+      if (!phoneInput) return { attempted: true, state: 'phone_form_visible', reason: 'phone_input_missing' };
+
+      setValue(phoneInput, phone.replace(/^\+/, ''));
+      await sleep(300);
+
+      const next = visibleControls().find(({ label }) => (
+        label === 'next'
+        || label.includes('next')
+        || label.includes('continue')
+        || label.includes('link')
+      ));
+      const nextClickable = next?.el?.closest('button, [role="button"], a, [tabindex]') || next?.el;
+      if (!nextClickable || !isVisible(nextClickable)) {
+        return { attempted: true, state: 'phone_number_filled', reason: 'next_button_missing' };
+      }
+
+      clickCenter(nextClickable);
+      await sleep(5000);
+      state = inspectPairingState();
+      return {
+        attempted: true,
+        state: state.codeVisible ? 'pairing_code_visible' : (state.phoneFormVisible ? 'phone_form_visible' : 'submitted_phone_number')
+      };
+    }, { phone: PAIRING_PHONE_NUMBER });
+
+    if (result?.attempted) {
+      log(`attempted WhatsApp phone-number pairing (${result.state || result.reason || 'unknown'}).`);
+    }
+    return {
+      attempted: !!result?.attempted,
+      state: result?.state || null,
+      reason: result?.reason || null,
+      phone_masked: maskPhoneNumber(PAIRING_PHONE_NUMBER)
+    };
+  } catch (error) {
+    log(`failed to start WhatsApp phone-number pairing: ${error?.message || error}`);
+    return {
+      attempted: true,
+      reason: 'phone_pairing_error',
+      phone_masked: maskPhoneNumber(PAIRING_PHONE_NUMBER)
+    };
   }
 }
 
@@ -2287,7 +2437,13 @@ async function main() {
         }
 
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
-          const qrRefresh = readyState.waitingForLogin
+          const phonePairing = readyState.waitingForLogin
+            ? await startWhatsappPhonePairingIfConfigured(page)
+            : { attempted: false };
+          if (phonePairing.attempted) {
+            readyState = await detectWhatsappReady(page);
+          }
+          const qrRefresh = readyState.waitingForLogin && !phonePairing.attempted
             ? await refreshWhatsappLoginQrIfNeeded(page)
             : { refreshed: false };
           if (qrRefresh.refreshed) {
@@ -2308,6 +2464,7 @@ async function main() {
               ready_state: readyState,
               login_screenshot_data_url: loginScreenshotDataUrl || null,
               login_screenshot_captured_at: loginScreenshotDataUrl ? new Date().toISOString() : null,
+              login_phone_pairing: phonePairing,
               login_qr_refresh: qrRefresh,
               note: readyState.databaseError
                 ? 'WhatsApp Web is showing a browser database/storage error. Refresh WhatsApp Web or relink the bridge profile if it persists.'

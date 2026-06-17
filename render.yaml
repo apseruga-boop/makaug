@@ -33,6 +33,10 @@ services:
         value: "false"
       - key: WHATSAPP_WEB_COPILOT_HOSTED
         value: "true"
+      - key: WHATSAPP_WEB_COPILOT_LOGIN_METHOD
+        value: auto
+      - key: WHATSAPP_WEB_COPILOT_PAIRING_PHONE
+        sync: false
       - key: WHATSAPP_WEB_COPILOT_POLL_MS
         value: "50"
       - key: WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS

@@ -20,7 +20,9 @@ assert(renderYaml.includes('numInstances: 1'), 'WhatsApp Web profile must run as
 assert(renderYaml.includes('mountPath: /var/data'), 'Render worker must attach persistent disk at /var/data');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR') && renderYaml.includes('/var/data/whatsapp-profile-live'), 'Render worker must persist WhatsApp login profile on disk');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HEADLESS') && renderYaml.includes('value: "false"'), 'Render worker must run a visible browser under xvfb for WhatsApp linking');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_LOGIN_METHOD') && renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE'), 'Render worker must expose phone-number pairing as a QR fallback');
 assert(renderYaml.includes('WHATSAPP_WEB_BRIDGE_TOKEN') && renderYaml.includes('sync: false'), 'Bridge token must be prompted in Render, not committed');
+assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && renderYaml.includes('sync: false'), 'Phone pairing number must be configured as a private Render env var');
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes('makaug-whatsapp-web-prod'), 'Render worker must use hosted production identity');
 
 assert(dockerfile.includes('mcr.microsoft.com/playwright') && dockerfile.includes('scripts/start-whatsapp-agent-render.sh'), 'Dockerfile must provide Playwright runtime and start the hosted agent script');
@@ -42,7 +44,10 @@ assert(agentScript.includes('...hostedRuntimeMetadata()'), 'Every heartbeat must
 assert(agentScript.includes('captureLoginScreenshotDataUrl(page)'), 'Hosted worker must capture a protected login screenshot while WhatsApp is not ready');
 assert(agentScript.includes('refreshWhatsappLoginQrIfNeeded(page)'), 'Hosted worker must refresh stale WhatsApp login QR codes before screenshot heartbeats');
 assert(agentScript.includes('select to reload qr code') && agentScript.includes('clicked_reload_qr'), 'Hosted worker must detect and click WhatsApp reload-QR prompts');
+assert(agentScript.includes('startWhatsappPhonePairingIfConfigured(page)'), 'Hosted worker must support WhatsApp phone-number pairing when QR linking fails');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && agentScript.includes('log in with phone number'), 'Phone pairing must use the configured private phone number and click the WhatsApp phone login path');
 assert(agentScript.includes('login_screenshot_data_url: loginScreenshotDataUrl || null'), 'Non-ready heartbeats must expose the current login screenshot');
+assert(agentScript.includes('login_phone_pairing: phonePairing'), 'Non-ready heartbeats must expose phone pairing metadata for proof');
 assert(agentScript.includes('login_qr_refresh: qrRefresh'), 'Non-ready heartbeats must include QR refresh metadata for proof');
 assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_USER_AGENT') && agentScript.includes('Chrome/120.0.0.0'), 'Hosted browser must present a normal Chrome user agent for WhatsApp Web');
