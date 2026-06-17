@@ -143,6 +143,10 @@ const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
 const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
 );
+const BROWSER_USER_AGENT = String(
+  process.env.WHATSAPP_WEB_COPILOT_USER_AGENT
+    || 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+).trim();
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 60);
 const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
@@ -2146,10 +2150,27 @@ async function main() {
     context = await chromium.launchPersistentContext(PROFILE_DIR, {
       headless: HEADLESS_BROWSER,
       executablePath,
+      userAgent: BROWSER_USER_AGENT,
       viewport: { width: 1440, height: 980 },
-      args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-dev-shm-usage',
+        '--no-sandbox',
+        '--disable-setuid-sandbox'
+      ]
     });
   }
+
+  await context.addInitScript(() => {
+    try {
+      Object.defineProperty(navigator, 'webdriver', {
+        configurable: true,
+        get: () => false
+      });
+    } catch (_error) {
+      // Ignore browsers that do not allow redefining navigator.webdriver.
+    }
+  });
 
   let page = await getUsableWhatsappPage(context);
 

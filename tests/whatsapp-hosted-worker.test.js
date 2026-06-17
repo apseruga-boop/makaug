@@ -39,6 +39,8 @@ assert(agentScript.includes('...hostedRuntimeMetadata()'), 'Every heartbeat must
 assert(agentScript.includes('captureLoginScreenshotDataUrl(page)'), 'Hosted worker must capture a protected login screenshot while WhatsApp is not ready');
 assert(agentScript.includes('login_screenshot_data_url: loginScreenshotDataUrl || null'), 'Non-ready heartbeats must expose the current login screenshot');
 assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
+assert(agentScript.includes('WHATSAPP_WEB_COPILOT_USER_AGENT') && agentScript.includes('Chrome/120.0.0.0'), 'Hosted browser must present a normal Chrome user agent for WhatsApp Web');
+assert(agentScript.includes('--disable-blink-features=AutomationControlled') && agentScript.includes("navigator, 'webdriver'"), 'Hosted browser must avoid the automated/headless browser rejection path');
 
 assert(readiness.includes('hosted_agent_online') && readiness.includes('only_local_laptop_bridge_is_online'), 'Admin readiness must distinguish hosted 24/7 bridge from local-only bridge');
 assert(adminApp.includes('Hosted WhatsApp login screen') && adminApp.includes('login_screenshot_data_url'), 'Admin WhatsApp overview must render the hosted login screenshot from protected insights');
