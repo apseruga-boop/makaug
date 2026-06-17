@@ -360,6 +360,27 @@ function normalizeReplyText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function hostedRuntimeMetadata() {
+  const renderSignals = {
+    render_service_id: process.env.RENDER_SERVICE_ID || '',
+    render_service_name: process.env.RENDER_SERVICE_NAME || '',
+    render_instance_id: process.env.RENDER_INSTANCE_ID || '',
+    render_external_hostname: process.env.RENDER_EXTERNAL_HOSTNAME || ''
+  };
+  const hosted = String(process.env.WHATSAPP_WEB_COPILOT_HOSTED || '').trim().toLowerCase() === 'true'
+    || PROFILE_DIR.startsWith('/var/data')
+    || Object.values(renderSignals).some(Boolean);
+
+  return {
+    hosted,
+    production: process.env.NODE_ENV === 'production',
+    runtime: hosted ? 'render_worker' : 'local_browser',
+    deploy_target: hosted ? 'render' : 'local',
+    node_version: process.version.replace(/^v/, ''),
+    ...Object.fromEntries(Object.entries(renderSignals).filter(([, value]) => Boolean(value)))
+  };
+}
+
 async function apiRequest(endpoint, { method = 'GET', body } = {}) {
   let response = null;
   let lastError = null;
@@ -414,6 +435,8 @@ async function apiRequest(endpoint, { method = 'GET', body } = {}) {
 
 async function sendHeartbeat(extra = {}) {
   try {
+    const normalizedExtra = extra && typeof extra === 'object' ? extra : {};
+    const { metadata, ...rest } = normalizedExtra;
     await apiRequest('/api/whatsapp/web-bridge/heartbeat', {
       method: 'POST',
       body: {
@@ -421,7 +444,11 @@ async function sendHeartbeat(extra = {}) {
         operator_name: OPERATOR_NAME || null,
         browser_name: 'Google Chrome',
         profile_dir: PROFILE_DIR,
-        ...extra
+        ...rest,
+        metadata: {
+          ...(metadata && typeof metadata === 'object' ? metadata : {}),
+          ...hostedRuntimeMetadata()
+        }
       }
     });
   } catch (error) {

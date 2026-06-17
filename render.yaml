@@ -1,0 +1,39 @@
+services:
+  - type: worker
+    name: makaug-whatsapp-agent
+    runtime: docker
+    dockerfilePath: ./Dockerfile.whatsapp-agent
+    dockerContext: .
+    plan: starter
+    numInstances: 1
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 60
+    disk:
+      name: whatsapp-profile
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WHATSAPP_DELIVERY_MODE
+        value: web_bridge
+      - key: WHATSAPP_WEB_BRIDGE_ENABLED
+        value: "true"
+      - key: WHATSAPP_WEB_BRIDGE_TOKEN
+        sync: false
+      - key: WHATSAPP_WEB_COPILOT_BASE_URL
+        value: https://makaug.com
+      - key: WHATSAPP_WEB_COPILOT_CLIENT_ID
+        value: makaug-whatsapp-web-prod
+      - key: WHATSAPP_WEB_COPILOT_OPERATOR_NAME
+        value: Render WhatsApp Agent
+      - key: WHATSAPP_WEB_COPILOT_PROFILE_DIR
+        value: /var/data/whatsapp-profile
+      - key: WHATSAPP_WEB_COPILOT_HOSTED
+        value: "true"
+      - key: WHATSAPP_WEB_COPILOT_POLL_MS
+        value: "50"
+      - key: WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS
+        value: "60"
+      - key: WHATSAPP_WEB_COPILOT_HEARTBEAT_MS
+        value: "30000"
