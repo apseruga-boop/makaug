@@ -472,6 +472,69 @@ async function captureLoginScreenshotDataUrl(page) {
   }
 }
 
+async function refreshWhatsappLoginQrIfNeeded(page) {
+  if (!page || page.isClosed()) return { refreshed: false };
+
+  try {
+    const result = await page.evaluate(() => {
+      const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const isVisible = (el) => {
+        if (!el) return false;
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity || 1) === 0) return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 12 && rect.height > 12;
+      };
+      const clickCenter = (el) => {
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+          el.dispatchEvent(new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            view: window
+          }));
+        }
+      };
+      const bodyText = normalize(document.body?.innerText || '');
+      const hasReloadPrompt = bodyText.includes('select to reload qr code')
+        || bodyText.includes('reload qr code')
+        || bodyText.includes('reload qr');
+      if (!hasReloadPrompt) return { refreshed: false, reason: 'no_reload_prompt' };
+
+      const candidates = Array.from(document.querySelectorAll('button, [role="button"], [tabindex], div, span'))
+        .filter(isVisible)
+        .map((el) => ({
+          el,
+          label: normalize([
+            el.getAttribute('aria-label'),
+            el.getAttribute('title'),
+            el.textContent
+          ].filter(Boolean).join(' '))
+        }));
+      const target = candidates.find(({ label }) => label.includes('reload qr code') || label.includes('reload qr'))
+        || candidates.find(({ label }) => label.includes('select to reload'));
+      const clickable = target?.el?.closest('button, [role="button"], [tabindex]') || target?.el;
+      if (!clickable || !isVisible(clickable)) return { refreshed: false, reason: 'reload_target_missing' };
+
+      clickCenter(clickable);
+      return { refreshed: true, reason: 'clicked_reload_qr' };
+    });
+
+    if (result?.refreshed) {
+      log('refreshed WhatsApp login QR code before heartbeat screenshot.');
+      await page.waitForTimeout(2500);
+    }
+    return result || { refreshed: false, reason: 'unknown' };
+  } catch (error) {
+    log(`failed to refresh WhatsApp login QR code: ${error?.message || error}`);
+    return { refreshed: false, reason: 'refresh_error' };
+  }
+}
+
 async function detectWhatsappReady(page) {
   return page.evaluate(() => {
     const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -2224,6 +2287,12 @@ async function main() {
         }
 
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
+          const qrRefresh = readyState.waitingForLogin
+            ? await refreshWhatsappLoginQrIfNeeded(page)
+            : { refreshed: false };
+          if (qrRefresh.refreshed) {
+            readyState = await detectWhatsappReady(page);
+          }
           const loginScreenshotDataUrl = await captureLoginScreenshotDataUrl(page);
           await sendHeartbeat({
             status: readyState.databaseError
@@ -2239,6 +2308,7 @@ async function main() {
               ready_state: readyState,
               login_screenshot_data_url: loginScreenshotDataUrl || null,
               login_screenshot_captured_at: loginScreenshotDataUrl ? new Date().toISOString() : null,
+              login_qr_refresh: qrRefresh,
               note: readyState.databaseError
                 ? 'WhatsApp Web is showing a browser database/storage error. Refresh WhatsApp Web or relink the bridge profile if it persists.'
                 : readyState.openElsewhere

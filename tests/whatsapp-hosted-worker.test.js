@@ -40,7 +40,10 @@ assert(agentScript.includes('WHATSAPP_WEB_COPILOT_HOSTED') && agentScript.includ
 assert(agentScript.includes("runtime: hosted ? 'render_worker' : 'local_browser'"), 'Heartbeat metadata must distinguish Render worker from local browser');
 assert(agentScript.includes('...hostedRuntimeMetadata()'), 'Every heartbeat must include hosted metadata');
 assert(agentScript.includes('captureLoginScreenshotDataUrl(page)'), 'Hosted worker must capture a protected login screenshot while WhatsApp is not ready');
+assert(agentScript.includes('refreshWhatsappLoginQrIfNeeded(page)'), 'Hosted worker must refresh stale WhatsApp login QR codes before screenshot heartbeats');
+assert(agentScript.includes('select to reload qr code') && agentScript.includes('clicked_reload_qr'), 'Hosted worker must detect and click WhatsApp reload-QR prompts');
 assert(agentScript.includes('login_screenshot_data_url: loginScreenshotDataUrl || null'), 'Non-ready heartbeats must expose the current login screenshot');
+assert(agentScript.includes('login_qr_refresh: qrRefresh'), 'Non-ready heartbeats must include QR refresh metadata for proof');
 assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_USER_AGENT') && agentScript.includes('Chrome/120.0.0.0'), 'Hosted browser must present a normal Chrome user agent for WhatsApp Web');
 assert(agentScript.includes('--disable-blink-features=AutomationControlled') && agentScript.includes("navigator, 'webdriver'"), 'Hosted browser must avoid the automated/headless browser rejection path');
