@@ -592,15 +592,19 @@ async function startWhatsappPhonePairingIfConfigured(page) {
         .filter(isVisible);
       const inspectPairingState = () => {
         const text = normalizedLower(document.body?.innerText || '');
-        const codeVisible = (text.includes('enter this code') || text.includes('enter code') || text.includes('link with phone number'))
+        const inputLabels = visibleInputs().map((input) => normalizedLower([
+          input.getAttribute('aria-label'),
+          input.getAttribute('placeholder'),
+          input.getAttribute('title'),
+          input.textContent
+        ].filter(Boolean).join(' ')));
+        const hasPhoneInput = inputLabels.some((label) => label.includes('phone'));
+        const codeVisible = (text.includes('enter this code') || text.includes('enter code') || text.includes('code on your phone'))
           && (text.includes('linked devices') || text.includes('on your phone') || text.includes('your phone'));
         const phoneFormVisible = text.includes('enter phone number')
-          || text.includes('phone number')
-          || visibleInputs().some((input) => normalizedLower([
-            input.getAttribute('aria-label'),
-            input.getAttribute('placeholder'),
-            input.getAttribute('title')
-          ].filter(Boolean).join(' ')).includes('phone'));
+          || text.includes('confirm your phone number')
+          || text.includes('select your country')
+          || hasPhoneInput;
         return { text, codeVisible, phoneFormVisible };
       };
       const setValue = (input, value) => {
