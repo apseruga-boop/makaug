@@ -16,8 +16,14 @@ else
   echo "render-whatsapp-agent-xvfb missing"
 fi
 
-if [[ "${WHATSAPP_WEB_COPILOT_HEADLESS}" != "true" ]] && command -v xvfb-run >/dev/null 2>&1; then
-  exec xvfb-run -a --server-args="-screen 0 1440x980x24" npm run dev:whatsapp-agent
+if [[ "${WHATSAPP_WEB_COPILOT_HEADLESS}" != "true" ]] && command -v Xvfb >/dev/null 2>&1; then
+  echo "render-whatsapp-agent-xvfb-server starting"
+  Xvfb "${DISPLAY}" -screen 0 1440x980x24 -nolisten tcp >/tmp/makaug-xvfb.log 2>&1 &
+  XVFB_PID="$!"
+  trap 'kill "${XVFB_PID}" >/dev/null 2>&1 || true' EXIT INT TERM
+  sleep 1
+  echo "render-whatsapp-agent-node starting"
+  exec node scripts/whatsapp-web-agent.js
 fi
 
-exec npm run dev:whatsapp-agent
+exec node scripts/whatsapp-web-agent.js

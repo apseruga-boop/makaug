@@ -24,8 +24,9 @@ assert(renderYaml.includes('WHATSAPP_WEB_BRIDGE_TOKEN') && renderYaml.includes('
 assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes('makaug-whatsapp-web-prod'), 'Render worker must use hosted production identity');
 
 assert(dockerfile.includes('mcr.microsoft.com/playwright') && dockerfile.includes('scripts/start-whatsapp-agent-render.sh'), 'Dockerfile must provide Playwright runtime and start the hosted agent script');
-assert(startScript.includes('xvfb-run') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"'), 'Hosted start script must run Chrome under xvfb and default to persistent disk profile');
+assert(startScript.includes('command -v Xvfb') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile-live}"'), 'Hosted start script must run Chrome under Xvfb and default to persistent disk profile');
 assert(startScript.includes('WHATSAPP_WEB_COPILOT_HEADLESS="${WHATSAPP_WEB_COPILOT_HEADLESS:-false}"'), 'Hosted start script must default to a visible browser for WhatsApp linking');
+assert(startScript.includes('exec node scripts/whatsapp-web-agent.js'), 'Hosted start script must hand off directly to the WhatsApp Node agent');
 assert(!renderYaml.includes('/ms-playwright/chromium-1217'), 'Render config must not pin Chrome to a Playwright revision-specific path');
 assert(!startScript.includes('/ms-playwright/chromium-1217'), 'Hosted start script must let Playwright resolve the Chromium executable path');
 assert(!agentScript.includes('if (!CDP_URL && !fs.existsSync(CHROME_PATH))'), 'WhatsApp agent must not exit before Playwright browser path fallback runs');
