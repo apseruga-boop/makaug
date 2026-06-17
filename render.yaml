@@ -28,9 +28,9 @@ services:
       - key: WHATSAPP_WEB_COPILOT_OPERATOR_NAME
         value: Render WhatsApp Agent
       - key: WHATSAPP_WEB_COPILOT_PROFILE_DIR
-        value: /var/data/whatsapp-profile
+        value: /var/data/whatsapp-profile-live
       - key: WHATSAPP_WEB_COPILOT_HEADLESS
-        value: "true"
+        value: "false"
       - key: WHATSAPP_WEB_COPILOT_HOSTED
         value: "true"
       - key: WHATSAPP_WEB_COPILOT_POLL_MS
