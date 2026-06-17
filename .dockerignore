@@ -1,0 +1,15 @@
+.git
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules
+dist
+logs
+private-local
+qa-output
+reports
+.tmp-wa*
+.whatsapp-web-copilot-profile
+.whatsapp-web-copilot-profile*
+outputs
