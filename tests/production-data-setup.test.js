@@ -90,8 +90,11 @@ assert(
 assert(
   cloudReadinessScript.includes('REQUIRE_CLOUD_AI_EXPORTS')
     && cloudReadinessScript.includes('AI_EXPORT_BUCKET')
+    && cloudReadinessScript.includes('DATA_BACKUP_BUCKET')
+    && cloudReadinessScript.includes('S3_BUCKET')
+    && cloudReadinessScript.includes('Missing AI export bucket')
     && cloudReadinessScript.includes('AI learning exports are configured to write to S3/R2'),
-  'cloud readiness must check AI export cloud storage configuration'
+  'cloud readiness must check AI export cloud storage configuration with bucket fallback support'
 );
 
 assert(
