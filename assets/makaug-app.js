@@ -15550,6 +15550,22 @@ function renderAdminWhatsappOverview(summary = {}) {
     { label: "Live Agent", value: liveAgentLabel, cls: liveAgentReady ? "text-green-700" : "text-amber-700" }
   ];
   const readinessReason = String(bridgeReadiness.reason || "").replace(/_/g, " ");
+  const selectedBridgeMetadata = bridgeReadiness.selected_client?.metadata || {};
+  const loginScreenshotDataUrl = String(selectedBridgeMetadata.login_screenshot_data_url || "");
+  const hasLoginScreenshot = /^data:image\/(?:jpeg|jpg|png|webp);base64,[a-z0-9+/=]+$/i.test(loginScreenshotDataUrl);
+  const loginScreenshotCapturedAt = selectedBridgeMetadata.login_screenshot_captured_at
+    ? adminWhatsappTimeText(selectedBridgeMetadata.login_screenshot_captured_at)
+    : "";
+  const loginScreenshotHtml = hasLoginScreenshot ? `
+    <div class="md:col-span-2 xl:col-span-4 rounded-2xl border border-amber-100 bg-white p-4">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-sm font-black text-gray-900">Hosted WhatsApp login screen</div>
+          <div class="mt-1 text-xs text-gray-500">Scan this screen from WhatsApp Linked Devices when the hosted agent is waiting for login.${loginScreenshotCapturedAt ? ` Captured: ${adminEscape(loginScreenshotCapturedAt)}.` : ""}</div>
+        </div>
+      </div>
+      <img src="${adminAttr(loginScreenshotDataUrl)}" alt="Hosted WhatsApp login screen" class="mt-3 w-full max-h-[520px] rounded-xl border border-gray-200 bg-gray-50 object-contain">
+    </div>` : "";
   const readinessHtml = bridgeReadiness.reason ? `
     <div class="md:col-span-2 xl:col-span-4 rounded-2xl border ${liveAgentReady ? "border-green-100 bg-green-50 text-green-900" : "border-amber-100 bg-amber-50 text-amber-900"} p-4 text-sm">
       <div class="font-black">WhatsApp live agent: ${adminEscape(liveAgentLabel)}</div>
@@ -15560,7 +15576,7 @@ function renderAdminWhatsappOverview(summary = {}) {
       <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">${adminEscape(card.label)}</div>
       <div class="text-2xl font-black mt-2 ${card.cls}">${adminEscape(card.value)}</div>
     </div>
-  `).join("")}${readinessHtml}`;
+  `).join("")}${readinessHtml}${loginScreenshotHtml}`;
 }
 
 function renderAdminWhatsappConversationList(conversations = []) {

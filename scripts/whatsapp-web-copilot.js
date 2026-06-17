@@ -140,6 +140,9 @@ const HEARTBEAT_MS = Math.max(10000, Number(process.env.WHATSAPP_WEB_COPILOT_HEA
 const HEADLESS_BROWSER = ['1', 'true', 'yes', 'on'].includes(
   String(process.env.WHATSAPP_WEB_COPILOT_HEADLESS || '').trim().toLowerCase()
 );
+const LOGIN_SCREENSHOT_ENABLED = !['0', 'false', 'no', 'off'].includes(
+  String(process.env.WHATSAPP_WEB_COPILOT_LOGIN_SCREENSHOT || 'true').trim().toLowerCase()
+);
 const MAX_CONSECUTIVE_LOOP_ERRORS = Math.max(2, Number(process.env.WHATSAPP_WEB_COPILOT_MAX_LOOP_ERRORS || 5));
 const configuredRecentSweepMs = Number(process.env.WHATSAPP_WEB_COPILOT_RECENT_SWEEP_MS || 60);
 const RECENT_CHAT_SWEEP_MS = Math.min(300, Math.max(60, Number.isFinite(configuredRecentSweepMs) ? configuredRecentSweepMs : 120));
@@ -451,6 +454,17 @@ async function sendHeartbeat(extra = {}) {
     });
   } catch (error) {
     log('heartbeat failed:', error.message || error);
+  }
+}
+
+async function captureLoginScreenshotDataUrl(page) {
+  if (!LOGIN_SCREENSHOT_ENABLED || !page || page.isClosed()) return '';
+  try {
+    const buffer = await page.screenshot({ type: 'jpeg', quality: 35, fullPage: false });
+    return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  } catch (error) {
+    log('login screenshot capture failed:', error.message || error);
+    return '';
   }
 }
 
@@ -2189,6 +2203,7 @@ async function main() {
         }
 
         if (now - lastHeartbeat >= HEARTBEAT_MS) {
+          const loginScreenshotDataUrl = await captureLoginScreenshotDataUrl(page);
           await sendHeartbeat({
             status: readyState.databaseError
               ? 'browser_database_error'
@@ -2201,6 +2216,8 @@ async function main() {
             unread_count: 0,
             metadata: {
               ready_state: readyState,
+              login_screenshot_data_url: loginScreenshotDataUrl || null,
+              login_screenshot_captured_at: loginScreenshotDataUrl ? new Date().toISOString() : null,
               note: readyState.databaseError
                 ? 'WhatsApp Web is showing a browser database/storage error. Refresh WhatsApp Web or relink the bridge profile if it persists.'
                 : readyState.openElsewhere
@@ -2295,6 +2312,10 @@ async function main() {
             processed_recent_sweep: recentSweepResult.processed || 0,
             scanned_recent_sweep: recentSweepResult.scanned || 0,
             sent_outbound: sentCount || 0
+          },
+          metadata: {
+            login_screenshot_data_url: null,
+            login_screenshot_captured_at: null
           }
         });
         lastHeartbeat = now;

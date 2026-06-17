@@ -10,6 +10,7 @@ const dockerfile = read('Dockerfile.whatsapp-agent');
 const dockerignore = read('.dockerignore');
 const agentScript = read('scripts/whatsapp-web-copilot.js');
 const startScript = read('scripts/start-whatsapp-agent-render.sh');
+const adminApp = read('assets/makaug-app.js');
 const readiness = read('services/whatsappBridgeReadiness.js');
 
 assert(renderYaml.includes('type: worker'), 'Render blueprint must define a background worker for the WhatsApp agent');
@@ -35,7 +36,11 @@ assert(agentScript.includes('function hostedRuntimeMetadata()'), 'WhatsApp agent
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_HOSTED') && agentScript.includes("PROFILE_DIR.startsWith('/var/data')"), 'Hosted metadata must detect Render worker/profile disk');
 assert(agentScript.includes("runtime: hosted ? 'render_worker' : 'local_browser'"), 'Heartbeat metadata must distinguish Render worker from local browser');
 assert(agentScript.includes('...hostedRuntimeMetadata()'), 'Every heartbeat must include hosted metadata');
+assert(agentScript.includes('captureLoginScreenshotDataUrl(page)'), 'Hosted worker must capture a protected login screenshot while WhatsApp is not ready');
+assert(agentScript.includes('login_screenshot_data_url: loginScreenshotDataUrl || null'), 'Non-ready heartbeats must expose the current login screenshot');
+assert(agentScript.includes('login_screenshot_data_url: null'), 'Online heartbeats must clear stale login screenshots');
 
 assert(readiness.includes('hosted_agent_online') && readiness.includes('only_local_laptop_bridge_is_online'), 'Admin readiness must distinguish hosted 24/7 bridge from local-only bridge');
+assert(adminApp.includes('Hosted WhatsApp login screen') && adminApp.includes('login_screenshot_data_url'), 'Admin WhatsApp overview must render the hosted login screenshot from protected insights');
 
 console.log('WhatsApp hosted worker setup ok');
