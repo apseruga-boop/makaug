@@ -217,7 +217,13 @@ function checkAiDataExports() {
     add('ai_learning_storage', 'ok', 'AI learning export scripts are present.');
   }
   if (isTruthy('REQUIRE_CLOUD_AI_EXPORTS')) {
-    if (requireNames('ai_learning_storage', ['AI_EXPORT_BUCKET', 'AI_EXPORT_PREFIX', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])) {
+    const hasExportBucket = isSet('AI_EXPORT_BUCKET') || isSet('DATA_BACKUP_BUCKET') || isSet('S3_BUCKET');
+    if (!hasExportBucket) {
+      add('ai_learning_storage', 'blocker', 'Missing AI export bucket. Set AI_EXPORT_BUCKET, DATA_BACKUP_BUCKET, or S3_BUCKET.', {
+        missing: ['AI_EXPORT_BUCKET']
+      });
+    }
+    if (hasExportBucket && requireNames('ai_learning_storage', ['AI_EXPORT_PREFIX', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])) {
       add('ai_learning_storage', 'ok', 'AI learning exports are configured to write to S3/R2.');
     }
   } else {
