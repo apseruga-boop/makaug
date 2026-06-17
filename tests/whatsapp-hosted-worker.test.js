@@ -47,6 +47,7 @@ assert(agentScript.includes('select to reload qr code') && agentScript.includes(
 assert(agentScript.includes('startWhatsappPhonePairingIfConfigured(page)'), 'Hosted worker must support WhatsApp phone-number pairing when QR linking fails');
 assert(agentScript.includes('WHATSAPP_WEB_COPILOT_PAIRING_PHONE') && agentScript.includes('log in with phone number'), 'Phone pairing must use the configured private phone number and click the WhatsApp phone login path');
 assert(agentScript.includes('clickWhatsappPhoneLoginLink(page)') && agentScript.includes('getByRole'), 'Phone pairing must use Playwright locator clicks for the login link');
+assert(agentScript.includes('submitWhatsappPhonePairingWithPlaywright(page)') && agentScript.includes('phone_fill_did_not_stick'), 'Phone pairing must fill and submit the phone form with Playwright and report fill failures');
 assert(agentScript.includes('phone_form_not_visible_after_click'), 'Phone pairing must not claim submission if the phone form never appears');
 assert(agentScript.includes("text.includes('code on your phone')"), 'Phone pairing detection must require real pairing-code copy, not QR-screen text');
 assert(!agentScript.includes("text.includes('link with phone number'))"), 'Phone pairing detection must not confuse the QR login link with a visible pairing code');

@@ -565,6 +565,60 @@ async function clickWhatsappPhoneLoginLink(page) {
   return false;
 }
 
+async function submitWhatsappPhonePairingWithPlaywright(page) {
+  try {
+    await page.getByText(/enter phone number/i).first().waitFor({ state: 'visible', timeout: 1800 });
+  } catch (_error) {
+    return { attempted: false, reason: 'phone_form_not_visible' };
+  }
+
+  const digits = PAIRING_PHONE_NUMBER.replace(/\D/g, '');
+  const visibleInputs = page.locator('input:visible');
+  const inputCount = await visibleInputs.count().catch(() => 0);
+  if (!inputCount) return { attempted: true, state: 'phone_form_visible', reason: 'phone_input_missing' };
+
+  const phoneInput = visibleInputs.nth(inputCount - 1);
+  try {
+    await phoneInput.click({ timeout: 1200 });
+    await phoneInput.fill(PAIRING_PHONE_NUMBER, { timeout: 1500 });
+    let currentValue = await phoneInput.inputValue({ timeout: 800 }).catch(() => '');
+    if (!currentValue.replace(/\D/g, '').endsWith(digits.slice(-8))) {
+      await phoneInput.click({ timeout: 1200 });
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+      await page.keyboard.type(PAIRING_PHONE_NUMBER, { delay: 20 });
+      currentValue = await phoneInput.inputValue({ timeout: 800 }).catch(() => '');
+    }
+
+    if (!currentValue.replace(/\D/g, '').endsWith(digits.slice(-8))) {
+      return {
+        attempted: true,
+        state: 'phone_form_visible',
+        reason: 'phone_fill_did_not_stick'
+      };
+    }
+  } catch (error) {
+    return {
+      attempted: true,
+      state: 'phone_form_visible',
+      reason: `phone_fill_error:${String(error?.message || error).slice(0, 80)}`
+    };
+  }
+
+  const nextLocators = [
+    page.getByRole('button', { name: /^next$/i }).first(),
+    page.getByText(/^next$/i).first(),
+    page.locator('button, [role="button"], [tabindex]').filter({ hasText: /^next$/i }).first()
+  ];
+  for (const locator of nextLocators) {
+    if (await clickVisibleLocator(locator, 1500)) {
+      await page.waitForTimeout(5000);
+      return { attempted: true, state: 'submitted_phone_number', reason: null };
+    }
+  }
+
+  return { attempted: true, state: 'phone_number_filled', reason: 'next_button_missing' };
+}
+
 async function startWhatsappPhonePairingIfConfigured(page) {
   if (!page || page.isClosed()) return { attempted: false, reason: 'page_unavailable' };
   if (!PAIRING_PHONE_NUMBER) return { attempted: false, reason: 'phone_pairing_not_configured' };
@@ -575,8 +629,12 @@ async function startWhatsappPhonePairingIfConfigured(page) {
     if (clickedPhoneLogin) {
       log('clicked WhatsApp "Log in with phone number" link with Playwright locator.');
     }
+    const playwrightPairing = await submitWhatsappPhonePairingWithPlaywright(page);
+    if (playwrightPairing.attempted) {
+      log(`submitted WhatsApp phone pairing with Playwright (${playwrightPairing.state || playwrightPairing.reason || 'unknown'}).`);
+    }
 
-    const result = await page.evaluate(async ({ phone, clickedPhoneLogin }) => {
+    const result = await page.evaluate(async ({ phone, clickedPhoneLogin, playwrightPairing }) => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
       const normalize = (value) => String(value || '').replace(/\s+/g, ' ').trim();
       const normalizedLower = (value) => normalize(value).toLowerCase();
@@ -646,6 +704,16 @@ async function startWhatsappPhonePairingIfConfigured(page) {
 
       let state = inspectPairingState();
       if (state.codeVisible) return { attempted: true, state: 'pairing_code_visible' };
+      if (playwrightPairing?.attempted) {
+        return {
+          attempted: true,
+          state: state.phoneFormVisible
+            ? (playwrightPairing.state || 'phone_form_visible')
+            : (playwrightPairing.state || 'submitted_phone_number'),
+          reason: playwrightPairing.reason || null,
+          playwright_pairing: playwrightPairing
+        };
+      }
 
       if (!state.phoneFormVisible) {
         if (clickedPhoneLogin) {
@@ -698,7 +766,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
         attempted: true,
         state: state.codeVisible ? 'pairing_code_visible' : (state.phoneFormVisible ? 'phone_form_visible' : 'submitted_phone_number')
       };
-    }, { phone: PAIRING_PHONE_NUMBER, clickedPhoneLogin });
+    }, { phone: PAIRING_PHONE_NUMBER, clickedPhoneLogin, playwrightPairing });
 
     if (result?.attempted) {
       log(`attempted WhatsApp phone-number pairing (${result.state || result.reason || 'unknown'}).`);
@@ -707,6 +775,7 @@ async function startWhatsappPhonePairingIfConfigured(page) {
       attempted: !!result?.attempted,
       state: result?.state || null,
       reason: result?.reason || null,
+      playwright_pairing: result?.playwright_pairing || null,
       phone_masked: maskPhoneNumber(PAIRING_PHONE_NUMBER)
     };
   } catch (error) {
