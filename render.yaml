@@ -29,8 +29,6 @@ services:
         value: Render WhatsApp Agent
       - key: WHATSAPP_WEB_COPILOT_PROFILE_DIR
         value: /var/data/whatsapp-profile
-      - key: WHATSAPP_WEB_COPILOT_CHROME_PATH
-        value: /ms-playwright/chromium-1217/chrome-linux/chrome
       - key: WHATSAPP_WEB_COPILOT_HEADLESS
         value: "true"
       - key: WHATSAPP_WEB_COPILOT_HOSTED

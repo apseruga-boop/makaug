@@ -229,11 +229,6 @@ if (!BRIDGE_TOKEN) {
   process.exit(1);
 }
 
-if (!CDP_URL && !fs.existsSync(CHROME_PATH)) {
-  console.error(`Chrome executable not found at ${CHROME_PATH}`);
-  process.exit(1);
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

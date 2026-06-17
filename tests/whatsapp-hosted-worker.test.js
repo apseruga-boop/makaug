@@ -23,6 +23,9 @@ assert(renderYaml.includes('WHATSAPP_WEB_COPILOT_HOSTED') && renderYaml.includes
 
 assert(dockerfile.includes('mcr.microsoft.com/playwright') && dockerfile.includes('scripts/start-whatsapp-agent-render.sh'), 'Dockerfile must provide Playwright runtime and start the hosted agent script');
 assert(startScript.includes('xvfb-run') && startScript.includes('WHATSAPP_WEB_COPILOT_PROFILE_DIR="${WHATSAPP_WEB_COPILOT_PROFILE_DIR:-/var/data/whatsapp-profile}"'), 'Hosted start script must run Chrome headlessly and default to persistent disk profile');
+assert(!renderYaml.includes('/ms-playwright/chromium-1217'), 'Render config must not pin Chrome to a Playwright revision-specific path');
+assert(!startScript.includes('/ms-playwright/chromium-1217'), 'Hosted start script must let Playwright resolve the Chromium executable path');
+assert(!agentScript.includes('if (!CDP_URL && !fs.existsSync(CHROME_PATH))'), 'WhatsApp agent must not exit before Playwright browser path fallback runs');
 
 assert(dockerignore.includes('.env') && dockerignore.includes('.env.*'), 'Docker build must exclude local env files');
 assert(dockerignore.includes('.whatsapp-web-copilot-profile*'), 'Docker build must exclude local WhatsApp browser profiles');
