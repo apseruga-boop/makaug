@@ -566,6 +566,29 @@ async function clickWhatsappPhoneLoginLink(page) {
 }
 
 async function submitWhatsappPhonePairingWithPlaywright(page) {
+  const codeScreenState = await page.evaluate(() => {
+    const text = String(document.body?.innerText || '').replace(/\s+/g, ' ').trim();
+    const lower = text.toLowerCase();
+    const codeVisible = /\b[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s*-\s*[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\s+[A-Z0-9]\b/i.test(text)
+      || /\b[A-Z0-9]{4}\s*-\s*[A-Z0-9]{4}\b/i.test(text);
+    return {
+      codeScreen: lower.includes('enter code on phone') || lower.includes('linking whatsapp account'),
+      codeVisible
+    };
+  }).catch(() => ({ codeScreen: false, codeVisible: false }));
+
+  if (codeScreenState.codeScreen) {
+    if (codeScreenState.codeVisible) {
+      return { attempted: true, state: 'pairing_code_visible', reason: null };
+    }
+    const editClicked = await clickVisibleLocator(page.getByText(/^edit$/i).first(), 1200)
+      || await clickVisibleLocator(page.locator('a, button, [role="button"], [tabindex]').filter({ hasText: /^edit$/i }).first(), 1200);
+    if (!editClicked) {
+      return { attempted: true, state: 'pairing_code_loading', reason: 'edit_link_missing' };
+    }
+    await page.waitForTimeout(1800);
+  }
+
   try {
     await page.getByText(/enter phone number/i).first().waitFor({ state: 'visible', timeout: 1800 });
   } catch (_error) {
@@ -860,6 +883,9 @@ async function detectWhatsappReady(page) {
       || bodyText.includes('use whatsapp on your phone to link a device')
       || (bodyText.includes('link to your account') && (bodyText.includes('scan') || bodyText.includes('qr code')))
       || bodyText.includes('log in with phone number');
+    const phonePairingPrompt = bodyText.includes('enter code on phone')
+      || bodyText.includes('linking whatsapp account')
+      || bodyText.includes('link with phone number instead');
     const databaseError = bodyText.includes('a database error occurred')
       || bodyText.includes('database error occurred')
       || bodyText.includes('your browser storage is full')
@@ -869,7 +895,7 @@ async function detectWhatsappReady(page) {
       || bodyText.includes('click "use here"')
       || bodyText.includes('click “use here”');
     const readySignals = hasComposer || hasChatList || hasSearchBox || hasLoggedInShell;
-    const waitingForLogin = (loginPrompt || databaseError) && !readySignals;
+    const waitingForLogin = (loginPrompt || phonePairingPrompt || databaseError) && !readySignals;
     return {
       waitingForLogin,
       ready: readySignals && !waitingForLogin,
@@ -878,6 +904,7 @@ async function detectWhatsappReady(page) {
       hasSearchBox,
       hasLoggedInShell,
       loginPrompt,
+      phonePairingPrompt,
       databaseError,
       openElsewhere
     };
