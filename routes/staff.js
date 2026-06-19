@@ -29,6 +29,8 @@ const FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden'
 const OPEN_LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified'];
 const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
+const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
+const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 
 function boolLike(value) {
   return ['true', '1', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -309,6 +311,8 @@ function trainingGuide() {
 
 async function dashboardPayload(req) {
   const staffId = actorId(req);
+  const queueLimit = STAFF_DASHBOARD_QUEUE_LIMIT;
+  const panelLimit = STAFF_DASHBOARD_PANEL_LIMIT;
   const [
     listingSummary,
     myModeration,
@@ -385,8 +389,8 @@ async function dashboardPayload(req) {
        FROM staff_activity_logs
        WHERE staff_user_id = $1
        ORDER BY created_at DESC
-       LIMIT 25`,
-      [staffId]
+       LIMIT $2`,
+      [staffId, panelLimit]
     ),
     safeRows(
       `SELECT p.id, p.title, p.description, p.listing_type, p.property_type, p.district, p.area, p.address,
@@ -396,35 +400,16 @@ async function dashboardPayload(req) {
               p.extra_fields,
               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'tiktok_url', p.extra_fields->>'youtube_url', p.extra_fields->>'video_url') AS source_url,
               COALESCE(p.extra_fields->>'source_platform', p.extra_fields->>'source_badge', p.source, p.listed_via) AS source_platform,
-              COALESCE(dup.duplicate_count, 0)::int AS duplicate_count,
+              0::int AS duplicate_count,
               img.url AS primary_image_url
        FROM properties p
        LEFT JOIN LATERAL (
          SELECT url FROM property_images i WHERE i.property_id = p.id ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC LIMIT 1
        ) img ON true
-       LEFT JOIN LATERAL (
-         SELECT COUNT(*)::int AS duplicate_count
-         FROM properties d
-         WHERE d.id <> p.id
-           AND (
-             (COALESCE(p.lister_phone, '') <> '' AND d.lister_phone = p.lister_phone)
-             OR LOWER(COALESCE(d.title, '')) = LOWER(COALESCE(p.title, ''))
-             OR (
-               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') <> ''
-               AND COALESCE(d.extra_fields->>'source_url', d.extra_fields->>'source_post_url', '') = COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '')
-             )
-             OR (
-               COALESCE(p.area, '') <> ''
-               AND COALESCE(p.district, '') <> ''
-               AND LOWER(COALESCE(d.area, '')) = LOWER(COALESCE(p.area, ''))
-               AND d.district = p.district
-               AND COALESCE(d.price, 0) = COALESCE(p.price, 0)
-             )
-           )
-       ) dup ON true
        WHERE ${pendingReviewWhere('p')}
-       ORDER BY COALESCE(dup.duplicate_count, 0) DESC, COALESCE(p.updated_at, p.created_at) DESC
-       LIMIT 30`
+       ORDER BY COALESCE(p.updated_at, p.created_at) DESC
+       LIMIT $1`,
+      [queueLimit]
     ),
     safeRows(
       `SELECT l.*, c.name AS contact_name, c.phone AS contact_phone, c.email AS contact_email, c.whatsapp AS contact_whatsapp, p.title AS listing_title
@@ -433,8 +418,8 @@ async function dashboardPayload(req) {
        LEFT JOIN properties p ON p.id = l.listing_id
        WHERE l.assigned_to_user_id = $1 OR l.lead_status = ANY($2::text[])
        ORDER BY CASE WHEN l.assigned_to_user_id = $1 THEN 0 ELSE 1 END, l.created_at DESC
-       LIMIT 20`,
-      [staffId, OPEN_LEAD_STATUSES]
+       LIMIT $3`,
+      [staffId, OPEN_LEAD_STATUSES, panelLimit]
     ),
     safeRows(
       `SELECT id, full_name, business_name, email, phone, product_interests, target_locations,
@@ -443,8 +428,8 @@ async function dashboardPayload(req) {
        FROM advertising_inquiries
        WHERE assigned_to_user_id = $1 OR status = ANY($2::text[])
        ORDER BY CASE WHEN assigned_to_user_id = $1 THEN 0 ELSE 1 END, created_at DESC
-       LIMIT 20`,
-      [staffId, OPEN_AD_STATUSES]
+       LIMIT $3`,
+      [staffId, OPEN_AD_STATUSES, panelLimit]
     ),
     safeRows(
       `SELECT phone, status, category, priority, assigned_to, latest_preview, last_intent, preferred_language,
@@ -453,8 +438,8 @@ async function dashboardPayload(req) {
        FROM whatsapp_conversation_state
        WHERE assigned_to = $1 OR status IN ('needs_human','escalated','open')
        ORDER BY COALESCE(last_message_at, updated_at) DESC
-       LIMIT 20`,
-      [staffId]
+       LIMIT $2`,
+      [staffId, panelLimit]
     ),
     safeOne(
       `SELECT
@@ -471,25 +456,22 @@ async function dashboardPayload(req) {
     ),
     safeOne(
       `WITH pending AS (
-         SELECT p.id, p.title, p.area, p.district, p.price, p.lister_phone, p.extra_fields
+         SELECT
+           NULLIF(lister_phone, '') AS lister_phone,
+           NULLIF(LOWER(COALESCE(title, '')), '') AS normalized_title,
+           NULLIF(COALESCE(extra_fields->>'source_url', extra_fields->>'source_post_url', ''), '') AS source_url
          FROM properties p
          WHERE ${pendingReviewWhere('p')}
+       ),
+       duplicate_keys AS (
+         SELECT lister_phone AS duplicate_key FROM pending WHERE lister_phone IS NOT NULL GROUP BY lister_phone HAVING COUNT(*) > 1
+         UNION
+         SELECT normalized_title AS duplicate_key FROM pending WHERE normalized_title IS NOT NULL GROUP BY normalized_title HAVING COUNT(*) > 1
+         UNION
+         SELECT source_url AS duplicate_key FROM pending WHERE source_url IS NOT NULL GROUP BY source_url HAVING COUNT(*) > 1
        )
        SELECT COUNT(*)::int AS possible_duplicates
-       FROM pending p
-       WHERE EXISTS (
-         SELECT 1
-         FROM properties d
-         WHERE d.id <> p.id
-           AND (
-             (COALESCE(p.lister_phone, '') <> '' AND d.lister_phone = p.lister_phone)
-             OR LOWER(COALESCE(d.title, '')) = LOWER(COALESCE(p.title, ''))
-             OR (
-               COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '') <> ''
-               AND COALESCE(d.extra_fields->>'source_url', d.extra_fields->>'source_post_url', '') = COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', '')
-             )
-           )
-       )`,
+       FROM duplicate_keys`,
       [],
       { possible_duplicates: 0 }
     ),
@@ -499,7 +481,8 @@ async function dashboardPayload(req) {
               can_contact_directly, last_seen_at, last_checked_at, notes
        FROM property_source_registry
        ORDER BY COALESCE(last_seen_at, last_checked_at, created_at) DESC
-       LIMIT 12`
+       LIMIT $1`,
+      [panelLimit]
     ),
     safeRows(
       `SELECT p.id, p.title, p.area, p.district, p.status, p.updated_at,
@@ -514,7 +497,8 @@ async function dashboardPayload(req) {
            OR COALESCE(p.extra_fields->>'source_url', p.extra_fields->>'source_post_url', p.extra_fields->>'youtube_url', p.extra_fields->>'tiktok_url', '') <> ''
          )
        ORDER BY COALESCE(p.updated_at, p.created_at) DESC
-       LIMIT 12`
+       LIMIT $1`,
+      [panelLimit]
     ),
     safeOne(
       `SELECT
@@ -530,7 +514,8 @@ async function dashboardPayload(req) {
               household_income, payload, created_at
        FROM mortgage_enquiries
        ORDER BY created_at DESC
-       LIMIT 20`
+       LIMIT $1`,
+      [panelLimit]
     ),
     safeOne(
       `SELECT
