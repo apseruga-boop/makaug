@@ -33,6 +33,7 @@ function run() {
 
   assert(server.includes("const staffRoutes = require('./routes/staff')"), 'server should import staff routes');
   assert(server.includes("app.use('/api/staff', staffRoutes)"), 'server should mount /api/staff');
+  assert(server.includes('renderPublicHtml(req.originalUrl || req.url || req.path)'), 'server should render /login?next=/staff-dashboard with the staff account panel mode');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');

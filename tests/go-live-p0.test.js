@@ -403,6 +403,7 @@ function run() {
   const mortgageHtml = sanitizePublicHtml(sourceHtml, { pathname: '/mortgage' });
   const fraudHtml = sanitizePublicHtml(sourceHtml, { pathname: '/fraud' });
   const loginHtml = sanitizePublicHtml(sourceHtml, { pathname: '/login' });
+  const staffLoginHtml = sanitizePublicHtml(sourceHtml, { pathname: '/login?next=%2Fstaff-dashboard' });
   const howItWorksHtml = sanitizePublicHtml(sourceHtml, { pathname: '/how-it-works' });
   const helpHtml = sanitizePublicHtml(sourceHtml, { pathname: '/help' });
   const safetyHtml = sanitizePublicHtml(sourceHtml, { pathname: '/safety' });
@@ -485,6 +486,8 @@ function run() {
   assert(loginHtml.includes('id="page-login"'), '/login should render clean auth route');
   assert(loginText.includes('Opening your makaug.com account panel'), '/login should launch the shared auth panel instead of a duplicate login page');
   assert(!loginText.includes('Choose how you want to continue'), '/login should not render a separate role-selection login page');
+  assert(staffLoginHtml.includes("openAuthSignIn('moderator')"), '/login?next=/staff-dashboard should open the staff account panel');
+  assert(staffLoginHtml.includes('Selected account type: Staff'), '/login?next=/staff-dashboard should show staff as the selected account type');
   for (const unrelated of ['Find your perfect rental property', 'Mortgage Finder Mortgage Finder', 'Fraud Prevention', 'Commercial Property Hub']) {
     assert(!loginText.includes(unrelated), `/login should not render marketplace route content: ${unrelated}`);
   }

@@ -567,10 +567,22 @@ function stripPublicModalBlocks(html, pathname = '/') {
 
 function authRouteMode(pathname = '/') {
   const pathName = normalizePath(pathname).toLowerCase();
-  if (pathName.includes('student')) return 'student';
-  if (pathName.includes('broker')) return 'agent';
-  if (pathName.includes('field-agent')) return 'field_agent';
-  if (pathName.includes('advertiser')) return 'advertiser';
+  let nextPath = '';
+  try {
+    const rawQuery = String(pathname || '').split('?')[1]?.split('#')[0] || '';
+    const params = new URLSearchParams(rawQuery);
+    const rawNext = params.get('next') || params.get('redirect') || '';
+    if (rawNext) nextPath = normalizePath(new URL(rawNext, 'https://makaug.local').pathname).toLowerCase();
+  } catch (error) {
+    nextPath = '';
+  }
+  const target = `${pathName} ${nextPath}`;
+  if (target.includes('staff-dashboard') || target.includes('moderator')) return 'moderator';
+  if (target.includes('admin') || target.includes('king')) return 'admin';
+  if (target.includes('student')) return 'student';
+  if (target.includes('broker')) return 'agent';
+  if (target.includes('field-agent')) return 'field_agent';
+  if (target.includes('advertiser')) return 'advertiser';
   return 'finder';
 }
 
@@ -582,7 +594,9 @@ function renderAuthRouteContent(pathname = '/') {
     student: 'Student',
     agent: 'Broker',
     field_agent: 'Field Agent',
-    advertiser: 'Advertiser'
+    advertiser: 'Advertiser',
+    moderator: 'Staff',
+    admin: 'Admin'
   };
   const roleLabel = roleLabels[mode] || roleLabels.finder;
   return `

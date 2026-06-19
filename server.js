@@ -441,9 +441,12 @@ function readIndexHtml() {
 }
 
 function renderPublicHtml(pathname) {
-  const key = pathname || '/';
+  const rawPath = pathname || '/';
+  const basePath = String(rawPath).split('?')[0].split('#')[0] || '/';
+  const normalizedBasePath = basePath.length > 1 ? basePath.replace(/\/+$/, '') : basePath;
+  const key = normalizedBasePath === '/login' ? rawPath : normalizedBasePath;
   if (isProduction && publicHtmlCache.has(key)) return publicHtmlCache.get(key);
-  const rendered = sanitizePublicHtml(readIndexHtml(), { pathname: key });
+  const rendered = sanitizePublicHtml(readIndexHtml(), { pathname: rawPath });
   if (isProduction) publicHtmlCache.set(key, rendered);
   return rendered;
 }
@@ -513,7 +516,7 @@ function sendPublicIndex(req, res, next) {
   }
   try {
     res.set('X-makaug-Public-Sanitized', '1');
-    return sendTextResponse(req, res, renderPublicHtml(req.path), {
+    return sendTextResponse(req, res, renderPublicHtml(req.originalUrl || req.url || req.path), {
       cacheControl: PUBLIC_HTML_CACHE_CONTROL
     });
   } catch (error) {
