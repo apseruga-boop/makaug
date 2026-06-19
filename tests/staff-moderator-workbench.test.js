@@ -35,9 +35,17 @@ function run() {
   assert(server.includes("app.use('/api/staff', staffRoutes)"), 'server should mount /api/staff');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
+  assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
+  assert(staffRoutes.includes("router.get('/properties/:id/preview'"), 'staff listing preview API should exist');
+  assert(staffRoutes.includes("router.patch('/properties/:id/review'"), 'staff listing preview save API should exist');
+  assert(staffRoutes.includes("router.post('/source-intake/exact-social/import'"), 'staff social source import API should exist');
+  assert(staffRoutes.includes("router.post('/source-intake/social-sweep'"), 'staff social sweep API should exist');
   assert(staffRoutes.includes("router.patch('/leads/:id'"), 'staff lead update API route should exist');
   assert(staffRoutes.includes("router.patch('/advertising/inquiries/:id'"), 'staff advertising update API route should exist');
   assert(staffRoutes.includes("router.post('/assistant/query'"), 'staff AI assistant route should exist');
+  assert(staffRoutes.includes('staff_contact_export_v1'), 'staff AI should expose controlled contact export answers');
+  assert(staffRoutes.includes('normalizeReviewLocationHierarchy'), 'staff listing edits should validate Uganda location hierarchy');
+  assert(staffRoutes.includes('districtForKnownArea'), 'staff listing edits should catch Nansana/Wakiso and Masindi/Masindi style hierarchy bugs');
   assert(staffRoutes.includes('staff_activity_logs'), 'staff routes should write staff activity logs');
   assert(staffRoutes.includes('Moderators can only assign a lead to themselves'), 'lead assignment should be staff self-service only');
 
@@ -52,6 +60,11 @@ function run() {
   assert(propertyRoutes.includes('staff_listing_approved'), 'moderator approvals should be logged');
 
   assert(html.includes('id="page-staff-dashboard"'), 'staff dashboard page should be in the product');
+  assert(html.includes('id="staff-settings-panel"'), 'staff dashboard should expose staff settings and payout details');
+  assert(html.includes('id="staff-stat-total"'), 'staff dashboard should show total property count');
+  assert(html.includes('id="staff-stat-duplicates"'), 'staff dashboard should show duplicate risk count');
+  assert(html.includes('id="staff-source-quick-paste"'), 'staff dashboard should expose source quick paste');
+  assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
   assert(html.includes('id="admin-staff-control"'), 'King dashboard should include staff operations control panel');
@@ -62,6 +75,12 @@ function run() {
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
   assert(app.includes('/api/staff/assistant/query'), 'frontend should call staff assistant API');
+  assert(app.includes('/api/staff/profile'), 'frontend should save staff settings');
+  assert(app.includes('/api/staff/properties/${encodeURIComponent(propertyId)}/preview'), 'frontend should open staff listing preview before approval');
+  assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
+  assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
+  assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
+  assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
   assert(app.includes('staffModerateListing'), 'frontend should expose moderation action');
   assert(app.includes('moderator email or +256'), 'staff sign-in copy should be present');
 

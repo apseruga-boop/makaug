@@ -4291,32 +4291,83 @@
             </div>
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderStaffDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-rotate-right mr-1"></i>Refresh</button>
+              <button onclick="document.getElementById('staff-settings-panel')?.scrollIntoView({behavior:'smooth',block:'start'})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-gear mr-1"></i>Settings</button>
               <button onclick="showPage('list-property')" class="border border-emerald-700 text-emerald-800 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1"></i>Add Listing</button>
               <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-right-from-bracket mr-1"></i>Sign Out</button>
             </div>
           </div>
         </div>
 
-        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+        <div id="staff-settings-panel" class="bg-white border border-blue-100 rounded-2xl p-6">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 class="text-xl font-black text-gray-900">Staff settings & payout details</h3>
+              <p class="text-sm text-gray-500 mt-1">Save your working name, phone, personal email, Simba/mobile-money, and bank fallback details. King/admin still controls payment approval.</p>
+            </div>
+            <div id="staff-payment-summary" class="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-700 min-w-[220px]">Payment summary loading...</div>
+          </div>
+          <form onsubmit="saveStaffProfile(event)" class="grid md:grid-cols-3 gap-3 mt-4">
+            <input id="staff-settings-first-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="First name">
+            <input id="staff-settings-last-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Last name">
+            <input id="staff-settings-phone" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Work WhatsApp / phone">
+            <input id="staff-settings-personal-email" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Personal email">
+            <input id="staff-settings-simba-account" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Simba account / reference">
+            <select id="staff-settings-payment-provider" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+              <option value="mobile_money">Mobile money</option>
+              <option value="simba">Simba</option>
+              <option value="bank">Bank</option>
+              <option value="cash">Cash</option>
+            </select>
+            <input id="staff-settings-mobile-money-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Mobile money name">
+            <input id="staff-settings-mobile-money-phone" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Mobile money phone">
+            <input id="staff-settings-bank-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Bank name">
+            <input id="staff-settings-bank-account-name" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Bank account name">
+            <input id="staff-settings-bank-last4" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Bank account last 4 digits">
+            <input id="staff-settings-payout-notes" class="border border-gray-200 rounded-xl px-3 py-2 text-sm" placeholder="Payout notes">
+            <button type="submit" class="md:col-span-3 bg-blue-700 hover:bg-blue-600 text-white rounded-xl py-3 font-black">Save staff settings</button>
+          </form>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="All property records in makaug.">
+            <div class="text-sm text-gray-500">Total Properties</div>
+            <div id="staff-stat-total" class="text-3xl font-black text-slate-900 mt-1">0</div>
+            <p id="staff-stat-total-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Listings waiting for moderation.">
             <div class="text-sm text-gray-500">Pending Review</div>
             <div id="staff-stat-pending" class="text-3xl font-black text-gray-900 mt-1">0</div>
+            <p id="staff-stat-pending-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Listings approved by this staff account.">
             <div class="text-sm text-gray-500">My Approvals</div>
             <div id="staff-stat-approvals" class="text-3xl font-black text-emerald-700 mt-1">0</div>
+            <p id="staff-stat-approvals-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Open customer demand and listing-owner leads.">
             <div class="text-sm text-gray-500">Open Leads</div>
             <div id="staff-stat-leads" class="text-3xl font-black text-blue-700 mt-1">0</div>
+            <p id="staff-stat-leads-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Open advertising sales inquiries.">
             <div class="text-sm text-gray-500">Ad Leads</div>
             <div id="staff-stat-ads" class="text-3xl font-black text-amber-700 mt-1">0</div>
+            <p id="staff-stat-ads-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </div>
-          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="WhatsApp conversations needing a human.">
             <div class="text-sm text-gray-500">WhatsApp Needs Human</div>
             <div id="staff-stat-whatsapp" class="text-3xl font-black text-purple-700 mt-1">0</div>
+            <p id="staff-stat-whatsapp-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Pending rows that look like duplicates.">
+            <div class="text-sm text-gray-500">Duplicate Risk</div>
+            <div id="staff-stat-duplicates" class="text-3xl font-black text-red-700 mt-1">0</div>
+            <p id="staff-stat-duplicates-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5" title="Mortgage and bank-finance leads.">
+            <div class="text-sm text-gray-500">Bank Leads</div>
+            <div id="staff-stat-bank" class="text-3xl font-black text-green-700 mt-1">0</div>
+            <p id="staff-stat-bank-help" class="mt-2 text-[11px] text-gray-500 line-clamp-3"></p>
           </div>
         </div>
 
@@ -4324,7 +4375,7 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <div class="flex items-center justify-between gap-3 mb-4">
               <h3 class="text-xl font-black text-gray-900">Listing moderation queue</h3>
-              <span class="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">Approve = goes live</span>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">Preview first, approve = goes live</span>
             </div>
             <div id="staff-review-queue" class="space-y-3 text-sm"></div>
           </div>
@@ -4345,7 +4396,52 @@
           </div>
         </div>
 
-        <div class="grid lg:grid-cols-3 gap-5">
+        <div class="bg-white border border-violet-100 rounded-2xl p-5">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h3 class="text-xl font-black text-gray-900">Source intake & social scraping</h3>
+              <p class="text-sm text-gray-500 mt-1">TikTok, YouTube, Facebook, X/Twitter, student housing, and WhatsApp-found rows all feed the same shared moderation queue. Preview before queueing to avoid duplication.</p>
+            </div>
+            <div id="staff-source-intake-status" class="rounded-xl bg-violet-50 border border-violet-100 p-3 text-xs text-violet-950 min-w-[220px]">Source intake loading...</div>
+          </div>
+          <div class="grid lg:grid-cols-[1.05fr,0.95fr] gap-4 mt-4">
+            <div class="rounded-xl border border-gray-200 p-4">
+              <h4 class="font-black text-gray-900">Paste exact social links</h4>
+              <textarea id="staff-source-quick-paste" class="mt-2 w-full rounded-xl border border-violet-200 p-3 text-xs font-mono min-h-[150px]" placeholder="Paste TikTok / YouTube / Facebook / X links or copied source text. Preview first, then queue."></textarea>
+              <div class="mt-3 flex flex-wrap gap-2">
+                <button type="button" onclick="staffPreviewSourceImport()" class="bg-violet-700 hover:bg-violet-600 text-white px-3 py-2 rounded-lg text-xs font-black">Preview extracted rows</button>
+                <button type="button" onclick="staffQueueSourceImport()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-black">Queue found online</button>
+              </div>
+              <div class="mt-4 grid sm:grid-cols-[0.7fr,1fr] gap-2">
+                <select id="staff-source-sweep-platform" class="border border-gray-200 rounded-lg px-3 py-2 text-xs">
+                  <option value="all">All social</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="facebook">Facebook</option>
+                  <option value="x">X/Twitter</option>
+                </select>
+                <input id="staff-source-sweep-focus" class="border border-gray-200 rounded-lg px-3 py-2 text-xs" placeholder="Focus, e.g. students, land, Wakiso">
+              </div>
+              <div class="mt-2 flex flex-wrap gap-2">
+                <button type="button" onclick="staffRunSourceSweep(true)" class="border border-violet-200 text-violet-700 hover:bg-violet-50 px-3 py-2 rounded-lg text-xs font-black">Preview limited sweep</button>
+                <button type="button" onclick="staffRunSourceSweep(false)" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-black">Run limited sweep</button>
+              </div>
+              <div id="staff-source-import-result" class="mt-3"></div>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div>
+                <h4 class="font-black text-gray-900 mb-2">Shared found-online queue</h4>
+                <div id="staff-source-queue-list" class="space-y-2 text-sm"></div>
+              </div>
+              <div>
+                <h4 class="font-black text-gray-900 mb-2">Source registry</h4>
+                <div id="staff-source-registry-list" class="space-y-2 text-sm"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-4 gap-5">
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h3 class="text-lg font-black text-gray-900 mb-3">Lead generation</h3>
             <div id="staff-leads-list" class="space-y-3 text-sm"></div>
@@ -4357,6 +4453,10 @@
           <div class="bg-white border border-gray-200 rounded-2xl p-5">
             <h3 class="text-lg font-black text-gray-900 mb-3">WhatsApp conversations</h3>
             <div id="staff-whatsapp-list" class="space-y-3 text-sm"></div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h3 class="text-lg font-black text-gray-900 mb-3">Bank / mortgage leads</h3>
+            <div id="staff-bank-leads-list" class="space-y-3 text-sm"></div>
           </div>
         </div>
 

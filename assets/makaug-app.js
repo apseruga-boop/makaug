@@ -9136,6 +9136,9 @@ async function renderAdvertiserDashboard() {
   await hydrateAdvertiserDashboardPlacements();
 }
 
+let staffDashboardData = null;
+let staffAiLastCsv = "";
+
 function staffNumber(value) {
   return Number(value || 0).toLocaleString("en-UG");
 }
@@ -9148,6 +9151,91 @@ function staffEmpty(label) {
   return `<div class="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-500">${adminEscape(label)}</div>`;
 }
 
+function staffStatCopy(definitions = {}, key = "") {
+  const item = definitions?.[key] || {};
+  const meaning = item.meaning || "";
+  const action = item.action || "";
+  return [meaning, action].filter(Boolean).join(" Action: ");
+}
+
+function setStaffStat(id, value, definitions = {}, key = "") {
+  const el = document.getElementById(id);
+  if (el) el.textContent = staffNumber(value);
+  const help = document.getElementById(`${id}-help`);
+  if (help) {
+    help.textContent = staffStatCopy(definitions, key);
+    help.title = help.textContent;
+  }
+}
+
+function staffProfileValue(profile = {}, key = "") {
+  const payment = profile.payment_profile || {};
+  return profile[key] || payment[key] || "";
+}
+
+function renderStaffProfileSettings(staff = {}, payments = {}) {
+  const first = document.getElementById("staff-settings-first-name");
+  const last = document.getElementById("staff-settings-last-name");
+  const phone = document.getElementById("staff-settings-phone");
+  const personalEmail = document.getElementById("staff-settings-personal-email");
+  const simba = document.getElementById("staff-settings-simba-account");
+  const provider = document.getElementById("staff-settings-payment-provider");
+  const momoName = document.getElementById("staff-settings-mobile-money-name");
+  const momoPhone = document.getElementById("staff-settings-mobile-money-phone");
+  const bank = document.getElementById("staff-settings-bank-name");
+  const accountName = document.getElementById("staff-settings-bank-account-name");
+  const accountLast4 = document.getElementById("staff-settings-bank-last4");
+  const notes = document.getElementById("staff-settings-payout-notes");
+  const paymentProfile = staff.payment_profile || payments.staff_payment_profile || {};
+  if (first) first.value = staff.first_name || "";
+  if (last) last.value = staff.last_name || "";
+  if (phone) phone.value = staff.phone || paymentProfile.mobile_money_phone || "";
+  if (personalEmail) personalEmail.value = staff.personal_email || "";
+  if (simba) simba.value = paymentProfile.simba_account || "";
+  if (provider) provider.value = paymentProfile.payment_provider || "mobile_money";
+  if (momoName) momoName.value = paymentProfile.mobile_money_name || `${staff.first_name || ""} ${staff.last_name || ""}`.trim();
+  if (momoPhone) momoPhone.value = paymentProfile.mobile_money_phone || staff.phone || "";
+  if (bank) bank.value = paymentProfile.bank_name || "";
+  if (accountName) accountName.value = paymentProfile.bank_account_name || "";
+  if (accountLast4) accountLast4.value = paymentProfile.bank_account_last4 || "";
+  if (notes) notes.value = paymentProfile.payout_notes || "";
+  const summary = document.getElementById("staff-payment-summary");
+  if (summary) {
+    const stats = payments.summary || {};
+    summary.innerHTML = `
+      <div><strong>${staffNumber(stats.open_payment_links || 0)}</strong> open payment links</div>
+      <div><strong>${staffNumber(stats.open_invoices || 0)}</strong> open invoices</div>
+      <div><strong>${staffNumber(stats.paid_invoices || 0)}</strong> paid invoices visible as proof only</div>
+      <div class="text-[11px] text-slate-500 mt-1">${adminEscape(payments.note || "Payment confirmation stays with King/admin.")}</div>`;
+  }
+}
+
+async function saveStaffProfile(event) {
+  event.preventDefault();
+  const payload = {
+    first_name: document.getElementById("staff-settings-first-name")?.value || "",
+    last_name: document.getElementById("staff-settings-last-name")?.value || "",
+    phone: document.getElementById("staff-settings-phone")?.value || "",
+    personal_email: document.getElementById("staff-settings-personal-email")?.value || "",
+    simba_account: document.getElementById("staff-settings-simba-account")?.value || "",
+    payment_provider: document.getElementById("staff-settings-payment-provider")?.value || "mobile_money",
+    mobile_money_name: document.getElementById("staff-settings-mobile-money-name")?.value || "",
+    mobile_money_phone: document.getElementById("staff-settings-mobile-money-phone")?.value || "",
+    bank_name: document.getElementById("staff-settings-bank-name")?.value || "",
+    bank_account_name: document.getElementById("staff-settings-bank-account-name")?.value || "",
+    bank_account_last4: document.getElementById("staff-settings-bank-last4")?.value || "",
+    payout_notes: document.getElementById("staff-settings-payout-notes")?.value || ""
+  };
+  try {
+    const res = await apiRequest("/api/staff/profile", { method: "PATCH", body: payload });
+    renderStaffProfileSettings(res?.data || {}, staffDashboardData?.payments || {});
+    toast("Staff settings saved.");
+    await renderStaffDashboard();
+  } catch (error) {
+    toast(`Staff settings failed: ${error.message || "request failed"}`);
+  }
+}
+
 function renderStaffReviewQueue(rows = []) {
   const wrap = document.getElementById("staff-review-queue");
   if (!wrap) return;
@@ -9158,6 +9246,8 @@ function renderStaffReviewQueue(rows = []) {
   wrap.innerHTML = rows.map((item) => {
     const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
     const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
+    const duplicateCount = Number(item.duplicate_count || 0) || 0;
+    const sourceUrl = String(item.source_url || "").trim();
     return `
       <article class="border border-gray-200 rounded-2xl p-4">
         <div class="flex items-start justify-between gap-3">
@@ -9165,13 +9255,15 @@ function renderStaffReviewQueue(rows = []) {
             <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
             <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
+            <div class="text-xs text-gray-500 mt-1">Source: ${adminEscape(item.source_platform || item.source || item.listed_via || "website")}${sourceUrl ? ` • <a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="font-black text-blue-700 underline underline-offset-2">open evidence</a>` : ""}</div>
+            ${duplicateCount ? `<div class="mt-2 rounded-xl bg-red-50 border border-red-100 p-2 text-xs text-red-800"><strong>${staffNumber(duplicateCount)} possible duplicate${duplicateCount === 1 ? "" : "s"}.</strong> Compare before publishing.</div>` : ""}
             ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
           </div>
           <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'approved')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-check mr-1"></i>Approve live</button>
-          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject</button>
+          <button type="button" onclick="openStaffListingPreview(${propertyIdArg(item.id)})" class="bg-slate-900 hover:bg-slate-800 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-eye mr-1"></i>Preview & edit</button>
+          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject with reason</button>
           <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
         </div>
       </article>`;
@@ -9192,11 +9284,12 @@ function renderStaffLeads(rows = []) {
       <article class="border border-gray-200 rounded-xl p-3">
         <div class="font-black text-gray-900">${adminEscape(contact)}</div>
         <div class="text-xs text-gray-500 mt-1">${adminEscape(label)}</div>
-        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(lead.lead_status || "open")} • Priority: ${adminEscape(lead.priority || "normal")}</div>
+        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(lead.lead_status || "open")} • Priority: ${adminEscape(lead.priority || "normal")} • Claim = assign to you and start contact</div>
         ${lead.message ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="staffClaimLead(${adminListingIdArg(lead.id)})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
           <button type="button" onclick="staffAddLeadNote(${adminListingIdArg(lead.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Add note</button>
+          ${lead.contact_phone || lead.contact_whatsapp ? `<a href="https://wa.me/${adminAttr(String(lead.contact_whatsapp || lead.contact_phone).replace(/[^0-9]/g, ""))}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">WhatsApp</a>` : ""}
         </div>
       </article>`;
   }).join("");
@@ -9215,7 +9308,8 @@ function renderStaffAdvertising(rows = []) {
       <article class="border border-gray-200 rounded-xl p-3">
         <div class="font-black text-gray-900">${adminEscape(item.business_name || item.full_name || "Advertiser lead")}</div>
         <div class="text-xs text-gray-500 mt-1">${adminEscape(item.phone || item.email || "contact pending")}</div>
-        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(item.status || "new")} • Pipeline: ${adminEscape(adMoney(budget))}</div>
+        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(item.status || "new")} • Staff-visible pipeline: ${adminEscape(adMoney(budget))}</div>
+        <div class="text-xs text-gray-500 mt-1">Next action: claim, contact, capture package/area/budget, then mark proposal sent. Payment proof stays with King/admin.</div>
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" onclick="staffClaimAdInquiry(${adminListingIdArg(item.id)})" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
           <button type="button" onclick="staffUpdateAdInquiryStatus(${adminListingIdArg(item.id)}, 'contacted')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Contacted</button>
@@ -9239,11 +9333,161 @@ function renderStaffWhatsapp(rows = []) {
         <div class="font-black text-gray-900">${adminEscape(item.phone || "WhatsApp contact")}</div>
         <div class="text-xs text-gray-500 mt-1">${adminEscape(item.category || "conversation")} • ${adminEscape(item.priority || "normal")} • ${adminEscape(item.status || "open")}</div>
         ${item.latest_preview ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(item.latest_preview).slice(0, 180)}</div>` : ""}
+        <div class="mt-2 text-[11px] text-gray-500">Last message: ${adminEscape(staffDate(item.last_message_at || item.updated_at))} • Intent: ${adminEscape(item.last_intent || "not tagged")}</div>
         <div class="mt-3 flex flex-wrap gap-2">
           ${phone ? `<a href="https://wa.me/${adminAttr(phone)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Open WhatsApp</a>` : ""}
         </div>
       </article>`;
   }).join("");
+}
+
+function renderStaffSourceIntake(data = {}) {
+  const status = document.getElementById("staff-source-intake-status");
+  if (status) {
+    const summary = data.summary || {};
+    status.innerHTML = `
+      <div><strong>${staffNumber(summary.total_sources || 0)}</strong> source records • <strong>${staffNumber(summary.active_sources || 0)}</strong> active</div>
+      <div class="mt-1"><strong>${staffNumber(data.possible_duplicates || 0)}</strong> pending listings have duplicate risk. Preview before approval.</div>
+      <div class="mt-1 text-[11px] text-gray-500">Batch: ${adminEscape(data.batch_id || "source-intake")}</div>`;
+  }
+  const queue = document.getElementById("staff-source-queue-list");
+  if (queue) {
+    const rows = Array.isArray(data.queued_found_online) ? data.queued_found_online : [];
+    queue.innerHTML = rows.length ? rows.map((row) => `
+      <article class="rounded-xl border border-gray-200 p-3">
+        <div class="font-black text-gray-900">${adminEscape(row.title || "Found-online row")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape([row.platform, row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
+        <div class="mt-2 flex gap-2 flex-wrap">
+          <button type="button" onclick="openStaffListingPreview(${propertyIdArg(row.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-black">Preview</button>
+          ${row.source_url ? `<a href="${adminAttr(row.source_url)}" target="_blank" rel="noopener noreferrer" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Source</a>` : ""}
+        </div>
+      </article>
+    `).join("") : staffEmpty("No found-online source rows are waiting in this panel.");
+  }
+  const registry = document.getElementById("staff-source-registry-list");
+  if (registry) {
+    const rows = Array.isArray(data.source_registry) ? data.source_registry : [];
+    registry.innerHTML = rows.length ? rows.slice(0, 8).map((row) => `
+      <div class="rounded-xl border border-gray-200 p-3">
+        <div class="font-black text-gray-900">${adminEscape(row.source_name || row.handle || "Source")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape([row.platform, row.status, row.trust_level].filter(Boolean).join(" • "))}</div>
+        <div class="text-xs text-gray-600 mt-1">${adminEscape([row.contact_phone, row.contact_email].filter(Boolean).join(" • ") || "public source route")}</div>
+      </div>
+    `).join("") : staffEmpty("No source registry rows returned.");
+  }
+}
+
+function renderStaffBankLeads(data = {}) {
+  const wrap = document.getElementById("staff-bank-leads-list");
+  if (!wrap) return;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No mortgage or bank-finance leads are available.");
+    return;
+  }
+  wrap.innerHTML = rows.slice(0, 10).map((row) => {
+    const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
+    return `
+      <article class="rounded-xl border border-gray-200 p-3">
+        <div class="font-black text-gray-900">${adminEscape(row.user_phone || "Mortgage lead")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape(payload.location || payload.preferred_area || row.property_purpose || "Bank finance")}</div>
+        <div class="text-xs text-gray-600 mt-1">Price: ${adminEscape(row.property_price ? adMoney(row.property_price) : "not stated")} • Deposit: ${adminEscape(row.deposit_percent || "not stated")}% • Term: ${adminEscape(row.term_years || "not stated")} years</div>
+        <div class="text-xs text-gray-500 mt-1">Next action: call, confirm bank/product need, then add to lead notes.</div>
+        ${row.user_phone ? `<a href="https://wa.me/${adminAttr(String(row.user_phone).replace(/[^0-9]/g, ""))}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">WhatsApp</a>` : ""}
+      </article>`;
+  }).join("");
+}
+
+function staffSourceImportPayload(dryRun = true) {
+  const rawText = document.getElementById("staff-source-quick-paste")?.value || "";
+  return {
+    raw_text: rawText,
+    dry_run: dryRun,
+    fetch_oembed: true,
+    fetch_public_metadata: true
+  };
+}
+
+function renderStaffSourceImportResult(data = {}, dryRun = true) {
+  const wrap = document.getElementById("staff-source-import-result");
+  if (!wrap) return;
+  const result = data || {};
+  const importResult = result.import_result || result;
+  wrap.innerHTML = `
+    <div class="rounded-xl border ${dryRun ? "border-violet-100 bg-violet-50" : "border-emerald-100 bg-emerald-50"} p-3 text-xs">
+      <div class="font-black ${dryRun ? "text-violet-900" : "text-emerald-900"}">${dryRun ? "Preview complete" : "Queued into shared review"}</div>
+      <div class="grid sm:grid-cols-2 gap-2 mt-2 text-gray-700">
+        <div>Exact social URLs: <strong>${staffNumber(result.exact_social_url_count || result.exact_video_url_count || 0)}</strong></div>
+        <div>Created properties: <strong>${staffNumber(importResult.created_properties || result.created_properties || 0)}</strong></div>
+        <div>Existing/duplicates blocked: <strong>${staffNumber(importResult.existing_properties || result.existing_properties || 0)}</strong></div>
+        <div>Review queue rows: <strong>${staffNumber(importResult.review_queue_properties || result.review_queue_properties || 0)}</strong></div>
+        <div>Source-review only: <strong>${staffNumber(importResult.source_review_count || result.source_review_count || 0)}</strong></div>
+        <div>Discovered posts: <strong>${staffNumber(result.discovered_posts_count || 0)}</strong></div>
+      </div>
+      <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Every staff member will see the same shared moderation rows." : "Refresh the dashboard and open Preview & edit before publishing any queued row."}</div>
+    </div>`;
+}
+
+async function staffPreviewSourceImport() {
+  const payload = staffSourceImportPayload(true);
+  if (!payload.raw_text.trim()) {
+    toast("Paste exact social links or copied source text first.");
+    return;
+  }
+  try {
+    const res = await apiRequest("/api/staff/source-intake/exact-social/import", {
+      method: "POST",
+      body: payload
+    });
+    renderStaffSourceImportResult(res?.data || {}, true);
+    toast("Source preview ready.");
+  } catch (error) {
+    toast(`Source preview failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffQueueSourceImport() {
+  const ok = window.confirm("Queue these found-online source rows for shared staff moderation? Preview first if you have not checked duplicate counts.");
+  if (!ok) return;
+  const payload = staffSourceImportPayload(false);
+  if (!payload.raw_text.trim()) {
+    toast("Paste exact social links or copied source text first.");
+    return;
+  }
+  try {
+    const res = await apiRequest("/api/staff/source-intake/exact-social/import", {
+      method: "POST",
+      body: payload
+    });
+    renderStaffSourceImportResult(res?.data || {}, false);
+    await renderStaffDashboard();
+    toast("Source rows queued into shared review.");
+  } catch (error) {
+    toast(`Source queue failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffRunSourceSweep(dryRun = true) {
+  const platform = document.getElementById("staff-source-sweep-platform")?.value || "all";
+  const focus = document.getElementById("staff-source-sweep-focus")?.value || "";
+  try {
+    const res = await apiRequest("/api/staff/source-intake/social-sweep", {
+      method: "POST",
+      body: {
+        platform,
+        focus,
+        dry_run: dryRun,
+        max_sources: 8,
+        max_results: 5,
+        published_after: "2026-01-01T00:00:00.000Z"
+      }
+    });
+    renderStaffSourceImportResult(res?.data || {}, dryRun);
+    if (!dryRun) await renderStaffDashboard();
+    toast(dryRun ? "Sweep preview ready." : "Limited source sweep queued rows where eligible.");
+  } catch (error) {
+    toast(`Source sweep failed: ${error.message || "request failed"}`);
+  }
 }
 
 function renderStaffActivity(rows = []) {
@@ -9264,18 +9508,22 @@ function renderStaffTraining(training = {}) {
   const wrap = document.getElementById("staff-training-guide");
   if (!wrap) return;
   const sections = [
-    ["Moderation", training.moderation || []],
-    ["Lead generation", training.leads || []],
-    ["Advertising sales", training.advertising || []],
-    ["Scripts", training.scripts || []]
+    ["Moderation", training.moderation || {}],
+    ["Source scraping", training.source_intake || {}],
+    ["Lead generation", training.leads || {}],
+    ["Advertising sales", training.advertising || {}],
+    ["WhatsApp", training.whatsapp || {}],
+    ["Bank leads", training.bank_leads || {}],
+    ["Scripts", training.scripts || {}]
   ];
   wrap.innerHTML = sections.map(([title, items]) => `
-    <section class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h4 class="font-black text-gray-900">${adminEscape(title)}</h4>
-      <ul class="mt-2 space-y-2 text-xs text-gray-700">
-        ${(items || []).slice(0, 5).map((item) => `<li>${adminEscape(item)}</li>`).join("") || "<li>No guide notes yet.</li>"}
-      </ul>
-    </section>`).join("");
+    <details class="rounded-xl border border-gray-200 bg-gray-50 p-4" ${title === "Moderation" ? "open" : ""}>
+      <summary class="cursor-pointer font-black text-gray-900">${adminEscape(title)}</summary>
+      <p class="mt-2 text-xs font-bold text-emerald-800">${adminEscape(items.goal || "Use the steps below.")}</p>
+      <ol class="mt-2 space-y-2 text-xs text-gray-700 list-decimal list-inside">
+        ${(items.steps || items || []).slice(0, 8).map((item) => `<li>${adminEscape(item)}</li>`).join("") || "<li>No guide notes yet.</li>"}
+      </ol>
+    </details>`).join("");
 }
 
 async function renderStaffDashboard() {
@@ -9296,30 +9544,281 @@ async function renderStaffDashboard() {
   try {
     const res = await apiRequest("/api/staff/dashboard");
     const data = res?.data || {};
-    setTextById("staff-stat-pending", staffNumber(data.summary?.listings?.pending_review));
-    setTextById("staff-stat-approvals", staffNumber(data.summary?.my_moderation?.approvals));
-    setTextById("staff-stat-leads", staffNumber(data.summary?.leads?.open));
-    setTextById("staff-stat-ads", staffNumber(data.summary?.advertising?.open_inquiries));
-    setTextById("staff-stat-whatsapp", staffNumber(data.summary?.whatsapp?.needs_human));
+    staffDashboardData = data;
+    const definitions = data.summary?.definitions || {};
+    setStaffStat("staff-stat-total", data.summary?.listings?.total, definitions, "total_properties");
+    setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
+    setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
+    setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
+    setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
+    setStaffStat("staff-stat-whatsapp", data.summary?.whatsapp?.needs_human, definitions, "whatsapp_human");
+    setStaffStat("staff-stat-duplicates", data.summary?.duplicates?.possible_duplicates, definitions, "source_duplicates");
+    setStaffStat("staff-stat-bank", data.summary?.bank_leads?.total, definitions, "bank_leads");
+    renderStaffProfileSettings(data.staff || user, data.payments || {});
     renderStaffReviewQueue(data.review_queue || []);
     renderStaffLeads(data.leads || []);
     renderStaffAdvertising(data.advertising_inquiries || []);
     renderStaffWhatsapp(data.whatsapp_conversations || []);
+    renderStaffSourceIntake(data.source_intake || {});
+    renderStaffBankLeads(data.bank_leads || {});
     renderStaffActivity(data.recent_activity || []);
     renderStaffTraining(data.training || {});
   } catch (error) {
+    staffDashboardData = null;
     renderStaffReviewQueue([]);
     renderStaffLeads([]);
     renderStaffAdvertising([]);
     renderStaffWhatsapp([]);
+    renderStaffSourceIntake({});
+    renderStaffBankLeads({});
     renderStaffActivity([]);
     renderStaffTraining({});
     toast(`Staff dashboard failed: ${error.message || "request failed"}`);
   }
 }
 
+function staffPreviewImagesHtml(images = []) {
+  const list = Array.isArray(images) ? images : [];
+  if (!list.length) return staffEmpty("No images are attached. Do not approve unless source evidence explains why.");
+  return `<div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+    ${list.slice(0, 8).map((image) => `
+      <a href="${adminAttr(image.url || "")}" target="_blank" rel="noopener noreferrer" class="block rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
+        <img src="${adminAttr(image.url || "")}" alt="${adminAttr(image.room_label || "Listing image")}" class="w-full aspect-square object-cover">
+        <div class="px-2 py-1 text-[11px] text-gray-600">${adminEscape(image.room_label || image.slot_key || (image.is_primary ? "Primary" : "Image"))}</div>
+      </a>
+    `).join("")}
+  </div>`;
+}
+
+function staffPreviewField(id, label, value = "", type = "text", extra = "") {
+  const tag = type === "textarea"
+    ? `<textarea id="${adminAttr(id)}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" ${extra}>${adminEscape(value || "")}</textarea>`
+    : `<input id="${adminAttr(id)}" type="${adminAttr(type)}" value="${adminAttr(value || "")}" class="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" ${extra}>`;
+  return `<label class="block text-sm font-bold text-gray-800">${adminEscape(label)}${tag}</label>`;
+}
+
+function renderStaffListingPreviewModal(preview = {}) {
+  const existing = document.getElementById("staff-listing-preview-modal");
+  if (existing) existing.remove();
+  const source = preview.source_evidence || {};
+  const location = preview.location_review || {};
+  const duplicates = preview.duplicate_review || {};
+  const review = preview.review || {};
+  const sourceUrl = String(source.source_url || "").trim();
+  const modal = document.createElement("div");
+  modal.id = "staff-listing-preview-modal";
+  modal.className = "fixed inset-0 z-[11000] bg-slate-950/70 overflow-y-auto p-4";
+  modal.innerHTML = `
+    <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">Preview before publishing</div>
+          <h3 class="text-2xl font-black mt-1">${adminEscape(preview.title || "Untitled listing")}</h3>
+          <p class="text-sm text-slate-300 mt-1">${adminEscape([preview.area, preview.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(preview.status || "pending")}</p>
+        </div>
+        <button type="button" onclick="closeStaffListingPreview()" class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><i class="fas fa-xmark"></i></button>
+      </div>
+      <div class="p-5 grid lg:grid-cols-[1.2fr,0.8fr] gap-5">
+        <div class="space-y-4">
+          <section class="rounded-xl border border-gray-200 p-4">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <h4 class="font-black text-gray-900">Public listing facts</h4>
+              <span class="text-xs text-gray-500">Save changes before approval.</span>
+            </div>
+            <div class="grid md:grid-cols-2 gap-3 mt-3">
+              ${staffPreviewField("staff-preview-title", "Public title", preview.title || "")}
+              ${staffPreviewField("staff-preview-listing-type", "Listing type", preview.listing_type || "")}
+              ${staffPreviewField("staff-preview-property-type", "Property type", preview.property_type || "")}
+              ${staffPreviewField("staff-preview-price", "Price", preview.price || "", "number")}
+              ${staffPreviewField("staff-preview-price-period", "Price period", preview.price_period || "")}
+              ${staffPreviewField("staff-preview-title-type", "Title type", preview.title_type || "")}
+              ${staffPreviewField("staff-preview-region", "Region", location.region || "")}
+              ${staffPreviewField("staff-preview-district", "District", preview.district || "")}
+              ${staffPreviewField("staff-preview-city", "Town / city", location.city || "")}
+              ${staffPreviewField("staff-preview-neighborhood", "Neighbourhood", location.neighborhood || "")}
+              ${staffPreviewField("staff-preview-area", "Area / public location", preview.area || "")}
+              ${staffPreviewField("staff-preview-address", "Address / location note", preview.address || "")}
+              ${staffPreviewField("staff-preview-lister-name", "Owner/source name", preview.lister_name || "")}
+              ${staffPreviewField("staff-preview-lister-phone", "Owner/source phone", preview.lister_phone || "")}
+              ${staffPreviewField("staff-preview-lister-email", "Owner/source email", preview.lister_email || "")}
+              ${staffPreviewField("staff-preview-bedrooms", "Bedrooms", preview.bedrooms || "", "number")}
+              ${staffPreviewField("staff-preview-bathrooms", "Bathrooms", preview.bathrooms || "", "number")}
+            </div>
+            <div class="mt-3">${staffPreviewField("staff-preview-description", "Public description", preview.description || "", "textarea")}</div>
+          </section>
+          <section class="rounded-xl border border-gray-200 p-4">
+            <h4 class="font-black text-gray-900 mb-3">Photo and source evidence</h4>
+            ${staffPreviewImagesHtml(preview.images || [])}
+            <div class="mt-3 rounded-xl bg-gray-50 border border-gray-200 p-3 text-xs text-gray-700">
+              <div><strong>Platform/source:</strong> ${adminEscape(source.platform || "not recorded")}</div>
+              <div><strong>Source name:</strong> ${adminEscape(source.source_name || "not recorded")}</div>
+              <div><strong>First posted:</strong> ${adminEscape(source.first_posted_online || "not recorded")}</div>
+              ${sourceUrl ? `<a href="${adminAttr(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex mt-2 font-black text-blue-700 underline underline-offset-2">Open original evidence</a>` : `<div class="mt-2 text-amber-700 font-bold">No source URL stored. Do not approve found-online listings without evidence.</div>`}
+            </div>
+          </section>
+        </div>
+        <div class="space-y-4">
+          <section class="rounded-xl border ${duplicates.count ? "border-red-200 bg-red-50" : "border-emerald-100 bg-emerald-50"} p-4">
+            <h4 class="font-black ${duplicates.count ? "text-red-900" : "text-emerald-950"}">Duplicate check</h4>
+            <p class="text-xs mt-1 ${duplicates.count ? "text-red-800" : "text-emerald-900"}">${duplicates.count ? `${staffNumber(duplicates.count)} possible duplicate(s). Compare before approval.` : "No obvious duplicate rows returned by staff preview."}</p>
+            <div class="mt-3 space-y-2 max-h-52 overflow-auto">
+              ${(duplicates.rows || []).slice(0, 8).map((row) => `<div class="rounded-lg bg-white border border-gray-200 p-2 text-xs">
+                <div class="font-black text-gray-900">${adminEscape(row.title || "Duplicate candidate")}</div>
+                <div class="text-gray-500">${adminEscape([row.area, row.district, row.status].filter(Boolean).join(" • "))}</div>
+              </div>`).join("") || ""}
+            </div>
+          </section>
+          <section class="rounded-xl border border-amber-100 bg-amber-50 p-4">
+            <h4 class="font-black text-amber-950">Location guardrail</h4>
+            <p class="text-xs text-amber-900 mt-1">Location is non-negotiable. Known hierarchy warnings block staff save/approval until corrected.</p>
+            ${(location.warnings || []).length ? `<div class="mt-2 rounded-lg bg-white border border-red-100 p-2 text-xs text-red-800">${(location.warnings || []).map((w) => adminEscape(w)).join("<br>")}</div>` : `<div class="mt-2 text-xs text-emerald-800 font-bold">No known area/district mismatch detected.</div>`}
+          </section>
+          <section class="rounded-xl border border-gray-200 p-4">
+            <h4 class="font-black text-gray-900">Internal review notes</h4>
+            <textarea id="staff-preview-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(review.notes || "")}</textarea>
+            <textarea id="staff-preview-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(review.reason || "")}</textarea>
+          </section>
+          <section class="rounded-xl border border-gray-200 p-4">
+            <h4 class="font-black text-gray-900">Decision</h4>
+            <div class="mt-3 grid gap-2">
+              <button type="button" onclick="saveStaffListingPreview(${propertyIdArg(preview.id)})" class="border border-slate-300 text-slate-800 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-black">Save preview changes</button>
+              <button type="button" onclick="staffApprovePreviewListing(${propertyIdArg(preview.id)})" class="bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl px-4 py-2 text-sm font-black">Approve live after preview</button>
+              <button type="button" onclick="staffRejectPreviewListing(${propertyIdArg(preview.id)})" class="bg-red-600 hover:bg-red-500 text-white rounded-xl px-4 py-2 text-sm font-black">Reject with reason</button>
+              <button type="button" onclick="staffModerateListing(${propertyIdArg(preview.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl px-4 py-2 text-sm font-black">Keep pending</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-3">Approve uses the same live publish API as King moderation. If checklist warnings remain, the backend will block approval.</p>
+          </section>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+function closeStaffListingPreview() {
+  document.getElementById("staff-listing-preview-modal")?.remove();
+}
+
+function staffListingPreviewPatch() {
+  const get = (id) => document.getElementById(id)?.value ?? "";
+  return {
+    title: get("staff-preview-title"),
+    description: get("staff-preview-description"),
+    listing_type: get("staff-preview-listing-type"),
+    property_type: get("staff-preview-property-type"),
+    price: get("staff-preview-price"),
+    price_period: get("staff-preview-price-period"),
+    title_type: get("staff-preview-title-type"),
+    region: get("staff-preview-region"),
+    district: get("staff-preview-district"),
+    city: get("staff-preview-city"),
+    neighborhood: get("staff-preview-neighborhood"),
+    area: get("staff-preview-area"),
+    address: get("staff-preview-address"),
+    lister_name: get("staff-preview-lister-name"),
+    lister_phone: get("staff-preview-lister-phone"),
+    lister_email: get("staff-preview-lister-email"),
+    bedrooms: get("staff-preview-bedrooms"),
+    bathrooms: get("staff-preview-bathrooms")
+  };
+}
+
+function staffReviewPatch() {
+  return {
+    notes: document.getElementById("staff-preview-review-notes")?.value || "",
+    reason: document.getElementById("staff-preview-reason")?.value || "",
+    checklist: {
+      preview_opened: true,
+      location_checked: true,
+      duplicate_checked: true,
+      contact_checked: true,
+      source_evidence_checked: true
+    },
+    stage: "in_review"
+  };
+}
+
+async function openStaffListingPreview(propertyId) {
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
+    renderStaffListingPreviewModal(response?.data || {});
+  } catch (error) {
+    toast(`Preview failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function saveStaffListingPreview(propertyId) {
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`, {
+      method: "PATCH",
+      body: {
+        listing: staffListingPreviewPatch(),
+        ...staffReviewPatch()
+      }
+    });
+    renderStaffListingPreviewModal(response?.data || {});
+    await renderStaffDashboard();
+    toast("Preview changes saved.");
+    return response?.data || null;
+  } catch (error) {
+    toast(`Preview save failed: ${error.message || "request failed"}`);
+    throw error;
+  }
+}
+
+async function staffApprovePreviewListing(propertyId) {
+  const ok = window.confirm("Approve this listing live after the saved preview facts? It will appear on the public website if backend checks pass.");
+  if (!ok) return;
+  try {
+    await saveStaffListingPreview(propertyId);
+    const review = staffReviewPatch();
+    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+      method: "PATCH",
+      body: {
+        status: "approved",
+        reason: review.reason || "Staff approved after previewing and saving listing facts",
+        review_notes: review.notes || "Staff preview completed before approval",
+        checklist: review.checklist,
+        manual_notification_only: true
+      }
+    });
+    closeStaffListingPreview();
+    await refreshPublicListingsFromApi({ silent: true });
+    await renderStaffDashboard();
+    toast("Listing approved and live.");
+  } catch (error) {
+    toast(`Approval blocked: ${error.message || "backend checks failed"}`);
+  }
+}
+
+async function staffRejectPreviewListing(propertyId) {
+  const review = staffReviewPatch();
+  const reason = review.reason || window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
+  if (!reason.trim()) return;
+  try {
+    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+      method: "PATCH",
+      body: {
+        status: "rejected",
+        reason,
+        review_notes: review.notes || "Rejected from staff preview",
+        checklist: review.checklist,
+        manual_notification_only: true
+      }
+    });
+    closeStaffListingPreview();
+    await renderStaffDashboard();
+    toast("Listing rejected.");
+  } catch (error) {
+    toast(`Reject failed: ${error.message || "request failed"}`);
+  }
+}
+
 async function staffModerateListing(propertyId, status) {
   const cleanStatus = String(status || "").trim().toLowerCase();
+  if (cleanStatus === "approved") {
+    await openStaffListingPreview(propertyId);
+    return;
+  }
   let reason = cleanStatus === "approved"
     ? "Staff approved after moderation review"
     : "Staff moderation update";
@@ -9410,15 +9909,43 @@ async function askStaffAssistant(event) {
       body: { question }
     });
     if (answer) {
+      const contacts = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
+      staffAiLastCsv = res?.data?.csv || "";
       answer.innerHTML = `
         <div class="font-black text-slate-900">${adminEscape(res?.data?.model || "staff assistant")}</div>
-        <div class="mt-2 whitespace-pre-line">${adminEscape(res?.data?.answer || "No answer returned.")}</div>`;
+        <div class="mt-2 whitespace-pre-line">${adminEscape(res?.data?.answer || "No answer returned.")}</div>
+        ${contacts.length ? `
+          <div class="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="font-black text-emerald-950">${staffNumber(contacts.length)} contact row${contacts.length === 1 ? "" : "s"}</div>
+              <button type="button" onclick="copyStaffAiCsv()" class="border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-xs font-black">Copy CSV</button>
+            </div>
+            <div class="mt-2 max-h-60 overflow-auto space-y-2">
+              ${contacts.slice(0, 12).map((row) => `
+                <div class="rounded-lg bg-white border border-emerald-100 p-2 text-xs">
+                  <div class="font-black text-slate-900">${adminEscape(row.name || row.label || row.source || "Contact")}</div>
+                  <div class="text-slate-600">${adminEscape([row.phone, row.email, row.location].filter(Boolean).join(" • "))}</div>
+                  <div class="text-slate-400">${adminEscape([row.source, row.status, row.reference].filter(Boolean).join(" • "))}</div>
+                </div>
+              `).join("")}
+            </div>
+          </div>` : ""}`;
     }
     await renderStaffDashboard();
   } catch (error) {
     if (answer) answer.textContent = error.message || "Staff assistant failed.";
     toast(`Staff AI failed: ${error.message || "request failed"}`);
   }
+}
+
+async function copyStaffAiCsv() {
+  if (!staffAiLastCsv) {
+    toast("No CSV contact list is available yet.");
+    return;
+  }
+  const copied = await copyTextToClipboard(staffAiLastCsv);
+  toast(copied ? "CSV copied." : "CSV ready to copy.");
+  if (!copied) window.prompt("Copy staff contact CSV", staffAiLastCsv);
 }
 
 async function submitAdvertiserDashboardCampaign(event) {
