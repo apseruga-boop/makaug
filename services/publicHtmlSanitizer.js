@@ -6,6 +6,7 @@ const PROTECTED_ROUTE_PREFIXES = [
   '/student-dashboard',
   '/broker-dashboard',
   '/field-agent-dashboard',
+  '/staff-dashboard',
   '/advertiser-dashboard',
   '/admin',
   '/king',
@@ -29,6 +30,8 @@ const PUBLIC_FORBIDDEN_STRINGS = [
   'Student Dashboard',
   'Broker Dashboard',
   'Field Agent Dashboard',
+  'Staff Operations Dashboard',
+  'Moderator Dashboard',
   'Advertiser Dashboard',
   'Admin Dashboard',
   'King Dashboard',
@@ -349,6 +352,7 @@ function roleCanAccessProtectedPath(auth = {}, pathname = '') {
   if (pathName.startsWith('/admin')) return isAdminRole;
   if (pathName.startsWith('/broker-dashboard')) return role === 'agent_broker' || isAdminRole;
   if (pathName.startsWith('/field-agent-dashboard')) return role === 'field_agent' || isAdminRole;
+  if (pathName.startsWith('/staff-dashboard')) return role === 'moderator' || isAdminRole;
   if (pathName.startsWith('/student-dashboard')) return isAdminRole || audience === 'student';
   if (pathName.startsWith('/advertiser-dashboard')) return isAdminRole || audience === 'advertiser';
   if (pathName.startsWith('/dashboard')) return isAdminRole || audience === 'finder' || audience === 'property_finder' || !audience;
@@ -487,7 +491,7 @@ function renderSyntheticRouteContent(pathname = '/') {
     '/students': 'students'
   }[pathName] || '';
   const videoSection = videoContext
-    ? `<section class="max-w-5xl mx-auto px-4 pb-10"><div class="rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="${videoContext}"></div></section>`
+    ? `<section class="max-w-5xl mx-auto px-4 pb-10"><div class="hidden rounded-3xl bg-white border border-green-100 p-5 md:p-6" data-howto-video-grid="${videoContext}"></div></section>`
     : '';
   return `
   <main id="page-${pathName.slice(1).replace(/[^a-z0-9-]/g, '-')}" class="page active" data-public-route="${pathName}">

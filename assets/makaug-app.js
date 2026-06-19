@@ -8,18 +8,18 @@ const publicBrand = () => BrandConfig.productDisplayName;
 const normalizeType = (t) => (t === "students" ? "student" : t);
 
 const DISTRICTS = [
-  "Abim","Adjumani","Agago","Alebtong","Amolatar","Amudat","Amuria","Amuru","Apac","Arua","Budaka","Bududa","Bugiri","Bugweri","Buhweju","Buikwe","Bukedea","Bukomansimbi","Bukwo","Bulambuli","Buliisa","Bundibugyo","Bunyangabu","Bushenyi","Busia","Butaleja","Butebo","Buvuma","Buyende","Dokolo","Gomba","Gulu","Hoima","Ibanda","Iganga","Isingiro","Jinja","Kaabong","Kabale","Kabarole","Kaberamaido","Kagadi","Kakumiro","Kalaki","Kalangala","Kaliro","Kalungu","Kampala","Kamuli","Kamwenge","Kanungu","Kapchorwa","Kapelebyong","Karenga","Kasanda","Kasese","Katakwi","Kayunga","Kazo","Kibaale","Kiboga","Kibuku","Kikuube","Kiruhura","Kiryandongo","Kisoro","Kitagwenda","Kitgum","Koboko","Kole","Kotido","Kumi","Kwania","Kween","Kyankwanzi","Kyegegwa","Kyenjojo","Kyotera","Lamwo","Lira","Luuka","Luwero","Lwengo","Lyantonde","Madi-Okollo","Manafwa","Maracha","Masaka","Masindi","Mayuge","Mbale","Mbarara","Mitooma","Mityana","Moroto","Moyo","Mpigi","Mubende","Mukono","Nabilatuk","Nakapiripirit","Nakaseke","Nakasongola","Namayingo","Namisindwa","Namutumba","Napak","Nebbi","Ngora","Ntoroko","Ntungamo","Nwoya","Obongi","Omoro","Otuke","Oyam","Pader","Pakwach","Pallisa","Rakai","Rubanda","Rubirizi","Rukiga","Rukungiri","Sembabule","Serere","Sheema","Sironko","Soroti","Tororo","Wakiso","Yumbe","Zombo"
+  "Abim","Adjumani","Agago","Alebtong","Amolatar","Amudat","Amuria","Amuru","Apac","Arua","Budaka","Bududa","Bugiri","Bugweri","Buhweju","Buikwe","Bukedea","Bukomansimbi","Bukwo","Bulambuli","Buliisa","Bundibugyo","Bunyangabu","Bushenyi","Busia","Butaleja","Butambala","Butebo","Buvuma","Buyende","Dokolo","Gomba","Gulu","Hoima","Ibanda","Iganga","Isingiro","Jinja","Kaabong","Kabale","Kabarole","Kaberamaido","Kagadi","Kakumiro","Kalaki","Kalangala","Kaliro","Kalungu","Kampala","Kamuli","Kamwenge","Kanungu","Kapchorwa","Kapelebyong","Karenga","Kasanda","Kasese","Katakwi","Kayunga","Kazo","Kibaale","Kiboga","Kibuku","Kikuube","Kiruhura","Kiryandongo","Kisoro","Kitagwenda","Kitgum","Koboko","Kole","Kotido","Kumi","Kwania","Kween","Kyankwanzi","Kyegegwa","Kyenjojo","Kyotera","Lamwo","Lira","Luuka","Luwero","Lwengo","Lyantonde","Madi-Okollo","Manafwa","Maracha","Masaka","Masindi","Mayuge","Mbale","Mbarara","Mitooma","Mityana","Moroto","Moyo","Mpigi","Mubende","Mukono","Nabilatuk","Nakapiripirit","Nakaseke","Nakasongola","Namayingo","Namisindwa","Namutumba","Napak","Nebbi","Ngora","Ntoroko","Ntungamo","Nwoya","Obongi","Omoro","Otuke","Oyam","Pader","Pakwach","Pallisa","Rakai","Rubanda","Rubirizi","Rukiga","Rukungiri","Sembabule","Serere","Sheema","Sironko","Soroti","Tororo","Wakiso","Yumbe","Zombo"
 ];
 const UGANDA_REGIONS = ["Central Region","Western Region","Eastern Region","Northern Region","Greater Kampala Metropolitan Area"];
 const LOCATION_HINTS = [
-  "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Kabale","Fort Portal","Soroti","Iganga",
+  "Kampala","Entebbe","Mukono","Wakiso","Jinja","Mbarara","Gulu","Mbale","Arua","Lira","Masaka","Hoima","Masindi","Kabale","Fort Portal","Soroti","Iganga",
   "Mukono Town","Kira","Nansana","Bweyogerere","Kira Town","Kasangati","Kireka","Naalya","Namugongo","Gayaza","Lugazi","Njeru","Seeta","Busega",
   "Makindye","Muyenga","Bugolobi","Kololo","Nakasero","Ntinda","Kyaliwajjala","Kisaasi","Bukoto","Najjera","Mutungo","Mbuya","Wandegeya","Kikoni",
   "Kamwokya","Kawempe","Rubaga","Najjanankumbi","Katwe","Kibuli","Lubowa","Buziga","Ggaba","Kansanga","Muyenga Tank Hill","Kampala Road",
   "Industrial Area","Nakawa","Luzira","Munyonyo","Kireka Namugongo Road","Bombo Road","Gayaza Road","Kyanja","Kyanja Ring Road","Kiwatule",
   "Kyebando","Naguru","Makerere","Old Kampala","Mengo","Kasubi","Lungujja","Nateete","Salaama","Bunga","Kabalagala","Muyenga Bukasa",
   "Kitende","Kajjansi","Seguku","Bwebajja","Kitukutwe","Bulindo","Sonde","Naalya Estate","Namanve","Goma","Bweyogerere Industrial Park",
-  "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Soroti City","Kabale Town","Fort Portal City"
+  "Mbarara Town","Jinja Town","Mbale Town","Arua Town","Lira City","Gulu City","Masaka City","Hoima City","Masindi Town","Soroti City","Kabale Town","Fort Portal City"
 ];
 
 const PROPERTIES = [
@@ -343,9 +343,11 @@ const UG_AREA_PIN_OVERRIDES = [
   { name: "Bujjuko Akright Estate", district: "Wakiso", lat: 0.374, lng: 32.389, aliases: ["Bujjuko Akright", "Bujuuko Akright", "Akright", "Bujjuko", "Bujuuko"] },
   { name: "Kakiri", district: "Wakiso", lat: 0.409, lng: 32.38, aliases: ["Kakiri", "Kakiri Masulita", "Kakiri Masulita Hoima Road", "Hoima Road"] },
   { name: "Masulita", district: "Wakiso", lat: 0.51, lng: 32.46, aliases: ["Masulita"] },
+  { name: "Masindi", district: "Masindi", lat: 1.683, lng: 31.715, aliases: ["Masindi", "Masindi Town", "Masindi Municipality"] },
   { name: "Kira", district: "Wakiso", lat: 0.3978, lng: 32.6414, aliases: ["Kira", "Kira Town"] },
   { name: "Kira-Mulawa", district: "Wakiso", lat: 0.412, lng: 32.65, aliases: ["Kira-Mulawa", "Kira Mulawa", "Mulawa"] },
   { name: "Kira-Nsasa", district: "Wakiso", lat: 0.428, lng: 32.665, aliases: ["Kira-Nsasa", "Kira Nsasa", "Nsasa"] },
+  { name: "Nansana", district: "Wakiso", lat: 0.364, lng: 32.52, aliases: ["Nansana", "Nansana Municipality", "Nansana Town"] },
   { name: "Namugongo", district: "Wakiso", lat: 0.363, lng: 32.636, aliases: ["Namugongo"] },
   { name: "Najjera", district: "Wakiso", lat: 0.396, lng: 32.615, aliases: ["Najjera", "Najjeera"] },
   { name: "Kitende", district: "Wakiso", lat: 0.197, lng: 32.535, aliases: ["Kitende"] },
@@ -612,6 +614,7 @@ let authSignUpOtpChannel = "phone";
 let adminApiKey = "";
 let adminRemoteListings = [];
 let adminLiveListings = [];
+let adminPublicInventoryParity = {};
 let adminRemoteAgents = [];
 let adminPropertyRequests = [];
 let adminFieldAgents = [];
@@ -638,6 +641,8 @@ let adminActiveReview = null;
 let activeAdminWorkflowTab = "review";
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
+const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
+let adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
 let adminReviewEvidence = {};
 let adminReviewEvidenceViewed = {};
 let adminReviewWarningOverrides = {};
@@ -654,6 +659,7 @@ let publicListingsApiLoading = false;
 let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
 let publicListingsApiTotal = null;
+let publicListingsApiStats = null;
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -5097,7 +5103,29 @@ function applyFraudLanguageUI() {
   setTextById("fraud-example-4-sub", fraudTr("example4Sub"));
 }
 
+function normalizeHeroOpportunityStats(raw = {}) {
+  const source = raw?.public_opportunities || raw?.category_counts || raw?.by_type || raw || {};
+  const nested = source.by_type || source.category_counts || {};
+  const numberFrom = (key) => Number(source[key] ?? nested[key] ?? 0) || 0;
+  const stats = {
+    total: Number(source.total ?? raw?.total ?? 0) || 0,
+    sale: numberFrom("sale"),
+    rent: numberFrom("rent"),
+    student: numberFrom("student"),
+    commercial: numberFrom("commercial"),
+    land: numberFrom("land"),
+    other: numberFrom("other"),
+    social: numberFrom("social")
+  };
+  const categoryTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
+  if (!stats.total) stats.total = categoryTotal;
+  return stats.total || categoryTotal ? stats : null;
+}
+
 function getHeroPropertyOpportunityStats() {
+  if (publicListingsApiStats) {
+    return { ...publicListingsApiStats };
+  }
   let publicListings = [];
   try {
     publicListings = typeof getPublicListings === "function"
@@ -5697,12 +5725,14 @@ function persistAdminApiKey(value) {
 	      const preferred = String(preferredAudience || "").toLowerCase();
 	      const profileData = user?.profile_data && typeof user.profile_data === "object" && !Array.isArray(user.profile_data) ? user.profile_data : {};
 	      if (preferred === "admin" || preferred === "super_admin") return "admin";
+  if (preferred === "moderator" || preferred === "staff" || preferred === "operations") return "moderator";
   if (preferred === "field_agent" || preferred === "field") return "field_agent";
   if (preferred === "agent") return "agent";
   if (preferred === "advertiser") return "advertiser";
   if (preferred === "student") return "student";
   if (preferred === "finder") return "finder";
 	      if (user?.role === "admin" || user?.role === "super_admin") return "admin";
+  if (user?.role === "moderator" || profileData.staff_dashboard_enabled === true || String(profileData.staff_dashboard_enabled || "").toLowerCase() === "true") return "moderator";
   if (user?.role === "field_agent") return "field_agent";
   if (user?.role === "agent_broker") return "agent";
   if (profileData.account_kind === "advertiser" || profileData.audience === "advertiser") return "advertiser";
@@ -5718,7 +5748,8 @@ function portalModeForDashboardUrl(url = "") {
     "/student-dashboard": "student",
     "/broker-dashboard": "agent",
     "/field-agent-dashboard": "field_agent",
-    "/advertiser-dashboard": "advertiser"
+    "/advertiser-dashboard": "advertiser",
+    "/staff-dashboard": "moderator"
   }[path] || "";
 }
 
@@ -5729,7 +5760,8 @@ function dashboardRouteForPortalMode(mode = "finder") {
     student: "/student-dashboard",
     agent: "/broker-dashboard",
     field_agent: "/field-agent-dashboard",
-    advertiser: "/advertiser-dashboard"
+    advertiser: "/advertiser-dashboard",
+    moderator: "/staff-dashboard"
   }[String(mode || "finder").toLowerCase()] || "/dashboard";
 }
 
@@ -5740,7 +5772,8 @@ function dashboardPageForPortalMode(mode = "finder") {
     student: "student-dashboard",
     agent: "agent-dashboard",
     field_agent: "field-dashboard",
-    advertiser: "advertiser-dashboard"
+    advertiser: "advertiser-dashboard",
+    moderator: "staff-dashboard"
   }[String(mode || "finder").toLowerCase()] || "finder-dashboard";
 }
 
@@ -6915,6 +6948,10 @@ function updateAuthSignInUi() {
       if (audienceHelp) audienceHelp.textContent = "Admin: internal platform control for moderation, approvals, and operations.";
       if (identifierLabel) identifierLabel.textContent = "Admin Email or Phone";
       if (identifierInput) identifierInput.placeholder = "staff email or +256 7XX XXX XXX";
+    } else if (authSignInAudience === "moderator") {
+      if (audienceHelp) audienceHelp.textContent = "Staff: restricted operations access for moderation, leads, advertising, WhatsApp follow-up, and training.";
+      if (identifierLabel) identifierLabel.textContent = "Staff Email or Phone";
+      if (identifierInput) identifierInput.placeholder = "moderator email or +256 7XX XXX XXX";
     } else if (authSignInAudience === "agent") {
       if (audienceHelp) audienceHelp.textContent = "Broker: licensed or active property professional who lists and manages properties.";
       if (identifierLabel) identifierLabel.textContent = "Phone Number or Email";
@@ -6959,17 +6996,21 @@ function setAuthSignInAudience(mode) {
         ? "student"
         : (normalized === "advertiser"
           ? "advertiser"
-          : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
+          : (normalized === "moderator" || normalized === "staff" || normalized === "operations"
+            ? "moderator"
+            : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")))));
   setAudienceButtonState(
     authSignInAudience === "admin"
       ? "auth-audience-admin"
+      : (authSignInAudience === "moderator"
+        ? "auth-audience-admin"
       : (authSignInAudience === "agent"
         ? "auth-audience-agent"
         : (authSignInAudience === "student"
           ? "auth-audience-student"
           : (authSignInAudience === "advertiser"
             ? "auth-audience-advertiser"
-            : (authSignInAudience === "field_agent" ? "auth-audience-field" : "auth-audience-finder")))),
+            : (authSignInAudience === "field_agent" ? "auth-audience-field" : "auth-audience-finder"))))),
     ["auth-audience-finder", "auth-audience-student", "auth-audience-agent", "auth-audience-field", "auth-audience-advertiser", "auth-audience-admin"]
   );
   updateAdminAccessEntrypoints();
@@ -7152,6 +7193,9 @@ function setAuthSignUpAudience(mode) {
 	      if (mode === "admin") {
 	        showPage("admin-dashboard");
 	        renderAdminDashboard();
+  } else if (mode === "moderator") {
+    showPage("staff-dashboard");
+    renderStaffDashboard();
   } else if (mode === "agent") {
     showPage("agent-dashboard");
     renderAgentDashboard();
@@ -8065,7 +8109,7 @@ function renderBrokerProfilePreview(broker = {}, listings = [], stats = {}) {
           <p class="text-sm text-gray-600 mt-2">${adminEscape(broker.bio || "Add a short broker bio so clients know where you work and what you handle.")}</p>
           <div class="grid sm:grid-cols-3 gap-2 mt-4 text-center">
             <div class="rounded-xl bg-white border border-green-100 p-3">
-              <div class="text-2xl font-black text-green-900">${brokerMetric(stats.active_listings ?? listings.filter((item) => item.status === "approved").length)}</div>
+              <div class="text-2xl font-black text-green-900">${brokerMetric(stats.active_listings ?? listings.filter((item) => normalizeModerationStatus(item.status) === "approved").length)}</div>
               <div class="text-xs text-green-800">Active Listings</div>
             </div>
             <div class="rounded-xl bg-white border border-amber-100 p-3">
@@ -8590,7 +8634,7 @@ async function renderAgentDashboard() {
   const totalViews = Number(stats.listing_views ?? myListings.reduce((sum, p) => sum + getPropertyViewCount(p.id), 0));
   const totalSaves = Number(stats.listing_saves ?? myListings.reduce((sum, p) => sum + getPropertySaveCount(p.id), 0));
   const profileViews = Number(stats.profile_views ?? getBrokerProfileViewCount(broker.id));
-  const activeCount = Number(stats.active_listings ?? myListings.filter((item) => item.status === "approved").length);
+  const activeCount = Number(stats.active_listings ?? myListings.filter((item) => normalizeModerationStatus(item.status) === "approved").length);
   const leadCount = Number(stats.lead_enquiries ?? myListings.reduce((sum, p) => sum + brokerListingLeadCount(p), 0));
 
   if (nameEl) nameEl.textContent = broker.name || "makaug broker";
@@ -8798,7 +8842,7 @@ async function renderFieldDashboard() {
   const sourcedListings = Array.isArray(liveDashboard?.listings)
     ? liveDashboard.listings.map((item) => ({ ...item, review_status: item.status || inferFieldListingStatus(item) }))
     : getFieldSourceListingsForUser(user);
-  const approved = sourcedListings.filter((p) => p.review_status === "approved" || p.status === "approved");
+  const approved = sourcedListings.filter((p) => normalizeModerationStatus(p.review_status || p.status) === "approved");
   const rejected = sourcedListings.filter((p) => p.review_status === "rejected" || p.status === "rejected");
   const pending = sourcedListings.filter((p) => ["pending", "draft", "submitted"].includes(String(p.review_status || p.status || "").toLowerCase()));
   const submitted = Number.isFinite(Number(liveStats.submitted)) ? Number(liveStats.submitted) : sourcedListings.length;
@@ -9085,6 +9129,291 @@ async function renderAdvertiserDashboard() {
     setTextById("advertiser-stat-spend", "UGX 0");
   }
   await hydrateAdvertiserDashboardPlacements();
+}
+
+function staffNumber(value) {
+  return Number(value || 0).toLocaleString("en-UG");
+}
+
+function staffDate(value) {
+  return value ? formatListingDate(value) : "not recorded";
+}
+
+function staffEmpty(label) {
+  return `<div class="rounded-xl bg-gray-50 border border-gray-200 p-4 text-sm text-gray-500">${adminEscape(label)}</div>`;
+}
+
+function renderStaffReviewQueue(rows = []) {
+  const wrap = document.getElementById("staff-review-queue");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No listings are waiting for staff review.");
+    return;
+  }
+  wrap.innerHTML = rows.map((item) => {
+    const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
+    const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
+    return `
+      <article class="border border-gray-200 rounded-2xl p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
+            <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
+            ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
+          </div>
+          <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'approved')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-check mr-1"></i>Approve live</button>
+          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject</button>
+          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function renderStaffLeads(rows = []) {
+  const wrap = document.getElementById("staff-leads-list");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No open or assigned leads are available.");
+    return;
+  }
+  wrap.innerHTML = rows.map((lead) => {
+    const contact = lead.contact_name || lead.contact_phone || lead.contact_email || lead.contact_whatsapp || "Contact pending";
+    const label = [lead.location, lead.category, lead.listing_title].filter(Boolean).join(" • ") || lead.lead_type || "Lead";
+    return `
+      <article class="border border-gray-200 rounded-xl p-3">
+        <div class="font-black text-gray-900">${adminEscape(contact)}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape(label)}</div>
+        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(lead.lead_status || "open")} • Priority: ${adminEscape(lead.priority || "normal")}</div>
+        ${lead.message ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(lead.message).slice(0, 180)}</div>` : ""}
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="staffClaimLead(${adminListingIdArg(lead.id)})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
+          <button type="button" onclick="staffAddLeadNote(${adminListingIdArg(lead.id)})" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Add note</button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function renderStaffAdvertising(rows = []) {
+  const wrap = document.getElementById("staff-advertising-list");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No open advertising inquiries are available.");
+    return;
+  }
+  wrap.innerHTML = rows.map((item) => {
+    const budget = item.estimated_value_ugx || item.budget_ugx || 0;
+    return `
+      <article class="border border-gray-200 rounded-xl p-3">
+        <div class="font-black text-gray-900">${adminEscape(item.business_name || item.full_name || "Advertiser lead")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape(item.phone || item.email || "contact pending")}</div>
+        <div class="text-xs text-gray-600 mt-1">Status: ${adminEscape(item.status || "new")} • Pipeline: ${adminEscape(adMoney(budget))}</div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" onclick="staffClaimAdInquiry(${adminListingIdArg(item.id)})" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-black">Claim</button>
+          <button type="button" onclick="staffUpdateAdInquiryStatus(${adminListingIdArg(item.id)}, 'contacted')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-black">Contacted</button>
+          <button type="button" onclick="staffUpdateAdInquiryStatus(${adminListingIdArg(item.id)}, 'proposal_sent')" class="border border-emerald-200 text-emerald-700 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-black">Proposal sent</button>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function renderStaffWhatsapp(rows = []) {
+  const wrap = document.getElementById("staff-whatsapp-list");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No WhatsApp conversations need staff attention.");
+    return;
+  }
+  wrap.innerHTML = rows.map((item) => {
+    const phone = String(item.phone || "").replace(/[^0-9]/g, "");
+    return `
+      <article class="border border-gray-200 rounded-xl p-3">
+        <div class="font-black text-gray-900">${adminEscape(item.phone || "WhatsApp contact")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape(item.category || "conversation")} • ${adminEscape(item.priority || "normal")} • ${adminEscape(item.status || "open")}</div>
+        ${item.latest_preview ? `<div class="mt-2 text-xs text-gray-700">${adminEscape(item.latest_preview).slice(0, 180)}</div>` : ""}
+        <div class="mt-3 flex flex-wrap gap-2">
+          ${phone ? `<a href="https://wa.me/${adminAttr(phone)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Open WhatsApp</a>` : ""}
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function renderStaffActivity(rows = []) {
+  const wrap = document.getElementById("staff-activity-list");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("Your activity trail will appear here.");
+    return;
+  }
+  wrap.innerHTML = rows.slice(0, 12).map((item) => `
+    <div class="rounded-xl bg-gray-50 border border-gray-200 p-3">
+      <div class="font-black text-gray-900">${adminEscape(String(item.action || "").replace(/_/g, " "))}</div>
+      <div class="text-xs text-gray-500 mt-1">${adminEscape(item.target_type || "dashboard")} • ${adminEscape(staffDate(item.created_at))}</div>
+    </div>`).join("");
+}
+
+function renderStaffTraining(training = {}) {
+  const wrap = document.getElementById("staff-training-guide");
+  if (!wrap) return;
+  const sections = [
+    ["Moderation", training.moderation || []],
+    ["Lead generation", training.leads || []],
+    ["Advertising sales", training.advertising || []],
+    ["Scripts", training.scripts || []]
+  ];
+  wrap.innerHTML = sections.map(([title, items]) => `
+    <section class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <h4 class="font-black text-gray-900">${adminEscape(title)}</h4>
+      <ul class="mt-2 space-y-2 text-xs text-gray-700">
+        ${(items || []).slice(0, 5).map((item) => `<li>${adminEscape(item)}</li>`).join("") || "<li>No guide notes yet.</li>"}
+      </ul>
+    </section>`).join("");
+}
+
+async function renderStaffDashboard() {
+  const gate = document.getElementById("staff-auth-gate");
+  const body = document.getElementById("staff-body");
+  if (!gate || !body) return;
+  const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
+  if (!authState?.user || !["moderator", "admin"].includes(mode)) {
+    gate.classList.remove("hidden");
+    body.classList.add("hidden");
+    return;
+  }
+  gate.classList.add("hidden");
+  body.classList.remove("hidden");
+  const user = authState.user || {};
+  setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
+  setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
+  try {
+    const res = await apiRequest("/api/staff/dashboard");
+    const data = res?.data || {};
+    setTextById("staff-stat-pending", staffNumber(data.summary?.listings?.pending_review));
+    setTextById("staff-stat-approvals", staffNumber(data.summary?.my_moderation?.approvals));
+    setTextById("staff-stat-leads", staffNumber(data.summary?.leads?.open));
+    setTextById("staff-stat-ads", staffNumber(data.summary?.advertising?.open_inquiries));
+    setTextById("staff-stat-whatsapp", staffNumber(data.summary?.whatsapp?.needs_human));
+    renderStaffReviewQueue(data.review_queue || []);
+    renderStaffLeads(data.leads || []);
+    renderStaffAdvertising(data.advertising_inquiries || []);
+    renderStaffWhatsapp(data.whatsapp_conversations || []);
+    renderStaffActivity(data.recent_activity || []);
+    renderStaffTraining(data.training || {});
+  } catch (error) {
+    renderStaffReviewQueue([]);
+    renderStaffLeads([]);
+    renderStaffAdvertising([]);
+    renderStaffWhatsapp([]);
+    renderStaffActivity([]);
+    renderStaffTraining({});
+    toast(`Staff dashboard failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffModerateListing(propertyId, status) {
+  const cleanStatus = String(status || "").trim().toLowerCase();
+  let reason = cleanStatus === "approved"
+    ? "Staff approved after moderation review"
+    : "Staff moderation update";
+  if (cleanStatus === "rejected") {
+    reason = window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
+    if (!reason.trim()) return;
+  }
+  try {
+    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+      method: "PATCH",
+      body: { status: cleanStatus, reason }
+    });
+    await refreshPublicListingsFromApi({ silent: true });
+    await renderStaffDashboard();
+    toast(cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`);
+  } catch (error) {
+    toast(`Listing moderation failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffClaimLead(leadId) {
+  try {
+    await apiRequest(`/api/staff/leads/${encodeURIComponent(leadId)}`, {
+      method: "PATCH",
+      body: { assigned_to_me: true, lead_status: "contacted", note: "Lead claimed by staff dashboard" }
+    });
+    await renderStaffDashboard();
+    toast("Lead claimed.");
+  } catch (error) {
+    toast(`Lead update failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffAddLeadNote(leadId) {
+  const note = window.prompt("Add lead activity note:", "");
+  if (!note || !note.trim()) return;
+  try {
+    await apiRequest(`/api/staff/leads/${encodeURIComponent(leadId)}/activities`, {
+      method: "POST",
+      body: { activity_type: "note", message: note.trim() }
+    });
+    await renderStaffDashboard();
+    toast("Lead note saved.");
+  } catch (error) {
+    toast(`Lead note failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffClaimAdInquiry(inquiryId) {
+  try {
+    await apiRequest(`/api/staff/advertising/inquiries/${encodeURIComponent(inquiryId)}`, {
+      method: "PATCH",
+      body: { assigned_to_me: true, status: "contacted" }
+    });
+    await renderStaffDashboard();
+    toast("Advertising inquiry claimed.");
+  } catch (error) {
+    toast(`Advertising update failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffUpdateAdInquiryStatus(inquiryId, status) {
+  try {
+    await apiRequest(`/api/staff/advertising/inquiries/${encodeURIComponent(inquiryId)}`, {
+      method: "PATCH",
+      body: { assigned_to_me: true, status }
+    });
+    await renderStaffDashboard();
+    toast(`Advertising inquiry updated: ${status}.`);
+  } catch (error) {
+    toast(`Advertising update failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function askStaffAssistant(event) {
+  event.preventDefault();
+  const input = document.getElementById("staff-ai-question");
+  const answer = document.getElementById("staff-ai-answer");
+  const question = String(input?.value || "").trim();
+  if (!question) {
+    toast("Type a staff data question first.");
+    return;
+  }
+  if (answer) answer.textContent = "Checking makaug data...";
+  try {
+    const res = await apiRequest("/api/staff/assistant/query", {
+      method: "POST",
+      body: { question }
+    });
+    if (answer) {
+      answer.innerHTML = `
+        <div class="font-black text-slate-900">${adminEscape(res?.data?.model || "staff assistant")}</div>
+        <div class="mt-2 whitespace-pre-line">${adminEscape(res?.data?.answer || "No answer returned.")}</div>`;
+    }
+    await renderStaffDashboard();
+  } catch (error) {
+    if (answer) answer.textContent = error.message || "Staff assistant failed.";
+    toast(`Staff AI failed: ${error.message || "request failed"}`);
+  }
 }
 
 async function submitAdvertiserDashboardCampaign(event) {
@@ -9418,6 +9747,7 @@ function adminCommandSelectorForTab(tab = "review") {
     actioned: "#admin-actioned-listings-control",
     live: "#admin-live-followup-control",
     accounts: "#admin-accounts-control",
+    staff: "#admin-staff-control",
     "field-agents": "#admin-field-agent-control",
     ads: "#admin-advertising-control",
     whatsapp: "#admin-whatsapp-control",
@@ -9815,6 +10145,46 @@ function normalizeRemoteAdminListing(p) {
   };
 }
 
+function adminListingMatchesId(item = {}, listingId = "") {
+  const target = String(listingId || "").trim();
+  if (!target) return false;
+  return [item.id, item.backend_id, item.property_id, item.inquiry_reference]
+    .some((value) => String(value || "").trim() === target);
+}
+
+function adminUpsertListingById(list = [], listing = {}, listingId = "") {
+  const source = Array.isArray(list) ? list : [];
+  const id = String(listingId || listing.id || listing.backend_id || "").trim();
+  if (!id) return source;
+  const idx = source.findIndex((item) => adminListingMatchesId(item, id));
+  if (idx >= 0) {
+    source[idx] = { ...source[idx], ...listing };
+  } else {
+    source.unshift({ ...listing, id: listing.id || id, backend_id: listing.backend_id || id });
+  }
+  return source;
+}
+
+function adminRemoveListingById(list = [], listingId = "") {
+  const source = Array.isArray(list) ? list : [];
+  const id = String(listingId || "").trim();
+  if (!id) return source;
+  return source.filter((item) => !adminListingMatchesId(item, id));
+}
+
+function adminSetNumericText(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = String(Math.max(0, Number(value) || 0));
+}
+
+function adminAdjustNumericText(id, delta) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const current = Number(String(el.textContent || "0").replace(/[^\d.-]/g, "")) || 0;
+  adminSetNumericText(id, current + Number(delta || 0));
+}
+
 function adminEscape(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -10014,12 +10384,14 @@ function adminFoundOnlineSourceSummaryHtml(row = {}, options = {}) {
     </div>`;
 }
 
-function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
+function adminPendingQueueToolbarHtml(rows = [], filteredRows = [], visibleRows = filteredRows) {
   const counts = adminPendingQueueCounts(rows);
   const isFoundOnlineView = adminPendingQueueFilter === "found_online";
+  const visibleCount = Array.isArray(visibleRows) ? visibleRows.length : Number(visibleRows || 0);
+  const hasMore = filteredRows.length > visibleCount;
   const statusText = isFoundOnlineView
-    ? `${adminEscape(filteredRows.length)} found-online source property records are pending review. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
-    : `${adminEscape(filteredRows.length)} of ${adminEscape(rows.length)} pending review records shown. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
+    ? `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} found-online source property records shown. Approved, live, sold, hidden, rejected, and deleted records are excluded from this queue.`
+    : `${adminEscape(visibleCount)} of ${adminEscape(filteredRows.length)} matching records shown from ${adminEscape(rows.length)} pending review records. Approved/live records move to Live & Featured and do not stay in Review Queue.`;
   return `
     <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
       <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -10031,6 +10403,7 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
           ${adminPendingQueueFilterButton("all", "All", counts.all)}
           ${adminPendingQueueFilterButton("found_online", "Found online", counts.found_online)}
           ${adminPendingQueueFilterButton("student", "Student", counts.student)}
+          ${hasMore ? `<button type="button" onclick="adminShowMorePendingQueueRows()" class="bg-white text-blue-700 hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-black">Show more</button>` : ""}
         </div>
       </div>
     </div>`;
@@ -10039,6 +10412,12 @@ function adminPendingQueueToolbarHtml(rows = [], filteredRows = []) {
 function adminSetPendingQueueFilter(filter = "all") {
   const allowed = new Set(["all", "found_online", "student"]);
   adminPendingQueueFilter = allowed.has(String(filter)) ? String(filter) : "all";
+  adminPendingQueueVisibleLimit = ADMIN_PENDING_QUEUE_RENDER_STEP;
+  renderAdminPendingRows(adminCurrentPendingListings);
+}
+
+function adminShowMorePendingQueueRows() {
+  adminPendingQueueVisibleLimit += ADMIN_PENDING_QUEUE_RENDER_STEP;
   renderAdminPendingRows(adminCurrentPendingListings);
 }
 
@@ -10078,7 +10457,7 @@ function adminVerificationBadge(status) {
 }
 
 function setAdminWorkflowTab(tab = "review") {
-  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "field-agents", "ads", "whatsapp", "notifications", "listings"];
+  const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "notifications", "listings"];
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -10097,16 +10476,50 @@ async function fetchAdminPaginatedRows(path, headers, options = {}) {
   const limit = Math.min(Math.max(Number(options.limit || 100), 1), 100);
   const maxPages = Math.min(Math.max(Number(options.maxPages || 10), 1), 500);
   const rows = [];
+  let firstResponse = null;
+  let lastResponse = null;
   let page = 1;
   let totalPages = 1;
   do {
     const separator = path.includes("?") ? "&" : "?";
     const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { headers });
+    if (!firstResponse) firstResponse = response;
+    lastResponse = response;
     rows.push(...(Array.isArray(response?.data) ? response.data : []));
     totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
     page += 1;
   } while (page <= totalPages && page <= maxPages);
+  Object.defineProperty(rows, "adminPagination", {
+    value: lastResponse?.pagination || firstResponse?.pagination || null,
+    enumerable: false
+  });
+  Object.defineProperty(rows, "adminSummary", {
+    value: firstResponse?.summary || lastResponse?.summary || null,
+    enumerable: false
+  });
+  Object.defineProperty(rows, "adminMeta", {
+    value: firstResponse?.meta || lastResponse?.meta || null,
+    enumerable: false
+  });
   return rows;
+}
+
+let adminAllListingsHydrationInFlight = null;
+
+function hydrateAdminAllListingsInBackground(headers) {
+  if (adminAllListingsHydrationInFlight || !canUseLiveAdminApi()) return;
+  adminAllListingsHydrationInFlight = fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 })
+    .then((rows) => {
+      const allListings = (rows || []).map(normalizeRemoteAdminListing);
+      if (!allListings.length) return;
+      adminRemoteListings = allListings;
+      renderAdminActionedRows(allListings);
+      renderAdminAllListingsRows(allListings);
+    })
+    .catch(() => {})
+    .finally(() => {
+      adminAllListingsHydrationInFlight = null;
+    });
 }
 
 async function fetchRemoteAdminSnapshot() {
@@ -10130,12 +10543,12 @@ async function fetchRemoteAdminSnapshot() {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const [summaryRes, commandCentreRes, recentRes, pendingRows, allRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
+  const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     apiRequest("/api/admin/summary", { headers }),
     apiRequest("/api/admin/command-centre", { headers }),
     apiRequest("/api/admin/recent", { headers }),
-    fetchAdminPaginatedRows("/api/properties?status=pending", headers, { maxPages: 500 }),
-    fetchAdminPaginatedRows("/api/properties?status=all", headers, { maxPages: 500 }),
+    fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }),
+    fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }),
     apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }),
     apiRequest("/api/admin/agents?limit=100", { headers }),
     apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }),
@@ -10157,14 +10570,33 @@ async function fetchRemoteAdminSnapshot() {
     apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers })
   ]);
   const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
-  const allListings = (allRows || []).map(normalizeRemoteAdminListing);
-  let liveListings = allListings.filter(adminIsPublicLiveAdminListing);
-  try {
-    const liveRows = await fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 });
-    liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
-  } catch (e) {}
+  const liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
+  const livePagination = liveRows?.adminPagination || {};
+  const livePublicInventory = liveRows?.adminSummary?.public_inventory || liveRows?.adminMeta?.public_parity || {};
+  const publicVisibleTotal = Number(
+    livePublicInventory.public_visible_total
+      ?? livePublicInventory.total
+      ?? livePagination.total
+      ?? liveListings.length
+  );
+  const featuredVisibleTotal = Number(
+    livePublicInventory.featured_total
+      ?? livePublicInventory.featured
+      ?? liveListings.filter(isFeaturedListing).length
+  );
+  const publicInventoryParity = {
+    public_visible_total: Number.isFinite(publicVisibleTotal) ? publicVisibleTotal : liveListings.length,
+    featured_total: Number.isFinite(featuredVisibleTotal) ? featuredVisibleTotal : liveListings.filter(isFeaturedListing).length,
+    loaded_rows: liveListings.length,
+    same_as_public_api: livePublicInventory.same_as_public_api !== false,
+    public_api_endpoint: livePublicInventory.public_api_endpoint || "/api/properties?status=approved&public_only=1",
+    featured_api_endpoint: livePublicInventory.featured_api_endpoint || "/api/properties?status=approved&featured=true&public_only=1&sort=featured"
+  };
+  const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings]);
   adminRemoteListings = allListings;
   adminLiveListings = liveListings;
+  adminPublicInventoryParity = publicInventoryParity;
+  hydrateAdminAllListingsInBackground(headers);
   adminRemoteAgents = Array.isArray(agentsRes?.data) ? agentsRes.data.map(mapRemoteAgentForUi) : [];
   adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
   adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
@@ -10194,6 +10626,7 @@ async function fetchRemoteAdminSnapshot() {
     recent: recentRes?.data || {},
     pendingListings,
     liveListings,
+    publicInventoryParity,
     allListings,
     users: usersRes?.data || [],
     agents: adminRemoteAgents,
@@ -10226,7 +10659,8 @@ function renderAdminPendingRows(listings) {
   const cleanListings = adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem);
   adminCurrentPendingListings = cleanListings;
   const filteredListings = adminFilterPendingQueueRows(cleanListings);
-  const toolbarHtml = adminPendingQueueToolbarHtml(cleanListings, filteredListings);
+  const visibleListings = filteredListings.slice(0, adminPendingQueueVisibleLimit);
+  const toolbarHtml = adminPendingQueueToolbarHtml(cleanListings, filteredListings, visibleListings);
   if (!cleanListings.length && !filteredListings.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No pending listings in the current snapshot.</div>`;
     return;
@@ -10235,7 +10669,7 @@ function renderAdminPendingRows(listings) {
     wrap.innerHTML = `${toolbarHtml}<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No ${adminEscape(adminPendingQueueFilterLabel().toLowerCase())} records match the current pending queue.</div>`;
     return;
   }
-  wrap.innerHTML = `${toolbarHtml}${filteredListings.map((p) => {
+  wrap.innerHTML = `${toolbarHtml}${visibleListings.map((p) => {
     const statusMeta = adminStatusBadge(p.status);
     const locationText = [p.area, p.district].filter(Boolean).join(", ") || "-";
     const createdText = listingDateMeta(p);
@@ -10266,7 +10700,56 @@ function renderAdminPendingRows(listings) {
           ${!isPendingReview ? `<button onclick="openAdminListingLivePreview(${reviewArg})" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Live-style Preview</button>` : ""}
         </div>
       </div>`;
-  }).join("")}`;
+	  }).join("")}`;
+}
+
+function adminRenderListingStatusLocally(updatedListing = {}, normalizedStatus = "", listingId = "", options = {}) {
+  const id = String(listingId || updatedListing.id || updatedListing.backend_id || "").trim();
+  if (!id) return false;
+  const finalStatuses = new Set(["approved", "sold", "rejected", "hidden", "deleted"]);
+  const status = normalizeModerationStatus(normalizedStatus || updatedListing.status);
+  const wasPending = options.wasPending === true
+    || adminCurrentPendingListings.some((item) => adminListingMatchesId(item, id));
+  const mergedListing = normalizeRemoteAdminListing({
+    ...updatedListing,
+    id: updatedListing.id || id,
+    backend_id: updatedListing.backend_id || id,
+    status,
+    moderation_status: status,
+    reviewed_at: updatedListing.reviewed_at || new Date().toISOString()
+  });
+
+  if (status === "pending") {
+    adminCurrentPendingListings = adminUpsertListingById(adminCurrentPendingListings, mergedListing, id);
+  } else {
+    adminCurrentPendingListings = adminRemoveListingById(adminCurrentPendingListings, id);
+  }
+
+  if (finalStatuses.has(status)) {
+    adminRemoteListings = adminUpsertListingById(adminRemoteListings, mergedListing, id);
+  } else {
+    adminRemoteListings = adminRemoveListingById(adminRemoteListings, id);
+  }
+
+  if (status === "approved") {
+    adminLiveListings = adminUpsertListingById(adminLiveListings, mergedListing, id);
+  } else {
+    adminLiveListings = adminRemoveListingById(adminLiveListings, id);
+  }
+
+  renderAdminPendingRows(adminCurrentPendingListings);
+  renderAdminActionedRows(adminRemoteListings);
+  renderAdminLiveParitySummary(adminPublicInventoryParity, adminLiveListings);
+  renderAdminLiveListingsRows(adminLiveListings);
+  renderAdminFeaturedRows(adminLiveListings);
+  adminSetNumericText("admin-stat-pending", adminCurrentPendingListings.length);
+  if (wasPending && status !== "pending") {
+    if (status === "approved") adminAdjustNumericText("admin-stat-approved", 1);
+    if (status === "rejected") adminAdjustNumericText("admin-stat-rejected", 1);
+    if (status === "hidden") adminAdjustNumericText("admin-stat-hidden", 1);
+    if (status === "deleted") adminAdjustNumericText("admin-stat-deleted", 1);
+  }
+  return true;
 }
 
 function ensureAdminFoundOnlineControls() {
@@ -11736,6 +12219,50 @@ function buildAdminFollowUpWhatsAppMessage(p = {}) {
   ].join("\n");
 }
 
+function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
+  const liveEl = document.getElementById("admin-live-parity-summary");
+  const featuredEl = document.getElementById("admin-featured-parity-summary");
+  const visibleRows = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : []).filter(adminIsPublicLiveAdminListing);
+  const featuredRows = visibleRows.filter(isFeaturedListing);
+  const publicTotal = Number(snapshot?.public_visible_total ?? snapshot?.total ?? visibleRows.length);
+  const featuredTotal = Number(snapshot?.featured_total ?? snapshot?.featured ?? featuredRows.length);
+  const loadedRows = Number(snapshot?.loaded_rows ?? visibleRows.length);
+  const safePublicTotal = Number.isFinite(publicTotal) ? publicTotal : visibleRows.length;
+  const safeFeaturedTotal = Number.isFinite(featuredTotal) ? featuredTotal : featuredRows.length;
+  const safeLoadedRows = Number.isFinite(loadedRows) ? loadedRows : visibleRows.length;
+  const publicEndpoint = snapshot?.public_api_endpoint || "/api/properties?status=approved&public_only=1";
+  const featuredEndpoint = snapshot?.featured_api_endpoint || "/api/properties?status=approved&featured=true&public_only=1&sort=featured";
+  const parityLabel = snapshot?.same_as_public_api === false
+    ? "Test-like records are included in this view."
+    : "Matched to the anonymous public property API.";
+  const liveHtml = `
+    <div class="grid md:grid-cols-3 gap-3">
+      <div class="rounded-xl border border-green-100 bg-green-50 p-3">
+        <div class="text-[11px] font-black uppercase text-green-800">Online public listings</div>
+        <div id="admin-live-public-count" class="text-2xl font-black text-green-950 mt-1">${safePublicTotal.toLocaleString("en-UG")}</div>
+        <div class="text-[11px] text-green-900 mt-1">${adminEscape(parityLabel)}</div>
+      </div>
+      <div class="rounded-xl border border-emerald-100 bg-white p-3">
+        <div class="text-[11px] font-black uppercase text-emerald-800">Featured online</div>
+        <div id="admin-live-featured-count" class="text-2xl font-black text-emerald-950 mt-1">${safeFeaturedTotal.toLocaleString("en-UG")}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Homepage feed: ${adminEscape(featuredEndpoint)}</div>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-white p-3">
+        <div class="text-[11px] font-black uppercase text-gray-700">Rows loaded in King</div>
+        <div class="text-2xl font-black text-gray-950 mt-1">${safeLoadedRows.toLocaleString("en-UG")}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Public feed: ${adminEscape(publicEndpoint)}</div>
+      </div>
+    </div>`;
+  if (liveEl) liveEl.innerHTML = liveHtml;
+  if (featuredEl) {
+    featuredEl.innerHTML = `
+      <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-950">
+        <strong>${safeFeaturedTotal.toLocaleString("en-UG")} featured online</strong>
+        <span class="text-emerald-900"> from ${safePublicTotal.toLocaleString("en-UG")} public listings. Featured controls below use the same live listing set.</span>
+      </div>`;
+  }
+}
+
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
@@ -12201,6 +12728,177 @@ function renderAdminOutlookAgentActions(actions = [], status = {}) {
   }).join("");
 }
 
+function renderAdminStaffPasswordOutput(accounts = [], message = "") {
+  const output = document.getElementById("admin-staff-password-output");
+  if (!output) return;
+  const rows = (accounts || []).filter((account) => account?.temporary_password);
+  if (!rows.length && !message) {
+    output.classList.add("hidden");
+    output.innerHTML = "";
+    return;
+  }
+  output.classList.remove("hidden");
+  output.innerHTML = `
+    <div class="font-black text-amber-950">${adminEscape(message || "Temporary staff passwords")}</div>
+    <p class="text-xs text-amber-900 mt-1">Copy these now. They are returned only on create or password reset.</p>
+    ${rows.length ? `<div class="mt-3 overflow-x-auto"><table class="w-full text-xs">
+      <thead><tr class="text-left text-amber-900"><th class="py-1 pr-3">Staff</th><th class="py-1 pr-3">Email</th><th class="py-1 pr-3">Password</th></tr></thead>
+      <tbody>${rows.map((account) => `<tr class="border-t border-amber-100">
+        <td class="py-2 pr-3 font-bold">${adminEscape(account.staff_code || account.first_name || "Staff")}</td>
+        <td class="py-2 pr-3">${adminEscape(account.email || "")}</td>
+        <td class="py-2 pr-3 font-mono font-black">${adminEscape(account.temporary_password || "")}</td>
+      </tr>`).join("")}</tbody>
+    </table></div>` : ""}`;
+}
+
+function renderAdminStaffRows(accounts = [], activity = []) {
+  const table = document.getElementById("admin-staff-table");
+  const activityTable = document.getElementById("admin-staff-activity-table");
+  setTextById("admin-staff-stat-total", String(accounts.length || 0));
+  setTextById("admin-staff-stat-approvals", String((accounts || []).reduce((sum, account) => sum + (parseInt(account.approved_count || 0, 10) || 0), 0)));
+  setTextById("admin-staff-stat-actions", String((accounts || []).reduce((sum, account) => sum + (parseInt(account.activity_count || 0, 10) || 0), 0)));
+  const latest = (activity || [])[0]?.created_at || (accounts || []).map((account) => account.last_activity_at).filter(Boolean).sort().reverse()[0];
+  setTextById("admin-staff-stat-latest", latest ? staffDate(latest) : "-");
+  if (table) {
+    table.innerHTML = accounts.length ? accounts.map((account) => `
+      <article class="rounded-2xl border border-gray-200 bg-white p-4">
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <div class="font-black text-gray-900">${adminEscape(`${account.first_name || ""} ${account.last_name || ""}`.trim() || "Moderator")}</div>
+            <div class="text-xs text-gray-500 mt-1">${adminEscape(account.staff_code || "MOD")} • ${adminEscape(account.email || account.phone || "contact missing")} • ${adminEscape(account.status || "active")}</div>
+            <div class="text-xs text-gray-600 mt-2">Approvals: <strong>${adminEscape(account.approved_count || 0)}</strong> • Rejections: <strong>${adminEscape(account.rejected_count || 0)}</strong> • Activity: <strong>${adminEscape(account.activity_count || 0)}</strong></div>
+            ${account.personal_email ? `<div class="text-xs text-gray-500 mt-1">Personal email: ${adminEscape(account.personal_email)}</div>` : ""}
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="adminResetStaffPassword(${adminListingIdArg(account.id)})" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-3 py-1.5 rounded-lg text-xs font-bold">Reset password</button>
+            ${String(account.status || "").toLowerCase() === "active"
+              ? `<button type="button" onclick="adminSetStaffStatus(${adminListingIdArg(account.id)}, 'suspended')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-xs font-bold">Suspend</button>`
+              : `<button type="button" onclick="adminSetStaffStatus(${adminListingIdArg(account.id)}, 'active')" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-bold">Activate</button>`}
+          </div>
+        </div>
+      </article>`).join("") : staffEmpty("No moderator staff accounts found. Use Create / verify 5 staff logins.");
+  }
+  if (activityTable) {
+    activityTable.innerHTML = activity.length ? activity.slice(0, 20).map((item) => `
+      <div class="rounded-xl border border-gray-200 bg-white p-3">
+        <div class="font-bold text-gray-900">${adminEscape(item.staff_code || [item.first_name, item.last_name].filter(Boolean).join(" ") || "Staff")}</div>
+        <div class="text-xs text-gray-500 mt-1">${adminEscape(String(item.action || "").replace(/_/g, " "))} • ${adminEscape(item.target_type || "dashboard")} • ${adminEscape(staffDate(item.created_at))}</div>
+      </div>`).join("") : staffEmpty("No staff activity has been recorded yet.");
+  }
+}
+
+async function renderAdminStaffControl() {
+  const table = document.getElementById("admin-staff-table");
+  if (!table) return;
+  if (!canUseLiveAdminApi()) {
+    renderAdminStaffRows([], []);
+    table.innerHTML = staffEmpty("Sign in as admin or save ADMIN_API_KEY to load staff accounts.");
+    return;
+  }
+  try {
+    const headers = adminAuthHeaders();
+    const [staffRes, activityRes] = await Promise.all([
+      apiRequest("/api/admin/staff", { headers }),
+      apiRequest("/api/admin/staff/activity?limit=50", { headers })
+    ]);
+    renderAdminStaffRows(Array.isArray(staffRes?.data) ? staffRes.data : [], Array.isArray(activityRes?.data) ? activityRes.data : []);
+  } catch (error) {
+    table.innerHTML = staffEmpty(`Staff accounts could not load: ${error.message || "request failed"}`);
+  }
+}
+
+async function adminBootstrapStaffAccounts() {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
+  try {
+    const res = await apiRequest("/api/admin/staff/bootstrap-five", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    const accounts = res?.data?.accounts || [];
+    renderAdminStaffPasswordOutput(accounts, accounts.some((account) => account.temporary_password)
+      ? "Five moderator logins verified. New passwords are below."
+      : "Five moderator logins already exist. No passwords were reset.");
+    await renderAdminStaffControl();
+    toast("Staff accounts verified.");
+  } catch (error) {
+    toast(`Staff bootstrap failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function adminCreateStaffAccount(event) {
+  event.preventDefault();
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const payload = {
+    first_name: String(data.get("first_name") || "").trim(),
+    last_name: String(data.get("last_name") || "").trim(),
+    email: String(data.get("email") || "").trim(),
+    phone: normalizePhoneInput(data.get("phone") || ""),
+    personal_email: String(data.get("personal_email") || "").trim(),
+    staff_code: String(data.get("staff_code") || "").trim(),
+    staff_notes: String(data.get("staff_notes") || "").trim()
+  };
+  try {
+    const res = await apiRequest("/api/admin/staff", {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: payload
+    });
+    renderAdminStaffPasswordOutput([res?.data?.account].filter(Boolean), "Staff login saved.");
+    form.reset();
+    await renderAdminStaffControl();
+    toast("Staff login saved.");
+  } catch (error) {
+    toast(`Staff login failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function adminResetStaffPassword(staffId) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
+  if (!window.confirm("Reset this staff password now? The new password will be shown once.")) return;
+  try {
+    const res = await apiRequest(`/api/admin/staff/${encodeURIComponent(staffId)}/password-reset`, {
+      method: "POST",
+      headers: adminAuthHeaders(),
+      body: {}
+    });
+    renderAdminStaffPasswordOutput([res?.data?.account].filter(Boolean), "Staff password reset.");
+    await renderAdminStaffControl();
+    toast("Staff password reset.");
+  } catch (error) {
+    toast(`Password reset failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function adminSetStaffStatus(staffId, status) {
+  if (!canUseLiveAdminApi()) {
+    toast("Sign in as admin or set ADMIN_API_KEY first.");
+    return;
+  }
+  try {
+    await apiRequest(`/api/admin/staff/${encodeURIComponent(staffId)}`, {
+      method: "PATCH",
+      headers: adminAuthHeaders(),
+      body: { status }
+    });
+    await renderAdminStaffControl();
+    toast(`Staff status updated: ${status}.`);
+  } catch (error) {
+    toast(`Staff status failed: ${error.message || "request failed"}`);
+  }
+}
+
 async function renderAdminDashboard() {
   const gate = document.getElementById("admin-auth-gate");
   const body = document.getElementById("admin-body");
@@ -12240,7 +12938,7 @@ async function renderAdminDashboard() {
   const summary = remoteSnap?.summary || {};
   const totalListings = summary?.properties?.total ?? localSnap.summary.totalListings;
   const pendingListings = summary?.properties?.pending ?? localSnap.summary.pendingListings;
-  const approvedListings = summary?.properties?.approved ?? localSnap.summary.approvedListings;
+  const approvedListings = summary?.properties?.public_live ?? summary?.properties?.approved ?? localSnap.summary.approvedListings;
   const rejectedListings = summary?.properties?.rejected ?? localSnap.summary.rejectedListings;
   const hiddenListings = summary?.properties?.hidden ?? localSnap.summary.hiddenListings;
   const deletedListings = summary?.properties?.deleted ?? localSnap.summary.deletedListings;
@@ -12293,10 +12991,12 @@ async function renderAdminDashboard() {
 
   const adminUsers = remoteSnap?.users || localSnap.users || [];
   const adminAgents = remoteSnap?.agents || localSnap.agents || [];
+  const adminLiveRows = remoteSnap?.liveListings || localSnap.liveListings || [];
   renderAdminPendingRows(remoteSnap?.pendingListings || localSnap.pendingListings);
   renderAdminActionedRows(remoteSnap?.allListings || localSnap.allListings || []);
-  renderAdminLiveListingsRows(remoteSnap?.liveListings || localSnap.liveListings || []);
-  renderAdminFeaturedRows(remoteSnap?.liveListings || localSnap.liveListings || []);
+  renderAdminLiveParitySummary(remoteSnap?.publicInventoryParity || adminPublicInventoryParity, adminLiveRows);
+  renderAdminLiveListingsRows(adminLiveRows);
+  renderAdminFeaturedRows(adminLiveRows);
   renderAdminOutreachOverview({
     summary,
     users: adminUsers,
@@ -12312,6 +13012,9 @@ async function renderAdminDashboard() {
   renderAdminAdvertisingInquiries(remoteSnap?.advertisingInquiries || []);
   renderAdminAdvertisingCampaigns(remoteSnap?.advertisingCampaigns || []);
   renderAdminUsersRows(adminUsers);
+  renderAdminStaffControl().catch((error) => {
+    console.warn("Unable to render staff control", error);
+  });
   renderAdminBrokerRows(adminAgents);
   renderAdminFeaturedAgentsRows(adminAgents);
   renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
@@ -12425,6 +13128,7 @@ function renderAdminSetupProof(status = {}) {
   const rows = [
     ["DATABASE_URL", dbStatus.databaseUrlConnected ? "connected" : "not proven"],
     ["Migrations", (dbStatus.missingMigrations || []).length ? `missing ${(dbStatus.missingMigrations || []).join(", ")}` : "033 and 034 applied"],
+    ["Media storage", status.mediaStorage?.durableCloudConfigured ? `${status.mediaStorage.provider || "cloud"} configured` : `${status.mediaStorage?.provider || "local"} needs Cloudflare R2/S3 env`],
     ["Property submission tests", counts.listingTests || 0],
     ["Saved searches / alert matches", `${counts.savedSearches || 0} / ${counts.alertMatches || 0}`],
     ["Property need requests", `${counts.unresolvedPropertyNeedRequests || 0} unresolved / ${counts.resolvedPropertyNeedRequests || 0} resolved`],
@@ -15446,6 +16150,11 @@ function renderAdminWhatsappOverview(summary = {}) {
   const wrap = document.getElementById("admin-whatsapp-overview");
   if (!wrap) return;
   const bridgeSummary = summary?.webBridge?.summary || {};
+  const bridgeReadiness = summary?.webBridge?.readiness || {};
+  const liveAgentReady = bridgeReadiness.ok === true;
+  const liveAgentLabel = liveAgentReady
+    ? "Ready"
+    : (bridgeReadiness.status ? String(bridgeReadiness.status).replace(/_/g, " ") : "Not ready");
   const cards = [
     { label: "Conversations", value: summary.total_conversations || 0, cls: "text-gray-900" },
     { label: "Active 7d", value: summary.active_7d || 0, cls: "text-green-700" },
@@ -15453,14 +16162,21 @@ function renderAdminWhatsappOverview(summary = {}) {
     { label: "Resolved", value: summary.resolved || 0, cls: "text-green-700" },
     { label: "Autopilot", value: summary.autopilot || 0, cls: "text-emerald-700" },
     { label: "Manual / Copilot", value: Number(summary.copilot || 0) + Number(summary.manual_only || 0), cls: "text-indigo-700" },
-    { label: "Web Bridge Online", value: bridgeSummary.online_clients || 0, cls: Number(bridgeSummary.online_clients || 0) > 0 ? "text-green-700" : "text-amber-700" }
+    { label: "Web Bridge Online", value: bridgeSummary.online_clients || 0, cls: Number(bridgeSummary.online_clients || 0) > 0 ? "text-green-700" : "text-amber-700" },
+    { label: "Live Agent", value: liveAgentLabel, cls: liveAgentReady ? "text-green-700" : "text-amber-700" }
   ];
-  wrap.innerHTML = cards.map((card) => `
+  const readinessReason = String(bridgeReadiness.reason || "").replace(/_/g, " ");
+  const readinessHtml = bridgeReadiness.reason ? `
+    <div class="md:col-span-2 xl:col-span-4 rounded-2xl border ${liveAgentReady ? "border-green-100 bg-green-50 text-green-900" : "border-amber-100 bg-amber-50 text-amber-900"} p-4 text-sm">
+      <div class="font-black">WhatsApp live agent: ${adminEscape(liveAgentLabel)}</div>
+      <div class="mt-1 text-xs">Reason: ${adminEscape(readinessReason)}${bridgeReadiness.selected_client?.last_seen_at ? ` • Last seen: ${adminEscape(adminWhatsappTimeText(bridgeReadiness.selected_client.last_seen_at))}` : ""}</div>
+    </div>` : "";
+  wrap.innerHTML = `${cards.map((card) => `
     <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
       <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">${adminEscape(card.label)}</div>
       <div class="text-2xl font-black mt-2 ${card.cls}">${adminEscape(card.value)}</div>
     </div>
-  `).join("");
+  `).join("")}${readinessHtml}`;
 }
 
 function renderAdminWhatsappConversationList(conversations = []) {
@@ -16179,6 +16895,83 @@ function adminReviewSourceText(review = {}) {
   ].filter(Boolean).join(" ");
 }
 
+function adminReviewKnownLocationCandidates() {
+  const candidates = [];
+  const add = (candidate = {}) => {
+    const name = String(candidate.name || "").trim();
+    const alias = String(candidate.alias || name).trim();
+    if (!name || !alias) return;
+    candidates.push({
+      name,
+      alias,
+      district: String(candidate.district || "").trim(),
+      city: String(candidate.city || "").trim(),
+      neighborhood: String(candidate.neighborhood || "").trim(),
+      specificity: Number(candidate.specificity) || 0
+    });
+  };
+
+  (UG_AREA_PIN_OVERRIDES || []).forEach((point) => {
+    (point.aliases || [point.name]).forEach((alias) => add({
+      name: point.name,
+      alias,
+      district: point.district,
+      specificity: 5
+    }));
+  });
+
+  Object.entries(UG_LOCATION_TREE || {}).forEach(([district, tree]) => {
+    (tree || []).forEach((cityNode) => {
+      add({
+        name: cityNode.city,
+        alias: cityNode.city,
+        district,
+        city: cityNode.city,
+        specificity: 3
+      });
+      (cityNode.neighborhoods || []).forEach((neighborhood) => add({
+        name: neighborhood.name,
+        alias: neighborhood.name,
+        district,
+        city: cityNode.city,
+        neighborhood: neighborhood.name,
+        specificity: 4
+      }));
+    });
+  });
+
+  (LOCATION_HINTS || []).forEach((name) => {
+    const district = DISTRICTS.includes(name) ? name : "";
+    add({ name, alias: name, district, specificity: district ? 1 : 2 });
+  });
+  DISTRICTS.forEach((district) => add({ name: district, alias: district, district, specificity: 1 }));
+  return candidates;
+}
+
+function adminReviewBestKnownLocationFromText(text = "") {
+  const haystack = String(text || "");
+  if (!haystack.trim()) return null;
+  const matches = [];
+  for (const candidate of adminReviewKnownLocationCandidates()) {
+    const pattern = knownAreaAliasPattern(candidate.alias);
+    if (!pattern) continue;
+    const match = haystack.match(new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i"));
+    if (!match) continue;
+    matches.push({
+      ...candidate,
+      index: match.index,
+      aliasLength: String(candidate.alias || "").length
+    });
+  }
+  if (!matches.length) return null;
+  matches.sort((a, b) => (
+    (b.specificity - a.specificity)
+    || (a.index - b.index)
+    || (b.aliasLength - a.aliasLength)
+  ));
+  return matches[0];
+}
+
 function adminReviewMoneyFromText(text = "") {
   const raw = String(text || "").replace(/,/g, "");
   const billion = raw.match(/(?:ugx|ush|ugshs|shs)?\s*([0-9]+(?:\.[0-9]+)?)\s*(?:b|bn|billion)\b/i);
@@ -16201,6 +16994,10 @@ function adminReviewFirstNumber(text = "", pattern) {
 }
 
 function adminReviewDetectedLocation(text = "", review = {}) {
+  const specificLocation = adminReviewBestKnownLocationFromText(text);
+  if (specificLocation?.district && specificLocation.name) {
+    return { area: specificLocation.name, district: specificLocation.district };
+  }
   const district = DISTRICTS.find((name) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(text))
     || review.district
     || "";
@@ -16516,6 +17313,17 @@ function adminReviewNeighborhoodOptionsHtml(district = "", city = "", selected =
     .join("");
 }
 
+function adminReviewCityBelongsToDistrict(district = "", city = "") {
+  if (!district || !city) return false;
+  return getDistrictLocationTree(district).some((item) => item.city === city);
+}
+
+function adminReviewNeighborhoodBelongsToCity(district = "", city = "", neighborhood = "") {
+  if (!district || !city || !neighborhood) return false;
+  const cityNode = getDistrictLocationTree(district).find((item) => item.city === city);
+  return Boolean(cityNode?.neighborhoods?.some((item) => item.name === neighborhood));
+}
+
 function adminReviewSetOptions(id, html, value = "") {
   const el = document.getElementById(id);
   if (!el) return "";
@@ -16549,7 +17357,7 @@ function adminReviewSetAreaFromNeighborhood() {
 function adminReviewRefreshHierarchyControls(options = {}) {
   const { syncMap = true } = options;
   const fields = adminReviewCurrentLocationFields();
-  const region = fields.region || (fields.district ? regionForDistrict(fields.district) : "");
+  const region = fields.district ? regionForDistrict(fields.district) : fields.region;
   if (region) adminSetReviewEditValue("admin-review-region-edit", region);
   const district = adminReviewSetOptions("admin-review-district-edit", adminReviewDistrictOptionsHtml(region, fields.district), fields.district);
   const city = adminReviewSetOptions("admin-review-city-edit", adminReviewCityOptionsHtml(district, fields.city), fields.city);
@@ -16622,19 +17430,30 @@ function adminReviewHierarchyMatchInDistrict(district = "", text = "", point = n
 }
 
 function adminReviewInferHierarchyFromText(label = "", point = null, districtHint = "") {
-  const text = String(label || "").toLowerCase();
+  const rawText = String(label || "");
+  const text = rawText.toLowerCase();
   const pinPoint = Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng))
     ? { lat: Number(point.lat), lng: Number(point.lng) }
     : null;
   const nearestDistrict = pinPoint ? findNearestDistrictFromCoords(pinPoint.lat, pinPoint.lng)?.district || "" : "";
+  const specificLocation = adminReviewBestKnownLocationFromText(rawText);
   const districtFromText = text
     ? DISTRICTS.find((item) => text.includes(item.toLowerCase())) || ""
     : "";
-  const preferredDistrict = districtFromText
+  const preferredDistrict = specificLocation?.district
+    || districtFromText
     || (DISTRICTS.includes(districtHint) ? districtHint : "")
     || nearestDistrict
     || "";
   let match = preferredDistrict ? adminReviewHierarchyMatchInDistrict(preferredDistrict, text, pinPoint) : null;
+  if (specificLocation?.district) {
+    match = {
+      district: specificLocation.district,
+      region: regionForDistrict(specificLocation.district),
+      city: specificLocation.city || match?.city || "",
+      neighborhood: specificLocation.neighborhood || match?.neighborhood || ""
+    };
+  }
   if ((!match?.city && !match?.neighborhood) && text) {
     for (const district of DISTRICTS) {
       const candidate = adminReviewHierarchyMatchInDistrict(district, text, pinPoint);
@@ -16840,26 +17659,33 @@ function adminReviewListingEditPanel(review = {}) {
     ? { lat: adminReviewCoordinateNumber(review.latitude), lng: adminReviewCoordinateNumber(review.longitude) }
     : null;
   const locationSeedText = uniqueTextParts([
-    review.resolved_location_label,
-    extra.resolved_location_label,
+    facts.area,
+    facts.district,
+    review.title,
     review.address,
     extra.source_location,
     extra.location_label,
     extra.source_area,
     extra.location_town,
+    adminReviewSourceText(review),
+    review.resolved_location_label,
+    extra.resolved_location_label,
     review.neighborhood,
     extra.neighborhood,
+    review.city,
+    extra.city,
+    extra.town,
     review.area,
-    facts.area,
-    review.district,
-    facts.district,
-    adminReviewSourceText(review)
+    review.district
   ]).join(", ");
-  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, reviewPoint, review.district || facts.district || "");
-  const initialDistrict = review.district || facts.district || inferredHierarchy.district || "";
-  const initialRegion = review.region || extra.region || inferredHierarchy.region || (initialDistrict ? regionForDistrict(initialDistrict) : "");
-  const initialCity = review.city || extra.city || extra.town || inferredHierarchy.city || "";
-  const initialNeighborhood = review.neighborhood || extra.neighborhood || inferredHierarchy.neighborhood || "";
+  const inferredHierarchy = adminReviewInferHierarchyFromText(locationSeedText, reviewPoint, facts.district || review.district || "");
+  const initialDistrict = inferredHierarchy.district || facts.district || review.district || "";
+  const initialRegion = initialDistrict ? regionForDistrict(initialDistrict) : (inferredHierarchy.region || review.region || extra.region || "");
+  const cityCandidate = inferredHierarchy.city || review.city || extra.city || extra.town || "";
+  const initialCity = adminReviewCityBelongsToDistrict(initialDistrict, cityCandidate) ? cityCandidate : "";
+  const neighborhoodCandidate = inferredHierarchy.neighborhood || review.neighborhood || extra.neighborhood || "";
+  const initialNeighborhood = adminReviewNeighborhoodBelongsToCity(initialDistrict, initialCity, neighborhoodCandidate) ? neighborhoodCandidate : "";
+  const initialArea = inferredHierarchy.neighborhood || facts.area || inferredHierarchy.city || review.area || "";
   const initialStreet = review.street_name || extra.street_name || "";
   const districtOptions = adminReviewDistrictOptionsHtml(initialRegion, initialDistrict);
   const regionOptions = adminReviewRegionOptionsHtml(initialRegion);
@@ -16918,7 +17744,7 @@ function adminReviewListingEditPanel(review = {}) {
           <input id="admin-review-lister-phone-edit" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(extractedPhone || review.lister_phone || "")}" placeholder="+2567XXXXXXXX">
         </label>
         <label class="block text-xs font-bold text-gray-700">Area / neighbourhood
-          <input id="admin-review-area-edit" oninput="adminReviewOnAreaInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(review.area || "")}" placeholder="e.g. Kololo, Kira, Kampala">
+          <input id="admin-review-area-edit" oninput="adminReviewOnAreaInput()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm" value="${adminAttr(initialArea)}" placeholder="e.g. Kololo, Kira, Kampala">
         </label>
         <label class="block text-xs font-bold text-gray-700">Region
           <select id="admin-review-region-edit" onchange="adminReviewOnRegionChange()" class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm">${regionOptions}</select>
@@ -17016,7 +17842,6 @@ function adminApplyExtractedReviewFacts() {
   adminReviewOnListingTypeChange();
   adminSetReviewEditValue("admin-review-lister-phone-edit", facts.contact_phone || adminActiveReview.lister_phone || "");
   adminSetReviewEditValue("admin-review-area-edit", facts.area || adminActiveReview.area || "");
-  adminSetReviewEditValue("admin-review-district-edit", facts.district || adminActiveReview.district || "");
   adminReviewApplyHierarchyFromText([facts.area, facts.district, adminActiveReview.address].filter(Boolean).join(", "));
   adminSetReviewEditValue("admin-review-property-type-edit", facts.property_type || adminActiveReview.property_type || "");
   adminSetReviewEditValue("admin-review-land-title-available-edit", facts.land_title_available || getLandTitleAvailabilityValue(adminActiveReview) || "");
@@ -17290,6 +18115,17 @@ async function initAdminReviewLocationMap(review = adminActiveReview) {
 function collectAdminReviewListingPatch() {
   const get = (id) => document.getElementById(id)?.value ?? "";
   const listingType = normalizeType(get("admin-review-listing-type-edit"));
+  const district = get("admin-review-district-edit");
+  const region = district ? regionForDistrict(district) : get("admin-review-region-edit");
+  let city = get("admin-review-city-edit");
+  if (city && !adminReviewCityBelongsToDistrict(district, city)) city = "";
+  let neighborhood = get("admin-review-neighborhood-edit");
+  if (neighborhood && !adminReviewNeighborhoodBelongsToCity(district, city, neighborhood)) neighborhood = "";
+  let area = get("admin-review-area-edit");
+  const areaLocation = adminReviewBestKnownLocationFromText(area);
+  if (areaLocation?.district && district && areaLocation.district !== district) {
+    area = neighborhood || city || district;
+  }
   const coordinates = adminReviewNormalizeCoordinateInputs(
     get("admin-review-latitude-edit"),
     get("admin-review-longitude-edit")
@@ -17314,11 +18150,11 @@ function collectAdminReviewListingPatch() {
     description: get("admin-review-description-edit"),
     listing_type: listingType,
     lister_phone: adminReviewNormalizeUgandaPhone(get("admin-review-lister-phone-edit")),
-    region: get("admin-review-region-edit"),
-    district: get("admin-review-district-edit"),
-    city: get("admin-review-city-edit"),
-    neighborhood: get("admin-review-neighborhood-edit"),
-    area: get("admin-review-area-edit"),
+    region,
+    district,
+    city,
+    neighborhood,
+    area,
     street_name: get("admin-review-street-edit"),
     address: get("admin-review-address-edit"),
     price: get("admin-review-price-edit"),
@@ -18021,6 +18857,9 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     return;
   }
 
+  const previousStatus = normalizeModerationStatus(listing.status);
+  const wasPendingBeforeStatusUpdate = previousStatus === "pending"
+    || adminCurrentPendingListings.some((item) => adminListingMatchesId(item, backendId || localId));
   const isLiveApi = !!backendId && canUseLiveAdminApi();
   if ((normalizedStatus === "approved" || normalizedStatus === "rejected") && isLiveApi && (!adminActiveReview || String(adminActiveReview.id) !== String(backendId))) {
     await openAdminListingReview(backendId);
@@ -18078,13 +18917,15 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       const response = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}/status`, {
         method: "PATCH",
         headers: adminAuthHeaders(),
-        body: {
-          ...statusOptions,
-          status: normalizedStatus,
-          reason: moderationReason.trim() || undefined,
-          review_notes: reviewNotes || undefined,
-          checklist,
-          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+	        body: {
+	          ...statusOptions,
+	          fast_admin_render: true,
+	          manual_notification_only: ["approved", "rejected"].includes(normalizedStatus),
+	          status: normalizedStatus,
+	          reason: moderationReason.trim() || undefined,
+	          review_notes: reviewNotes || undefined,
+	          checklist,
+	          warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
         }
       });
       statusResponse = response?.data || null;
@@ -18094,14 +18935,17 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
           moderation_status: normalizeModerationStatus(statusResponse.status || normalizedStatus)
         });
         const remoteIdx = adminRemoteListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
-        if (remoteIdx >= 0) adminRemoteListings[remoteIdx] = { ...adminRemoteListings[remoteIdx], ...listing };
-        const liveIdx = adminLiveListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
-        if (liveIdx >= 0) adminLiveListings[liveIdx] = { ...adminLiveListings[liveIdx], ...listing };
-      }
-      if (normalizedStatus === "approved") {
-        try {
-          const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`, {
-            headers: adminAuthHeaders()
+	        if (remoteIdx >= 0) adminRemoteListings[remoteIdx] = { ...adminRemoteListings[remoteIdx], ...listing };
+	        const liveIdx = adminLiveListings.findIndex((p) => String(p.id) === String(backendId) || String(p.backend_id || "") === String(backendId));
+	        if (liveIdx >= 0) adminLiveListings[liveIdx] = { ...adminLiveListings[liveIdx], ...listing };
+	      }
+	      adminRenderListingStatusLocally(listing, normalizedStatus, backendId || localId, {
+	        wasPending: wasPendingBeforeStatusUpdate
+	      });
+	      if (normalizedStatus === "approved") {
+	        try {
+	          const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`, {
+	            headers: adminAuthHeaders()
           });
           const liveProperty = upsertPropertyForUi(mapRemotePropertyForUi(detail?.data || {}));
           if (liveProperty) liveProperty.status = "approved";
@@ -18142,23 +18986,30 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
       manualUrl: waPayload.manual_url || ""
     });
     return true;
-  };
-  ownerNotificationOpened = maybeOpenOwnerNotification();
+	  };
+	  ownerNotificationOpened = maybeOpenOwnerNotification();
 
-  renderAll();
-  resetMaps();
-  void renderAdminDashboard().catch((error) => {
-    toast(`Dashboard refresh failed: ${error.message || "error"}`);
-  });
-  if (normalizedStatus === "approved") {
-    setAdminWorkflowTab("live");
-  } else if (["rejected", "hidden", "deleted"].includes(normalizedStatus)) {
-    setAdminWorkflowTab("actioned");
-  } else if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
-    await openAdminListingReview(backendId);
-  }
-  toast(ownerNotificationOpened && normalizedStatus === "approved" ? "Listing approved. WhatsApp message is ready." : (normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`));
-}
+	  if (normalizedStatus === "approved") {
+	    setAdminWorkflowTab("live");
+	  } else if (["rejected", "hidden", "deleted"].includes(normalizedStatus)) {
+	    setAdminWorkflowTab("actioned");
+	  } else if (backendId && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
+	    await openAdminListingReview(backendId);
+	  }
+	  const refreshAfterStatus = () => {
+	    renderAll();
+	    resetMaps();
+	    void renderAdminDashboard().catch((error) => {
+	      toast(`Dashboard refresh failed: ${error.message || "error"}`);
+	    });
+	  };
+	  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+	    window.requestAnimationFrame(refreshAfterStatus);
+	  } else {
+	    refreshAfterStatus();
+	  }
+	  toast(ownerNotificationOpened && normalizedStatus === "approved" ? "Listing approved. WhatsApp message is ready." : (normalizedStatus === "approved" ? "Listing approved and live." : `Listing updated: ${normalizedStatus}.`));
+	}
 
 async function adminSetListingFeatured(propertyId, featured) {
   const id = String(propertyId || "");
@@ -18386,6 +19237,7 @@ function persistAuthState(token, user) {
   renderStudentDashboard();
   renderAgentDashboard();
   renderFieldDashboard();
+  renderStaffDashboard();
   renderAdminDashboard();
   if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
   if (pendingSaveId) toast("Property saved to your account.");
@@ -18404,6 +19256,7 @@ function clearAuthState() {
   renderStudentDashboard();
   renderAgentDashboard();
   renderFieldDashboard();
+  renderStaffDashboard();
   renderAdminDashboard();
 }
 
@@ -18418,6 +19271,8 @@ function clearAuthState() {
 	          const mode = derivePortalMode(authState.user, authState.user.portal_mode);
 	          const label = mode === "admin"
 	            ? "Admin"
+            : mode === "moderator"
+              ? "Staff Dashboard"
 	            : mode === "student"
 	              ? "Student Dashboard"
 	              : mode === "agent"
@@ -18457,6 +19312,7 @@ function mapRoleLabel(role) {
 	        property_owner: "Property Owner",
 	        agent_broker: "Broker",
 	        field_agent: "Field Agent",
+	        moderator: "Moderator",
 	        admin: "Admin",
 	        super_admin: "Super Admin"
 	      };
@@ -18736,6 +19592,10 @@ async function finalizeAuth(data, source, preferredAudience = "") {
   if (preferredAudience === "field_agent" && user.role !== "field_agent") {
     resolvedUser.portal_mode = "finder";
     toast("This account is not marked as a Field Agent. Opening Property Finder dashboard.");
+  }
+  if ((preferredAudience === "moderator" || preferredAudience === "staff" || preferredAudience === "operations") && user.role !== "moderator" && user.role !== "admin" && user.role !== "super_admin") {
+    resolvedUser.portal_mode = "finder";
+    toast("This account is not marked as staff. Opening property finder dashboard.");
   }
   if (preferredAudience === "admin" && user.role !== "admin" && user.role !== "super_admin") {
     resolvedUser.portal_mode = "finder";
@@ -21612,10 +22472,21 @@ function buildListPropertyPayload(photoUploadUrls = lpPhotoUploadUrls) {
   }
 
   if (type === "student") {
-    payload.nearest_university = extra.nearest_uni || null;
+    const nearestUniversity = normalizeStudentUniversityName(extra.nearest_uni) || inferStudentNearestUniversity({
+      ...payload,
+      type,
+      desc: description,
+      extra_fields: extra
+    });
+    payload.nearest_university = nearestUniversity || null;
     payload.distance_to_uni_km = parseFloatSafe(extra.uni_distance);
     payload.room_arrangement = extra.room_arrangement || null;
     payload.room_type = lpVal("lp-subtype") || null;
+    if (nearestUniversity) {
+      payload.extra_fields.nearest_university = nearestUniversity;
+      payload.extra_fields.student_campus = nearestUniversity;
+      payload.extra_fields.student_universities = normalizeStudentUniversityList([nearestUniversity]);
+    }
   }
 
   return payload;
@@ -21705,6 +22576,12 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     is_main: idx === lpMainPhotoIndex
   }));
   const mainPhoto = galleryPhotos.find((item) => item.is_main) || galleryPhotos[0];
+  const nearestUniversity = inferStudentNearestUniversity({
+    ...payload,
+    type,
+    desc: payload.description || "",
+    extra_fields: payload.extra_fields || {}
+  });
   const local = {
     id: localId,
     backend_id: apiData.id || null,
@@ -21737,9 +22614,12 @@ function applySubmittedListingToLocal(payload, apiData = {}) {
     area_highlights: payload?.extra_fields?.area_highlights || "",
     nearby_places: Array.isArray(payload?.extra_fields?.nearby_facilities) ? payload.extra_fields.nearby_facilities : [],
     contact_display_name: payload?.lister_display_name || payload?.extra_fields?.public_display_name || payload?.lister_name || "",
-    nearest_university: payload.nearest_university || null,
+    nearest_university: nearestUniversity || null,
     distance_to_uni_km: payload.distance_to_uni_km || null,
-    student_universities: payload.nearest_university ? [payload.nearest_university] : [],
+    student_universities: normalizeStudentUniversityList([
+      ...(Array.isArray(payload.student_universities) ? payload.student_universities : []),
+      nearestUniversity
+    ]),
     student_verified: normalizeType(type) === "student" || !!payload.students_welcome,
     students_welcome: !!payload.students_welcome,
     created_at: nowIso,
@@ -23117,6 +23997,15 @@ const ACCOUNT_ACCESS_ROLE_THEME = {
     text: "#1e3a8a",
     header: "linear-gradient(135deg, #052e2b 0%, #2563eb 54%, #60a5fa 100%)"
   },
+  moderator: {
+    name: "staff",
+    primary: "#334155",
+    secondary: "#0f172a",
+    soft: "#f8fafc",
+    border: "#94a3b8",
+    text: "#0f172a",
+    header: "linear-gradient(135deg, #020617 0%, #334155 58%, #10b981 100%)"
+  },
   advertiser: {
     name: "advertiser",
     primary: "#c2410c",
@@ -23259,6 +24148,7 @@ function normalizeAuthAudience(audience = "finder", allowAdmin = false) {
   if (normalized === "student") return "student";
   if (normalized === "advertiser") return "advertiser";
   if (normalized === "field_agent" || normalized === "field") return "field_agent";
+  if (normalized === "moderator" || normalized === "staff" || normalized === "operations") return "moderator";
   return "finder";
 }
 
@@ -23279,6 +24169,7 @@ function authAudienceFromLoginParams(params = new URLSearchParams()) {
   if (normalizedNext === "/student-dashboard") return "student";
   if (normalizedNext === "/broker-dashboard") return "agent";
   if (normalizedNext === "/field-agent-dashboard") return "field_agent";
+  if (normalizedNext === "/staff-dashboard") return "moderator";
   if (normalizedNext === "/advertiser-dashboard") return "advertiser";
   return "finder";
 }
@@ -23351,6 +24242,7 @@ function accountAccessRoleCopy(role = "finder") {
       student: ["Student", "Campus rooms and alerts."],
       agent: ["Broker", "Listings, leads, viewings."],
       field_agent: ["Field Agent", "PIN sign-in and payouts."],
+      moderator: ["Staff", "Moderation, leads, ads."],
       advertiser: ["Advertiser", "Campaigns, payments, leads."],
       admin: ["Admin", "Platform control access."]
     },
@@ -23408,6 +24300,7 @@ function accountAccessRoleCopy(role = "finder") {
     student: ["Student", "Campus rooms and alerts."],
     agent: ["Broker", "Listings, leads, viewings."],
     field_agent: ["Field Agent", "PIN sign-in and payouts."],
+    moderator: ["Staff", "Moderation, leads, ads."],
     advertiser: ["Advertiser", "Campaigns, payments, leads."],
     admin: ["Admin", "Platform control access."]
   };
@@ -23431,6 +24324,11 @@ function accountAccessRoleCopy(role = "finder") {
       label: copy.field_agent[0],
       icon: "fa-clipboard-list",
       body: copy.field_agent[1]
+    },
+    moderator: {
+      label: (copy.moderator || ["Staff", "Moderation, leads, ads."])[0],
+      icon: "fa-user-shield",
+      body: (copy.moderator || ["Staff", "Moderation, leads, ads."])[1]
     },
     advertiser: {
       label: copy.advertiser[0],
@@ -24618,6 +25516,7 @@ function setAccountAccessRole(role = "finder") {
 function updateAccountAccessSignInCopy() {
   const isFieldAgent = accountAccessDrawerAudience === "field_agent";
   const isAdmin = accountAccessDrawerAudience === "admin";
+  const isModerator = accountAccessDrawerAudience === "moderator";
   const drawer = document.getElementById("account-access-drawer");
   const label = document.getElementById("account-access-password-label");
   const input = document.getElementById("account-access-password");
@@ -24626,9 +25525,9 @@ function updateAccountAccessSignInCopy() {
   const identifierInput = document.getElementById("account-access-identifier");
   const identifierHelp = document.getElementById("account-access-identifier-help");
   const roleBody = document.getElementById("account-access-role-body");
-  if (identifierLabel) identifierLabel.textContent = isAdmin ? "Admin email address" : (isFieldAgent ? "Field Agent ID" : accountAccessText("identifier"));
+  if (identifierLabel) identifierLabel.textContent = isAdmin ? "Admin email address" : (isModerator ? "Staff email or phone" : (isFieldAgent ? "Field Agent ID" : accountAccessText("identifier")));
   if (identifierInput) {
-    identifierInput.placeholder = isAdmin ? `admin@${publicBrand()}` : (isFieldAgent ? "FA-7301" : accountAccessText("identifier"));
+    identifierInput.placeholder = isAdmin ? `admin@${publicBrand()}` : (isModerator ? "moderator email or +256 7XX XXX XXX" : (isFieldAgent ? "FA-7301" : accountAccessText("identifier")));
     identifierInput.autocomplete = isFieldAgent ? "off" : "username";
     identifierInput.inputMode = isFieldAgent ? "text" : "email";
     identifierInput.maxLength = isFieldAgent ? 8 : 128;
@@ -25427,7 +26326,9 @@ function openAuthSignIn(audience = "finder", event) {
         ? "student"
         : (normalized === "advertiser"
           ? "advertiser"
-          : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder"))));
+          : (normalized === "moderator" || normalized === "staff" || normalized === "operations"
+            ? "moderator"
+            : (normalized === "field_agent" || normalized === "field" ? "field_agent" : "finder")))));
   openAccountAccessDrawer("signin", resolved);
 }
 
@@ -26477,7 +27378,7 @@ function populateBrokerFilterOptions() {
 }
 
 function regionForDistrict(district) {
-  return DISTRICT_TO_REGION[district] || "Central";
+  return DISTRICT_TO_REGION[district] || "";
 }
 
 function getDistrictsByRegion(region) {
@@ -29503,15 +30404,22 @@ function studentCard(p) {
 	      const badge = p.student_badge || (p.student_verified ? "VERIFIED" : (normalizeType(p.type) === "student" ? "" : "STUDENTS WELCOME"));
   const isThirdPartyResult = isFoundOnlineListing(p);
   const photoSrc = isThirdPartyResult ? "" : publicImageSrc(p.img, "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=900&q=80");
-  const uniTags = (p.student_universities && p.student_universities.length)
-    ? p.student_universities.slice(0, 3)
-    : (p.nearest_university ? [p.nearest_university] : []);
+  const nearestUniversity = inferStudentNearestUniversity(p);
+  const uniTags = normalizeStudentUniversityList([
+    ...(Array.isArray(p.student_universities) ? p.student_universities : []),
+    nearestUniversity
+  ]).slice(0, 3);
   const amenities = (p.amenities || []).slice(0, 3);
-  const distanceText = p.nearest_university
-    ? `${p.area}, ${p.distance_to_uni_km || "?"}km from ${p.nearest_university}`
+  const universityDistance = Number(p.distance_to_uni_km);
+  const universityDistanceText = Number.isFinite(universityDistance) && universityDistance > 0
+    ? `${universityDistance.toFixed(universityDistance < 10 ? 1 : 0)}km from ${nearestUniversity}`
+    : nearestUniversity;
+  const distanceText = nearestUniversity
+    ? [p.area, universityDistanceText].filter(Boolean).join(", ")
     : `${p.area}, ${p.district}`;
   const nearDistanceText = Number.isFinite(Number(p.distance_miles)) ? `${Number(p.distance_miles).toFixed(1)} mi away` : "";
-  const bottomText = p.student_walk_text || "Near campus";
+  const walkText = String(p.student_walk_text || "").trim();
+  const bottomText = nearestUniversity || (!/near\s+campus/i.test(walkText) ? walkText : "") || "Nearest university to confirm";
   const roomLabel = p.student_room_label || ((studentTypeKey(p) === "shared") ? "Shared" : (p.beds ? String(p.beds) : ""));
   return `
     <div class="group relative bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm property-card cursor-pointer" onclick="openPropertyCardDetail(event, ${idArg})">
@@ -29702,6 +30610,7 @@ function renderAll() {
   renderStudentDashboard();
   renderAgentDashboard();
   renderFieldDashboard();
+  renderStaffDashboard();
   renderAdvertiserDashboard();
   ensureRevenuePlacements();
   syncPublicWhatsappLinks();
@@ -29734,6 +30643,7 @@ const PAGE_ROUTE_MAP = Object.freeze({
   "student-dashboard": "/student-dashboard",
   "agent-dashboard": "/broker-dashboard",
   "field-dashboard": "/field-agent-dashboard",
+  "staff-dashboard": "/staff-dashboard",
   "advertiser-dashboard": "/advertiser-dashboard",
   "admin-dashboard": "/admin",
   "king-dashboard": "/king",
@@ -29783,7 +30693,9 @@ function normalizePageKey(page) {
     "anti-fraud": "fraud",
     "report-fraud": "fraud",
     "broker-dashboard": "agent-dashboard",
-    "field-agent-dashboard": "field-dashboard"
+    "field-agent-dashboard": "field-dashboard",
+    "staff-operations-dashboard": "staff-dashboard",
+    "moderator-dashboard": "staff-dashboard"
   }[key] || key;
 }
 
@@ -29815,6 +30727,8 @@ const ADMIN_ROUTE_CONTROL_MAP = Object.freeze({
   "/admin/live": { page: "admin-dashboard", tab: "live", selector: "#admin-live-followup-control", label: "Live Listings" },
   "/admin/featured": { page: "admin-dashboard", tab: "live", selector: "#admin-featured-properties-control", label: "Featured Control" },
   "/admin/listings": { page: "admin-dashboard", tab: "listings", selector: "#admin-listings-control", label: "All Listings" },
+  "/admin/staff": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
+  "/admin/moderators": { page: "admin-dashboard", tab: "staff", selector: "#admin-staff-control", label: "Staff Ops" },
   "/admin/crm": { page: "admin-dashboard", tab: "notifications", selector: "#admin-crm-shell", label: "CRM Lead Centre" },
   "/admin/leads": { page: "admin-dashboard", tab: "notifications", selector: "#admin-notifications-control", label: "Lead Centre" },
   "/admin/property-needs": { page: "admin-dashboard", tab: "accounts", selector: "#admin-property-requests-table", label: "Property Need Requests" },
@@ -30016,6 +30930,7 @@ function showPage(page, options = {}) {
   if (targetPage === "saved") renderSaved();
   if (targetPage === "agent-dashboard") renderAgentDashboard();
   if (targetPage === "field-dashboard") renderFieldDashboard();
+  if (targetPage === "staff-dashboard") renderStaffDashboard();
   if (targetPage === "advertiser-dashboard") renderAdvertiserDashboard();
   if (targetPage === "admin-dashboard") renderAdminDashboard();
   if (targetPage === "admin-setup-status") renderAdminSetupStatus();
@@ -30310,6 +31225,7 @@ function returnToLastPageFromDetail() {
 
 function mapRemotePropertyForUi(p, options = {}) {
   const images = Array.isArray(p?.images) ? p.images : [];
+  const extraFields = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
   const imageItems = images.map((item, index) => ({
     url: item.url || item,
     is_main: item.is_primary === true || index === 0,
@@ -30322,6 +31238,12 @@ function mapRemotePropertyForUi(p, options = {}) {
   const id = String(p?.id || "");
   const thirdPartyDiscovery = isFoundOnlineListing(p);
   const publicImageItems = thirdPartyDiscovery ? [] : imageItems;
+  const nearestUniversity = inferStudentNearestUniversity({ ...p, extra_fields: extraFields });
+  const studentUniversities = normalizeStudentUniversityList([
+    ...(Array.isArray(p?.student_universities) ? p.student_universities : []),
+    ...(Array.isArray(extraFields.student_universities) ? extraFields.student_universities : []),
+    nearestUniversity
+  ]);
   return {
     ...p,
     id,
@@ -30329,7 +31251,7 @@ function mapRemotePropertyForUi(p, options = {}) {
     title: p?.title || "Untitled listing",
     type: normalizeType(p?.listing_type || p?.type),
     subtype: p?.property_type || p?.subtype || "Property",
-    title_type: p?.title_type || p?.extra_fields?.title_type || "",
+    title_type: p?.title_type || extraFields.title_type || "",
     land_title_available: getLandTitleAvailabilityValue(p),
     beds: p?.bedrooms,
     baths: p?.bathrooms,
@@ -30343,28 +31265,31 @@ function mapRemotePropertyForUi(p, options = {}) {
     status: p?.status || "pending",
     sold_at: p?.sold_at || null,
     moderation_status: normalizeModerationStatus(p?.status),
-    featured: p?.featured === true || String(p?.extra_fields?.featured || "").toLowerCase() === "true",
-    featured_at: p?.featured_at || p?.extra_fields?.featured_at || null,
-    registration_status: p?.registration_status || p?.agent_registration_status || p?.extra_fields?.lister_registration_status || "not_registered",
-    lister_registration_status: p?.extra_fields?.lister_registration_status || p?.registration_status || "not_registered",
+    featured: p?.featured === true || String(extraFields.featured || "").toLowerCase() === "true",
+    featured_at: p?.featured_at || extraFields.featured_at || null,
+    registration_status: p?.registration_status || p?.agent_registration_status || extraFields.lister_registration_status || "not_registered",
+    lister_registration_status: extraFields.lister_registration_status || p?.registration_status || "not_registered",
     inquiry_reference: p?.inquiry_reference || "",
     inquiry_count: Number(p?.inquiry_count || p?.lead_count || p?.leads || 0) || 0,
     agent: p?.agent_id || p?.agent || null,
     lister_display_name: p?.lister_name || p?.contact_display_name || "",
-    area_highlights: p?.extra_fields?.area_highlights || p?.area_highlights || "",
-    translations: p?.extra_fields?.translations || p?.translations || {},
-    city: p?.city || p?.extra_fields?.city || "",
-    neighborhood: p?.neighborhood || p?.extra_fields?.neighborhood || "",
-    region: p?.region || p?.extra_fields?.region || "",
-    street_name: p?.street_name || p?.extra_fields?.street_name || "",
-    preferred_contact_method: p?.preferred_contact_method || p?.extra_fields?.preferred_contact_method || "both",
-    video_url: p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.youtube_url || p?.extra_fields?.tiktok_url || "",
-    youtube_url: p?.youtube_url || p?.extra_fields?.youtube_url || "",
-    tiktok_url: p?.tiktok_url || p?.extra_fields?.tiktok_url || (/tiktok\.com/i.test(String(p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.source_url || "")) ? (p?.video_url || p?.extra_fields?.video_url || p?.extra_fields?.source_url || "") : ""),
-    resolved_location_label: p?.resolved_location_label || p?.extra_fields?.resolved_location_label || "",
+    area_highlights: extraFields.area_highlights || p?.area_highlights || "",
+    translations: extraFields.translations || p?.translations || {},
+    city: p?.city || extraFields.city || "",
+    neighborhood: p?.neighborhood || extraFields.neighborhood || "",
+    region: p?.region || extraFields.region || "",
+    street_name: p?.street_name || extraFields.street_name || "",
+    preferred_contact_method: p?.preferred_contact_method || extraFields.preferred_contact_method || "both",
+    video_url: p?.video_url || extraFields.video_url || extraFields.youtube_url || extraFields.tiktok_url || "",
+    youtube_url: p?.youtube_url || extraFields.youtube_url || "",
+    tiktok_url: p?.tiktok_url || extraFields.tiktok_url || (/tiktok\.com/i.test(String(p?.video_url || extraFields.video_url || extraFields.source_url || "")) ? (p?.video_url || extraFields.video_url || extraFields.source_url || "") : ""),
+    resolved_location_label: p?.resolved_location_label || extraFields.resolved_location_label || "",
     nearby_places: normalizeNearbyPlacesForUi(
-      Array.isArray(p?.extra_fields?.nearby_facilities) ? p.extra_fields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
+      Array.isArray(extraFields.nearby_facilities) ? extraFields.nearby_facilities : (Array.isArray(p?.nearby_places) ? p.nearby_places : [])
     ),
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: parseFloatSafe(p?.distance_to_uni_km ?? extraFields.distance_to_uni_km ?? extraFields.uni_distance),
+    student_universities: studentUniversities,
     images: publicImageItems,
     third_party_discovery_result: thirdPartyDiscovery,
     detail_loaded: options.detailLoaded === true || publicImageItems.length > 0,
@@ -30428,13 +31353,33 @@ async function hydratePropertyDetailForUi(property) {
   }
 }
 
+async function fetchPublicPaginatedRows(path, options = {}) {
+  const limit = Math.min(Math.max(Number(options.limit || 100), 1), 100);
+  const maxPages = Math.min(Math.max(Number(options.maxPages || 50), 1), 200);
+  const rows = [];
+  let firstResponse = null;
+  let page = 1;
+  let totalPages = 1;
+  do {
+    const separator = path.includes("?") ? "&" : "?";
+    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { skipAuth: true });
+    if (!firstResponse) firstResponse = response;
+    rows.push(...(Array.isArray(response?.data) ? response.data : []));
+    totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
+    page += 1;
+  } while (page <= totalPages && page <= maxPages);
+  return { rows, firstResponse };
+}
+
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-    const response = await apiRequest("/api/properties?status=approved&limit=1000&public_only=1", { skipAuth: true });
-    const rows = Array.isArray(response?.data) ? response.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-    publicListingsApiTotal = Number(response?.pagination?.total || rows.length) || rows.length;
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 200 });
+    const rows = Array.isArray(publicRows) ? publicRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+    publicListingsApiStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
+    const apiTotal = Number(publicListingsApiStats?.total ?? firstResponse?.pagination?.total ?? rows.length);
+    publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
     let featuredRows = [];
     try {
       const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured", { skipAuth: true });
@@ -30454,6 +31399,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     combinedRows.forEach((p) => upsertPropertyForUi(p));
     publicFeaturedListingsFromApi = featuredRows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
     publicListingsFromApiLoaded = true;
+    renderHeroPropertyOpportunityCounter();
     return true;
   } catch (e) {
     if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
@@ -30649,6 +31595,16 @@ async function parseInitialDeepLink() {
       renderFieldDashboard();
     } else {
       openAuthSignIn("field_agent");
+    }
+    return true;
+  }
+
+  if (path === "/staff-dashboard") {
+    if (authState?.user && ["moderator", "admin"].includes(derivePortalMode(authState.user, authState.user.portal_mode))) {
+      showPage("staff-dashboard", { history: false, source: "deep_link" });
+      renderStaffDashboard();
+    } else {
+      openAuthSignIn("moderator");
     }
     return true;
   }
@@ -31614,6 +32570,25 @@ const UG_LOCATION_TREE = {
       ]
     }
   ],
+  Masindi: [
+    {
+      city: "Masindi Municipality",
+      neighborhoods: [
+        { name: "Masindi", lat: 1.683, lng: 31.715 },
+        { name: "Masindi Central", lat: 1.683, lng: 31.715 },
+        { name: "Kijura", lat: 1.69, lng: 31.72 },
+        { name: "Kisanja", lat: 1.676, lng: 31.711 },
+        { name: "Nyangahya", lat: 1.704, lng: 31.725 }
+      ]
+    },
+    {
+      city: "Masindi Town",
+      neighborhoods: [
+        { name: "Masindi Town", lat: 1.683, lng: 31.715 },
+        { name: "Kigulya", lat: 1.697, lng: 31.706 }
+      ]
+    }
+  ],
   Masaka: [
     {
       city: "Masaka City",
@@ -31657,8 +32632,8 @@ const UG_REGION_DISTRICTS = {
     "Budaka", "Bududa", "Bugiri", "Bugweri", "Bukedea", "Bukwo",
     "Bulambuli", "Busia", "Butaleja", "Butebo", "Buyende", "Iganga",
     "Jinja", "Kaberamaido", "Kalaki", "Kaliro", "Kamuli", "Kapchorwa",
-    "Kapelebyong", "Katakwi", "Kibuku", "Kumi", "Luuka", "Mayuge",
-    "Mbale", "Namisindwa", "Namutumba", "Namayingo", "Ngora",
+    "Kapelebyong", "Katakwi", "Kibuku", "Kumi", "Kween", "Luuka",
+    "Manafwa", "Mayuge", "Mbale", "Namisindwa", "Namutumba", "Namayingo", "Ngora",
     "Pallisa", "Serere", "Sironko", "Soroti", "Tororo", "Amuria"
   ],
   Northern: [
@@ -31673,9 +32648,9 @@ const UG_REGION_DISTRICTS = {
   Western: [
     "Buhweju", "Buliisa", "Bundibugyo", "Bunyangabu", "Bushenyi",
     "Hoima", "Ibanda", "Isingiro", "Kabale", "Kabarole", "Kagadi",
-    "Kakumiro", "Kamwenge", "Kanungu", "Kasese", "Kibaale", "Kitagwenda",
+    "Kakumiro", "Kamwenge", "Kanungu", "Kasese", "Kazo", "Kibaale", "Kitagwenda",
     "Kikuube", "Kiruhura", "Kiryandongo", "Kisoro", "Kyegegwa",
-    "Kyenjojo", "Mbarara", "Mitooma", "Ntoroko", "Ntungamo",
+    "Kyenjojo", "Masindi", "Mbarara", "Mitooma", "Ntoroko", "Ntungamo",
     "Rubanda", "Rubirizi", "Rukiga", "Rukungiri", "Sheema"
   ]
 };
@@ -31684,11 +32659,6 @@ const DISTRICT_TO_REGION = (() => {
   const map = {};
   Object.entries(UG_REGION_DISTRICTS).forEach(([region, districts]) => {
     districts.forEach((district) => { map[district] = region; });
-  });
-  DISTRICTS.forEach((district) => {
-    if (!map[district]) {
-      map[district] = "Central";
-    }
   });
   return map;
 })();
@@ -31741,6 +32711,106 @@ const UGANDA_UNIVERSITIES = [
   "Uganda Management Institute (UMI)",
   "Other / Not Listed"
 ];
+
+const STUDENT_UNIVERSITY_ALIAS_GROUPS = [
+  { name: "Makerere University", aliases: ["makerere", "makerere university", "muk", "kikoni", "wandegeya", "mulago"] },
+  { name: "Makerere University Business School (MUBS)", aliases: ["mubs", "makerere university business school", "nakawa campus", "nakawa"] },
+  { name: "Kyambogo University", aliases: ["kyambogo", "kyambogo university", "banda", "ntinda"] },
+  { name: "Uganda Christian University (UCU)", aliases: ["ucu", "uganda christian university", "bishop tucker", "mukono campus", "mukono town", "mukono"] },
+  { name: "Kampala International University (KIU)", aliases: ["kiu", "kampala international university", "kansanga", "kabalagala"] },
+  { name: "Nkumba University", aliases: ["nkumba", "nkumba university", "entebbe"] },
+  { name: "Ndejje University", aliases: ["ndejje", "ndejje university"] },
+  { name: "Uganda Martyrs University (UMU)", aliases: ["umu", "uganda martyrs university", "nkozi"] },
+  { name: "Mbarara University of Science and Technology (MUST)", aliases: ["must", "mbarara university", "mbarara university of science and technology", "mbarara"] },
+  { name: "Gulu University", aliases: ["gulu university", "gulu"] },
+  { name: "Kabale University", aliases: ["kabale university", "kabale"] },
+  { name: "Lira University", aliases: ["lira university", "lira"] },
+  { name: "Busitema University", aliases: ["busitema", "busitema university"] },
+  { name: "Soroti University", aliases: ["soroti university", "soroti"] },
+  { name: "Islamic University in Uganda (IUIU)", aliases: ["iuiu", "islamic university in uganda", "mbale campus"] }
+];
+
+function simplifyStudentUniversityText(value = "") {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeStudentUniversityName(value = "") {
+  const raw = String(value || "").trim();
+  const key = simplifyStudentUniversityText(raw);
+  if (!key || ["other", "not listed", "other not listed", "near campus", "campus", "university"].includes(key)) return "";
+  const canonical = [...UGANDA_UNIVERSITIES, ...STUDENT_UNIVERSITY_ALIAS_GROUPS.map((group) => group.name)].find((name) => {
+    const nameKey = simplifyStudentUniversityText(name);
+    return nameKey === key || key === nameKey.replace(/\s+university$/, "") || nameKey.includes(key);
+  });
+  if (canonical) return canonical;
+  const aliasMatch = STUDENT_UNIVERSITY_ALIAS_GROUPS.find((group) => group.aliases.some((alias) => simplifyStudentUniversityText(alias) === key));
+  return aliasMatch ? aliasMatch.name : "";
+}
+
+function normalizeStudentUniversityList(values = []) {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(values) ? values : [values]).forEach((value) => {
+    const normalized = normalizeStudentUniversityName(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  });
+  return out;
+}
+
+function inferStudentNearestUniversity(p = {}) {
+  const extra = p.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const explicit = normalizeStudentUniversityName(
+    p.nearest_university
+      || p.nearest_uni
+      || p.university
+      || p.campus
+      || extra.nearest_university
+      || extra.nearest_uni
+      || extra.student_campus
+      || extra.student_university
+      || extra.university
+      || extra.campus
+  );
+  if (explicit) return explicit;
+  if (!isStudentDiscoverable(p)) return "";
+  const text = simplifyStudentUniversityText([
+    p.title,
+    p.desc,
+    p.description,
+    p.area,
+    p.address,
+    p.district,
+    p.resolved_location_label,
+    extra.resolved_location_label,
+    extra.map_pin_label,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text
+  ].filter(Boolean).join(" "));
+  if (!text) return "";
+  const aliases = STUDENT_UNIVERSITY_ALIAS_GROUPS
+    .flatMap((group) => group.aliases.map((alias) => ({ name: group.name, alias })))
+    .sort((a, b) => simplifyStudentUniversityText(b.alias).length - simplifyStudentUniversityText(a.alias).length);
+  for (const item of aliases) {
+    const pattern = simplifyStudentUniversityText(item.alias).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    if (pattern && new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(text)) return item.name;
+  }
+  return "";
+}
 
 const UG_AMENITY_POINTS = [
   { name: "Mulago National Referral Hospital", kind: "Hospital", district: "Kampala", lat: 0.338, lng: 32.576 },

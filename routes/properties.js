@@ -10,8 +10,10 @@ const {
   sendSupportEmail
 } = require('../services/emailService');
 const {
+  buildOwnerStatusMessage,
   buildAutomatedListingReview,
   createOwnerEditToken,
+  getDirectWhatsAppUrl,
   getOwnerPreviewUrl,
   hashOwnerEditToken,
   isOwnerEditTokenValid,
@@ -29,7 +31,8 @@ const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
 const { createLead } = require('../services/leadService');
 const { ensurePostVerificationRecords } = require('../services/authFlowService');
-const { hasAdminAccess, requireAdminApiKey } = require('../middleware/auth');
+const { prepareMediaUrlForStorage } = require('../services/cloudMediaStorageService');
+const { hasAdminAccess, requireAdminApiKey, requireListingModerationAccess } = require('../middleware/auth');
 const {
   asArray,
   cleanText,
@@ -49,6 +52,10 @@ const {
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, UNIVERSITIES, LISTING_TYPES, PROPERTY_STATUSES } = require('../utils/constants');
 const {
+  isPublicLivePropertyStatus,
+  publicLivePropertyStatusSql
+} = require('../utils/publicInventoryStatus');
+const {
   DEFAULT_SEARCH_RADIUS_MILES,
   buildHaversineSql,
   kmToMiles,
@@ -57,9 +64,14 @@ const {
   roundLocationForAnalytics
 } = require('../services/locationSearchService');
 const {
-  buildUgNlisLandVerificationPack,
-  sanitizeUgNlisLandVerificationFields
-} = require('../services/ugnlisLandVerificationService');
+  landTitleAvailabilityLabel,
+  normalizeLandTitleAvailability
+} = require('../utils/landTitleAvailability');
+const {
+  inferNearestUniversityFromListing,
+  normalizeUniversityList,
+  normalizeUniversityName
+} = require('../utils/universityMatcher');
 
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
@@ -98,6 +110,7 @@ function addPublicLaunchSeedFilter(filters, values) {
   filters.push("COALESCE(p.source, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
   filters.push("COALESCE(p.listed_via, '') !~* '(qa|test|demo|soft_launch|launch_proof)'");
   filters.push("COALESCE(p.lister_name, '') !~* '(qa test delete|qa owner|dummy|sample)'");
+  filters.push("COALESCE(p.lister_email, '') !~* '(makaug\\.invalid|test@|qa@|dummy|sample)'");
   filters.push("COALESCE(p.inquiry_reference, '') !~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'");
   filters.push("COALESCE(p.extra_fields->>'qa_test_delete', '') !~* '^(true|1|yes)$'");
   filters.push("COALESCE(p.extra_fields->>'soft_launch_test', '') !~* '^(true|1|yes)$'");
@@ -112,15 +125,72 @@ function normalizeListingType(type) {
   return t;
 }
 
+function publicOpportunityBucketSql(alias = 'p') {
+  const a = alias;
+  const directType = `LOWER(TRIM(COALESCE(${a}.listing_type, '')))`;
+  const propertyType = `LOWER(COALESCE(${a}.property_type, ''))`;
+  const period = `LOWER(COALESCE(${a}.price_period, ''))`;
+  const text = `LOWER(CONCAT_WS(' ',
+    ${a}.title,
+    ${a}.description,
+    ${a}.property_type,
+    ${a}.price_period,
+    ${a}.extra_fields->>'room_type',
+    ${a}.extra_fields->>'commercial_type',
+    ${a}.extra_fields->>'title_type'
+  ))`;
+  return `CASE
+    WHEN ${directType} IN ('sale', 'rent', 'commercial', 'land') THEN ${directType}
+    WHEN ${directType} IN ('student', 'students') THEN 'student'
+    WHEN ${propertyType} ~* '(land|plot|acre|decimal|estate plots?)' THEN 'land'
+    WHEN ${propertyType} ~* '(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)' THEN 'commercial'
+    WHEN ${text} ~* '(student|hostel|university|campus|bedsitter)' THEN 'student'
+    WHEN ${text} ~* '(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)' THEN 'commercial'
+    WHEN ${text} ~* '(land|plot|acre|decimal|estate plots?)' THEN 'land'
+    WHEN ${period} IN ('mo', 'month', 'monthly', 'per_month') OR ${text} ~* '(rent|rental|lease|per month|monthly)' THEN 'rent'
+    WHEN ${text} ~* '(for sale|sale|selling|buy)' THEN 'sale'
+    ELSE 'other'
+  END`;
+}
+
+function normalizePublicOpportunitySummary(row = {}) {
+  const sale = Number(row.sale || 0) || 0;
+  const rent = Number(row.rent || 0) || 0;
+  const student = Number(row.student || 0) || 0;
+  const commercial = Number(row.commercial || 0) || 0;
+  const land = Number(row.land || 0) || 0;
+  const other = Number(row.other || 0) || 0;
+  const total = Number(row.total || 0) || (sale + rent + student + commercial + land + other);
+  return {
+    total,
+    sale,
+    rent,
+    student,
+    commercial,
+    land,
+    other,
+    by_type: {
+      sale,
+      rent,
+      student,
+      commercial,
+      land,
+      other
+    }
+  };
+}
+
 const PUBLIC_AREA_PIN_OVERRIDES = [
   { name: 'Ndejje', district: 'Wakiso', latitude: 0.244, longitude: 32.553, aliases: ['Ndejje', 'Ndejje Lubugumu'] },
   { name: 'Munyonyo', district: 'Kampala', latitude: 0.236, longitude: 32.623, aliases: ['Munyonyo', 'Munyonjo', 'Munyonyo Kampala', 'Munyonyo Uganda'] },
   { name: 'Bujjuko Akright Estate', district: 'Wakiso', latitude: 0.374, longitude: 32.389, aliases: ['Bujjuko Akright', 'Bujuuko Akright', 'Akright', 'Bujjuko', 'Bujuuko'] },
   { name: 'Kakiri', district: 'Wakiso', latitude: 0.409, longitude: 32.38, aliases: ['Kakiri', 'Kakiri Masulita', 'Kakiri Masulita Hoima Road', 'Hoima Road'] },
   { name: 'Masulita', district: 'Wakiso', latitude: 0.51, longitude: 32.46, aliases: ['Masulita'] },
+  { name: 'Masindi', district: 'Masindi', latitude: 1.683, longitude: 31.715, aliases: ['Masindi', 'Masindi Town', 'Masindi Municipality'] },
   { name: 'Kira', district: 'Wakiso', latitude: 0.3978, longitude: 32.6414, aliases: ['Kira', 'Kira Town'] },
   { name: 'Kira-Mulawa', district: 'Wakiso', latitude: 0.412, longitude: 32.65, aliases: ['Kira-Mulawa', 'Kira Mulawa', 'Mulawa'] },
   { name: 'Kira-Nsasa', district: 'Wakiso', latitude: 0.428, longitude: 32.665, aliases: ['Kira-Nsasa', 'Kira Nsasa', 'Nsasa'] },
+  { name: 'Nansana', district: 'Wakiso', latitude: 0.364, longitude: 32.52, aliases: ['Nansana', 'Nansana Municipality', 'Nansana Town'] },
   { name: 'Namugongo', district: 'Wakiso', latitude: 0.363, longitude: 32.636, aliases: ['Namugongo'] },
   { name: 'Najjera', district: 'Wakiso', latitude: 0.396, longitude: 32.615, aliases: ['Najjera', 'Najjeera'] },
   { name: 'Kitende', district: 'Wakiso', latitude: 0.197, longitude: 32.535, aliases: ['Kitende'] },
@@ -184,6 +254,45 @@ function cleanPublicListingCopy(value = '') {
     .replace(/\s*Confirm latest availability, exact pin, and ownership authority before featuring\.?/gi, '')
     .replace(/\s*Pending King review[^.]*\.?/gi, '')
     .trim();
+}
+
+function listingLooksStudentLike(row = {}) {
+  const text = [
+    row.listing_type,
+    row.category,
+    row.property_type,
+    row.title,
+    row.description
+  ].filter(Boolean).join(' ').toLowerCase();
+  return row.students_welcome === true
+    || row.students_welcome === 'true'
+    || /\b(student|students|hostel|campus|university|dorm|dormitory)\b/i.test(text);
+}
+
+function studentUniversityContextFor(row = {}, safeExtra = null) {
+  const extra = safeExtra || (row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {});
+  const explicit = normalizeUniversityName(
+    row.nearest_university
+    || extra.nearest_university
+    || extra.nearest_uni
+    || extra.student_campus
+    || extra.student_university
+    || extra.university
+  );
+  const nearestUniversity = explicit || (listingLooksStudentLike(row)
+    ? inferNearestUniversityFromListing({ ...row, extra_fields: extra })
+    : '');
+  const distanceRaw = row.distance_to_uni_km ?? extra.distance_to_uni_km ?? extra.uni_distance ?? null;
+  const distance = toNullableFloat(distanceRaw);
+  const universities = normalizeUniversityList([
+    ...(Array.isArray(extra.student_universities) ? extra.student_universities : []),
+    nearestUniversity
+  ]);
+  return {
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: distance,
+    student_universities: universities
+  };
 }
 
 function redactThirdPartyPublicText(value = '') {
@@ -341,10 +450,23 @@ function buildThirdPartyPublicSummary(property = {}, extra = {}) {
   const price = publicPriceLabelFor(property);
   const bedrooms = Number(property.bedrooms);
   const bathrooms = Number(property.bathrooms);
+  const landTitleAvailable = normalizeLandTitleAvailability(
+    extra.land_title_available
+      ?? extra.landTitleAvailable
+      ?? extra.title_available
+      ?? extra.land_title_status,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text
+  );
+  const landTitleLabel = landTitleAvailabilityLabel(landTitleAvailable);
   const facts = [
     area && `Area: ${area}`,
     type && `Type: ${type}`,
     price && `Guide price: ${price}`,
+    landTitleLabel && `Land title: ${landTitleLabel}`,
     Number.isFinite(bedrooms) && bedrooms > 0 ? `Bedrooms: ${bedrooms}` : '',
     Number.isFinite(bathrooms) && bathrooms > 0 ? `Bathrooms: ${bathrooms}` : ''
   ].filter(Boolean).join('. ');
@@ -556,10 +678,46 @@ function inferPublicSourcePlatform(value = '') {
   return '';
 }
 
+function publicSourceDateConfidence(extra = {}) {
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
+  return cleanText(
+    extra.source_post_date_confidence
+      || extra.sourceDateConfidence
+      || extra.date_confidence
+      || raw.source_post_date_confidence
+      || raw.sourceDateConfidence
+      || raw.date_confidence
+      || ''
+  ).toLowerCase();
+}
+
+function publicSourceDateNeedsPlatformConfirmation(extra = {}) {
+  const confidence = publicSourceDateConfidence(extra);
+  const raw = extra.raw_source_post && typeof extra.raw_source_post === 'object' ? extra.raw_source_post : {};
+  const importMethod = cleanText(raw.import_method || extra.import_method || '').toLowerCase();
+  const platform = cleanText(extra.source_platform || '').toLowerCase();
+  if (!confidence) return platform === 'tiktok' && importMethod === 'no_api_exact_social_url_intake';
+  return /inferred_from_public_post_id|inferred.*(?:video|status|post|id)|estimated|needs_.*date_confirmation/.test(confidence);
+}
+
 function publicExtraFields(extraFields = {}) {
   const extra = extraFields && typeof extraFields === 'object' ? extraFields : {};
-  const landVerification = buildUgNlisLandVerificationPack(extra);
+  const landTitleAvailable = normalizeLandTitleAvailability(
+    extra.land_title_available
+      ?? extra.landTitleAvailable
+      ?? extra.title_available
+      ?? extra.land_title_status,
+    extra.source_title,
+    extra.source_caption,
+    extra.source_description,
+    extra.source_text,
+    extra.source_visual_text,
+    extra.video_ocr_text,
+    extra.frame_ocr_text
+  );
   const sourceHoverDescription = buildPublicSourceHoverDescription(extra);
+  const sourceDateNeedsConfirmation = publicSourceDateNeedsPlatformConfirmation(extra);
+  const sourceDateConfirmationLabel = 'Original post date is being confirmed from the source platform.';
   const safeSourceUrls = Array.isArray(extra.source_urls)
     ? extra.source_urls.filter((url) => /^https?:\/\//i.test(String(url || ''))).slice(0, 5)
     : [];
@@ -589,6 +747,17 @@ function publicExtraFields(extraFields = {}) {
     || inferPublicSourcePlatform(sourceContactUrl);
   const sourceContactLabel = cleanText(extra.source_contact_label)
     || (sourceContactUrl ? `Contact via ${sourceContactPlatform || 'source'} source` : null);
+  const nearestUniversity = normalizeUniversityName(
+    extra.nearest_university
+    || extra.nearest_uni
+    || extra.student_campus
+    || extra.student_university
+    || extra.university
+  );
+  const studentUniversities = normalizeUniversityList([
+    ...(Array.isArray(extra.student_universities) ? extra.student_universities : []),
+    nearestUniversity
+  ]);
   const tiktokUrl = safePublicSourceUrl(
     extra.tiktok_url
       || extra.tiktok_video_url
@@ -614,6 +783,12 @@ function publicExtraFields(extraFields = {}) {
     resolved_location_label: extra.resolved_location_label || null,
     public_display_name: extra.public_display_name || null,
     preferred_contact_method: extra.preferred_contact_method || null,
+    nearest_university: nearestUniversity || null,
+    distance_to_uni_km: toNullableFloat(extra.distance_to_uni_km ?? extra.uni_distance),
+    student_campus: nearestUniversity || extra.student_campus || null,
+    student_universities: studentUniversities,
+    land_title_available: landTitleAvailable || null,
+    land_title_available_label: landTitleAvailabilityLabel(landTitleAvailable) || null,
     video_url: videoUrl || null,
     youtube_url: youtubeUrl || null,
     tiktok_url: tiktokUrl || null,
@@ -636,11 +811,15 @@ function publicExtraFields(extraFields = {}) {
     source_urls: safeSourceUrls,
     first_seen_online_at: extra.first_seen_online_at || null,
     first_seen_online_label: extra.first_seen_online_label || null,
-    first_posted_online_at: extra.first_posted_online_at || null,
-    first_posted_online_label: extra.first_posted_online_label || null,
-    source_published_at: extra.source_published_at || null,
-    source_published_label: extra.source_published_label || null,
-    original_publish_date_status: extra.original_publish_date_status || null,
+    first_posted_online_at: sourceDateNeedsConfirmation ? null : (extra.first_posted_online_at || null),
+    first_posted_online_label: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.first_posted_online_label || null),
+    source_published_at: sourceDateNeedsConfirmation ? null : (extra.source_published_at || null),
+    source_published_label: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.source_published_label || null),
+    source_post_date_confidence: publicSourceDateConfidence(extra) || null,
+    source_post_date_status: sourceDateNeedsConfirmation
+      ? 'needs_source_platform_date_confirmation'
+      : (extra.source_post_date_status || null),
+    original_publish_date_status: sourceDateNeedsConfirmation ? sourceDateConfirmationLabel : (extra.original_publish_date_status || null),
     added_to_makaug_at: extra.added_to_makaug_at || null,
     added_to_makaug_label: extra.added_to_makaug_label || null,
     source_followers_label: extra.source_followers_label || null,
@@ -656,17 +835,6 @@ function publicExtraFields(extraFields = {}) {
     area_highlights: cleanPublicListingCopy(extra.area_highlights || ''),
     nearby_facilities: Array.isArray(extra.nearby_facilities) ? extra.nearby_facilities : [],
     size_raw: extra.size_raw || '',
-    land_verification: landVerification,
-    ugnlis_title_volume: extra.ugnlis_title_volume || null,
-    ugnlis_title_folio: extra.ugnlis_title_folio || null,
-    ugnlis_county: extra.ugnlis_county || null,
-    ugnlis_block: extra.ugnlis_block || null,
-    ugnlis_plot: extra.ugnlis_plot || null,
-    ugnlis_transaction_number: extra.ugnlis_transaction_number || null,
-    ugnlis_search_reference: extra.ugnlis_search_reference || null,
-    ugnlis_search_date: extra.ugnlis_search_date || null,
-    ugnlis_search_letter_url: extra.ugnlis_search_letter_url || null,
-    land_verification_status: landVerification.status,
     featured: extra.featured === true,
     featured_at: extra.featured_at || null
   };
@@ -712,6 +880,16 @@ function publicPropertyRow(property, images = []) {
   const publicDescription = foundOnlinePublic
     ? buildThirdPartyPublicSummary(safeProperty, safeExtra)
     : cleanPublicListingCopy(safeProperty.description || '');
+  const studentContext = studentUniversityContextFor(safeProperty, safeExtra);
+  const extraWithStudentContext = {
+    ...safeExtra,
+    ...(studentContext.nearest_university ? {
+      nearest_university: studentContext.nearest_university,
+      student_campus: studentContext.nearest_university,
+      student_universities: studentContext.student_universities
+    } : {}),
+    ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+  };
   return {
     ...safeProperty,
     title: publicTitle,
@@ -719,8 +897,10 @@ function publicPropertyRow(property, images = []) {
     district: locationOverride?.district || safeProperty.district,
     latitude: !hasUsablePublicPin && locationOverride ? locationOverride.latitude : safeProperty.latitude,
     longitude: !hasUsablePublicPin && locationOverride ? locationOverride.longitude : safeProperty.longitude,
-    extra_fields: safeExtra,
-    land_verification: buildUgNlisLandVerificationPack(property?.extra_fields || {}),
+    nearest_university: studentContext.nearest_university || safeProperty.nearest_university || null,
+    distance_to_uni_km: studentContext.distance_to_uni_km,
+    student_universities: studentContext.student_universities,
+    extra_fields: extraWithStudentContext,
     featured: safeProperty.featured === true || String(safeExtra?.featured || '').toLowerCase() === 'true',
     featured_at: safeProperty.featured_at || safeExtra?.featured_at || null,
     id_number_present: !!property?.id_number,
@@ -980,6 +1160,27 @@ function parseBooleanLike(value, fallback = false) {
   return fallback;
 }
 
+function buildManualOwnerStatusNotification({ listing = {}, status, reason }) {
+  const message = buildOwnerStatusMessage({ listing, status, reason });
+  const phone = cleanText(listing.lister_phone);
+  const email = cleanText(listing.lister_email);
+  return {
+    email: {
+      sent: false,
+      reason: email ? 'manual_first_fast_status_update' : 'no_lister_email',
+      subject: message.subject,
+      message: message.text
+    },
+    whatsapp: {
+      sent: false,
+      reason: phone ? 'manual_first_fast_status_update' : 'no_lister_phone',
+      phone: phone || null,
+      message: message.whatsapp,
+      manual_url: phone ? getDirectWhatsAppUrl(phone, message.whatsapp) : ''
+    }
+  };
+}
+
 function isSourcedInventoryCandidateRecord(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const source = cleanText(row.source || extra.source).toLowerCase();
@@ -1034,7 +1235,7 @@ router.get('/suggestions', async (req, res, next) => {
     const areas = await db.query(
       `SELECT DISTINCT area
        FROM properties
-       WHERE status = 'approved' AND area ILIKE $1${whereType}
+       WHERE ${publicLivePropertyStatusSql('')} AND area ILIKE $1${whereType}
        ORDER BY area ASC
        LIMIT 20`,
       values
@@ -1043,7 +1244,7 @@ router.get('/suggestions', async (req, res, next) => {
     const streets = await db.query(
       `SELECT DISTINCT extra_fields->>'street_name' AS street_name
        FROM properties
-       WHERE status = 'approved'
+       WHERE ${publicLivePropertyStatusSql('')}
          AND COALESCE(extra_fields->>'street_name', '') ILIKE $1${whereType}
        ORDER BY extra_fields->>'street_name' ASC
        LIMIT 20`,
@@ -1105,6 +1306,7 @@ async function listPropertiesHandler(req, res, next) {
     const amenities = asArray(req.query.amenities).map((item) => cleanText(item).toLowerCase()).filter(Boolean);
     const studentCampus = cleanText(req.query.studentCampus || req.query.student_campus);
     const landTitleType = cleanText(req.query.landTitleType || req.query.land_title_type);
+    const landTitleAvailable = normalizeLandTitleAvailability(req.query.landTitleAvailable ?? req.query.land_title_available ?? req.query.titleAvailable ?? req.query.title_available);
     const commercialType = cleanText(req.query.commercialType || req.query.commercial_type);
     const currency = cleanText(req.query.currency || 'UGX').toUpperCase();
     const source = cleanText(req.query.source || 'web_search');
@@ -1172,10 +1374,12 @@ async function listPropertiesHandler(req, res, next) {
 
     if (status && status !== 'all') {
       if (status === 'approved') {
-        addFilter(filters, values, "(p.status = 'approved' OR (p.status = 'sold' AND p.sold_at >= NOW() - INTERVAL '7 days'))");
+        filters.push(publicLivePropertyStatusSql('p'));
       } else {
         addFilter(filters, values, 'p.status = ?', status);
       }
+    } else if (publicOnly) {
+      filters.push(publicLivePropertyStatusSql('p'));
     }
     if (featuredFilterRequested) {
       if (featuredOnly) {
@@ -1217,7 +1421,7 @@ async function listPropertiesHandler(req, res, next) {
       addFilter(
         filters,
         values,
-        "(COALESCE(p.extra_fields->>'nearest_university', '') ILIKE ? OR COALESCE(p.extra_fields->>'student_campus', '') ILIKE ? OR COALESCE(p.description, '') ILIKE ?)",
+        "(COALESCE(p.nearest_university, p.extra_fields->>'nearest_university', '') ILIKE ? OR COALESCE(p.extra_fields->>'student_campus', '') ILIKE ? OR COALESCE(p.description, '') ILIKE ?)",
         `%${studentCampus}%`,
         `%${studentCampus}%`,
         `%${studentCampus}%`
@@ -1225,6 +1429,14 @@ async function listPropertiesHandler(req, res, next) {
     }
     if (landTitleType) {
       addFilter(filters, values, "(COALESCE(p.title_type, '') ILIKE ? OR COALESCE(p.extra_fields->>'title_type', '') ILIKE ?)", `%${landTitleType}%`, `%${landTitleType}%`);
+    }
+    if (landTitleAvailable) {
+      addFilter(
+        filters,
+        values,
+        "LOWER(COALESCE(p.extra_fields->>'land_title_available', p.extra_fields->>'landTitleAvailable', p.extra_fields->>'title_available', '')) = ?",
+        landTitleAvailable
+      );
     }
     if (commercialType) {
       addFilter(filters, values, "(p.property_type ILIKE ? OR COALESCE(p.extra_fields->>'commercial_type', '') ILIKE ?)", `%${commercialType}%`, `%${commercialType}%`);
@@ -1276,8 +1488,25 @@ async function listPropertiesHandler(req, res, next) {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const countResult = await db.query(`SELECT COUNT(*)::int AS total FROM properties p ${where}`, values);
-    const total = countResult.rows[0]?.total || 0;
+    const opportunityBucketSql = publicOpportunityBucketSql('p');
+    const summaryResult = await db.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
+         COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
+         COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
+         COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
+         COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
+         COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
+       FROM (
+         SELECT ${opportunityBucketSql} AS bucket
+         FROM properties p
+         ${where}
+       ) public_inventory`,
+      values
+    );
+    const opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
+    const total = opportunitySummary.total;
     if (total === 0) {
       try {
         await db.query(
@@ -1298,6 +1527,7 @@ async function listPropertiesHandler(req, res, next) {
               amenities,
               student_campus: studentCampus || null,
               land_title_type: landTitleType || null,
+              land_title_available: landTitleAvailable || null,
               commercial_type: commercialType || null
             },
             location: hasRadiusSearch ? {
@@ -1348,6 +1578,10 @@ async function listPropertiesHandler(req, res, next) {
         p.bedrooms,
         p.bathrooms,
         p.property_type,
+        p.nearest_university,
+        p.distance_to_uni_km,
+        p.room_type,
+        p.room_arrangement,
         p.title_type,
         p.status,
         p.moderation_stage,
@@ -1435,6 +1669,7 @@ async function listPropertiesHandler(req, res, next) {
               amenities,
               student_campus: studentCampus || null,
               land_title_type: landTitleType || null,
+              land_title_available: landTitleAvailable || null,
               commercial_type: commercialType || null
             },
             result_count: listResult.rows.length,
@@ -1477,6 +1712,16 @@ async function listPropertiesHandler(req, res, next) {
         const publicDescription = foundOnlinePublic
           ? buildThirdPartyPublicSummary(row, safeExtra)
           : cleanPublicListingCopy(publicRow.description || '');
+        const studentContext = studentUniversityContextFor(row, safeExtra);
+        const publicExtra = {
+          ...safeExtra,
+          ...(studentContext.nearest_university ? {
+            nearest_university: studentContext.nearest_university,
+            student_campus: studentContext.nearest_university,
+            student_universities: studentContext.student_universities
+          } : {}),
+          ...(studentContext.distance_to_uni_km != null ? { distance_to_uni_km: studentContext.distance_to_uni_km } : {})
+        };
         const responseRow = {
           ...publicRow,
           title: publicTitle,
@@ -1500,7 +1745,10 @@ async function listPropertiesHandler(req, res, next) {
           distanceKm,
           distance_miles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
           distanceMiles: distanceKm == null ? null : Number(kmToMiles(Number(distanceKm)).toFixed(2)),
-          extra_fields: safeExtra,
+          nearest_university: studentContext.nearest_university || null,
+          distance_to_uni_km: studentContext.distance_to_uni_km,
+          student_universities: studentContext.student_universities,
+          extra_fields: publicExtra,
           third_party_discovery_result: foundOnlinePublic
         };
         if (adminAccess) {
@@ -1529,6 +1777,9 @@ async function listPropertiesHandler(req, res, next) {
           analytics_location: roundLocationForAnalytics(searchLat, searchLng)
         }
       } : null,
+      summary: {
+        public_opportunities: opportunitySummary
+      },
       pagination: toPagination(total, page, limit)
     });
   } catch (error) {
@@ -1551,7 +1802,7 @@ router.get('/:id', async (req, res, next) => {
     const ownerToken = getOwnerEditTokenFromRequest(req);
     const ownerCanPreview = canUseOwnerEditToken(property, ownerToken);
     const adminAccess = hasAdminCredentialHint(req) ? await hasAdminAccess(req) : false;
-    const canViewNonPublic = property.status === 'approved'
+    const canViewNonPublic = isPublicLivePropertyStatus(property.status)
       || ownerCanPreview
       || adminAccess;
 
@@ -1977,7 +2228,7 @@ router.post('/', async (req, res, next) => {
     const newUntilDate = body.new_until ? new Date(body.new_until) : new Date(Date.now() + (5 * 24 * 60 * 60 * 1000));
     const newUntil = Number.isNaN(newUntilDate.getTime()) ? new Date(Date.now() + (5 * 24 * 60 * 60 * 1000)) : newUntilDate;
     const idDocumentName = cleanText(body.id_document_name || extraFields?.verify?.id_document_name);
-    const idDocumentUrl = cleanText(body.id_document_url || extraFields?.verify?.id_document_url);
+    let idDocumentUrl = cleanText(body.id_document_url || extraFields?.verify?.id_document_url);
     const idDocumentType = cleanText(body.id_document_type || body.id_document_mime_type || extraFields?.verify?.id_document_type || extraFields?.verify?.id_document_mime_type);
 
     if (listerEmail && !isValidEmail(listerEmail)) errors.push('lister_email is invalid');
@@ -2055,6 +2306,32 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: 'Validation failed', details: errors });
     }
 
+    idDocumentUrl = await prepareMediaUrlForStorage(idDocumentUrl, {
+      keyPrefix: `listing-submissions/${inquiryReference}/identity`,
+      filename: idDocumentName || 'national-id-photo',
+      isPrivate: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      maxBytes: 5 * 1024 * 1024,
+      label: 'National ID photo'
+    });
+    if (idDocumentUrl && extraFields.verify && typeof extraFields.verify === 'object') {
+      extraFields.verify.id_document_url = idDocumentUrl;
+    }
+    const storedSubmittedImageItems = [];
+    for (const [index, item] of submittedImageItems.entries()) {
+      storedSubmittedImageItems.push({
+        ...item,
+        url: await prepareMediaUrlForStorage(item.url, {
+          keyPrefix: `listing-submissions/${inquiryReference}/photos`,
+          filename: item.room_label || item.slot_key || `property-photo-${index + 1}`,
+          isPrivate: false,
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          maxBytes: 6 * 1024 * 1024,
+          label: 'Property image'
+        })
+      });
+    }
+
     const amenities = asArray(body.amenities).map((x) => cleanText(x)).filter(Boolean);
     const videoUrl = cleanText(body.video_url || body.youtube_url || extraFields.video_url || extraFields.youtube_url);
     const availableFrom = cleanText(body.available_from || extraFields.available_from);
@@ -2065,18 +2342,62 @@ router.post('/', async (req, res, next) => {
     if (['phone', 'whatsapp', 'email', 'both'].includes(preferredContactMethod)) {
       extraFields.preferred_contact_method = preferredContactMethod;
     }
-    const landVerificationFields = sanitizeUgNlisLandVerificationFields({
-      ...extraFields,
-      ...body
-    });
-    if (listingType === 'land' || Object.keys(landVerificationFields).length) {
-      Object.assign(extraFields, landVerificationFields);
+    const landTitleAvailable = normalizeLandTitleAvailability(
+      body.land_title_available
+        ?? body.landTitleAvailable
+        ?? body.title_available
+        ?? extraFields.land_title_available
+        ?? extraFields.landTitleAvailable
+        ?? extraFields.title_available
+        ?? extraFields.land_title_status,
+      title,
+      description,
+      extraFields.source_title,
+      extraFields.source_caption,
+      extraFields.source_description,
+      extraFields.source_text,
+      extraFields.source_visual_text
+    );
+    if (landTitleAvailable) {
+      extraFields.land_title_available = landTitleAvailable;
+      extraFields.land_title_available_label = landTitleAvailabilityLabel(landTitleAvailable);
     }
     if (brokerCanSkipOwnerIdentity) {
       extraFields.broker_submission = true;
       extraFields.broker_agent_id = brokerAgent.id;
       extraFields.broker_listing_review = 'Admin approval required before this broker listing goes live.';
       extraFields.skip_owner_identity_recheck = true;
+    }
+    const nearestUniversity = normalizeUniversityName(
+      body.nearest_university
+      || extraFields.nearest_university
+      || extraFields.nearest_uni
+      || extraFields.student_campus
+      || extraFields.student_university
+      || extraFields.university
+    ) || ((listingType === 'student' || studentsWelcome)
+      ? inferNearestUniversityFromListing({
+        ...body,
+        listing_type: listingType,
+        title,
+        description,
+        district,
+        area,
+        address: cleanText(body.address) || '',
+        extra_fields: extraFields
+      })
+      : '');
+    const distanceToUniversityKm = toNullableFloat(body.distance_to_uni_km ?? extraFields.distance_to_uni_km ?? extraFields.uni_distance);
+    if (nearestUniversity) {
+      extraFields.nearest_university = nearestUniversity;
+      extraFields.student_campus = nearestUniversity;
+      extraFields.student_universities = normalizeUniversityList([
+        ...(Array.isArray(extraFields.student_universities) ? extraFields.student_universities : []),
+        nearestUniversity
+      ]);
+    }
+    if (distanceToUniversityKm != null) {
+      extraFields.distance_to_uni_km = distanceToUniversityKm;
     }
 
     const insertResult = await db.query(
@@ -2158,8 +2479,8 @@ router.post('/', async (req, res, next) => {
         toNullableFloat(body.floor_area_sqm),
         toNullableFloat(body.usable_size_sqm),
         toNullableInt(body.parking_bays),
-        cleanText(body.nearest_university) || null,
-        toNullableFloat(body.distance_to_uni_km),
+        nearestUniversity || null,
+        distanceToUniversityKm,
         cleanText(body.room_type) || null,
         cleanText(body.room_arrangement) || null,
         cleanText(body.commercial_intent) || null,
@@ -2246,7 +2567,7 @@ router.post('/', async (req, res, next) => {
       userAgent: req.get('user-agent')
     });
 
-    const imageItems = submittedImageItems.slice(0, enforceOtp ? websiteMaxImages : 20);
+    const imageItems = storedSubmittedImageItems.slice(0, enforceOtp ? websiteMaxImages : 20);
     const imageUrls = imageItems.map((item) => item.url);
 
     for (let i = 0; i < imageUrls.length; i += 1) {
@@ -2495,7 +2816,7 @@ router.post('/:id/whatsapp-click', async (req, res, next) => {
        FROM properties p
        LEFT JOIN agents a ON a.id = p.agent_id
        WHERE p.id = $1
-         AND p.status IN ('approved','sold')
+         AND (${publicLivePropertyStatusSql('p')} OR LOWER(COALESCE(p.status, '')) = 'sold')
        LIMIT 1`,
       [propertyId]
     );
@@ -2676,7 +2997,7 @@ router.post('/:id/inquiries', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
+router.patch('/:id/status', requireListingModerationAccess, async (req, res, next) => {
   try {
     const nextStatus = cleanText(req.body.status).toLowerCase();
     let moderationReason = cleanText(req.body.reason) || null;
@@ -2684,9 +3005,33 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     const warningOverrides = req.body.warning_overrides && typeof req.body.warning_overrides === 'object'
       ? req.body.warning_overrides
       : {};
+    const manualNotificationOnly = parseBooleanLike(
+      req.body.manual_notification_only
+        || req.body.manualNotificationOnly
+        || req.body.fast_admin_render
+        || req.body.fastAdminRender,
+      false
+    );
 
     if (!PROPERTY_STATUSES.includes(nextStatus)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
+    }
+
+    const actorRole = String(req.adminAuth?.role || '').toLowerCase();
+    if (actorRole === 'moderator') {
+      const moderatorAllowedStatuses = new Set(['approved', 'rejected', 'pending']);
+      if (!moderatorAllowedStatuses.has(nextStatus)) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Moderator accounts can only approve, reject, or return listings to pending review'
+        });
+      }
+      if (parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false)) {
+        return res.status(403).json({
+          ok: false,
+          error: 'Found-online special dispensation requires King/admin approval'
+        });
+      }
     }
 
     if (nextStatus === 'rejected' && !moderationReason) {
@@ -2921,19 +3266,28 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
     };
 
     try {
-      notification = await sendOwnerListingStatusNotifications({
-        listing: {
-          ...listing,
-          owner_edit_token: regeneratedOwnerToken
-        },
-        status: nextStatus,
-        reason: moderationReason
-      });
-      if (notification.email?.sent || notification.whatsapp?.sent) {
-        await db.query(
-          'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
-          [listing.id]
-        );
+      const notificationListing = {
+        ...listing,
+        owner_edit_token: regeneratedOwnerToken
+      };
+      if (manualNotificationOnly && ['approved', 'rejected'].includes(nextStatus)) {
+        notification = buildManualOwnerStatusNotification({
+          listing: notificationListing,
+          status: nextStatus,
+          reason: moderationReason
+        });
+      } else {
+        notification = await sendOwnerListingStatusNotifications({
+          listing: notificationListing,
+          status: nextStatus,
+          reason: moderationReason
+        });
+        if (notification.email?.sent || notification.whatsapp?.sent) {
+          await db.query(
+            'UPDATE properties SET last_moderation_notification_at = NOW() WHERE id = $1',
+            [listing.id]
+          );
+        }
       }
     } catch (error) {
       notification = { sent: false, reason: 'notification_failed', error: error.message || 'send_failed' };
@@ -3003,6 +3357,26 @@ router.patch('/:id/status', requireAdminApiKey, async (req, res, next) => {
         message: error.message
       });
       approvalWarnings.push('Moderation history event could not be written, but the listing status was updated.');
+    }
+
+    if (actorRole === 'moderator') {
+      await db.query(
+        `INSERT INTO staff_activity_logs (staff_user_id, action, target_type, target_id, metadata)
+         VALUES ($1,$2,$3,$4,$5::jsonb)`,
+        [
+          reviewerUserId,
+          nextStatus === 'approved' ? 'staff_listing_approved' : (nextStatus === 'rejected' ? 'staff_listing_rejected' : 'staff_listing_returned_pending'),
+          'property',
+          listing.id,
+          JSON.stringify({
+            status_from: current.status,
+            status_to: nextStatus,
+            title: listing.title || null,
+            reason: moderationReason || null,
+            lister_notified: !!(notification.email?.sent || notification.whatsapp?.sent)
+          })
+        ]
+      ).catch(() => {});
     }
 
     let alertMatching = null;
