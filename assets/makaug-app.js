@@ -9138,6 +9138,7 @@ async function renderAdvertiserDashboard() {
 
 let staffDashboardData = null;
 let staffAiLastCsv = "";
+let staffPreviewPreviousAdminReview = null;
 
 function staffNumber(value) {
   return Number(value || 0).toLocaleString("en-UG");
@@ -9599,17 +9600,20 @@ function staffPreviewField(id, label, value = "", type = "text", extra = "") {
 
 function renderStaffListingPreviewModal(preview = {}) {
   const existing = document.getElementById("staff-listing-preview-modal");
-  if (existing) existing.remove();
+  if (existing) {
+    existing.remove();
+  } else {
+    staffPreviewPreviousAdminReview = adminActiveReview || null;
+  }
   const source = preview.source_evidence || {};
-  const location = preview.location_review || {};
   const duplicates = preview.duplicate_review || {};
-  const review = preview.review || {};
   const sourceUrl = String(source.source_url || "").trim();
+  adminActiveReview = preview;
   const modal = document.createElement("div");
   modal.id = "staff-listing-preview-modal";
   modal.className = "fixed inset-0 z-[11000] bg-slate-950/70 overflow-y-auto p-4";
   modal.innerHTML = `
-    <div class="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div class="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
       <div class="bg-slate-900 text-white p-5 flex justify-between gap-4">
         <div>
           <div class="text-xs uppercase tracking-wide text-emerald-200 font-black">Preview before publishing</div>
@@ -9618,34 +9622,9 @@ function renderStaffListingPreviewModal(preview = {}) {
         </div>
         <button type="button" onclick="closeStaffListingPreview()" class="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20"><i class="fas fa-xmark"></i></button>
       </div>
-      <div class="p-5 grid lg:grid-cols-[1.2fr,0.8fr] gap-5">
+      <div class="p-5 grid xl:grid-cols-[1.55fr,0.75fr] gap-5">
         <div class="space-y-4">
-          <section class="rounded-xl border border-gray-200 p-4">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-              <h4 class="font-black text-gray-900">Public listing facts</h4>
-              <span class="text-xs text-gray-500">Save changes before approval.</span>
-            </div>
-            <div class="grid md:grid-cols-2 gap-3 mt-3">
-              ${staffPreviewField("staff-preview-title", "Public title", preview.title || "")}
-              ${staffPreviewField("staff-preview-listing-type", "Listing type", preview.listing_type || "")}
-              ${staffPreviewField("staff-preview-property-type", "Property type", preview.property_type || "")}
-              ${staffPreviewField("staff-preview-price", "Price", preview.price || "", "number")}
-              ${staffPreviewField("staff-preview-price-period", "Price period", preview.price_period || "")}
-              ${staffPreviewField("staff-preview-title-type", "Title type", preview.title_type || "")}
-              ${staffPreviewField("staff-preview-region", "Region", location.region || "")}
-              ${staffPreviewField("staff-preview-district", "District", preview.district || "")}
-              ${staffPreviewField("staff-preview-city", "Town / city", location.city || "")}
-              ${staffPreviewField("staff-preview-neighborhood", "Neighbourhood", location.neighborhood || "")}
-              ${staffPreviewField("staff-preview-area", "Area / public location", preview.area || "")}
-              ${staffPreviewField("staff-preview-address", "Address / location note", preview.address || "")}
-              ${staffPreviewField("staff-preview-lister-name", "Owner/source name", preview.lister_name || "")}
-              ${staffPreviewField("staff-preview-lister-phone", "Owner/source phone", preview.lister_phone || "")}
-              ${staffPreviewField("staff-preview-lister-email", "Owner/source email", preview.lister_email || "")}
-              ${staffPreviewField("staff-preview-bedrooms", "Bedrooms", preview.bedrooms || "", "number")}
-              ${staffPreviewField("staff-preview-bathrooms", "Bathrooms", preview.bathrooms || "", "number")}
-            </div>
-            <div class="mt-3">${staffPreviewField("staff-preview-description", "Public description", preview.description || "", "textarea")}</div>
-          </section>
+          ${adminReviewListingEditPanel(preview)}
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900 mb-3">Photo and source evidence</h4>
             ${staffPreviewImagesHtml(preview.images || [])}
@@ -9675,8 +9654,8 @@ function renderStaffListingPreviewModal(preview = {}) {
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Internal review notes</h4>
-            <textarea id="staff-preview-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(review.notes || "")}</textarea>
-            <textarea id="staff-preview-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(review.reason || "")}</textarea>
+            <textarea id="admin-review-notes" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[90px]" placeholder="What did you verify?">${adminEscape(preview.review?.notes || preview.moderation_notes || "")}</textarea>
+            <textarea id="admin-review-reason" class="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm min-h-[80px]" placeholder="Approval/rejection reason">${adminEscape(preview.review?.reason || preview.moderation_reason || "")}</textarea>
           </section>
           <section class="rounded-xl border border-gray-200 p-4">
             <h4 class="font-black text-gray-900">Decision</h4>
@@ -9692,13 +9671,30 @@ function renderStaffListingPreviewModal(preview = {}) {
       </div>
     </div>`;
   document.body.appendChild(modal);
+  window.setTimeout(() => {
+    adminReviewRefreshHierarchyControls({ syncMap: false });
+    adminReviewOnListingTypeChange();
+    adminReviewAutoPopulateLocationFromSource(preview);
+    initAdminReviewLocationMap(preview);
+  }, 120);
 }
 
 function closeStaffListingPreview() {
+  if (adminReviewLocationMap?.remove) {
+    try { adminReviewLocationMap.remove(); } catch (e) {}
+  }
+  adminReviewLocationMap = null;
+  adminReviewLocationMarker = null;
+  adminReviewLocationProvider = "";
+  adminActiveReview = staffPreviewPreviousAdminReview || null;
+  staffPreviewPreviousAdminReview = null;
   document.getElementById("staff-listing-preview-modal")?.remove();
 }
 
 function staffListingPreviewPatch() {
+  if (document.getElementById("admin-review-title-edit")) {
+    return collectAdminReviewListingPatch();
+  }
   const get = (id) => document.getElementById(id)?.value ?? "";
   return {
     title: get("staff-preview-title"),
@@ -9724,9 +9720,9 @@ function staffListingPreviewPatch() {
 
 function staffReviewPatch() {
   return {
-    notes: document.getElementById("staff-preview-review-notes")?.value || "",
-    reason: document.getElementById("staff-preview-reason")?.value || "",
-    checklist: {
+    notes: document.getElementById("admin-review-notes")?.value || document.getElementById("staff-preview-review-notes")?.value || "",
+    reason: document.getElementById("admin-review-reason")?.value || document.getElementById("staff-preview-reason")?.value || "",
+    checklist: typeof getAdminReviewChecklistFromDom === "function" ? getAdminReviewChecklistFromDom() : {
       preview_opened: true,
       location_checked: true,
       duplicate_checked: true,

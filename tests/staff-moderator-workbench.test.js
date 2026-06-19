@@ -48,6 +48,9 @@ function run() {
   assert(staffRoutes.includes('staff_contact_export_v1'), 'staff AI should expose controlled contact export answers');
   assert(staffRoutes.includes('normalizeReviewLocationHierarchy'), 'staff listing edits should validate Uganda location hierarchy');
   assert(staffRoutes.includes('districtForKnownArea'), 'staff listing edits should catch Nansana/Wakiso and Masindi/Masindi style hierarchy bugs');
+  assert(staffRoutes.includes('map_pin_confirmed'), 'staff preview save should persist confirmed map pins from the King review panel');
+  assert(staffRoutes.includes('nearest_university'), 'staff preview save should persist student accommodation fields from the King review panel');
+  assert(staffRoutes.includes('amenities = $'), 'staff preview save should persist amenities from extracted source facts');
   assert(staffRoutes.includes('staff_activity_logs'), 'staff routes should write staff activity logs');
   assert(staffRoutes.includes('Moderators can only assign a lead to themselves'), 'lead assignment should be staff self-service only');
 
@@ -79,6 +82,9 @@ function run() {
   assert(app.includes('/api/staff/assistant/query'), 'frontend should call staff assistant API');
   assert(app.includes('/api/staff/profile'), 'frontend should save staff settings');
   assert(app.includes('/api/staff/properties/${encodeURIComponent(propertyId)}/preview'), 'frontend should open staff listing preview before approval');
+  assert(app.includes('adminReviewListingEditPanel(preview)'), 'staff preview should reuse the King review edit panel');
+  assert(app.includes('collectAdminReviewListingPatch()'), 'staff preview save should collect the King review edit panel fields');
+  assert(app.includes('initAdminReviewLocationMap(preview)'), 'staff preview should render the same King review map pin control');
   assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');

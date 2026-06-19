@@ -67,6 +67,22 @@ function firstNonEmpty(...values) {
   return values.map((value) => cleanText(value)).find(Boolean) || '';
 }
 
+function cleanArray(value) {
+  if (Array.isArray(value)) return value.map((item) => cleanText(item)).filter(Boolean);
+  if (value == null || value === '') return [];
+  return String(value)
+    .split(/[,;\n]/)
+    .map((item) => cleanText(item))
+    .filter(Boolean);
+}
+
+function boolField(value) {
+  if (value === true || value === false) return value;
+  const text = String(value || '').trim().toLowerCase();
+  if (['false', '0', 'no', 'n', 'off'].includes(text)) return false;
+  return boolLike(text);
+}
+
 function staffMetricDefinitions() {
   return {
     total_properties: {
@@ -575,6 +591,22 @@ async function dashboardPayload(req) {
 
 function normalizeStaffListingPatch(existing = {}, patch = {}) {
   const normalized = safeJsonObject(patch, {});
+  if (!Object.prototype.hasOwnProperty.call(normalized, 'listing_type')) {
+    const typeAlias = normalized.listingType ?? normalized.type ?? normalized.category;
+    if (typeAlias != null) normalized.listing_type = typeAlias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(normalized, 'latitude')) {
+    const latAlias = normalized.lat;
+    if (latAlias != null) normalized.latitude = latAlias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(normalized, 'longitude')) {
+    const lngAlias = normalized.lng ?? normalized.lon ?? normalized.long;
+    if (lngAlias != null) normalized.longitude = lngAlias;
+  }
+  if (!Object.prototype.hasOwnProperty.call(normalized, 'land_title_available')) {
+    const landTitleAlias = normalized.landTitleAvailable ?? normalized.title_available ?? normalized.titleAvailable;
+    if (landTitleAlias != null) normalized.land_title_available = landTitleAlias;
+  }
   const currentExtra = safeJsonObject(existing.extra_fields, {});
   const base = {
     area: Object.prototype.hasOwnProperty.call(normalized, 'area') ? cleanText(normalized.area) : cleanText(existing.area),
@@ -659,7 +691,11 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     lister_phone: (value) => normalizePhoneLite(value) || null,
     lister_email: (value) => cleanText(value).toLowerCase() || null,
     latitude: (value) => toNullableFloat(value),
-    longitude: (value) => toNullableFloat(value)
+    longitude: (value) => toNullableFloat(value),
+    nearest_university: (value) => cleanText(value) || null,
+    distance_to_uni_km: (value) => toNullableFloat(value),
+    room_type: (value) => cleanText(value) || null,
+    students_welcome: (value) => boolField(value)
   };
 
   Object.entries(fieldMap).forEach(([key, transform]) => {
@@ -670,15 +706,85 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
   });
 
   const extraPatch = {};
-  ['region', 'city', 'neighborhood', 'street_name', 'location_note', 'source_url', 'source_platform'].forEach((key) => {
+  [
+    'region',
+    'city',
+    'neighborhood',
+    'street_name',
+    'location_note',
+    'source_url',
+    'source_platform',
+    'geocoding_provider',
+    'place_id',
+    'location_confidence',
+    'map_pin_source',
+    'nearest_university',
+    'distance_to_uni_km',
+    'room_type',
+    'room_arrangement',
+    'gender_pref',
+    'student_room_label'
+  ].forEach((key) => {
     if (Object.prototype.hasOwnProperty.call(patch, key)) extraPatch[key] = cleanText(patch[key]) || null;
   });
+  if (Object.prototype.hasOwnProperty.call(patch, 'land_title_available')) {
+    extraPatch.land_title_available = cleanText(patch.land_title_available) || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'student_universities')) {
+    extraPatch.student_universities = cleanArray(patch.student_universities);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'students_welcome')) {
+    extraPatch.students_welcome = boolField(patch.students_welcome);
+  }
   if (hierarchy.region) extraPatch.region = hierarchy.region;
   if (hierarchy.city) extraPatch.city = hierarchy.city;
   if (hierarchy.neighborhood) extraPatch.neighborhood = hierarchy.neighborhood;
+  if (Object.prototype.hasOwnProperty.call(patch, 'amenities')) {
+    values.push(JSON.stringify(cleanArray(patch.amenities)));
+    setParts.push(`amenities = $${values.length}::jsonb`);
+    changed.push('amenities');
+  }
   if (Object.keys(extraPatch).length) {
+    const latitude = toNullableFloat(patch.latitude ?? patch.lat);
+    const longitude = toNullableFloat(patch.longitude ?? patch.lng ?? patch.lon ?? patch.long);
+    const resolvedLocationLabel = firstNonEmpty(
+      [extraPatch.street_name, extraPatch.neighborhood || patch.area, extraPatch.city, patch.district || normalized.district].filter(Boolean).join(', '),
+      normalized.address,
+      existing.address
+    );
     extraPatch.staff_location_reviewed_at = new Date().toISOString();
     extraPatch.staff_location_reviewed_by = actorId(req);
+    extraPatch.staff_review_public_listing_facts = {
+      title: cleanText(normalized.title),
+      listing_type: cleanText(normalized.listing_type),
+      region: cleanText(extraPatch.region),
+      district: cleanText(normalized.district),
+      city: cleanText(extraPatch.city),
+      neighborhood: cleanText(extraPatch.neighborhood),
+      area: cleanText(normalized.area),
+      address: cleanText(normalized.address),
+      street_name: cleanText(extraPatch.street_name),
+      property_type: cleanText(normalized.property_type),
+      title_type: cleanText(normalized.title_type),
+      land_title_available: cleanText(extraPatch.land_title_available),
+      lister_phone: normalizePhoneLite(normalized.lister_phone),
+      nearest_university: cleanText(extraPatch.nearest_university),
+      distance_to_uni_km: toNullableFloat(extraPatch.distance_to_uni_km),
+      room_type: cleanText(extraPatch.room_type),
+      room_arrangement: cleanText(extraPatch.room_arrangement),
+      gender_pref: cleanText(extraPatch.gender_pref),
+      student_universities: cleanArray(extraPatch.student_universities),
+      price: toNullableInt(normalized.price),
+      price_period: cleanText(normalized.price_period),
+      latitude,
+      longitude
+    };
+    if (resolvedLocationLabel) extraPatch.resolved_location_label = resolvedLocationLabel;
+    if (latitude != null && longitude != null) {
+      extraPatch.map_pin_confirmed = true;
+      extraPatch.map_pin_source = cleanText(extraPatch.map_pin_source) || 'staff_review';
+      extraPatch.map_pin_confirmed_at = new Date().toISOString();
+    }
     values.push(JSON.stringify(extraPatch));
     setParts.push(`extra_fields = COALESCE(extra_fields, '{}'::jsonb) || $${values.length}::jsonb`);
     changed.push('extra_fields');
