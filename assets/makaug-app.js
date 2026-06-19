@@ -20089,12 +20089,19 @@ function pendingAdminControlAfterAuth() {
   return control ? { path, control } : null;
 }
 
+function preferredAudienceForResolvedUser(user, preferredAudience = "") {
+  const preferred = String(preferredAudience || "").toLowerCase();
+  if (preferred && preferred !== "finder") return preferred;
+  return derivePortalMode(user, "");
+}
+
 async function finalizeAuth(data, source, preferredAudience = "") {
   const token = data?.token;
   const user = data?.user;
   if (!token || !user) throw new Error("Authentication response is incomplete");
   const responseRedirect = data?.redirectUrl || data?.redirect_url || "";
-  const resolvedMode = derivePortalMode(user, preferredAudience || portalModeForDashboardUrl(responseRedirect));
+  preferredAudience = preferredAudienceForResolvedUser(user, preferredAudience || portalModeForDashboardUrl(responseRedirect));
+  const resolvedMode = derivePortalMode(user, preferredAudience);
   const resolvedUser = { ...user, portal_mode: resolvedMode };
   if (preferredAudience === "agent" && user.role !== "agent_broker") {
     resolvedUser.portal_mode = "finder";

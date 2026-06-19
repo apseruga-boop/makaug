@@ -81,6 +81,8 @@ function run() {
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
   assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
+  assert(app.includes('function preferredAudienceForResolvedUser'), 'generic account drawer sign-in should resolve staff role from returned user');
+  assert(app.includes('return derivePortalMode(user, "")'), 'finder drawer sign-in must not force moderator accounts into finder dashboard');
   assert(app.includes('staffModerateListing'), 'frontend should expose moderation action');
   assert(app.includes('moderator email or +256'), 'staff sign-in copy should be present');
 
