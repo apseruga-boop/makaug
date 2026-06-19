@@ -125,6 +125,7 @@ const FORBIDDEN_PUBLIC_IDS = [
   'page-student-dashboard',
   'page-agent-dashboard',
   'page-field-dashboard',
+  'page-staff-dashboard',
   'page-advertiser-dashboard',
   'page-admin-dashboard',
   'page-admin-setup-status',
@@ -476,6 +477,10 @@ function run() {
   assert(normalizeText(mortgageHtml).includes('Gross Monthly Income Required'), '/mortgage should show professional result panel');
   assert(mortgageHtml.includes('data-mortgage-visual="light-3d"'), '/mortgage should use the light 3D calculator shell');
   assert(mortgageHtml.includes('mortgage-result-pop'), '/mortgage should include subtle result animation styling');
+  assert(mortgageHtml.includes('mortgage-tab-panel'), '/mortgage should render a dynamic calculator tab panel');
+  assert(mortgageHtml.includes('mortgage-lead-provider'), '/mortgage should collect preferred bank for callback routing');
+  assert(frontendSource.includes('saveMortgageCalculation'), '/mortgage save action should be wired to an implementation');
+  assert(frontendSource.includes('requestMortgageHelp'), '/mortgage help action should open the lead form');
   assert(fraudHtml.includes('id="page-fraud"'), '/fraud should render the fraud route');
   assert(loginHtml.includes('id="page-login"'), '/login should render clean auth route');
   assert(loginText.includes('Opening your makaug.com account panel'), '/login should launch the shared auth panel instead of a duplicate login page');
@@ -1157,6 +1162,10 @@ function run() {
   assert(mortgageRoutes.includes('mortgage_lead_received'), 'mortgage enquiry should create/log mortgage lead events');
   assert(mortgageRoutes.includes('createLead'), 'mortgage enquiry should create CRM leads');
   assert(mortgageRoutes.includes('logEmailEvent'), 'mortgage enquiry should create EmailLog entries');
+  assert(mortgageRoutes.includes('mortgage_bank_callback'), 'mortgage bank callback should create bank-specific CRM leads');
+  assert(mortgageRoutes.includes('bank_handoff_status'), 'mortgage bank leads should be marked for bank handoff');
+  assert(propertySeekerRoutes.includes("router.post('/mortgage-calculations'"), 'property finder backend should save mortgage calculations');
+  assert(frontendSource.includes('Mortgage bank lead:'), 'CRM dashboard should expose bank-specific mortgage lead handoff metadata');
   assert(adminRoutes.includes("router.get('/setup-status'"), 'admin setup status API should exist');
   assert(adminRoutes.includes("router.post('/setup-status/property-submission-test'"), 'admin setup status should run safe property submission proof');
   assert(adminRoutes.includes("router.post('/setup-status/provider-test'"), 'admin setup status should run provider proof');
@@ -1174,7 +1183,7 @@ function run() {
   assert(adminRoutes.includes('logWhatsAppMessage'), 'admin proof actions should create WhatsAppMessageLog records');
   assert(adminRoutes.includes('matchListingToSavedSearches'), 'admin proof actions should run real alert matcher service');
 
-  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard', '/account', '/admin', '/king', '/king/dashboard', '/admin/docs', '/admin/setup-status', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
+  for (const protectedPath of ['/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/staff-dashboard', '/advertiser-dashboard', '/account', '/admin', '/king', '/king/dashboard', '/admin/docs', '/admin/setup-status', '/admin/moderation', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications']) {
     assert(isProtectedPath(protectedPath), `${protectedPath} should be protected`);
     const shell = renderProtectedLoginShell(protectedPath);
     assert(shell.includes('noindex,noarchive'), `${protectedPath} protected shell needs noindex/noarchive`);
@@ -1187,7 +1196,7 @@ function run() {
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/king'), 'admin should access King dashboard alias');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/crm'), 'admin should access CRM centre');
   assert(roleCanAccessProtectedPath({ role: 'admin' }, '/admin/leads'), 'admin should access lead centre');
-  for (const adminPath of ['/admin', '/king', '/king/dashboard', '/admin/setup-status', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/advertiser-dashboard']) {
+  for (const adminPath of ['/admin', '/king', '/king/dashboard', '/admin/setup-status', '/admin/crm', '/admin/leads', '/admin/property-needs', '/admin/viewings', '/admin/callbacks', '/admin/advertising', '/admin/revenue', '/admin/notifications', '/admin/emails', '/admin/whatsapp-inbox', '/admin/alerts', '/dashboard', '/student-dashboard', '/broker-dashboard', '/field-agent-dashboard', '/staff-dashboard', '/advertiser-dashboard']) {
     assert(roleCanAccessProtectedPath({ role: 'super_admin', audience: 'super_admin' }, adminPath), `super_admin should access ${adminPath}`);
   }
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/admin'), 'normal users must not access admin');
@@ -1195,6 +1204,9 @@ function run() {
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/broker-dashboard'), 'finder must not access broker dashboard');
   assert(roleCanAccessProtectedPath({ role: 'field_agent', audience: 'field_agent' }, '/field-agent-dashboard'), 'field agent should access field dashboard');
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/field-agent-dashboard'), 'finder must not access field dashboard');
+  assert(roleCanAccessProtectedPath({ role: 'moderator', audience: 'moderator' }, '/staff-dashboard'), 'moderator should access staff dashboard');
+  assert(!roleCanAccessProtectedPath({ role: 'moderator', audience: 'moderator' }, '/admin'), 'moderator must not access King dashboard');
+  assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/staff-dashboard'), 'finder must not access staff dashboard');
   assert(roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'student' }, '/student-dashboard'), 'student should access student dashboard');
   assert(!roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'finder' }, '/student-dashboard'), 'finder must not access student dashboard');
   assert(roleCanAccessProtectedPath({ role: 'buyer_renter', audience: 'advertiser' }, '/advertiser-dashboard'), 'advertiser should access advertiser dashboard');
@@ -1203,13 +1215,16 @@ function run() {
   assert.strictEqual(normalizeSignupAudience('student-signup'), 'student');
   assert.strictEqual(normalizeSignupAudience('super_admin'), 'super_admin');
   assert.strictEqual(normalizeSignupAudience('field-agent-signup'), 'field_agent');
+  assert.strictEqual(normalizeSignupAudience('staff'), 'moderator');
   assert.strictEqual(roleForSignup({ audience: 'field_agent' }), 'field_agent');
+  assert.strictEqual(roleForSignup({ audience: 'moderator' }), 'moderator');
   assert.strictEqual(roleForSignup({ audience: 'agent' }), 'agent_broker');
   assert.strictEqual(roleForSignup({ audience: 'student' }), 'buyer_renter');
   assert.strictEqual(roleForSignup({ audience: 'advertiser' }), 'buyer_renter');
   assert.strictEqual(dashboardForUser({ role: 'buyer_renter', profile_data: { audience: 'student' } }), '/student-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'agent_broker', profile_data: { audience: 'agent' } }), '/broker-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'field_agent', profile_data: { audience: 'field_agent' } }), '/field-agent-dashboard');
+  assert.strictEqual(dashboardForUser({ role: 'moderator', profile_data: { audience: 'moderator' } }), '/staff-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'buyer_renter', profile_data: { audience: 'advertiser' } }), '/advertiser-dashboard');
   assert.strictEqual(dashboardForUser({ role: 'super_admin', profile_data: { audience: 'super_admin' } }), '/admin');
 

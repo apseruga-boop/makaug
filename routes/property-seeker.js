@@ -55,6 +55,12 @@ function asBigIntNumber(value, fallback = null) {
   return Number.isSafeInteger(parsed) ? parsed : fallback;
 }
 
+function asDecimalNumber(value, fallback = null) {
+  if (value == null || value === '') return fallback;
+  const parsed = Number.parseFloat(String(value).replace(/,/g, ''));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function asArray(value) {
   if (Array.isArray(value)) return value.map((item) => asText(item)).filter(Boolean).slice(0, 20);
   const text = asText(value);
@@ -1754,6 +1760,80 @@ router.delete('/property-comparison/:id', requireAuth, async (req, res, next) =>
     const result = await db.query('DELETE FROM property_comparisons WHERE user_id = $1 AND id = $2 RETURNING id', [req.userAuth.id, id]);
     await logActivity(req.userAuth.id, 'compare_deleted', { comparison_id: id });
     return res.json({ ok: true, data: { removed: result.rowCount > 0 } });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/mortgage-calculations', requireAuth, async (req, res, next) => {
+  try {
+    const propertyPrice = asBigIntNumber(req.body.property_price ?? req.body.propertyPrice);
+    const loanAmount = asBigIntNumber(req.body.loan_amount ?? req.body.loanAmount);
+    const monthlyRepayment = asBigIntNumber(req.body.monthly_repayment ?? req.body.monthlyRepayment);
+    if (!propertyPrice || !loanAmount || !monthlyRepayment) {
+      return res.status(400).json({ ok: false, error: 'property_price, loan_amount, and monthly_repayment are required' });
+    }
+    const payload = {
+      deposit_percent: asDecimalNumber(req.body.deposit_percent ?? req.body.depositPercent),
+      annual_rate: asDecimalNumber(req.body.annual_rate ?? req.body.annualRate),
+      term_years: asInteger(req.body.term_years ?? req.body.termYears),
+      household_income: asBigIntNumber(req.body.household_income ?? req.body.householdIncome),
+      currency: asText(req.body.currency, 'UGX').toUpperCase().slice(0, 8),
+      product_type: normalizeCategory(req.body.product_type || req.body.productType || req.body.purpose),
+      preferred_provider_key: asText(req.body.preferred_provider_key || req.body.preferredProviderKey).toLowerCase() || null,
+      preferred_provider_name: asText(req.body.preferred_provider_name || req.body.preferredProviderName) || null,
+      extra_monthly_payment: asBigIntNumber(req.body.extra_monthly_payment ?? req.body.extraMonthlyPayment, 0),
+      estimated_interest_saved: asBigIntNumber(req.body.estimated_interest_saved ?? req.body.estimatedInterestSaved, 0),
+      estimated_months_saved: asInteger(req.body.estimated_months_saved ?? req.body.estimatedMonthsSaved, 0),
+      source: asText(req.body.source, 'mortgage_finder'),
+      language: asLanguage(req.body.language, 'en'),
+      source_note: asText(req.body.source_note || req.body.sourceNote) || null,
+      public_record_disclosure: asText(req.body.public_record_disclosure || req.body.publicRecordDisclosure) || null
+    };
+    const result = await db.query(
+      `INSERT INTO mortgage_calculations (
+         user_id, property_price, deposit_percent, loan_amount, annual_rate, term_years,
+         monthly_repayment, household_income, currency, product_type, preferred_provider_key,
+         preferred_provider_name, extra_monthly_payment, estimated_interest_saved,
+         estimated_months_saved, source, language, source_note, public_record_disclosure, metadata
+       )
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)
+       RETURNING *`,
+      [
+        req.userAuth.id,
+        propertyPrice,
+        payload.deposit_percent,
+        loanAmount,
+        payload.annual_rate,
+        payload.term_years,
+        monthlyRepayment,
+        payload.household_income,
+        payload.currency,
+        payload.product_type,
+        payload.preferred_provider_key,
+        payload.preferred_provider_name,
+        payload.extra_monthly_payment,
+        payload.estimated_interest_saved,
+        payload.estimated_months_saved,
+        payload.source,
+        payload.language,
+        payload.source_note,
+        payload.public_record_disclosure,
+        JSON.stringify({
+          saved_from: payload.source,
+          preferred_provider_key: payload.preferred_provider_key,
+          preferred_provider_name: payload.preferred_provider_name
+        })
+      ]
+    );
+    await logActivity(req.userAuth.id, 'mortgage_calculation_saved', {
+      mortgage_calculation_id: result.rows[0]?.id,
+      property_price: propertyPrice,
+      loan_amount: loanAmount,
+      monthly_repayment: monthlyRepayment,
+      preferred_provider_key: payload.preferred_provider_key
+    });
+    return res.status(201).json({ ok: true, data: result.rows[0] });
   } catch (error) {
     return next(error);
   }

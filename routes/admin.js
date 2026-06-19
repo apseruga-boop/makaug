@@ -1,13 +1,16 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const db = require('../config/database');
 const { requireAdminApiKey } = require('../middleware/auth');
 const { asArray, cleanText, toNullableInt, toNullableFloat, isValidEmail, isValidPhone } = require('../middleware/validation');
 const { parsePagination, toPagination } = require('../utils/pagination');
 const { DISTRICTS, LISTING_TYPES } = require('../utils/constants');
+const { normalizeReviewLocationHierarchy } = require('../utils/ugandaLocationHierarchy');
 const { normalizeEmail, normalizeUgPhone } = require('../utils/adminOtpOverride');
 const { createListingSubmitToken } = require('../utils/listingSubmitOtp');
+const { publicLivePropertyStatusSql } = require('../utils/publicInventoryStatus');
 const {
   landTitleAvailabilityLabel,
   normalizeLandTitleAvailability
@@ -78,6 +81,7 @@ const { markInvoicePaidManually, paymentProviderConfigured } = require('../servi
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const { logEmailEvent } = require('../services/emailLogService');
 const { logWhatsAppMessage } = require('../services/whatsappMessageLogService');
+const { prepareMediaUrlForStorage, prepareUploadObjectForStorage, uploadBufferToS3 } = require('../services/cloudMediaStorageService');
 const {
   approveOutlookEmailAction,
   getOutlookAgentStatus,
@@ -128,7 +132,7 @@ const {
 const {
   normalizeObjectKey,
   storageEnvConfigured,
-  uploadBufferToS3
+  uploadBufferToS3: uploadBackupBufferToS3
 } = require('../services/s3ObjectStorageService');
 
 const router = express.Router();
@@ -184,7 +188,6 @@ const ADMIN_FINAL_REVIEW_STATUSES = [
   'duplicate',
   'actioned'
 ];
-
 function adminSqlList(values = []) {
   return values.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(', ');
 }
@@ -230,12 +233,29 @@ function adminFeaturedListingCondition(alias = 'p') {
 }
 
 function adminPublicLiveListingCondition(alias = 'p') {
-  return `(NOT ${adminLaunchTestListingCondition(alias)})`;
+  const markers = LAUNCH_TEST_LISTING_MARKERS.map((marker) => {
+    const safeMarker = marker.replace(/'/g, "''");
+    return `(COALESCE(${adminColumn(alias, 'title')}, '') NOT ILIKE '%${safeMarker}%' AND COALESCE(${adminColumn(alias, 'description')}, '') NOT ILIKE '%${safeMarker}%')`;
+  });
+  const dummyTitles = LAUNCH_TEST_DUMMY_TITLES.map((title) => `'${title.replace(/'/g, "''")}'`).join(', ');
+  return `(
+    ${markers.join('\n    AND ')}
+    AND LOWER(TRIM(COALESCE(${adminColumn(alias, 'title')}, ''))) NOT IN (${dummyTitles})
+    AND COALESCE(${adminColumn(alias, 'source')}, '') !~* '(qa|test|demo|soft_launch|launch_proof)'
+    AND COALESCE(${adminColumn(alias, 'listed_via')}, '') !~* '(qa|test|demo|soft_launch|launch_proof)'
+    AND COALESCE(${adminColumn(alias, 'lister_name')}, '') !~* '(qa test delete|qa owner|dummy|sample)'
+    AND COALESCE(${adminColumn(alias, 'lister_email')}, '') !~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    AND COALESCE(${adminColumn(alias, 'inquiry_reference')}, '') !~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    AND COALESCE(${adminColumn(alias, 'extra_fields')}->>'qa_test_delete', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${adminColumn(alias, 'extra_fields')}->>'soft_launch_test', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${adminColumn(alias, 'extra_fields')}->>'is_test', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${adminColumn(alias, 'extra_fields')}->>'launch_proof', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${adminColumn(alias, 'extra_fields')}->>'non_public_test', '') !~* '^(true|1|yes)$'
+  )`;
 }
 
 function adminPublicLiveListingWhere(alias = 'p') {
-  return `(${adminColumn(alias, 'status')} = 'approved' OR (${adminColumn(alias, 'status')} = 'sold' AND ${adminColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days')) AND ${adminPublicLiveListingCondition(alias)}`;
-}
+  return `(${adminColumn(alias, 'status')} = 'approved' OR (${adminColumn(alias, 'status')} = 'sold' AND ${adminColumn(alias, 'sold_at')} >= NOW() - INTERVAL '7 days')) AND ${adminPublicLiveListingCondition(alias)}`;}
 
 function safeJsonObject(value, fallback = {}) {
   if (!value) return fallback;
@@ -797,6 +817,244 @@ function generateBrokerTemporaryPassword() {
   return `${output}!`;
 }
 
+const STAFF_DEFAULT_PERMISSIONS = {
+  listing_moderation: true,
+  lead_generation: true,
+  advertising_sales: true,
+  whatsapp_conversations: true,
+  training_library: true,
+  ai_assistant: true,
+  financial_admin: false,
+  user_admin: false,
+  system_settings: false
+};
+
+function normalizeStaffCode(value = '', fallbackIndex = 1) {
+  const cleaned = cleanText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]/g, '')
+    .slice(0, 24);
+  if (cleaned) return cleaned;
+  const number = Math.max(1, parseInt(fallbackIndex, 10) || 1);
+  return `MOD-${String(number).padStart(3, '0')}`;
+}
+
+function normalizeStaffPermissions(value = {}) {
+  const source = safeJsonObject(value, {});
+  return Object.keys(STAFF_DEFAULT_PERMISSIONS).reduce((permissions, key) => {
+    permissions[key] = typeof source[key] === 'boolean'
+      ? source[key]
+      : STAFF_DEFAULT_PERMISSIONS[key];
+    return permissions;
+  }, {});
+}
+
+function normalizeStaffChannelAccess(value = {}) {
+  const source = safeJsonObject(value, {});
+  return {
+    listings: source.listings !== false,
+    leads: source.leads !== false,
+    advertising: source.advertising !== false,
+    whatsapp: source.whatsapp !== false,
+    social_media: source.social_media !== false,
+    ai_assistant: source.ai_assistant !== false
+  };
+}
+
+function generateStaffTemporaryPassword() {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let output = 'MkStaff';
+  for (let i = 0; i < 10; i += 1) {
+    output += alphabet[crypto.randomInt(0, alphabet.length)];
+  }
+  return `${output}!`;
+}
+
+function defaultStaffSeed(index = 1) {
+  const number = Math.max(1, parseInt(index, 10) || 1);
+  const suffix = String(number).padStart(2, '0');
+  return {
+    first_name: `Moderator ${number}`,
+    last_name: 'Makaug',
+    email: `moderator${number}@staff.makaug.internal`,
+    personal_email: '',
+    phone: `+2567000010${suffix}`,
+    staff_code: normalizeStaffCode('', number),
+    status: 'active'
+  };
+}
+
+function buildStaffProfilePatch(input = {}, staffCode, existingProfile = {}) {
+  const existing = safeJsonObject(existingProfile, {});
+  const personalEmail = normalizeEmail(input.personal_email || input.personalEmail || existing.personal_email || '');
+  return {
+    ...existing,
+    audience: 'moderator',
+    account_kind: 'moderator',
+    staff_dashboard_enabled: true,
+    staff_code: staffCode,
+    employee_number: staffCode,
+    personal_email: personalEmail,
+    channel_access: normalizeStaffChannelAccess(input.channel_access || existing.channel_access),
+    permissions: normalizeStaffPermissions(input.permissions || existing.permissions),
+    staff_notes: cleanText(input.notes || input.staff_notes || existing.staff_notes || '').slice(0, 500),
+    password_managed_by_admin: true,
+    force_password_change: false
+  };
+}
+
+function publicStaffAccount(row = {}, temporaryPassword = '') {
+  const profile = safeJsonObject(row.profile_data, {});
+  return {
+    id: row.id,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    phone: row.phone,
+    email: row.email,
+    role: row.role,
+    status: row.status,
+    phone_verified: row.phone_verified,
+    preferred_contact_channel: row.preferred_contact_channel,
+    preferred_language: row.preferred_language,
+    staff_code: profile.staff_code || profile.employee_number || '',
+    personal_email: profile.personal_email || '',
+    channel_access: normalizeStaffChannelAccess(profile.channel_access),
+    permissions: normalizeStaffPermissions(profile.permissions),
+    staff_notes: profile.staff_notes || '',
+    last_login_at: row.last_login_at || null,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    temporary_password: temporaryPassword || undefined
+  };
+}
+
+async function upsertModeratorStaffAccount(input = {}, req = null, fallbackIndex = 1) {
+  const seed = { ...defaultStaffSeed(fallbackIndex), ...safeJsonObject(input, input || {}) };
+  const firstName = cleanText(seed.first_name || seed.firstName || seed.name || `Moderator ${fallbackIndex}`).slice(0, 80);
+  const lastName = cleanText(seed.last_name || seed.lastName || 'Makaug').slice(0, 80);
+  const email = normalizeEmail(seed.email);
+  const phone = normalizeUgPhone(seed.phone) || cleanText(seed.phone);
+  const status = cleanText(seed.status || 'active').toLowerCase();
+  const staffCode = normalizeStaffCode(seed.staff_code || seed.staffCode || seed.employee_number, fallbackIndex);
+  const suppliedPassword = cleanText(seed.password || seed.temporary_password || seed.tempPassword);
+  const allowedStatuses = ['active', 'suspended', 'deleted'];
+
+  if (!firstName || !lastName || !email || !phone) {
+    const error = new Error('Staff first name, surname, email, and phone are required');
+    error.status = 400;
+    throw error;
+  }
+  if (!isValidEmail(email)) {
+    const error = new Error('Enter a valid staff email address');
+    error.status = 400;
+    throw error;
+  }
+  if (!isValidPhone(phone)) {
+    const error = new Error('Enter a full staff phone number with country code, e.g. +256701123456');
+    error.status = 400;
+    throw error;
+  }
+  if (!allowedStatuses.includes(status)) {
+    const error = new Error('Invalid staff account status');
+    error.status = 400;
+    throw error;
+  }
+
+  const existing = await db.query(
+    `SELECT *
+     FROM users
+     WHERE LOWER(email) = LOWER($1)
+        OR phone = $2
+        OR UPPER(COALESCE(profile_data->>'staff_code', profile_data->>'employee_number', '')) = $3
+     ORDER BY created_at ASC
+     LIMIT 1`,
+    [email, phone, staffCode]
+  );
+  const existingUser = existing.rows[0] || null;
+  const shouldResetPassword = !existingUser || Boolean(suppliedPassword) || parseBooleanLike(seed.reset_password || seed.resetPassword, false);
+  const temporaryPassword = shouldResetPassword ? (suppliedPassword || generateStaffTemporaryPassword()) : '';
+  const passwordHash = shouldResetPassword ? await bcrypt.hash(temporaryPassword, 12) : null;
+  const existingProfile = existingUser?.profile_data && typeof existingUser.profile_data === 'object'
+    ? existingUser.profile_data
+    : {};
+  const profilePatch = buildStaffProfilePatch(seed, staffCode, existingProfile);
+  const actorId = adminActorId(req || {});
+
+  let saved;
+  if (existingUser) {
+    const updated = await db.query(
+      `UPDATE users
+       SET first_name = $2,
+           last_name = $3,
+           phone = $4,
+           email = $5,
+           role = 'moderator',
+           password_hash = COALESCE($6::text, password_hash),
+           phone_verified = TRUE,
+           status = $7,
+           marketing_opt_in = FALSE,
+           weekly_tips_opt_in = FALSE,
+           preferred_contact_channel = 'whatsapp',
+           preferred_language = COALESCE(NULLIF($8, ''), preferred_language, 'en'),
+           profile_data = COALESCE(profile_data, '{}'::jsonb) || $9::jsonb,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_contact_channel, preferred_language, profile_data, last_login_at, created_at, updated_at`,
+      [
+        existingUser.id,
+        firstName,
+        lastName,
+        phone,
+        email,
+        passwordHash,
+        status,
+        cleanText(seed.preferred_language || seed.preferredLanguage || 'en').slice(0, 8),
+        JSON.stringify(profilePatch)
+      ]
+    );
+    saved = updated.rows[0];
+  } else {
+    const inserted = await db.query(
+      `INSERT INTO users (
+        first_name,
+        last_name,
+        phone,
+        email,
+        role,
+        password_hash,
+        phone_verified,
+        status,
+        marketing_opt_in,
+        weekly_tips_opt_in,
+        preferred_contact_channel,
+        preferred_language,
+        profile_data
+      ) VALUES ($1,$2,$3,$4,'moderator',$5,TRUE,$6,FALSE,FALSE,'whatsapp',$7,$8::jsonb)
+      RETURNING id, first_name, last_name, phone, email, role, status, phone_verified, preferred_contact_channel, preferred_language, profile_data, last_login_at, created_at, updated_at`,
+      [
+        firstName,
+        lastName,
+        phone,
+        email,
+        passwordHash,
+        status,
+        cleanText(seed.preferred_language || seed.preferredLanguage || 'en').slice(0, 8) || 'en',
+        JSON.stringify(profilePatch)
+      ]
+    );
+    saved = inserted.rows[0];
+  }
+
+  await writeAudit(existingUser ? 'moderator_staff_account_updated' : 'moderator_staff_account_created', {
+    staff_user_id: saved.id,
+    staff_code: staffCode,
+    email,
+    phone
+  }, actorId);
+
+  return publicStaffAccount(saved, temporaryPassword);
+}
+
 async function provisionApprovedBrokerAccount(agent = {}, req = null) {
   const email = normalizeEmail(agent.email);
   const phone = normalizeUgPhone(agent.phone) || cleanText(agent.phone);
@@ -1188,7 +1446,6 @@ function mediaStorageConfigured() {
 function backupStorageProvider() {
   return process.env.DATA_BACKUP_BUCKET ? 's3' : 'missing';
 }
-
 function backupStorageRequiredEnv() {
   return ['DATA_BACKUP_BUCKET', 'DATA_BACKUP_PREFIX', 'DATA_BACKUP_LOCAL_PATHS', 'S3_ENDPOINT', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 }
@@ -1198,8 +1455,7 @@ function missingBackupStorageEnv() {
 }
 
 function backupStorageConfigured() {
-  return storageEnvConfigured({ bucket: process.env.DATA_BACKUP_BUCKET }) && missingBackupStorageEnv().length === 0;
-}
+  return storageEnvConfigured({ bucket: process.env.DATA_BACKUP_BUCKET }) && missingBackupStorageEnv().length === 0;}
 
 function providerConfigured(provider) {
   const keyGroups = {
@@ -1240,8 +1496,7 @@ function missingEnv(keys = []) {
 function missingProviderEnv(provider) {
   if (provider === 'sms') return missingSmsEnv();
   if (provider === 'media_storage') return missingMediaStorageEnv();
-  if (provider === 'backups') return missingBackupStorageEnv();
-  return missingEnv(providerEnvKeys(provider));
+  if (provider === 'backups') return missingBackupStorageEnv();  return missingEnv(providerEnvKeys(provider));
 }
 
 async function safeOne(sql, values = [], fallback = {}) {
@@ -1299,7 +1554,7 @@ async function uploadBackupStorageCanary() {
     data_backup_local_paths: process.env.DATA_BACKUP_LOCAL_PATHS || null
   }, null, 2)}\n`, 'utf8');
 
-  return uploadBufferToS3({
+  return uploadBackupBufferToS3({
     bucket: process.env.DATA_BACKUP_BUCKET,
     key: `${prefix}/canary/${stamp}-admin-backup-storage.json`,
     bytes: payload,
@@ -1991,6 +2246,17 @@ async function updatePropertyEditableFields({ propertyId, patch = {} }) {
   const extraPatch = {};
   let idx = 2;
 
+  const hasLocationHierarchyPatch = ['region', 'district', 'city', 'neighborhood'].some((key) => (
+    Object.prototype.hasOwnProperty.call(normalizedPatch, key)
+  ));
+  if (hasLocationHierarchyPatch) {
+    const hierarchy = normalizeReviewLocationHierarchy(normalizedPatch);
+    errors.push(...hierarchy.errors);
+    if (hierarchy.region) normalizedPatch.region = hierarchy.region;
+    if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'city')) normalizedPatch.city = hierarchy.city;
+    if (Object.prototype.hasOwnProperty.call(normalizedPatch, 'neighborhood')) normalizedPatch.neighborhood = hierarchy.neighborhood;
+  }
+
   Object.entries(fieldMap).forEach(([bodyKey, spec]) => {
     if (!Object.prototype.hasOwnProperty.call(normalizedPatch, bodyKey)) return;
     if (spec.required && !spec.value) errors.push(`${bodyKey} cannot be empty`);
@@ -2218,8 +2484,7 @@ router.get('/summary', async (req, res, next) => {
         `SELECT
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE ${adminPendingReviewWhere('')})::int AS pending,
-          COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
-          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')})::int AS public_live,
+          COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,          COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')})::int AS public_live,
           COUNT(*) FILTER (WHERE ${adminPublicLiveListingWhere('')} AND ${adminFeaturedListingCondition('')})::int AS public_featured,
           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
           COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden,
@@ -2227,7 +2492,7 @@ router.get('/summary', async (req, res, next) => {
           COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') <> 'agent' AND agent_id IS NULL)::int AS private,
           COUNT(*) FILTER (WHERE COALESCE(lister_type, 'owner') = 'agent' OR agent_id IS NOT NULL)::int AS agent_listed,
           COUNT(*) FILTER (WHERE listing_type = 'student' OR students_welcome = TRUE)::int AS student_discoverable,
-          COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'approved'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
+          COALESCE(ROUND((((COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('')}))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS approval_rate_pct,
           COALESCE(ROUND((((COUNT(*) FILTER (WHERE status = 'rejected'))::numeric / NULLIF(COUNT(*)::numeric, 0)) * 100)), 0)::int AS rejection_rate_pct
          FROM properties`
       ),
@@ -2642,10 +2907,13 @@ router.get('/properties/live', async (req, res, next) => {
     const { page, limit, offset } = parsePagination(req.query);
     const values = [limit, offset];
     const includeTestLike = parseBooleanLike(req.query.include_test_like || req.query.includeTestLike, false);
-    const publicLiveCondition = includeTestLike ? "p.status = 'approved'" : adminPublicLiveListingWhere('p');
+    const publicLiveCondition = includeTestLike ? publicLivePropertyStatusSql('p') : adminPublicLiveListingWhere('p');
+    const featuredCondition = adminFeaturedListingCondition('p');
 
     const countResult = await db.query(
-      `SELECT COUNT(*)::int AS total
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE ${featuredCondition})::int AS featured_total
        FROM properties p
        WHERE ${publicLiveCondition}`
     );
@@ -2660,7 +2928,6 @@ router.get('/properties/live', async (req, res, next) => {
       public_visible_total: Number(parityResult.rows[0]?.public_visible_total || 0),
       featured_total: Number(parityResult.rows[0]?.featured_total || 0)
     };
-
     const rows = await db.query(
       `SELECT
         p.id,
@@ -2727,8 +2994,7 @@ router.get('/properties/live', async (req, res, next) => {
           public_api_endpoint: '/api/properties?status=approved&public_only=1',
           featured_api_endpoint: '/api/properties?status=approved&featured=true&public_only=1&sort=featured'
         }
-      }
-    });
+      }    });
   } catch (error) {
     return next(error);
   }
@@ -3313,9 +3579,23 @@ router.post('/properties/:id/images', async (req, res, next) => {
     if (shouldMakeFirstPrimary) {
       await client.query('UPDATE property_images SET is_primary = false WHERE property_id = $1', [req.params.id]);
     }
+    const storedUploads = [];
+    for (const [index, image] of uploads.entries()) {
+      storedUploads.push({
+        ...image,
+        url: await prepareMediaUrlForStorage(image.url, {
+          keyPrefix: `properties/${req.params.id}/admin-images`,
+          filename: image.room_label || image.slot_key || `admin-photo-${index + 1}`,
+          isPrivate: false,
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          maxBytes: ADMIN_LISTING_IMAGE_MAX_BYTES,
+          label: 'Admin listing image'
+        })
+      });
+    }
     const requestedPrimaryIndex = uploads.findIndex((image) => image.is_primary);
     const created = [];
-    for (const [index, image] of uploads.entries()) {
+    for (const [index, image] of storedUploads.entries()) {
       const isPrimary = shouldMakeFirstPrimary
         ? (requestedPrimaryIndex >= 0 ? index === requestedPrimaryIndex : index === 0)
         : false;
@@ -3405,9 +3685,22 @@ router.patch('/properties/:id/images/:imageId', async (req, res, next) => {
       await client.query('ROLLBACK');
       return res.status(400).json({ ok: false, error: 'Replacing a listing image requires image rights confirmation' });
     }
-    const image = hasNewImage
+    let image = hasNewImage
       ? cleanAdminListingImageUpload(req.body || {}, cleanText(req.body?.room_label || req.body?.label) || 'Authorised property photo')
       : null;
+    if (image) {
+      image = {
+        ...image,
+        url: await prepareMediaUrlForStorage(image.url, {
+          keyPrefix: `properties/${req.params.id}/admin-images`,
+          filename: image.room_label || image.slot_key || `admin-photo-${req.params.imageId}`,
+          isPrivate: false,
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+          maxBytes: ADMIN_LISTING_IMAGE_MAX_BYTES,
+          label: 'Admin listing image'
+        })
+      };
+    }
     const setParts = [];
     const values = [req.params.id, req.params.imageId];
     let paramIndex = 3;
@@ -4004,6 +4297,252 @@ router.get('/users/:id', async (req, res, next) => {
         engagement: engagement.rows[0] || {}
       }
     });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.get('/staff', async (req, res, next) => {
+  try {
+    const rows = await db.query(
+      `SELECT
+         u.id,
+         u.first_name,
+         u.last_name,
+         u.phone,
+         u.email,
+         u.role,
+         u.status,
+         u.phone_verified,
+         u.preferred_contact_channel,
+         u.preferred_language,
+         u.profile_data,
+         u.last_login_at,
+         u.created_at,
+         u.updated_at,
+         COALESCE(m.moderated_count, 0)::int AS moderated_count,
+         COALESCE(m.approved_count, 0)::int AS approved_count,
+         COALESCE(m.rejected_count, 0)::int AS rejected_count,
+         m.last_moderation_at,
+         COALESCE(a.activity_count, 0)::int AS activity_count,
+         a.last_activity_at
+       FROM users u
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(*)::int AS moderated_count,
+           COUNT(*) FILTER (WHERE action ILIKE '%approved%' OR status_to IN ('approved','live','published'))::int AS approved_count,
+           COUNT(*) FILTER (WHERE action ILIKE '%rejected%' OR status_to IN ('rejected','declined','fraud'))::int AS rejected_count,
+           MAX(created_at) AS last_moderation_at
+         FROM property_moderation_events
+         WHERE actor_id = u.id
+       ) m ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::int AS activity_count, MAX(created_at) AS last_activity_at
+         FROM staff_activity_logs
+         WHERE staff_user_id = u.id
+       ) a ON true
+       WHERE u.role = 'moderator'
+          OR COALESCE(u.profile_data->>'staff_dashboard_enabled', '') ILIKE 'true'
+       ORDER BY COALESCE(u.profile_data->>'staff_code', u.profile_data->>'employee_number', u.created_at::text) ASC`
+    );
+
+    return res.json({
+      ok: true,
+      data: rows.rows.map((row) => ({
+        ...publicStaffAccount(row),
+        moderated_count: row.moderated_count,
+        approved_count: row.approved_count,
+        rejected_count: row.rejected_count,
+        last_moderation_at: row.last_moderation_at,
+        activity_count: row.activity_count,
+        last_activity_at: row.last_activity_at
+      }))
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/staff/bootstrap-five', async (req, res, next) => {
+  try {
+    const requestedStaff = Array.isArray(req.body?.staff) && req.body.staff.length
+      ? req.body.staff.slice(0, 5)
+      : [1, 2, 3, 4, 5].map((index) => defaultStaffSeed(index));
+    while (requestedStaff.length < 5) {
+      requestedStaff.push(defaultStaffSeed(requestedStaff.length + 1));
+    }
+
+    const accounts = [];
+    for (const [index, staffInput] of requestedStaff.entries()) {
+      accounts.push(await upsertModeratorStaffAccount({
+        ...staffInput,
+        reset_password: parseBooleanLike(req.body?.reset_password || req.body?.resetPassword, false)
+      }, req, index + 1));
+    }
+
+    await writeAudit('moderator_staff_bootstrap_five', {
+      staff_count: accounts.length,
+      passwords_returned_count: accounts.filter((account) => account.temporary_password).length
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        accounts,
+        login_url: '/staff-dashboard',
+        password_policy: 'Moderator passwords are created or reset by King/admin only.',
+        passwords_returned_count: accounts.filter((account) => account.temporary_password).length
+      }
+    });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.post('/staff', async (req, res, next) => {
+  try {
+    const account = await upsertModeratorStaffAccount(req.body || {}, req, 1);
+    return res.status(201).json({
+      ok: true,
+      data: {
+        account,
+        login_url: '/staff-dashboard',
+        password_policy: 'Moderator passwords are created or reset by King/admin only.'
+      }
+    });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.patch('/staff/:id', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, preferred_language, profile_data
+       FROM users
+       WHERE id = $1 AND (role = 'moderator' OR COALESCE(profile_data->>'staff_dashboard_enabled', '') ILIKE 'true')
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Moderator staff account not found' });
+    }
+
+    const current = existing.rows[0];
+    const profile = safeJsonObject(current.profile_data, {});
+    const account = await upsertModeratorStaffAccount({
+      first_name: Object.prototype.hasOwnProperty.call(req.body || {}, 'first_name') ? req.body.first_name : current.first_name,
+      last_name: Object.prototype.hasOwnProperty.call(req.body || {}, 'last_name') ? req.body.last_name : current.last_name,
+      phone: Object.prototype.hasOwnProperty.call(req.body || {}, 'phone') ? req.body.phone : current.phone,
+      email: Object.prototype.hasOwnProperty.call(req.body || {}, 'email') ? req.body.email : current.email,
+      status: Object.prototype.hasOwnProperty.call(req.body || {}, 'status') ? req.body.status : current.status,
+      preferred_language: Object.prototype.hasOwnProperty.call(req.body || {}, 'preferred_language') ? req.body.preferred_language : current.preferred_language,
+      staff_code: Object.prototype.hasOwnProperty.call(req.body || {}, 'staff_code') ? req.body.staff_code : (profile.staff_code || profile.employee_number),
+      personal_email: Object.prototype.hasOwnProperty.call(req.body || {}, 'personal_email') ? req.body.personal_email : profile.personal_email,
+      channel_access: Object.prototype.hasOwnProperty.call(req.body || {}, 'channel_access') ? req.body.channel_access : profile.channel_access,
+      permissions: Object.prototype.hasOwnProperty.call(req.body || {}, 'permissions') ? req.body.permissions : profile.permissions,
+      staff_notes: Object.prototype.hasOwnProperty.call(req.body || {}, 'staff_notes') ? req.body.staff_notes : profile.staff_notes,
+      reset_password: parseBooleanLike(req.body?.reset_password || req.body?.resetPassword, false),
+      password: req.body?.password
+    }, req, 1);
+
+    return res.json({ ok: true, data: account });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.post('/staff/:id/password-reset', async (req, res, next) => {
+  try {
+    const existing = await db.query(
+      `SELECT id, first_name, last_name, phone, email, role, status, preferred_language, profile_data
+       FROM users
+       WHERE id = $1 AND (role = 'moderator' OR COALESCE(profile_data->>'staff_dashboard_enabled', '') ILIKE 'true')
+       LIMIT 1`,
+      [req.params.id]
+    );
+    if (!existing.rows.length) {
+      return res.status(404).json({ ok: false, error: 'Moderator staff account not found' });
+    }
+    const current = existing.rows[0];
+    const profile = safeJsonObject(current.profile_data, {});
+    const account = await upsertModeratorStaffAccount({
+      first_name: current.first_name,
+      last_name: current.last_name,
+      phone: current.phone,
+      email: current.email,
+      status: current.status,
+      preferred_language: current.preferred_language,
+      staff_code: profile.staff_code || profile.employee_number,
+      personal_email: profile.personal_email,
+      channel_access: profile.channel_access,
+      permissions: profile.permissions,
+      staff_notes: profile.staff_notes,
+      password: req.body?.password,
+      reset_password: true
+    }, req, 1);
+
+    await writeAudit('moderator_staff_password_reset', {
+      staff_user_id: current.id,
+      staff_code: account.staff_code
+    }, adminActorId(req));
+
+    return res.json({
+      ok: true,
+      data: {
+        account,
+        temporary_password: account.temporary_password,
+        password_policy: 'Share this password once. Staff cannot reset it themselves.'
+      }
+    });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ ok: false, error: error.message });
+    return next(error);
+  }
+});
+
+router.get('/staff/activity', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit || '100', 10) || 100, 1), 500);
+    const staffUserId = cleanText(req.query.staff_user_id || req.query.staffUserId);
+    const action = cleanText(req.query.action).slice(0, 120);
+    const filters = [];
+    const values = [];
+    if (staffUserId) {
+      values.push(staffUserId);
+      filters.push(`sal.staff_user_id = $${values.length}`);
+    }
+    if (action) {
+      values.push(`%${action}%`);
+      filters.push(`sal.action ILIKE $${values.length}`);
+    }
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    values.push(limit);
+    const rows = await db.query(
+      `SELECT
+         sal.id,
+         sal.staff_user_id,
+         sal.action,
+         sal.target_type,
+         sal.target_id,
+         sal.metadata,
+         sal.created_at,
+         u.first_name,
+         u.last_name,
+         u.email,
+         u.phone,
+         COALESCE(u.profile_data->>'staff_code', u.profile_data->>'employee_number', '') AS staff_code
+       FROM staff_activity_logs sal
+       LEFT JOIN users u ON u.id = sal.staff_user_id
+       ${where}
+       ORDER BY sal.created_at DESC
+       LIMIT $${values.length}`,
+      values
+    );
+    return res.json({ ok: true, data: rows.rows });
   } catch (error) {
     return next(error);
   }
@@ -4884,7 +5423,7 @@ router.patch('/users/:id', async (req, res, next) => {
     const phoneVerified = typeof req.body.phone_verified === 'boolean' ? req.body.phone_verified : undefined;
 
     const allowedStatuses = ['active', 'suspended', 'deleted'];
-    const allowedRoles = ['buyer_renter', 'property_owner', 'agent_broker', 'field_agent', 'admin'];
+    const allowedRoles = ['buyer_renter', 'property_owner', 'agent_broker', 'field_agent', 'moderator', 'admin'];
 
     if (status && !allowedStatuses.includes(status)) {
       return res.status(400).json({ ok: false, error: 'Invalid status value' });
@@ -4958,8 +5497,8 @@ router.post('/field-agents/provision', async (req, res, next) => {
     const notes = cleanText(req.body.notes);
 	    const supportPhone = normalizeFieldAgentContactPhone(req.body.support_phone || process.env.SUPPORT_WHATSAPP || process.env.SUPPORT_PHONE || '0760112587');
 	    const actorId = adminActorId(req);
-	    const idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
-	    const signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
+	    let idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
+	    let signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
 
     if (!firstName || !lastName || !email || !idNumber || !phone || !whatsappPhone || !pin) {
       return res.status(400).json({ ok: false, error: 'First name, surname, email, ID number, phone, WhatsApp number, and 4-digit PIN are required' });
@@ -5003,10 +5542,10 @@ router.post('/field-agents/provision', async (req, res, next) => {
 	    const reusableExistingCode = existingCode && !isLegacyZeroFieldAgentCode(existingCode) ? existingCode : '';
 	    const reusableRequestedCode = requestedFieldAgentCode && !isLegacyZeroFieldAgentCode(requestedFieldAgentCode) ? requestedFieldAgentCode : '';
 	    const generatedCode = reusableExistingCode || reusableRequestedCode || await generateNextFieldAgentCode();
-	    if ((req.body.field_agent_code || req.body.employee_number) && !reusableRequestedCode) {
-	      return res.status(400).json({ ok: false, error: 'Field Agent ID must look like FA-7301, or leave it blank to auto-generate' });
-    }
-    const conflictQuery = existing.rows.length
+		    if ((req.body.field_agent_code || req.body.employee_number) && !reusableRequestedCode) {
+		      return res.status(400).json({ ok: false, error: 'Field Agent ID must look like FA-7301, or leave it blank to auto-generate' });
+	    }
+		    const conflictQuery = existing.rows.length
       ? await db.query(
         `SELECT id
          FROM users
@@ -5030,10 +5569,24 @@ router.post('/field-agents/provision', async (req, res, next) => {
          LIMIT 1`,
         [generatedCode]
       );
-    if (conflictQuery.rows.length) {
-      return res.status(409).json({ ok: false, error: 'Field Agent ID is already assigned' });
-    }
-    const passwordHash = await bcrypt.hash(pin, 12);
+	    if (conflictQuery.rows.length) {
+	      return res.status(409).json({ ok: false, error: 'Field Agent ID is already assigned' });
+	    }
+	    idDocument = await prepareUploadObjectForStorage(idDocument, {
+	      keyPrefix: `field-agents/${generatedCode}/documents`,
+	      isPrivate: true,
+	      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+	      maxBytes: FIELD_AGENT_UPLOAD_MAX_BYTES,
+	      label: 'Field Agent ID document'
+	    });
+	    signedContract = await prepareUploadObjectForStorage(signedContract, {
+	      keyPrefix: `field-agents/${generatedCode}/contracts`,
+	      isPrivate: true,
+	      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+	      maxBytes: FIELD_AGENT_UPLOAD_MAX_BYTES,
+	      label: 'Field Agent signed contract'
+	    });
+	    const passwordHash = await bcrypt.hash(pin, 12);
     const profileData = {
       ...existingProfile,
       audience: 'field_agent',
@@ -5282,11 +5835,26 @@ router.post('/field-agents/:id/documents', async (req, res, next) => {
     if (!user) return res.status(404).json({ ok: false, error: 'Field Agent not found' });
 
     const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
-    const idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
-    const signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
+    let idDocument = cleanFieldAgentUpload(req.body.id_document || req.body.id_document_file, 'Field Agent ID document');
+    let signedContract = cleanFieldAgentUpload(req.body.signed_contract || req.body.contract || req.body.signed_contract_file, 'Field Agent signed contract');
     if (!idDocument && !signedContract) {
       return res.status(400).json({ ok: false, error: 'Upload an ID document or signed contract first' });
     }
+    const fieldAgentCode = normalizeFieldAgentCode(profile.field_agent_code || profile.employee_number || req.params.id);
+    idDocument = await prepareUploadObjectForStorage(idDocument, {
+      keyPrefix: `field-agents/${fieldAgentCode || req.params.id}/documents`,
+      isPrivate: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      maxBytes: FIELD_AGENT_UPLOAD_MAX_BYTES,
+      label: 'Field Agent ID document'
+    });
+    signedContract = await prepareUploadObjectForStorage(signedContract, {
+      keyPrefix: `field-agents/${fieldAgentCode || req.params.id}/contracts`,
+      isPrivate: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      maxBytes: FIELD_AGENT_UPLOAD_MAX_BYTES,
+      label: 'Field Agent signed contract'
+    });
 
     const patch = {
       ...(idDocument ? {
@@ -5368,6 +5936,13 @@ router.post('/field-agents/:id/payment', async (req, res, next) => {
 
     const profile = user.profile_data && typeof user.profile_data === 'object' ? user.profile_data : {};
     const fieldAgentCode = profile.field_agent_code || profile.employee_number || '';
+    receipt = await prepareUploadObjectForStorage(receipt, {
+      keyPrefix: `field-agents/${normalizeFieldAgentCode(fieldAgentCode) || req.params.id}/payments`,
+      isPrivate: true,
+      allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+      maxBytes: FIELD_AGENT_UPLOAD_MAX_BYTES,
+      label: 'Field Agent payment receipt'
+    });
     const payment = {
       id: `FAP-${Date.now()}`,
       amount_ugx: amountUgx,
@@ -5708,7 +6283,7 @@ router.get('/agents', async (req, res, next) => {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int AS total_listings,
-          COUNT(*) FILTER (WHERE p.status = 'approved')::int AS live_listings,
+          COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('p')})::int AS live_listings,
           COUNT(*) FILTER (WHERE p.status = 'pending')::int AS pending_listings,
           COUNT(*) FILTER (WHERE p.status = 'rejected')::int AS rejected_listings
         FROM properties p
@@ -7933,8 +8508,7 @@ async function buildSetupStatus() {
   const counts = {
     leads: await safeCount('SELECT COUNT(*)::int AS total FROM leads'),
     listingsPending: await safeCount(`SELECT COUNT(*)::int AS total FROM properties p WHERE ${adminPendingReviewWhere('p')}`),
-    listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),
-    listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
+    listingsApproved: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE status = 'approved'"),    listingTests: await safeCount("SELECT COUNT(*)::int AS total FROM properties WHERE source = 'admin_test'"),
     failedEmails: await safeCount("SELECT COUNT(*)::int AS total FROM email_logs WHERE status IN ('failed','provider_missing')"),
     failedWhatsApp: await safeCount("SELECT COUNT(*)::int AS total FROM whatsapp_message_logs WHERE status IN ('failed','provider_missing')"),
     failedSms: await safeCount("SELECT COUNT(*)::int AS total FROM notifications WHERE channel = 'sms' AND status IN ('failed','provider_missing')"),
@@ -8040,8 +8614,7 @@ async function buildSetupStatus() {
       requiredEnv: providerEnvKeys('backups'),
       missingEnv: missingProviderEnv('backups'),
       bucketConfigured: envSet('DATA_BACKUP_BUCKET'),
-      productionRequirement: 'Use DATA_BACKUP_BUCKET with S3/R2 credentials so database backups, restore manifests, and AI export artifacts are not stored only on Render disk.'
-    },
+      productionRequirement: 'Use DATA_BACKUP_BUCKET with S3/R2 credentials so database backups, restore manifests, and AI export artifacts are not stored only on Render disk.'    },
     locationSystem: {
       geolocation: 'browser_permission_plus_manual_fallback',
       backendRadiusSearch: true,
@@ -8066,8 +8639,7 @@ router.get('/setup-status', async (_req, res, next) => {
 router.post('/setup-status/provider-test', async (req, res, next) => {
   try {
     const provider = cleanText(req.body.provider || req.body.type);
-    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link', 'backups'];
-    if (!allowed.includes(provider)) {
+    const allowed = ['email', 'whatsapp', 'sms', 'media_storage', 'google_places', 'openai_llm', 'payment_link', 'backups'];    if (!allowed.includes(provider)) {
       return res.status(400).json({ ok: false, error: 'Unsupported provider test' });
     }
     const configured = providerConfigured(provider);
@@ -8135,8 +8707,7 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
         recipientEmail: adminTestEmail(),
         channel: 'in_app',
         type: 'provider_test_backups',
-        status: configured ? 'logged' : 'provider_missing',
-        payloadSummary: {
+        status: configured ? 'logged' : 'provider_missing',        payloadSummary: {
           provider,
           configured,
           launch_proof: true,
@@ -8146,8 +8717,7 @@ router.post('/setup-status/provider-test', async (req, res, next) => {
           bytes: canary?.bytes || null,
           sha256: canary?.sha256 || null
         },
-        failureReason: configured ? null : 'backups_provider_missing'
-      });
+        failureReason: configured ? null : 'backups_provider_missing'      });
     } else {
       log = await logNotification(db, {
         recipientPhone: provider === 'sms' ? adminTestPhone() : null,

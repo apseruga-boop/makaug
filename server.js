@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -27,6 +28,7 @@ const adminAiAgentsRoutes = require('./routes/admin-agents');
 const propertySeekerRoutes = require('./routes/property-seeker');
 const studentRoutes = require('./routes/student');
 const fieldAgentRoutes = require('./routes/field-agent');
+const staffRoutes = require('./routes/staff');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const { runMigrations } = require('./scripts/migrate');
 const {
@@ -97,6 +99,7 @@ app.use('/api/admin/ai-agents', adminAiAgentsRoutes);
 app.use('/api/property-seeker', propertySeekerRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/field-agent', fieldAgentRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Never expose local/private operator tools on public host.
 app.use('/private-local', (_req, res) => {
@@ -126,12 +129,133 @@ app.get('/config.js', (_req, res) => {
 
 const staticRoot = __dirname;
 const indexPath = path.join(staticRoot, 'index.html');
+const appJsPath = path.join(staticRoot, 'assets', 'makaug-app.js');
 const isProduction = process.env.NODE_ENV === 'production';
 const captureHelperUsabilityVersion = 'capture-helper-usability-20260607';
 const studentNearestUniversityVersion = 'student-nearest-university-20260616';
 const publicAppVersionSuffixes = [captureHelperUsabilityVersion, studentNearestUniversityVersion];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
+const textAssetCache = new Map();
+const PUBLIC_HTML_CACHE_CONTROL = isProduction
+  ? 'public, max-age=60, stale-while-revalidate=300'
+  : 'no-store';
+const LONG_LIVED_STATIC_CACHE_CONTROL = 'public, max-age=604800, immutable';
+
+function appendVaryHeader(res, value) {
+  const next = String(value || '').trim();
+  if (!next) return;
+  const existing = res.getHeader('Vary');
+  if (!existing) {
+    res.setHeader('Vary', next);
+    return;
+  }
+  const values = String(existing)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (values.includes('*')) return;
+  if (!values.some((item) => item.toLowerCase() === next.toLowerCase())) {
+    values.push(next);
+  }
+  res.setHeader('Vary', values.join(', '));
+}
+
+function acceptsContentEncoding(req, encoding) {
+  const header = String(req.headers['accept-encoding'] || '');
+  return header.split(',').some((part) => {
+    const [name, ...params] = part.trim().toLowerCase().split(';').map((item) => item.trim());
+    if (name !== encoding && name !== '*') return false;
+    const q = params.find((item) => item.startsWith('q='));
+    return !q || Number(q.slice(2)) !== 0;
+  });
+}
+
+function preferredContentEncoding(req) {
+  if (acceptsContentEncoding(req, 'br')) return 'br';
+  if (acceptsContentEncoding(req, 'gzip')) return 'gzip';
+  return '';
+}
+
+function compressBody(body, encoding) {
+  if (encoding === 'br') {
+    return zlib.brotliCompressSync(body, {
+      params: {
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 5
+      }
+    });
+  }
+  if (encoding === 'gzip') {
+    return zlib.gzipSync(body, { level: 6 });
+  }
+  return body;
+}
+
+function readCachedTextAsset(filePath) {
+  const stat = fs.statSync(filePath);
+  const cached = textAssetCache.get(filePath);
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+    return cached;
+  }
+  const body = fs.readFileSync(filePath);
+  const entry = {
+    mtimeMs: stat.mtimeMs,
+    size: stat.size,
+    body,
+    etag: `W/"${stat.size.toString(16)}-${Math.floor(stat.mtimeMs).toString(16)}"`,
+    lastModified: stat.mtime.toUTCString(),
+    compressed: {
+      br: compressBody(body, 'br'),
+      gzip: compressBody(body, 'gzip')
+    }
+  };
+  textAssetCache.set(filePath, entry);
+  return entry;
+}
+
+function sendBufferResponse(req, res, body, options = {}) {
+  const source = Buffer.isBuffer(body) ? body : Buffer.from(String(body || ''), 'utf8');
+  const {
+    contentType = 'text/plain; charset=utf-8',
+    cacheControl = 'no-store',
+    etag = '',
+    lastModified = '',
+    compressed = null
+  } = options;
+
+  res.setHeader('Content-Type', contentType);
+  res.setHeader('Cache-Control', cacheControl);
+  if (etag) res.setHeader('ETag', etag);
+  if (lastModified) res.setHeader('Last-Modified', lastModified);
+  appendVaryHeader(res, 'Accept-Encoding');
+
+  if (req.fresh) {
+    return res.status(304).end();
+  }
+
+  const encoding = preferredContentEncoding(req);
+  let output = source;
+  if (encoding && source.length >= 1024) {
+    const candidate = compressed?.[encoding] || compressBody(source, encoding);
+    if (candidate.length < source.length) {
+      output = candidate;
+      res.setHeader('Content-Encoding', encoding);
+    }
+  }
+
+  res.setHeader('Content-Length', String(output.length));
+  if (req.method === 'HEAD') {
+    return res.end();
+  }
+  return res.end(output);
+}
+
+function sendTextResponse(req, res, html, options = {}) {
+  return sendBufferResponse(req, res, Buffer.from(String(html || ''), 'utf8'), {
+    contentType: 'text/html; charset=utf-8',
+    ...options
+  });
+}
 
 function applyCaptureHelperUsabilityIndexPatch(html) {
   if (!html) return html;
@@ -324,6 +448,21 @@ function renderPublicHtml(pathname) {
   return rendered;
 }
 
+app.get('/assets/makaug-app.js', (req, res, next) => {
+  try {
+    const asset = readCachedTextAsset(appJsPath);
+    return sendBufferResponse(req, res, asset.body, {
+      contentType: 'application/javascript; charset=utf-8',
+      cacheControl: LONG_LIVED_STATIC_CACHE_CONTROL,
+      etag: asset.etag,
+      lastModified: asset.lastModified,
+      compressed: asset.compressed
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 function parseCookies(header = '') {
   return String(header || '')
     .split(';')
@@ -364,18 +503,19 @@ function sendPublicIndex(req, res, next) {
     }
     try {
       const html = readIndexHtml();
-      res.type('html');
       res.set('Cache-Control', 'no-store');
-      return res.send(html);
+      return sendTextResponse(req, res, html, {
+        cacheControl: 'no-store'
+      });
     } catch (error) {
       return next(error);
     }
   }
   try {
-    res.type('html');
-    res.set('Cache-Control', 'no-store');
     res.set('X-makaug-Public-Sanitized', '1');
-    return res.send(renderPublicHtml(req.path));
+    return sendTextResponse(req, res, renderPublicHtml(req.path), {
+      cacheControl: PUBLIC_HTML_CACHE_CONTROL
+    });
   } catch (error) {
     return next(error);
   }

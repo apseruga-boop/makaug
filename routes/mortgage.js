@@ -234,6 +234,9 @@ router.post('/enquiry', async (req, res, next) => {
   const depositPercent = toNullableFloat(body.deposit_percent ?? body.depositPercent);
   const termYears = toNullableInt(body.term_years ?? body.termYears ?? body.preferred_term_years ?? body.preferredTermYears);
   const householdIncome = toNullableFloat(body.household_income ?? body.householdIncome);
+  const preferredProviderKey = cleanText(body.preferred_provider_key || body.preferredProviderKey || body.provider_key || body.providerKey).toLowerCase();
+  const preferredProviderNameInput = cleanText(body.preferred_provider_name || body.preferredProviderName || body.provider_name || body.providerName);
+  const leadContext = cleanText(body.lead_context || body.leadContext).toLowerCase();
 
   if (!name) {
     return res.status(400).json({ ok: false, error: 'name is required' });
@@ -250,6 +253,16 @@ router.post('/enquiry', async (req, res, next) => {
 
   try {
     await ensureMortgageEnquiriesTable();
+    const providerPayload = await readMortgageProviders();
+    const selectedProvider = (providerPayload.providers || []).find((provider) => {
+      const key = cleanText(provider.key).toLowerCase();
+      const name = cleanText(provider.name).toLowerCase();
+      return (preferredProviderKey && key === preferredProviderKey)
+        || (preferredProviderNameInput && name === preferredProviderNameInput.toLowerCase());
+    }) || null;
+    const preferredProviderName = selectedProvider?.name || preferredProviderNameInput || null;
+    const normalizedProviderKey = selectedProvider?.key || preferredProviderKey || null;
+    const isBankProviderLead = leadContext === 'bank_provider' || Boolean(normalizedProviderKey || preferredProviderName);
     const fallbackRef = buildMortgageLeadRef();
     const payload = {
       name,
@@ -257,6 +270,10 @@ router.post('/enquiry', async (req, res, next) => {
       contactMethod: ['phone', 'whatsapp', 'email'].includes(contactMethod) ? contactMethod : 'phone',
       amountToBorrow,
       preferredTermYears: toNullableInt(body.preferred_term_years ?? body.preferredTermYears),
+      preferredProviderKey: normalizedProviderKey,
+      preferredProviderName,
+      leadContext: isBankProviderLead ? 'bank_provider' : 'general_mortgage_callback',
+      bankHandoffStatus: isBankProviderLead ? 'pending_bank_handoff' : null,
       source: 'website_mortgage_finder',
       submittedAt: new Date().toISOString()
     };
@@ -279,11 +296,13 @@ router.post('/enquiry', async (req, res, next) => {
     const id = String(saved.rows[0]?.id || "");
     const reference = id ? `MF-${id.slice(0, 8).toUpperCase()}` : fallbackRef;
     const lead = await createLead(db, {
-      source: 'mortgage_widget',
+      source: isBankProviderLead ? 'mortgage_bank_callback' : 'mortgage_widget',
       leadType: 'mortgage',
       category: propertyPurpose,
       budget: amountToBorrow,
-      message: `Mortgage help requested: ${reference}`,
+      message: isBankProviderLead && preferredProviderName
+        ? `Mortgage bank callback requested: ${preferredProviderName} • ${reference}`
+        : `Mortgage help requested: ${reference}`,
       contact: {
         name,
         email: email || null,
@@ -296,7 +315,11 @@ router.post('/enquiry', async (req, res, next) => {
         mortgage_enquiry_id: id || null,
         reference,
         amount_to_borrow: amountToBorrow,
-        preferred_term_years: termYears
+        preferred_term_years: termYears,
+        preferred_provider_key: normalizedProviderKey,
+        preferred_provider_name: preferredProviderName,
+        lead_context: isBankProviderLead ? 'bank_provider' : 'general_mortgage_callback',
+        bank_handoff_status: isBankProviderLead ? 'pending_bank_handoff' : null
       }
     });
     const supportEmail = getSupportEmail();

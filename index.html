@@ -19,22 +19,28 @@
   <link rel="canonical" href="https://makaug.com/">
   <script>
     (function () {
-      document.documentElement.classList.add("app-booting");
       window.__releaseMakaugBoot = function () {
         document.documentElement.classList.remove("app-booting");
         document.documentElement.classList.add("app-ready");
       };
-      window.addEventListener("DOMContentLoaded", window.__releaseMakaugBoot, { once: true });
-      window.setTimeout(window.__releaseMakaugBoot, 1600);
+      window.__releaseMakaugBoot();
     })();
   </script>
   <link rel="preconnect" href="https://images.unsplash.com">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <script>
+    window.__makaugAppVersion = "king-location-hierarchy-nansana-20260616-staff-moderator-20260619";
+    window.__makaugReleaseMarkers = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-jan-broad-batch-sweep-20260607-king-review-location-autofill-20260607-mortgage-bank-leads-i18n-20260607-whatsapp-no-match-leadgen-20260607-land-title-availability-20260607-whatsapp-no-match-visible-leadbox-20260607-agent-registration-mobile-20260607-public-inventory-summary-20260609-king-status-fast-render-20260609-king-live-public-parity-20260609-king-location-hierarchy-nansana-20260616";
+  </script>
+  <link rel="preload" href="/assets/makaug-app.js?v=king-location-hierarchy-nansana-20260616" as="script">
+  <link rel="preload" as="image" href="https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60" fetchpriority="high">
   <script src="https://cdn.tailwindcss.com" defer></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"></noscript>
   <script src="/config.js"></script>
   <script>
     window.MAKAUG_ADSENSE_CLIENT = window.MAKAUG_ADSENSE_CLIENT || "";
@@ -43,13 +49,12 @@
     };
   </script>
   <style>
-    body { font-family: "Plus Jakarta Sans", sans-serif; }
-    html.app-booting body { opacity: 0; }
-    html.app-ready body { opacity: 1; transition: opacity .08s ease-out; }
+    body { font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    html.app-ready body { opacity: 1; }
     @media (prefers-reduced-motion: reduce) {
       html.app-ready body { transition: none; }
     }
-    .serif { font-family: "Plus Jakarta Sans", sans-serif; }
+    .serif { font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     input, select, textarea, button { font: inherit; }
     html { -webkit-text-size-adjust: 100%; }
     .page { display: none; }
@@ -64,7 +69,7 @@
       position: relative;
       min-height: 54vh;
       background-image: linear-gradient(180deg, rgba(4, 21, 33, 0.35) 0%, rgba(3, 20, 31, 0.62) 100%),
-        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1600&q=72");
+        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=60");
       background-size: cover;
       background-position: center;
     }
@@ -2338,10 +2343,10 @@
                 <p id="mortgage-calc-tip" class="text-sm text-gray-600 mt-1">Edit the assumptions below. makaug shows an estimate only, not a bank approval.</p>
               </div>
               <div class="flex flex-wrap gap-2" aria-label="Mortgage calculator tabs">
-                <button type="button" class="rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20">Repayment</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Affordability</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Extra Payment</button>
-                <button type="button" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Fees &amp; Transfer</button>
+                <button id="mortgage-tab-repayment" type="button" onclick="setMortgageTab('repayment')" class="rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20">Repayment</button>
+                <button id="mortgage-tab-affordability" type="button" onclick="setMortgageTab('affordability')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Affordability</button>
+                <button id="mortgage-tab-extra" type="button" onclick="setMortgageTab('extra')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Extra Payment</button>
+                <button id="mortgage-tab-fees" type="button" onclick="setMortgageTab('fees')" class="rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold">Fees &amp; Transfer</button>
               </div>
             </div>
             <div class="grid lg:grid-cols-[1fr_0.9fr] gap-5">
@@ -2412,6 +2417,9 @@
             </div>
             <div id="mortgage-summary" class="mt-4 grid sm:grid-cols-3 gap-3"></div>
             <div id="mortgage-health" class="mt-3 grid sm:grid-cols-3 gap-3"></div>
+            <div id="mortgage-tab-panel" class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 text-sm text-gray-700">
+              Loading calculator guidance...
+            </div>
           </div>
 
           <div class="bg-white border border-green-100 rounded-2xl p-5 md:p-6">
@@ -2497,6 +2505,13 @@
                 <div>
                   <label id="mortgage-lead-term-label" class="block text-xs font-semibold text-gray-600 mb-1">Preferred Term (years)</label>
                   <input id="mortgage-lead-term" type="number" min="5" max="30" step="1" class="w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white" placeholder="e.g. 20">
+                </div>
+                <div class="sm:col-span-2">
+                  <label id="mortgage-lead-provider-label" class="block text-xs font-semibold text-gray-600 mb-1">Preferred bank</label>
+                  <select id="mortgage-lead-provider" class="w-full border border-green-100 rounded-lg px-3 py-2 text-sm bg-white" onchange="setMortgageLeadProvider(this.value)">
+                    <option value="">No bank preference yet</option>
+                  </select>
+                  <div id="mortgage-lead-provider-context" class="mt-2 text-xs text-green-800"></div>
                 </div>
               </div>
               <button id="mortgage-lead-submit" onclick="submitMortgageLead()" class="mt-3 w-full bg-green-700 hover:bg-green-600 text-white py-2.5 rounded-lg text-sm font-semibold">Request Mortgage Call</button>
@@ -4249,6 +4264,110 @@
     </div>
   </div>
 
+  <div id="page-staff-dashboard" class="page">
+    <div class="bg-slate-900 py-8 text-white">
+      <div class="max-w-6xl mx-auto px-4">
+        <p class="text-emerald-200 text-sm font-black uppercase tracking-wide">makaug.com operations</p>
+        <h1 class="text-3xl font-black serif mt-1">Staff Operations Dashboard</h1>
+        <p class="text-slate-300 mt-1">Moderation, lead generation, advertising sales, WhatsApp follow-up, training, and staff-safe AI answers.</p>
+      </div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 py-8">
+      <div id="staff-auth-gate" class="bg-white border border-gray-200 rounded-2xl p-8 text-center">
+        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-50 text-emerald-700 grid place-items-center">
+          <i class="fas fa-user-shield text-xl"></i>
+        </div>
+        <h2 class="text-xl font-bold text-gray-800 mb-2">Staff sign-in required</h2>
+        <p class="text-sm text-gray-500 mb-5">Use the moderator login created by King/admin to approve listings and work assigned operations tasks.</p>
+        <button onclick="openAuthSignIn('moderator')" class="bg-slate-900 hover:bg-slate-800 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Staff</button>
+      </div>
+
+      <div id="staff-body" class="hidden space-y-6">
+        <div class="bg-white border border-gray-200 rounded-2xl p-6">
+          <div class="flex justify-between items-start gap-4 flex-wrap">
+            <div>
+              <h2 id="staff-dashboard-name" class="text-2xl font-black text-gray-900">Moderator Dashboard</h2>
+              <p id="staff-dashboard-status" class="text-sm text-gray-500 mt-1">Restricted operations access</p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="renderStaffDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-rotate-right mr-1"></i>Refresh</button>
+              <button onclick="showPage('list-property')" class="border border-emerald-700 text-emerald-800 hover:bg-emerald-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-plus mr-1"></i>Add Listing</button>
+              <button onclick="signOut()" class="border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold"><i class="fas fa-right-from-bracket mr-1"></i>Sign Out</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Pending Review</div>
+            <div id="staff-stat-pending" class="text-3xl font-black text-gray-900 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">My Approvals</div>
+            <div id="staff-stat-approvals" class="text-3xl font-black text-emerald-700 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Open Leads</div>
+            <div id="staff-stat-leads" class="text-3xl font-black text-blue-700 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">Ad Leads</div>
+            <div id="staff-stat-ads" class="text-3xl font-black text-amber-700 mt-1">0</div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="text-sm text-gray-500">WhatsApp Needs Human</div>
+            <div id="staff-stat-whatsapp" class="text-3xl font-black text-purple-700 mt-1">0</div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-[1.15fr,0.85fr] gap-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <div class="flex items-center justify-between gap-3 mb-4">
+              <h3 class="text-xl font-black text-gray-900">Listing moderation queue</h3>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-3 py-1">Approve = goes live</span>
+            </div>
+            <div id="staff-review-queue" class="space-y-3 text-sm"></div>
+          </div>
+
+          <div class="space-y-5">
+            <div class="bg-white border border-gray-200 rounded-2xl p-5">
+              <h3 class="text-xl font-black text-gray-900 mb-3">Staff AI assistant</h3>
+              <form onsubmit="askStaffAssistant(event)" class="space-y-3">
+                <textarea id="staff-ai-question" rows="4" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" placeholder="Ask: how many people looked for properties in Nansana?"></textarea>
+                <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-bold"><i class="fas fa-wand-magic-sparkles mr-1"></i>Ask makaug data</button>
+              </form>
+              <div id="staff-ai-answer" class="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-4 text-sm text-slate-800">Ask a staff-safe data question.</div>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-2xl p-5">
+              <h3 class="text-xl font-black text-gray-900 mb-3">My recent work</h3>
+              <div id="staff-activity-list" class="space-y-2 text-sm text-gray-700"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid lg:grid-cols-3 gap-5">
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h3 class="text-lg font-black text-gray-900 mb-3">Lead generation</h3>
+            <div id="staff-leads-list" class="space-y-3 text-sm"></div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h3 class="text-lg font-black text-gray-900 mb-3">Advertising sales</h3>
+            <div id="staff-advertising-list" class="space-y-3 text-sm"></div>
+          </div>
+          <div class="bg-white border border-gray-200 rounded-2xl p-5">
+            <h3 class="text-lg font-black text-gray-900 mb-3">WhatsApp conversations</h3>
+            <div id="staff-whatsapp-list" class="space-y-3 text-sm"></div>
+          </div>
+        </div>
+
+        <div class="bg-white border border-emerald-100 rounded-2xl p-5">
+          <h3 class="text-xl font-black text-gray-900 mb-4">How to work this desk</h3>
+          <div id="staff-training-guide" class="grid md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm text-gray-700"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="page-advertiser-dashboard" class="page">
     <div class="bg-amber-700 py-8 text-white">
       <div class="max-w-6xl mx-auto px-4">
@@ -4417,6 +4536,7 @@
             <div class="flex gap-2 flex-wrap">
               <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Refresh</button>
               <a href="/admin/launch-control" onclick="return openKingShortcut(event, '/admin/launch-control')" class="border border-green-200 text-green-700 hover:bg-green-50 px-4 py-2 rounded-lg text-sm font-semibold">Launch Control</a>
+              <a href="/admin/staff" onclick="return openKingShortcut(event, '/admin/staff')" class="border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-semibold">Staff Ops</a>
               <a href="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="border border-blue-200 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-semibold">Field Agent Control Centre</a>
               <a href="/admin/setup-status" onclick="return openKingShortcut(event, '/admin/setup-status')" class="border border-amber-200 text-amber-800 hover:bg-amber-50 px-4 py-2 rounded-lg text-sm font-semibold">Setup Status</a>
               <button onclick="showPage('account')" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-semibold">Account Settings</button>
@@ -4496,6 +4616,7 @@
             <a href="/admin/moderation" data-king-shortcut="/admin/moderation" onclick="return openKingShortcut(event, '/admin/moderation')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">Review Queue</a>
             <a href="/admin/listings" data-king-shortcut="/admin/listings" onclick="return openKingShortcut(event, '/admin/listings')" class="rounded-xl border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 p-3 font-bold text-gray-800">All Listings</a>
             <a href="/admin/field-agents" data-king-shortcut="/admin/field-agents" onclick="return openKingShortcut(event, '/admin/field-agents')" class="rounded-xl border border-blue-100 bg-blue-50 hover:bg-white hover:border-blue-300 p-3 font-bold text-blue-800">Field Agent Control Centre</a>
+            <a href="/admin/staff" data-king-shortcut="/admin/staff" onclick="return openKingShortcut(event, '/admin/staff')" class="rounded-xl border border-slate-200 bg-slate-50 hover:bg-white hover:border-slate-300 p-3 font-bold text-slate-800">Staff Ops</a>
             <a href="/admin/field-agent-active" data-king-shortcut="/admin/field-agent-active" onclick="return openKingShortcut(event, '/admin/field-agent-active')" class="rounded-xl border border-green-100 bg-green-50 hover:bg-white hover:border-green-300 p-3 font-bold text-green-800">Active Field Agents</a>
             <a href="/admin/field-agent-pending" data-king-shortcut="/admin/field-agent-pending" onclick="return openKingShortcut(event, '/admin/field-agent-pending')" class="rounded-xl border border-amber-100 bg-amber-50 hover:bg-white hover:border-amber-300 p-3 font-bold text-amber-800">Pending FA Listings</a>
             <a href="/admin/field-agent-accepted" data-king-shortcut="/admin/field-agent-accepted" onclick="return openKingShortcut(event, '/admin/field-agent-accepted')" class="rounded-xl border border-emerald-100 bg-emerald-50 hover:bg-white hover:border-emerald-300 p-3 font-bold text-emerald-800">Accepted FA Listings</a>
@@ -4818,6 +4939,7 @@
             <button type="button" data-admin-tab-button="actioned" onclick="setAdminWorkflowTab('actioned')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Rejected / Actioned</button>
             <button type="button" data-admin-tab-button="live" onclick="setAdminWorkflowTab('live')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Live & Featured</button>
             <button type="button" data-admin-tab-button="accounts" onclick="setAdminWorkflowTab('accounts')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Accounts & Outreach</button>
+            <button type="button" data-admin-tab-button="staff" onclick="setAdminWorkflowTab('staff')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Staff Ops</button>
             <button type="button" data-admin-tab-button="field-agents" onclick="setAdminWorkflowTab('field-agents')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Field Agent Control Centre</button>
             <button type="button" data-admin-tab-button="ads" onclick="setAdminWorkflowTab('ads')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">Advertising Desk</button>
             <button type="button" data-admin-tab-button="whatsapp" onclick="setAdminWorkflowTab('whatsapp')" class="admin-tab-btn shrink-0 px-4 py-2 rounded-xl text-sm font-bold">WhatsApp Inbox</button>
@@ -4924,8 +5046,7 @@
             </div>
           </div>
           <div id="admin-live-cleanup-status" class="text-[11px] text-gray-500 mb-3"></div>
-          <div id="admin-live-parity-summary"></div>
-          <div id="admin-live-listings-table" class="space-y-3"></div>
+          <div id="admin-live-parity-summary"></div>          <div id="admin-live-listings-table" class="space-y-3"></div>
         </div>
 
         <div id="admin-featured-properties-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -4936,8 +5057,7 @@
             </div>
             <button onclick="renderAdminDashboard()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-lg text-xs font-semibold">Refresh Featured</button>
           </div>
-          <div id="admin-featured-parity-summary"></div>
-          <div id="admin-featured-listings-table" class="space-y-3"></div>
+          <div id="admin-featured-parity-summary"></div>          <div id="admin-featured-listings-table" class="space-y-3"></div>
         </div>
 
         <div id="admin-featured-agents-control" data-admin-tab-panel="live" class="admin-tab-panel bg-white border border-gray-200 rounded-2xl p-5">
@@ -5028,6 +5148,7 @@
               <option value="property_owner">Property Owner</option>
               <option value="agent_broker">Broker</option>
               <option value="field_agent">Field Agent</option>
+              <option value="moderator">Moderator</option>
               <option value="admin">Admin</option>
             </select>
             <select id="admin-users-tips" onchange="renderAdminDashboard()" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white">
@@ -5052,11 +5173,54 @@
               <div class="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <div>
                   <h4 class="text-lg font-bold text-gray-800">People Looking for Property</h4>
-                  <p class="text-xs text-gray-500 mt-1">Recent demand requests from buyers and renters who want help finding the right property.</p>
+                  <p class="text-xs text-gray-500 mt-1">Recent demand requests from buyers, renters, and WhatsApp searches where makaug had no exact match.</p>
                 </div>
               </div>
               <div id="admin-property-requests-table" class="space-y-3"></div>
             </div>
+          </div>
+        </div>
+
+        <div id="admin-staff-control" data-admin-tab-panel="staff" class="admin-tab-panel bg-white border border-slate-200 rounded-2xl p-5">
+          <div class="flex items-center justify-between gap-3 flex-wrap mb-4">
+            <div>
+              <h3 class="text-xl font-bold text-gray-800">Staff Operations Control</h3>
+              <p class="text-xs text-gray-500 mt-1">Create the five moderator accounts, reset passwords, track staff work, and confirm access to moderation, leads, advertising, WhatsApp, training, and the staff AI assistant.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="adminBootstrapStaffAccounts()" class="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-xs font-bold">Create / verify 5 staff logins</button>
+              <button type="button" onclick="renderAdminStaffControl()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-xs font-bold">Refresh staff</button>
+            </div>
+          </div>
+          <div id="admin-staff-password-output" class="hidden mb-4 rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-950"></div>
+          <div class="grid xl:grid-cols-[0.8fr,1.2fr] gap-5">
+            <form id="admin-staff-create-form" onsubmit="adminCreateStaffAccount(event)" class="rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <h4 class="text-lg font-bold text-gray-800">Create / update one staff login</h4>
+              <div class="grid sm:grid-cols-2 gap-2">
+                <input name="first_name" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="First name" required>
+                <input name="last_name" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Second name" required>
+                <input name="email" type="email" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Staff email" required>
+                <input name="phone" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="+256 7XX XXX XXX" required>
+                <input name="personal_email" type="email" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Personal email optional">
+                <input name="staff_code" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="MOD-001">
+              </div>
+              <textarea name="staff_notes" rows="3" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white" placeholder="Notes, assigned channel, social media focus, or lead-generation territory"></textarea>
+              <button type="submit" class="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl text-sm font-bold">Save staff login</button>
+              <p class="text-[11px] text-gray-500">Passwords are returned once on create/reset. Staff cannot change passwords from their dashboard.</p>
+            </form>
+            <div>
+              <div class="grid sm:grid-cols-4 gap-3 mb-4">
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Staff accounts</div><div id="admin-staff-stat-total" class="text-2xl font-black text-gray-900">0</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Approvals</div><div id="admin-staff-stat-approvals" class="text-2xl font-black text-emerald-700">0</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Actions</div><div id="admin-staff-stat-actions" class="text-2xl font-black text-blue-700">0</div></div>
+                <div class="rounded-xl border border-gray-200 bg-white p-3"><div class="text-xs text-gray-500">Latest action</div><div id="admin-staff-stat-latest" class="text-sm font-black text-gray-900 mt-1">-</div></div>
+              </div>
+              <div id="admin-staff-table" class="space-y-3"></div>
+            </div>
+          </div>
+          <div class="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <h4 class="text-lg font-bold text-gray-800">Recent staff activity</h4>
+            <div id="admin-staff-activity-table" class="mt-3 space-y-2 text-sm text-gray-700"></div>
           </div>
         </div>
 
@@ -6540,8 +6704,7 @@
       function loadMakaugApp() {
         if (window.__makaugAppLoading) return;
         window.__makaugAppLoading = true;
-        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-batch-review-fix-20260607-admin-review-queue-fast-path-20260608-review-queue-inclusive-20260608-admin-auth-fallback-20260608-review-queue-isolated-fetch-20260608-king-live-public-parity-20260609-hero-public-total-parity-20260610-hero-route-classification-20260610";
-        var script = document.createElement("script");
+        window.__makaugAppVersion = "admin-command-centre-20260514-section-search-shell-20260512-controlled-public-inventory-20260514-admin-live-control-parity-20260515-final-map-sweep-20260515-outlook-email-agent-20260515-contextual-whatsapp-20260517-whatsapp-prefill-copy-20260517-listing-contact-whatsapp-i18n-20260519-live-featured-cleanup-20260519-agent-inquiry-nearby-20260519-approval-profile-sync-20260519-broker-profile-share-links-20260519-direct-agent-profile-20260519-source-registry-20260520-found-online-pending-filter-20260521-review-queue-final-hide-20260521-source-fishing-policy-20260523-launch-intake-20260523-source-post-import-20260523-found-online-queue-tabs-20260524-found-online-only-cleanup-20260524-found-online-status-cleanup-20260524-found-online-2026-unlimited-sweep-20260524-found-online-production-sweep-20260524-found-online-evidence-sweep-20260524-public-image-src-fix-20260524-found-online-admin-archive-20260524-social-platform-sweep-20260525-tiktok-full-capture-20260525-tiktok-exact-import-20260525-live-review-separation-20260525-social-only-preapproved-20260525-strict-preapproval-20260525-youtube-social-restore-20260525-youtube-social-republish-20260525-tiktok-source-import-fix-20260525-public-featured-feed-fix-20260525-public-featured-feed-fix-20260526-price-upon-application-import-20260526-found-online-location-override-20260526-source-contact-fallback-20260526-escaped-labels-20260526-sourced-broker-badge-cleanup-20260526-admin-source-fact-editor-20260526-social-location-pin-repair-20260527-youtube-feb-sweep-20260528-third-party-legal-guardrails-20260528-amharic-i18n-20260529-hero-opportunity-counter-20260529-i18n-counter-fix-20260529-counter-maths-fix-20260529-detail-container-i18n-20260529-king-review-location-trust-20260529-detail-map-description-i18n-20260529-social-capture-bookmarklet-20260602-marketplace-land-safety-20260602-king-student-youtube-import-20260603-source-post-date-confirmation-20260606-king-youtube-student-sweep-tabs-20260606-owner-verification-startup-fix-20260606-arabic-i18n-20260606-youtube-batch-review-fix-20260607-admin-review-queue-fast-path-20260608-review-queue-inclusive-20260608-admin-auth-fallback-20260608-review-queue-isolated-fetch-20260608-king-live-public-parity-20260609-hero-public-total-parity-20260610-hero-route-classification-20260610";        var script = document.createElement("script");
         script.src = "/assets/makaug-app.js?v=" + encodeURIComponent(window.__makaugAppVersion);
         script.async = true;
         document.body.appendChild(script);
