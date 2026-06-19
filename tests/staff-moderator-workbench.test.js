@@ -34,7 +34,7 @@ function run() {
   assert(server.includes("const staffRoutes = require('./routes/staff')"), 'server should import staff routes');
   assert(server.includes("app.use('/api/staff', staffRoutes)"), 'server should mount /api/staff');
   assert(server.includes('renderPublicHtml(req.originalUrl || req.url || req.path)'), 'server should render /login?next=/staff-dashboard with the staff account panel mode');
-  assert(server.includes('staff-operations-dashboard-20260619'), 'server should bump the public JS asset version for staff dashboard browsers');
+  assert(server.includes('staff-operations-dashboard-20260619b'), 'server should bump the public JS asset version for staff dashboard browsers');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
@@ -85,6 +85,8 @@ function run() {
   assert(app.includes('Copy CSV'), 'staff AI should render contact CSV copy control');
   assert(app.includes('function preferredAudienceForResolvedUser'), 'generic account drawer sign-in should resolve staff role from returned user');
   assert(app.includes('return derivePortalMode(user, "")'), 'finder drawer sign-in must not force moderator accounts into finder dashboard');
+  assert(app.includes('const isModerator = accountAccessDrawerAudience === "moderator"'), 'staff sign-in drawer should treat moderator as an internal role');
+  assert(app.includes('Sign in with your staff moderator account'), 'staff sign-in drawer should explain moderator access');
   assert(app.includes('staffModerateListing'), 'frontend should expose moderation action');
   assert(app.includes('moderator email or +256'), 'staff sign-in copy should be present');
 

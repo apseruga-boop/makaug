@@ -25449,14 +25449,16 @@ function updateAccountAccessRoleFocus() {
   const secondary = document.getElementById("account-access-secondary-actions");
   const isFocusedFlow = accountAccessDrawerMode === "create" || accountAccessDrawerMode === "verify";
   const isAdmin = accountAccessDrawerAudience === "admin";
-  if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow || isAdmin);
+  const isModerator = accountAccessDrawerAudience === "moderator";
+  const isInternalSignIn = isAdmin || isModerator;
+  if (listWrap) listWrap.classList.toggle("hidden", isFocusedFlow || isInternalSignIn);
   if (selectedWrap) {
     const copy = accountAccessRoleCopy(accountAccessDrawerAudience);
     const theme = accountAccessRoleTheme(accountAccessDrawerAudience);
-    selectedWrap.classList.toggle("hidden", !(isFocusedFlow || isAdmin));
+    selectedWrap.classList.toggle("hidden", !(isFocusedFlow || isInternalSignIn));
     selectedWrap.style.borderColor = theme.border;
     selectedWrap.style.background = theme.soft;
-    selectedWrap.innerHTML = (isFocusedFlow || isAdmin) ? `<div class="flex items-center justify-between gap-3">
+    selectedWrap.innerHTML = (isFocusedFlow || isInternalSignIn) ? `<div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
         <span class="w-10 h-10 rounded-2xl bg-white flex items-center justify-center" style="color:${theme.primary};"><i class="fas ${copy.icon}" aria-hidden="true"></i></span>
         <span><span class="block text-sm font-black text-gray-900">${adminEscape(copy.label)}</span><span class="block text-xs text-gray-600">${adminEscape(copy.body)}</span></span>
@@ -26072,6 +26074,9 @@ function updateAccountAccessSignInCopy() {
   }
   if (roleBody && isFieldAgent && accountAccessDrawerMode === "signin") {
     roleBody.textContent = "Sign in with your admin-issued Field Agent ID and PIN to track listings, approvals, rejections, ranking, balance, and payout updates.";
+  }
+  if (roleBody && isModerator && accountAccessDrawerMode === "signin") {
+    roleBody.textContent = "Sign in with your staff moderator account to open moderation, leads, advertising, WhatsApp follow-up, source intake, and training.";
   }
   if (roleBody && isAdmin && accountAccessDrawerMode === "signin") {
     roleBody.textContent = "Sign in with your admin or super_admin account to open Launch Control, Setup Status, CRM, listings, payments, and owner tools.";
