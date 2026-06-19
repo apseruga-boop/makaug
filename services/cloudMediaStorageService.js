@@ -1,0 +1,252 @@
+const crypto = require('crypto');
+
+const SERVICE = 's3';
+const DATA_URL_RE = /^data:([^;,]+)(?:;charset=[^;,]+)?;base64,([a-z0-9+/=\s]+)$/i;
+
+function cleanSegment(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120);
+}
+
+function normalizeObjectKey(value = '') {
+  return String(value || '')
+    .replace(/^\/+/, '')
+    .replace(/\/{2,}/g, '/');
+}
+
+function encodePathSegment(value) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+function canonicalUriFor(endpoint, bucket, key) {
+  const prefix = endpoint.pathname && endpoint.pathname !== '/' ? endpoint.pathname.replace(/\/+$/, '') : '';
+  return `${prefix}/${encodePathSegment(bucket)}/${normalizeObjectKey(key).split('/').map(encodePathSegment).join('/')}`;
+}
+
+function sha256Hex(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function hmac(key, value) {
+  return crypto.createHmac('sha256', key).update(value).digest();
+}
+
+function signingKey(secret, dateStamp, region) {
+  const dateKey = hmac(`AWS4${secret}`, dateStamp);
+  const regionKey = hmac(dateKey, region);
+  const serviceKey = hmac(regionKey, SERVICE);
+  return hmac(serviceKey, 'aws4_request');
+}
+
+function dateParts(now = new Date()) {
+  const iso = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  return {
+    dateStamp: iso.slice(0, 8),
+    amzDate: iso
+  };
+}
+
+function signedHeaders(headers) {
+  const entries = Object.entries(headers)
+    .map(([name, value]) => [name.toLowerCase(), String(value).trim().replace(/\s+/g, ' ')])
+    .sort(([a], [b]) => a.localeCompare(b));
+  return {
+    canonicalHeaders: entries.map(([name, value]) => `${name}:${value}\n`).join(''),
+    signedHeaderNames: entries.map(([name]) => name).join(';')
+  };
+}
+
+function storageError(message, status = 503) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function mediaStorageProvider() {
+  return String(process.env.MEDIA_STORAGE_PROVIDER || 'local').trim().toLowerCase();
+}
+
+function requiredS3Env() {
+  return ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+}
+
+function missingS3Env() {
+  return requiredS3Env().filter((key) => !String(process.env[key] || '').trim());
+}
+
+function cloudMediaStorageConfigured() {
+  return mediaStorageProvider() === 's3' && missingS3Env().length === 0;
+}
+
+function cloudMediaStorageRequired() {
+  return process.env.NODE_ENV === 'production'
+    || ['1', 'true', 'yes', 'on'].includes(String(process.env.REQUIRE_CLOUD_MEDIA_STORAGE || '').toLowerCase());
+}
+
+function assertCloudMediaStorageConfigured() {
+  const provider = mediaStorageProvider();
+  if (provider !== 's3') {
+    throw storageError('Cloud media storage is not configured. Set MEDIA_STORAGE_PROVIDER=s3 before accepting uploaded media.', 503);
+  }
+  const missing = missingS3Env();
+  if (missing.length) {
+    throw storageError(`Cloud media storage is missing required environment variables: ${missing.join(', ')}`, 503);
+  }
+}
+
+function isDataUrl(value = '') {
+  return DATA_URL_RE.test(String(value || '').trim());
+}
+
+function parseDataUrl(dataUrl, { allowedMimeTypes, maxBytes, label = 'uploaded media' } = {}) {
+  const match = String(dataUrl || '').trim().match(DATA_URL_RE);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  if (allowedMimeTypes?.length && !allowedMimeTypes.includes(mimeType)) {
+    throw storageError(`${label} must be one of: ${allowedMimeTypes.join(', ')}`, 400);
+  }
+  const bytes = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+  if (maxBytes && bytes.length > maxBytes) {
+    throw storageError(`${label} is too large. Upload must be ${Math.floor(maxBytes / (1024 * 1024))}MB or smaller.`, 400);
+  }
+  return { bytes, mimeType };
+}
+
+function extensionForMime(mimeType = '') {
+  const map = {
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'application/pdf': 'pdf',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx'
+  };
+  return map[String(mimeType || '').toLowerCase()] || 'bin';
+}
+
+function publicUrlFor(key) {
+  const base = String(process.env.S3_PUBLIC_BASE_URL || '').trim();
+  if (!base) return undefined;
+  return `${base.replace(/\/+$/, '')}/${normalizeObjectKey(key).split('/').map(encodePathSegment).join('/')}`;
+}
+
+function objectKeyFor({ keyPrefix = 'uploads', filename = '', mimeType = 'application/octet-stream' } = {}) {
+  const safePrefix = normalizeObjectKey(keyPrefix || 'uploads');
+  const safeName = cleanSegment(filename || '');
+  const ext = extensionForMime(mimeType);
+  const basename = safeName && safeName.includes('.') ? safeName.replace(/\.[^.]+$/, '') : (safeName || 'media');
+  return normalizeObjectKey(`${safePrefix}/${Date.now()}-${crypto.randomUUID()}-${basename}.${ext}`);
+}
+
+async function uploadBufferToS3({ bytes, mimeType, key, bucket: bucketOverride } = {}) {
+  assertCloudMediaStorageConfigured();
+
+  const endpoint = new URL(process.env.S3_ENDPOINT);
+  const bucket = String(bucketOverride || process.env.S3_BUCKET || '').trim();
+  if (!bucket) {
+    throw storageError('Cloud media upload bucket is missing.', 503);
+  }
+  const region = String(process.env.S3_REGION || 'auto').trim() || 'auto';
+  const accessKey = String(process.env.S3_ACCESS_KEY_ID || '').trim();
+  const secret = String(process.env.S3_SECRET_ACCESS_KEY || '').trim();
+  const objectKey = normalizeObjectKey(key);
+  const payloadHash = sha256Hex(bytes);
+  const { dateStamp, amzDate } = dateParts();
+  const canonicalUri = canonicalUriFor(endpoint, bucket, objectKey);
+  const uploadUrl = `${endpoint.origin}${canonicalUri}`;
+  const headers = {
+    host: endpoint.host,
+    'content-type': mimeType,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate
+  };
+  const { canonicalHeaders, signedHeaderNames } = signedHeaders(headers);
+  const canonicalRequest = ['PUT', canonicalUri, '', canonicalHeaders, signedHeaderNames, payloadHash].join('\n');
+  const credentialScope = `${dateStamp}/${region}/${SERVICE}/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, sha256Hex(canonicalRequest)].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(secret, dateStamp, region)).update(stringToSign).digest('hex');
+
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': mimeType,
+      'X-Amz-Content-Sha256': payloadHash,
+      'X-Amz-Date': amzDate,
+      Authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaderNames}, Signature=${signature}`
+    },
+    body: new Uint8Array(bytes)
+  });
+
+  if (!response.ok) {
+    throw storageError(`Cloud media upload failed: ${response.status} ${await response.text()}`, 502);
+  }
+
+  return {
+    provider: 's3',
+    key: objectKey,
+    internalRef: `s3://${bucket}/${objectKey}`,
+    publicUrl: publicUrlFor(objectKey),
+    bytes: bytes.length,
+    sha256: payloadHash,
+    mimeType
+  };
+}
+
+async function storeDataUrl(dataUrl, options = {}) {
+  if (!isDataUrl(dataUrl)) return null;
+  if (!cloudMediaStorageConfigured()) {
+    if (cloudMediaStorageRequired()) assertCloudMediaStorageConfigured();
+    return null;
+  }
+  const parsed = parseDataUrl(dataUrl, options);
+  if (!parsed) return null;
+  const key = objectKeyFor({
+    keyPrefix: options.keyPrefix,
+    filename: options.filename || options.label,
+    mimeType: parsed.mimeType
+  });
+  const stored = await uploadBufferToS3({ bytes: parsed.bytes, mimeType: parsed.mimeType, key });
+  return options.isPrivate ? stored.internalRef : (stored.publicUrl || stored.internalRef);
+}
+
+async function prepareMediaUrlForStorage(value, options = {}) {
+  const raw = String(value || '').trim();
+  if (!isDataUrl(raw)) return raw;
+  const storedUrl = await storeDataUrl(raw, options);
+  return storedUrl || raw;
+}
+
+async function prepareUploadObjectForStorage(upload, options = {}) {
+  if (!upload || typeof upload !== 'object' || !upload.data_url) return upload;
+  const storedUrl = await storeDataUrl(upload.data_url, {
+    ...options,
+    filename: upload.name || options.filename,
+    label: options.label || upload.name || 'uploaded media'
+  });
+  if (!storedUrl) return upload;
+  return {
+    ...upload,
+    data_url: undefined,
+    url: storedUrl,
+    storage_provider: 's3'
+  };
+}
+
+module.exports = {
+  assertCloudMediaStorageConfigured,
+  cloudMediaStorageConfigured,
+  cloudMediaStorageRequired,
+  isDataUrl,
+  mediaStorageProvider,
+  missingS3Env,
+  prepareMediaUrlForStorage,
+  prepareUploadObjectForStorage,
+  uploadBufferToS3,
+  storeDataUrl
+};

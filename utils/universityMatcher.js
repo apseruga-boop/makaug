@@ -1,21 +1,66 @@
 const { UNIVERSITIES } = require('./constants');
 
 const UNIVERSITY_ALIAS_GROUPS = [
-  { name: 'Makerere University', aliases: ['makerere', 'makerere university', 'muk', 'kikoni', 'wandegeya', 'mulago'] },
-  { name: 'Makerere University Business School (MUBS)', aliases: ['mubs', 'makerere university business school', 'nakawa campus', 'nakawa'] },
-  { name: 'Kyambogo University', aliases: ['kyambogo', 'kyambogo university', 'banda', 'ntinda'] },
-  { name: 'Uganda Christian University (UCU)', aliases: ['ucu', 'uganda christian university', 'bishop tucker', 'mukono campus', 'mukono town', 'mukono'] },
-  { name: 'Kampala International University (KIU)', aliases: ['kiu', 'kampala international university', 'kansanga', 'kabalagala'] },
-  { name: 'Nkumba University', aliases: ['nkumba', 'nkumba university', 'entebbe'] },
-  { name: 'Ndejje University', aliases: ['ndejje', 'ndejje university'] },
-  { name: 'Uganda Martyrs University (UMU)', aliases: ['umu', 'uganda martyrs university', 'nkozi'] },
-  { name: 'Mbarara University of Science and Technology (MUST)', aliases: ['must', 'mbarara university', 'mbarara university of science and technology', 'mbarara'] },
-  { name: 'Gulu University', aliases: ['gulu university', 'gulu'] },
-  { name: 'Kabale University', aliases: ['kabale university', 'kabale'] },
-  { name: 'Lira University', aliases: ['lira university', 'lira'] },
-  { name: 'Busitema University', aliases: ['busitema', 'busitema university'] },
-  { name: 'Soroti University', aliases: ['soroti university', 'soroti'] },
-  { name: 'Islamic University in Uganda (IUIU)', aliases: ['iuiu', 'islamic university in uganda', 'mbale campus'] }
+  {
+    name: 'Makerere University',
+    aliases: ['makerere', 'makerere university', 'muk', 'kikoni', 'wandegeya', 'mulago']
+  },
+  {
+    name: 'Makerere University Business School (MUBS)',
+    aliases: ['mubs', 'makerere university business school', 'nakawa campus', 'nakawa']
+  },
+  {
+    name: 'Kyambogo University',
+    aliases: ['kyambogo', 'kyambogo university', 'banda', 'ntinda']
+  },
+  {
+    name: 'Uganda Christian University (UCU)',
+    aliases: ['ucu', 'uganda christian university', 'bishop tucker', 'mukono campus', 'mukono town', 'mukono']
+  },
+  {
+    name: 'Kampala International University (KIU)',
+    aliases: ['kiu', 'kampala international university', 'kansanga', 'kabalagala']
+  },
+  {
+    name: 'Nkumba University',
+    aliases: ['nkumba', 'nkumba university', 'entebbe']
+  },
+  {
+    name: 'Ndejje University',
+    aliases: ['ndejje', 'ndejje university']
+  },
+  {
+    name: 'Uganda Martyrs University (UMU)',
+    aliases: ['umu', 'uganda martyrs university', 'nkozi']
+  },
+  {
+    name: 'Mbarara University of Science and Technology (MUST)',
+    aliases: ['must', 'mbarara university', 'mbarara university of science and technology', 'mbarara']
+  },
+  {
+    name: 'Gulu University',
+    aliases: ['gulu university', 'gulu']
+  },
+  {
+    name: 'Kabale University',
+    aliases: ['kabale university', 'kabale']
+  },
+  {
+    name: 'Lira University',
+    aliases: ['lira university', 'lira']
+  },
+  {
+    name: 'Busitema University',
+    aliases: ['busitema', 'busitema university']
+  },
+  {
+    name: 'Soroti University',
+    aliases: ['soroti university', 'soroti']
+  },
+  {
+    name: 'Islamic University in Uganda (IUIU)',
+    aliases: ['iuiu', 'islamic university in uganda', 'mbale campus']
+  }
 ];
 
 const CANONICAL_UNIVERSITIES = Array.from(new Set([
@@ -45,6 +90,20 @@ function aliasPattern(alias = '') {
     .replace(/\s+/g, '\\s+');
 }
 
+function unique(values = []) {
+  const seen = new Set();
+  const out = [];
+  values.forEach((value) => {
+    const normalized = normalizeUniversityName(value);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  });
+  return out;
+}
+
 function normalizeUniversityName(value = '') {
   const raw = clean(value);
   if (!raw) return '';
@@ -57,22 +116,10 @@ function normalizeUniversityName(value = '') {
   });
   if (canonical) return canonical;
 
-  const aliasMatch = UNIVERSITY_ALIAS_GROUPS.find((group) => group.aliases.some((alias) => simplify(alias) === rawKey));
-  return aliasMatch ? aliasMatch.name : '';
-}
-
-function normalizeUniversityList(values = []) {
-  const seen = new Set();
-  const out = [];
-  (Array.isArray(values) ? values : [values]).forEach((value) => {
-    const normalized = normalizeUniversityName(value);
-    if (!normalized) return;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push(normalized);
+  const aliasMatch = UNIVERSITY_ALIAS_GROUPS.find((group) => {
+    return group.aliases.some((alias) => simplify(alias) === rawKey);
   });
-  return out;
+  return aliasMatch ? aliasMatch.name : '';
 }
 
 function inferNearestUniversityFromText(...values) {
@@ -134,6 +181,10 @@ function inferNearestUniversityFromListing(listing = {}) {
     extra.resolved_location_label,
     extra.map_pin_label
   );
+}
+
+function normalizeUniversityList(values = []) {
+  return unique(Array.isArray(values) ? values : [values]);
 }
 
 module.exports = {
