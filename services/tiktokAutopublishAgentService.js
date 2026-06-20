@@ -96,15 +96,19 @@ function sourceTextFromRow(row = {}) {
 
 function sourcePostedAtFromRow(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
-  return cleanText(
-    extra.first_posted_online_at
-      || extra.source_published_at
-      || extra.video_published_at
-      || extra.platform_posted_at
-      || extra.source_posted_at
-      || inferTikTokPostedAtFromVideoUrl(sourceUrlFromRow(row))
-      || ''
-  );
+  const candidates = [
+    extra.first_posted_online_at,
+    extra.source_published_at,
+    extra.video_published_at,
+    extra.platform_posted_at,
+    extra.source_posted_at,
+    inferTikTokPostedAtFromVideoUrl(sourceUrlFromRow(row)),
+  ].map(cleanText).filter(Boolean);
+  for (const candidate of candidates) {
+    const parsed = new Date(candidate);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return '';
 }
 
 function sourceDateIsConfirmed2026(row = {}) {

@@ -83,7 +83,7 @@ test('TikTok autopublish can use exact video ID timestamp when stored source dat
       ...goodRow().extra_fields,
       source_post_url: 'https://www.tiktok.com/@rawlings2025/video/7651202396844084501',
       source_post_date_status: '',
-      first_posted_online_at: '',
+      first_posted_online_at: 'Original post date is being confirmed from the source platform.',
       source_published_at: '',
     },
   });
