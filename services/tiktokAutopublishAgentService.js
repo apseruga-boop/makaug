@@ -81,6 +81,31 @@ function inferTikTokPostedAtFromVideoUrl(value = '') {
   }
 }
 
+function seedPostWithInferredTikTokDate(post = {}) {
+  const sourceUrl = cleanText(post.post_url || post.source_url || post.tiktok_url || post.url || '');
+  if (!sourceUrl) return post;
+  const hasDate = cleanText(
+    post.first_posted_at
+      || post.first_posted_online_at
+      || post.posted_at
+      || post.platform_posted_at
+      || post.video_posted_at
+      || post.published_at
+      || post.source_published_at
+      || ''
+  );
+  if (hasDate) return post;
+  const inferred = inferTikTokPostedAtFromVideoUrl(sourceUrl);
+  return inferred ? { ...post, first_posted_at: inferred, platform_posted_at: inferred } : post;
+}
+
+function exactUrlPostsWithInferredDates(urls = []) {
+  return (Array.isArray(urls) ? urls : [])
+    .map((url) => cleanText(url))
+    .filter(Boolean)
+    .map((url) => seedPostWithInferredTikTokDate({ post_url: url, source_url: url, tiktok_url: url }));
+}
+
 function sourceTextFromRow(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   return cleanText([
@@ -448,10 +473,14 @@ async function runTikTokAutopublishAgent({
     let importResult = null;
 
     if (hasExactInput && reviewSlotsAvailable > 0) {
+      const exactPosts = [
+        ...(Array.isArray(posts) ? posts.map(seedPostWithInferredTikTokDate) : []),
+        ...exactUrlPostsWithInferredDates(Array.isArray(urls) ? urls : []),
+      ].slice(0, reviewSlotsAvailable);
       importResult = await importTikTokExactVideoPosts({
         db,
-        posts: Array.isArray(posts) ? posts.slice(0, reviewSlotsAvailable) : [],
-        urls: Array.isArray(urls) ? urls.slice(0, reviewSlotsAvailable) : [],
+        posts: exactPosts,
+        urls: [],
         rawText,
         dryRun,
         fetchOembed,

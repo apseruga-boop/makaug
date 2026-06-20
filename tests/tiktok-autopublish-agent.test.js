@@ -119,8 +119,8 @@ test('TikTok autopublish route and script are protected production surfaces', ()
 
 test('TikTok autopublish service enforces review cap and no accidental live writes', async () => {
   assert(serviceSource.includes('Math.max(0, maxReview - reviewQueueBefore)'), 'review queue cap should be computed before imports');
-  assert(serviceSource.includes('posts.slice(0, reviewSlotsAvailable)'), 'post imports should be limited by remaining review slots');
-  assert(serviceSource.includes('urls.slice(0, reviewSlotsAvailable)'), 'URL imports should be limited by remaining review slots');
+  assert(serviceSource.includes('.slice(0, reviewSlotsAvailable)'), 'exact TikTok imports should be limited by remaining review slots');
+  assert(serviceSource.includes('exactUrlPostsWithInferredDates'), 'URL imports should infer TikTok video dates before queueing');
   const result = await runTikTokAutopublishAgent({
     db: { pool: { connect: async () => { throw new Error('should not connect without confirm_live'); } } },
     dryRun: false,
