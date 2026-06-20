@@ -116,6 +116,9 @@ function run() {
   assert(staffRoutes.includes('STAFF_SOURCE_PRESETS'), 'staff API should return local source-search presets');
   assert(staffRoutes.includes('whatsapp_web_bridge_clients'), 'staff API should include hosted WhatsApp bridge heartbeat proof');
   assert(staffRoutes.includes('STAFF_REMOVED_STATUSES'), 'staff API should hide rejected/deleted/test rows from staff queues');
+  assert(staffRoutes.includes('publicCustomerVisiblePropertyWhere'), 'staff live counts should use the same customer-visible suppression as public property APIs');
+  assert(staffRoutes.includes('PUBLIC_SUPPRESSED_LISTING_MARKERS'), 'staff live counts should suppress soft-launch and QA records');
+  assert(staffRoutes.includes("COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live"), 'staff live property count must not include public-suppressed records');
   assert(staffRoutes.includes('source_presets: STAFF_SOURCE_PRESETS'), 'staff dashboard payload should include source presets');
   assert(staffRoutes.includes("whatsapp: { ...whatsappSummary, bridge: whatsappBridge }"), 'staff dashboard payload should expose WhatsApp bridge status');
   assert(staffRoutes.includes('FROM whatsapp_messages m'), 'staff dashboard and assistant should fall back to raw WhatsApp messages');

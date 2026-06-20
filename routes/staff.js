@@ -32,6 +32,8 @@ const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
+const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
+const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const STAFF_SOURCE_PRESETS = [
   { label: 'Kampala rentals', value: '#KampalaRentals #HouseForRentUganda #KampalaApartments', language: 'English' },
   { label: 'Student rooms', value: '#MakerereHostel #KyambogoHostel #StudentHostelUganda #RoomsNearCampus', language: 'English' },
@@ -159,6 +161,34 @@ function staffVisiblePropertyWhere(alias = 'p') {
   return `
     LOWER(COALESCE(${prefix}status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
     AND LOWER(COALESCE(${prefix}moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+  `;
+}
+
+function publicCustomerVisiblePropertyWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  const markerFilters = PUBLIC_SUPPRESSED_LISTING_MARKERS.map((marker) => {
+    const escaped = String(marker).replace(/'/g, "''");
+    return `(COALESCE(${prefix}title, '') NOT ILIKE '%${escaped}%' AND COALESCE(${prefix}description, '') NOT ILIKE '%${escaped}%')`;
+  }).join('\n    AND ');
+  const dummyTitleFilters = PUBLIC_SUPPRESSED_DUMMY_TITLES.map((title) => {
+    const escaped = String(title).replace(/'/g, "''");
+    return `LOWER(TRIM(COALESCE(${prefix}title, ''))) <> '${escaped}'`;
+  }).join('\n    AND ');
+
+  return `
+    ${publicLivePropertyStatusSql(alias)}
+    AND ${markerFilters}
+    AND ${dummyTitleFilters}
+    AND COALESCE(${prefix}source, '') !~* '(qa|test|demo|soft_launch|launch_proof)'
+    AND COALESCE(${prefix}listed_via, '') !~* '(qa|test|demo|soft_launch|launch_proof)'
+    AND COALESCE(${prefix}lister_name, '') !~* '(qa test delete|qa owner|dummy|sample)'
+    AND COALESCE(${prefix}lister_email, '') !~* '(makaug\\.invalid|test@|qa@|dummy|sample)'
+    AND COALESCE(${prefix}inquiry_reference, '') !~* '^(SLT|QA|TEST|DUMMY|SAMPLE)-'
+    AND COALESCE(${prefix}extra_fields->>'qa_test_delete', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${prefix}extra_fields->>'soft_launch_test', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${prefix}extra_fields->>'is_test', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${prefix}extra_fields->>'launch_proof', '') !~* '^(true|1|yes)$'
+    AND COALESCE(${prefix}extra_fields->>'non_public_test', '') !~* '^(true|1|yes)$'
   `;
 }
 
@@ -373,7 +403,7 @@ async function dashboardPayload(req) {
          COUNT(*)::int AS database_total,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
          COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
-         COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('p')})::int AS live,
+         COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live,
          COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
          COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
@@ -1064,7 +1094,7 @@ async function collectStaffContactRows(question = '') {
               CONCAT_WS(', ', NULLIF(area, ''), NULLIF(district, '')) AS location,
               title AS label, status
        FROM properties p
-       WHERE ${publicLivePropertyStatusSql('p')}
+       WHERE ${publicCustomerVisiblePropertyWhere('p')}
          AND (COALESCE(lister_phone, '') <> '' OR COALESCE(lister_email, '') <> '')
          AND ($1::text = '' OR area ILIKE $2 OR district ILIKE $2 OR address ILIKE $2 OR title ILIKE $2)
        ORDER BY approved_at DESC NULLS LAST, updated_at DESC
@@ -1473,7 +1503,7 @@ router.post('/assistant/query', async (req, res, next) => {
       safeRows(
         `SELECT
            COALESCE(NULLIF(area, ''), NULLIF(district, ''), 'Unknown') AS location,
-           COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('p')})::int AS live_listings,
+           COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live_listings,
            COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
            COUNT(*) FILTER (WHERE COALESCE(lister_phone, '') <> '')::int AS listings_with_phone
          FROM properties p
