@@ -24,13 +24,22 @@ const router = express.Router();
 
 router.use(requireStaffAccess);
 
-const PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'test_pending_review', 'pending_review_hidden', 'draft', 'submitted', 'in_review', 'under_review'];
+const PENDING_REVIEW_STATUSES = ['pending', 'pending_review', 'submitted', 'in_review', 'under_review'];
 const FINAL_REVIEW_STATUSES = ['approved', 'live', 'published', 'sold', 'hidden', 'deleted', 'rejected', 'declined', 'fraud', 'archived'];
+const STAFF_REMOVED_STATUSES = ['deleted', 'rejected', 'declined', 'fraud', 'archived', 'test_pending_review'];
 const OPEN_LEAD_STATUSES = ['open', 'new', 'contacted', 'qualified'];
 const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
+const STAFF_SOURCE_PRESETS = [
+  { label: 'Kampala rentals', value: '#KampalaRentals #HouseForRentUganda #KampalaApartments', language: 'English' },
+  { label: 'Student rooms', value: '#MakerereHostel #KyambogoHostel #StudentHostelUganda #RoomsNearCampus', language: 'English' },
+  { label: 'Land / plots', value: '#LandForSaleUganda #PlotsForSaleUganda #Ekibanja #Ettaka', language: 'English + Luganda' },
+  { label: 'Luganda homes', value: '#Ennyumba #Obupangisa #Amayumba #Muzigo #KampalaRent', language: 'Luganda' },
+  { label: 'Swahili homes', value: '#NyumbaUganda #NyumbaYaKupanga #ViwanjaUganda #KodiKampala', language: 'Kiswahili' },
+  { label: 'Wakiso growth', value: '#Nansana #Kira #Namugongo #Gayaza #WakisoHomes #WakisoRentals', language: 'Local areas' }
+];
 
 function boolLike(value) {
   return ['true', '1', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -86,9 +95,9 @@ function boolField(value) {
 function staffMetricDefinitions() {
   return {
     total_properties: {
-      label: 'Total Properties',
-      meaning: 'Every property record in makaug, across live, pending, rejected, hidden, and source-imported records.',
-      action: 'Use this to understand total stock. Staff normally work pending review and live follow-up, not deleted/system records.'
+      label: 'Live Properties',
+      meaning: 'Listings currently online for customers. Rejected, deleted, archived, hidden, and test rows are excluded from this staff number.',
+      action: 'Click to jump to the moderation queue. Use the public website for customer-facing availability.'
     },
     pending_review: {
       label: 'Pending Review',
@@ -111,12 +120,12 @@ function staffMetricDefinitions() {
       action: 'Claim, contact, record target area/package/budget, then move to proposal sent.'
     },
     whatsapp_human: {
-      label: 'WhatsApp Needs Human',
-      meaning: 'WhatsApp conversations where AI or routing marked human follow-up as needed.',
+      label: 'WhatsApp Chats',
+      meaning: 'Open or recently active WhatsApp conversations available for staff follow-up.',
       action: 'Open the chat, answer the customer, then add notes or move related leads forward.'
     },
     source_duplicates: {
-      label: 'Possible Duplicates',
+      label: 'Duplicate Risk',
       meaning: 'Pending rows that match another listing by phone, title, address, price/location, or exact social source URL.',
       action: 'Do not approve until you compare the duplicate warning and decide whether to merge, reject, or keep pending.'
     },
@@ -136,10 +145,20 @@ function pendingReviewWhere(alias = 'p') {
   const prefix = alias ? `${alias}.` : '';
   return `
     LOWER(COALESCE(${prefix}status, '')) NOT IN (${sqlList(FINAL_REVIEW_STATUSES)})
+    AND LOWER(COALESCE(${prefix}status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+    AND LOWER(COALESCE(${prefix}moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
     AND (
       LOWER(COALESCE(${prefix}status, '')) IN (${sqlList(PENDING_REVIEW_STATUSES)})
       OR LOWER(COALESCE(${prefix}moderation_stage, '')) IN (${sqlList(PENDING_REVIEW_STATUSES)})
     )
+  `;
+}
+
+function staffVisiblePropertyWhere(alias = 'p') {
+  const prefix = alias ? `${alias}.` : '';
+  return `
+    LOWER(COALESCE(${prefix}status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+    AND LOWER(COALESCE(${prefix}moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
   `;
 }
 
@@ -340,6 +359,7 @@ async function dashboardPayload(req) {
     leadRows,
     adRows,
     whatsappRows,
+    whatsappBridge,
     sourceSummary,
     duplicateSummary,
     sourceRows,
@@ -350,15 +370,16 @@ async function dashboardPayload(req) {
   ] = await Promise.all([
     safeOne(
       `SELECT
-         COUNT(*)::int AS total,
+         COUNT(*)::int AS database_total,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')})::int AS staff_visible_total,
          COUNT(*) FILTER (WHERE ${pendingReviewWhere('p')})::int AS pending_review,
          COUNT(*) FILTER (WHERE ${publicLivePropertyStatusSql('p')})::int AS live,
-         COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) = 'rejected')::int AS rejected,
-         COUNT(*) FILTER (WHERE COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
-         COUNT(*) FILTER (WHERE LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
+         COUNT(*) FILTER (WHERE LOWER(COALESCE(p.status, '')) IN (${sqlList(STAFF_REMOVED_STATUSES)}))::int AS staff_removed,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND COALESCE(p.extra_fields->>'found_online', p.extra_fields->>'found_online_candidate', p.extra_fields->>'social_search_candidate', '') ~* '^(true|1|yes)$')::int AS found_online,
+         COUNT(*) FILTER (WHERE ${staffVisiblePropertyWhere('p')} AND LOWER(COALESCE(p.source, p.listed_via, '')) IN ('website','web'))::int AS website_submitted
        FROM properties p`,
       [],
-      { total: 0, pending_review: 0, live: 0, rejected: 0, found_online: 0, website_submitted: 0 }
+      { database_total: 0, staff_visible_total: 0, pending_review: 0, live: 0, staff_removed: 0, found_online: 0, website_submitted: 0 }
     ),
     safeOne(
       `SELECT
@@ -394,11 +415,12 @@ async function dashboardPayload(req) {
     safeOne(
       `SELECT
          COUNT(*) FILTER (WHERE status IN ('needs_human','escalated'))::int AS needs_human,
-         COUNT(*) FILTER (WHERE status = 'open')::int AS open,
+         COUNT(*) FILTER (WHERE status IN ('open','ai_active','awaiting_customer','needs_human','escalated'))::int AS open,
+         COUNT(*) FILTER (WHERE last_message_at >= NOW() - INTERVAL '7 days')::int AS active_7d,
          COUNT(*) FILTER (WHERE assigned_to = $1)::int AS assigned_to_me
        FROM whatsapp_conversation_state`,
       [staffId],
-      { needs_human: 0, open: 0, assigned_to_me: 0 }
+      { needs_human: 0, open: 0, active_7d: 0, assigned_to_me: 0 }
     ),
     safeRows(
       `SELECT id, action, target_type, target_id, metadata, created_at
@@ -448,14 +470,64 @@ async function dashboardPayload(req) {
       [staffId, OPEN_AD_STATUSES, panelLimit]
     ),
     safeRows(
-      `SELECT phone, status, category, priority, assigned_to, latest_preview, last_intent, preferred_language,
-              last_message_at, last_inbound_at, last_outbound_at, last_ai_reply_at, last_human_reply_at,
-              metadata, updated_at
-       FROM whatsapp_conversation_state
-       WHERE assigned_to = $1 OR status IN ('needs_human','escalated','open')
-       ORDER BY COALESCE(last_message_at, updated_at) DESC
+      `WITH latest_message AS (
+         SELECT DISTINCT ON (m.user_phone)
+                m.user_phone,
+                m.message_type,
+                m.payload,
+                m.created_at
+         FROM whatsapp_messages m
+         ORDER BY m.user_phone, m.created_at DESC
+       ),
+       latest_intent AS (
+         SELECT DISTINCT ON (i.user_phone)
+                i.user_phone,
+                i.detected_intent,
+                i.language,
+                i.created_at
+         FROM whatsapp_intent_logs i
+         ORDER BY i.user_phone, i.created_at DESC
+       )
+       SELECT c.phone::text AS phone,
+              c.status::text AS status,
+              c.category::text AS category,
+              c.priority::text AS priority,
+              c.assigned_to::text AS assigned_to,
+              LEFT(COALESCE(
+                lm.payload->>'effectiveBody',
+                lm.payload->>'body',
+                lm.payload->>'text',
+                lm.payload->>'reply',
+                c.last_summary,
+                lm.message_type,
+                'WhatsApp conversation'
+              ), 240) AS latest_preview,
+              li.detected_intent::text AS last_intent,
+              COALESCE(li.language, 'en')::text AS preferred_language,
+              c.last_message_at,
+              c.last_inbound_at,
+              c.last_outbound_at,
+              c.last_ai_reply_at,
+              c.last_human_reply_at,
+              c.metadata,
+              c.updated_at
+       FROM whatsapp_conversation_state c
+       LEFT JOIN latest_message lm ON lm.user_phone = c.phone
+       LEFT JOIN latest_intent li ON li.user_phone = c.phone
+       WHERE c.assigned_to::text = $1::text
+          OR c.status IN ('needs_human','escalated','open','ai_active','awaiting_customer')
+       ORDER BY COALESCE(c.last_message_at, lm.created_at, c.updated_at) DESC
        LIMIT $2`,
       [staffId, panelLimit]
+    ),
+    safeOne(
+      `SELECT status, operator_name, unread_count, last_error, last_seen_at,
+              EXTRACT(EPOCH FROM (NOW() - last_seen_at))::int AS age_seconds
+       FROM whatsapp_web_bridge_clients
+       ORDER BY last_seen_at DESC
+       LIMIT 1`,
+      [],
+      { status: 'unknown', operator_name: '', unread_count: 0, last_error: '', last_seen_at: null, age_seconds: null }
     ),
     safeOne(
       `SELECT
@@ -496,6 +568,7 @@ async function dashboardPayload(req) {
               contact_email, districts, listing_types, status, trust_level, consent_status, scrape_policy,
               can_contact_directly, last_seen_at, last_checked_at, notes
        FROM property_source_registry
+       WHERE status IN ('active','candidate','review_needed')
        ORDER BY COALESCE(last_seen_at, last_checked_at, created_at) DESC
        LIMIT $1`,
       [panelLimit]
@@ -551,7 +624,7 @@ async function dashboardPayload(req) {
       my_moderation: myModeration,
       leads: leadSummary,
       advertising: adSummary,
-      whatsapp: whatsappSummary,
+      whatsapp: { ...whatsappSummary, bridge: whatsappBridge },
       sources: sourceSummary,
       duplicates: duplicateSummary,
       bank_leads: mortgageSummary,
@@ -566,6 +639,7 @@ async function dashboardPayload(req) {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       summary: sourceSummary,
       possible_duplicates: safeNumber(duplicateSummary, 'possible_duplicates'),
+      source_presets: STAFF_SOURCE_PRESETS,
       source_registry: sourceRows,
       queued_found_online: sourceQueueRows,
       exact_import_endpoint: '/api/staff/source-intake/exact-social/import',
@@ -748,34 +822,34 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     const latitude = toNullableFloat(patch.latitude ?? patch.lat);
     const longitude = toNullableFloat(patch.longitude ?? patch.lng ?? patch.lon ?? patch.long);
     const resolvedLocationLabel = firstNonEmpty(
-      [extraPatch.street_name, extraPatch.neighborhood || patch.area, extraPatch.city, patch.district || normalized.district].filter(Boolean).join(', '),
-      normalized.address,
+      [extraPatch.street_name, extraPatch.neighborhood || patch.area, extraPatch.city, patch.district].filter(Boolean).join(', '),
+      patch.address,
       existing.address
     );
     extraPatch.staff_location_reviewed_at = new Date().toISOString();
     extraPatch.staff_location_reviewed_by = actorId(req);
     extraPatch.staff_review_public_listing_facts = {
-      title: cleanText(normalized.title),
-      listing_type: cleanText(normalized.listing_type),
+      title: cleanText(patch.title),
+      listing_type: cleanText(patch.listing_type),
       region: cleanText(extraPatch.region),
-      district: cleanText(normalized.district),
+      district: cleanText(patch.district),
       city: cleanText(extraPatch.city),
       neighborhood: cleanText(extraPatch.neighborhood),
-      area: cleanText(normalized.area),
-      address: cleanText(normalized.address),
+      area: cleanText(patch.area),
+      address: cleanText(patch.address),
       street_name: cleanText(extraPatch.street_name),
-      property_type: cleanText(normalized.property_type),
-      title_type: cleanText(normalized.title_type),
+      property_type: cleanText(patch.property_type),
+      title_type: cleanText(patch.title_type),
       land_title_available: cleanText(extraPatch.land_title_available),
-      lister_phone: normalizePhoneLite(normalized.lister_phone),
+      lister_phone: normalizePhoneLite(patch.lister_phone),
       nearest_university: cleanText(extraPatch.nearest_university),
       distance_to_uni_km: toNullableFloat(extraPatch.distance_to_uni_km),
       room_type: cleanText(extraPatch.room_type),
       room_arrangement: cleanText(extraPatch.room_arrangement),
       gender_pref: cleanText(extraPatch.gender_pref),
       student_universities: cleanArray(extraPatch.student_universities),
-      price: toNullableInt(normalized.price),
-      price_period: cleanText(normalized.price_period),
+      price: toNullableInt(patch.price),
+      price_period: cleanText(patch.price_period),
       latitude,
       longitude
     };
@@ -855,6 +929,8 @@ async function loadStaffPropertyPreview(propertyId) {
               created_at
        FROM properties
        WHERE id <> $1
+         AND LOWER(COALESCE(status, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
+         AND LOWER(COALESCE(moderation_stage, '')) NOT IN (${sqlList(STAFF_REMOVED_STATUSES)})
          AND (
            (COALESCE($2::text, '') <> '' AND lister_phone = $2)
            OR LOWER(COALESCE(title, '')) = LOWER(COALESCE($3::text, ''))
@@ -930,11 +1006,16 @@ function extractQuestionFilter(question = '') {
   const lower = String(question || '').toLowerCase();
   const district = DISTRICTS.find((item) => lower.includes(item.toLowerCase())) || '';
   const quoted = question.match(/["']([^"']{2,60})["']/)?.[1] || '';
-  const areaMatch = question.match(/\b(?:in|around|near|for|at)\s+([a-z][a-z\s-]{2,40})/i);
-  const area = cleanText(quoted || areaMatch?.[1] || '')
-    .replace(/\b(properties|property|houses|house|land|rent|sale|area|district|website|uganda|phone|numbers|contacts|people)\b/gi, '')
+  const locationMatches = [...String(question || '').matchAll(/\b(?:in|around|near|at)\s+([a-z][a-z\s-]{2,60})/gi)];
+  const rawLocation = quoted || locationMatches.at(-1)?.[1] || '';
+  let area = cleanText(rawLocation)
+    .split(/\b(?:as|with|who|that|are|is|have|has|looking|want|need|needing|csv|download|phone|phones|number|numbers|contact|contacts|people|properties|property|houses|house|land|rent|sale|area|district|website|uganda)\b/i)[0]
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
-  const limitMatch = question.match(/\b(?:top|first|limit|show)\s+(\d{1,3})\b/i);
+  if (district && area.toLowerCase().includes(district.toLowerCase())) area = '';
+  const limitMatch = question.match(/\b(?:top|first|limit|show)\s+(\d{1,3})\b/i)
+    || question.match(/\b(\d{1,3})\s+(?:phone|phones|number|numbers|contact|contacts|rows|people)\b/i);
   return {
     district,
     area: area && area.length > 2 ? area : '',
@@ -1029,10 +1110,10 @@ async function collectStaffContactRows(question = '') {
     safeRows(
       `SELECT 'whatsapp_conversation' AS source, phone AS reference, 'WhatsApp contact' AS name,
               phone, '' AS email, COALESCE(metadata->>'location', metadata->>'preferred_area', '') AS location,
-              COALESCE(latest_preview, last_intent, category, 'WhatsApp conversation') AS label, status
+              COALESCE(last_summary, category, 'WhatsApp conversation') AS label, status
        FROM whatsapp_conversation_state
        WHERE COALESCE(phone, '') <> ''
-         AND ($1::text = '' OR latest_preview ILIKE $2 OR last_intent ILIKE $2 OR metadata->>'location' ILIKE $2)
+         AND ($1::text = '' OR last_summary ILIKE $2 OR category ILIKE $2 OR metadata->>'location' ILIKE $2)
        ORDER BY COALESCE(last_message_at, updated_at) DESC
        LIMIT $3`,
       params
@@ -1405,7 +1486,7 @@ router.post('/assistant/query', async (req, res, next) => {
       safeRows(
         `SELECT category, status, COUNT(*)::int AS count
          FROM whatsapp_conversation_state
-         WHERE ($1::text = '' OR latest_preview ILIKE $2 OR metadata->>'location' ILIKE $2)
+         WHERE ($1::text = '' OR last_summary ILIKE $2 OR category ILIKE $2 OR metadata->>'location' ILIKE $2)
          GROUP BY category, status
          ORDER BY count DESC
          LIMIT 10`,

@@ -34,7 +34,7 @@ function run() {
   assert(server.includes("const staffRoutes = require('./routes/staff')"), 'server should import staff routes');
   assert(server.includes("app.use('/api/staff', staffRoutes)"), 'server should mount /api/staff');
   assert(server.includes('renderPublicHtml(req.originalUrl || req.url || req.path)'), 'server should render /login?next=/staff-dashboard with the staff account panel mode');
-  assert(server.includes('staff-operations-dashboard-20260619b'), 'server should bump the public JS asset version for staff dashboard browsers');
+  assert(server.includes('staff-operations-dashboard-20260620a'), 'server should bump the public JS asset version for staff dashboard browsers');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
@@ -46,6 +46,8 @@ function run() {
   assert(staffRoutes.includes("router.patch('/advertising/inquiries/:id'"), 'staff advertising update API route should exist');
   assert(staffRoutes.includes("router.post('/assistant/query'"), 'staff AI assistant route should exist');
   assert(staffRoutes.includes('staff_contact_export_v1'), 'staff AI should expose controlled contact export answers');
+  assert(staffRoutes.includes('matchAll(/\\b(?:in|around|near|at)'), 'staff AI should parse the final real location phrase instead of greedy "for people" text');
+  assert(staffRoutes.includes('(\\d{1,3})\\s+(?:phone|phones|number|numbers|contact|contacts|rows|people)'), 'staff AI contact export should honor "give me 5 phone numbers" style limits');
   assert(staffRoutes.includes('normalizeReviewLocationHierarchy'), 'staff listing edits should validate Uganda location hierarchy');
   assert(staffRoutes.includes('districtForKnownArea'), 'staff listing edits should catch Nansana/Wakiso and Masindi/Masindi style hierarchy bugs');
   assert(staffRoutes.includes('map_pin_confirmed'), 'staff preview save should persist confirmed map pins from the King review panel');
@@ -66,7 +68,15 @@ function run() {
 
   assert(html.includes('id="page-staff-dashboard"'), 'staff dashboard page should be in the product');
   assert(html.includes('id="staff-settings-panel"'), 'staff dashboard should expose staff settings and payout details');
-  assert(html.includes('id="staff-stat-total"'), 'staff dashboard should show total property count');
+  assert(html.includes('id="staff-stat-total"'), 'staff dashboard should show live property count');
+  assert(html.includes('Live Properties'), 'staff dashboard should label public inventory as live properties');
+  assert(html.includes('onclick="staffJumpToDesk(\'leads\')"'), 'open leads metric should jump to lead actions');
+  assert(html.includes('id="staff-review-panel"'), 'staff dashboard should expose review action panel target');
+  assert(html.includes('id="staff-source-panel"'), 'staff dashboard should expose source action panel target');
+  assert(html.includes('id="staff-leads-panel"'), 'staff dashboard should expose lead action panel target');
+  assert(html.includes('id="staff-advertising-panel"'), 'staff dashboard should expose advertising action panel target');
+  assert(html.includes('id="staff-whatsapp-panel"'), 'staff dashboard should expose WhatsApp action panel target');
+  assert(html.includes('id="staff-bank-panel"'), 'staff dashboard should expose bank lead action panel target');
   assert(html.includes('id="staff-stat-duplicates"'), 'staff dashboard should show duplicate risk count');
   assert(html.includes('id="staff-source-quick-paste"'), 'staff dashboard should expose source quick paste');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
@@ -81,10 +91,18 @@ function run() {
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
   assert(app.includes('/api/staff/assistant/query'), 'frontend should call staff assistant API');
   assert(app.includes('/api/staff/profile'), 'frontend should save staff settings');
+  assert(app.includes('staffJumpToDesk'), 'staff stats should be clickable action jumps');
+  assert(app.includes('data.summary?.listings?.live'), 'staff dashboard total stat should use live public listings');
+  assert(app.includes('staffWhatsappBridgeCopy'), 'staff dashboard should render hosted WhatsApp bridge status');
+  assert(app.includes('staffUseSourcePreset'), 'staff source intake should expose search presets');
+  assert(app.includes('setStaffTrainingTab'), 'staff training should render one focused workflow at a time');
+  assert(app.includes('copyStaffTrainingScript'), 'staff scripts should be copyable');
   assert(app.includes('/api/staff/properties/${encodeURIComponent(propertyId)}/preview'), 'frontend should open staff listing preview before approval');
   assert(app.includes('adminReviewListingEditPanel(preview)'), 'staff preview should reuse the King review edit panel');
   assert(app.includes('collectAdminReviewListingPatch()'), 'staff preview save should collect the King review edit panel fields');
   assert(app.includes('initAdminReviewLocationMap(preview)'), 'staff preview should render the same King review map pin control');
+  assert(app.includes('const location = preview.location_review || {}'), 'staff preview should define location guardrail data before rendering warnings');
+  assert(app.includes('openStaffOwnerStatusWhatsApp'), 'staff decisions should open owner WhatsApp notification drafts');
   assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
@@ -95,6 +113,12 @@ function run() {
   assert(app.includes('Sign in with your staff moderator account'), 'staff sign-in drawer should explain moderator access');
   assert(app.includes('staffModerateListing'), 'frontend should expose moderation action');
   assert(app.includes('moderator email or +256'), 'staff sign-in copy should be present');
+  assert(staffRoutes.includes('STAFF_SOURCE_PRESETS'), 'staff API should return local source-search presets');
+  assert(staffRoutes.includes('whatsapp_web_bridge_clients'), 'staff API should include hosted WhatsApp bridge heartbeat proof');
+  assert(staffRoutes.includes('STAFF_REMOVED_STATUSES'), 'staff API should hide rejected/deleted/test rows from staff queues');
+  assert(staffRoutes.includes('source_presets: STAFF_SOURCE_PRESETS'), 'staff dashboard payload should include source presets');
+  assert(staffRoutes.includes("whatsapp: { ...whatsappSummary, bridge: whatsappBridge }"), 'staff dashboard payload should expose WhatsApp bridge status');
+  assert(staffRoutes.includes('FROM whatsapp_messages m'), 'staff dashboard and assistant should fall back to raw WhatsApp messages');
 
   console.log('staff-moderator-workbench tests passed');
 }

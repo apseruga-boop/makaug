@@ -9138,6 +9138,8 @@ async function renderAdvertiserDashboard() {
 
 let staffDashboardData = null;
 let staffAiLastCsv = "";
+let staffTrainingActive = "moderation";
+let staffTrainingScripts = [];
 let staffPreviewPreviousAdminReview = null;
 
 function staffNumber(value) {
@@ -9167,6 +9169,25 @@ function setStaffStat(id, value, definitions = {}, key = "") {
     help.textContent = staffStatCopy(definitions, key);
     help.title = help.textContent;
   }
+}
+
+function staffJumpToDesk(target) {
+  const id = {
+    review: "staff-review-panel",
+    activity: "staff-activity-panel",
+    leads: "staff-leads-panel",
+    advertising: "staff-advertising-panel",
+    whatsapp: "staff-whatsapp-panel",
+    bank: "staff-bank-panel",
+    source: "staff-source-panel",
+    ai: "staff-ai-panel",
+    training: "staff-training-panel"
+  }[String(target || "").toLowerCase()];
+  const el = id ? document.getElementById(id) : null;
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.classList.add("ring-2", "ring-emerald-200");
+  window.setTimeout(() => el.classList.remove("ring-2", "ring-emerald-200"), 1400);
 }
 
 function staffProfileValue(profile = {}, key = "") {
@@ -9320,14 +9341,41 @@ function renderStaffAdvertising(rows = []) {
   }).join("");
 }
 
-function renderStaffWhatsapp(rows = []) {
+function staffWhatsappBridgeCopy(whatsapp = {}) {
+  const bridge = whatsapp.bridge || {};
+  const status = String(bridge.status || "unknown").toLowerCase();
+  const age = Number(bridge.age_seconds || 0);
+  const ageText = bridge.last_seen_at
+    ? `${age > 0 ? `${Math.floor(age / 60)}m ago` : "just now"}`
+    : "not seen";
+  const online = ["online", "connected", "ready", "active"].includes(status) && (!age || age < 180);
+  return {
+    online,
+    label: status ? status.replace(/_/g, " ") : "unknown",
+    detail: [
+      bridge.operator_name ? `operator ${bridge.operator_name}` : "",
+      `last seen ${ageText}`,
+      Number(bridge.unread_count || 0) ? `${staffNumber(bridge.unread_count)} unread` : "",
+      bridge.last_error ? `error: ${bridge.last_error}` : ""
+    ].filter(Boolean).join(" • ")
+  };
+}
+
+function renderStaffWhatsapp(rows = [], whatsapp = {}) {
   const wrap = document.getElementById("staff-whatsapp-list");
   if (!wrap) return;
+  const bridge = staffWhatsappBridgeCopy(whatsapp);
+  const banner = `
+    <div class="rounded-xl border ${bridge.online ? "border-emerald-100 bg-emerald-50 text-emerald-950" : "border-amber-100 bg-amber-50 text-amber-950"} p-3 text-xs">
+      <div class="font-black">WhatsApp bridge: ${adminEscape(bridge.label)}</div>
+      <div class="mt-1">${adminEscape(bridge.detail || "No hosted bridge heartbeat returned yet.")}</div>
+      ${bridge.online ? "" : `<div class="mt-1 font-bold">If chats are missing, check the hosted WhatsApp worker and pairing state before telling staff it is connected.</div>`}
+    </div>`;
   if (!rows.length) {
-    wrap.innerHTML = staffEmpty("No WhatsApp conversations need staff attention.");
+    wrap.innerHTML = `${banner}${staffEmpty("No recent WhatsApp conversations are available in the staff queue yet.")}`;
     return;
   }
-  wrap.innerHTML = rows.map((item) => {
+  wrap.innerHTML = `${banner}${rows.map((item) => {
     const phone = String(item.phone || "").replace(/[^0-9]/g, "");
     return `
       <article class="border border-gray-200 rounded-xl p-3">
@@ -9339,7 +9387,7 @@ function renderStaffWhatsapp(rows = []) {
           ${phone ? `<a href="https://wa.me/${adminAttr(phone)}" target="_blank" rel="noopener noreferrer" class="border border-green-200 text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg text-xs font-black">Open WhatsApp</a>` : ""}
         </div>
       </article>`;
-  }).join("");
+  }).join("")}`;
 }
 
 function renderStaffSourceIntake(data = {}) {
@@ -9350,6 +9398,13 @@ function renderStaffSourceIntake(data = {}) {
       <div><strong>${staffNumber(summary.total_sources || 0)}</strong> source records • <strong>${staffNumber(summary.active_sources || 0)}</strong> active</div>
       <div class="mt-1"><strong>${staffNumber(data.possible_duplicates || 0)}</strong> pending listings have duplicate risk. Preview before approval.</div>
       <div class="mt-1 text-[11px] text-gray-500">Batch: ${adminEscape(data.batch_id || "source-intake")}</div>`;
+  }
+  const presets = document.getElementById("staff-source-presets");
+  if (presets) {
+    const rows = Array.isArray(data.source_presets) ? data.source_presets : [];
+    presets.innerHTML = rows.length ? rows.map((preset) => `
+      <button type="button" onclick="staffUseSourcePreset(${adminListingIdArg(preset.value || "")})" class="rounded-full border border-violet-200 bg-violet-50 hover:bg-violet-100 text-violet-900 px-3 py-1.5 text-[11px] font-black" title="${adminAttr(`${preset.language || "Search"}: ${preset.value || ""}`)}">${adminEscape(preset.label || "Search preset")}</button>
+    `).join("") : `<span class="text-[11px] text-gray-500">No search presets returned.</span>`;
   }
   const queue = document.getElementById("staff-source-queue-list");
   if (queue) {
@@ -9376,6 +9431,15 @@ function renderStaffSourceIntake(data = {}) {
       </div>
     `).join("") : staffEmpty("No source registry rows returned.");
   }
+}
+
+function staffUseSourcePreset(value = "") {
+  const input = document.getElementById("staff-source-sweep-focus");
+  const resolved = String(value || "").trim();
+  if (!input || !resolved) return;
+  input.value = resolved;
+  input.focus();
+  toast("Search preset loaded. Preview the sweep before queueing.");
 }
 
 function renderStaffBankLeads(data = {}) {
@@ -9509,22 +9573,55 @@ function renderStaffTraining(training = {}) {
   const wrap = document.getElementById("staff-training-guide");
   if (!wrap) return;
   const sections = [
-    ["Moderation", training.moderation || {}],
-    ["Source scraping", training.source_intake || {}],
-    ["Lead generation", training.leads || {}],
-    ["Advertising sales", training.advertising || {}],
-    ["WhatsApp", training.whatsapp || {}],
-    ["Bank leads", training.bank_leads || {}],
-    ["Scripts", training.scripts || {}]
+    ["moderation", "Moderation", training.moderation || {}],
+    ["source", "Source scraping", training.source_intake || {}],
+    ["leads", "Lead generation", training.leads || {}],
+    ["advertising", "Advertising sales", training.advertising || {}],
+    ["whatsapp", "WhatsApp", training.whatsapp || {}],
+    ["bank", "Bank leads", training.bank_leads || {}],
+    ["scripts", "Scripts", training.scripts || {}]
   ];
-  wrap.innerHTML = sections.map(([title, items]) => `
-    <details class="rounded-xl border border-gray-200 bg-gray-50 p-4" ${title === "Moderation" ? "open" : ""}>
-      <summary class="cursor-pointer font-black text-gray-900">${adminEscape(title)}</summary>
-      <p class="mt-2 text-xs font-bold text-emerald-800">${adminEscape(items.goal || "Use the steps below.")}</p>
-      <ol class="mt-2 space-y-2 text-xs text-gray-700 list-decimal list-inside">
-        ${(items.steps || items || []).slice(0, 8).map((item) => `<li>${adminEscape(item)}</li>`).join("") || "<li>No guide notes yet.</li>"}
-      </ol>
-    </details>`).join("");
+  const active = sections.find(([key]) => key === staffTrainingActive) || sections[0];
+  const activeItems = active?.[2] || {};
+  const steps = Array.isArray(activeItems.steps) ? activeItems.steps : (Array.isArray(activeItems) ? activeItems : []);
+  staffTrainingScripts = active[0] === "scripts" ? steps : [];
+  wrap.innerHTML = `
+    <div class="flex flex-wrap gap-2">
+      ${sections.map(([key, title]) => `
+        <button type="button" onclick="setStaffTrainingTab('${adminAttr(key)}')" class="rounded-full border px-3 py-1.5 text-xs font-black ${key === active[0] ? "border-emerald-700 bg-emerald-700 text-white" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}">${adminEscape(title)}</button>
+      `).join("")}
+    </div>
+    <div class="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div class="text-xs uppercase tracking-wide text-emerald-700 font-black">${adminEscape(active[1])}</div>
+      <p class="mt-1 text-sm font-bold text-gray-900">${adminEscape(activeItems.goal || "Use this workflow before actioning the desk.")}</p>
+      <div class="mt-3 grid gap-2">
+        ${steps.slice(0, 10).map((item, index) => active[0] === "scripts"
+          ? `<div class="rounded-xl border border-emerald-100 bg-white p-3">
+              <div class="flex items-start justify-between gap-3">
+                <p class="text-xs text-gray-700 whitespace-pre-line">${adminEscape(item)}</p>
+                <button type="button" onclick="copyStaffTrainingScript(${index})" class="shrink-0 border border-emerald-200 text-emerald-800 hover:bg-emerald-50 rounded-lg px-2 py-1 text-[11px] font-black">Copy</button>
+              </div>
+            </div>`
+          : `<div class="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-700"><span class="font-black text-emerald-800">${index + 1}.</span> ${adminEscape(item)}</div>`
+        ).join("") || `<div class="rounded-xl border border-gray-200 bg-white p-3 text-xs text-gray-500">No guide notes yet.</div>`}
+      </div>
+    </div>`;
+}
+
+function setStaffTrainingTab(key) {
+  staffTrainingActive = String(key || "moderation");
+  renderStaffTraining(staffDashboardData?.training || {});
+}
+
+async function copyStaffTrainingScript(index) {
+  const text = staffTrainingScripts[Number(index)] || "";
+  if (!text) {
+    toast("No script text is available.");
+    return;
+  }
+  const copied = await copyTextToClipboard(text);
+  toast(copied ? "Script copied." : "Script ready to copy.");
+  if (!copied) window.prompt("Copy staff script", text);
 }
 
 async function renderStaffDashboard() {
@@ -9547,19 +9644,19 @@ async function renderStaffDashboard() {
     const data = res?.data || {};
     staffDashboardData = data;
     const definitions = data.summary?.definitions || {};
-    setStaffStat("staff-stat-total", data.summary?.listings?.total, definitions, "total_properties");
+    setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
     setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
     setStaffStat("staff-stat-approvals", data.summary?.my_moderation?.approvals, definitions, "my_approvals");
     setStaffStat("staff-stat-leads", data.summary?.leads?.open, definitions, "open_leads");
     setStaffStat("staff-stat-ads", data.summary?.advertising?.open_inquiries, definitions, "ad_leads");
-    setStaffStat("staff-stat-whatsapp", data.summary?.whatsapp?.needs_human, definitions, "whatsapp_human");
+    setStaffStat("staff-stat-whatsapp", data.summary?.whatsapp?.open, definitions, "whatsapp_human");
     setStaffStat("staff-stat-duplicates", data.summary?.duplicates?.possible_duplicates, definitions, "source_duplicates");
     setStaffStat("staff-stat-bank", data.summary?.bank_leads?.total, definitions, "bank_leads");
     renderStaffProfileSettings(data.staff || user, data.payments || {});
     renderStaffReviewQueue(data.review_queue || []);
     renderStaffLeads(data.leads || []);
     renderStaffAdvertising(data.advertising_inquiries || []);
-    renderStaffWhatsapp(data.whatsapp_conversations || []);
+    renderStaffWhatsapp(data.whatsapp_conversations || [], data.summary?.whatsapp || {});
     renderStaffSourceIntake(data.source_intake || {});
     renderStaffBankLeads(data.bank_leads || {});
     renderStaffActivity(data.recent_activity || []);
@@ -9569,7 +9666,7 @@ async function renderStaffDashboard() {
     renderStaffReviewQueue([]);
     renderStaffLeads([]);
     renderStaffAdvertising([]);
-    renderStaffWhatsapp([]);
+    renderStaffWhatsapp([], {});
     renderStaffSourceIntake({});
     renderStaffBankLeads({});
     renderStaffActivity([]);
@@ -9607,6 +9704,7 @@ function renderStaffListingPreviewModal(preview = {}) {
   }
   const source = preview.source_evidence || {};
   const duplicates = preview.duplicate_review || {};
+  const location = preview.location_review || {};
   const sourceUrl = String(source.source_url || "").trim();
   adminActiveReview = preview;
   const modal = document.createElement("div");
@@ -9761,13 +9859,34 @@ async function saveStaffListingPreview(propertyId) {
   }
 }
 
+function openStaffOwnerStatusWhatsApp(statusData = {}, normalizedStatus = "", reason = "") {
+  const status = String(normalizedStatus || statusData.status || "").toLowerCase();
+  if (!["approved", "rejected"].includes(status)) return false;
+  const waPayload = statusData.notification?.whatsapp || {};
+  const listing = {
+    ...(adminActiveReview || {}),
+    ...statusData
+  };
+  const phone = waPayload.phone || statusData.lister_phone || listing.lister_phone || "";
+  const message = waPayload.message || (status === "rejected" ? buildAdminRejectionWhatsAppMessage(listing, reason) : "");
+  if (!(phone || waPayload.manual_url) || !message) return false;
+  openAdminWhatsAppMessageModal({
+    title: status === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+    listingLabel: statusData.inquiry_reference || listing.inquiry_reference || listing.title || listing.id || "-",
+    phone,
+    message,
+    manualUrl: waPayload.manual_url || ""
+  });
+  return true;
+}
+
 async function staffApprovePreviewListing(propertyId) {
   const ok = window.confirm("Approve this listing live after the saved preview facts? It will appear on the public website if backend checks pass.");
   if (!ok) return;
   try {
     await saveStaffListingPreview(propertyId);
     const review = staffReviewPatch();
-    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: "approved",
@@ -9777,10 +9896,11 @@ async function staffApprovePreviewListing(propertyId) {
         manual_notification_only: true
       }
     });
+    const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "approved");
     closeStaffListingPreview();
     await refreshPublicListingsFromApi({ silent: true });
     await renderStaffDashboard();
-    toast("Listing approved and live.");
+    toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved and live.");
   } catch (error) {
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
   }
@@ -9791,7 +9911,7 @@ async function staffRejectPreviewListing(propertyId) {
   const reason = review.reason || window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
   if (!reason.trim()) return;
   try {
-    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
         status: "rejected",
@@ -9801,9 +9921,10 @@ async function staffRejectPreviewListing(propertyId) {
         manual_notification_only: true
       }
     });
+    const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "rejected", reason);
     closeStaffListingPreview();
     await renderStaffDashboard();
-    toast("Listing rejected.");
+    toast(messageOpened ? "Listing rejected. WhatsApp message is ready." : "Listing rejected.");
   } catch (error) {
     toast(`Reject failed: ${error.message || "request failed"}`);
   }
@@ -9823,13 +9944,14 @@ async function staffModerateListing(propertyId, status) {
     if (!reason.trim()) return;
   }
   try {
-    await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
+    const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
-      body: { status: cleanStatus, reason }
+      body: { status: cleanStatus, reason, manual_notification_only: cleanStatus === "rejected" }
     });
+    const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, cleanStatus, reason);
     await refreshPublicListingsFromApi({ silent: true });
     await renderStaffDashboard();
-    toast(cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`);
+    toast(messageOpened ? "WhatsApp message is ready." : (cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`));
   } catch (error) {
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
   }
@@ -9906,9 +10028,16 @@ async function askStaffAssistant(event) {
     });
     if (answer) {
       const contacts = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
+      const provider = res?.data?.provider || {};
+      const context = res?.data?.context || {};
       staffAiLastCsv = res?.data?.csv || "";
       answer.innerHTML = `
         <div class="font-black text-slate-900">${adminEscape(res?.data?.model || "staff assistant")}</div>
+        <div class="mt-1 text-[11px] text-slate-500">${adminEscape([
+          provider.provider || provider.name || "provider checked",
+          Number.isFinite(Number(res?.data?.contact_count)) ? `${staffNumber(res.data.contact_count)} contacts returned` : "",
+          context.area ? `area: ${context.area}` : ""
+        ].filter(Boolean).join(" • "))}</div>
         <div class="mt-2 whitespace-pre-line">${adminEscape(res?.data?.answer || "No answer returned.")}</div>
         ${contacts.length ? `
           <div class="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">

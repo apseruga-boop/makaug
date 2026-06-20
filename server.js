@@ -133,7 +133,7 @@ const appJsPath = path.join(staticRoot, 'assets', 'makaug-app.js');
 const isProduction = process.env.NODE_ENV === 'production';
 const captureHelperUsabilityVersion = 'capture-helper-usability-20260607';
 const studentNearestUniversityVersion = 'student-nearest-university-20260616';
-const staffOperationsDashboardVersion = 'staff-operations-dashboard-20260619b';
+const staffOperationsDashboardVersion = 'staff-operations-dashboard-20260620a';
 const publicAppVersionSuffixes = [captureHelperUsabilityVersion, studentNearestUniversityVersion, staffOperationsDashboardVersion];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
