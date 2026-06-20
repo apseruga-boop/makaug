@@ -120,6 +120,9 @@ const {
   importTikTokExactVideoPosts,
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
+const {
+  runTikTokAutopublishAgent
+} = require('../services/tiktokAutopublishAgentService');
 const { getProviderMeta } = require('../services/llmProvider');
 const { translationProviderStatus } = require('../services/translationProviderService');
 const { DEFAULT_SEARCH_RADIUS_MILES, DEFAULT_SEARCH_RADIUS_KM } = require('../services/locationSearchService');
@@ -3187,6 +3190,46 @@ router.post('/tiktok-source-posts/import', async (req, res, next) => {
       source_review_count: result.source_review_count,
     }, adminActorId(req));
     return res.json({ ok: true, data: result });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
+  try {
+    const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
+    const confirmLive = req.body?.confirm_live === true || req.body?.confirmLive === true;
+    const posts = Array.isArray(req.body?.posts)
+      ? req.body.posts
+      : (Array.isArray(req.body) ? req.body : []);
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const result = await runTikTokAutopublishAgent({
+      db,
+      hashtag: req.body?.hashtag || req.body?.tag || 'ugandarealestate',
+      liveLimit: req.body?.live_limit || req.body?.liveLimit || 5,
+      reviewLimit: req.body?.review_limit || req.body?.reviewLimit || 100,
+      scanLimit: req.body?.scan_limit || req.body?.scanLimit || 250,
+      dryRun,
+      confirmLive,
+      posts,
+      urls,
+      rawText: req.body?.raw_text || req.body?.rawText || req.body?.text || '',
+      fetchOembed: req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false
+    });
+    await writeAudit('admin_tiktok_autopublish_agent_run', {
+      batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+      dry_run: dryRun,
+      confirm_live: confirmLive,
+      hashtag: result.hashtag,
+      review_queue_before: result.review_queue_before,
+      review_queue_after: result.review_queue_after,
+      scanned_candidates: result.scanned_candidates,
+      published_live_count: result.published_live_count,
+      ready_review_count: result.ready_review_count,
+      blocked_count: result.blocked_count,
+      not_100_percent_reason: result.not_100_percent_reason || ''
+    }, adminActorId(req));
+    return res.status(result.ok === false ? 400 : 200).json({ ok: result.ok !== false, data: result });
   } catch (error) {
     return next(error);
   }

@@ -38,6 +38,7 @@
     "inventory:daily-source-sweep": "node scripts/run-daily-found-online-source-sweep.js",
     "inventory:import-source-posts": "node scripts/import-found-online-source-posts.js",
     "inventory:sweep-social-platforms": "node scripts/sweep-social-platform-posts.js",
+    "inventory:tiktok-autopublish": "node scripts/run-tiktok-autopublish-agent.js",
     "inventory:prepare-video-stills": "node scripts/prepare-found-online-video-stills.js",
     "inventory:import-found-online-images": "node scripts/import-found-online-images.js",
     "ads:daily-report": "node scripts/send-advertising-daily-reports.js",
