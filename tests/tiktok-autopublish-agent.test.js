@@ -77,6 +77,21 @@ test('TikTok autopublish hard gate accepts only exact 2026 phone-location proper
   assert(decision.description.includes('Source date: 2026-04-10'), 'rewritten description should include source date');
 });
 
+test('TikTok autopublish can use exact video ID timestamp when stored source date is missing', () => {
+  const row = goodRow({
+    extra_fields: {
+      ...goodRow().extra_fields,
+      source_post_url: 'https://www.tiktok.com/@rawlings2025/video/7651202396844084501',
+      source_post_date_status: '',
+      first_posted_online_at: '',
+      source_published_at: '',
+    },
+  });
+  const decision = hardGateTikTokRow(row);
+  assert.strictEqual(decision.eligible, true);
+  assert.strictEqual(decision.source_date, '2026-06-14T10:52:58.000Z');
+});
+
 test('TikTok autopublish hard gate blocks missing exact URL, date, phone, location, text, and duplicates', () => {
   const cases = [
     [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_url: 'https://www.tiktok.com/tag/ugandarealestate' } }), 'missing_exact_tiktok_video_url'],

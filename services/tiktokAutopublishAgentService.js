@@ -68,6 +68,19 @@ function sourceUrlFromRow(row = {}) {
   return cleanText(extra.source_post_url || extra.source_url || extra.tiktok_url || row.source_url || '');
 }
 
+function inferTikTokPostedAtFromVideoUrl(value = '') {
+  const match = cleanText(value).match(/\/video\/(\d+)/i);
+  if (!match) return '';
+  try {
+    const unixSeconds = Number(BigInt(match[1]) >> 32n);
+    const date = new Date(unixSeconds * 1000);
+    const year = date.getUTCFullYear();
+    return year >= 2016 && year <= 2036 ? date.toISOString() : '';
+  } catch (_) {
+    return '';
+  }
+}
+
 function sourceTextFromRow(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   return cleanText([
@@ -89,6 +102,7 @@ function sourcePostedAtFromRow(row = {}) {
       || extra.video_published_at
       || extra.platform_posted_at
       || extra.source_posted_at
+      || inferTikTokPostedAtFromVideoUrl(sourceUrlFromRow(row))
       || ''
   );
 }
@@ -98,7 +112,7 @@ function sourceDateIsConfirmed2026(row = {}) {
   const status = cleanText(extra.source_post_date_status || extra.original_publish_date_status).toLowerCase();
   const postedAt = sourcePostedAtFromRow(row);
   const parsed = postedAt ? new Date(postedAt) : null;
-  if (status === 'confirmed_2026_plus_source_window') return true;
+  if (status === 'confirmed_2026_plus_source_window' || status === 'tiktok_video_id_inferred_2026_source_window') return true;
   if (!parsed || Number.isNaN(parsed.getTime())) return false;
   return parsed >= new Date(LAUNCH_SOURCE_POST_WINDOW_START);
 }
@@ -281,6 +295,7 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       actor: AGENT_ACTOR_ID,
       source_url: decision.source_url,
       source_date: decision.source_date,
+      source_date_method: 'stored_platform_date_or_tiktok_video_id_timestamp',
       source_text_length: decision.source_text_length,
       checks: {
         exact_tiktok_video_url: true,
