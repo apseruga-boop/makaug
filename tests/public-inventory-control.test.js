@@ -179,8 +179,11 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 \* 1000/);
   assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
   assert.match(propertiesRouteSource, /function clearPublicPropertiesCache\(reason = 'public_inventory_changed'\)/);
+  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set\(\['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_'\]\)/);
+  assert.match(propertiesRouteSource, /function isPublicCacheRefreshRequest\(req\)/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', 'HIT'/);
-  assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? 'MISS' : 'BYPASS'/);
+  assert.match(propertiesRouteSource, /forcePublicCacheRefresh \? 'REFRESH' : 'MISS'/);
+  assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? \(forcePublicCacheRefresh \? 'REFRESH' : 'MISS'\) : 'BYPASS'/);
   assert.match(propertiesRouteSource, /function fastPublicOpportunityBucketSql\(alias = 'p'\)/);
   assert.match(propertiesRouteSource, /const opportunityBucketSql = fastPublicOpportunityBucketSql\('p'\)/);
   assert.match(propertiesRouteSource, /SELECT COUNT\(\*\)::int AS total\s+FROM properties p/);
@@ -189,6 +192,9 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /WHERE i\.property_id = public_page\.id/);
   assert.match(serverSource, /PUBLIC_HTML_WARMUP_PATHS = \['\/'\]/);
   assert.match(serverSource, /PUBLIC_INVENTORY_WARMUP_PATHS = \[/);
+  assert.match(serverSource, /PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 \* 1000/);
+  assert.match(serverSource, /function addPublicCacheRefreshParam\(pathName\)/);
+  assert.match(serverSource, /function schedulePublicCacheWarmup\(baseUrl\)/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);

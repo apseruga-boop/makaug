@@ -84,6 +84,8 @@ const PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 * 1000;
 const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = 60;
 const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
+const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
+const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
 const publicPropertiesResponseCache = new Map();
 
 function publicPropertiesCacheControl() {
@@ -92,9 +94,15 @@ function publicPropertiesCacheControl() {
 
 function publicPropertiesCacheKey(req) {
   const entries = Object.entries(req.query || {})
+    .filter(([key]) => !PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS.has(String(key)))
     .map(([key, value]) => [String(key), Array.isArray(value) ? value.map(String).sort().join(',') : String(value)])
     .sort(([a], [b]) => a.localeCompare(b));
   return entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&') || 'default';
+}
+
+function isPublicCacheRefreshRequest(req) {
+  if (!parseBooleanLike(req.query.cache_refresh || req.query.cacheRefresh, false)) return false;
+  return String(req.get('user-agent') || '').includes(PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT);
 }
 
 function getPublicPropertiesCache(req) {
@@ -1408,8 +1416,9 @@ async function listPropertiesHandler(req, res, next) {
       && !hasAdminCredentialHint(req)
       && !hasRadiusSearch
       && (publicOnly || status === 'approved' || !status);
+    const forcePublicCacheRefresh = canUsePublicResponseCache && isPublicCacheRefreshRequest(req);
     const publicCache = canUsePublicResponseCache ? getPublicPropertiesCache(req) : { key: '', payload: null };
-    if (publicCache.payload) {
+    if (publicCache.payload && !forcePublicCacheRefresh) {
       res.set('Cache-Control', publicPropertiesCacheControl());
       res.set('X-Makaug-Properties-Cache', 'HIT');
       return res.json(publicCache.payload);
@@ -1897,7 +1906,7 @@ async function listPropertiesHandler(req, res, next) {
     };
     if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
     res.set('Cache-Control', canUsePublicResponseCache ? publicPropertiesCacheControl() : 'no-store');
-    res.set('X-Makaug-Properties-Cache', canUsePublicResponseCache ? 'MISS' : 'BYPASS');
+    res.set('X-Makaug-Properties-Cache', canUsePublicResponseCache ? (forcePublicCacheRefresh ? 'REFRESH' : 'MISS') : 'BYPASS');
     return res.json(payload);
   } catch (error) {
     return next(error);

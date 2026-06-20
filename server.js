@@ -143,15 +143,24 @@ const PUBLIC_INVENTORY_WARMUP_PATHS = [
   '/api/properties?status=approved&public_only=1&include_summary=false&limit=24',
   '/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false'
 ];
+const PUBLIC_CACHE_WARMUP_INTERVAL_MS = 45 * 1000;
+const PUBLIC_CACHE_WARMUP_USER_AGENT = 'makaug-public-inventory-cache-warmup';
+let publicCacheWarmupInFlight = false;
+
+function addPublicCacheRefreshParam(pathName) {
+  if (!String(pathName || '').startsWith('/api/properties')) return pathName;
+  return `${pathName}${pathName.includes('?') ? '&' : '?'}cache_refresh=1`;
+}
 
 async function warmPublicCache(baseUrl) {
   if (process.env.PUBLIC_INVENTORY_CACHE_WARMUP === 'false' || typeof fetch !== 'function') return;
   for (const pathName of [...PUBLIC_HTML_WARMUP_PATHS, ...PUBLIC_INVENTORY_WARMUP_PATHS]) {
+    const requestPath = addPublicCacheRefreshParam(pathName);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch(`${baseUrl}${pathName}`, {
-        headers: { 'User-Agent': 'makaug-public-inventory-cache-warmup' },
+      const response = await fetch(`${baseUrl}${requestPath}`, {
+        headers: { 'User-Agent': PUBLIC_CACHE_WARMUP_USER_AGENT },
         signal: controller.signal
       });
       logger.info('Public cache warmup completed', {
@@ -169,6 +178,23 @@ async function warmPublicCache(baseUrl) {
       clearTimeout(timeout);
     }
   }
+}
+
+function schedulePublicCacheWarmup(baseUrl) {
+  const run = () => {
+    if (publicCacheWarmupInFlight) return;
+    publicCacheWarmupInFlight = true;
+    warmPublicCache(baseUrl)
+      .catch((error) => {
+        logger.warn('Public cache warmup crashed', { error: error.message });
+      })
+      .finally(() => {
+        publicCacheWarmupInFlight = false;
+      });
+  };
+  setTimeout(run, 1000);
+  const interval = setInterval(run, PUBLIC_CACHE_WARMUP_INTERVAL_MS);
+  if (typeof interval.unref === 'function') interval.unref();
 }
 const PUBLIC_HTML_CACHE_CONTROL = isProduction
   ? 'public, max-age=60, stale-while-revalidate=300'
@@ -612,11 +638,7 @@ async function start() {
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);
-    setTimeout(() => {
-      warmPublicCache(`http://127.0.0.1:${port}`).catch((error) => {
-        logger.warn('Public cache warmup crashed', { error: error.message });
-      });
-    }, 1000);
+    schedulePublicCacheWarmup(`http://127.0.0.1:${port}`);
   });
 }
 
