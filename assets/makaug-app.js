@@ -32024,14 +32024,14 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 24, maxPages: 1 });
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1&include_summary=false", { limit: 24, maxPages: 1 });
     const rows = Array.isArray(publicRows) ? publicRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
     publicListingsApiStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
     const apiTotal = Number(publicListingsApiStats?.total ?? firstResponse?.pagination?.total ?? rows.length);
     publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
     let featuredRows = [];
     try {
-      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured", { skipAuth: true });
+      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false", { skipAuth: true });
       featuredRows = Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
     } catch (featuredError) {
       console.warn("Unable to refresh featured listings", featuredError);

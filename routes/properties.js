@@ -1556,24 +1556,35 @@ async function listPropertiesHandler(req, res, next) {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const opportunityBucketSql = fastPublicOpportunityBucketSql('p');
-    const summaryResult = await db.query(
-      `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
-         COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
-         COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
-         COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
-         COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
-         COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
-       FROM (
-         SELECT ${opportunityBucketSql} AS bucket
+    let opportunitySummary;
+    if (includeSummary) {
+      const opportunityBucketSql = fastPublicOpportunityBucketSql('p');
+      const summaryResult = await db.query(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE bucket = 'sale')::int AS sale,
+           COUNT(*) FILTER (WHERE bucket = 'rent')::int AS rent,
+           COUNT(*) FILTER (WHERE bucket = 'student')::int AS student,
+           COUNT(*) FILTER (WHERE bucket = 'commercial')::int AS commercial,
+           COUNT(*) FILTER (WHERE bucket = 'land')::int AS land,
+           COUNT(*) FILTER (WHERE bucket = 'other')::int AS other
+         FROM (
+           SELECT ${opportunityBucketSql} AS bucket
+           FROM properties p
+           ${where}
+         ) public_inventory`,
+        values
+      );
+      opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
+    } else {
+      const countResult = await db.query(
+        `SELECT COUNT(*)::int AS total
          FROM properties p
-         ${where}
-       ) public_inventory`,
-      values
-    );
-    const opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
+         ${where}`,
+        values
+      );
+      opportunitySummary = normalizePublicOpportunitySummary({ total: countResult.rows[0]?.total || 0 });
+    }
     const total = opportunitySummary.total;
     if (total === 0) {
       try {
@@ -1630,81 +1641,107 @@ async function listPropertiesHandler(req, res, next) {
       ? `${distanceSql} ASC NULLS LAST, p.created_at DESC`
       : (sortMap[sortBy] || sortMap.newest);
 
+    const publicExtraFieldsSql = `(COALESCE(p.extra_fields, '{}'::jsonb)
+        - 'raw_source_post'
+        - 'source_text'
+        - 'source_caption'
+        - 'source_description'
+        - 'source_visual_text'
+        - 'video_ocr_text'
+        - 'frame_ocr_text'
+        - 'source_comments'
+        - 'source_transcript'
+        - 'transcript'
+        - 'ocr_text'
+        - 'raw_caption')`;
+    const extraFieldsSelectSql = adminAccess
+      ? 'p.extra_fields AS admin_extra_fields'
+      : `${publicExtraFieldsSql} AS admin_extra_fields`;
     const listValues = [...values, limit, offset];
 
     const listResult = await db.query(
-      `SELECT
-        p.id,
-        p.listing_type,
-        p.title,
-        p.description,
-        p.district,
-        p.area,
-        p.address,
-        p.price,
-        p.price_period,
-        p.bedrooms,
-        p.bathrooms,
-        p.property_type,
-        p.nearest_university,
-        p.distance_to_uni_km,
-        p.room_type,
-        p.room_arrangement,
-        p.title_type,
-        p.status,
-        p.moderation_stage,
-        p.moderation_notes,
-        p.moderation_reason,
-        p.sold_at,
-        p.created_at,
-        p.latitude,
-        p.longitude,
-        p.students_welcome,
-        p.new_until,
-        p.inquiry_reference,
-        p.amenities,
-        p.agent_id,
-        p.source,
-        p.listed_via,
-        p.lister_name,
-        p.lister_phone,
-        p.lister_email,
-        p.extra_fields AS admin_extra_fields,
-        COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
-        p.extra_fields->>'city' AS city,
-        p.extra_fields->>'neighborhood' AS neighborhood,
-        p.extra_fields->>'street_name' AS street_name,
-        p.extra_fields->>'video_url' AS video_url,
-        p.extra_fields->>'youtube_url' AS youtube_url,
-        p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
-        p.extra_fields->>'region' AS region,
-        p.extra_fields->>'resolved_location_label' AS resolved_location_label,
-        ${distanceSql} AS distance_km,
-        (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
-        p.extra_fields->>'featured_at' AS featured_at,
-        img.url AS primary_image_url,
-        CASE
-          WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
-          ELSE 'private'
-        END AS listed_by,
-        CASE
-          WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'not_registered')
-          WHEN p.lister_type = 'agent' THEN COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
-          ELSE COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
-        END AS registration_status
-      FROM properties p
-      LEFT JOIN agents a ON a.id = p.agent_id
+      `WITH public_page_source AS (
+        SELECT
+          p.id,
+          p.listing_type,
+          p.title,
+          p.description,
+          p.district,
+          p.area,
+          p.address,
+          p.price,
+          p.price_period,
+          p.bedrooms,
+          p.bathrooms,
+          p.property_type,
+          p.nearest_university,
+          p.distance_to_uni_km,
+          p.room_type,
+          p.room_arrangement,
+          p.title_type,
+          p.status,
+          p.moderation_stage,
+          p.moderation_notes,
+          p.moderation_reason,
+          p.sold_at,
+          p.created_at,
+          p.latitude,
+          p.longitude,
+          p.students_welcome,
+          p.new_until,
+          p.inquiry_reference,
+          p.amenities,
+          p.agent_id,
+          p.source,
+          p.listed_via,
+          p.lister_name,
+          p.lister_phone,
+          p.lister_email,
+          ${extraFieldsSelectSql},
+          COALESCE(p.extra_fields->>'found_online_candidate', p.extra_fields->>'sourced_inventory_candidate') AS found_online_candidate,
+          p.extra_fields->>'city' AS city,
+          p.extra_fields->>'neighborhood' AS neighborhood,
+          p.extra_fields->>'street_name' AS street_name,
+          p.extra_fields->>'video_url' AS video_url,
+          p.extra_fields->>'youtube_url' AS youtube_url,
+          p.extra_fields->>'preferred_contact_method' AS preferred_contact_method,
+          p.extra_fields->>'region' AS region,
+          p.extra_fields->>'resolved_location_label' AS resolved_location_label,
+          ${distanceSql} AS distance_km,
+          (COALESCE(p.extra_fields->>'featured', 'false') IN ('true', '1', 'yes')) AS featured,
+          p.extra_fields->>'featured_at' AS featured_at,
+          CASE
+            WHEN p.agent_id IS NOT NULL OR p.lister_type = 'agent' THEN 'agent'
+            ELSE 'private'
+          END AS listed_by,
+          CASE
+            WHEN p.agent_id IS NOT NULL THEN COALESCE(a.registration_status, 'not_registered')
+            WHEN p.lister_type = 'agent' THEN COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
+            ELSE COALESCE(p.extra_fields->>'lister_registration_status', 'not_registered')
+          END AS registration_status
+        FROM properties p
+        LEFT JOIN agents a ON a.id = p.agent_id
+        ${where}
+        ORDER BY ${orderBy}
+        LIMIT $${values.length + 1}
+        OFFSET $${values.length + 2}
+      ),
+      public_page AS (
+        SELECT public_page_source.*, ROW_NUMBER() OVER () AS __page_order
+        FROM public_page_source
+      )
+      SELECT
+        public_page.*,
+        img.url AS primary_image_url
+      FROM public_page
       LEFT JOIN LATERAL (
         SELECT i.url
         FROM property_images i
-        WHERE i.property_id = p.id
+        WHERE i.property_id = public_page.id
         ORDER BY i.is_primary DESC, i.sort_order ASC, i.created_at ASC
         LIMIT 1
       ) img ON true
-      ${where}
-      ORDER BY ${orderBy}
-      LIMIT $${values.length + 1}
-      OFFSET $${values.length + 2}`,
+      ORDER BY public_page.__page_order`,
       listValues
     );
     if (hasRadiusSearch) {
@@ -1763,6 +1800,7 @@ async function listPropertiesHandler(req, res, next) {
           moderation_notes: rowModerationNotes,
           moderation_reason: rowModerationReason,
           found_online_candidate: rowFoundOnlineCandidate,
+          __page_order: rowPageOrder,
           ...publicRow
         } = row;
         const distanceKm = row.distance_km == null ? null : Number(Number(row.distance_km).toFixed(3));
