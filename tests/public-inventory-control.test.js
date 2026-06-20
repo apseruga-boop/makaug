@@ -187,7 +187,9 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /WITH public_page_source AS/);
   assert.match(propertiesRouteSource, /COALESCE\(p\.extra_fields, '\{\}'::jsonb\)\s+- 'raw_source_post'/);
   assert.match(propertiesRouteSource, /WHERE i\.property_id = public_page\.id/);
+  assert.match(serverSource, /PUBLIC_HTML_WARMUP_PATHS = \['\/'\]/);
   assert.match(serverSource, /PUBLIC_INVENTORY_WARMUP_PATHS = \[/);
+  assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
   assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
