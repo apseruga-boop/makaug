@@ -10,6 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const adminRoute = read('routes/admin.js');
 const pkg = JSON.parse(read('package.json'));
 const serviceSource = read('services/tiktokAutopublishAgentService.js');
+const {
+  buildTikTokExactPostImportRows,
+} = require('../services/socialPlatformPostDiscoveryService');
 
 const {
   AGENT_NAME,
@@ -107,6 +110,34 @@ test('TikTok autopublish can use exact video ID timestamp when stored source dat
   assert.strictEqual(decision.source_date, '2026-06-14T10:52:58.000Z');
 });
 
+test('Maka Scout relaxed mode can publish exact TikTok posts with phone, location, duplicate safety, and Price upon application', () => {
+  const row = goodRow({
+    listing_type: '',
+    price: null,
+    price_period: 'once',
+    description: '',
+    extra_fields: {
+      ...goodRow().extra_fields,
+      source_post_date_status: 'needs_source_platform_date_confirmation',
+      first_posted_online_at: '',
+      source_published_at: '',
+      source_text: '',
+      source_visual_text: '',
+      source_price_label: '',
+      price_label: '',
+    },
+  });
+  const strict = hardGateTikTokRow(row);
+  assert.strictEqual(strict.eligible, false, 'strict mode should still reject missing date/type/text evidence');
+
+  const relaxed = hardGateTikTokRow(row, { policyMode: 'relaxed' });
+  assert.strictEqual(relaxed.eligible, true);
+  assert.strictEqual(relaxed.policy_mode, 'phone_location_price_optional');
+  assert.strictEqual(relaxed.price_label, 'Price upon application');
+  assert.strictEqual(relaxed.price_status, 'price_upon_application');
+  assert(relaxed.title.includes('TikTok source'), 'unclear type should not be forced into a sale/rent title');
+});
+
 test('TikTok autopublish hard gate blocks missing exact URL, date, phone, location, text, and duplicates', () => {
   const cases = [
     [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_url: 'https://www.tiktok.com/tag/ugandarealestate' } }), 'missing_exact_tiktok_video_url'],
@@ -123,6 +154,42 @@ test('TikTok autopublish hard gate blocks missing exact URL, date, phone, locati
     assert.strictEqual(decision.eligible, false, `${reason} should block live publish`);
     assert(decision.reasons.includes(reason), `${reason} should be reported`);
   });
+});
+
+test('Maka Scout relaxed mode still blocks missing exact source, phone, location, and duplicates', () => {
+  const cases = [
+    [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_url: 'https://www.tiktok.com/tag/ugandarealestate' } }), 'missing_exact_tiktok_video_url'],
+    [goodRow({ lister_phone: '', extra_fields: { ...goodRow().extra_fields, contact_phone: '' } }), 'missing_source_phone_number'],
+    [goodRow({ area: 'Kampala', district: 'Kampala', address: 'Kampala' }), 'missing_specific_area_and_district'],
+    [goodRow({ duplicate_count: 1 }), 'duplicate_source_or_contact_location_match'],
+  ];
+  cases.forEach(([row, reason]) => {
+    const decision = hardGateTikTokRow(row, { policyMode: 'relaxed' });
+    assert.strictEqual(decision.eligible, false, `${reason} should block relaxed live publish`);
+    assert(decision.reasons.includes(reason), `${reason} should be reported`);
+  });
+});
+
+test('TikTok exact post parser preserves local-language listing and price evidence', () => {
+  const rows = buildTikTokExactPostImportRows({
+    posts: [{
+      post_url: 'https://www.tiktok.com/@lugandaproperty/video/7651202396844084501',
+      caption: 'Ettaka e Wakiso 12 obukadde negotiable. Call 0760112587',
+    }],
+  });
+  assert.strictEqual(rows.length, 1);
+  assert.strictEqual(rows[0].listing_type, 'land');
+  assert.strictEqual(rows[0].price_text, '12 obukadde negotiable');
+  assert.strictEqual(rows[0].contact_phone, '+256760112587');
+
+  const rentalRows = buildTikTokExactPostImportRows({
+    posts: [{
+      post_url: 'https://www.tiktok.com/@lugandarentals/video/7651202396844084502',
+      caption: 'Muzigo gwa renti e Nansana bei 250 emitwalo za mwezi. 0700112233',
+    }],
+  });
+  assert.strictEqual(rentalRows[0].listing_type, 'rent');
+  assert.strictEqual(rentalRows[0].price_text, 'bei 250 emitwalo za mwezi');
 });
 
 test('Maka Scout returns explicit live, review, duplicate, and excluded buckets', () => {
@@ -173,9 +240,11 @@ test('TikTok autopublish route and script are protected production surfaces', ()
   assert(adminRoute.includes('requireAdminApiKey'), 'admin router should remain API-key protected');
   assert(adminRoute.includes('confirm_live'), 'route should expose explicit confirm_live control');
   assert(adminRoute.includes('hashtag_sequence'), 'route should accept explicit hashtag sequence control');
+  assert(adminRoute.includes('policy_mode'), 'route should accept explicit relaxed policy control');
   assert(adminRoute.includes('admin_tiktok_autopublish_agent_run'), 'route should write an audit trail');
   assert.strictEqual(pkg.scripts['inventory:tiktok-autopublish'], 'node scripts/run-tiktok-autopublish-agent.js');
   assert(read('scripts/run-tiktok-autopublish-agent.js').includes('--hashtag-sequence'), 'CLI should support explicit hashtag sequence control');
+  assert(read('scripts/run-tiktok-autopublish-agent.js').includes('--policy-mode'), 'CLI should support explicit policy mode control');
 });
 
 test('TikTok autopublish service enforces review cap and no accidental live writes', async () => {
@@ -184,6 +253,8 @@ test('TikTok autopublish service enforces review cap and no accidental live writ
   assert(serviceSource.includes('exactUrlPostsWithInferredDates'), 'URL imports should infer TikTok video dates before queueing');
   assert(serviceSource.includes('buildAgentBuckets'), 'agent output should separate live/review/duplicate/excluded buckets');
   assert(serviceSource.includes('buildHashtagWorkflow'), 'agent output should include one-hashtag workflow state');
+  assert(serviceSource.includes('phone_location_price_optional'), 'agent should expose explicit relaxed phone/location/price-optional mode');
+  assert(serviceSource.includes('Price upon application'), 'agent should use Price upon application when source price is missing');
   const result = await runTikTokAutopublishAgent({
     db: { pool: { connect: async () => { throw new Error('should not connect without confirm_live'); } } },
     dryRun: false,

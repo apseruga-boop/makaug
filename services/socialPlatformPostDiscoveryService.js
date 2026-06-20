@@ -1420,23 +1420,25 @@ function districtForArea(area = '', text = '') {
 
 function listingTypeFromText(text = '') {
   const raw = cleanText(text).toLowerCase();
-  const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room)\b/.test(raw);
-  if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu)\b/.test(raw)) return 'students';
-  if (/\b(commercial|office|shop|retail|warehouse|factory|showroom|arcade)\b/.test(raw)) return 'commercial';
-  if (/\b(rent|rental|to let|month|monthly)\b/.test(raw)) return 'rent';
-  if (hasDwelling && /\b(for sale|sale|selling|buy|purchase)\b/.test(raw)) return 'sale';
-  if (/\b(land|plot|acre|acres|decimal|decimals|mailo)\b/.test(raw) && !hasDwelling) return 'land';
+  const hasDwelling = /\b(apartment|flat|house|home|villa|mansion|duplex|bungalow|bedroom|bedrooms|beds?|living room|sitting room|muzigo|mizigo|rental room)\b/.test(raw);
+  if (/\b(hostel|student|campus|makerere|kyambogo|mubs|ucu|university|campus room)\b/.test(raw)) return 'students';
+  if (/\b(commercial|office|shop|retail|warehouse|factory|showroom|arcade|duuka|madduuka|store)\b/.test(raw)) return 'commercial';
+  if (/\b(rent|rental|to let|month|monthly|kupangisa|renti|for rent|ku rentinga|muzigo|mizigo)\b/.test(raw)) return 'rent';
+  if (/\b(land|plot|acre|acres|decimal|decimals|mailo|ettaka|kibanja|bibanja|akabanja|plots?)\b/.test(raw) && !hasDwelling) return 'land';
+  if (hasDwelling && /\b(for sale|sale|selling|buy|purchase|kitundibwa|kutunda|gula|okugula)\b/.test(raw)) return 'sale';
   return 'sale';
 }
 
 function priceTextFromText(text = '') {
   const raw = cleanText(text);
+  const localPriceMatch = raw.match(/\b(?:bei|omuwendo|price|ugx|ush|shs?)?\s*\d+(?:\.\d+)?\s*(?:obukadde|akakadde|bukadde|emitwalo|mitwalo|laki|lakhs?)\b(?:\s*(?:negotiable|asking|only|za mwezi|per month|monthly))?/i);
+  if (localPriceMatch) return cleanText(localPriceMatch[0]);
   const negotiableMatch = raw.match(/\b(?:UGX|USh|Shs?)?\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))\s*(?:negotiable|asking|only)\b/i);
   if (negotiableMatch) return cleanText(negotiableMatch[0]);
   const usdMatch = raw.match(/(?:\$|US\$|USD)\s*\d[\d,.]*(?:\/month| per month| monthly|\/mo)?/i);
   if (usdMatch) return cleanText(usdMatch[0]);
   const patterns = [
-    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly)?/i,
+    /\b(?:UGX|USh|Shs?)\s*\d[\d,.]*(?:\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands))?(?:\/month| per month| monthly| kwa mwezi| za mwezi)?/i,
     /\b\d+(?:\.\d+)?\s*(?:bn|billion|billions|m|mn|million|millions|k|thousand|thousands)\b(?:\/month| per month| monthly)?/i,
   ];
   for (const pattern of patterns) {

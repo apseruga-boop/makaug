@@ -3210,6 +3210,7 @@ router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
       db,
       hashtag: req.body?.hashtag || req.body?.tag || 'ugandarealestate',
       hashtagSequence,
+      policyMode: req.body?.policy_mode || req.body?.policyMode || 'strict',
       liveLimit: req.body?.live_limit || req.body?.liveLimit || 5,
       reviewLimit: req.body?.review_limit || req.body?.reviewLimit || 100,
       scanLimit: req.body?.scan_limit || req.body?.scanLimit || 250,

@@ -28,6 +28,7 @@ const DEFAULT_HASHTAG_SEQUENCE = [
 const DEFAULT_LIVE_LIMIT = 5;
 const DEFAULT_REVIEW_LIMIT = 100;
 const MAX_SCAN_LIMIT = 250;
+const PRICE_UPON_APPLICATION_LABEL = 'Price upon application';
 const AGENT_ACTOR_ID = 'tiktok_autopublish_agent';
 const AGENT_NAME = 'Maka Scout';
 const AGENT_DISPLAY_NAME = 'Maka Scout AI';
@@ -211,6 +212,29 @@ function locationIsSpecific(row = {}) {
   return true;
 }
 
+function normalizedPolicyMode(value = '') {
+  const normalized = cleanText(value || '').toLowerCase();
+  return ['relaxed', 'phone_location', 'phone_location_price_optional', 'phone-location'].includes(normalized)
+    ? 'phone_location_price_optional'
+    : 'strict';
+}
+
+function priceLabelForTikTok(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  if (Number(row.price || 0) > 0) {
+    const period = cleanText(row.price_period || '');
+    return `USh ${Number(row.price).toLocaleString('en-UG')}${period && period !== 'once' ? `/${period}` : ''}`;
+  }
+  const label = cleanText(extra.source_price_label || extra.price_label || extra.price_text || extra.source_price_text || '');
+  return label || PRICE_UPON_APPLICATION_LABEL;
+}
+
+function priceStatusForTikTok(row = {}) {
+  return priceLabelForTikTok(row) === PRICE_UPON_APPLICATION_LABEL
+    ? 'price_upon_application'
+    : 'published_price_or_guide_price';
+}
+
 function sourceReviewRecordsFromImport(importResult = {}) {
   return Array.isArray(importResult?.source_review_records)
     ? importResult.source_review_records
@@ -307,6 +331,7 @@ function titleForApprovedTikTok(row = {}) {
   const area = cleanText(row.area);
   const district = cleanText(row.district);
   const label = listingTypeLabel(row.listing_type, row);
+  if (!knownListingType(row.listing_type)) return `${label} in ${area}, ${district} (TikTok source)`;
   const action = row.listing_type === 'rent' || row.listing_type === 'students' || row.listing_type === 'commercial'
     ? 'for rent'
     : 'for sale';
@@ -318,36 +343,38 @@ function descriptionForApprovedTikTok(row = {}) {
   const sourceUrl = sourceUrlFromRow(row);
   const posted = sourcePostedAtFromRow(row);
   const sourceText = sourceTextFromRow(row);
-  const priceLabel = cleanText(extra.source_price_label || extra.price_label || '');
+  const priceLabel = priceLabelForTikTok(row);
   return [
     `${titleForApprovedTikTok(row)}.`,
     `Location: ${cleanText(row.area)}, ${cleanText(row.district)}${row.address ? ` (${cleanText(row.address)})` : ''}.`,
     posted ? `Source date: ${posted.slice(0, 10)}.` : '',
-    priceLabel ? `Source price: ${priceLabel}.` : '',
+    `Source price: ${priceLabel}.`,
     sourceText ? `Source evidence: ${sourceText.slice(0, 420)}${sourceText.length > 420 ? '...' : ''}` : '',
     sourceUrl ? `Original TikTok source: ${sourceUrl}` : '',
     'Contact details and exact availability should be confirmed directly with the listed source before viewing.',
   ].filter(Boolean).join(' ');
 }
 
-function hardGateTikTokRow(row = {}) {
+function hardGateTikTokRow(row = {}, { policyMode = 'strict' } = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const sourceUrl = sourceUrlFromRow(row);
   const sourceText = sourceTextFromRow(row);
   const phone = normalizeUgandanPhone(row.lister_phone || extra.contact_phone || extra.source_phone || extra.whatsapp || '');
+  const mode = normalizedPolicyMode(policyMode);
   const reasons = [];
 
   if (!TIKTOK_EXACT_VIDEO_URL_PATTERN.test(sourceUrl)) reasons.push('missing_exact_tiktok_video_url');
-  if (!sourceDateIsConfirmed2026(row)) reasons.push('missing_confirmed_2026_source_date');
+  if (mode === 'strict' && !sourceDateIsConfirmed2026(row)) reasons.push('missing_confirmed_2026_source_date');
   if (!phone) reasons.push('missing_source_phone_number');
   if (!locationIsSpecific(row)) reasons.push('missing_specific_area_and_district');
-  if (!knownListingType(row.listing_type)) reasons.push('unclear_listing_type');
-  if (sourceText.length < 25) reasons.push('missing_caption_transcript_or_visual_text');
+  if (mode === 'strict' && !knownListingType(row.listing_type)) reasons.push('unclear_listing_type');
+  if (mode === 'strict' && sourceText.length < 25) reasons.push('missing_caption_transcript_or_visual_text');
   if (Number(row.duplicate_count || 0) > 0) reasons.push('duplicate_source_or_contact_location_match');
 
   return {
     eligible: reasons.length === 0,
     reasons,
+    policy_mode: mode,
     source_url: sourceUrl,
     phone,
     source_date: sourcePostedAtFromRow(row),
@@ -355,6 +382,8 @@ function hardGateTikTokRow(row = {}) {
     description: descriptionForApprovedTikTok(row),
     location: [cleanText(row.area), cleanText(row.district)].filter(Boolean).join(', '),
     source_text_length: sourceText.length,
+    price_label: priceLabelForTikTok(row),
+    price_status: priceStatusForTikTok(row),
     consent_confirmed: Boolean(extra.consent_confirmed),
     image_rights_confirmed: Boolean(extra.image_rights_confirmed),
   };
@@ -459,18 +488,28 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       source_date: decision.source_date,
       source_date_method: 'stored_platform_date_or_tiktok_video_id_timestamp',
       source_text_length: decision.source_text_length,
+      policy_mode: decision.policy_mode || 'strict',
+      price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+      price_status: decision.price_status || 'price_upon_application',
       checks: {
         exact_tiktok_video_url: true,
-        source_date_2026_plus: true,
+        source_date_2026_plus: decision.policy_mode === 'strict',
         phone_number_present: true,
         specific_location_present: true,
-        listing_type_clear: true,
+        listing_type_clear: decision.policy_mode === 'strict',
         duplicate_safe: true,
+        price_captured_or_price_upon_application: true,
       },
     },
     found_online_location_confirmed: true,
-    found_online_approval_policy: 'tiktok_ai_agent_exact_post_2026_phone_location_duplicate_gate',
+    found_online_approval_policy: decision.policy_mode === 'phone_location_price_optional'
+      ? 'maka_scout_relaxed_exact_post_phone_location_price_optional_duplicate_gate'
+      : 'tiktok_ai_agent_exact_post_2026_phone_location_duplicate_gate',
     found_online_non_location_checks_overridden: false,
+    price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+    source_price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+    price_upon_application: (decision.price_status || '') === 'price_upon_application',
+    price_status: decision.price_status || 'price_upon_application',
   };
 
   const result = await client.query(
@@ -491,7 +530,9 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       row.id,
       decision.title,
       decision.description,
-      'TikTok AI autopublish agent approved only after exact URL, 2026 date, phone, specific location, listing type, source text, and duplicate checks passed.',
+      decision.policy_mode === 'phone_location_price_optional'
+        ? 'Maka Scout relaxed mode approved after exact TikTok URL, phone, specific location, duplicate-safe check, and price captured or Price upon application.'
+        : 'TikTok AI autopublish agent approved only after exact URL, 2026 date, phone, specific location, listing type, source text, and duplicate checks passed.',
       `Autopublished from exact TikTok source: ${decision.source_url}`,
       JSON.stringify(extraPatch),
     ]
@@ -521,6 +562,9 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
         source_date: decision.source_date,
         location: decision.location,
         phone_present: Boolean(decision.phone),
+        policy_mode: decision.policy_mode,
+        price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
+        price_status: decision.price_status || 'price_upon_application',
       }),
     ]
   );
@@ -571,6 +615,7 @@ async function runTikTokAutopublishAgent({
   db,
   hashtag = DEFAULT_HASHTAG,
   hashtagSequence = DEFAULT_HASHTAG_SEQUENCE,
+  policyMode = 'strict',
   liveLimit = DEFAULT_LIVE_LIMIT,
   reviewLimit = DEFAULT_REVIEW_LIMIT,
   scanLimit = MAX_SCAN_LIMIT,
@@ -584,6 +629,7 @@ async function runTikTokAutopublishAgent({
   if (!db?.pool) throw new Error('db.pool is required');
 
   const normalizedHashtag = normalizeHashtag(hashtag);
+  const normalizedMode = normalizedPolicyMode(policyMode);
   const maxLive = safeLimit(liveLimit, DEFAULT_LIVE_LIMIT, 1, 25);
   const maxReview = safeLimit(reviewLimit, DEFAULT_REVIEW_LIMIT, 1, 500);
   const maxScan = safeLimit(scanLimit, MAX_SCAN_LIMIT, maxLive, 500);
@@ -630,7 +676,7 @@ async function runTikTokAutopublishAgent({
     await client.query('BEGIN');
     try {
       for (const row of candidates) {
-        const decision = hardGateTikTokRow(row);
+        const decision = hardGateTikTokRow(row, { policyMode: normalizedMode });
         if (decision.eligible && published.length < maxLive) {
           published.push(await publishTikTokCandidate(client, row, decision, { dryRun }));
         } else {
@@ -670,13 +716,15 @@ async function runTikTokAutopublishAgent({
       hashtag: `#${normalizedHashtag}`,
       hashtag_workflow,
       policy: {
+        mode: normalizedMode,
         publish_gate: [
           'exact TikTok video URL',
-          'source platform date confirmed on or after 2026-01-01',
           'Ugandan phone number present',
           'specific area and district present',
-          'listing type is clear',
-          'caption/transcript/visual text evidence present',
+          normalizedMode === 'strict' ? 'source platform date confirmed on or after 2026-01-01' : 'source date preserved when known; not a relaxed-mode live blocker',
+          normalizedMode === 'strict' ? 'listing type is clear' : 'listing type is preserved when known; relaxed mode can still publish a generic property listing',
+          normalizedMode === 'strict' ? 'caption/transcript/visual text evidence present' : 'caption/transcript/visual text is preserved when available',
+          'price captured when visible, otherwise Price upon application',
           'no exact-source or live contact/location duplicate',
         ],
         review_queue_cap: maxReview,
