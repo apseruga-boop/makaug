@@ -3203,9 +3203,13 @@ router.post('/tiktok-autopublish-agent/run', async (req, res, next) => {
       ? req.body.posts
       : (Array.isArray(req.body) ? req.body : []);
     const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const hashtagSequence = Array.isArray(req.body?.hashtag_sequence)
+      ? req.body.hashtag_sequence
+      : (Array.isArray(req.body?.hashtagSequence) ? req.body.hashtagSequence : undefined);
     const result = await runTikTokAutopublishAgent({
       db,
       hashtag: req.body?.hashtag || req.body?.tag || 'ugandarealestate',
+      hashtagSequence,
       liveLimit: req.body?.live_limit || req.body?.liveLimit || 5,
       reviewLimit: req.body?.review_limit || req.body?.reviewLimit || 100,
       scanLimit: req.body?.scan_limit || req.body?.scanLimit || 250,

@@ -27,6 +27,7 @@ function usage() {
     '',
     'Optional exact source input:',
     '  --url=https://www.tiktok.com/@handle/video/1234567890',
+    '  --hashtag-sequence=ugandarealestate,housesforsaleuganda,kampalarentals,landforsaleuganda',
     '',
     'Rules:',
     '  The agent only publishes exact TikTok /@handle/video/id records that pass all hard gates.',
@@ -41,9 +42,14 @@ async function main() {
     .filter((arg) => String(arg || '').startsWith('--url='))
     .map((arg) => arg.slice('--url='.length))
     .filter(Boolean);
+  const hashtagSequence = argValue('--hashtag-sequence', '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
   const result = await runTikTokAutopublishAgent({
     db,
     hashtag: argValue('--hashtag', DEFAULT_HASHTAG),
+    hashtagSequence,
     liveLimit: argValue('--live-limit', '5'),
     reviewLimit: argValue('--review-limit', '100'),
     scanLimit: argValue('--scan-limit', '250'),

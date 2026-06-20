@@ -11,10 +11,37 @@ const {
 
 const LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE = 'sourced_inventory_candidate_v1';
 const DEFAULT_HASHTAG = 'ugandarealestate';
+const DEFAULT_HASHTAG_SEQUENCE = [
+  'ugandarealestate',
+  'housesforsaleuganda',
+  'kampalarentals',
+  'landforsaleuganda',
+  'plotsforsaleuganda',
+  'housesforrentuganda',
+  'ugandahomes',
+  'kampalahomes',
+  'wakisohomes',
+  'ebibanja',
+  'bibanja',
+  'ettaka',
+];
 const DEFAULT_LIVE_LIMIT = 5;
 const DEFAULT_REVIEW_LIMIT = 100;
 const MAX_SCAN_LIMIT = 250;
 const AGENT_ACTOR_ID = 'tiktok_autopublish_agent';
+const AGENT_NAME = 'Maka Scout';
+const AGENT_DISPLAY_NAME = 'Maka Scout AI';
+const AGENT_CHAT_ROUTE = '/staff-dashboard';
+const AGENT_VISUAL_PROFILE = {
+  id: 'maka_scout',
+  name: AGENT_NAME,
+  display_name: AGENT_DISPLAY_NAME,
+  initials: 'MS',
+  role: 'TikTok property scout and safe-publish assistant',
+  avatar_prompt: 'A warm, sharp Uganda property scout AI wearing a clean green Makaug jacket, holding a phone and map pin, friendly but professional.',
+  chat_route: AGENT_CHAT_ROUTE,
+  status_label: 'Scans one TikTok hashtag at a time, publishes only high-confidence listings, sends uncertain posts to review, and stops at 100 review items.',
+};
 
 const REVIEW_STATUSES = [
   'pending',
@@ -53,6 +80,29 @@ function normalizeHashtag(value = DEFAULT_HASHTAG) {
     .replace(/[^a-z0-9_]/gi, '')
     .toLowerCase();
   return normalized || DEFAULT_HASHTAG;
+}
+
+function uniqueNormalizedHashtags(values = []) {
+  const seen = new Set();
+  return values
+    .map(normalizeHashtag)
+    .filter((value) => {
+      if (!value || seen.has(value)) return false;
+      seen.add(value);
+      return true;
+    });
+}
+
+function buildHashtagSequence(values = []) {
+  const sequence = uniqueNormalizedHashtags([
+    ...(Array.isArray(values) ? values : []),
+    ...DEFAULT_HASHTAG_SEQUENCE,
+  ]);
+  return sequence.length ? sequence : [DEFAULT_HASHTAG];
+}
+
+function agentProfile() {
+  return { ...AGENT_VISUAL_PROFILE };
 }
 
 function normalizeUgandanPhone(value = '') {
@@ -154,7 +204,90 @@ function locationIsSpecific(row = {}) {
   const generic = new Set(['uganda', 'central', 'greater kampala']);
   if (generic.has(area.toLowerCase()) || generic.has(district.toLowerCase())) return false;
   if (area.toLowerCase() === district.toLowerCase() && !address) return false;
+  if (area.toLowerCase() === district.toLowerCase()) {
+    const normalizedAddress = address.toLowerCase();
+    if (!normalizedAddress || generic.has(normalizedAddress) || normalizedAddress === area.toLowerCase()) return false;
+  }
   return true;
+}
+
+function sourceReviewRecordsFromImport(importResult = {}) {
+  return Array.isArray(importResult?.source_review_records)
+    ? importResult.source_review_records
+    : [];
+}
+
+function existingRecordsFromImport(importResult = {}) {
+  return Array.isArray(importResult?.already_present_properties)
+    ? importResult.already_present_properties
+    : [];
+}
+
+function buildAgentBuckets({ published = [], readyReview = [], blocked = [], importResult = null } = {}) {
+  const sourceReview = sourceReviewRecordsFromImport(importResult);
+  const existing = existingRecordsFromImport(importResult);
+  return {
+    live: {
+      count: published.length,
+      meaning: 'Properties Maka Scout approved live because every hard gate passed.',
+      items: published,
+    },
+    review: {
+      count: readyReview.length,
+      meaning: 'Properties Maka Scout could not safely publish automatically, so they remain in the human review queue.',
+      items: readyReview,
+    },
+    existing_or_duplicate: {
+      count: existing.length,
+      meaning: 'Exact-source links that were already in makaug; Maka Scout does not create another copy.',
+      items: existing,
+    },
+    excluded: {
+      count: sourceReview.length + blocked.length,
+      meaning: 'Records that were not allowed live and were not newly queued because intake failed or the review cap was reached.',
+      items: [
+        ...sourceReview.map((item) => ({
+          title: item.title,
+          source_url: item.source_url,
+          reason: item.reason || 'missing_intake_evidence',
+          intake: item.intake || {},
+        })),
+        ...blocked,
+      ],
+    },
+  };
+}
+
+function buildHashtagWorkflow({
+  hashtag = DEFAULT_HASHTAG,
+  hashtagSequence = [],
+  reviewQueueAfter = 0,
+  reviewLimit = DEFAULT_REVIEW_LIMIT,
+  reviewSlotsAvailable = DEFAULT_REVIEW_LIMIT,
+} = {}) {
+  const sequence = buildHashtagSequence(hashtagSequence);
+  const current = normalizeHashtag(hashtag);
+  const currentIndex = sequence.includes(current) ? sequence.indexOf(current) : 0;
+  const nextIndex = (currentIndex + 1) % sequence.length;
+  const paused = Number(reviewQueueAfter || 0) >= Number(reviewLimit || DEFAULT_REVIEW_LIMIT);
+  return {
+    agent: AGENT_NAME,
+    mode: 'one_hashtag_at_a_time',
+    current_hashtag: `#${current}`,
+    current_source_url: `https://www.tiktok.com/tag/${current}`,
+    next_hashtag: paused ? '' : `#${sequence[nextIndex]}`,
+    next_source_url: paused ? '' : `https://www.tiktok.com/tag/${sequence[nextIndex]}`,
+    status: paused ? 'paused_review_queue_cap_reached' : 'ready_for_next_hashtag',
+    stop_condition: `Stop when this TikTok review queue reaches ${reviewLimit} records.`,
+    resume_condition: 'Resume from the next hashtag after the review queue is cleared below the cap.',
+    review_queue_remaining_slots: Math.max(0, Number(reviewLimit || DEFAULT_REVIEW_LIMIT) - Number(reviewQueueAfter || 0)),
+    review_slots_available_before_run: Math.max(0, Number(reviewSlotsAvailable || 0)),
+    sequence: sequence.map((item, index) => ({
+      hashtag: `#${item}`,
+      source_url: `https://www.tiktok.com/tag/${item}`,
+      status: item === current ? 'current' : (index === nextIndex && !paused ? 'next' : 'queued'),
+    })),
+  };
 }
 
 function knownListingType(value = '') {
@@ -437,6 +570,7 @@ async function markReadyReviewDecision(client, row, decision, { dryRun = false }
 async function runTikTokAutopublishAgent({
   db,
   hashtag = DEFAULT_HASHTAG,
+  hashtagSequence = DEFAULT_HASHTAG_SEQUENCE,
   liveLimit = DEFAULT_LIVE_LIMIT,
   reviewLimit = DEFAULT_REVIEW_LIMIT,
   scanLimit = MAX_SCAN_LIMIT,
@@ -459,6 +593,7 @@ async function runTikTokAutopublishAgent({
 
   if (!dryRun && !confirmLive) {
     return {
+      agent: agentProfile(),
       ok: false,
       dry_run: false,
       error: 'confirm_live_required',
@@ -511,6 +646,14 @@ async function runTikTokAutopublishAgent({
     }
 
     const reviewQueueAfter = dryRun ? reviewQueueBefore : await countTikTokReviewQueue(client);
+    const buckets = buildAgentBuckets({ published, readyReview, blocked, importResult });
+    const hashtag_workflow = buildHashtagWorkflow({
+      hashtag: normalizedHashtag,
+      hashtagSequence,
+      reviewQueueAfter,
+      reviewLimit: maxReview,
+      reviewSlotsAvailable,
+    });
     const captureTask = {
       platform: 'tiktok',
       hashtag: `#${normalizedHashtag}`,
@@ -521,9 +664,11 @@ async function runTikTokAutopublishAgent({
     };
 
     return {
+      agent: agentProfile(),
       ok: true,
       dry_run: dryRun,
       hashtag: `#${normalizedHashtag}`,
+      hashtag_workflow,
       policy: {
         publish_gate: [
           'exact TikTok video URL',
@@ -546,6 +691,7 @@ async function runTikTokAutopublishAgent({
       published_live_count: published.length,
       ready_review_count: readyReview.length,
       blocked_count: blocked.length,
+      buckets,
       published_live: published,
       ready_review: readyReview,
       blocked,
@@ -561,11 +707,18 @@ async function runTikTokAutopublishAgent({
 
 module.exports = {
   AGENT_ACTOR_ID,
+  AGENT_NAME,
+  AGENT_DISPLAY_NAME,
+  AGENT_VISUAL_PROFILE,
   DEFAULT_HASHTAG,
+  DEFAULT_HASHTAG_SEQUENCE,
   DEFAULT_LIVE_LIMIT,
   DEFAULT_REVIEW_LIMIT,
   REVIEW_STATUSES,
   LIVE_STATUSES,
+  agentProfile,
+  buildAgentBuckets,
+  buildHashtagWorkflow,
   hardGateTikTokRow,
   normalizeHashtag,
   runTikTokAutopublishAgent,

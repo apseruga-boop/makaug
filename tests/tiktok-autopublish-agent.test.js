@@ -12,6 +12,10 @@ const pkg = JSON.parse(read('package.json'));
 const serviceSource = read('services/tiktokAutopublishAgentService.js');
 
 const {
+  AGENT_NAME,
+  agentProfile,
+  buildAgentBuckets,
+  buildHashtagWorkflow,
   hardGateTikTokRow,
   normalizeHashtag,
   runTikTokAutopublishAgent,
@@ -77,6 +81,17 @@ test('TikTok autopublish hard gate accepts only exact 2026 phone-location proper
   assert(decision.description.includes('Source date: 2026-04-10'), 'rewritten description should include source date');
 });
 
+test('Maka Scout identity is exposed for staff chat and visual surfaces', () => {
+  const profile = agentProfile();
+  assert.strictEqual(AGENT_NAME, 'Maka Scout');
+  assert.strictEqual(profile.name, 'Maka Scout');
+  assert.strictEqual(profile.display_name, 'Maka Scout AI');
+  assert.strictEqual(profile.initials, 'MS');
+  assert.strictEqual(profile.chat_route, '/staff-dashboard');
+  assert(profile.avatar_prompt.includes('Uganda property scout AI'), 'visual prompt should describe the agent representation');
+  assert(profile.status_label.includes('one TikTok hashtag at a time'), 'profile should explain the hashtag workflow');
+});
+
 test('TikTok autopublish can use exact video ID timestamp when stored source date is missing', () => {
   const row = goodRow({
     extra_fields: {
@@ -98,6 +113,7 @@ test('TikTok autopublish hard gate blocks missing exact URL, date, phone, locati
     [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_date_status: 'needs_source_platform_date_confirmation', first_posted_online_at: '' } }), 'missing_confirmed_2026_source_date'],
     [goodRow({ lister_phone: '', extra_fields: { ...goodRow().extra_fields, contact_phone: '' } }), 'missing_source_phone_number'],
     [goodRow({ area: 'Kampala', district: 'Kampala', address: '' }), 'missing_specific_area_and_district'],
+    [goodRow({ area: 'Kampala', district: 'Kampala', address: 'Kampala' }), 'missing_specific_area_and_district'],
     [goodRow({ listing_type: '' }), 'unclear_listing_type'],
     [goodRow({ description: '', extra_fields: { ...goodRow().extra_fields, source_text: '', source_visual_text: '' } }), 'missing_caption_transcript_or_visual_text'],
     [goodRow({ duplicate_count: 1 }), 'duplicate_source_or_contact_location_match'],
@@ -109,18 +125,65 @@ test('TikTok autopublish hard gate blocks missing exact URL, date, phone, locati
   });
 });
 
+test('Maka Scout returns explicit live, review, duplicate, and excluded buckets', () => {
+  const buckets = buildAgentBuckets({
+    published: [{ id: 'live-1', title: 'Live property' }],
+    readyReview: [{ id: 'review-1', reasons: ['missing_source_phone_number'] }],
+    blocked: [{ id: 'blocked-1', reasons: ['review_queue_cap_reached'] }],
+    importResult: {
+      already_present_properties: [{ id: 'existing-1', reason: 'already_queued' }],
+      source_review_records: [{ title: 'Old TikTok post', source_url: 'https://www.tiktok.com/@old/video/1', reason: 'missing_2026_launch_intake_evidence' }],
+    },
+  });
+  assert.strictEqual(buckets.live.count, 1);
+  assert.strictEqual(buckets.review.count, 1);
+  assert.strictEqual(buckets.existing_or_duplicate.count, 1);
+  assert.strictEqual(buckets.excluded.count, 2);
+  assert(buckets.review.meaning.includes('human review queue'), 'review bucket should explain action');
+  assert(buckets.excluded.meaning.includes('not allowed live'), 'excluded bucket should explain action');
+});
+
+test('Maka Scout plans one hashtag at a time and pauses at the review cap', () => {
+  const workflow = buildHashtagWorkflow({
+    hashtag: '#UgandaRealEstate',
+    hashtagSequence: ['UgandaRealEstate', 'HousesForSaleUganda', 'KampalaRentals'],
+    reviewQueueAfter: 12,
+    reviewLimit: 100,
+    reviewSlotsAvailable: 88,
+  });
+  assert.strictEqual(workflow.agent, 'Maka Scout');
+  assert.strictEqual(workflow.mode, 'one_hashtag_at_a_time');
+  assert.strictEqual(workflow.current_hashtag, '#ugandarealestate');
+  assert.strictEqual(workflow.next_hashtag, '#housesforsaleuganda');
+  assert.strictEqual(workflow.status, 'ready_for_next_hashtag');
+  assert.strictEqual(workflow.review_queue_remaining_slots, 88);
+
+  const paused = buildHashtagWorkflow({
+    hashtag: '#KampalaRentals',
+    hashtagSequence: ['UgandaRealEstate', 'HousesForSaleUganda', 'KampalaRentals'],
+    reviewQueueAfter: 100,
+    reviewLimit: 100,
+  });
+  assert.strictEqual(paused.status, 'paused_review_queue_cap_reached');
+  assert.strictEqual(paused.next_hashtag, '');
+});
+
 test('TikTok autopublish route and script are protected production surfaces', () => {
   assert(adminRoute.includes("router.post('/tiktok-autopublish-agent/run'"), 'admin route should exist');
   assert(adminRoute.includes('requireAdminApiKey'), 'admin router should remain API-key protected');
   assert(adminRoute.includes('confirm_live'), 'route should expose explicit confirm_live control');
+  assert(adminRoute.includes('hashtag_sequence'), 'route should accept explicit hashtag sequence control');
   assert(adminRoute.includes('admin_tiktok_autopublish_agent_run'), 'route should write an audit trail');
   assert.strictEqual(pkg.scripts['inventory:tiktok-autopublish'], 'node scripts/run-tiktok-autopublish-agent.js');
+  assert(read('scripts/run-tiktok-autopublish-agent.js').includes('--hashtag-sequence'), 'CLI should support explicit hashtag sequence control');
 });
 
 test('TikTok autopublish service enforces review cap and no accidental live writes', async () => {
   assert(serviceSource.includes('Math.max(0, maxReview - reviewQueueBefore)'), 'review queue cap should be computed before imports');
   assert(serviceSource.includes('.slice(0, reviewSlotsAvailable)'), 'exact TikTok imports should be limited by remaining review slots');
   assert(serviceSource.includes('exactUrlPostsWithInferredDates'), 'URL imports should infer TikTok video dates before queueing');
+  assert(serviceSource.includes('buildAgentBuckets'), 'agent output should separate live/review/duplicate/excluded buckets');
+  assert(serviceSource.includes('buildHashtagWorkflow'), 'agent output should include one-hashtag workflow state');
   const result = await runTikTokAutopublishAgent({
     db: { pool: { connect: async () => { throw new Error('should not connect without confirm_live'); } } },
     dryRun: false,
@@ -128,6 +191,7 @@ test('TikTok autopublish service enforces review cap and no accidental live writ
   });
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.error, 'confirm_live_required');
+  assert.strictEqual(result.agent.name, 'Maka Scout');
 });
 
 test('TikTok hashtag normalization is stable for one-hashtag runs', () => {
