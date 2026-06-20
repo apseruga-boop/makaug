@@ -99,6 +99,7 @@ function isLocalOptionalResponseFailure(failure) {
 function isKnownExternalOptionalResponseFailure(failure) {
   try {
     const url = new URL(failure.url);
+    if (url.hostname === 'mon.tiktokv.com' && url.pathname.startsWith('/monitor_browser/collect')) return true;
     return url.hostname === 'api.whatsapp.com' && url.pathname === '/data/manifest.json';
   } catch {
     return false;
@@ -118,6 +119,12 @@ function significantConsoleIssues(issues, responseFailures) {
     }
     if (
       /Manifest fetch from https:\/\/api\.whatsapp\.com\/data\/manifest\.json failed|Failed to load resource: the server responded with a status of 404/i.test(issue.text || '')
+      && responseFailures.some(isKnownExternalOptionalResponseFailure)
+    ) {
+      return false;
+    }
+    if (
+      /mon\.tiktokv\.com\/monitor_browser\/collect|tiktok.*monitor_browser.*collect|biz_id=tiktok_web_embed|bid=tiktok_pns_web_runtime/i.test(issue.text || '')
       && responseFailures.some(isKnownExternalOptionalResponseFailure)
     ) {
       return false;
