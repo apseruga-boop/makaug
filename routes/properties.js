@@ -80,6 +80,41 @@ const {
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
+const PUBLIC_PROPERTIES_CACHE_TTL_MS = 15 * 1000;
+const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = 15;
+const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 60;
+const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
+const publicPropertiesResponseCache = new Map();
+
+function publicPropertiesCacheControl() {
+  return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
+}
+
+function publicPropertiesCacheKey(req) {
+  const entries = Object.entries(req.query || {})
+    .map(([key, value]) => [String(key), Array.isArray(value) ? value.map(String).sort().join(',') : String(value)])
+    .sort(([a], [b]) => a.localeCompare(b));
+  return entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&') || 'default';
+}
+
+function getPublicPropertiesCache(req) {
+  const key = publicPropertiesCacheKey(req);
+  const cached = publicPropertiesResponseCache.get(key);
+  if (!cached) return { key, payload: null };
+  if ((Date.now() - cached.createdAt) > PUBLIC_PROPERTIES_CACHE_TTL_MS) {
+    publicPropertiesResponseCache.delete(key);
+    return { key, payload: null };
+  }
+  return { key, payload: cached.payload };
+}
+
+function setPublicPropertiesCache(key, payload) {
+  if (!key || !payload) return;
+  publicPropertiesResponseCache.set(key, { createdAt: Date.now(), payload });
+  if (publicPropertiesResponseCache.size <= PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES) return;
+  const oldestKey = publicPropertiesResponseCache.keys().next().value;
+  if (oldestKey) publicPropertiesResponseCache.delete(oldestKey);
+}
 
 function addFilter(filters, values, clause, ...vals) {
   let prepared = clause;
@@ -154,6 +189,23 @@ function publicOpportunityBucketSql(alias = 'p') {
     WHEN ${period} IN ('mo', 'month', 'monthly', 'per_month') OR ${text} ~* '(rent|rental|lease|per month|monthly)' THEN 'rent'
     WHEN ${text} ~* '(for sale|sale|selling|buy)' THEN 'sale'
     ELSE 'other'
+  END`;
+}
+
+function fastPublicOpportunityBucketSql(alias = 'p') {
+  const a = alias;
+  const directType = `LOWER(TRIM(COALESCE(${a}.listing_type, '')))`;
+  const propertyType = `LOWER(COALESCE(${a}.property_type, ''))`;
+  const period = `LOWER(COALESCE(${a}.price_period, ''))`;
+  return `CASE
+    WHEN ${directType} IN ('sale', 'rent', 'commercial', 'land') THEN ${directType}
+    WHEN ${directType} IN ('student', 'students') THEN 'student'
+    WHEN ${a}.students_welcome = TRUE THEN 'student'
+    WHEN ${propertyType} ~* '(land|plot|acre|decimal|estate plots?)' THEN 'land'
+    WHEN ${propertyType} ~* '(commercial|office|shop|retail|warehouse|showroom|restaurant|industrial)' THEN 'commercial'
+    WHEN ${propertyType} ~* '(hostel|student|campus|dorm|bedsitter)' THEN 'student'
+    WHEN ${period} IN ('mo', 'month', 'monthly', 'per_month') THEN 'rent'
+    ELSE 'sale'
   END`;
 }
 
@@ -1320,6 +1372,7 @@ async function listPropertiesHandler(req, res, next) {
     const featuredRaw = req.query.featured ?? req.query.is_featured ?? req.query.isFeatured;
     const featuredFilterRequested = featuredRaw !== undefined && featuredRaw !== null && cleanText(featuredRaw) !== '';
     const featuredOnly = parseBooleanLike(featuredRaw, false);
+    const includeSummary = parseBooleanLike(req.query.include_summary ?? req.query.includeSummary ?? true, true);
     const radiusUnit = cleanText(req.query.radiusUnit || req.query.radius_unit || (req.query.radiusMiles || req.query.radius_miles ? 'miles' : 'km')).toLowerCase();
     const requestingModerationData = status && status !== 'approved';
     const searchLat = toNullableFloat(req.query.lat || req.query.latitude);
@@ -1341,6 +1394,18 @@ async function listPropertiesHandler(req, res, next) {
       }
     } else if (!publicOnly && hasAdminCredentialHint(req)) {
       adminAccess = await hasAdminAccess(req);
+    }
+
+    const canUsePublicResponseCache = req.method === 'GET'
+      && !adminAccess
+      && !hasAdminCredentialHint(req)
+      && !hasRadiusSearch
+      && (publicOnly || status === 'approved' || !status);
+    const publicCache = canUsePublicResponseCache ? getPublicPropertiesCache(req) : { key: '', payload: null };
+    if (publicCache.payload) {
+      res.set('Cache-Control', publicPropertiesCacheControl());
+      res.set('X-Makaug-Properties-Cache', 'HIT');
+      return res.json(publicCache.payload);
     }
 
     if (publicOnly || !adminAccess) {
@@ -1381,7 +1446,7 @@ async function listPropertiesHandler(req, res, next) {
       } else {
         addFilter(filters, values, 'p.status = ?', status);
       }
-    } else if (publicOnly) {
+    } else if (publicOnly || !adminAccess) {
       filters.push(publicLivePropertyStatusSql('p'));
     }
     if (featuredFilterRequested) {
@@ -1491,7 +1556,7 @@ async function listPropertiesHandler(req, res, next) {
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const opportunityBucketSql = publicOpportunityBucketSql('p');
+    const opportunityBucketSql = fastPublicOpportunityBucketSql('p');
     const summaryResult = await db.query(
       `SELECT
          COUNT(*)::int AS total,
@@ -1684,7 +1749,7 @@ async function listPropertiesHandler(req, res, next) {
       }
     }
 
-    return res.json({
+    const payload = {
       ok: true,
       data: listResult.rows.map((row) => {
         const {
@@ -1781,10 +1846,14 @@ async function listPropertiesHandler(req, res, next) {
         }
       } : null,
       summary: {
-        public_opportunities: opportunitySummary
+        public_opportunities: includeSummary ? opportunitySummary : { total: opportunitySummary.total }
       },
       pagination: toPagination(total, page, limit)
-    });
+    };
+    if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
+    res.set('Cache-Control', canUsePublicResponseCache ? publicPropertiesCacheControl() : 'no-store');
+    res.set('X-Makaug-Properties-Cache', canUsePublicResponseCache ? 'MISS' : 'BYPASS');
+    return res.json(payload);
   } catch (error) {
     return next(error);
   }

@@ -97,7 +97,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 200 \}\)/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 24, maxPages: 1 \}\)/);
+  assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
   assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}`, \{ skipAuth: true \}\)/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
 });
@@ -171,6 +172,17 @@ test('homepage opportunity counter uses the public API total as the visible sour
   assert.match(htmlSource, /hero-route-classification-20260610/);
   assert.match(appSource, /const publicListingType = normalizedListingType \|\| getHeroPropertyOpportunityBucket\(p\)/);
   assert.match(appSource, /return "sale";\s*\}\s*function heroOpportunityStatRow/);
+});
+
+test('public properties API is cacheable and uses the fast public summary path', () => {
+  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = 15 \* 1000/);
+  assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
+  assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', 'HIT'/);
+  assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? 'MISS' : 'BYPASS'/);
+  assert.match(propertiesRouteSource, /function fastPublicOpportunityBucketSql\(alias = 'p'\)/);
+  assert.match(propertiesRouteSource, /const opportunityBucketSql = fastPublicOpportunityBucketSql\('p'\)/);
+  assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);
+  assert.match(propertiesRouteSource, /Cache-Control', canUsePublicResponseCache \? publicPropertiesCacheControl\(\) : 'no-store'/);
 });
 
 test('property detail enquiries are routed to the listing contact, not the signed-in admin viewer', () => {
