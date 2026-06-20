@@ -138,6 +138,30 @@ test('Maka Scout relaxed mode can publish exact TikTok posts with phone, locatio
   assert(relaxed.title.includes('TikTok source'), 'unclear type should not be forced into a sale/rent title');
 });
 
+test('Maka Scout relaxed mode can push exact TikTok records without phone when source contact is available', () => {
+  const row = goodRow({
+    lister_phone: '',
+    extra_fields: {
+      ...goodRow().extra_fields,
+      contact_phone: '',
+      source_phone: '',
+      whatsapp: '',
+      source_contact_url: 'https://www.tiktok.com/@agentug',
+    },
+  });
+
+  const strict = hardGateTikTokRow(row);
+  assert.strictEqual(strict.eligible, false);
+  assert(strict.reasons.includes('missing_source_phone_number'), 'strict mode should still require phone');
+
+  const relaxed = hardGateTikTokRow(row, { policyMode: 'relaxed' });
+  assert.strictEqual(relaxed.eligible, true);
+  assert.strictEqual(relaxed.phone, '');
+  assert.strictEqual(relaxed.phone_missing_but_source_contact_allowed, true);
+  assert.strictEqual(relaxed.source_contact_url, 'https://www.tiktok.com/@agentug');
+  assert(relaxed.description.includes('No source phone number was captured'), 'description should disclose source-contact requirement');
+});
+
 test('TikTok autopublish hard gate blocks missing exact URL, date, phone, location, text, and duplicates', () => {
   const cases = [
     [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_url: 'https://www.tiktok.com/tag/ugandarealestate' } }), 'missing_exact_tiktok_video_url'],
@@ -156,10 +180,9 @@ test('TikTok autopublish hard gate blocks missing exact URL, date, phone, locati
   });
 });
 
-test('Maka Scout relaxed mode still blocks missing exact source, phone, location, and duplicates', () => {
+test('Maka Scout relaxed mode still blocks missing exact source, location, and duplicates', () => {
   const cases = [
     [goodRow({ extra_fields: { ...goodRow().extra_fields, source_post_url: 'https://www.tiktok.com/tag/ugandarealestate' } }), 'missing_exact_tiktok_video_url'],
-    [goodRow({ lister_phone: '', extra_fields: { ...goodRow().extra_fields, contact_phone: '' } }), 'missing_source_phone_number'],
     [goodRow({ area: 'Kampala', district: 'Kampala', address: 'Kampala' }), 'missing_specific_area_and_district'],
     [goodRow({ duplicate_count: 1 }), 'duplicate_source_or_contact_location_match'],
   ];

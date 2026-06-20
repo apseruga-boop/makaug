@@ -119,6 +119,11 @@ function sourceUrlFromRow(row = {}) {
   return cleanText(extra.source_post_url || extra.source_url || extra.tiktok_url || row.source_url || '');
 }
 
+function sourceContactUrlFromRow(row = {}) {
+  const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
+  return cleanText(extra.source_contact_url || extra.source_page_url || extra.profile_url || sourceUrlFromRow(row));
+}
+
 function inferTikTokPostedAtFromVideoUrl(value = '') {
   const match = cleanText(value).match(/\/video\/(\d+)/i);
   if (!match) return '';
@@ -341,6 +346,8 @@ function titleForApprovedTikTok(row = {}) {
 function descriptionForApprovedTikTok(row = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const sourceUrl = sourceUrlFromRow(row);
+  const sourceContactUrl = sourceContactUrlFromRow(row);
+  const phone = normalizeUgandanPhone(row.lister_phone || extra.contact_phone || extra.source_phone || extra.whatsapp || '');
   const posted = sourcePostedAtFromRow(row);
   const sourceText = sourceTextFromRow(row);
   const priceLabel = priceLabelForTikTok(row);
@@ -349,6 +356,7 @@ function descriptionForApprovedTikTok(row = {}) {
     `Location: ${cleanText(row.area)}, ${cleanText(row.district)}${row.address ? ` (${cleanText(row.address)})` : ''}.`,
     posted ? `Source date: ${posted.slice(0, 10)}.` : '',
     `Source price: ${priceLabel}.`,
+    !phone && sourceContactUrl ? 'No source phone number was captured; contact must start from the original TikTok/source profile and be verified before viewing.' : '',
     sourceText ? `Source evidence: ${sourceText.slice(0, 420)}${sourceText.length > 420 ? '...' : ''}` : '',
     sourceUrl ? `Original TikTok source: ${sourceUrl}` : '',
     'Contact details and exact availability should be confirmed directly with the listed source before viewing.',
@@ -358,14 +366,16 @@ function descriptionForApprovedTikTok(row = {}) {
 function hardGateTikTokRow(row = {}, { policyMode = 'strict' } = {}) {
   const extra = row.extra_fields && typeof row.extra_fields === 'object' ? row.extra_fields : {};
   const sourceUrl = sourceUrlFromRow(row);
+  const sourceContactUrl = sourceContactUrlFromRow(row);
   const sourceText = sourceTextFromRow(row);
   const phone = normalizeUgandanPhone(row.lister_phone || extra.contact_phone || extra.source_phone || extra.whatsapp || '');
   const mode = normalizedPolicyMode(policyMode);
+  const sourceContactAllowed = mode === 'phone_location_price_optional' && Boolean(sourceContactUrl);
   const reasons = [];
 
   if (!TIKTOK_EXACT_VIDEO_URL_PATTERN.test(sourceUrl)) reasons.push('missing_exact_tiktok_video_url');
   if (mode === 'strict' && !sourceDateIsConfirmed2026(row)) reasons.push('missing_confirmed_2026_source_date');
-  if (!phone) reasons.push('missing_source_phone_number');
+  if (!phone && !sourceContactAllowed) reasons.push('missing_source_phone_number');
   if (!locationIsSpecific(row)) reasons.push('missing_specific_area_and_district');
   if (mode === 'strict' && !knownListingType(row.listing_type)) reasons.push('unclear_listing_type');
   if (mode === 'strict' && sourceText.length < 25) reasons.push('missing_caption_transcript_or_visual_text');
@@ -376,7 +386,9 @@ function hardGateTikTokRow(row = {}, { policyMode = 'strict' } = {}) {
     reasons,
     policy_mode: mode,
     source_url: sourceUrl,
+    source_contact_url: sourceContactUrl,
     phone,
+    phone_missing_but_source_contact_allowed: !phone && sourceContactAllowed,
     source_date: sourcePostedAtFromRow(row),
     title: titleForApprovedTikTok(row),
     description: descriptionForApprovedTikTok(row),
@@ -491,10 +503,14 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       policy_mode: decision.policy_mode || 'strict',
       price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
       price_status: decision.price_status || 'price_upon_application',
+      phone_missing_but_source_contact_allowed: Boolean(decision.phone_missing_but_source_contact_allowed),
+      source_contact_url: decision.source_contact_url || decision.source_url,
       checks: {
         exact_tiktok_video_url: true,
         source_date_2026_plus: decision.policy_mode === 'strict',
-        phone_number_present: true,
+        phone_number_present: Boolean(decision.phone),
+        source_contact_path_present: Boolean(decision.source_contact_url || decision.source_url),
+        source_contact_required: !decision.phone,
         specific_location_present: true,
         listing_type_clear: decision.policy_mode === 'strict',
         duplicate_safe: true,
@@ -505,11 +521,14 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
     found_online_approval_policy: decision.policy_mode === 'phone_location_price_optional'
       ? 'maka_scout_relaxed_exact_post_phone_location_price_optional_duplicate_gate'
       : 'tiktok_ai_agent_exact_post_2026_phone_location_duplicate_gate',
-    found_online_non_location_checks_overridden: false,
+    found_online_non_location_checks_overridden: Boolean(decision.phone_missing_but_source_contact_allowed),
     price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
     source_price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
     price_upon_application: (decision.price_status || '') === 'price_upon_application',
     price_status: decision.price_status || 'price_upon_application',
+    source_contact_url: decision.source_contact_url || decision.source_url,
+    found_online_contact_status: decision.phone ? 'source_phone_confirmed' : 'source_contact_required',
+    source_phone_missing_at_publish: !decision.phone,
   };
 
   const result = await client.query(
@@ -530,7 +549,9 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       row.id,
       decision.title,
       decision.description,
-      decision.policy_mode === 'phone_location_price_optional'
+      decision.phone_missing_but_source_contact_allowed
+        ? 'Maka Scout source-contact mode approved after exact TikTok URL, specific location, source contact path, duplicate-safe check, and price captured or Price upon application. Source phone number still needs staff verification.'
+        : decision.policy_mode === 'phone_location_price_optional'
         ? 'Maka Scout relaxed mode approved after exact TikTok URL, phone, specific location, duplicate-safe check, and price captured or Price upon application.'
         : 'TikTok AI autopublish agent approved only after exact URL, 2026 date, phone, specific location, listing type, source text, and duplicate checks passed.',
       `Autopublished from exact TikTok source: ${decision.source_url}`,
@@ -549,19 +570,25 @@ async function publishTikTokCandidate(client, row, decision, { dryRun = false } 
       row.status || row.moderation_stage || 'pending',
       JSON.stringify({
         exact_tiktok_video_url: true,
-        confirmed_2026_source_date: true,
-        phone_number_present: true,
+        confirmed_2026_source_date: decision.policy_mode === 'strict',
+        phone_number_present: Boolean(decision.phone),
+        source_contact_path_present: Boolean(decision.source_contact_url || decision.source_url),
+        source_contact_required: !decision.phone,
         specific_location_present: true,
-        listing_type_clear: true,
+        listing_type_clear: decision.policy_mode === 'strict',
         duplicate_safe: true,
       }),
-      'AI agent approved a high-confidence TikTok property source.',
+      decision.phone
+        ? 'AI agent approved a high-confidence TikTok property source.'
+        : 'AI agent approved a TikTok property source with source-contact follow-up required because no phone was captured.',
       decision.description,
       JSON.stringify({
         source_url: decision.source_url,
+        source_contact_url: decision.source_contact_url || decision.source_url,
         source_date: decision.source_date,
         location: decision.location,
         phone_present: Boolean(decision.phone),
+        source_contact_required: !decision.phone,
         policy_mode: decision.policy_mode,
         price_label: decision.price_label || PRICE_UPON_APPLICATION_LABEL,
         price_status: decision.price_status || 'price_upon_application',
