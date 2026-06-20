@@ -176,8 +176,9 @@ test('homepage opportunity counter uses the public API total as the visible sour
 });
 
 test('public properties API is cacheable and uses the fast public summary path', () => {
-  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = 15 \* 1000/);
+  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 \* 1000/);
   assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
+  assert.match(propertiesRouteSource, /function clearPublicPropertiesCache\(reason = 'public_inventory_changed'\)/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', 'HIT'/);
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? 'MISS' : 'BYPASS'/);
   assert.match(propertiesRouteSource, /function fastPublicOpportunityBucketSql\(alias = 'p'\)/);
@@ -189,6 +190,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /PUBLIC_INVENTORY_WARMUP_PATHS = \[/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
+  assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
   assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);
   assert.match(propertiesRouteSource, /Cache-Control', canUsePublicResponseCache \? publicPropertiesCacheControl\(\) : 'no-store'/);
 });

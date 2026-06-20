@@ -80,9 +80,9 @@ const {
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
-const PUBLIC_PROPERTIES_CACHE_TTL_MS = 15 * 1000;
-const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = 15;
-const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 60;
+const PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 * 1000;
+const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = 60;
+const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
 const publicPropertiesResponseCache = new Map();
 
@@ -114,6 +114,13 @@ function setPublicPropertiesCache(key, payload) {
   if (publicPropertiesResponseCache.size <= PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES) return;
   const oldestKey = publicPropertiesResponseCache.keys().next().value;
   if (oldestKey) publicPropertiesResponseCache.delete(oldestKey);
+}
+
+function clearPublicPropertiesCache(reason = 'public_inventory_changed') {
+  if (!publicPropertiesResponseCache.size) return;
+  const entries = publicPropertiesResponseCache.size;
+  publicPropertiesResponseCache.clear();
+  logger.info('Cleared public properties response cache', { reason, entries });
 }
 
 function addFilter(filters, values, clause, ...vals) {
@@ -3493,6 +3500,7 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     if (nextStatus === 'approved' && current.status !== 'approved') {
       alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
     }
+    clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
 
     return res.json({
       ok: true,
