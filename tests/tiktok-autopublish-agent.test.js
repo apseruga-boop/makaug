@@ -16,6 +16,8 @@ const {
 
 const {
   AGENT_NAME,
+  DEFAULT_HASHTAG_SEQUENCE,
+  DEFAULT_HASHTAG_SEQUENCE_LIMIT,
   agentProfile,
   buildAgentBuckets,
   buildHashtagWorkflow,
@@ -93,6 +95,28 @@ test('Maka Scout identity is exposed for staff chat and visual surfaces', () => 
   assert.strictEqual(profile.chat_route, '/staff-dashboard');
   assert(profile.avatar_prompt.includes('Uganda property scout AI'), 'visual prompt should describe the agent representation');
   assert(profile.status_label.includes('one TikTok hashtag at a time'), 'profile should explain the hashtag workflow');
+});
+
+test('Maka Scout defaults to a 100-hashtag multilingual TikTok sweep sequence', () => {
+  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE_LIMIT, 100);
+  assert.strictEqual(DEFAULT_HASHTAG_SEQUENCE.length, 100);
+  [
+    'ugandarealestate',
+    'kampalarentals',
+    'housesforsaleuganda',
+    'studentaccommodationmakerere',
+    'commercialpropertykampala',
+    'landforsalewakiso',
+    'ettaka',
+    'ebibanja',
+    'obupangisa',
+    'amayumbagokutunda',
+    'nyumbayokupangisa',
+    'muzigo',
+  ].forEach((tag) => {
+    assert(DEFAULT_HASHTAG_SEQUENCE.includes(tag), `default TikTok sweep should include #${tag}`);
+  });
+  assert.strictEqual(new Set(DEFAULT_HASHTAG_SEQUENCE).size, DEFAULT_HASHTAG_SEQUENCE.length, 'default TikTok sequence should not contain duplicates');
 });
 
 test('TikTok autopublish can use exact video ID timestamp when stored source date is missing', () => {

@@ -25,6 +25,7 @@ const pkg = JSON.parse(read('package.json'));
 const {
   PROPERTY_SOURCE_REGISTRY,
   PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  PROPERTY_HASHTAG_WATCHLIST,
   sourceRecordKind,
   summarizePropertySourceRegistry,
 } = require('../services/propertySourceRegistryService');
@@ -74,6 +75,22 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000'), 'source registry should reserve an 8,000-record X hashtag sweep');
   assert(service.includes('CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000'), 'source registry should reserve a 12,000-record Instagram/Facebook/TikTok/YouTube hashtag sweep');
   assert(service.includes('PROPERTY_HASHTAG_WATCHLIST'), 'source registry should maintain a cross-platform property hashtag watchlist');
+  assert(PROPERTY_HASHTAG_WATCHLIST.length >= 100, 'source registry should maintain at least 100 property hashtags for social sweeps');
+  [
+    'UgandaRealEstate',
+    'KampalaRentals',
+    'StudentAccommodationMakerere',
+    'CommercialPropertyKampala',
+    'LandForSaleWakiso',
+    'Ettaka',
+    'Ebibanja',
+    'Obupangisa',
+    'AmayumbaGoKutunda',
+    'NyumbaYoKupangisa',
+    'Muzigo',
+  ].forEach((tag) => {
+    assert(PROPERTY_HASHTAG_WATCHLIST.includes(tag), `source watchlist should include ${tag}`);
+  });
   assert(service.includes('function getPropertySourceRegistry()'), 'source registry should lazy-load generated sources instead of building them during server startup');
   assert(service.includes("Object.defineProperty(exported, 'PROPERTY_SOURCE_REGISTRY'"), 'legacy registry export should stay available through a lazy getter');
   assert(!service.includes('const PROPERTY_SOURCE_REGISTRY = ['), 'source registry must not eagerly allocate the expanded 30,000-record registry at module import');
@@ -85,6 +102,13 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'facebook' && item.sourceType === 'hashtag_search_feed' && /facebook\.com\/hashtag/i.test(item.url || '')), 'source registry should include Facebook hashtag search feeds');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'tiktok' && item.sourceType === 'hashtag_search_feed' && /tiktok\.com\/tag/i.test(item.url || '')), 'source registry should include TikTok hashtag/tag feeds');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => item.platform === 'youtube' && item.sourceType === 'hashtag_search_feed' && /youtube\.com\/hashtag/i.test(item.url || '')), 'source registry should include YouTube hashtag feeds');
+  const socialTagUrls = PROPERTY_SOURCE_REGISTRY
+    .filter((item) => ['instagram', 'tiktok'].includes(String(item.platform || '').toLowerCase()))
+    .map((item) => String(item.url || '').toLowerCase());
+  ['ugandarealestate', 'ettaka', 'ebibanja', 'obupangisa', 'amayumbagokutunda', 'nyumbayokupangisa', 'muzigo'].forEach((tag) => {
+    assert(socialTagUrls.some((url) => url.includes(`instagram.com/explore/tags/${tag}`)), `Instagram registry should track #${tag}`);
+    assert(socialTagUrls.some((url) => url.includes(`tiktok.com/tag/${tag}`)), `TikTok registry should track #${tag}`);
+  });
   ['StudentHostelUganda', 'HouseForRentKampala', 'CommercialSpaceUganda', 'OfficeForRentKampala', 'LandForSaleWakiso', '50x100Uganda'].forEach((tag) => {
     assert(summary.hashtags.includes(tag) || PROPERTY_SOURCE_REGISTRY.some((item) => (item.hashtags || []).includes(tag)), `source watchlist should include ${tag}`);
   });
