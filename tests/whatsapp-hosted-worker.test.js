@@ -12,6 +12,7 @@ const agentScript = read('scripts/whatsapp-web-copilot.js');
 const startScript = read('scripts/start-whatsapp-agent-render.sh');
 const adminApp = read('assets/makaug-app.js');
 const readiness = read('services/whatsappBridgeReadiness.js');
+const whatsappRoute = read('routes/whatsapp.js');
 
 assert(renderYaml.includes('type: worker'), 'Render blueprint must define a background worker for the WhatsApp agent');
 assert(renderYaml.includes('runtime: docker'), 'WhatsApp worker must run with Docker so Playwright/Chrome is available');
@@ -62,5 +63,7 @@ assert(agentScript.includes('--disable-blink-features=AutomationControlled') && 
 
 assert(readiness.includes('hosted_agent_online') && readiness.includes('only_local_laptop_bridge_is_online'), 'Admin readiness must distinguish hosted 24/7 bridge from local-only bridge');
 assert(adminApp.includes('Hosted WhatsApp login screen') && adminApp.includes('login_screenshot_data_url'), 'Admin WhatsApp overview must render the hosted login screenshot from protected insights');
+assert(whatsappRoute.includes("router.get('/web-bridge/status'") && whatsappRoute.includes('evaluateHostedWhatsappBridgeReadiness'), 'Bridge token must expose a protected read-only status endpoint for hosted worker proof');
+assert(whatsappRoute.includes('summarizeWhatsappBridgeClient') && whatsappRoute.includes('isWhatsappWebBridgeAuthorized(req)'), 'Bridge status endpoint must be token-protected and return sanitized client metadata');
 
 console.log('WhatsApp hosted worker setup ok');

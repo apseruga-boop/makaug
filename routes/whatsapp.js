@@ -37,12 +37,17 @@ const { createLead, addLeadActivity } = require('../services/leadService');
 const { logNotification, notificationStatusFromDelivery } = require('../services/notificationLogService');
 const {
   claimWhatsappWebBridgeMessages,
+  getWhatsappWebBridgeStatus,
   getWhatsappWebBridgeToken,
   markWhatsappWebBridgeMessageFailed,
   markWhatsappWebBridgeMessageSent,
   queueWhatsappWebBridgeMessage,
   upsertWhatsappWebBridgeClient
 } = require('../services/whatsappWebBridgeService');
+const {
+  evaluateHostedWhatsappBridgeReadiness,
+  summarizeWhatsappBridgeClient
+} = require('../services/whatsappBridgeReadiness');
 const { handleOwnerWhatsappCommand } = require('../services/aiCeoControlService');
 const { captureLearningEvent } = require('../services/aiLearningCaptureService');
 const { isLlmEnabled } = require('../services/llmProvider');
@@ -8086,6 +8091,25 @@ router.post('/web-bridge/inbound', asyncRoute(async (req, res) => {
     }
   });
 }));
+
+// GET /api/whatsapp/web-bridge/status
+router.get('/web-bridge/status', async (req, res) => {
+  if (!isWhatsappWebBridgeAuthorized(req)) return bridgeUnauthorized(res);
+
+  const bridgeStatus = await getWhatsappWebBridgeStatus();
+  const readiness = evaluateHostedWhatsappBridgeReadiness(bridgeStatus?.clients || [], {
+    freshSeconds: Number(process.env.WHATSAPP_WEB_BRIDGE_FRESH_SECONDS || 180) || 180
+  });
+
+  return res.json({
+    ok: true,
+    data: {
+      summary: bridgeStatus.summary,
+      readiness,
+      clients: (bridgeStatus.clients || []).map(summarizeWhatsappBridgeClient)
+    }
+  });
+});
 
 // GET /api/whatsapp/web-bridge/outbox
 router.get('/web-bridge/outbox', async (req, res) => {
