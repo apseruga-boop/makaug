@@ -190,6 +190,16 @@ test('TikTok exact post parser preserves local-language listing and price eviden
   });
   assert.strictEqual(rentalRows[0].listing_type, 'rent');
   assert.strictEqual(rentalRows[0].price_text, 'bei 250 emitwalo za mwezi');
+
+  const garugaRows = buildTikTokExactPostImportRows({
+    posts: [{
+      post_url: 'https://www.tiktok.com/@lady_property_agent/video/7652233722216959240',
+      caption: '4 Bedroom house for sale in Garuga priced at 850m. Call 0760112587',
+    }],
+  });
+  assert.strictEqual(garugaRows[0].area, 'Garuga');
+  assert.strictEqual(garugaRows[0].district, 'Wakiso');
+  assert.strictEqual(garugaRows[0].price_text, '850m');
 });
 
 test('Maka Scout returns explicit live, review, duplicate, and excluded buckets', () => {
