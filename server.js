@@ -138,6 +138,37 @@ const publicAppVersionSuffixes = [captureHelperUsabilityVersion, studentNearestU
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
+const PUBLIC_INVENTORY_WARMUP_PATHS = [
+  '/api/properties?status=approved&public_only=1&include_summary=false&limit=24',
+  '/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false'
+];
+
+async function warmPublicInventoryCache(baseUrl) {
+  if (process.env.PUBLIC_INVENTORY_CACHE_WARMUP === 'false' || typeof fetch !== 'function') return;
+  for (const pathName of PUBLIC_INVENTORY_WARMUP_PATHS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(`${baseUrl}${pathName}`, {
+        headers: { 'User-Agent': 'makaug-public-inventory-cache-warmup' },
+        signal: controller.signal
+      });
+      logger.info('Public inventory cache warmup completed', {
+        path: pathName,
+        status: response.status,
+        cache: response.headers.get('x-makaug-properties-cache') || null
+      });
+      await response.arrayBuffer();
+    } catch (error) {
+      logger.warn('Public inventory cache warmup failed', {
+        path: pathName,
+        error: error.message
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
 const PUBLIC_HTML_CACHE_CONTROL = isProduction
   ? 'public, max-age=60, stale-while-revalidate=300'
   : 'no-store';
@@ -580,6 +611,11 @@ async function start() {
 
   app.listen(port, () => {
     logger.info(`makaug backend running on http://localhost:${port}`);
+    setTimeout(() => {
+      warmPublicInventoryCache(`http://127.0.0.1:${port}`).catch((error) => {
+        logger.warn('Public inventory cache warmup crashed', { error: error.message });
+      });
+    }, 1000);
   });
 }
 
