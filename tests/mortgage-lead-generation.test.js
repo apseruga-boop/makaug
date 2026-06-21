@@ -57,6 +57,15 @@ assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
 assert(app.includes('leadQualificationTitle'), 'mortgage lead form should explain optional qualifying questions');
+for (const snippet of [
+  'leadQualificationTitle: "Ebibuuzo',
+  'leadQualificationTitle: "Maswali',
+  'leadQualificationTitle: "Ibibazo',
+  'leadQualificationTitle: "አጭር',
+  'leadQualificationTitle: "أسئلة'
+]) {
+  assert(app.includes(snippet), `mortgage qualifying questions should be localized: ${snippet}`);
+}
 assert(app.includes('buying_stage: buyingStage || null'), 'mortgage lead payload should include buying stage');
 assert(app.includes('deposit_status: depositStatus || null'), 'mortgage lead payload should include deposit readiness');
 assert(app.includes('income_type: incomeType || null'), 'mortgage lead payload should include income type');
