@@ -488,13 +488,13 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: 16.5,
     commercialRate: 16.5,
     landRate: null,
-    minDepositPct: { residential: 10, commercial: 20, land: 10, default: 10 },
-    maxYears: { default: 25 },
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: "Stanbic home loan public pages",
     sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan",
-    sourceNote: "Stanbic publishes home loan costs and public rate guidance; final pricing is confirmed by the bank.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "Stanbic publishes home loan fees, transfer stamp duty, mortgage stamp duty, and valuation guidance; final pricing is confirmed by the bank.",
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "hfb",
@@ -508,21 +508,21 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
     sourceNote: "Housing Finance publishes LTV, term, facility fee, and gross-income guidance; rate is variable and requires bank confirmation.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "dfcu",
     name: "dfcu Bank",
     residentialRate: 16.0,
-    commercialRate: 16.0,
-    landRate: 16.5,
-    minDepositPct: { default: 40 },
-    maxYears: { default: 20 },
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
     sourceLabel: "dfcu home loans",
     sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
-    sourceNote: "dfcu publishes UGX calculator rate guidance and affordability/term rules on its home-loans page.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "dfcu publishes UGX home-loan rate guidance, 20-year UGX term rules, and up-to-85% open-market-value guidance for residential home loans.",
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "kcb",
@@ -530,13 +530,13 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: 17.5,
     commercialRate: 17.5,
     landRate: null,
-    minDepositPct: { residential: 20, default: 20 },
-    maxYears: { residential: 20, default: 20 },
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 1.5,
     sourceLabel: "KCB mortgage overview",
     sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
     sourceNote: "KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance term guidance, and LTV rules.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "baroda",
@@ -544,8 +544,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: 18.0,
     commercialRate: null,
     landRate: null,
-    minDepositPct: { default: 20 },
-    maxYears: { default: 15 },
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
     arrangementFeePct: 1.0,
     sourceLabel: "Baroda housing loan and interest rates",
     sourceUrl: "https://www.bankofbaroda.ug/rates-and-charges/interest-rates",
@@ -558,8 +558,8 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: null,
     commercialRate: null,
     landRate: null,
-    minDepositPct: { residential: 15, default: 20 },
-    maxYears: { default: 25 },
+    minDepositPct: { residential: 15, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: "Absa Uganda home loans",
     sourceUrl: "https://www.absa.co.ug/personal/home-loans/",
@@ -567,6 +567,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceVerifiedAt: "2026-06-07"
   }
 ];
+const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
@@ -574,6 +575,7 @@ let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 let activeMortgageTab = "repayment";
 let selectedMortgageProviderKey = "";
 let mortgageExtraPaymentAmount = 0;
+let mortgageRateManuallyEdited = false;
 
 const HOW_TO_VIDEO_SLOTS = [
   { key: "what-is-makaug", title: "What is makaug?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore makaug", ctaUrl: "/about" },
@@ -3156,6 +3158,11 @@ const MORTGAGE_I18N = {
     depositLabel: "Deposit",
     bankRegistrationEstimate: "Bank/registration estimate",
     transferStampDutyEstimate: "Transfer/stamp duty estimate",
+    mortgageStampDutyEstimate: "Mortgage stamp duty estimate",
+    valuationEstimate: "Valuation estimate",
+    transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, and valuation estimate",
+    bestRateApplied: "Using current best match: {bank} at {rate}%. Edit the rate to test another assumption.",
+    manualRateApplied: "Using your manual calculator rate.",
     grossMonthlyIncomeRequired: "Gross Monthly Income Required",
     loanAmount: "Loan Amount",
     totalInterestEstimate: "Total interest estimate",
@@ -37036,7 +37043,7 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     MORTGAGE_RATE_UPDATED_AT = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW);
     return false;
   }
-  const normalized = providers.map((provider) => ({
+  const normalized = providers.map((provider) => mergeAuditedMortgageProvider({
     id: provider.id || provider.key || provider.providerKey || provider.name || "provider",
     name: provider.name || provider.provider_name || "Provider",
     residentialRate: provider.residentialRate ?? provider.residential_rate ?? null,
@@ -37094,6 +37101,30 @@ function mortgageProviderKey(provider = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function mergeAuditedMortgageProvider(provider = {}) {
+  const audited = AUDITED_MORTGAGE_PROVIDER_BY_ID[mortgageProviderKey(provider)];
+  if (!audited) return provider;
+  return {
+    ...provider,
+    residentialRate: audited.residentialRate,
+    commercialRate: audited.commercialRate,
+    landRate: audited.landRate,
+    minDepositPct: {
+      ...provider.minDepositPct,
+      ...audited.minDepositPct
+    },
+    maxYears: {
+      ...provider.maxYears,
+      ...audited.maxYears
+    },
+    arrangementFeePct: audited.arrangementFeePct ?? provider.arrangementFeePct,
+    sourceLabel: audited.sourceLabel || provider.sourceLabel,
+    sourceUrl: audited.sourceUrl || provider.sourceUrl,
+    sourceNote: audited.sourceNote || provider.sourceNote,
+    sourceVerifiedAt: audited.sourceVerifiedAt || provider.sourceVerifiedAt
+  };
 }
 
 function mortgageProviderByKey(key = "") {
@@ -37192,6 +37223,44 @@ function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMon
   };
 }
 
+function setMortgageManualRate(value = "") {
+  mortgageRateManuallyEdited = true;
+  const rateInput = document.getElementById("mortgage-rate");
+  if (rateInput && rateInput.value !== String(value)) rateInput.value = String(value);
+  renderMortgageFinder();
+}
+
+function resolveMortgageSelectedRate(result, rateEl) {
+  const bestRate = Number(result?.best?.rate || 0);
+  if (!mortgageRateManuallyEdited && bestRate > 0) {
+    if (rateEl && Number(rateEl.value) !== bestRate) {
+      rateEl.value = String(bestRate);
+    }
+    return bestRate;
+  }
+  const manualRate = Number(rateEl?.value || 0);
+  if (Number.isFinite(manualRate) && manualRate >= 0) return manualRate;
+  return bestRate;
+}
+
+function getMortgageFeeEstimates(result, provider) {
+  const price = Math.max(0, Number(result?.price || 0));
+  const loanAmount = Math.max(0, Number(result?.loanAmount || 0));
+  const arrangementEstimate = loanAmount * (((provider?.arrangementFeePct) || 1.5) / 100);
+  const transferStampDuty = price * 0.015;
+  const mortgageStampDuty = loanAmount * 0.005;
+  const valuationEstimate = price * 0.0025;
+  const transferAndStampDutyEstimate = transferStampDuty + mortgageStampDuty + valuationEstimate;
+  return {
+    arrangementEstimate,
+    transferStampDuty,
+    mortgageStampDuty,
+    valuationEstimate,
+    transferAndStampDutyEstimate,
+    onceOffCosts: Math.max(0, Number(result?.depositAmount || 0)) + arrangementEstimate + transferAndStampDutyEstimate
+  };
+}
+
 function currentMortgageCalculation() {
   const price = Number(document.getElementById("mortgage-price")?.value || 0) || 0;
   const depositPct = clampMortgageValue(document.getElementById("mortgage-deposit")?.value, 0, 90, 20);
@@ -37200,7 +37269,7 @@ function currentMortgageCalculation() {
   const currency = document.getElementById("mortgage-currency")?.value || "UGX";
   const income = Math.max(0, Number(document.getElementById("mortgage-income")?.value || 0));
   const result = buildMortgageComparison(price, depositPct, years, purpose);
-  const selectedRate = Math.max(0, Number(document.getElementById("mortgage-rate")?.value || result.best?.rate || 0));
+  const selectedRate = resolveMortgageSelectedRate(result, document.getElementById("mortgage-rate"));
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, years) || result.best?.monthlyRepayment || 0;
   const selectedProvider = mortgageProviderByKey(selectedMortgageProviderKey);
   const bestProvider = result.best?.provider || null;
@@ -37243,9 +37312,7 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
   const panel = document.getElementById("mortgage-tab-panel");
   if (!panel) return;
   const { result, selectedRate, monthly, income, suggestedIncome, extraImpact } = context;
-  const bankRegistrationEstimate = result.loanAmount * 0.015;
-  const transferEstimate = result.price * 0.01;
-  const arrangementEstimate = result.loanAmount * (((context.provider?.arrangementFeePct) || 1.5) / 100);
+  const fees = getMortgageFeeEstimates(result, context.provider);
   const title = {
     repayment: mortgageTr("tabRepaymentTitle"),
     affordability: mortgageTr("tabAffordabilityTitle"),
@@ -37276,8 +37343,8 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
       : activeMortgageTab === "fees"
         ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("depositLabel")}</strong><br>${formatMortgageAmount(result.depositAmount, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("arrangementFee")}</strong><br>${formatMortgageAmount(arrangementEstimate, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("transferStampDutyEstimate")}</strong><br>${formatMortgageAmount(transferEstimate + bankRegistrationEstimate, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("arrangementFee")}</strong><br>${formatMortgageAmount(fees.arrangementEstimate, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("transferAndStampDutyEstimate")}</strong><br>${formatMortgageAmount(fees.transferAndStampDutyEstimate, context.currency)}</div>
           </div>`
         : `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
             <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
@@ -37587,7 +37654,7 @@ function resetMortgageCalculator() {
   const defaults = {
     "mortgage-price": "250000000",
     "mortgage-deposit": "20",
-    "mortgage-rate": "16",
+    "mortgage-rate": "",
     "mortgage-years": "20",
     "mortgage-income": "",
     "mortgage-purpose": "residential",
@@ -37598,6 +37665,7 @@ function resetMortgageCalculator() {
 	    if (el) el.value = value;
 	  });
 	  mortgageExtraPaymentAmount = 0;
+	  mortgageRateManuallyEdited = false;
 	  selectedMortgageProviderKey = "";
 	  activeMortgageTab = "repayment";
 	  renderMortgageFinder();
@@ -37635,15 +37703,17 @@ function renderMortgageFinder() {
   const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
   const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_LAST_CHECKED_RAW || MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
   const income = Math.max(0, Number(incomeEl?.value || 0));
-  const selectedRate = Math.max(0, Number(rateEl?.value || result.best?.rate || 0));
+  const selectedRate = resolveMortgageSelectedRate(result, rateEl);
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;
   const suggestedIncome = monthly ? monthly / 0.35 : 0;
   const loanShare = result.price > 0 ? Math.round((result.loanAmount / result.price) * 100) : 0;
   const currency = currencyEl?.value || "UGX";
-  const bankRegistrationEstimate = result.loanAmount * 0.015;
-  const transferEstimate = result.price * 0.01;
-  const onceOffCosts = result.depositAmount + bankRegistrationEstimate + transferEstimate;
+  const feeProvider = mortgageProviderByKey(selectedMortgageProviderKey) || result.best?.provider || null;
+  const fees = getMortgageFeeEstimates(result, feeProvider);
   const totalInterestEstimate = monthly ? Math.max(0, monthly * normalizedYears * 12 - result.loanAmount) : 0;
+  const rateSourceLine = !mortgageRateManuallyEdited && result.best
+    ? mortgageTr("bestRateApplied").replace("{bank}", result.best.provider.name).replace("{rate}", selectedRate.toFixed(2))
+    : mortgageTr("manualRateApplied");
   if (professionalResultsEl) {
     professionalResultsEl.className = "mortgage-result-pop rounded-[1.75rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-5 min-h-[360px] shadow-[0_28px_65px_rgba(20,83,45,0.18)]";
     professionalResultsEl.innerHTML = `
@@ -37653,11 +37723,12 @@ function renderMortgageFinder() {
       </div>
       <div class="text-4xl font-black mt-2">${formatMortgageAmount(monthly, currency)}</div>
       <div class="text-xs text-gray-600 mt-2">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
+      <div class="text-[11px] text-emerald-700 font-semibold mt-1">${adminEscape(rateSourceLine)}</div>
       <div class="mt-5 grid gap-3">
         <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
           <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("onceOffCosts")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(onceOffCosts, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("bankRegistrationEstimate")} ${formatMortgageAmount(bankRegistrationEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(transferEstimate, currency)}</div>
+          <div class="text-lg font-black mt-1">${formatMortgageAmount(fees.onceOffCosts, currency)}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("arrangementFee")} ${formatMortgageAmount(fees.arrangementEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(fees.transferStampDuty, currency)} • ${mortgageTr("mortgageStampDutyEstimate")} ${formatMortgageAmount(fees.mortgageStampDuty, currency)} • ${mortgageTr("valuationEstimate")} ${formatMortgageAmount(fees.valuationEstimate, currency)}</div>
         </div>
         <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
           <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
@@ -37827,6 +37898,25 @@ function renderDetailMortgageWidget(propertyId) {
       ${top.map((row, idx) => `<div class="flex items-center justify-between text-xs ${idx === 0 ? "text-green-800 font-semibold" : "text-gray-600"}"><span>${idx + 1}. ${row.provider.name}</span><span>${formatUgxAmount(row.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</span></div>`).join("")}
     </div>`;
 }
+
+function exposeMortgageFinderHandlers() {
+  Object.assign(window, {
+    loadMortgageRates,
+    renderMortgageFinder,
+    requestMortgageHelp,
+    resetMortgageCalculator,
+    saveMortgageCalculation,
+    setMortgageExtraPayment,
+    setMortgageLeadProvider,
+    setMortgageManualRate,
+    setMortgageTab,
+    submitMortgageLead,
+    syncMortgageInput,
+    syncMortgageSlider
+  });
+}
+
+exposeMortgageFinderHandlers();
 
 function shouldShowUgNlisAdvisory(property = {}) {
   const titleSensitiveTypes = ["land", "plot", "mailo", "freehold", "leasehold"];

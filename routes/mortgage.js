@@ -20,32 +20,38 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
-    sourceLabel: 'Stanbic mortgages and home loans',
-    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans'
+    sourceLabel: 'Stanbic home loan public pages',
+    sourceUrl: 'https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan',
+    sourceNote: 'Stanbic publishes 80% financing/LTV, 1.5% arrangement fee, 1.5% transfer stamp duty, 0.5% mortgage stamp duty, and 0.25% valuation guidance.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'hfb',
     name: 'Housing Finance Bank',
-    residentialRate: 16.0,
-    commercialRate: 18.0,
-    landRate: 18.0,
-    minDepositPct: { residential: 30, commercial: 40, land: 40, default: 30 },
-    maxYears: { residential: 20, commercial: 20, land: 15, default: 20 },
-    arrangementFeePct: 1.5,
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 40, default: 20 },
+    maxYears: { residential: 20, commercial: 20, land: 5, default: 20 },
+    arrangementFeePct: 1.25,
     sourceLabel: 'Housing Finance mortgage terms and conditions',
-    sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/mortgage-products/housing-finance-bank-mortgages-terms-and-conditions/'
+    sourceUrl: 'https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/',
+    sourceNote: 'Housing Finance publishes LTV, term, facility-fee, stamp-duty, and gross-income guidance; its public page says interest is variable and requires lender confirmation.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'dfcu',
     name: 'dfcu Bank',
     residentialRate: 16.0,
-    commercialRate: 16.0,
-    landRate: 16.5,
-    minDepositPct: { residential: 40, commercial: 40, land: 40, default: 40 },
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
     sourceLabel: 'dfcu home loans',
-    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/'
+    sourceUrl: 'https://www.dfcugroup.com/personal-banking/home-loans/',
+    sourceNote: 'dfcu publishes UGX home-loan rate guidance and 20-year UGX term rules; commercial and land rates need bank confirmation.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'kcb',
@@ -57,7 +63,9 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 1.5,
     sourceLabel: 'KCB mortgage overview',
-    sourceUrl: 'https://ug.kcbgroup.com/products/mortgage'
+    sourceUrl: 'https://ug.kcbgroup.com/products/mortgage',
+    sourceNote: 'KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance terms, and 80% LTV guidance for Kampala, Entebbe, and Wakiso.',
+    sourceVerifiedAt: '2026-06-21'
   },
   {
     key: 'baroda',
@@ -67,9 +75,11 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     landRate: null,
     minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
     maxYears: { residential: 15, commercial: 15, land: 15, default: 15 },
-    arrangementFeePct: 1.5,
-    sourceLabel: 'Baroda housing loan',
-    sourceUrl: 'https://www.bankofbaroda.ug/personal-banking/loans/housing-loan'
+    arrangementFeePct: 1.0,
+    sourceLabel: 'Baroda housing loan and interest rates',
+    sourceUrl: 'https://www.bankofbaroda.ug/rates-and-charges/interest-rates',
+    sourceNote: 'Baroda publishes housing-loan pricing as 2% below UGX PLR; with public PLR at 20%, this is an indicative 18% UGX rate.',
+    sourceVerifiedAt: '2026-06-07'
   },
   {
     key: 'absa',
@@ -81,9 +91,12 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: 'Absa Uganda home loans',
-    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/'
+    sourceUrl: 'https://www.absa.co.ug/personal/home-loans/',
+    sourceNote: 'Absa publishes home-loan availability but does not publish a fixed public rate on the reviewed page, so quotes are required.',
+    sourceVerifiedAt: '2026-06-07'
   }
 ];
+const AUDITED_MORTGAGE_PROVIDER_BY_KEY = new Map(FALLBACK_MORTGAGE_PROVIDERS.map((provider) => [provider.key, provider]));
 
 function normalizeProvider(row) {
   return {
@@ -104,7 +117,33 @@ function normalizeProvider(row) {
     },
     arrangementFeePct: toNullableFloat(row.arrangement_fee_pct ?? row.arrangementFeePct) ?? 1.5,
     sourceLabel: cleanText(row.source_label || row.sourceLabel),
-    sourceUrl: cleanText(row.source_url || row.sourceUrl)
+    sourceUrl: cleanText(row.source_url || row.sourceUrl),
+    sourceNote: cleanText(row.source_note || row.sourceNote),
+    sourceVerifiedAt: row.source_verified_at || row.sourceVerifiedAt || null
+  };
+}
+
+function withAuditedMortgageData(provider) {
+  const audited = AUDITED_MORTGAGE_PROVIDER_BY_KEY.get(provider.key);
+  if (!audited) return provider;
+  return {
+    ...provider,
+    residentialRate: audited.residentialRate,
+    commercialRate: audited.commercialRate,
+    landRate: audited.landRate,
+    minDepositPct: {
+      ...provider.minDepositPct,
+      ...audited.minDepositPct
+    },
+    maxYears: {
+      ...provider.maxYears,
+      ...audited.maxYears
+    },
+    arrangementFeePct: audited.arrangementFeePct ?? provider.arrangementFeePct,
+    sourceLabel: audited.sourceLabel || provider.sourceLabel,
+    sourceUrl: audited.sourceUrl || provider.sourceUrl,
+    sourceNote: audited.sourceNote || provider.sourceNote,
+    sourceVerifiedAt: audited.sourceVerifiedAt || provider.sourceVerifiedAt
   };
 }
 
@@ -192,7 +231,7 @@ async function readMortgageProviders() {
     };
   }
 
-  const providers = result.rows.map((row) => withDefaultKeys(normalizeProvider(row)));
+  const providers = result.rows.map((row) => withDefaultKeys(withAuditedMortgageData(normalizeProvider(row))));
   const latest = result.rows
     .map((row) => row.updated_at)
     .filter(Boolean)
