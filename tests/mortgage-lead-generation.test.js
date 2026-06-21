@@ -23,7 +23,7 @@ const requiredWindowHandlers = [
 ];
 
 assert(
-  html.includes('mortgage-finder-accuracy-handlers-20260621') && html.includes('mortgage-qualification-20260621'),
+  html.includes('mortgage-finder-accuracy-handlers-20260621') && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(
@@ -56,6 +56,15 @@ for (const handler of requiredWindowHandlers) {
 assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual rate state should exist');
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
+for (const provider of [
+  'NCBA Bank Uganda',
+  'Centenary Bank Uganda',
+  'https://ncbagroup.com/ug/property-loans/',
+  'https://www.centenarybank.co.ug/product/cente-mortgage/4/8'
+]) {
+  assert(app.includes(provider), `frontend audited mortgage providers should include ${provider}`);
+  assert(mortgageRoutes.includes(provider), `API audited mortgage providers should include ${provider}`);
+}
 assert(app.includes('leadQualificationTitle'), 'mortgage lead form should explain optional qualifying questions');
 for (const snippet of [
   'leadQualificationTitle: "Ebibuuzo',
@@ -73,8 +82,13 @@ assert(app.includes('transferStampDuty = price * 0.015'), 'transfer stamp duty s
 assert(app.includes('mortgageStampDuty = loanAmount * 0.005'), 'mortgage stamp duty should use the verified 0.5% public assumption');
 assert(app.includes('valuationEstimate = price * 0.0025'), 'valuation estimate should use the verified 0.25% public assumption');
 assert(app.includes('mergeAuditedMortgageProvider'), 'frontend should protect audited bank data from stale API rows');
+assert(app.includes('mergeAuditedMortgageProviderList'), 'frontend should append audited providers missing from API rows');
+assert(app.includes('DEFAULT_MORTGAGE_PROVIDERS'), 'frontend should keep audited fallback providers available after API hydration');
 
 assert(mortgageRoutes.includes('withAuditedMortgageData'), 'API should protect audited bank data from stale DB rows');
+assert(mortgageRoutes.includes('mergeAuditedMortgageProviders'), 'API should append audited providers missing from database rows');
+assert(mortgageRoutes.includes('seenProviderKeys.has(provider.key)'), 'API should avoid duplicated audited providers when merging database rows');
+assert(mortgageRoutes.includes('} catch (error) {'), 'API should fall back to audited public provider data when database reads fail');
 assert(mortgageRoutes.includes("residentialRate: null"), 'Housing Finance variable public rate should render as quote required');
 assert(mortgageRoutes.includes("sourceVerifiedAt: '2026-06-21'"), 'audited mortgage assumptions should carry the verification date');
 assert(mortgageRoutes.includes('sourceNote'), 'audited source notes should be returned to the UI');

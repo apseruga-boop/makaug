@@ -539,6 +539,34 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceVerifiedAt: "2026-06-21"
   },
   {
+    id: "ncba",
+    name: "NCBA Bank Uganda",
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 30, land: 30, default: 10 },
+    maxYears: { residential: 25, commercial: 25, land: 5, default: 25 },
+    arrangementFeePct: 1.5,
+    sourceLabel: "NCBA Uganda property loans",
+    sourceUrl: "https://ncbagroup.com/ug/property-loans/",
+    sourceNote: "NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms including up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, and up to 60-month land-purchase terms; public rate requires bank confirmation.",
+    sourceVerifiedAt: "2026-06-21"
+  },
+  {
+    id: "centenary",
+    name: "Centenary Bank Uganda",
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 10, default: 20 },
+    maxYears: { residential: 10, commercial: 10, land: 10, default: 10 },
+    arrangementFeePct: 1.5,
+    sourceLabel: "Centenary Bank housing loan pages",
+    sourceUrl: "https://www.centenarybank.co.ug/product/cente-mortgage/4/8",
+    sourceNote: "Centenary publishes Cente Mortgage and CenteLand terms including UGX 20m-300m mortgage loan amounts, up to 10-year tenure, up to 80% LTV, and CenteLand 10% mandatory contribution; public rate requires bank confirmation.",
+    sourceVerifiedAt: "2026-06-21"
+  },
+  {
     id: "baroda",
     name: "Bank of Baroda Uganda",
     residentialRate: 18.0,
@@ -37335,7 +37363,7 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
   }));
 
-  MORTGAGE_PROVIDERS = normalized;
+  MORTGAGE_PROVIDERS = mergeAuditedMortgageProviderList(normalized);
   MORTGAGE_RATE_UPDATED_RAW = data.updatedAt || DEFAULT_MORTGAGE_RATE_UPDATED_AT;
   MORTGAGE_RATE_UPDATED_AT = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_UPDATED_RAW);
   return true;
@@ -37386,6 +37414,28 @@ function mergeAuditedMortgageProvider(provider = {}) {
     sourceNote: audited.sourceNote || provider.sourceNote,
     sourceVerifiedAt: audited.sourceVerifiedAt || provider.sourceVerifiedAt
   };
+}
+
+function mergeAuditedMortgageProviderList(providers = []) {
+  const mergedProviders = [];
+  const seenProviderKeys = new Set();
+
+  for (const provider of providers) {
+    const mergedProvider = mergeAuditedMortgageProvider(provider);
+    const key = mortgageProviderKey(mergedProvider);
+    if (!key) continue;
+    seenProviderKeys.add(key);
+    mergedProviders.push(mergedProvider);
+  }
+
+  for (const provider of DEFAULT_MORTGAGE_PROVIDERS) {
+    const key = mortgageProviderKey(provider);
+    if (seenProviderKeys.has(key)) continue;
+    seenProviderKeys.add(key);
+    mergedProviders.push(mergeAuditedMortgageProvider({ ...provider }));
+  }
+
+  return mergedProviders;
 }
 
 function mortgageProviderByKey(key = "") {

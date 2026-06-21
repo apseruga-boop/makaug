@@ -68,6 +68,34 @@ const FALLBACK_MORTGAGE_PROVIDERS = [
     sourceVerifiedAt: '2026-06-21'
   },
   {
+    key: 'ncba',
+    name: 'NCBA Bank Uganda',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 10, commercial: 30, land: 30, default: 10 },
+    maxYears: { residential: 25, commercial: 25, land: 5, default: 25 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'NCBA Uganda property loans',
+    sourceUrl: 'https://ncbagroup.com/ug/property-loans/',
+    sourceNote: 'NCBA publishes property-loan, construction-finance, land-purchase, and equity-release terms: up to 25-year UGX mortgage tenure, up to 90% financing for eligible Kampala/city properties, 70% office-space financing, and up to 60-month land-purchase terms; public rate requires bank confirmation.',
+    sourceVerifiedAt: '2026-06-21'
+  },
+  {
+    key: 'centenary',
+    name: 'Centenary Bank Uganda',
+    residentialRate: null,
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 20, commercial: 20, land: 10, default: 20 },
+    maxYears: { residential: 10, commercial: 10, land: 10, default: 10 },
+    arrangementFeePct: 1.5,
+    sourceLabel: 'Centenary Bank housing loan pages',
+    sourceUrl: 'https://www.centenarybank.co.ug/product/cente-mortgage/4/8',
+    sourceNote: 'Centenary publishes Cente Mortgage and CenteLand product pages: mortgage loan amounts from UGX 20m to UGX 300m, up to 10-year tenure, declining-balance interest, up to 80% LTV, and CenteLand 10% mandatory contribution; public rate requires bank confirmation.',
+    sourceVerifiedAt: '2026-06-21'
+  },
+  {
     key: 'baroda',
     name: 'Bank of Baroda Uganda',
     residentialRate: 18.0,
@@ -165,6 +193,26 @@ function withDefaultKeys(provider) {
   };
 }
 
+function mergeAuditedMortgageProviders(providers = []) {
+  const mergedProviders = [];
+  const seenProviderKeys = new Set();
+
+  for (const provider of providers) {
+    const mergedProvider = withDefaultKeys(withAuditedMortgageData(provider));
+    if (!mergedProvider.key) continue;
+    seenProviderKeys.add(mergedProvider.key);
+    mergedProviders.push(mergedProvider);
+  }
+
+  for (const provider of FALLBACK_MORTGAGE_PROVIDERS) {
+    if (seenProviderKeys.has(provider.key)) continue;
+    seenProviderKeys.add(provider.key);
+    mergedProviders.push(withDefaultKeys(provider));
+  }
+
+  return mergedProviders;
+}
+
 async function hasMortgageTable() {
   const exists = await db.query(`SELECT to_regclass('public.mortgage_providers') AS table_name`);
   return Boolean(exists.rows[0]?.table_name);
@@ -193,55 +241,63 @@ function buildMortgageLeadRef() {
 }
 
 async function readMortgageProviders() {
-  if (!(await hasMortgageTable())) {
+  try {
+    if (!(await hasMortgageTable())) {
+      return {
+        providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
+        updatedAt: null,
+        source: 'fallback'
+      };
+    }
+
+    const result = await db.query(
+      `SELECT
+        provider_key,
+        provider_name,
+        residential_rate,
+        commercial_rate,
+        land_rate,
+        min_deposit_residential,
+        min_deposit_commercial,
+        min_deposit_land,
+        max_years_residential,
+        max_years_commercial,
+        max_years_land,
+        arrangement_fee_pct,
+        source_label,
+        source_url,
+        updated_at
+       FROM mortgage_providers
+       WHERE is_active = TRUE
+       ORDER BY provider_name ASC`
+    );
+
+    if (!result.rows.length) {
+      return {
+        providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
+        updatedAt: null,
+        source: 'fallback'
+      };
+    }
+
+    const providers = mergeAuditedMortgageProviders(result.rows.map(normalizeProvider));
+    const latest = result.rows
+      .map((row) => row.updated_at)
+      .filter(Boolean)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
+
     return {
-      providers: FALLBACK_MORTGAGE_PROVIDERS.map(withDefaultKeys),
+      providers,
+      updatedAt: latest,
+      source: 'database'
+    };
+  } catch (error) {
+    return {
+      providers: mergeAuditedMortgageProviders(FALLBACK_MORTGAGE_PROVIDERS),
       updatedAt: null,
       source: 'fallback'
     };
   }
-
-  const result = await db.query(
-    `SELECT
-      provider_key,
-      provider_name,
-      residential_rate,
-      commercial_rate,
-      land_rate,
-      min_deposit_residential,
-      min_deposit_commercial,
-      min_deposit_land,
-      max_years_residential,
-      max_years_commercial,
-      max_years_land,
-      arrangement_fee_pct,
-      source_label,
-      source_url,
-      updated_at
-     FROM mortgage_providers
-     WHERE is_active = TRUE
-     ORDER BY provider_name ASC`
-  );
-
-  if (!result.rows.length) {
-    return {
-      providers: FALLBACK_MORTGAGE_PROVIDERS.map(withDefaultKeys),
-      updatedAt: null,
-      source: 'fallback'
-    };
-  }
-
-  const providers = result.rows.map((row) => withDefaultKeys(withAuditedMortgageData(normalizeProvider(row))));
-  const latest = result.rows
-    .map((row) => row.updated_at)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] || null;
-
-  return {
-    providers,
-    updatedAt: latest,
-    source: 'database'
-  };
 }
 
 router.get('/', async (req, res, next) => {
