@@ -3180,10 +3180,10 @@ const MORTGAGE_I18N = {
     providerContextSelected: "Selected lender: {bank}. This lead will be marked for bank handoff in King dashboard.",
     setUpBankCall: "Set up call",
     sourceNoteLabel: "Source note",
-    publicRecordDisclosure: "Pulled from public bank pages and public market records. Terms can change without notice; confirm with the lender before applying.",
+    publicRecordDisclosure: "Advisory only: rates and fees are pulled from public bank pages and market records, but banks can change terms without notice. Ask a makaug consultant or selected bank to confirm current rates before applying.",
     leadSubmitBank: "Request {bank} Call",
     resultsTitle: "Best Match & Bank Comparison",
-    ratesFootnote: "Indicative public rates. Confirm with bank before applying.",
+    ratesFootnote: "Indicative public rates from bank sources. Confirm current rates with the lender before applying.",
     refresh: "Refresh",
     whatTitle: "What is a Mortgage?",
     whatBody: "A mortgage is a long-term loan used to buy property. You pay a deposit upfront, and the bank finances the balance. You then repay monthly with interest over an agreed period.",
@@ -3200,7 +3200,7 @@ const MORTGAGE_I18N = {
     termEarlyTitle: "Early Repayment",
     termEarlyBody: "Some lenders charge a fee if you clear the loan early. Always check this before signing your offer letter.",
     dailyTitle: "Daily Update Flow",
-    dailyNote: "Rates are pulled from our API and reviewed daily. Use the refresh button above for the latest available data.",
+    dailyNote: "Rates are pulled from our API and public bank sources, then reviewed regularly. Use Refresh for the latest available makaug data, and confirm final terms with the bank.",
     summaryPrice: "Property Price",
     summaryDepositLoan: "Deposit / Loan",
     summaryUpdated: "Rates Updated",
@@ -3232,15 +3232,37 @@ const MORTGAGE_I18N = {
     dataRefreshed: "Mortgage rates refreshed.",
     dataRefreshFail: "Could not refresh rates now.",
     leadTitle: "Need a mortgage consultant call-back?",
-    leadSub: "Share your details and we will connect you to a mortgage consultant for guidance.",
+    leadSub: "Share a few details so the consultant can prepare the right affordability and bank-rate guidance before calling.",
     leadNameLabel: "Full Name *",
     leadPhoneLabel: "Phone Number *",
     leadEmailLabel: "Email",
     leadContactLabel: "Best Contact Method",
     leadAmountLabel: "Amount to Borrow (UGX) *",
     leadTermLabel: "Preferred Term (years)",
+    leadQualificationTitle: "Quick qualifying questions",
+    leadQualificationSub: "Optional, but it helps the consultant prepare the right advice before calling.",
+    leadStageLabel: "Where are you in the buying process?",
+    leadStageNone: "Not sure yet",
+    leadStageBudget: "Still comparing budget",
+    leadStageShortlist: "Have property shortlist",
+    leadStageAgreed: "Price agreed / offer stage",
+    leadStageReady: "Ready to apply now",
+    leadDepositStatusLabel: "Deposit readiness",
+    leadDepositNone: "Not sure yet",
+    leadDepositSaving: "Still saving",
+    leadDepositPart: "Part deposit ready",
+    leadDepositReady: "Deposit ready",
+    leadDepositAdvice: "Need advice on deposit",
+    leadIncomeTypeLabel: "Main income type",
+    leadIncomeNone: "Prefer to discuss on call",
+    leadIncomeSalaried: "Salaried",
+    leadIncomeBusiness: "Business / self-employed",
+    leadIncomeMixed: "Mixed income",
+    leadIncomeNotSure: "Not sure what counts",
+    leadMonthlyIncomeLabel: "Monthly household income (optional)",
+    leadMonthlyIncomePlaceholder: "e.g. 6000000",
     leadSubmit: "Request Mortgage Call",
-    leadNote: "This is a lead request, not a bank approval. Rates and approvals are subject to lender checks.",
+    leadNote: "makaug gives advisory guidance from public sources, not a bank approval. If you choose a bank above, we route the request for a bank call-back; final rates, fees, affordability, and approval must be confirmed by that lender.",
     leadContactPhone: "Phone Call",
     leadContactWhatsapp: "WhatsApp",
     leadContactEmail: "Email",
@@ -4970,6 +4992,12 @@ function applyMortgageLanguageUI() {
   setTextById("mortgage-lead-amount-label", mortgageTr("leadAmountLabel"));
   setTextById("mortgage-lead-term-label", mortgageTr("leadTermLabel"));
   setTextById("mortgage-lead-provider-label", mortgageTr("preferredBankLabel"));
+  setTextById("mortgage-lead-qualification-title", mortgageTr("leadQualificationTitle"));
+  setTextById("mortgage-lead-qualification-sub", mortgageTr("leadQualificationSub"));
+  setTextById("mortgage-lead-stage-label", mortgageTr("leadStageLabel"));
+  setTextById("mortgage-lead-deposit-status-label", mortgageTr("leadDepositStatusLabel"));
+  setTextById("mortgage-lead-income-type-label", mortgageTr("leadIncomeTypeLabel"));
+  setTextById("mortgage-lead-monthly-income-label", mortgageTr("leadMonthlyIncomeLabel"));
   setTextById("mortgage-lead-submit", selectedMortgageProviderKey ? mortgageTr("leadSubmitBank").replace("{bank}", mortgageProviderByKey(selectedMortgageProviderKey)?.name || mortgageTr("preferredBankLabel")) : mortgageTr("leadSubmit"));
   setTextById("mortgage-lead-note", mortgageTr("leadNote"));
 
@@ -5011,6 +5039,8 @@ function applyMortgageLanguageUI() {
   if (leadAmount) leadAmount.placeholder = mortgageTr("leadAmountPlaceholder");
   const leadTerm = document.getElementById("mortgage-lead-term");
   if (leadTerm) leadTerm.placeholder = mortgageTr("leadTermPlaceholder");
+  const leadMonthlyIncome = document.getElementById("mortgage-lead-monthly-income");
+  if (leadMonthlyIncome) leadMonthlyIncome.placeholder = mortgageTr("leadMonthlyIncomePlaceholder");
   const leadContact = document.getElementById("mortgage-lead-contact");
   if (leadContact) {
     leadContact.querySelectorAll("[data-mortgage-contact-option]").forEach((optionEl) => {
@@ -5018,6 +5048,39 @@ function applyMortgageLanguageUI() {
       if (value === "phone") optionEl.textContent = mortgageTr("leadContactPhone");
       if (value === "whatsapp") optionEl.textContent = mortgageTr("leadContactWhatsapp");
       if (value === "email") optionEl.textContent = mortgageTr("leadContactEmail");
+    });
+  }
+  const stageSelect = document.getElementById("mortgage-lead-stage");
+  if (stageSelect) {
+    stageSelect.querySelectorAll("[data-mortgage-stage-option]").forEach((optionEl) => {
+      const value = optionEl.getAttribute("data-mortgage-stage-option");
+      if (value === "none") optionEl.textContent = mortgageTr("leadStageNone");
+      if (value === "budget") optionEl.textContent = mortgageTr("leadStageBudget");
+      if (value === "shortlist") optionEl.textContent = mortgageTr("leadStageShortlist");
+      if (value === "agreed") optionEl.textContent = mortgageTr("leadStageAgreed");
+      if (value === "ready") optionEl.textContent = mortgageTr("leadStageReady");
+    });
+  }
+  const depositStatusSelect = document.getElementById("mortgage-lead-deposit-status");
+  if (depositStatusSelect) {
+    depositStatusSelect.querySelectorAll("[data-mortgage-deposit-option]").forEach((optionEl) => {
+      const value = optionEl.getAttribute("data-mortgage-deposit-option");
+      if (value === "none") optionEl.textContent = mortgageTr("leadDepositNone");
+      if (value === "saving") optionEl.textContent = mortgageTr("leadDepositSaving");
+      if (value === "part") optionEl.textContent = mortgageTr("leadDepositPart");
+      if (value === "ready") optionEl.textContent = mortgageTr("leadDepositReady");
+      if (value === "advice") optionEl.textContent = mortgageTr("leadDepositAdvice");
+    });
+  }
+  const incomeTypeSelect = document.getElementById("mortgage-lead-income-type");
+  if (incomeTypeSelect) {
+    incomeTypeSelect.querySelectorAll("[data-mortgage-income-option]").forEach((optionEl) => {
+      const value = optionEl.getAttribute("data-mortgage-income-option");
+      if (value === "none") optionEl.textContent = mortgageTr("leadIncomeNone");
+      if (value === "salaried") optionEl.textContent = mortgageTr("leadIncomeSalaried");
+      if (value === "business") optionEl.textContent = mortgageTr("leadIncomeBusiness");
+      if (value === "mixed") optionEl.textContent = mortgageTr("leadIncomeMixed");
+      if (value === "not_sure") optionEl.textContent = mortgageTr("leadIncomeNotSure");
     });
   }
   hydrateMortgageProviderSelect();
@@ -37427,11 +37490,15 @@ async function submitMortgageLead() {
   const contactMethod = (document.getElementById("mortgage-lead-contact")?.value || "phone").trim();
   const amountToBorrow = Number(document.getElementById("mortgage-lead-amount")?.value || calc.result.loanAmount || 0);
   const preferredTermYears = Number(document.getElementById("mortgage-lead-term")?.value || 0) || null;
+  const buyingStage = (document.getElementById("mortgage-lead-stage")?.value || "").trim();
+  const depositStatus = (document.getElementById("mortgage-lead-deposit-status")?.value || "").trim();
+  const incomeType = (document.getElementById("mortgage-lead-income-type")?.value || "").trim();
+  const monthlyIncome = Number(document.getElementById("mortgage-lead-monthly-income")?.value || calc.income || 0) || null;
   const propertyPrice = calc.price || null;
   const propertyPurpose = calc.purpose || "residential";
   const depositPercent = calc.depositPct || null;
   const termYears = calc.years || null;
-  const householdIncome = calc.income || null;
+  const householdIncome = monthlyIncome || calc.income || null;
   const provider = mortgageProviderByKey(selectedMortgageProviderKey);
 
   if (!name) {
@@ -37469,6 +37536,9 @@ async function submitMortgageLead() {
         deposit_percent: depositPercent,
         term_years: termYears,
         household_income: householdIncome,
+        buying_stage: buyingStage || null,
+        deposit_status: depositStatus || null,
+        income_type: incomeType || null,
         annual_rate: calc.selectedRate,
         monthly_repayment: calc.monthly,
         preferred_provider_key: provider ? mortgageProviderKey(provider) : null,
@@ -37489,14 +37559,21 @@ async function submitMortgageLead() {
       contact_method: contactMethod || "phone",
       property_purpose: propertyPurpose || "residential",
       provider_key: provider ? mortgageProviderKey(provider) : "general",
-      lead_context: provider ? "bank_provider" : "general_mortgage_callback"
+      lead_context: provider ? "bank_provider" : "general_mortgage_callback",
+      buying_stage: buyingStage || "not_given",
+      deposit_status: depositStatus || "not_given",
+      income_type: incomeType || "not_given"
     });
-    ["mortgage-lead-name", "mortgage-lead-phone", "mortgage-lead-email", "mortgage-lead-amount", "mortgage-lead-term"].forEach((id) => {
+    ["mortgage-lead-name", "mortgage-lead-phone", "mortgage-lead-email", "mortgage-lead-amount", "mortgage-lead-term", "mortgage-lead-monthly-income"].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.value = "";
     });
     const contactSelect = document.getElementById("mortgage-lead-contact");
     if (contactSelect) contactSelect.value = "phone";
+    ["mortgage-lead-stage", "mortgage-lead-deposit-status", "mortgage-lead-income-type"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
   } catch (error) {
     toast(error.message || mortgageTr("leadSubmitFail"));
   } finally {

@@ -273,6 +273,9 @@ router.post('/enquiry', async (req, res, next) => {
   const depositPercent = toNullableFloat(body.deposit_percent ?? body.depositPercent);
   const termYears = toNullableInt(body.term_years ?? body.termYears ?? body.preferred_term_years ?? body.preferredTermYears);
   const householdIncome = toNullableFloat(body.household_income ?? body.householdIncome);
+  const buyingStage = cleanText(body.buying_stage || body.buyingStage).toLowerCase();
+  const depositStatus = cleanText(body.deposit_status || body.depositStatus).toLowerCase();
+  const incomeType = cleanText(body.income_type || body.incomeType).toLowerCase();
   const preferredProviderKey = cleanText(body.preferred_provider_key || body.preferredProviderKey || body.provider_key || body.providerKey).toLowerCase();
   const preferredProviderNameInput = cleanText(body.preferred_provider_name || body.preferredProviderName || body.provider_name || body.providerName);
   const leadContext = cleanText(body.lead_context || body.leadContext).toLowerCase();
@@ -311,6 +314,10 @@ router.post('/enquiry', async (req, res, next) => {
       preferredTermYears: toNullableInt(body.preferred_term_years ?? body.preferredTermYears),
       preferredProviderKey: normalizedProviderKey,
       preferredProviderName,
+      buyingStage: buyingStage || null,
+      depositStatus: depositStatus || null,
+      incomeType: incomeType || null,
+      householdIncome: householdIncome || null,
       leadContext: isBankProviderLead ? 'bank_provider' : 'general_mortgage_callback',
       bankHandoffStatus: isBankProviderLead ? 'pending_bank_handoff' : null,
       source: 'website_mortgage_finder',
@@ -354,6 +361,10 @@ router.post('/enquiry', async (req, res, next) => {
         mortgage_enquiry_id: id || null,
         reference,
         amount_to_borrow: amountToBorrow,
+        household_income: householdIncome,
+        buying_stage: buyingStage || null,
+        deposit_status: depositStatus || null,
+        income_type: incomeType || null,
         preferred_term_years: termYears,
         preferred_provider_key: normalizedProviderKey,
         preferred_provider_name: preferredProviderName,
@@ -395,7 +406,11 @@ router.post('/enquiry', async (req, res, next) => {
           `Phone: ${phone}`,
           `Email: ${email || '-'}`,
           `Amount to borrow: UGX ${Number(amountToBorrow).toLocaleString('en-UG')}`,
-          `Preferred contact: ${payload.contactMethod}`
+          `Preferred contact: ${payload.contactMethod}`,
+          `Buying stage: ${buyingStage || '-'}`,
+          `Deposit readiness: ${depositStatus || '-'}`,
+          `Income type: ${incomeType || '-'}`,
+          `Household income: ${householdIncome ? `UGX ${Number(householdIncome).toLocaleString('en-UG')}` : '-'}`
         ].join('\n'),
         replyTo: email || undefined
       });
