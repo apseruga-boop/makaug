@@ -6,6 +6,7 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'assets', 'makaug-app.js'), 'utf8');
 const mortgageRoutes = fs.readFileSync(path.join(root, 'routes', 'mortgage.js'), 'utf8');
+const server = fs.readFileSync(path.join(root, 'server.js'), 'utf8');
 
 const requiredWindowHandlers = [
   'loadMortgageRates',
@@ -58,6 +59,7 @@ for (const handler of requiredWindowHandlers) {
 assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual rate state should exist');
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
+assert(server.includes("mortgageUiTabsBankLogosVersion = 'mortgage-ui-tabs-bank-logos-20260622'"), 'server should append the mortgage UI cache marker in production HTML');
 assert(app.includes('const MORTGAGE_PROVIDER_BRANDS'), 'mortgage comparison should define bank brand/logo metadata');
 assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison should render lender logo badges');
 assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
