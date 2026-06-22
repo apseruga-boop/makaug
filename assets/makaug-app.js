@@ -596,6 +596,64 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
   }
 ];
 const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROVIDERS.map((provider) => [provider.id, provider]));
+const MORTGAGE_PROVIDER_BRANDS = {
+  stanbic: {
+    shortName: "Stanbic",
+    logoUrl: "https://www.stanbicbank.co.ug/favicon.ico",
+    bg: "#eef6ff",
+    border: "#b7d7f6",
+    text: "#0052a3"
+  },
+  hfb: {
+    shortName: "HFB",
+    logoUrl: "https://www.housingfinance.co.ug/favicon.ico",
+    bg: "#ecfdf5",
+    border: "#a7f3d0",
+    text: "#047857"
+  },
+  dfcu: {
+    shortName: "dfcu",
+    logoUrl: "https://www.dfcugroup.com/favicon.ico",
+    bg: "#eef2ff",
+    border: "#c7d2fe",
+    text: "#3730a3"
+  },
+  kcb: {
+    shortName: "KCB",
+    logoUrl: "https://ug.kcbgroup.com/favicon.ico",
+    bg: "#ecfdf5",
+    border: "#86efac",
+    text: "#166534"
+  },
+  ncba: {
+    shortName: "NCBA",
+    logoUrl: "https://ncbagroup.com/favicon.ico",
+    bg: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#1d4ed8"
+  },
+  centenary: {
+    shortName: "Centenary",
+    logoUrl: "https://www.centenarybank.co.ug/favicon.ico",
+    bg: "#f0fdf4",
+    border: "#bbf7d0",
+    text: "#15803d"
+  },
+  baroda: {
+    shortName: "Baroda",
+    logoUrl: "https://www.bankofbaroda.ug/favicon.ico",
+    bg: "#fff7ed",
+    border: "#fed7aa",
+    text: "#c2410c"
+  },
+  absa: {
+    shortName: "Absa",
+    logoUrl: "https://www.absa.co.ug/favicon.ico",
+    bg: "#fef2f2",
+    border: "#fecaca",
+    text: "#b91c1c"
+  }
+};
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
@@ -4335,6 +4393,122 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   leadValidationAmount: "أدخل المبلغ الذي تريد اقتراضه.",
   leadSubmitted: "تم إرسال طلب التمويل العقاري. سيتواصل معك مستشار قريباً.",
   leadSubmitFail: "تعذر إرسال طلب التمويل العقاري الآن."
+});
+
+Object.assign(MORTGAGE_I18N.lg, {
+  tabRepayment: "Ensasula",
+  tabAffordability: "Obusobozi",
+  tabExtraPayment: "Okusasula okwongera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasula buli mwezi",
+  tabRepaymentBody: "Bala ensasula ya buli mwezi okuva ku muwendo, deposit, rate y'amagoba, n'emyaka gya loan.",
+  tabAffordabilityTitle: "Obusobozi",
+  tabAffordabilityBody: "Gerageranya ensasula n'enfuna y'eka ng'okozesa ekiragiro kya 35% nga tonnayogera ne lender.",
+  tabExtraTitle: "Okusasula okwongera",
+  tabExtraBody: "Yongerako ensasula ya buli mwezi okulaba amagoba n'ebiseera by'oyinza okukekkereza.",
+  tabFeesTitle: "Fees ne transfer",
+  tabFeesBody: "Kebera deposit, arrangement fee, valuation, registration, transfer, ne stamp-duty nga tonnasaba.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty eteberezebwa",
+  valuationEstimate: "Valuation eteberezebwa",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ne valuation",
+  bestRateApplied: "Tukozesezza match esinga kati: {bank} ku {rate}%. Kyusa rate okugezesa endowooza endala.",
+  manualRateApplied: "Tukozesezza rate gy'oyingizza mu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.sw, {
+  tabRepayment: "Malipo",
+  tabAffordability: "Uwezo",
+  tabExtraPayment: "Malipo ya ziada",
+  tabFeesTransfer: "Ada & Uhamisho",
+  tabRepaymentTitle: "Malipo ya mwezi",
+  tabRepaymentBody: "Kadiria malipo ya mwezi kutoka bei, amana, riba, na muda wa mkopo.",
+  tabAffordabilityTitle: "Uwezo wa kulipa",
+  tabAffordabilityBody: "Linganisha malipo na mapato ya kaya ukitumia mwongozo wa 35% kabla ya kuzungumza na mkopeshaji.",
+  tabExtraTitle: "Malipo ya ziada",
+  tabExtraBody: "Ongeza malipo ya ziada ya kila mwezi kuona riba na muda unaoweza kuokoa.",
+  tabFeesTitle: "Ada na uhamisho",
+  tabFeesBody: "Kagua amana, ada ya mpangilio, tathmini, usajili, uhamisho, na stamp duty kabla ya kuomba.",
+  mortgageStampDutyEstimate: "Makadirio ya stamp duty ya rehani",
+  valuationEstimate: "Makadirio ya tathmini",
+  transferAndStampDutyEstimate: "Makadirio ya uhamisho, stamp duty ya rehani, na tathmini",
+  bestRateApplied: "Tunatumia chaguo bora la sasa: {bank} kwa {rate}%. Badilisha riba kujaribu makadirio mengine.",
+  manualRateApplied: "Tunatumia kiwango cha riba ulichoingiza."
+});
+
+Object.assign(MORTGAGE_I18N.ac, {
+  tabRepayment: "Cato",
+  tabAffordability: "Twero",
+  tabExtraPayment: "Cato mukene",
+  tabFeesTransfer: "Fee & Transfer",
+  tabRepaymentTitle: "Cato me dwe",
+  tabRepaymentBody: "Pim cato me dwe ki wel gang, deposit, rate pa nyinge, ki kare pa loan.",
+  tabAffordabilityTitle: "Twero me cato",
+  tabAffordabilityBody: "Pim cato ki income pa gang kun itiyo ki 35% guide mapwod i lok ki lender.",
+  tabExtraTitle: "Cato mukene",
+  tabExtraBody: "Med cato me dwe mukene me neno nyinge ki kare ma itwero gwoko.",
+  tabFeesTitle: "Fee ki transfer",
+  tabFeesBody: "Nen deposit, arrangement fee, valuation, registration, transfer, ki stamp duty mapwod i kwero.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty ma ipimo",
+  valuationEstimate: "Valuation ma ipimo",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ki valuation ma ipimo",
+  bestRateApplied: "Watye ka tiyo ki match maber kombedi: {bank} ki {rate}%. Lok rate me temo gin mukene.",
+  manualRateApplied: "Watye ka tiyo ki rate ma iketo i calculator."
+});
+
+Object.assign(MORTGAGE_I18N.ny, {
+  tabRepayment: "Okusasura",
+  tabAffordability: "Obushoboorozi",
+  tabExtraPayment: "Okusasura okwongyera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasura kwa buri kwezi",
+  tabRepaymentBody: "Bara ensasura ya buri kwezi kuruga ku muhendo, deposit, rate y'inyungu, n'emyaka ya loan.",
+  tabAffordabilityTitle: "Obushoboorozi",
+  tabAffordabilityBody: "Gerageranya ensasura n'income y'eka okoresize 35% guide otakagambire na lender.",
+  tabExtraTitle: "Okusasura okwongyera",
+  tabExtraBody: "Yongeraho ensasura ya buri kwezi kureeba inyungu n'obwire oburikuba nibukyerera.",
+  tabFeesTitle: "Fees na transfer",
+  tabFeesBody: "Reeba deposit, arrangement fee, valuation, registration, transfer, na stamp duty otakasabye.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty egeraganyijwe",
+  valuationEstimate: "Valuation egeraganyijwe",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, na valuation",
+  bestRateApplied: "Tukoresize match esinga hati: {bank} kuri {rate}%. Hindura rate kwoleka endi estimate.",
+  manualRateApplied: "Tukoresize rate ei waingiza omu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.sm, {
+  tabRepayment: "Ensasula",
+  tabAffordability: "Obusobozi",
+  tabExtraPayment: "Okusasula okwongera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasula buli mwezi",
+  tabRepaymentBody: "Bala ensasula ya buli mwezi okuva ku muwendo, deposit, rate y'amagoba, n'emyaka gya loan.",
+  tabAffordabilityTitle: "Obusobozi",
+  tabAffordabilityBody: "Gerageranya ensasula n'enfuna y'eka nga okozesa 35% guide nga tonnayogera ne lender.",
+  tabExtraTitle: "Okusasula okwongera",
+  tabExtraBody: "Yongerako ensasula ya buli mwezi okulaba amagoba n'ebiseera by'oyinza okukekkereza.",
+  tabFeesTitle: "Fees ne transfer",
+  tabFeesBody: "Kebera deposit, arrangement fee, valuation, registration, transfer, ne stamp-duty nga tonnasaba.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty etegererwa",
+  valuationEstimate: "Valuation etegererwa",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ne valuation",
+  bestRateApplied: "Tukozesezza match esinga kati: {bank} ku {rate}%. Kyusa rate okugezesa endowooza endala.",
+  manualRateApplied: "Tukozesezza rate gy'oyingizza mu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.am, {
+  mortgageStampDutyEstimate: "የቤት ብድር ስታምፕ ግዴታ ግምት",
+  valuationEstimate: "የግምገማ ግምት",
+  transferAndStampDutyEstimate: "የዝውውር፣ የቤት ብድር ስታምፕ ግዴታ እና የግምገማ ግምት",
+  bestRateApplied: "የአሁኑን ምርጥ ተዛማጅ እየተጠቀምን ነው፦ {bank} በ {rate}%። ሌላ ግምት ለመሞከር ወለዱን ይቀይሩ።",
+  manualRateApplied: "በማስሊያው ያስገቡትን የወለድ መጠን እየተጠቀምን ነው።"
+});
+
+Object.assign(MORTGAGE_I18N.ar, {
+  mortgageStampDutyEstimate: "تقدير رسوم طابع التمويل العقاري",
+  valuationEstimate: "تقدير التقييم",
+  transferAndStampDutyEstimate: "تقدير التحويل ورسوم الطابع العقاري والتقييم",
+  bestRateApplied: "نستخدم أفضل تطابق حالي: {bank} عند {rate}%. عدل الفائدة لاختبار افتراض آخر.",
+  manualRateApplied: "نستخدم نسبة الفائدة التي أدخلتها في الحاسبة."
 });
 
 function mortgageTr(key) {
@@ -37359,6 +37533,7 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     arrangementFeePct: provider.arrangementFeePct ?? provider.arrangement_fee_pct ?? 1.5,
     sourceLabel: provider.sourceLabel ?? provider.source_label ?? "Mortgage source",
     sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#",
+    logoUrl: provider.logoUrl ?? provider.logo_url ?? "",
     sourceNote: provider.sourceNote ?? provider.source_note ?? "",
     sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
   }));
@@ -37390,6 +37565,61 @@ function mortgageProviderKey(provider = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function mortgageProviderBrand(provider = {}) {
+  const key = mortgageProviderKey(provider);
+  const name = String(provider.name || provider.provider_name || provider.providerName || key || "").toLowerCase();
+  const alias = (key.includes("stanbic") || name.includes("stanbic") ? "stanbic" : "")
+    || (key.includes("housing-finance") || key === "hfb" || name.includes("housing finance") ? "hfb" : "")
+    || (key.includes("dfcu") || name.includes("dfcu") ? "dfcu" : "")
+    || (key.includes("kcb") || name.includes("kcb") ? "kcb" : "")
+    || (key.includes("ncba") || name.includes("ncba") ? "ncba" : "")
+    || (key.includes("centenary") || name.includes("centenary") ? "centenary" : "")
+    || (key.includes("baroda") || name.includes("baroda") ? "baroda" : "")
+    || (key.includes("absa") || name.includes("absa") ? "absa" : "")
+    || key;
+  const brand = MORTGAGE_PROVIDER_BRANDS[alias] || {};
+  let logoUrl = provider.logoUrl || provider.logo_url || brand.logoUrl || "";
+  if (!logoUrl && provider.sourceUrl) {
+    try {
+      logoUrl = new URL("/favicon.ico", provider.sourceUrl).toString();
+    } catch (_error) {
+      logoUrl = "";
+    }
+  }
+  const fallbackName = brand.shortName || String(provider.name || provider.provider_name || "Bank").replace(/\s+Bank\s+Uganda$/i, "").trim();
+  const initials = fallbackName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase() || "BK";
+  return {
+    key: alias || key,
+    shortName: fallbackName,
+    initials,
+    logoUrl,
+    bg: brand.bg || "#f8fafc",
+    border: brand.border || "#d1d5db",
+    text: brand.text || "#374151"
+  };
+}
+
+function renderMortgageProviderLogo(provider = {}, options = {}) {
+  const brand = mortgageProviderBrand(provider);
+  const size = options.size === "lg" ? "w-14 h-14" : options.size === "sm" ? "w-9 h-9" : "w-11 h-11";
+  const imgSize = options.size === "lg" ? "max-w-[42px] max-h-[42px]" : options.size === "sm" ? "max-w-[26px] max-h-[26px]" : "max-w-[32px] max-h-[32px]";
+  const fallbackSize = options.size === "lg" ? "text-sm" : "text-[11px]";
+  const label = `${provider.name || brand.shortName || "Bank"} logo`;
+  const image = brand.logoUrl
+    ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="lazy" referrerpolicy="no-referrer" class="${imgSize} object-contain" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">`
+    : "";
+  return `
+    <span class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
+      ${image}
+      <span class="${image ? "hidden " : ""}${fallbackSize} font-black tracking-wide">${adminEscape(brand.initials)}</span>
+    </span>`;
 }
 
 function mergeAuditedMortgageProvider(provider = {}) {
@@ -37616,9 +37846,10 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
     const button = document.getElementById(id);
     if (!button) return;
     const active = key === activeMortgageTab;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
     button.className = active
       ? "rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20"
-      : "rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold hover:bg-green-50";
+      : "rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold hover:bg-green-50 hover:border-green-300";
   });
   const panel = document.getElementById("mortgage-tab-panel");
   if (!panel) return;
@@ -37638,12 +37869,12 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
   }[activeMortgageTab] || mortgageTr("tabRepaymentBody");
   const dynamic = activeMortgageTab === "affordability"
     ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthSuggestedIncome")}</strong><br>${formatMortgageAmount(suggestedIncome, context.currency)}</div>
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthAffordability")}</strong><br>${income ? (monthly <= income * 0.35 ? mortgageTr("fitsIncome") : mortgageTr("highIncomeWarning")) : mortgageTr("quoteRequired")}</div>
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("estimatedMonthlyRepayment")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(monthly, context.currency)}</strong></div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("healthSuggestedIncome")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(suggestedIncome, context.currency)}</strong></div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("healthAffordability")}</span><strong class="block mt-1 ${income && monthly > income * 0.35 ? "text-amber-700" : "text-green-700"}">${income ? (monthly <= income * 0.35 ? mortgageTr("fitsIncome") : mortgageTr("highIncomeWarning")) : mortgageTr("quoteRequired")}</strong></div>
       </div>`
     : activeMortgageTab === "extra"
-      ? `<div class="mt-3 grid sm:grid-cols-[1fr,1.2fr] gap-2 items-end">
+      ? `<div class="mt-3 grid sm:grid-cols-[1fr_1.2fr] gap-2 items-end">
           <label class="block text-xs font-bold text-emerald-900">${mortgageTr("extraPaymentLabel")}
             <input id="mortgage-extra-payment" type="number" min="0" step="100000" value="${adminAttr(mortgageExtraPaymentAmount || "")}" oninput="setMortgageExtraPayment(this.value)" class="mt-1 w-full border border-emerald-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="${adminAttr(mortgageTr("extraPaymentPlaceholder"))}">
           </label>
@@ -37653,14 +37884,14 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
         </div>`
       : activeMortgageTab === "fees"
         ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("depositLabel")}</strong><br>${formatMortgageAmount(result.depositAmount, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("arrangementFee")}</strong><br>${formatMortgageAmount(fees.arrangementEstimate, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("transferAndStampDutyEstimate")}</strong><br>${formatMortgageAmount(fees.transferAndStampDutyEstimate, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("depositLabel")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(result.depositAmount, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("arrangementFee")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(fees.arrangementEstimate, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("transferAndStampDutyEstimate")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(fees.transferAndStampDutyEstimate, context.currency)}</strong></div>
           </div>`
         : `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("loanAmount")}</strong><br>${formatMortgageAmount(result.loanAmount, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("rate")}</strong><br>${selectedRate.toFixed(2)}%</div>
+            <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("estimatedMonthlyRepayment")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(monthly, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("loanAmount")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(result.loanAmount, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("rate")}</span><strong class="block text-gray-950 mt-1">${selectedRate.toFixed(2)}%</strong></div>
           </div>`;
   panel.innerHTML = `
     <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -37668,7 +37899,6 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
         <div class="text-sm font-black text-emerald-950">${adminEscape(title)}</div>
         <div class="mt-1 text-xs text-emerald-800">${adminEscape(body)}</div>
       </div>
-      <div class="text-[11px] text-emerald-700 font-bold">${adminEscape(mortgageTr("publicRecordDisclosure"))}</div>
     </div>
     ${dynamic}`;
 }
@@ -38040,36 +38270,40 @@ function renderMortgageFinder() {
     ? mortgageTr("bestRateApplied").replace("{bank}", result.best.provider.name).replace("{rate}", selectedRate.toFixed(2))
     : mortgageTr("manualRateApplied");
   if (professionalResultsEl) {
-    professionalResultsEl.className = "mortgage-result-pop rounded-[1.75rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-5 min-h-[360px] shadow-[0_28px_65px_rgba(20,83,45,0.18)]";
+    professionalResultsEl.className = "mortgage-result-pop rounded-[1.5rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-4 shadow-[0_22px_48px_rgba(20,83,45,0.14)]";
     professionalResultsEl.innerHTML = `
       <div class="flex items-center justify-between gap-3">
-        <div class="text-sm text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
+        <div>
+          <div class="text-xs text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
+        </div>
         <div class="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-xs font-black text-green-800 shadow-sm" aria-label="Deposit percent">${normalizedDeposit}%</div>
       </div>
-      <div class="text-4xl font-black mt-2">${formatMortgageAmount(monthly, currency)}</div>
-      <div class="text-xs text-gray-600 mt-2">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
+      <div class="text-3xl md:text-4xl font-black mt-2 leading-tight">${formatMortgageAmount(monthly, currency)}</div>
       <div class="text-[11px] text-emerald-700 font-semibold mt-1">${adminEscape(rateSourceLine)}</div>
-      <div class="mt-5 grid gap-3">
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
+      <div class="mt-4 grid gap-2">
+        <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
           <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("onceOffCosts")}</div>
           <div class="text-lg font-black mt-1">${formatMortgageAmount(fees.onceOffCosts, currency)}</div>
           <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("arrangementFee")} ${formatMortgageAmount(fees.arrangementEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(fees.transferStampDuty, currency)} • ${mortgageTr("mortgageStampDutyEstimate")} ${formatMortgageAmount(fees.mortgageStampDuty, currency)} • ${mortgageTr("valuationEstimate")} ${formatMortgageAmount(fees.valuationEstimate, currency)}</div>
         </div>
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
-        </div>
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("loanAmount")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("totalInterestEstimate")}: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+        <div class="grid sm:grid-cols-2 gap-2">
+          <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
+            <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
+            <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
+          </div>
+          <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
+            <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("loanAmount")}</div>
+            <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
+            <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("totalInterestEstimate")}: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+          </div>
         </div>
       </div>
-      <div class="mt-5 grid gap-2">
+      <div class="mt-4 grid sm:grid-cols-2 gap-2">
         <button type="button" onclick="requestMortgageHelp('')" class="bg-green-700 text-white hover:bg-green-600 rounded-xl px-4 py-3 text-sm font-black text-center shadow-lg shadow-green-700/20">${mortgageTr("requestMortgageHelp")}</button>
         <button type="button" onclick="saveMortgageCalculation()" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">${authState?.user ? mortgageTr("saveCalculation") : mortgageTr("signInToSave")}</button>
       </div>
-      <p class="text-[11px] text-gray-600 mt-4">${mortgageTr("estimateDisclaimer")}</p>`;
+      <p class="text-[11px] text-gray-600 mt-3">${mortgageTr("estimateDisclaimer")}</p>`;
   }
   const leadAmountEl = document.getElementById("mortgage-lead-amount");
   if (leadAmountEl && !leadAmountEl.value) leadAmountEl.placeholder = String(Math.round(result.loanAmount || 0));
@@ -38107,6 +38341,7 @@ function renderMortgageFinder() {
 
   if (result.best) {
     const bestMonthly = result.best.monthlyRepayment || 0;
+    const bestLogo = renderMortgageProviderLogo(result.best.provider, { size: "lg" });
     const affordability = income > 0
       ? (bestMonthly <= income * 0.35
         ? `<span class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full"><i class="fas fa-check-circle"></i> ${mortgageTr("fitsIncome")}</span>`
@@ -38115,10 +38350,13 @@ function renderMortgageFinder() {
     bestEl.innerHTML = `
       <div class="border border-green-100 rounded-2xl p-4 bg-green-50">
         <div class="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div class="text-xs uppercase tracking-wide font-semibold text-green-700">${mortgageTr("bestCurrentMatch")}</div>
-            <div class="text-xl font-black text-gray-900 mt-1">${result.best.provider.name}</div>
-            <div class="text-sm text-gray-600 mt-1">${mortgageTr("bestRateLine").replace("{rate}", result.best.rate.toFixed(2)).replace("{years}", result.years).replace("{deposit}", result.best.minDeposit)}</div>
+          <div class="flex items-start gap-3 min-w-0">
+            ${bestLogo}
+            <div class="min-w-0">
+              <div class="text-xs uppercase tracking-wide font-semibold text-green-700">${mortgageTr("bestCurrentMatch")}</div>
+              <div class="text-xl font-black text-gray-900 mt-1">${adminEscape(result.best.provider.name)}</div>
+              <div class="text-sm text-gray-600 mt-1">${mortgageTr("bestRateLine").replace("{rate}", result.best.rate.toFixed(2)).replace("{years}", result.years).replace("{deposit}", result.best.minDeposit)}</div>
+            </div>
           </div>
           <div class="text-right">
             <div class="text-xs text-gray-500 uppercase font-semibold">${mortgageTr("bestEstimatedMonthly")}</div>
@@ -38141,13 +38379,17 @@ function renderMortgageFinder() {
     const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
     const repay = row.totalRepayment ? formatUgxAmount(row.totalRepayment) : "-";
     const providerKey = mortgageProviderKey(row.provider);
+    const providerLogo = renderMortgageProviderLogo(row.provider, { size: "md" });
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div class="font-bold text-gray-900">${row.provider.name}</div>
-            <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
+          <div class="flex items-start gap-3 min-w-0">
+            ${providerLogo}
+            <div class="min-w-0">
+              <div class="font-bold text-gray-900">${adminEscape(row.provider.name)}</div>
+              <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
+            </div>
           </div>
           <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}">${status.label}</span>
         </div>

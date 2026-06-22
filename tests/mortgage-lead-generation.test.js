@@ -23,7 +23,9 @@ const requiredWindowHandlers = [
 ];
 
 assert(
-  html.includes('mortgage-finder-accuracy-handlers-20260621') && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621'),
+  html.includes('mortgage-finder-accuracy-handlers-20260621')
+    && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621')
+    && html.includes('mortgage-ui-tabs-bank-logos-20260622'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(
@@ -56,6 +58,15 @@ for (const handler of requiredWindowHandlers) {
 assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual rate state should exist');
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
+assert(app.includes('const MORTGAGE_PROVIDER_BRANDS'), 'mortgage comparison should define bank brand/logo metadata');
+assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison should render lender logo badges');
+assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
+assert(app.includes('renderMortgageProviderLogo(row.provider'), 'every mortgage comparison row should show a lender logo');
+assert(html.includes('grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]'), 'mortgage calculator should use the compact two-column layout');
+assert(html.includes('bg-white/85 p-3 text-sm text-emerald-950 shadow-sm'), 'mortgage tab panel should live inside the calculator panel');
+const mortgageResultShell = (html.match(/id="mortgage-professional-results"[^>]+>/) || [''])[0];
+assert(!mortgageResultShell.includes('min-h-[360px]'), 'mortgage result card should not force a large blank area');
+assert(app.includes('aria-pressed'), 'mortgage tabs should expose active state and visibly change content');
 for (const provider of [
   'NCBA Bank Uganda',
   'Centenary Bank Uganda',
@@ -81,6 +92,15 @@ assert(app.includes('income_type: incomeType || null'), 'mortgage lead payload s
 assert(app.includes('transferStampDuty = price * 0.015'), 'transfer stamp duty should use the verified 1.5% public assumption');
 assert(app.includes('mortgageStampDuty = loanAmount * 0.005'), 'mortgage stamp duty should use the verified 0.5% public assumption');
 assert(app.includes('valuationEstimate = price * 0.0025'), 'valuation estimate should use the verified 0.25% public assumption');
+for (const lang of ['lg', 'sw', 'ac', 'ny', 'sm', 'am', 'ar']) {
+  const marker = `Object.assign(MORTGAGE_I18N.${lang}`;
+  const chunk = app.slice(app.indexOf(marker), app.indexOf(marker) + 2400);
+  assert(chunk.includes('mortgageStampDutyEstimate:'), `missing mortgage stamp-duty label for ${lang}`);
+  assert(chunk.includes('valuationEstimate:'), `missing mortgage valuation label for ${lang}`);
+  assert(chunk.includes('transferAndStampDutyEstimate:'), `missing mortgage transfer/stamp/valuation label for ${lang}`);
+  assert(chunk.includes('bestRateApplied:'), `missing best-rate source line for ${lang}`);
+  assert(chunk.includes('manualRateApplied:'), `missing manual-rate source line for ${lang}`);
+}
 assert(app.includes('mergeAuditedMortgageProvider'), 'frontend should protect audited bank data from stale API rows');
 assert(app.includes('mergeAuditedMortgageProviderList'), 'frontend should append audited providers missing from API rows');
 assert(app.includes('DEFAULT_MORTGAGE_PROVIDERS'), 'frontend should keep audited fallback providers available after API hydration');
