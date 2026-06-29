@@ -1362,7 +1362,7 @@ async function listPropertiesHandler(req, res, next) {
     const filters = [];
     const values = [];
 
-    const listingType = normalizeListingType(req.query.listing_type);
+    const listingType = normalizeListingType(req.query.listing_type || req.query.type || req.query.category);
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);

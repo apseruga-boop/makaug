@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const appSource = fs.readFileSync('assets/makaug-app.js', 'utf8');
 const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.js', 'utf8');
@@ -18,6 +19,14 @@ function functionSource(name) {
   assert.notEqual(start, -1, `Expected ${name} to exist`);
   const next = appSource.indexOf('\nfunction ', start + 1);
   return appSource.slice(start, next === -1 ? appSource.length : next);
+}
+
+function constFunctionSource(name) {
+  const start = appSource.indexOf(`const ${name} =`);
+  assert.notEqual(start, -1, `Expected const ${name} to exist`);
+  const end = appSource.indexOf('\n};', start);
+  assert.notEqual(end, -1, `Expected const ${name} to end with };`);
+  return appSource.slice(start, end + 3);
 }
 
 function asyncFunctionSource(name) {
@@ -98,7 +107,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1&include_summary=false", \{ limit: 24, maxPages: 1 \}\)/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 200 \}\)/);
+  assert.doesNotMatch(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1&include_summary=false"/);
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
   assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}`, \{ skipAuth: true \}\)/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
@@ -173,6 +183,40 @@ test('homepage opportunity counter uses the public API total as the visible sour
   assert.match(htmlSource, /hero-route-classification-20260610/);
   assert.match(appSource, /const publicListingType = normalizedListingType \|\| getHeroPropertyOpportunityBucket\(p\)/);
   assert.match(appSource, /return "sale";\s*\}\s*function heroOpportunityStatRow/);
+});
+
+test('homepage opportunity counter preserves backend category counts and aliases', () => {
+  const normalizeStats = vm.runInNewContext(`${functionSource('normalizeHeroOpportunityStats')}; normalizeHeroOpportunityStats`);
+  const stats = normalizeStats({
+    total: 409,
+    by_type: {
+      for_sale: 266,
+      to_rent: 48,
+      student_accommodation: 4,
+      commercial: 10,
+      land: 81
+    }
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(stats)), {
+    total: 409,
+    sale: 266,
+    rent: 48,
+    student: 4,
+    commercial: 10,
+    land: 81,
+    other: 0,
+    social: 0
+  });
+});
+
+test('student public listings are discoverable from backend listing aliases', () => {
+  const isStudent = vm.runInNewContext(`${constFunctionSource('normalizeType')}\n${functionSource('isStudentDiscoverable')}; isStudentDiscoverable`);
+  assert.equal(isStudent({ listing_type: 'student' }), true);
+  assert.equal(isStudent({ type: 'student_accommodation' }), true);
+  assert.equal(isStudent({ type: 'rent', students_welcome: 'yes' }), true);
+  assert.equal(isStudent({ type: 'commercial', extra_fields: { student_verified: true } }), true);
+  assert.equal(isStudent({ type: 'sale' }), false);
+  assert.match(propertiesRouteSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
 });
 
 test('public properties API is cacheable and uses the fast public summary path', () => {
@@ -284,4 +328,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /direct-agent-profile-20260519/);
   assert.match(htmlSource, /public-featured-feed-fix-20260525/);
   assert.match(htmlSource, /king-live-public-parity-20260609/);
+  assert.match(htmlSource, /public-opportunity-counts-20260629/);
 });

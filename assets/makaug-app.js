@@ -5,7 +5,25 @@ const BrandConfig = Object.freeze({
   tagline: "Uganda Property"
 });
 const publicBrand = () => BrandConfig.productDisplayName;
-const normalizeType = (t) => (t === "students" ? "student" : t);
+const normalizeType = (t) => {
+  const value = String(t || "").toLowerCase().trim();
+  const aliases = {
+    buy: "sale",
+    for_sale: "sale",
+    "for sale": "sale",
+    sales: "sale",
+    rental: "rent",
+    rentals: "rent",
+    to_rent: "rent",
+    "to rent": "rent",
+    let: "rent",
+    students: "student",
+    student_accommodation: "student",
+    student_housing: "student",
+    campus_housing: "student"
+  };
+  return aliases[value] || value;
+};
 
 const DISTRICTS = [
   "Abim","Adjumani","Agago","Alebtong","Amolatar","Amudat","Amuria","Amuru","Apac","Arua","Budaka","Bududa","Bugiri","Bugweri","Buhweju","Buikwe","Bukedea","Bukomansimbi","Bukwo","Bulambuli","Buliisa","Bundibugyo","Bunyangabu","Bushenyi","Busia","Butaleja","Butambala","Butebo","Buvuma","Buyende","Dokolo","Gomba","Gulu","Hoima","Ibanda","Iganga","Isingiro","Jinja","Kaabong","Kabale","Kabarole","Kaberamaido","Kagadi","Kakumiro","Kalaki","Kalangala","Kaliro","Kalungu","Kampala","Kamuli","Kamwenge","Kanungu","Kapchorwa","Kapelebyong","Karenga","Kasanda","Kasese","Katakwi","Kayunga","Kazo","Kibaale","Kiboga","Kibuku","Kikuube","Kiruhura","Kiryandongo","Kisoro","Kitagwenda","Kitgum","Koboko","Kole","Kotido","Kumi","Kwania","Kween","Kyankwanzi","Kyegegwa","Kyenjojo","Kyotera","Lamwo","Lira","Luuka","Luwero","Lwengo","Lyantonde","Madi-Okollo","Manafwa","Maracha","Masaka","Masindi","Mayuge","Mbale","Mbarara","Mitooma","Mityana","Moroto","Moyo","Mpigi","Mubende","Mukono","Nabilatuk","Nakapiripirit","Nakaseke","Nakasongola","Namayingo","Namisindwa","Namutumba","Napak","Nebbi","Ngora","Ntoroko","Ntungamo","Nwoya","Obongi","Omoro","Otuke","Oyam","Pader","Pakwach","Pallisa","Rakai","Rubanda","Rubirizi","Rukiga","Rukungiri","Sembabule","Serere","Sheema","Sironko","Soroti","Tororo","Wakiso","Yumbe","Zombo"
@@ -5576,16 +5594,22 @@ function applyFraudLanguageUI() {
 function normalizeHeroOpportunityStats(raw = {}) {
   const source = raw?.public_opportunities || raw?.category_counts || raw?.by_type || raw || {};
   const nested = source.by_type || source.category_counts || {};
-  const numberFrom = (key) => Number(source[key] ?? nested[key] ?? 0) || 0;
+  const numberFrom = (...keys) => {
+    for (const key of keys) {
+      const value = Number(source[key] ?? nested[key] ?? 0);
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
+  };
   const stats = {
     total: Number(source.total ?? raw?.total ?? 0) || 0,
-    sale: numberFrom("sale"),
-    rent: numberFrom("rent"),
-    student: numberFrom("student"),
-    commercial: numberFrom("commercial"),
-    land: numberFrom("land"),
+    sale: numberFrom("sale", "for_sale", "buy"),
+    rent: numberFrom("rent", "to_rent", "rental"),
+    student: numberFrom("student", "students", "student_accommodation", "student_housing"),
+    commercial: numberFrom("commercial", "commercial_property"),
+    land: numberFrom("land", "plots"),
     other: numberFrom("other"),
-    social: numberFrom("social")
+    social: numberFrom("social", "found_online")
   };
   const categoryTotal = stats.sale + stats.rent + stats.student + stats.commercial + stats.land + stats.other;
   if (!stats.total) stats.total = categoryTotal;
@@ -31481,10 +31505,11 @@ function studentTypeKey(p) {
 }
 
 function isStudentDiscoverable(p) {
-  const t = normalizeType(p?.type);
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const t = normalizeType(p?.type || p?.listing_type || p?.category || extra.listing_type);
   if (t === "student") return true;
   if (!["sale", "rent", "commercial"].includes(t)) return false;
-  const flag = p?.students_welcome;
+  const flag = p?.students_welcome ?? p?.student_verified ?? extra.students_welcome ?? extra.student_verified;
   if (typeof flag === "boolean") return flag;
   if (typeof flag === "string") return ["yes", "true", "1"].includes(flag.toLowerCase().trim());
   return false;
@@ -32494,7 +32519,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1&include_summary=false", { limit: 24, maxPages: 1 });
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 200 });
     const rows = Array.isArray(publicRows) ? publicRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
     publicListingsApiStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
     const apiTotal = Number(publicListingsApiStats?.total ?? firstResponse?.pagination?.total ?? rows.length);
