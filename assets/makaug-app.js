@@ -5,7 +5,13 @@ const BrandConfig = Object.freeze({
   tagline: "Uganda Property"
 });
 const publicBrand = () => BrandConfig.productDisplayName;
-const normalizeType = (t) => (t === "students" ? "student" : t);
+const normalizeType = (t) => {
+  const value = String(t || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (["students", "student_accommodation", "student_housing", "campus_housing"].includes(value)) return "student";
+  if (["for_sale", "buy", "purchase"].includes(value)) return "sale";
+  if (["to_rent", "rental", "lease"].includes(value)) return "rent";
+  return value;
+};
 
 const DISTRICTS = [
   "Abim","Adjumani","Agago","Alebtong","Amolatar","Amudat","Amuria","Amuru","Apac","Arua","Budaka","Bududa","Bugiri","Bugweri","Buhweju","Buikwe","Bukedea","Bukomansimbi","Bukwo","Bulambuli","Buliisa","Bundibugyo","Bunyangabu","Bushenyi","Busia","Butaleja","Butambala","Butebo","Buvuma","Buyende","Dokolo","Gomba","Gulu","Hoima","Ibanda","Iganga","Isingiro","Jinja","Kaabong","Kabale","Kabarole","Kaberamaido","Kagadi","Kakumiro","Kalaki","Kalangala","Kaliro","Kalungu","Kampala","Kamuli","Kamwenge","Kanungu","Kapchorwa","Kapelebyong","Karenga","Kasanda","Kasese","Katakwi","Kayunga","Kazo","Kibaale","Kiboga","Kibuku","Kikuube","Kiruhura","Kiryandongo","Kisoro","Kitagwenda","Kitgum","Koboko","Kole","Kotido","Kumi","Kwania","Kween","Kyankwanzi","Kyegegwa","Kyenjojo","Kyotera","Lamwo","Lira","Luuka","Luwero","Lwengo","Lyantonde","Madi-Okollo","Manafwa","Maracha","Masaka","Masindi","Mayuge","Mbale","Mbarara","Mitooma","Mityana","Moroto","Moyo","Mpigi","Mubende","Mukono","Nabilatuk","Nakapiripirit","Nakaseke","Nakasongola","Namayingo","Namisindwa","Namutumba","Napak","Nebbi","Ngora","Ntoroko","Ntungamo","Nwoya","Obongi","Omoro","Otuke","Oyam","Pader","Pakwach","Pallisa","Rakai","Rubanda","Rubirizi","Rukiga","Rukungiri","Sembabule","Serere","Sheema","Sironko","Soroti","Tororo","Wakiso","Yumbe","Zombo"
@@ -488,13 +494,13 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     residentialRate: 16.5,
     commercialRate: 16.5,
     landRate: null,
-    minDepositPct: { residential: 10, commercial: 20, land: 10, default: 10 },
-    maxYears: { default: 25 },
+    minDepositPct: { residential: 20, commercial: 20, land: 20, default: 20 },
+    maxYears: { residential: 25, commercial: 25, land: 25, default: 25 },
     arrangementFeePct: 1.5,
     sourceLabel: "Stanbic home loan public pages",
     sourceUrl: "https://www.stanbicbank.co.ug/uganda/personal/products-and-services/borrow-for-your-needs/see-all-mortgages-and-home-loans/house-purchase-loan",
-    sourceNote: "Stanbic publishes home loan costs and public rate guidance; final pricing is confirmed by the bank.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "Stanbic publishes home loan fees, transfer stamp duty, mortgage stamp duty, and valuation guidance; final pricing is confirmed by the bank.",
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "hfb",
@@ -508,21 +514,21 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "Housing Finance mortgage terms and conditions",
     sourceUrl: "https://www.housingfinance.co.ug/mortgage-development-finance/housing-finance-bank-mortgage-terms-and-conditions/",
     sourceNote: "Housing Finance publishes LTV, term, facility fee, and gross-income guidance; rate is variable and requires bank confirmation.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "dfcu",
     name: "dfcu Bank",
     residentialRate: 16.0,
-    commercialRate: 16.0,
-    landRate: 16.5,
-    minDepositPct: { default: 40 },
-    maxYears: { default: 20 },
+    commercialRate: null,
+    landRate: null,
+    minDepositPct: { residential: 15, commercial: 40, land: 40, default: 15 },
+    maxYears: { residential: 20, commercial: 20, land: 20, default: 20 },
     arrangementFeePct: 2.0,
     sourceLabel: "dfcu home loans",
     sourceUrl: "https://www.dfcugroup.com/personal-banking/home-loans/",
-    sourceNote: "dfcu publishes UGX calculator rate guidance and affordability/term rules on its home-loans page.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceNote: "dfcu publishes UGX home-loan rate guidance, 20-year UGX term rules, and up-to-85% open-market-value guidance for residential home loans.",
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "kcb",
@@ -536,7 +542,7 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceLabel: "KCB mortgage overview",
     sourceUrl: "https://ug.kcbgroup.com/products/mortgage",
     sourceNote: "KCB publishes UGX pricing from 17.5%, 20-year purchase/construction/refinance term guidance, and LTV rules.",
-    sourceVerifiedAt: "2026-06-07"
+    sourceVerifiedAt: "2026-06-21"
   },
   {
     id: "baroda",
@@ -567,6 +573,85 @@ const DEFAULT_MORTGAGE_PROVIDERS = [
     sourceVerifiedAt: "2026-06-07"
   }
 ];
+function mortgageLogoSvgData(config = {}) {
+  const esc = (value) => String(value || "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+  const label = esc(config.label || config.text || "Mortgage lender");
+  const text = esc(config.text || "Bank");
+  const subText = esc(config.subText || "");
+  const color = esc(config.color || "#111827");
+  const accent = esc(config.accent || color);
+  const fill = esc(config.fill || "#ffffff");
+  const fontSize = config.fontSize || (text.length > 7 ? 16 : 22);
+  const y = subText ? 42 : 52;
+  const subTextMarkup = subText ? `<text x="48" y="64" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="${color}" letter-spacing=".8">${subText}</text>` : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="${label}"><title>${label}</title><rect width="96" height="96" rx="22" fill="${fill}"/><rect x="14" y="14" width="68" height="68" rx="18" fill="none" stroke="${accent}" stroke-width="5"/><path d="M24 72h48" stroke="${accent}" stroke-width="5" stroke-linecap="round"/><text x="48" y="${y}" text-anchor="middle" font-family="Arial, sans-serif" font-size="${fontSize}" font-weight="900" fill="${color}" letter-spacing=".2">${text}</text>${subTextMarkup}</svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+const MORTGAGE_PROVIDER_BRANDS = {
+  stanbic: {
+    shortName: "Stanbic",
+    logoSvg: mortgageLogoSvgData({ label: "Stanbic Bank Uganda", text: "Stanbic", color: "#0052a3", accent: "#0052a3", fill: "#eef6ff", fontSize: 17 }),
+    bg: "#eef6ff",
+    border: "#b7d7f6",
+    text: "#0052a3"
+  },
+  hfb: {
+    shortName: "HFB",
+    logoSvg: mortgageLogoSvgData({ label: "Housing Finance Bank", text: "HFB", subText: "HOME", color: "#047857", accent: "#facc15", fill: "#ecfdf5", fontSize: 24 }),
+    bg: "#ecfdf5",
+    border: "#a7f3d0",
+    text: "#047857"
+  },
+  dfcu: {
+    shortName: "dfcu",
+    logoSvg: mortgageLogoSvgData({ label: "dfcu Bank", text: "dfcu", color: "#3730a3", accent: "#6366f1", fill: "#eef2ff", fontSize: 24 }),
+    bg: "#eef2ff",
+    border: "#c7d2fe",
+    text: "#3730a3"
+  },
+  kcb: {
+    shortName: "KCB",
+    logoSvg: mortgageLogoSvgData({ label: "KCB Bank Uganda", text: "KCB", color: "#166534", accent: "#22c55e", fill: "#ecfdf5", fontSize: 25 }),
+    bg: "#ecfdf5",
+    border: "#86efac",
+    text: "#166534"
+  },
+  baroda: {
+    shortName: "Baroda",
+    logoSvg: mortgageLogoSvgData({ label: "Bank of Baroda Uganda", text: "Baroda", color: "#c2410c", accent: "#f97316", fill: "#fff7ed", fontSize: 18 }),
+    bg: "#fff7ed",
+    border: "#fed7aa",
+    text: "#c2410c"
+  },
+  absa: {
+    shortName: "Absa",
+    logoSvg: mortgageLogoSvgData({ label: "Absa Bank Uganda", text: "Absa", color: "#b91c1c", accent: "#ef4444", fill: "#fef2f2", fontSize: 24 }),
+    bg: "#fef2f2",
+    border: "#fecaca",
+    text: "#b91c1c"
+  },
+  ncba: {
+    shortName: "NCBA",
+    logoSvg: mortgageLogoSvgData({ label: "NCBA Bank Uganda", text: "NCBA", color: "#1d4ed8", accent: "#60a5fa", fill: "#eff6ff", fontSize: 23 }),
+    bg: "#eff6ff",
+    border: "#bfdbfe",
+    text: "#1d4ed8"
+  },
+  centenary: {
+    shortName: "Centenary",
+    logoSvg: mortgageLogoSvgData({ label: "Centenary Bank", text: "Cente", color: "#15803d", accent: "#22c55e", fill: "#f0fdf4", fontSize: 20 }),
+    bg: "#f0fdf4",
+    border: "#bbf7d0",
+    text: "#15803d"
+  }
+};
 let MORTGAGE_RATE_UPDATED_AT = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_UPDATED_RAW = DEFAULT_MORTGAGE_RATE_UPDATED_AT;
 let MORTGAGE_RATE_LAST_CHECKED_RAW = "";
@@ -574,6 +659,7 @@ let MORTGAGE_PROVIDERS = JSON.parse(JSON.stringify(DEFAULT_MORTGAGE_PROVIDERS));
 let activeMortgageTab = "repayment";
 let selectedMortgageProviderKey = "";
 let mortgageExtraPaymentAmount = 0;
+let mortgageRateManuallyEdited = false;
 
 const HOW_TO_VIDEO_SLOTS = [
   { key: "what-is-makaug", title: "What is makaug?", description: "A one-minute introduction to the Uganda-first property platform.", category: "about", youtubeVideoId: "", ctaLabel: "Explore makaug", ctaUrl: "/about" },
@@ -3156,6 +3242,11 @@ const MORTGAGE_I18N = {
     depositLabel: "Deposit",
     bankRegistrationEstimate: "Bank/registration estimate",
     transferStampDutyEstimate: "Transfer/stamp duty estimate",
+    mortgageStampDutyEstimate: "Mortgage stamp duty estimate",
+    valuationEstimate: "Valuation estimate",
+    transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, and valuation estimate",
+    bestRateApplied: "Using current best match: {bank} at {rate}%. Edit the rate to test another assumption.",
+    manualRateApplied: "Using your manual calculator rate.",
     grossMonthlyIncomeRequired: "Gross Monthly Income Required",
     loanAmount: "Loan Amount",
     totalInterestEstimate: "Total interest estimate",
@@ -4080,6 +4171,122 @@ MORTGAGE_I18N.ar = Object.assign({}, MORTGAGE_I18N.en, {
   leadValidationAmount: "أدخل المبلغ الذي تريد اقتراضه.",
   leadSubmitted: "تم إرسال طلب التمويل العقاري. سيتواصل معك مستشار قريباً.",
   leadSubmitFail: "تعذر إرسال طلب التمويل العقاري الآن."
+});
+
+Object.assign(MORTGAGE_I18N.lg, {
+  tabRepayment: "Ensasula",
+  tabAffordability: "Obusobozi",
+  tabExtraPayment: "Okusasula okwongera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasula buli mwezi",
+  tabRepaymentBody: "Bala ensasula ya buli mwezi okuva ku muwendo, deposit, rate y'amagoba, n'emyaka gya loan.",
+  tabAffordabilityTitle: "Obusobozi",
+  tabAffordabilityBody: "Gerageranya ensasula n'enfuna y'eka ng'okozesa ekiragiro kya 35% nga tonnayogera ne lender.",
+  tabExtraTitle: "Okusasula okwongera",
+  tabExtraBody: "Yongerako ensasula ya buli mwezi okulaba amagoba n'ebiseera by'oyinza okukekkereza.",
+  tabFeesTitle: "Fees ne transfer",
+  tabFeesBody: "Kebera deposit, arrangement fee, valuation, registration, transfer, ne stamp-duty nga tonnasaba.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty eteberezebwa",
+  valuationEstimate: "Valuation eteberezebwa",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ne valuation",
+  bestRateApplied: "Tukozesezza match esinga kati: {bank} ku {rate}%. Kyusa rate okugezesa endowooza endala.",
+  manualRateApplied: "Tukozesezza rate gy'oyingizza mu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.sw, {
+  tabRepayment: "Malipo",
+  tabAffordability: "Uwezo",
+  tabExtraPayment: "Malipo ya ziada",
+  tabFeesTransfer: "Ada & Uhamisho",
+  tabRepaymentTitle: "Malipo ya mwezi",
+  tabRepaymentBody: "Kadiria malipo ya mwezi kutoka bei, amana, riba, na muda wa mkopo.",
+  tabAffordabilityTitle: "Uwezo wa kulipa",
+  tabAffordabilityBody: "Linganisha malipo na mapato ya kaya ukitumia mwongozo wa 35% kabla ya kuzungumza na mkopeshaji.",
+  tabExtraTitle: "Malipo ya ziada",
+  tabExtraBody: "Ongeza malipo ya ziada ya kila mwezi kuona riba na muda unaoweza kuokoa.",
+  tabFeesTitle: "Ada na uhamisho",
+  tabFeesBody: "Kagua amana, ada ya mpangilio, tathmini, usajili, uhamisho, na stamp duty kabla ya kuomba.",
+  mortgageStampDutyEstimate: "Makadirio ya stamp duty ya rehani",
+  valuationEstimate: "Makadirio ya tathmini",
+  transferAndStampDutyEstimate: "Makadirio ya uhamisho, stamp duty ya rehani, na tathmini",
+  bestRateApplied: "Tunatumia chaguo bora la sasa: {bank} kwa {rate}%. Badilisha riba kujaribu makadirio mengine.",
+  manualRateApplied: "Tunatumia kiwango cha riba ulichoingiza."
+});
+
+Object.assign(MORTGAGE_I18N.ac, {
+  tabRepayment: "Cato",
+  tabAffordability: "Twero",
+  tabExtraPayment: "Cato mukene",
+  tabFeesTransfer: "Fee & Transfer",
+  tabRepaymentTitle: "Cato me dwe",
+  tabRepaymentBody: "Pim cato me dwe ki wel gang, deposit, rate pa nyinge, ki kare pa loan.",
+  tabAffordabilityTitle: "Twero me cato",
+  tabAffordabilityBody: "Pim cato ki income pa gang kun itiyo ki 35% guide mapwod i lok ki lender.",
+  tabExtraTitle: "Cato mukene",
+  tabExtraBody: "Med cato me dwe mukene me neno nyinge ki kare ma itwero gwoko.",
+  tabFeesTitle: "Fee ki transfer",
+  tabFeesBody: "Nen deposit, arrangement fee, valuation, registration, transfer, ki stamp duty mapwod i kwero.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty ma ipimo",
+  valuationEstimate: "Valuation ma ipimo",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ki valuation ma ipimo",
+  bestRateApplied: "Watye ka tiyo ki match maber kombedi: {bank} ki {rate}%. Lok rate me temo gin mukene.",
+  manualRateApplied: "Watye ka tiyo ki rate ma iketo i calculator."
+});
+
+Object.assign(MORTGAGE_I18N.ny, {
+  tabRepayment: "Okusasura",
+  tabAffordability: "Obushoboorozi",
+  tabExtraPayment: "Okusasura okwongyera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasura kwa buri kwezi",
+  tabRepaymentBody: "Bara ensasura ya buri kwezi kuruga ku muhendo, deposit, rate y'inyungu, n'emyaka ya loan.",
+  tabAffordabilityTitle: "Obushoboorozi",
+  tabAffordabilityBody: "Gerageranya ensasura n'income y'eka okoresize 35% guide otakagambire na lender.",
+  tabExtraTitle: "Okusasura okwongyera",
+  tabExtraBody: "Yongeraho ensasura ya buri kwezi kureeba inyungu n'obwire oburikuba nibukyerera.",
+  tabFeesTitle: "Fees na transfer",
+  tabFeesBody: "Reeba deposit, arrangement fee, valuation, registration, transfer, na stamp duty otakasabye.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty egeraganyijwe",
+  valuationEstimate: "Valuation egeraganyijwe",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, na valuation",
+  bestRateApplied: "Tukoresize match esinga hati: {bank} kuri {rate}%. Hindura rate kwoleka endi estimate.",
+  manualRateApplied: "Tukoresize rate ei waingiza omu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.sm, {
+  tabRepayment: "Ensasula",
+  tabAffordability: "Obusobozi",
+  tabExtraPayment: "Okusasula okwongera",
+  tabFeesTransfer: "Fees & Transfer",
+  tabRepaymentTitle: "Okusasula buli mwezi",
+  tabRepaymentBody: "Bala ensasula ya buli mwezi okuva ku muwendo, deposit, rate y'amagoba, n'emyaka gya loan.",
+  tabAffordabilityTitle: "Obusobozi",
+  tabAffordabilityBody: "Gerageranya ensasula n'enfuna y'eka nga okozesa 35% guide nga tonnayogera ne lender.",
+  tabExtraTitle: "Okusasula okwongera",
+  tabExtraBody: "Yongerako ensasula ya buli mwezi okulaba amagoba n'ebiseera by'oyinza okukekkereza.",
+  tabFeesTitle: "Fees ne transfer",
+  tabFeesBody: "Kebera deposit, arrangement fee, valuation, registration, transfer, ne stamp-duty nga tonnasaba.",
+  mortgageStampDutyEstimate: "Mortgage stamp duty etegererwa",
+  valuationEstimate: "Valuation etegererwa",
+  transferAndStampDutyEstimate: "Transfer, mortgage stamp duty, ne valuation",
+  bestRateApplied: "Tukozesezza match esinga kati: {bank} ku {rate}%. Kyusa rate okugezesa endowooza endala.",
+  manualRateApplied: "Tukozesezza rate gy'oyingizza mu calculator."
+});
+
+Object.assign(MORTGAGE_I18N.am, {
+  mortgageStampDutyEstimate: "የቤት ብድር ስታምፕ ግዴታ ግምት",
+  valuationEstimate: "የግምገማ ግምት",
+  transferAndStampDutyEstimate: "የዝውውር፣ የቤት ብድር ስታምፕ ግዴታ እና የግምገማ ግምት",
+  bestRateApplied: "የአሁኑን ምርጥ ተዛማጅ እየተጠቀምን ነው፦ {bank} በ {rate}%። ሌላ ግምት ለመሞከር ወለዱን ይቀይሩ።",
+  manualRateApplied: "በማስሊያው ያስገቡትን የወለድ መጠን እየተጠቀምን ነው።"
+});
+
+Object.assign(MORTGAGE_I18N.ar, {
+  mortgageStampDutyEstimate: "تقدير رسوم طابع التمويل العقاري",
+  valuationEstimate: "تقدير التقييم",
+  transferAndStampDutyEstimate: "تقدير التحويل ورسوم الطابع العقاري والتقييم",
+  bestRateApplied: "نستخدم أفضل تطابق حالي: {bank} عند {rate}%. عدل الفائدة لاختبار افتراض آخر.",
+  manualRateApplied: "نستخدم نسبة الفائدة التي أدخلتها في الحاسبة."
 });
 
 function mortgageTr(key) {
@@ -5106,7 +5313,23 @@ function applyFraudLanguageUI() {
 function normalizeHeroOpportunityStats(raw = {}) {
   const source = raw?.public_opportunities || raw?.category_counts || raw?.by_type || raw || {};
   const nested = source.by_type || source.category_counts || {};
-  const numberFrom = (key) => Number(source[key] ?? nested[key] ?? 0) || 0;
+  const aliases = {
+    sale: ["sale", "for_sale", "forSale", "buy"],
+    rent: ["rent", "to_rent", "toRent", "rental"],
+    student: ["student", "students", "student_accommodation", "studentAccommodation", "student_housing"],
+    commercial: ["commercial", "business"],
+    land: ["land", "plots", "plot"],
+    other: ["other"],
+    social: ["social", "found_online", "foundOnline"]
+  };
+  const numberFrom = (key) => {
+    const keys = aliases[key] || [key];
+    for (const candidate of keys) {
+      const value = Number(source[candidate] ?? nested[candidate]);
+      if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
+  };
   const stats = {
     total: Number(source.total ?? raw?.total ?? 0) || 0,
     sale: numberFrom("sale"),
@@ -9153,24 +9376,47 @@ function renderStaffReviewQueue(rows = []) {
   wrap.innerHTML = rows.map((item) => {
     const location = [item.area, item.district].filter(Boolean).join(", ") || "Location needs checking";
     const price = item.price ? `UGX ${Number(item.price || 0).toLocaleString("en-UG")}` : "Price not stated";
+    const foundOnlineBadge = adminIsFoundOnlineSourcedListing(item)
+      ? `<span class="inline-flex rounded-full bg-blue-50 text-blue-800 border border-blue-100 px-2 py-0.5 text-[11px] font-black">Found online</span>`
+      : "";
     return `
       <article class="border border-gray-200 rounded-2xl p-4">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")}</div>
+            <div class="font-black text-gray-900">${adminEscape(item.title || "Untitled listing")} ${foundOnlineBadge}</div>
             <div class="text-xs text-gray-500 mt-1">${adminEscape(location)} • ${adminEscape(item.listing_type || item.property_type || "property")} • ${adminEscape(price)}</div>
             <div class="text-xs text-gray-500 mt-1">Owner/contact: ${adminEscape(item.lister_name || item.lister_phone || item.lister_email || "not recorded")}</div>
+            ${adminFoundOnlineSourceSummaryHtml(item)}
             ${item.moderation_reason ? `<div class="mt-2 rounded-xl bg-amber-50 border border-amber-100 p-2 text-xs text-amber-900">${adminEscape(item.moderation_reason)}</div>` : ""}
           </div>
           <span class="shrink-0 rounded-full bg-amber-50 text-amber-800 border border-amber-100 px-2.5 py-1 text-[11px] font-black">${adminEscape(item.status || item.moderation_stage || "pending")}</span>
         </div>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'approved')" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-check mr-1"></i>Approve live</button>
+          <button type="button" onclick="staffOpenListingReview(${propertyIdArg(item.id)})" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-clipboard-check mr-1"></i>Review / approve</button>
           <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'rejected')" class="border border-red-200 text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-xmark mr-1"></i>Reject</button>
           <button type="button" onclick="staffModerateListing(${propertyIdArg(item.id)}, 'pending')" class="border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black"><i class="fas fa-rotate-left mr-1"></i>Keep pending</button>
         </div>
       </article>`;
   }).join("");
+}
+
+function renderStaffPublications(rows = []) {
+  const wrap = document.getElementById("staff-publication-list");
+  if (!wrap) return;
+  if (!rows.length) {
+    wrap.innerHTML = staffEmpty("No moderator approvals have been recorded yet.");
+    return;
+  }
+  wrap.innerHTML = rows.slice(0, 10).map((row) => `
+    <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <div class="font-black text-emerald-950">${adminEscape(row.staff_name || "Moderator")}</div>
+          <div class="text-xs text-emerald-800 mt-1">${adminEscape(row.approved_live_7d || 0)} approved in 7 days • last ${adminEscape(staffDate(row.last_published_at))}</div>
+        </div>
+        <div class="text-2xl font-black text-emerald-800">${adminEscape(row.approved_live || 0)}</div>
+      </div>
+    </div>`).join("");
 }
 
 function renderStaffLeads(rows = []) {
@@ -9301,6 +9547,7 @@ async function renderStaffDashboard() {
     renderStaffAdvertising(data.advertising_inquiries || []);
     renderStaffWhatsapp(data.whatsapp_conversations || []);
     renderStaffActivity(data.recent_activity || []);
+    renderStaffPublications(data.moderator_publications || []);
     renderStaffTraining(data.training || {});
   } catch (error) {
     renderStaffReviewQueue([]);
@@ -9308,28 +9555,341 @@ async function renderStaffDashboard() {
     renderStaffAdvertising([]);
     renderStaffWhatsapp([]);
     renderStaffActivity([]);
+    renderStaffPublications([]);
     renderStaffTraining({});
     toast(`Staff dashboard failed: ${error.message || "request failed"}`);
   }
 }
 
-async function staffModerateListing(propertyId, status) {
+function staffReviewPanelElement() {
+  return document.getElementById("staff-review-panel");
+}
+
+function staffReviewSourceEvidenceHtml(review = {}) {
+  const links = adminSourcedCandidateSourceLinks(review);
+  const images = Array.isArray(review.images) ? review.images : [];
+  const sourceSummary = adminFoundOnlineSourceSummaryHtml(review, { compact: false });
+  return `
+    <div class="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
+      <div class="font-black uppercase tracking-wide">Photo and source evidence</div>
+      ${sourceSummary || `<div class="mt-2">No found-online source summary is stored for this listing.</div>`}
+      <div class="mt-3 grid grid-cols-2 gap-2">
+        ${images.length ? images.slice(0, 6).map((img, idx) => `
+          <button type="button" onclick="openAdminEvidence('${adminAttr(registerAdminEvidence(`staff-review-${review.id}-photo-${idx}`, adminListingPhotoEvidence(review, img, idx)))}')" class="overflow-hidden rounded-lg border border-blue-100 bg-white text-left">
+            <img src="${adminAttr(img.url || "")}" alt="Listing evidence ${idx + 1}" class="h-24 w-full object-cover">
+            <div class="px-2 py-1 text-[11px] text-blue-900">${adminEscape(img.room_label || img.slot_key || `Evidence ${idx + 1}`)}${adminIsGeneratedPlaceholderPhoto(review, img) ? " • Placeholder" : ""}</div>
+          </button>
+        `).join("") : `<div class="col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900">No listing images are attached. Use source evidence and request authorised photos before relying on imagery.</div>`}
+      </div>
+      <div class="mt-3">
+        <div class="font-bold">Source links</div>
+        ${links.length ? `
+          <ul class="mt-1 space-y-1">
+            ${links.slice(0, 8).map((link) => `<li><a href="${adminAttr(link)}" target="_blank" rel="noopener" class="font-bold text-blue-700 underline break-all">${adminEscape(link)}</a></li>`).join("")}
+          </ul>
+        ` : `<div class="mt-1 text-amber-900">No source link is stored. Do not approve unless the original public evidence was checked outside makaug and the notes explain it.</div>`}
+      </div>
+    </div>`;
+}
+
+function staffReviewGuideHtml(review = {}) {
+  const isFoundOnline = adminIsSourcedInventoryCandidate(review);
+  const hasLocation = adminSourcedCandidateCanUseOverride(review);
+  const priceLabel = review.price ? fmtP(review.price, review.price_period || "") : "Price not stated";
+  const checks = [
+    ["Location", hasLocation, "Area, district, address, or exact map pin must match the source. Location cannot be overridden."],
+    ["Price", Boolean(review.price || review.extra_fields?.price_upon_application), `Use the published price or keep Price upon application. Current value: ${priceLabel}.`],
+    ["Source", !isFoundOnline || adminSourcedCandidateSourceLinks(review).length > 0, "Open the original social/source evidence and confirm it is the same property."],
+    ["Contact", Boolean(review.lister_phone || review.lister_email || review.extra_fields?.source_contact_url), "Confirm a phone, WhatsApp, email, or public social contact route."],
+    ["Photos", Array.isArray(review.images) && review.images.length > 0, "Check whether images are authorised property photos or only source/placeholder evidence."],
+    ["Duplicates", !(review.quality_signals?.likely_duplicate_count > 0), "If duplicates appear, compare location, price, title, and source before approving."]
+  ];
+  return `
+    <div class="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+      <div class="text-xs font-black uppercase tracking-wide text-emerald-900">Moderator approval checklist</div>
+      <div class="mt-3 space-y-2">
+        ${checks.map(([label, ok, copy]) => `
+          <div class="rounded-lg border ${ok ? "border-emerald-100 bg-white" : "border-amber-200 bg-amber-50"} p-2">
+            <div class="font-black ${ok ? "text-emerald-900" : "text-amber-900"}">${ok ? "OK" : "Check"} - ${adminEscape(label)}</div>
+            <div class="mt-1 text-[11px] ${ok ? "text-gray-600" : "text-amber-900"}">${adminEscape(copy)}</div>
+          </div>
+        `).join("")}
+      </div>
+      <div class="mt-3 rounded-lg border border-emerald-100 bg-white p-2 text-[11px] text-emerald-950">
+        After approval, makaug verifies the public property API can read this listing. If that proof fails, the dashboard will say so.
+      </div>
+    </div>`;
+}
+
+function staffAutomatedChecksHtml(review = {}) {
+  const automated = review?.review?.automated || {};
+  const checklistItems = automated?.checks || review?.review?.checklist_items || [];
+  if (!checklistItems.length) return staffEmpty("No automated checks are available for this listing.");
+  const badgeFor = (status) => {
+    const key = String(status || "").toLowerCase();
+    if (key === "pass") return { cls: "bg-green-100 text-green-700", label: "Green" };
+    if (key === "warning") return { cls: "bg-amber-100 text-amber-700", label: "Warning" };
+    return { cls: "bg-red-100 text-red-700", label: "Fail" };
+  };
+  const warningOverrides = getAdminReviewWarningOverrides(review);
+  return `
+    <div class="rounded-xl border border-gray-200 bg-white p-4">
+      <div class="font-black text-gray-900">Automated approval checks</div>
+      <div class="mt-3 space-y-2">
+        ${checklistItems.map((item, idx) => {
+          const evidenceId = registerAdminEvidence(`staff-review-${review.id}-check-${idx}`, {
+            kind: "json",
+            title: item.label || item.key,
+            message: item.message || "",
+            raw: {
+              check: item,
+              listing_id: review.id,
+              inquiry_reference: review.inquiry_reference
+            }
+          });
+          const badge = badgeFor(item.status);
+          const warningKey = adminWarningOverrideKey(item);
+          const itemStatus = String(item.status || "").toLowerCase();
+          const needsOverride = itemStatus === "warning" || ((itemStatus === "fail" || itemStatus === "error") && item?.overrideable === true);
+          const warningOverridden = !!warningOverrides[warningKey];
+          const warningEvidenceViewed = !!adminReviewEvidenceViewed[evidenceId];
+          return `
+            <div class="rounded-lg border border-gray-200 p-2">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-sm font-bold text-gray-800">${adminEscape(item.label || item.key || "Review check")}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">${adminEscape(item.message || "")}</div>
+                  ${needsOverride ? `
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <button id="admin-warning-override-${adminAttr(evidenceId)}" data-overridden="${warningOverridden ? "true" : "false"}" type="button" onclick="adminOverrideWarningCheck('${adminAttr(evidenceId)}','${adminAttr(warningKey)}')" ${warningEvidenceViewed || warningOverridden ? "" : "disabled"} class="${warningOverridden ? "bg-green-700 text-white" : warningEvidenceViewed ? "border border-amber-300 text-amber-800 hover:bg-amber-50" : "bg-gray-100 text-gray-400 cursor-not-allowed"} px-2 py-1 rounded text-[11px] font-semibold">
+                        ${warningOverridden ? "Review flag overridden" : warningEvidenceViewed ? "Override after review" : "View evidence first"}
+                      </button>
+                      <span id="admin-warning-hint-${adminAttr(evidenceId)}" class="text-[11px] ${warningOverridden ? "text-green-700" : "text-amber-700"}">${warningOverridden ? "Recorded for this approval." : "Open evidence first, then override if acceptable."}</span>
+                    </div>
+                  ` : ""}
+                </div>
+                <button type="button" onclick="openAdminEvidence('${adminAttr(evidenceId)}')" class="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded ${badge.cls} hover:ring-2 hover:ring-green-200">${badge.label}</button>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
+function renderStaffReviewPanel(review = {}) {
+  const panel = staffReviewPanelElement();
+  if (!panel) return;
+  adminActiveReview = review;
+  adminReviewEvidence = {};
+  const statusMeta = adminStatusBadge(review.status);
+  const reviewIdArg = adminListingIdArg(review.id);
+  const generatedDecisionReason = buildAdminGeneratedDecisionReason(review);
+  const decisionReason = review?.review?.reason || review?.moderation_reason || review?.extra_fields?.moderation_reason || generatedDecisionReason || "";
+  const notes = review?.review?.notes || review?.moderation_notes || "";
+  const isFoundOnline = adminIsSourcedInventoryCandidate(review);
+  const foundOnlineReady = !isFoundOnline || adminSourcedCandidateCanUseOverride(review);
+  panel.innerHTML = `
+    <div class="rounded-2xl border border-emerald-100 bg-white p-5">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="text-xs font-black uppercase tracking-wide text-emerald-700">Preview before publishing</div>
+          <h3 class="mt-1 text-2xl font-black text-gray-900">${adminEscape(review.title || "Untitled listing")}</h3>
+          <div class="mt-1 text-sm text-gray-500">${adminEscape([review.area, review.district].filter(Boolean).join(", ") || "Location needs checking")} • ${adminEscape(review.status || "pending")}</div>
+        </div>
+        <span class="rounded-full px-3 py-1 text-xs font-black ${statusMeta.cls}">${statusMeta.label}</span>
+      </div>
+      <div class="mt-5 grid lg:grid-cols-[1.15fr,0.85fr] gap-5">
+        <div class="space-y-4">
+          ${adminReviewListingEditPanel(review)}
+          ${staffReviewSourceEvidenceHtml(review)}
+          ${adminSocialSourceTrustHtml(review)}
+          <div>
+            <h4 class="font-black text-gray-900 mb-3">Duplicate and quality signals</h4>
+            ${renderAdminQualitySignals(review)}
+          </div>
+        </div>
+        <div class="space-y-4">
+          ${staffReviewGuideHtml(review)}
+          ${staffAutomatedChecksHtml(review)}
+          <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <label class="block text-sm font-bold text-gray-700 mb-1">Internal review notes</label>
+            <textarea id="admin-review-notes" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[90px]">${adminEscape(notes)}</textarea>
+            <label class="block text-sm font-bold text-gray-700 mt-3 mb-1">Decision reason</label>
+            <textarea id="admin-review-reason" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm min-h-[110px]">${adminEscape(decisionReason)}</textarea>
+            ${generatedDecisionReason ? `<button type="button" onclick="useAdminGeneratedDecisionReason()" class="mt-2 border border-amber-300 text-amber-800 hover:bg-amber-50 px-3 py-2 rounded-lg text-xs font-bold">Use suggested reason</button>` : ""}
+            <div class="mt-4 grid gap-2">
+              <button type="button" onclick="staffOpenListingLivePreview(${reviewIdArg})" class="border border-emerald-700 text-emerald-700 hover:bg-emerald-50 px-3 py-2 rounded-lg text-xs font-black">Open live-style preview</button>
+              <button type="button" onclick="staffSaveListingReview()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black">Save preview changes</button>
+              <button type="button" onclick="staffApproveActiveReview()" ${foundOnlineReady ? "" : "disabled"} class="${foundOnlineReady ? "bg-emerald-700 hover:bg-emerald-600" : "bg-gray-300 cursor-not-allowed"} text-white px-3 py-2 rounded-lg text-xs font-black">Approve live after preview</button>
+              <button type="button" onclick="staffRejectActiveReview()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-lg text-xs font-black">Reject with reason</button>
+              <button type="button" onclick="staffKeepActiveReviewPending()" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-3 py-2 rounded-lg text-xs font-black">Keep pending</button>
+            </div>
+            ${isFoundOnline ? `<div class="mt-3 text-xs ${foundOnlineReady ? "text-blue-700" : "text-amber-700"}">${foundOnlineReady ? "Found-online approval is available because location evidence exists. Non-location warnings are recorded as source-review overrides." : "Found-online approval is blocked until area, district, address, or map pin is present."}</div>` : ""}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  panel.classList.remove("hidden");
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => {
+    adminReviewRefreshHierarchyControls({ syncMap: false });
+    adminReviewOnListingTypeChange();
+    adminReviewAutoPopulateLocationFromSource(review);
+    initAdminReviewLocationMap(review);
+  }, 120);
+}
+
+async function staffOpenListingReview(propertyId) {
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`);
+    renderStaffReviewPanel(response?.data || {});
+    toast("Moderator review loaded.");
+  } catch (error) {
+    toast(`Review load failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffSaveListingReview(options = {}) {
+  if (!adminActiveReview?.id) {
+    toast("Open a listing review first.");
+    return null;
+  }
+  try {
+    const listingPatch = collectAdminReviewListingPatch();
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(adminActiveReview.id)}/review`, {
+      method: "PATCH",
+      body: {
+        listing: listingPatch,
+        checklist: getAdminReviewChecklistFromDom(),
+        notes: document.getElementById("admin-review-notes")?.value || "",
+        reason: document.getElementById("admin-review-reason")?.value || "",
+        stage: "in_review",
+        warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+      }
+    });
+    const updated = response?.data || {};
+    adminActiveReview = {
+      ...adminActiveReview,
+      ...listingPatch,
+      ...updated,
+      review: {
+        ...(adminActiveReview.review || {}),
+        checklist: updated.moderation_checklist || getAdminReviewChecklistFromDom(),
+        notes: updated.moderation_notes || document.getElementById("admin-review-notes")?.value || "",
+        reason: updated.moderation_reason || document.getElementById("admin-review-reason")?.value || "",
+        warning_overrides: getAdminReviewWarningOverrides(adminActiveReview)
+      }
+    };
+    if (!options.silent) toast("Moderator preview changes saved.");
+    return updated;
+  } catch (error) {
+    toast(`Review save failed: ${error.message || "request failed"}`);
+    return null;
+  }
+}
+
+async function staffOpenListingLivePreview(propertyId) {
+  try {
+    const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/live-preview`);
+    const property = mapRemotePropertyForUi(response?.data || {}, { ownerPreview: true, detailLoaded: true });
+    property.remote_source = "staff_preview";
+    upsertPropertyForUi(property);
+    openDetail(property.id, { source: "staff_live_style_preview" });
+    toast("Live-style preview loaded.");
+  } catch (error) {
+    toast(`Preview failed: ${error.message || "request failed"}`);
+  }
+}
+
+async function staffApproveActiveReview() {
+  if (!adminActiveReview?.id) {
+    toast("Open a listing review first.");
+    return;
+  }
+  if (adminIsSourcedInventoryCandidate(adminActiveReview) && !adminSourcedCandidateCanUseOverride(adminActiveReview)) {
+    toast("Add or confirm the location before approving this found-online listing.");
+    return;
+  }
+  const saved = await staffSaveListingReview({ silent: true });
+  if (!saved) return;
+  await staffModerateListing(adminActiveReview.id, "approved", { fromReview: true, review: adminActiveReview });
+}
+
+async function staffRejectActiveReview() {
+  if (!adminActiveReview?.id) {
+    toast("Open a listing review first.");
+    return;
+  }
+  await staffModerateListing(adminActiveReview.id, "rejected", { fromReview: true, review: adminActiveReview });
+}
+
+async function staffKeepActiveReviewPending() {
+  if (!adminActiveReview?.id) {
+    toast("Open a listing review first.");
+    return;
+  }
+  await staffModerateListing(adminActiveReview.id, "pending", { fromReview: true, review: adminActiveReview });
+}
+
+async function staffModerateListing(propertyId, status, options = {}) {
   const cleanStatus = String(status || "").trim().toLowerCase();
+  const statusOptions = options && typeof options === "object" ? options : {};
+  if (cleanStatus === "approved" && !statusOptions.fromReview) {
+    await staffOpenListingReview(propertyId);
+    toast("Review and save the listing before approving it live.");
+    return;
+  }
   let reason = cleanStatus === "approved"
     ? "Staff approved after moderation review"
     : "Staff moderation update";
+  const review = statusOptions.review || adminActiveReview || {};
+  const isFoundOnlineReview = cleanStatus === "approved" && adminIsSourcedInventoryCandidate(review);
+  const body = { status: cleanStatus, reason };
+  if (statusOptions.fromReview) {
+    const reviewReason = (document.getElementById("admin-review-reason")?.value || "").trim();
+    const reviewNotes = (document.getElementById("admin-review-notes")?.value || "").trim();
+    if (reviewReason) {
+      reason = reviewReason;
+      body.reason = reviewReason;
+    }
+    body.review_notes = reviewNotes || undefined;
+    body.checklist = getAdminReviewChecklistFromDom();
+    body.warning_overrides = getAdminReviewWarningOverrides(review);
+  }
+  if (isFoundOnlineReview) {
+    body.sourced_candidate_override = true;
+    body.found_online_location_confirmed = true;
+    body.source_reviewed = true;
+    body.staff_source_reviewed = true;
+  }
   if (cleanStatus === "rejected") {
-    reason = window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed") || "";
+    reason = (document.getElementById("admin-review-reason")?.value || "").trim()
+      || window.prompt("Why is this listing being rejected?", "Location/contact/evidence was not confirmed")
+      || "";
     if (!reason.trim()) return;
+    body.reason = reason;
   }
   try {
     await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
-      body: { status: cleanStatus, reason }
+      body
     });
+    let publicProofOk = false;
+    if (cleanStatus === "approved") {
+      try {
+        const publicProof = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}`, { skipAuth: true });
+        publicProofOk = String(publicProof?.data?.id || "") === String(propertyId);
+      } catch (_error) {
+        publicProofOk = false;
+      }
+    }
     await refreshPublicListingsFromApi({ silent: true });
     await renderStaffDashboard();
-    toast(cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`);
+    const panel = staffReviewPanelElement();
+    if (panel && statusOptions.fromReview && cleanStatus !== "pending") panel.classList.add("hidden");
+    toast(cleanStatus === "approved"
+      ? (publicProofOk ? "Listing approved, sent live, and verified on the public API." : "Listing approved, but public API proof did not return yet.")
+      : `Listing updated: ${cleanStatus}.`);
   } catch (error) {
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
   }
@@ -30363,10 +30923,11 @@ function studentTypeKey(p) {
 }
 
 function isStudentDiscoverable(p) {
-  const t = normalizeType(p?.type);
+  const extra = p?.extra_fields && typeof p.extra_fields === "object" ? p.extra_fields : {};
+  const t = normalizeType(p?.type || p?.listing_type || p?.category || extra.listing_type);
   if (t === "student") return true;
   if (!["sale", "rent", "commercial"].includes(t)) return false;
-  const flag = p?.students_welcome;
+  const flag = p?.students_welcome ?? p?.student_verified ?? extra.students_welcome ?? extra.student_verified;
   if (typeof flag === "boolean") return flag;
   if (typeof flag === "string") return ["yes", "true", "1"].includes(flag.toLowerCase().trim());
   return false;
@@ -36414,6 +36975,7 @@ function hydrateMortgageProvidersFromApi(data, options = {}) {
     arrangementFeePct: provider.arrangementFeePct ?? provider.arrangement_fee_pct ?? 1.5,
     sourceLabel: provider.sourceLabel ?? provider.source_label ?? "Mortgage source",
     sourceUrl: provider.sourceUrl ?? provider.source_url ?? "#",
+    logoUrl: provider.logoUrl ?? provider.logo_url ?? "",
     sourceNote: provider.sourceNote ?? provider.source_note ?? "",
     sourceVerifiedAt: provider.sourceVerifiedAt ?? provider.source_verified_at ?? null
   }));
@@ -36445,6 +37007,63 @@ function mortgageProviderKey(provider = {}) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function mortgageProviderBrand(provider = {}) {
+  const key = mortgageProviderKey(provider);
+  const name = String(provider.name || provider.provider_name || provider.providerName || key || "").toLowerCase();
+  const alias = (key.includes("stanbic") || name.includes("stanbic") ? "stanbic" : "")
+    || (key.includes("housing-finance") || key === "hfb" || name.includes("housing finance") ? "hfb" : "")
+    || (key.includes("dfcu") || name.includes("dfcu") ? "dfcu" : "")
+    || (key.includes("kcb") || name.includes("kcb") ? "kcb" : "")
+    || (key.includes("baroda") || name.includes("baroda") ? "baroda" : "")
+    || (key.includes("absa") || name.includes("absa") ? "absa" : "")
+    || (key.includes("ncba") || name.includes("ncba") ? "ncba" : "")
+    || (key.includes("centenary") || name.includes("centenary") ? "centenary" : "")
+    || key;
+  const brand = MORTGAGE_PROVIDER_BRANDS[alias] || {};
+  let logoUrl = provider.logoUrl || provider.logo_url || brand.logoUrl || "";
+  if (!logoUrl && provider.sourceUrl) {
+    try {
+      logoUrl = new URL("/favicon.ico", provider.sourceUrl).toString();
+    } catch (_error) {
+      logoUrl = "";
+    }
+  }
+  const fallbackName = brand.shortName || String(provider.name || provider.provider_name || "Bank").replace(/\s+Bank\s+Uganda$/i, "").trim();
+  const initials = fallbackName
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 4)
+    .toUpperCase() || "BK";
+  return {
+    key: alias || key,
+    shortName: fallbackName,
+    initials,
+    logoSvg: brand.logoSvg || "",
+    logoUrl,
+    bg: brand.bg || "#f8fafc",
+    border: brand.border || "#d1d5db",
+    text: brand.text || "#374151"
+  };
+}
+
+function renderMortgageProviderLogo(provider = {}, options = {}) {
+  const brand = mortgageProviderBrand(provider);
+  const size = options.size === "lg" ? "w-14 h-14" : options.size === "sm" ? "w-9 h-9" : "w-11 h-11";
+  const imgSize = options.size === "lg" ? "max-w-[42px] max-h-[42px]" : options.size === "sm" ? "max-w-[26px] max-h-[26px]" : "max-w-[32px] max-h-[32px]";
+  const fallbackSize = options.size === "lg" ? "text-sm" : "text-[11px]";
+  const label = `${provider.name || brand.shortName || "Bank"} logo`;
+  const logoSrc = brand.logoSvg || brand.logoUrl;
+  const image = logoSrc
+    ? `<img src="${adminAttr(logoSrc)}" alt="${adminAttr(label)}" loading="lazy" referrerpolicy="no-referrer" class="${imgSize} object-contain" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">`
+    : "";
+  return `
+    <span class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
+      ${image}
+      <span class="${image ? "hidden " : ""}${fallbackSize} font-black tracking-wide">${adminEscape(brand.initials)}</span>
+    </span>`;
 }
 
 function mortgageProviderByKey(key = "") {
@@ -36543,6 +37162,44 @@ function calculateExtraMortgageImpact(loanAmount, annualRate, years, baselineMon
   };
 }
 
+function setMortgageManualRate(value = "") {
+  mortgageRateManuallyEdited = true;
+  const rateInput = document.getElementById("mortgage-rate");
+  if (rateInput && rateInput.value !== String(value)) rateInput.value = String(value);
+  renderMortgageFinder();
+}
+
+function resolveMortgageSelectedRate(result, rateEl) {
+  const bestRate = Number(result?.best?.rate || 0);
+  if (!mortgageRateManuallyEdited && bestRate > 0) {
+    if (rateEl && Number(rateEl.value) !== bestRate) {
+      rateEl.value = String(bestRate);
+    }
+    return bestRate;
+  }
+  const manualRate = Number(rateEl?.value || 0);
+  if (Number.isFinite(manualRate) && manualRate >= 0) return manualRate;
+  return bestRate;
+}
+
+function getMortgageFeeEstimates(result, provider) {
+  const price = Math.max(0, Number(result?.price || 0));
+  const loanAmount = Math.max(0, Number(result?.loanAmount || 0));
+  const arrangementEstimate = loanAmount * (((provider?.arrangementFeePct) || 1.5) / 100);
+  const transferStampDuty = price * 0.015;
+  const mortgageStampDuty = loanAmount * 0.005;
+  const valuationEstimate = price * 0.0025;
+  const transferAndStampDutyEstimate = transferStampDuty + mortgageStampDuty + valuationEstimate;
+  return {
+    arrangementEstimate,
+    transferStampDuty,
+    mortgageStampDuty,
+    valuationEstimate,
+    transferAndStampDutyEstimate,
+    onceOffCosts: Math.max(0, Number(result?.depositAmount || 0)) + arrangementEstimate + transferAndStampDutyEstimate
+  };
+}
+
 function currentMortgageCalculation() {
   const price = Number(document.getElementById("mortgage-price")?.value || 0) || 0;
   const depositPct = clampMortgageValue(document.getElementById("mortgage-deposit")?.value, 0, 90, 20);
@@ -36551,7 +37208,7 @@ function currentMortgageCalculation() {
   const currency = document.getElementById("mortgage-currency")?.value || "UGX";
   const income = Math.max(0, Number(document.getElementById("mortgage-income")?.value || 0));
   const result = buildMortgageComparison(price, depositPct, years, purpose);
-  const selectedRate = Math.max(0, Number(document.getElementById("mortgage-rate")?.value || result.best?.rate || 0));
+  const selectedRate = resolveMortgageSelectedRate(result, document.getElementById("mortgage-rate"));
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, years) || result.best?.monthlyRepayment || 0;
   const selectedProvider = mortgageProviderByKey(selectedMortgageProviderKey);
   const bestProvider = result.best?.provider || null;
@@ -36587,16 +37244,15 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
     const button = document.getElementById(id);
     if (!button) return;
     const active = key === activeMortgageTab;
+    button.setAttribute("aria-pressed", active ? "true" : "false");
     button.className = active
       ? "rounded-full bg-green-700 text-white px-3 py-1.5 text-xs font-bold shadow-lg shadow-green-700/20"
-      : "rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold hover:bg-green-50";
+      : "rounded-full bg-white text-green-800 border border-green-100 px-3 py-1.5 text-xs font-bold hover:bg-green-50 hover:border-green-300";
   });
   const panel = document.getElementById("mortgage-tab-panel");
   if (!panel) return;
   const { result, selectedRate, monthly, income, suggestedIncome, extraImpact } = context;
-  const bankRegistrationEstimate = result.loanAmount * 0.015;
-  const transferEstimate = result.price * 0.01;
-  const arrangementEstimate = result.loanAmount * (((context.provider?.arrangementFeePct) || 1.5) / 100);
+  const fees = getMortgageFeeEstimates(result, context.provider);
   const title = {
     repayment: mortgageTr("tabRepaymentTitle"),
     affordability: mortgageTr("tabAffordabilityTitle"),
@@ -36611,12 +37267,12 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
   }[activeMortgageTab] || mortgageTr("tabRepaymentBody");
   const dynamic = activeMortgageTab === "affordability"
     ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthSuggestedIncome")}</strong><br>${formatMortgageAmount(suggestedIncome, context.currency)}</div>
-        <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("healthAffordability")}</strong><br>${income ? (monthly <= income * 0.35 ? mortgageTr("fitsIncome") : mortgageTr("highIncomeWarning")) : mortgageTr("quoteRequired")}</div>
+        <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("estimatedMonthlyRepayment")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(monthly, context.currency)}</strong></div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("healthSuggestedIncome")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(suggestedIncome, context.currency)}</strong></div>
+        <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("healthAffordability")}</span><strong class="block mt-1 ${income && monthly > income * 0.35 ? "text-amber-700" : "text-green-700"}">${income ? (monthly <= income * 0.35 ? mortgageTr("fitsIncome") : mortgageTr("highIncomeWarning")) : mortgageTr("quoteRequired")}</strong></div>
       </div>`
     : activeMortgageTab === "extra"
-      ? `<div class="mt-3 grid sm:grid-cols-[1fr,1.2fr] gap-2 items-end">
+      ? `<div class="mt-3 grid sm:grid-cols-[1fr_1.2fr] gap-2 items-end">
           <label class="block text-xs font-bold text-emerald-900">${mortgageTr("extraPaymentLabel")}
             <input id="mortgage-extra-payment" type="number" min="0" step="100000" value="${adminAttr(mortgageExtraPaymentAmount || "")}" oninput="setMortgageExtraPayment(this.value)" class="mt-1 w-full border border-emerald-100 rounded-xl px-3 py-2 text-sm bg-white" placeholder="${adminAttr(mortgageTr("extraPaymentPlaceholder"))}">
           </label>
@@ -36626,14 +37282,14 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
         </div>`
       : activeMortgageTab === "fees"
         ? `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("depositLabel")}</strong><br>${formatMortgageAmount(result.depositAmount, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("arrangementFee")}</strong><br>${formatMortgageAmount(arrangementEstimate, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("transferStampDutyEstimate")}</strong><br>${formatMortgageAmount(transferEstimate + bankRegistrationEstimate, context.currency)}</div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("depositLabel")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(result.depositAmount, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("arrangementFee")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(fees.arrangementEstimate, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("transferAndStampDutyEstimate")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(fees.transferAndStampDutyEstimate, context.currency)}</strong></div>
           </div>`
         : `<div class="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("estimatedMonthlyRepayment")}</strong><br>${formatMortgageAmount(monthly, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("loanAmount")}</strong><br>${formatMortgageAmount(result.loanAmount, context.currency)}</div>
-            <div class="rounded-xl bg-white border border-emerald-100 p-3"><strong>${mortgageTr("rate")}</strong><br>${selectedRate.toFixed(2)}%</div>
+            <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("estimatedMonthlyRepayment")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(monthly, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("loanAmount")}</span><strong class="block text-gray-950 mt-1">${formatMortgageAmount(result.loanAmount, context.currency)}</strong></div>
+            <div class="rounded-xl bg-white border border-emerald-100 p-3"><span class="block text-gray-500 uppercase font-bold">${mortgageTr("rate")}</span><strong class="block text-gray-950 mt-1">${selectedRate.toFixed(2)}%</strong></div>
           </div>`;
   panel.innerHTML = `
     <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -36641,7 +37297,6 @@ function renderMortgageTabs(context = currentMortgageCalculation()) {
         <div class="text-sm font-black text-emerald-950">${adminEscape(title)}</div>
         <div class="mt-1 text-xs text-emerald-800">${adminEscape(body)}</div>
       </div>
-      <div class="text-[11px] text-emerald-700 font-bold">${adminEscape(mortgageTr("publicRecordDisclosure"))}</div>
     </div>
     ${dynamic}`;
 }
@@ -36938,7 +37593,7 @@ function resetMortgageCalculator() {
   const defaults = {
     "mortgage-price": "250000000",
     "mortgage-deposit": "20",
-    "mortgage-rate": "16",
+    "mortgage-rate": "",
     "mortgage-years": "20",
     "mortgage-income": "",
     "mortgage-purpose": "residential",
@@ -36949,6 +37604,7 @@ function resetMortgageCalculator() {
 	    if (el) el.value = value;
 	  });
 	  mortgageExtraPaymentAmount = 0;
+	  mortgageRateManuallyEdited = false;
 	  selectedMortgageProviderKey = "";
 	  activeMortgageTab = "repayment";
 	  renderMortgageFinder();
@@ -36986,45 +37642,52 @@ function renderMortgageFinder() {
   const result = buildMortgageComparison(priceEl.value, normalizedDeposit, normalizedYears, purposeEl.value);
   const updatedLabel = formatMortgageUpdatedAtLabel(MORTGAGE_RATE_LAST_CHECKED_RAW || MORTGAGE_RATE_UPDATED_RAW || MORTGAGE_RATE_UPDATED_AT);
   const income = Math.max(0, Number(incomeEl?.value || 0));
-  const selectedRate = Math.max(0, Number(rateEl?.value || result.best?.rate || 0));
+  const selectedRate = resolveMortgageSelectedRate(result, rateEl);
   const monthly = computeMonthlyRepayment(result.loanAmount, selectedRate, normalizedYears) || result.best?.monthlyRepayment || 0;
   const suggestedIncome = monthly ? monthly / 0.35 : 0;
   const loanShare = result.price > 0 ? Math.round((result.loanAmount / result.price) * 100) : 0;
   const currency = currencyEl?.value || "UGX";
-  const bankRegistrationEstimate = result.loanAmount * 0.015;
-  const transferEstimate = result.price * 0.01;
-  const onceOffCosts = result.depositAmount + bankRegistrationEstimate + transferEstimate;
+  const feeProvider = mortgageProviderByKey(selectedMortgageProviderKey) || result.best?.provider || null;
+  const fees = getMortgageFeeEstimates(result, feeProvider);
   const totalInterestEstimate = monthly ? Math.max(0, monthly * normalizedYears * 12 - result.loanAmount) : 0;
+  const rateSourceLine = !mortgageRateManuallyEdited && result.best
+    ? mortgageTr("bestRateApplied").replace("{bank}", result.best.provider.name).replace("{rate}", selectedRate.toFixed(2))
+    : mortgageTr("manualRateApplied");
   if (professionalResultsEl) {
-    professionalResultsEl.className = "mortgage-result-pop rounded-[1.75rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-5 min-h-[360px] shadow-[0_28px_65px_rgba(20,83,45,0.18)]";
+    professionalResultsEl.className = "mortgage-result-pop rounded-[1.5rem] bg-gradient-to-br from-white via-emerald-50 to-amber-50 text-gray-950 border border-white p-4 shadow-[0_22px_48px_rgba(20,83,45,0.14)]";
     professionalResultsEl.innerHTML = `
       <div class="flex items-center justify-between gap-3">
-        <div class="text-sm text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
+        <div>
+          <div class="text-xs text-green-800 font-bold uppercase tracking-wide">${mortgageTr("estimatedMonthlyRepayment")}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
+        </div>
         <div class="w-14 h-14 rounded-full bg-white border-4 border-amber-200 flex items-center justify-center text-xs font-black text-green-800 shadow-sm" aria-label="Deposit percent">${normalizedDeposit}%</div>
       </div>
-      <div class="text-4xl font-black mt-2">${formatMortgageAmount(monthly, currency)}</div>
-      <div class="text-xs text-gray-600 mt-2">${mortgageTr("basedOnRateTerm").replace("{rate}", selectedRate.toFixed(2)).replace("{years}", normalizedYears)}</div>
-      <div class="mt-5 grid gap-3">
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
+      <div class="text-3xl md:text-4xl font-black mt-2 leading-tight">${formatMortgageAmount(monthly, currency)}</div>
+      <div class="text-[11px] text-emerald-700 font-semibold mt-1">${adminEscape(rateSourceLine)}</div>
+      <div class="mt-4 grid gap-2">
+        <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
           <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("onceOffCosts")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(onceOffCosts, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("bankRegistrationEstimate")} ${formatMortgageAmount(bankRegistrationEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(transferEstimate, currency)}</div>
+          <div class="text-lg font-black mt-1">${formatMortgageAmount(fees.onceOffCosts, currency)}</div>
+          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("depositLabel")} ${formatMortgageAmount(result.depositAmount, currency)} • ${mortgageTr("arrangementFee")} ${formatMortgageAmount(fees.arrangementEstimate, currency)} • ${mortgageTr("transferStampDutyEstimate")} ${formatMortgageAmount(fees.transferStampDuty, currency)} • ${mortgageTr("mortgageStampDutyEstimate")} ${formatMortgageAmount(fees.mortgageStampDuty, currency)} • ${mortgageTr("valuationEstimate")} ${formatMortgageAmount(fees.valuationEstimate, currency)}</div>
         </div>
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
-        </div>
-        <div class="rounded-2xl bg-white/80 border border-emerald-100 p-3 shadow-sm">
-          <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("loanAmount")}</div>
-          <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
-          <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("totalInterestEstimate")}: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+        <div class="grid sm:grid-cols-2 gap-2">
+          <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
+            <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("grossMonthlyIncomeRequired")}</div>
+            <div class="text-lg font-black mt-1">${formatMortgageAmount(suggestedIncome, currency)}</div>
+          </div>
+          <div class="rounded-2xl bg-white/85 border border-emerald-100 p-3 shadow-sm">
+            <div class="text-xs text-green-700 uppercase font-bold">${mortgageTr("loanAmount")}</div>
+            <div class="text-lg font-black mt-1">${formatMortgageAmount(result.loanAmount, currency)}</div>
+            <div class="text-[11px] text-gray-600 mt-1">${mortgageTr("totalInterestEstimate")}: ${formatMortgageAmount(totalInterestEstimate, currency)}</div>
+          </div>
         </div>
       </div>
-      <div class="mt-5 grid gap-2">
+      <div class="mt-4 grid sm:grid-cols-2 gap-2">
         <button type="button" onclick="requestMortgageHelp('')" class="bg-green-700 text-white hover:bg-green-600 rounded-xl px-4 py-3 text-sm font-black text-center shadow-lg shadow-green-700/20">${mortgageTr("requestMortgageHelp")}</button>
         <button type="button" onclick="saveMortgageCalculation()" class="border border-green-200 text-green-800 bg-white rounded-xl px-4 py-3 text-sm font-black">${authState?.user ? mortgageTr("saveCalculation") : mortgageTr("signInToSave")}</button>
       </div>
-      <p class="text-[11px] text-gray-600 mt-4">${mortgageTr("estimateDisclaimer")}</p>`;
+      <p class="text-[11px] text-gray-600 mt-3">${mortgageTr("estimateDisclaimer")}</p>`;
   }
   const leadAmountEl = document.getElementById("mortgage-lead-amount");
   if (leadAmountEl && !leadAmountEl.value) leadAmountEl.placeholder = String(Math.round(result.loanAmount || 0));
@@ -37062,6 +37725,7 @@ function renderMortgageFinder() {
 
   if (result.best) {
     const bestMonthly = result.best.monthlyRepayment || 0;
+    const bestLogo = renderMortgageProviderLogo(result.best.provider, { size: "lg" });
     const affordability = income > 0
       ? (bestMonthly <= income * 0.35
         ? `<span class="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full"><i class="fas fa-check-circle"></i> ${mortgageTr("fitsIncome")}</span>`
@@ -37070,10 +37734,13 @@ function renderMortgageFinder() {
     bestEl.innerHTML = `
       <div class="border border-green-100 rounded-2xl p-4 bg-green-50">
         <div class="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div class="text-xs uppercase tracking-wide font-semibold text-green-700">${mortgageTr("bestCurrentMatch")}</div>
-            <div class="text-xl font-black text-gray-900 mt-1">${result.best.provider.name}</div>
-            <div class="text-sm text-gray-600 mt-1">${mortgageTr("bestRateLine").replace("{rate}", result.best.rate.toFixed(2)).replace("{years}", result.years).replace("{deposit}", result.best.minDeposit)}</div>
+          <div class="flex items-start gap-3 min-w-0">
+            ${bestLogo}
+            <div class="min-w-0">
+              <div class="text-xs uppercase tracking-wide font-semibold text-green-700">${mortgageTr("bestCurrentMatch")}</div>
+              <div class="text-xl font-black text-gray-900 mt-1">${adminEscape(result.best.provider.name)}</div>
+              <div class="text-sm text-gray-600 mt-1">${mortgageTr("bestRateLine").replace("{rate}", result.best.rate.toFixed(2)).replace("{years}", result.years).replace("{deposit}", result.best.minDeposit)}</div>
+            </div>
           </div>
           <div class="text-right">
             <div class="text-xs text-gray-500 uppercase font-semibold">${mortgageTr("bestEstimatedMonthly")}</div>
@@ -37096,13 +37763,17 @@ function renderMortgageFinder() {
     const monthly = row.monthlyRepayment ? `${formatUgxAmount(row.monthlyRepayment)} / ${mortgageTr("monthWord")}` : mortgageTr("quoteRequired");
     const repay = row.totalRepayment ? formatUgxAmount(row.totalRepayment) : "-";
     const providerKey = mortgageProviderKey(row.provider);
+    const providerLogo = renderMortgageProviderLogo(row.provider, { size: "md" });
     const sourceNote = row.provider.sourceNote ? `<div class="mt-2 rounded-lg bg-gray-50 border border-gray-100 p-2 text-[11px] text-gray-600"><strong>${mortgageTr("sourceNoteLabel")}:</strong> ${adminEscape(row.provider.sourceNote)}</div>` : "";
     return `
       <div class="border border-gray-200 rounded-xl p-4 bg-white">
         <div class="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <div class="font-bold text-gray-900">${row.provider.name}</div>
-            <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
+          <div class="flex items-start gap-3 min-w-0">
+            ${providerLogo}
+            <div class="min-w-0">
+              <div class="font-bold text-gray-900">${adminEscape(row.provider.name)}</div>
+              <div class="text-xs text-gray-500 mt-1">${mortgageTr("bankSourceLabel")}: ${adminEscape(row.provider.sourceLabel || "-")}</div>
+            </div>
           </div>
           <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${status.cls}">${status.label}</span>
         </div>
@@ -37178,6 +37849,25 @@ function renderDetailMortgageWidget(propertyId) {
       ${top.map((row, idx) => `<div class="flex items-center justify-between text-xs ${idx === 0 ? "text-green-800 font-semibold" : "text-gray-600"}"><span>${idx + 1}. ${row.provider.name}</span><span>${formatUgxAmount(row.monthlyRepayment || 0)} / ${mortgageTr("monthWord")}</span></div>`).join("")}
     </div>`;
 }
+
+function exposeMortgageFinderHandlers() {
+  Object.assign(window, {
+    loadMortgageRates,
+    renderMortgageFinder,
+    requestMortgageHelp,
+    resetMortgageCalculator,
+    saveMortgageCalculation,
+    setMortgageExtraPayment,
+    setMortgageLeadProvider,
+    setMortgageManualRate,
+    setMortgageTab,
+    submitMortgageLead,
+    syncMortgageInput,
+    syncMortgageSlider
+  });
+}
+
+exposeMortgageFinderHandlers();
 
 async function openDetail(id, options = {}) {
   let p = findPropertyForUi(id);

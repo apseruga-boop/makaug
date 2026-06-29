@@ -1292,7 +1292,7 @@ async function listPropertiesHandler(req, res, next) {
     const filters = [];
     const values = [];
 
-    const listingType = normalizeListingType(req.query.listing_type);
+    const listingType = normalizeListingType(req.query.listing_type || req.query.type || req.query.category);
     const studentPortal = parseBooleanLike(req.query.student_portal, false);
     const district = cleanText(req.query.district);
     const area = cleanText(req.query.area || req.query.search || req.query.query);
@@ -3026,12 +3026,6 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
           error: 'Moderator accounts can only approve, reject, or return listings to pending review'
         });
       }
-      if (parseBooleanLike(req.body.sourced_candidate_override || req.body.sourced_candidate_special_dispensation, false)) {
-        return res.status(403).json({
-          ok: false,
-          error: 'Found-online special dispensation requires King/admin approval'
-        });
-      }
     }
 
     if (nextStatus === 'rejected' && !moderationReason) {
@@ -3059,11 +3053,25 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
     const sourcedCandidateConsentConfirmed = parseBooleanLike(req.body.consent_confirmed, false);
     const sourcedCandidateImageRightsConfirmed = parseBooleanLike(req.body.image_rights_confirmed, false);
     const sourcedCandidateLocationConfirmed = parseBooleanLike(req.body.found_online_location_confirmed || req.body.location_confirmed, false);
+    const sourcedCandidateSourceReviewed = parseBooleanLike(
+      req.body.source_reviewed || req.body.staff_source_reviewed || req.body.source_evidence_reviewed,
+      false
+    );
 
     if (requestedSourcedCandidateOverride && !isSourcedCandidate) {
       return res.status(403).json({
         ok: false,
         error: 'Found-online approval is only available for found-online intake records'
+      });
+    }
+
+    if (actorRole === 'moderator' && requestedSourcedCandidateOverride && !sourcedCandidateSourceReviewed) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Found-online approval requires source review confirmation',
+        details: [
+          'Open the stored source/photo evidence, confirm the location and price policy, then approve from the moderator review panel.'
+        ]
       });
     }
 
@@ -3138,15 +3146,17 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
         source: 'found_online_property_source_v1',
         at: new Date().toISOString(),
         actor_id: actorId,
+        actor_role: actorRole || req.adminAuth?.type || 'admin',
         approval_policy: 'location_required_non_location_checks_admin_override',
         location_confirmed: sourcedCandidateLocationConfirmed || sourcedCandidateRecordHasApprovalLocation(current),
         consent_confirmed: sourcedCandidateConsentConfirmed,
         image_rights_confirmed: sourcedCandidateImageRightsConfirmed,
+        source_reviewed: sourcedCandidateSourceReviewed || actorRole !== 'moderator',
         missing_checks_overridden: missingChecks,
         warning_checks_overridden: missingWarningOverrides,
         reason: moderationReason
       };
-      approvalWarnings.push('Found-online approval used; admin confirmed location and overrode non-location review checks.');
+      approvalWarnings.push('Found-online approval used; source reviewer confirmed location and overrode non-location review checks.');
     }
     const sourcedCandidateExtraFields = sourcedCandidateDispensation
       ? {

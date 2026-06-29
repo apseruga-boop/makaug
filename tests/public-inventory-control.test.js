@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const test = require('node:test');
+const vm = require('node:vm');
 
 const appSource = fs.readFileSync('assets/makaug-app.js', 'utf8');
 const browserProbeSource = fs.readFileSync('scripts/probe-public-routes-browser.js', 'utf8');
@@ -11,6 +12,7 @@ const whatsappRouteSource = fs.readFileSync('routes/whatsapp.js', 'utf8');
 const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
 const propertiesRouteSource = fs.readFileSync('routes/properties.js', 'utf8');
+const publicInventoryStatusSource = fs.readFileSync('utils/publicInventoryStatus.js', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -28,6 +30,14 @@ function asyncFunctionSource(name) {
   return appSource.slice(start, next === undefined ? appSource.length : next);
 }
 
+function constFunctionSource(name) {
+  const start = appSource.indexOf(`const ${name} =`);
+  assert.notEqual(start, -1, `Expected const ${name} to exist`);
+  const next = appSource.indexOf('\n\nconst DISTRICTS', start);
+  assert.notEqual(next, -1, `Expected const ${name} to terminate`);
+  return appSource.slice(start, next).trim();
+}
+
 test('public listings are backend-controlled, not frontend seed inventory', () => {
   assert.match(appSource, /function publicSampleListingsEnabled\(\)/);
   assert.match(appSource, /window\.MAKAUG_ALLOW_SAMPLE_LISTINGS === true/);
@@ -39,9 +49,15 @@ test('public listings are backend-controlled, not frontend seed inventory', () =
 
 test('admin live controls use paginated backend snapshots', () => {
   assert.match(appSource, /async function fetchAdminPaginatedRows\(path, headers, options = \{\}\)/);
+  assert.match(adminRouteSource, /router\.get\('\/properties\/review-queue'/);
+  assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/review-queue", headers, \{ maxPages: 500 \}\)/);
+  assert.match(appSource, /ADMIN_PENDING_QUEUE_RENDER_STEP = 150/);
+  assert.match(appSource, /function adminShowMorePendingQueueRows\(\)/);
+  assert.match(appSource, /function hydrateAdminAllListingsInBackground\(headers\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/properties\?status=all", headers, \{ maxPages: 500 \}\)/);
   assert.match(appSource, /fetchAdminPaginatedRows\("\/api\/admin\/properties\/live", headers, \{ maxPages: 10 \}\)/);
-  assert.match(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]\)/);
+  assert.match(appSource, /const adminLiveRows = remoteSnap\?\.liveListings \|\| localSnap\.liveListings \|\| \[\]/);
+  assert.match(appSource, /renderAdminFeaturedRows\(adminLiveRows\)/);
   assert.doesNotMatch(appSource, /renderAdminFeaturedRows\(remoteSnap\?\.allListings \|\| localSnap\.allListings/);
 });
 
@@ -49,6 +65,22 @@ test('remove and status actions can target listings loaded only through the live
   assert.match(appSource, /adminLiveListings\.find\(\s*\(p\) => String\(p\.id\) === String\(localId\)/);
   assert.match(appSource, /const liveIdx = adminLiveListings\.findIndex/);
   assert.match(appSource, /if \(liveIdx >= 0\) adminLiveListings\[liveIdx\]/);
+});
+
+test('admin status actions render queue count before heavyweight refresh', () => {
+  assert.match(appSource, /function adminRenderListingStatusLocally\(updatedListing = \{\}, normalizedStatus = "", listingId = "", options = \{\}\)/);
+  assert.match(appSource, /renderAdminPendingRows\(adminCurrentPendingListings\)/);
+  assert.match(appSource, /adminSetNumericText\("admin-stat-pending", adminCurrentPendingListings\.length\)/);
+  const statusSource = asyncFunctionSource('adminSetListingStatus');
+  assert.match(statusSource, /fast_admin_render: true/);
+  assert.match(statusSource, /manual_notification_only: \["approved", "rejected"\]\.includes\(normalizedStatus\)/);
+  assert.match(statusSource, /adminRenderListingStatusLocally\(listing, normalizedStatus, backendId \|\| localId/);
+  assert.match(statusSource, /window\.requestAnimationFrame\(refreshAfterStatus\)/);
+  assert.match(propertiesRouteSource, /manual_notification_only/);
+  assert.match(propertiesRouteSource, /function buildManualOwnerStatusNotification/);
+  assert.match(propertiesRouteSource, /buildOwnerStatusMessage/);
+  assert.match(propertiesRouteSource, /getDirectWhatsAppUrl/);
+  assert.match(htmlSource, /king-status-fast-render-20260609/);
 });
 
 test('admin live and featured surfaces clean-filter test-like backend listings', () => {
@@ -77,11 +109,57 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /function addPublicLaunchSeedFilter/);
   assert.match(routeSource, /COALESCE\(p\.title, ''\) NOT ILIKE/);
   assert.match(routeSource, /LOWER\(TRIM\(COALESCE\(p\.title,/);
+  assert.match(routeSource, /COALESCE\(p\.lister_email, ''\) !~\* '\(makaug\\\\\.invalid\|test@\|qa@\|dummy\|sample\)'/);
   assert.match(routeSource, /COALESCE\(p\.extra_fields->>'soft_launch_test', ''\) !~\*/);
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /apiRequest\("\/api\/properties\?status=approved&limit=1000&public_only=1", \{ skipAuth: true \}\)/);
+  assert.match(routeSource, /function publicOpportunityBucketSql/);
+  assert.match(routeSource, /summary: \{\s*public_opportunities: opportunitySummary\s*\}/);
+  assert.match(publicInventoryStatusSource, /PUBLIC_LIVE_PROPERTY_STATUSES = \['approved', 'live', 'published'\]/);
+  assert.match(routeSource, /filters\.push\(publicLivePropertyStatusSql\('p'\)\)/);
+  assert.match(routeSource, /else if \(publicOnly\) \{\s*filters\.push\(publicLivePropertyStatusSql\('p'\)\);/);
+  assert.match(appSource, /function fetchPublicPaginatedRows\(path, options = \{\}\)/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 200 \}\)/);
+  assert.match(appSource, /publicListingsApiStats = normalizeHeroOpportunityStats\(firstResponse\?\.summary\?\.public_opportunities \|\| firstResponse\?\.summary\)/);
+  assert.match(appSource, /student: \["student", "students", "student_accommodation", "studentAccommodation", "student_housing"\]/);
+  assert.match(appSource, /const t = normalizeType\(p\?\.type \|\| p\?\.listing_type \|\| p\?\.category \|\| extra\.listing_type\)/);
+  assert.match(routeSource, /const listingType = normalizeListingType\(req\.query\.listing_type \|\| req\.query\.type \|\| req\.query\.category\)/);
+  assert.match(appSource, /if \(publicListingsApiStats\) \{\s*return \{ \.\.\.publicListingsApiStats \};\s*\}/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+});
+
+test('public opportunity summary and student rows normalize for public UI counts', () => {
+  const normalizeStats = vm.runInNewContext(`${functionSource('normalizeHeroOpportunityStats')}; normalizeHeroOpportunityStats`);
+  const stats = normalizeStats({
+    total: 409,
+    sale: 266,
+    rent: 48,
+    student: 4,
+    commercial: 10,
+    land: 81,
+    other: 0,
+    by_type: { sale: 266, rent: 48, student: 4, commercial: 10, land: 81, other: 0 }
+  });
+  assert.equal(stats.total, 409);
+  assert.equal(stats.sale, 266);
+  assert.equal(stats.rent, 48);
+  assert.equal(stats.student, 4);
+  assert.equal(stats.commercial, 10);
+  assert.equal(stats.land, 81);
+
+  const nestedStats = normalizeStats({
+    public_opportunities: {
+      total: 409,
+      by_type: { sale: 266, rent: 48, student: 4, commercial: 10, land: 81 }
+    }
+  });
+  assert.equal(nestedStats.student, 4);
+  assert.equal(nestedStats.total, 409);
+
+  const isStudent = vm.runInNewContext(`${constFunctionSource('normalizeType')}\n${functionSource('isStudentDiscoverable')}; isStudentDiscoverable`);
+  assert.equal(isStudent({ listing_type: 'student', status: 'approved' }), true);
+  assert.equal(isStudent({ type: 'rent', extra_fields: { students_welcome: 'yes' } }), true);
+  assert.equal(isStudent({ type: 'sale' }), false);
 });
 
 test('public featured property feed only returns featured backend listings', () => {
@@ -104,7 +182,7 @@ test('anonymous public agent APIs suppress QA broker records', () => {
   assert.match(agentsRouteSource, /addPublicAgentLaunchTestFilter\(filters, values\)/);
   assert.match(agentsRouteSource, /addPublicAgentSelfRegistrationFilter\(filters\)/);
   assert.match(agentsRouteSource, /addPublicAgentInventoryFilter\(filters\)/);
-  assert.match(agentsRouteSource, /COUNT\(\*\)::int[\s\S]*p\.agent_id = a\.id[\s\S]*p\.status = 'approved'[\s\S]*>= \$\{PUBLIC_AGENT_MIN_LIVE_LISTINGS\}/);
+  assert.match(agentsRouteSource, /COUNT\(\*\)::int[\s\S]*p\.agent_id = a\.id[\s\S]*publicLivePropertyStatusSql\('p'\)[\s\S]*>= \$\{PUBLIC_AGENT_MIN_LIVE_LISTINGS\}/);
   assert(agentsRouteSource.includes('a.user_id IS NOT NULL'));
   assert(agentsRouteSource.includes("COALESCE(a.email, '') !~* '(qa-test|makaug\\\\.invalid|dummy|sample)'"));
   assert(agentsRouteSource.includes("COALESCE(a.licence_number, '') !~* '^(QA|TEST|DUMMY|SAMPLE)-'"));
@@ -113,12 +191,23 @@ test('anonymous public agent APIs suppress QA broker records', () => {
 
 test('admin live endpoint mirrors public visibility and exposes cleanup action', () => {
   assert.match(adminRouteSource, /function adminLaunchTestListingCondition/);
+  assert.match(adminRouteSource, /function adminFeaturedListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingCondition/);
   assert.match(adminRouteSource, /function adminPublicLiveListingWhere/);
+  assert.match(adminRouteSource, /return `\$\{publicLivePropertyStatusSql\(alias\)\} AND \$\{adminPublicLiveListingCondition\(alias\)\}`/);
+  assert.match(adminRouteSource, /adminColumn\(alias, 'lister_email'\)/);
   assert.match(adminRouteSource, /router\.get\('\/properties\/live'/);
   assert.match(adminRouteSource, /WHERE \$\{publicLiveCondition\}/);
+  assert.match(adminRouteSource, /public_visible_total: total/);
+  assert.match(adminRouteSource, /featured_total: featuredTotal/);
+  assert.match(adminRouteSource, /same public visibility filter as \/api\/properties\?status=approved&public_only=1/);
   assert.match(adminRouteSource, /CONCAT\('\/property\/', p\.id::text\) AS property_url/);
   assert.match(appSource, /function adminIsPublicLiveAdminListing/);
+  assert.match(appSource, /let adminPublicInventoryParity = \{\}/);
+  assert.match(appSource, /function renderAdminLiveParitySummary\(snapshot = \{\}, listings = \[\]\)/);
+  assert.match(appSource, /summary\?\.properties\?\.public_live \?\? summary\?\.properties\?\.approved/);
+  assert.match(htmlSource, /admin-live-parity-summary/);
+  assert.match(htmlSource, /admin-featured-parity-summary/);
   assert.match(appSource, /Open Public Listing/);
   assert.match(adminRouteSource, /router\.post\('\/test-listings\/cleanup-live'/);
   assert.match(adminRouteSource, /live_test_listing_cleanup/);
@@ -207,4 +296,7 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /broker-profile-share-links-20260519/);
   assert.match(htmlSource, /direct-agent-profile-20260519/);
   assert.match(htmlSource, /public-featured-feed-fix-20260525/);
+  assert.match(htmlSource, /public-inventory-summary-20260609/);
+  assert.match(htmlSource, /king-live-public-parity-20260609/);
+  assert.match(htmlSource, /public-opportunity-counts-20260629/);
 });

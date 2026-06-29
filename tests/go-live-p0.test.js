@@ -94,6 +94,17 @@ const PUBLIC_ROUTE_MARKERS = {
   '/login': ['Opening your makaug.com account panel', 'Open account panel']
 };
 
+function accountAccessScreeningRoleSource(frontendSource, role) {
+  const start = frontendSource.indexOf('const ACCOUNT_ACCESS_SCREENING = {');
+  assert(start >= 0, 'auth drawer should define quick screening questions');
+  const end = frontendSource.indexOf('\n};', start);
+  assert(end > start, 'auth screening question object should terminate');
+  const screeningSource = frontendSource.slice(start, end + 3);
+  const match = screeningSource.match(new RegExp(`\\n\\s*${role}: \\[([\\s\\S]*?)\\n\\s*\\](?:,|\\n)`, 'm'));
+  assert(match, `missing auth screening questions for ${role}`);
+  return match[1];
+}
+
 const PUBLIC_ROUTE_ACTIVE_IDS = {
   '/': 'page-home',
   '/for-sale': 'page-sale',
@@ -505,9 +516,8 @@ function run() {
   }
   assert(frontendSource.includes('ACCOUNT_ACCESS_SCREENING'), 'auth drawer should define quick screening questions');
   for (const role of ['finder', 'student', 'agent', 'field_agent', 'advertiser']) {
-    const match = frontendSource.match(new RegExp(`${role}: \\[([\\s\\S]*?)\\n\\s*\\]`, 'm'));
-    assert(match, `missing auth screening questions for ${role}`);
-    const count = (match[1].match(/key:/g) || []).length;
+    const roleSource = accountAccessScreeningRoleSource(frontendSource, role);
+    const count = (roleSource.match(/key:/g) || []).length;
     assert(count > 0 && count <= 5, `${role} should have 1-5 screening questions, got ${count}`);
   }
   assert(frontendSource.includes('id="account-access-email"'), 'create account journey should collect email');
