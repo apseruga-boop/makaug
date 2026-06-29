@@ -80,13 +80,33 @@ const {
 const router = express.Router();
 const LAUNCH_SEED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const LAUNCH_DUMMY_LISTING_TITLES = new Set(['sdgsdgd', 'sgsgsgsgs']);
-const PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 * 1000;
-const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = 60;
+
+function readPositiveIntegerEnv(names, fallback) {
+  for (const name of names) {
+    const value = Number(process.env[name]);
+    if (Number.isFinite(value) && value > 0) return Math.floor(value);
+  }
+  return fallback;
+}
+
+const PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv(
+  ['PUBLIC_PROPERTIES_CACHE_TTL_MS', 'PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS'],
+  60 * 1000
+);
+const PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS = Math.max(1, Math.floor(PUBLIC_PROPERTIES_CACHE_TTL_MS / 1000));
 const PUBLIC_PROPERTIES_CACHE_STALE_SECONDS = 300;
 const PUBLIC_PROPERTIES_CACHE_MAX_ENTRIES = 120;
 const PUBLIC_PROPERTIES_CACHE_REFRESH_AGENT = 'makaug-public-inventory-cache-warmup';
 const PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set(['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_']);
 const publicPropertiesResponseCache = new Map();
+
+function runPublicInventoryFollowup(task, label, context = {}) {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      logger.warn(label, { ...context, message: error.message });
+    });
+}
 
 function publicPropertiesCacheControl() {
   return `public, max-age=${PUBLIC_PROPERTIES_CACHE_MAX_AGE_SECONDS}, stale-while-revalidate=${PUBLIC_PROPERTIES_CACHE_STALE_SECONDS}`;
@@ -248,6 +268,20 @@ function normalizePublicOpportunitySummary(row = {}) {
       land,
       other
     }
+  };
+}
+
+function approximatePublicPagination({ page, limit, offset, rowCount, hasMore }) {
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.max(1, Number(limit) || 1);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeRowCount = Math.max(0, Number(rowCount) || 0);
+  return {
+    total: safeOffset + safeRowCount + (hasMore ? 1 : 0),
+    page: safePage,
+    limit: safeLimit,
+    totalPages: hasMore ? safePage + 1 : Math.max(1, safePage),
+    approximate: true
   };
 }
 
@@ -1593,16 +1627,10 @@ async function listPropertiesHandler(req, res, next) {
       );
       opportunitySummary = normalizePublicOpportunitySummary(summaryResult.rows[0] || {});
     } else {
-      const countResult = await db.query(
-        `SELECT COUNT(*)::int AS total
-         FROM properties p
-         ${where}`,
-        values
-      );
-      opportunitySummary = normalizePublicOpportunitySummary({ total: countResult.rows[0]?.total || 0 });
+      opportunitySummary = null;
     }
-    const total = opportunitySummary.total;
-    if (total === 0) {
+    const total = opportunitySummary?.total || 0;
+    if (includeSummary && total === 0) {
       try {
         await db.query(
           `INSERT INTO property_search_requests (user_phone, payload)
@@ -1673,7 +1701,8 @@ async function listPropertiesHandler(req, res, next) {
     const extraFieldsSelectSql = adminAccess
       ? 'p.extra_fields AS admin_extra_fields'
       : `${publicExtraFieldsSql} AS admin_extra_fields`;
-    const listValues = [...values, limit, offset];
+    const rowLimit = includeSummary ? limit : limit + 1;
+    const listValues = [...values, rowLimit, offset];
 
     const listResult = await db.query(
       `WITH public_page_source AS (
@@ -1760,6 +1789,17 @@ async function listPropertiesHandler(req, res, next) {
       ORDER BY public_page.__page_order`,
       listValues
     );
+    const hasMoreRows = !includeSummary && listResult.rows.length > limit;
+    const responseRows = hasMoreRows ? listResult.rows.slice(0, limit) : listResult.rows;
+    const pagination = includeSummary
+      ? toPagination(total, page, limit)
+      : approximatePublicPagination({
+        page,
+        limit,
+        offset,
+        rowCount: responseRows.length,
+        hasMore: hasMoreRows
+      });
     if (hasRadiusSearch) {
       try {
         await db.query(
@@ -1793,7 +1833,7 @@ async function listPropertiesHandler(req, res, next) {
               land_title_available: landTitleAvailable || null,
               commercial_type: commercialType || null
             },
-            result_count: listResult.rows.length,
+            result_count: responseRows.length,
             outside_uganda: false
           })]
         );
@@ -1804,7 +1844,7 @@ async function listPropertiesHandler(req, res, next) {
 
     const payload = {
       ok: true,
-      data: listResult.rows.map((row) => {
+      data: responseRows.map((row) => {
         const {
           admin_extra_fields: adminExtraFields,
           source: rowSource,
@@ -1900,9 +1940,9 @@ async function listPropertiesHandler(req, res, next) {
         }
       } : null,
       summary: {
-        public_opportunities: includeSummary ? opportunitySummary : { total: opportunitySummary.total }
+        public_opportunities: includeSummary ? opportunitySummary : null
       },
-      pagination: toPagination(total, page, limit)
+      pagination
     };
     if (canUsePublicResponseCache) setPublicPropertiesCache(publicCache.key, payload);
     res.set('Cache-Control', canUsePublicResponseCache ? publicPropertiesCacheControl() : 'no-store');
@@ -3512,7 +3552,16 @@ router.patch('/:id/status', requireListingModerationAccess, async (req, res, nex
 
     let alertMatching = null;
     if (nextStatus === 'approved' && current.status !== 'approved') {
-      alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+      if (manualNotificationOnly) {
+        alertMatching = { deferred: true, reason: 'fast_manual_notification_response' };
+        runPublicInventoryFollowup(
+          () => matchListingToSavedSearches(db, { ...current, ...listing }),
+          'Deferred listing saved-search matching failed',
+          { property_id: listing.id }
+        );
+      } else {
+        alertMatching = await matchListingToSavedSearches(db, { ...current, ...listing });
+      }
     }
     clearPublicPropertiesCache(`listing_status_${current.status || 'unknown'}_to_${nextStatus}`);
 

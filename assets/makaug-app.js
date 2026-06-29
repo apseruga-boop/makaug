@@ -10446,9 +10446,13 @@ async function staffApprovePreviewListing(propertyId) {
     });
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "approved");
     closeStaffListingPreview();
-    await refreshPublicListingsFromApi({ silent: true });
-    await renderStaffDashboard();
     toast(messageOpened ? "Listing approved. WhatsApp message is ready." : "Listing approved and live.");
+    void Promise.resolve().then(async () => {
+      await refreshPublicListingsFromApi({ silent: true });
+      await renderStaffDashboard();
+    }).catch((refreshError) => {
+      console.warn("Staff dashboard refresh failed after approval", refreshError);
+    });
   } catch (error) {
     toast(`Approval blocked: ${error.message || "backend checks failed"}`);
   }
@@ -10471,8 +10475,12 @@ async function staffRejectPreviewListing(propertyId) {
     });
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, "rejected", reason);
     closeStaffListingPreview();
-    await renderStaffDashboard();
     toast(messageOpened ? "Listing rejected. WhatsApp message is ready." : "Listing rejected.");
+    void Promise.resolve().then(async () => {
+      await renderStaffDashboard();
+    }).catch((refreshError) => {
+      console.warn("Staff dashboard refresh failed after rejection", refreshError);
+    });
   } catch (error) {
     toast(`Reject failed: ${error.message || "request failed"}`);
   }
@@ -10494,12 +10502,21 @@ async function staffModerateListing(propertyId, status) {
   try {
     const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
-      body: { status: cleanStatus, reason, manual_notification_only: cleanStatus === "rejected" }
+      body: {
+        status: cleanStatus,
+        reason,
+        fast_admin_render: ["approved", "rejected"].includes(cleanStatus),
+        manual_notification_only: ["approved", "rejected"].includes(cleanStatus)
+      }
     });
     const messageOpened = openStaffOwnerStatusWhatsApp(statusRes?.data || {}, cleanStatus, reason);
-    await refreshPublicListingsFromApi({ silent: true });
-    await renderStaffDashboard();
     toast(messageOpened ? "WhatsApp message is ready." : (cleanStatus === "approved" ? "Listing approved and sent live." : `Listing updated: ${cleanStatus}.`));
+    void Promise.resolve().then(async () => {
+      await refreshPublicListingsFromApi({ silent: true });
+      await renderStaffDashboard();
+    }).catch((refreshError) => {
+      console.warn("Staff dashboard refresh failed after moderation", refreshError);
+    });
   } catch (error) {
     toast(`Listing moderation failed: ${error.message || "request failed"}`);
   }
@@ -20106,6 +20123,23 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
   }
 
   let statusResponse = null;
+  let ownerNotificationOpened = false;
+  const maybeOpenOwnerNotification = () => {
+    const waPayload = statusResponse?.notification?.whatsapp || {};
+    if (!["approved", "rejected"].includes(normalizedStatus)) return false;
+    if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
+    const fallbackMessage = normalizedStatus === "rejected"
+      ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
+      : buildAdminApprovalWhatsAppMessage(listing);
+    openAdminWhatsAppMessageModal({
+      title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
+      listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
+      phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
+      message: waPayload.message || fallbackMessage,
+      manualUrl: waPayload.manual_url || ""
+    });
+    return true;
+  };
   if (backendId) {
     try {
       if (isLiveApi && adminActiveReview?.id && String(adminActiveReview.id) === String(backendId)) {
@@ -20140,6 +20174,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
 	      adminRenderListingStatusLocally(listing, normalizedStatus, backendId || localId, {
 	        wasPending: wasPendingBeforeStatusUpdate
 	      });
+	      if (!ownerNotificationOpened) ownerNotificationOpened = maybeOpenOwnerNotification();
 	      if (normalizedStatus === "approved") {
 	        try {
 	          const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`, {
@@ -20168,24 +20203,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     }
   }
 
-  let ownerNotificationOpened = false;
-  const maybeOpenOwnerNotification = () => {
-    const waPayload = statusResponse?.notification?.whatsapp || {};
-    if (!["approved", "rejected"].includes(normalizedStatus)) return false;
-    if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
-    const fallbackMessage = normalizedStatus === "rejected"
-      ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
-      : buildAdminApprovalWhatsAppMessage(listing);
-    openAdminWhatsAppMessageModal({
-      title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
-      listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
-      phone: waPayload.phone || statusResponse?.lister_phone || listing.lister_phone || "",
-      message: waPayload.message || fallbackMessage,
-      manualUrl: waPayload.manual_url || ""
-    });
-    return true;
-	  };
-	  ownerNotificationOpened = maybeOpenOwnerNotification();
+	  if (!ownerNotificationOpened) ownerNotificationOpened = maybeOpenOwnerNotification();
 
 	  if (normalizedStatus === "approved") {
 	    setAdminWorkflowTab("live");
@@ -32572,9 +32590,12 @@ async function fetchPublicPaginatedRows(path, options = {}) {
   let firstResponse = null;
   let page = 1;
   let totalPages = 1;
+  const hasSummaryParam = /[?&](include_summary|includeSummary|summary)=/i.test(path);
   do {
     const separator = path.includes("?") ? "&" : "?";
-    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}`, { skipAuth: true });
+    const includeSummary = options.includeSummary !== false && page === 1;
+    const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;
+    const response = await apiRequest(`${path}${separator}limit=${limit}&page=${page}${summaryParam}`, { skipAuth: true });
     if (!firstResponse) firstResponse = response;
     rows.push(...(Array.isArray(response?.data) ? response.data : []));
     totalPages = Math.max(1, Number(response?.pagination?.totalPages || 1));
@@ -32587,10 +32608,11 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
   try {
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 200 });
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", { limit: 100, maxPages: 20, includeSummary: false });
     const rows = Array.isArray(publicRows) ? publicRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-    publicListingsApiStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
-    const apiTotal = Number(publicListingsApiStats?.total ?? firstResponse?.pagination?.total ?? rows.length);
+    const nextStats = normalizeHeroOpportunityStats(firstResponse?.summary?.public_opportunities || firstResponse?.summary) || null;
+    if (nextStats) publicListingsApiStats = nextStats;
+    const apiTotal = Number(publicListingsApiStats?.total ?? (firstResponse?.pagination?.approximate ? rows.length : firstResponse?.pagination?.total) ?? rows.length);
     publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
     let featuredRows = [];
     try {

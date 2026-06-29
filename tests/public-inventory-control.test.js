@@ -13,6 +13,7 @@ const adminRouteSource = fs.readFileSync('routes/admin.js', 'utf8');
 const agentsRouteSource = fs.readFileSync('routes/agents.js', 'utf8');
 const propertiesRouteSource = fs.readFileSync('routes/properties.js', 'utf8');
 const serverSource = fs.readFileSync('server.js', 'utf8');
+const publicInventoryPerformanceMigration = fs.readFileSync('db/migrations/066_public_inventory_performance.sql', 'utf8');
 
 function functionSource(name) {
   const start = appSource.indexOf(`function ${name}(`);
@@ -107,11 +108,17 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 200 \}\)/);
-  assert.doesNotMatch(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1&include_summary=false"/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 20, includeSummary: false \}\)/);
+  assert(appSource.includes('const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;'));
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
-  assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}`, \{ skipAuth: true \}\)/);
+  assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`, \{ skipAuth: true \}\)/);
+  assert.match(routeSource, /} else \{\s*opportunitySummary = null;\s*\}/);
+  assert.match(routeSource, /const rowLimit = includeSummary \? limit : limit \+ 1/);
+  assert.match(routeSource, /const pagination = includeSummary[\s\S]*approximatePublicPagination/);
+  assert.doesNotMatch(routeSource, /} else \{\s*const countResult = await db\.query/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+  assert.match(publicInventoryPerformanceMigration, /idx_properties_public_live_created/);
+  assert.match(publicInventoryPerformanceMigration, /idx_property_images_public_primary_lookup/);
 });
 
 test('public featured property feed only returns featured backend listings', () => {
@@ -220,7 +227,10 @@ test('student public listings are discoverable from backend listing aliases', ()
 });
 
 test('public properties API is cacheable and uses the fast public summary path', () => {
-  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = 60 \* 1000/);
+  assert.match(propertiesRouteSource, /function readPositiveIntegerEnv\(names, fallback\)/);
+  assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_TTL_MS = readPositiveIntegerEnv\(/);
+  assert.match(propertiesRouteSource, /PUBLIC_OPPORTUNITY_SUMMARY_CACHE_TTL_MS/);
+  assert.match(propertiesRouteSource, /60 \* 1000/);
   assert.match(propertiesRouteSource, /function publicPropertiesCacheControl\(\)/);
   assert.match(propertiesRouteSource, /function clearPublicPropertiesCache\(reason = 'public_inventory_changed'\)/);
   assert.match(propertiesRouteSource, /PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS = new Set\(\['cache_refresh', 'cacheRefresh', 'deploy_probe', 'v', '_'\]\)/);
@@ -230,7 +240,9 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(propertiesRouteSource, /X-Makaug-Properties-Cache', canUsePublicResponseCache \? \(forcePublicCacheRefresh \? 'REFRESH' : 'MISS'\) : 'BYPASS'/);
   assert.match(propertiesRouteSource, /function fastPublicOpportunityBucketSql\(alias = 'p'\)/);
   assert.match(propertiesRouteSource, /const opportunityBucketSql = fastPublicOpportunityBucketSql\('p'\)/);
-  assert.match(propertiesRouteSource, /SELECT COUNT\(\*\)::int AS total\s+FROM properties p/);
+  assert.match(propertiesRouteSource, /function approximatePublicPagination/);
+  assert.match(propertiesRouteSource, /public_opportunities: includeSummary \? opportunitySummary : null/);
+  assert.doesNotMatch(propertiesRouteSource, /SELECT COUNT\(\*\)::int AS total\s+FROM properties p\s+\$\{where\}/);
   assert.match(propertiesRouteSource, /WITH public_page_source AS/);
   assert.match(propertiesRouteSource, /COALESCE\(p\.extra_fields, '\{\}'::jsonb\)\s+- 'raw_source_post'/);
   assert.match(propertiesRouteSource, /WHERE i\.property_id = public_page\.id/);
@@ -243,6 +255,8 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
   assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
+  assert.match(propertiesRouteSource, /fast_manual_notification_response/);
+  assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*\(\) => matchListingToSavedSearches/);
   assert.doesNotMatch(propertiesRouteSource, /const opportunityBucketSql = publicOpportunityBucketSql\('p'\)/);
   assert.match(propertiesRouteSource, /Cache-Control', canUsePublicResponseCache \? publicPropertiesCacheControl\(\) : 'no-store'/);
 });
@@ -301,9 +315,12 @@ test('agent deep links open the broker profile route directly', () => {
 test('approval WhatsApp notification opens before heavy admin dashboard refresh', () => {
   const source = asyncFunctionSource('adminSetListingStatus');
   const modalIndex = source.indexOf('openAdminWhatsAppMessageModal({');
+  const detailIndex = source.indexOf('const detail = await apiRequest(`/api/properties/${encodeURIComponent(backendId)}`');
   const refreshIndex = source.indexOf('void renderAdminDashboard().catch');
   assert(modalIndex > -1, 'status flow should still open the owner WhatsApp modal');
+  assert(detailIndex > -1, 'status flow should still refresh approved listing detail');
   assert(refreshIndex > -1, 'dashboard refresh should be non-blocking after status update');
+  assert(modalIndex < detailIndex, 'approval WhatsApp modal should open before approved listing detail refresh');
   assert(modalIndex < refreshIndex, 'approval WhatsApp modal should open before dashboard refresh starts');
   assert.match(source, /buildAdminApprovalWhatsAppMessage\(listing\)/);
   assert.doesNotMatch(source, /await renderAdminDashboard\(\);/);
@@ -330,4 +347,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-featured-feed-fix-20260525/);
   assert.match(htmlSource, /king-live-public-parity-20260609/);
   assert.match(htmlSource, /public-opportunity-counts-20260629/);
+  assert.match(htmlSource, /public-inventory-performance-20260629/);
 });
