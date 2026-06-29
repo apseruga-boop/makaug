@@ -305,6 +305,7 @@ test('approval WhatsApp notification opens before heavy admin dashboard refresh'
   assert(modalIndex > -1, 'status flow should still open the owner WhatsApp modal');
   assert(refreshIndex > -1, 'dashboard refresh should be non-blocking after status update');
   assert(modalIndex < refreshIndex, 'approval WhatsApp modal should open before dashboard refresh starts');
+  assert.match(source, /buildAdminApprovalWhatsAppMessage\(listing\)/);
   assert.doesNotMatch(source, /await renderAdminDashboard\(\);/);
 });
 

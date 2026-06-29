@@ -46,6 +46,7 @@ function run() {
   assert(staffRoutes.includes("router.patch('/advertising/inquiries/:id'"), 'staff advertising update API route should exist');
   assert(staffRoutes.includes("router.post('/assistant/query'"), 'staff AI assistant route should exist');
   assert(staffRoutes.includes('staff_contact_export_v1'), 'staff AI should expose controlled contact export answers');
+  assert(staffRoutes.includes('buildAutomatedListingReview'), 'staff listing preview should return the same automated review checks as King review');
   assert(staffRoutes.includes('matchAll(/\\b(?:in|around|near|at)'), 'staff AI should parse the final real location phrase instead of greedy "for people" text');
   assert(staffRoutes.includes('(\\d{1,3})\\s+(?:phone|phones|number|numbers|contact|contacts|rows|people)'), 'staff AI contact export should honor "give me 5 phone numbers" style limits');
   assert(staffRoutes.includes('normalizeReviewLocationHierarchy'), 'staff listing edits should validate Uganda location hierarchy');
@@ -64,6 +65,8 @@ function run() {
 
   assert(propertyRoutes.includes('requireListingModerationAccess'), 'property status route should use listing moderation access');
   assert(propertyRoutes.includes("actorRole === 'moderator'"), 'moderator-specific publish restrictions should exist');
+  assert(propertyRoutes.includes('Found-online staff approval requires source review confirmation'), 'moderator found-online approval should require explicit source review confirmation');
+  assert(propertyRoutes.includes('found_online_source_reviewed'), 'found-online approvals should persist source review confirmation');
   assert(propertyRoutes.includes('staff_listing_approved'), 'moderator approvals should be logged');
 
   assert(html.includes('id="page-staff-dashboard"'), 'staff dashboard page should be in the product');
@@ -103,6 +106,12 @@ function run() {
   assert(app.includes('initAdminReviewLocationMap(preview)'), 'staff preview should render the same King review map pin control');
   assert(app.includes('const location = preview.location_review || {}'), 'staff preview should define location guardrail data before rendering warnings');
   assert(app.includes('openStaffOwnerStatusWhatsApp'), 'staff decisions should open owner WhatsApp notification drafts');
+  assert(app.includes('function staffBuildReviewWarningOverrides'), 'staff approval should build moderator warning overrides from preview checks');
+  assert(app.includes('saveStaffListingPreview(propertyId, { prepareApproval: true })'), 'staff approval should save preview facts with approval overrides before publishing');
+  assert(app.includes('warning_overrides: warningOverrides'), 'staff approval status call should submit warning overrides to the live publish API');
+  assert(app.includes('const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview)'), 'staff approval should detect found-online rows before publishing');
+  assert(app.includes('staff_source_reviewed: true'), 'staff found-online approval should confirm source review to the backend');
+  assert(app.includes('buildAdminApprovalWhatsAppMessage(listing)'), 'staff approval WhatsApp modal should have the same approval-message fallback as King moderation');
   assert(app.includes('Approve live after preview'), 'frontend should require preview before live approval');
   assert(app.includes('/api/staff/source-intake/exact-social/import'), 'frontend should call staff source intake import');
   assert(app.includes('/api/staff/source-intake/social-sweep'), 'frontend should call staff source sweep');
@@ -122,6 +131,10 @@ function run() {
   assert(staffRoutes.includes('source_presets: STAFF_SOURCE_PRESETS'), 'staff dashboard payload should include source presets');
   assert(staffRoutes.includes("whatsapp: { ...whatsappSummary, bridge: whatsappBridge }"), 'staff dashboard payload should expose WhatsApp bridge status');
   assert(staffRoutes.includes('FROM whatsapp_messages m'), 'staff dashboard and assistant should fall back to raw WhatsApp messages');
+  assert(staffRoutes.includes('warning_overrides: safeJsonObject(req.body.warning_overrides, {})'), 'staff review save API should accept moderator warning overrides');
+  assert(staffRoutes.includes('extraPatch.review_warning_overrides = warningOverrides'), 'staff review save should persist warning overrides for the live publish route');
+  assert(staffRoutes.includes('staff_review_warning_overrides_by'), 'staff review save should audit who recorded warning overrides');
+  assert(staffRoutes.includes('checklist_items: automatedReview.checks'), 'staff preview should expose automated warning rows for moderator override keys');
 
   console.log('staff-moderator-workbench tests passed');
 }

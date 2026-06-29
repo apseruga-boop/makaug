@@ -13,6 +13,8 @@ const {
   regionForDistrict
 } = require('../utils/ugandaLocationHierarchy');
 const { addLeadActivity } = require('../services/leadService');
+const { buildAutomatedListingReview } = require('../services/listingModerationService');
+const { getCachedExternalDuplicateScan } = require('../services/externalDuplicateScanService');
 const { getProviderClient, getProviderMeta, getTaskModel } = require('../services/llmProvider');
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
@@ -848,6 +850,13 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
     setParts.push(`amenities = $${values.length}::jsonb`);
     changed.push('amenities');
   }
+  const warningOverrides = safeJsonObject(reviewPatch.warning_overrides, null);
+  if (warningOverrides) {
+    extraPatch.review_warning_overrides = warningOverrides;
+    extraPatch.staff_review_warning_overrides = warningOverrides;
+    extraPatch.staff_review_warning_overrides_at = new Date().toISOString();
+    extraPatch.staff_review_warning_overrides_by = actorId(req);
+  }
   if (Object.keys(extraPatch).length) {
     const latitude = toNullableFloat(patch.latitude ?? patch.lat);
     const longitude = toNullableFloat(patch.longitude ?? patch.lng ?? patch.lon ?? patch.long);
@@ -924,7 +933,7 @@ async function updateStaffEditableListing(req, propertyId, listingPatch = {}, re
       reason || null,
       notes || null,
       JSON.stringify(checklist || {}),
-      JSON.stringify({ changed_fields: changed, hierarchy })
+      JSON.stringify({ changed_fields: changed, hierarchy, warning_override_count: warningOverrides ? Object.keys(warningOverrides).length : 0 })
     ]
   ).catch(() => {});
   await logStaffActivity(req, 'staff_listing_preview_saved', {
@@ -945,7 +954,7 @@ async function loadStaffPropertyPreview(propertyId) {
     null
   );
   if (!property) return null;
-  const [images, duplicates, events] = await Promise.all([
+  const [images, duplicates, events, previousListerListings, reusedImages, idNumberMatches, matchingUsers] = await Promise.all([
     safeRows(
       `SELECT id, url, is_primary, sort_order, slot_key, room_label, created_at
        FROM property_images
@@ -993,12 +1002,63 @@ async function loadStaffPropertyPreview(propertyId) {
        FROM property_moderation_events
        WHERE property_id = $1
        ORDER BY created_at DESC
-       LIMIT 30`,
+      LIMIT 30`,
       [property.id]
+    ),
+    safeRows(
+      `SELECT id, title, listing_type, district, area, price, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND (
+           ($2::text IS NOT NULL AND lister_phone = $2)
+           OR ($3::text IS NOT NULL AND LOWER(COALESCE(lister_email, '')) = LOWER($3))
+         )
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [property.id, property.lister_phone || null, property.lister_email || null]
+    ),
+    safeRows(
+      `SELECT DISTINCT p.id, p.title, p.status, i.url
+       FROM property_images current_i
+       JOIN property_images i ON i.url = current_i.url AND i.property_id <> current_i.property_id
+       JOIN properties p ON p.id = i.property_id
+       WHERE current_i.property_id = $1
+       ORDER BY p.title ASC
+       LIMIT 20`,
+      [property.id]
+    ),
+    safeRows(
+      `SELECT id, title, lister_name, lister_phone, lister_email, status, created_at
+       FROM properties
+       WHERE id <> $1
+         AND $2::text IS NOT NULL
+         AND id_number = $2
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [property.id, property.id_number || null]
+    ),
+    safeRows(
+      `SELECT id, first_name, last_name, phone, email, role, status, created_at
+       FROM users
+       WHERE ($1::text IS NOT NULL AND phone = $1)
+          OR ($2::text IS NOT NULL AND LOWER(COALESCE(email, '')) = LOWER($2))
+       ORDER BY created_at DESC
+       LIMIT 20`,
+      [property.lister_phone || null, property.lister_email || null]
     )
   ]);
   const extra = safeJsonObject(property.extra_fields, {});
   const sourceUrl = firstNonEmpty(extra.source_url, extra.source_post_url, extra.tiktok_url, extra.youtube_url, extra.video_url);
+  const automatedReview = buildAutomatedListingReview({
+    listing: property,
+    images,
+    previousListerListings,
+    likelyDuplicates: duplicates,
+    reusedImages,
+    idNumberMatches,
+    matchingUsers,
+    externalDuplicateScan: getCachedExternalDuplicateScan(property)
+  });
   return {
     ...property,
     images,
@@ -1024,9 +1084,12 @@ async function loadStaffPropertyPreview(propertyId) {
         : []
     },
     review: {
-      checklist: safeJsonObject(property.moderation_checklist, {}),
+      checklist: automatedReview.checklist || safeJsonObject(property.moderation_checklist, {}),
+      checklist_items: automatedReview.checks || [],
       notes: property.moderation_notes || '',
-      reason: property.moderation_reason || extra.moderation_reason || ''
+      reason: property.moderation_reason || extra.moderation_reason || '',
+      warning_overrides: safeJsonObject(extra.review_warning_overrides, {}),
+      automated: automatedReview
     },
     events
   };
@@ -1255,7 +1318,8 @@ router.patch('/properties/:id/review', async (req, res, next) => {
       checklist: safeJsonObject(req.body.checklist, {}),
       notes: req.body.notes || req.body.review_notes,
       reason: req.body.reason,
-      stage: req.body.stage || 'in_review'
+      stage: req.body.stage || 'in_review',
+      warning_overrides: safeJsonObject(req.body.warning_overrides, {})
     };
     const saved = await updateStaffEditableListing(req, req.params.id, listingPatch, reviewPatch);
     const preview = await loadStaffPropertyPreview(req.params.id);

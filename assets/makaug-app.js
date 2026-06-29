@@ -10325,6 +10325,44 @@ function staffReviewPatch() {
   };
 }
 
+function staffBuildReviewWarningOverrides(review = adminActiveReview) {
+  const currentReview = review || {};
+  const reviewId = String(currentReview.id || "");
+  const existing = typeof getAdminReviewWarningOverrides === "function"
+    ? getAdminReviewWarningOverrides(currentReview)
+    : {};
+  const items = typeof getAdminReviewWarningItems === "function" ? getAdminReviewWarningItems(currentReview) : [];
+  const overrides = { ...(existing && typeof existing === "object" ? existing : {}) };
+  const reviewedAt = new Date().toISOString();
+  const notes = document.getElementById("admin-review-notes")?.value || "";
+  items.forEach((item) => {
+    const status = String(item?.status || "").toLowerCase();
+    const needsOverride = status === "warning" || ((status === "fail" || status === "error") && item?.overrideable === true);
+    if (!needsOverride) return;
+    const key = typeof adminWarningOverrideKey === "function" ? adminWarningOverrideKey(item) : String(item?.key || item?.label || "").trim();
+    if (!key || overrides[key]) return;
+    overrides[key] = {
+      check_key: key,
+      label: item.label || item.key || key,
+      message: item.message || "",
+      evidence_id: `staff-review-${reviewId || "listing"}-${key}`,
+      reviewer: "staff_moderator_preview",
+      review_notes: notes,
+      overridden_at: reviewedAt
+    };
+  });
+  if (reviewId) {
+    adminReviewWarningOverrides[reviewId] = overrides;
+    if (adminActiveReview && String(adminActiveReview.id || "") === reviewId) {
+      adminActiveReview.review = {
+        ...(adminActiveReview.review || {}),
+        warning_overrides: overrides
+      };
+    }
+  }
+  return overrides;
+}
+
 async function openStaffListingPreview(propertyId) {
   try {
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/preview`);
@@ -10334,13 +10372,17 @@ async function openStaffListingPreview(propertyId) {
   }
 }
 
-async function saveStaffListingPreview(propertyId) {
+async function saveStaffListingPreview(propertyId, options = {}) {
+  const warningOverrides = options.prepareApproval === true
+    ? staffBuildReviewWarningOverrides(adminActiveReview)
+    : getAdminReviewWarningOverrides(adminActiveReview);
   try {
     const response = await apiRequest(`/api/staff/properties/${encodeURIComponent(propertyId)}/review`, {
       method: "PATCH",
       body: {
         listing: staffListingPreviewPatch(),
-        ...staffReviewPatch()
+        ...staffReviewPatch(),
+        warning_overrides: warningOverrides
       }
     });
     renderStaffListingPreviewModal(response?.data || {});
@@ -10362,7 +10404,10 @@ function openStaffOwnerStatusWhatsApp(statusData = {}, normalizedStatus = "", re
     ...statusData
   };
   const phone = waPayload.phone || statusData.lister_phone || listing.lister_phone || "";
-  const message = waPayload.message || (status === "rejected" ? buildAdminRejectionWhatsAppMessage(listing, reason) : "");
+  const fallbackMessage = status === "rejected"
+    ? buildAdminRejectionWhatsAppMessage(listing, reason)
+    : buildAdminApprovalWhatsAppMessage(listing);
+  const message = waPayload.message || fallbackMessage;
   if (!(phone || waPayload.manual_url) || !message) return false;
   openAdminWhatsAppMessageModal({
     title: status === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
@@ -10378,15 +10423,24 @@ async function staffApprovePreviewListing(propertyId) {
   const ok = window.confirm("Approve this listing live after the saved preview facts? It will appear on the public website if backend checks pass.");
   if (!ok) return;
   try {
-    await saveStaffListingPreview(propertyId);
+    await saveStaffListingPreview(propertyId, { prepareApproval: true });
     const review = staffReviewPatch();
+    const warningOverrides = staffBuildReviewWarningOverrides(adminActiveReview);
+    const foundOnlineApproval = typeof adminIsSourcedInventoryCandidate === "function" && adminIsSourcedInventoryCandidate(adminActiveReview);
     const statusRes = await apiRequest(`/api/properties/${encodeURIComponent(propertyId)}/status`, {
       method: "PATCH",
       body: {
+        ...(foundOnlineApproval ? {
+          sourced_candidate_override: true,
+          found_online_location_confirmed: true,
+          source_reviewed: true,
+          staff_source_reviewed: true
+        } : {}),
         status: "approved",
         reason: review.reason || "Staff approved after previewing and saving listing facts",
         review_notes: review.notes || "Staff preview completed before approval",
         checklist: review.checklist,
+        warning_overrides: warningOverrides,
         manual_notification_only: true
       }
     });
@@ -17945,6 +17999,20 @@ function useAdminGeneratedDecisionReason() {
   toast("Suggested rejection message added.");
 }
 
+function buildAdminApprovalWhatsAppMessage(listing = {}) {
+  const ref = listing.inquiry_reference || listing.id || "-";
+  const title = listing.title || "your makaug property listing";
+  const rawPath = listing.public_url || listing.share_url || listing.url || (listing.slug ? `/property/${listing.slug}` : `/?property=${encodeURIComponent(listing.id || "")}`);
+  const origin = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "https://makaug.com";
+  const publicUrl = /^https?:\/\//i.test(String(rawPath)) ? rawPath : `${origin}${String(rawPath).startsWith("/") ? "" : "/"}${rawPath}`;
+  return [
+    "makaug: your listing is approved and live.",
+    `Ref: ${ref}`,
+    `Title: ${title}`,
+    `View/share: ${publicUrl}`
+  ].join("\n");
+}
+
 function buildAdminRejectionWhatsAppMessage(listing = {}, reason = "") {
   const name = listing.lister_name || "there";
   const ref = listing.inquiry_reference || listing.id || "-";
@@ -20107,7 +20175,7 @@ async function adminSetListingStatus(localId, nextStatus, backendId = "", option
     if (!(waPayload.message || waPayload.manual_url || waPayload.phone || listing.lister_phone)) return false;
     const fallbackMessage = normalizedStatus === "rejected"
       ? buildAdminRejectionWhatsAppMessage(listing, moderationReason)
-      : "";
+      : buildAdminApprovalWhatsAppMessage(listing);
     openAdminWhatsAppMessageModal({
       title: normalizedStatus === "approved" ? "Listing is live: send approval WhatsApp" : "Send rejection WhatsApp",
       listingLabel: statusResponse?.inquiry_reference || listing.inquiry_reference || listing.title || backendId || "-",
