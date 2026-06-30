@@ -15,7 +15,7 @@ CREATE INDEX IF NOT EXISTS idx_property_images_public_primary_lookup
   ON property_images (property_id, is_primary DESC, sort_order ASC, created_at ASC);
 
 CREATE INDEX IF NOT EXISTS idx_property_images_duplicate_url_lookup
-  ON property_images (url, property_id)
+  ON property_images ((md5(url)), property_id)
   WHERE COALESCE(url, '') <> '';
 
 CREATE INDEX IF NOT EXISTS idx_properties_lister_phone_created

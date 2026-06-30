@@ -119,6 +119,7 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
   assert.match(publicInventoryPerformanceMigration, /idx_properties_public_live_created/);
   assert.match(publicInventoryPerformanceMigration, /idx_property_images_public_primary_lookup/);
+  assert.match(publicInventoryPerformanceMigration, /ON property_images \(\(md5\(url\)\), property_id\)/);
 });
 
 test('public featured property feed only returns featured backend listings', () => {
