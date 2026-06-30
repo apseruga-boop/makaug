@@ -1606,16 +1606,15 @@ function buildYouTubeSearchJobs({
   offset = 0,
   publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
   maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+  jobMode = 'all',
 } = {}) {
   const start = cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
   const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10);
+  const normalizedJobMode = normalizeYouTubeJobMode(jobMode);
   const sortedSources = sortYouTubeSourcesForDiscovery(sources
     .filter((source) => normalizePlatform(source.platform) === 'youtube')
   );
-  const startOffset = sortedSources.length ? cappedOffset(offset) % sortedSources.length : 0;
-  return sortedSources
-    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
-    .map((source) => {
+  const jobs = sortedSources.map((source) => {
       const channelLookup = youtubeChannelLookupForSource(source);
       const searchMethod = channelLookup ? 'channel_uploads' : 'search';
       return {
@@ -1647,6 +1646,24 @@ function buildYouTubeSearchJobs({
         includes_shorts_and_long_form: true,
       };
     });
+  const filteredJobs = filterYouTubeJobsByMode(jobs, normalizedJobMode);
+  const startOffset = filteredJobs.length ? cappedOffset(offset) % filteredJobs.length : 0;
+  return filteredJobs
+    .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES));
+}
+
+function normalizeYouTubeJobMode(value = 'all') {
+  const normalized = cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if (['channel', 'channels', 'channel_upload', 'channel_uploads', 'uploads', 'known_channels'].includes(normalized)) return 'channel_uploads';
+  if (['search', 'broad_search', 'hashtag_search', 'hashtags'].includes(normalized)) return 'search';
+  return 'all';
+}
+
+function filterYouTubeJobsByMode(jobs = [], jobMode = 'all') {
+  const normalizedJobMode = normalizeYouTubeJobMode(jobMode);
+  if (normalizedJobMode === 'channel_uploads') return jobs.filter((job) => job.search_method === 'channel_uploads');
+  if (normalizedJobMode === 'search') return jobs.filter((job) => job.search_method === 'search');
+  return jobs;
 }
 
 function youtubeThumbnailUrls(thumbnails = {}) {
@@ -2411,6 +2428,7 @@ async function runSocialPlatformPostSweep({
   sourceOffset = 0,
   maxResultsPerSource = DEFAULT_X_RESULTS_PER_SOURCE,
   maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
+  youtubeJobMode = 'all',
   searchMode = 'all',
   lookbackDays = 0,
   fetchX = true,
@@ -2445,8 +2463,12 @@ async function runSocialPlatformPostSweep({
   const tiktokCaptureTasks = requestedPlatforms.includes('tiktok')
     ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
     : [];
+  const normalizedYoutubeJobMode = normalizeYouTubeJobMode(youtubeJobMode);
+  const unfilteredYoutubeSearchJobs = requestedPlatforms.includes('youtube')
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource, jobMode: 'all' })
+    : [];
   const youtubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource })
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource, jobMode: normalizedYoutubeJobMode })
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
@@ -2509,6 +2531,7 @@ async function runSocialPlatformPostSweep({
         offset: 0,
         publishedAfter: youtubeStartTime,
         maxPagesPerSource,
+        jobMode: 'channel_uploads',
       }).filter((job) => job.search_method === 'channel_uploads' && !existingJobKeys.has(job.source_key))
       : [];
     youtubeKnownChannelFallback = {
@@ -2624,6 +2647,8 @@ async function runSocialPlatformPostSweep({
     youtube: {
       source_count: youtubeSources.length,
       source_offset: normalizedSourceOffset,
+      job_mode: normalizedYoutubeJobMode,
+      unfiltered_search_job_count: unfilteredYoutubeSearchJobs.length,
       search_job_count: youtubeSearchJobs.length,
       api_configured: youtubeFetch.api_configured,
       api_key_env: youtubeFetch.api_key_env,
@@ -2705,6 +2730,8 @@ module.exports = {
   buildTikTokExactPostImportRows,
   buildKnownYouTubeChannelSourcesFromRows,
   buildYouTubeSearchJobs,
+  filterYouTubeJobsByMode,
+  normalizeYouTubeJobMode,
   buildXSearchJobs,
   importExactSocialSourcePosts,
   importTikTokExactVideoPosts,

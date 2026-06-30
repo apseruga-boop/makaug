@@ -3122,6 +3122,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const sourceOffset = req.body?.source_offset || req.body?.sourceOffset || 0;
     const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
     const maxPagesPerSource = req.body?.max_pages || req.body?.maxPages || 1;
+    const youtubeJobMode = req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'all';
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
     const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
@@ -3135,6 +3136,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       sourceOffset,
       maxResultsPerSource,
       maxPagesPerSource,
+      youtubeJobMode,
       searchMode,
       lookbackDays,
       publishedAfter

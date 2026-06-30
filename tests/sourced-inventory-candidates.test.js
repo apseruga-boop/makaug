@@ -19,6 +19,7 @@ const socialSearchServiceSource = read('services/socialSearchSourcedListingsServ
 const socialPlatformSweepServiceSource = read('services/socialPlatformPostDiscoveryService.js');
 const propertySourceRegistrySource = read('services/propertySourceRegistryService.js');
 const socialPlatformSweepScript = read('scripts/sweep-social-platform-posts.js');
+const continuousMonitorScript = read('scripts/run-continuous-social-monitor.js');
 const bakaimaPublicCopyMigration = read('db/migrations/041_remove_bakaima_public_approval_copy.sql');
 const foundOnlineSecondSweepMigration = read('db/migrations/045_expand_found_online_sweep_images_and_sources.sql');
 const foundOnlinePublicLaunchMigration = read('db/migrations/050_publish_found_online_launch_inventory.sql');
@@ -1145,6 +1146,50 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(channelYoutubeJobs[0].channel_handle, 'TrustedAgentUg', 'YouTube channel jobs should retain the source handle for API channel lookup');
   assert.strictEqual(channelYoutubeJobs[0].endpoint, YOUTUBE_PLAYLIST_ITEMS_URL, 'YouTube channel jobs should read upload playlist items');
   assert.strictEqual(channelYoutubeJobs[0].channel_lookup_endpoint, YOUTUBE_CHANNELS_URL, 'YouTube channel jobs should resolve handles through the channel lookup endpoint');
+  const channelOnlyYoutubeJobs = buildYouTubeSearchJobs({
+    sources: [
+      {
+        key: 'youtube-search-feed',
+        name: 'YouTube search feed',
+        platform: 'youtube',
+        sourceType: 'public_video_search_feed',
+        url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda',
+      },
+      {
+        key: 'youtube-fresh-agent-channel',
+        name: 'Fresh Agent Channel',
+        platform: 'youtube',
+        sourceType: 'creator_channel',
+        url: 'https://www.youtube.com/@FreshAgentUg',
+      },
+    ],
+    limit: 2,
+    jobMode: 'channel_uploads',
+  });
+  assert.strictEqual(channelOnlyYoutubeJobs.length, 1, 'continuous YouTube monitor mode should skip broad search feeds');
+  assert.strictEqual(channelOnlyYoutubeJobs[0].search_method, 'channel_uploads', 'continuous YouTube monitor mode should keep only channel upload jobs');
+  const searchOnlyYoutubeJobs = buildYouTubeSearchJobs({
+    sources: [
+      {
+        key: 'youtube-search-feed',
+        name: 'YouTube search feed',
+        platform: 'youtube',
+        sourceType: 'public_video_search_feed',
+        url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda',
+      },
+      {
+        key: 'youtube-fresh-agent-channel',
+        name: 'Fresh Agent Channel',
+        platform: 'youtube',
+        sourceType: 'creator_channel',
+        url: 'https://www.youtube.com/@FreshAgentUg',
+      },
+    ],
+    limit: 2,
+    jobMode: 'search',
+  });
+  assert.strictEqual(searchOnlyYoutubeJobs.length, 1, 'slower broad YouTube search mode should be explicit');
+  assert.strictEqual(searchOnlyYoutubeJobs[0].search_method, 'search', 'slower broad YouTube search mode should keep search jobs only');
   const broadYoutubeJobs = buildYouTubeSearchJobs({
     sources: [
       {
@@ -1409,7 +1454,14 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_review_records'), 'daily found-online sweeps should expose source-review records separately');
   assert(read('services/socialSearchSourcedListingsService.js').includes('daily_target_status'), 'daily found-online sweeps should return 200/day target status for King');
   assert(socialPlatformSweepScript.includes('--max-pages'), 'YouTube sweep script should expose bounded pagination per source');
+  assert(socialPlatformSweepScript.includes('--youtube-job-mode'), 'YouTube sweep script should expose channel-upload-only frequent mode');
+  assert.strictEqual(pkg.scripts['inventory:continuous-monitor'], 'node scripts/run-continuous-social-monitor.js', 'package should expose the continuous social monitor');
+  assert(continuousMonitorScript.includes('continuous_social_monitor_run'), 'continuous monitor should audit each confirmed run for cursor/proof');
+  assert(continuousMonitorScript.includes("'channel_uploads'"), 'continuous monitor should default frequent YouTube pulls to channel uploads');
+  assert(continuousMonitorScript.includes('next_source_offset'), 'continuous monitor should advance source offsets between runs');
+  assert(continuousMonitorScript.includes('runSocialPlatformPostSweep'), 'continuous monitor should use the existing sweep/import gate');
   assert(adminRoute.includes('max_pages') && adminRoute.includes('maxPagesPerSource'), 'admin YouTube sweep endpoint should accept bounded pagination');
+  assert(adminRoute.includes('youtube_job_mode') && adminRoute.includes('youtubeJobMode'), 'admin YouTube sweep endpoint should accept explicit job mode');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
   assert(frontend.includes('adminYouTubeSweepMethodLabel'), 'King dashboard should distinguish YouTube search feeds from channel-upload scans');
   assert(frontend.includes('in_window_result_count'), 'King dashboard should show how many channel videos are inside the 2026 source window');

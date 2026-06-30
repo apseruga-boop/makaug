@@ -25,6 +25,7 @@ function usage() {
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=50 --max-pages=2',
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=50 --max-pages=2',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --youtube-job-mode=channel_uploads --source-offset=0 --max-sources=25 --max-results=25',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
     '  node scripts/sweep-social-platform-posts.js --platform=students --dry-run --max-sources=60',
@@ -53,6 +54,7 @@ async function main() {
   const sourceOffset = argValue('--source-offset', '0');
   const maxResultsPerSource = argValue('--max-results', '25');
   const maxPagesPerSource = argValue('--max-pages', '1');
+  const youtubeJobMode = argValue('--youtube-job-mode', argValue('--youtube-mode', 'all'));
   const searchMode = argValue('--x-search-mode', 'all');
   const lookbackDays = argValue('--lookback-days', '0');
   const publishedAfter = argValue('--published-after', '2026-01-01T00:00:00.000Z');
@@ -68,6 +70,7 @@ async function main() {
     sourceOffset,
     maxResultsPerSource,
     maxPagesPerSource,
+    youtubeJobMode,
     searchMode,
     lookbackDays,
     publishedAfter,

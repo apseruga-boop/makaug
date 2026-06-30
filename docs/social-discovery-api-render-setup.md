@@ -74,15 +74,41 @@ Switch `--dry-run` to `--confirm` only after the reports show usable exact posts
 
 ## Render Cron Jobs
 
-Use bounded batches so Render does not timeout or rate-limit the API providers:
+Use bounded batches so Render does not timeout or rate-limit the API providers. The high-frequency job should keep to known YouTube channel uploads first; this keeps Makaug fresh without burning the daily YouTube Search quota on every tick.
 
 ```bash
+npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1
 npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=25
 npm run inventory:sweep-social-platforms -- --platform=x --confirm --x-search-mode=recent --lookback-days=7 --max-sources=25 --max-results=25
 npm run inventory:daily-source-sweep -- --confirm
 ```
 
 Advance `--source-offset` for YouTube batches to walk the 60,000-record registry instead of repeating the first sources.
+
+Recommended production cadence:
+
+- Every 10-15 minutes: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`. This follows known source channels, advances offsets through `audit_logs`, dedupes exact URLs, and pushes high-confidence rows through the existing auto-live/review gates.
+- Every 2-4 hours: `inventory:sweep-social-platforms` with `--youtube-job-mode=all` and a small `--max-sources` batch for broader hashtag/search discovery.
+- Once daily: `inventory:daily-source-sweep -- --confirm` to refresh the 60,000 source registry and King review queue baseline.
+
+Useful Render env controls for the continuous monitor:
+
+```bash
+CONTINUOUS_SOCIAL_MONITOR_PLATFORMS=youtube,x
+CONTINUOUS_SOCIAL_MONITOR_YOUTUBE_JOB_MODE=channel_uploads
+CONTINUOUS_SOCIAL_MONITOR_MAX_SOURCES=15
+CONTINUOUS_SOCIAL_MONITOR_MAX_RESULTS=25
+CONTINUOUS_SOCIAL_MONITOR_MAX_PAGES=1
+CONTINUOUS_SOCIAL_MONITOR_CADENCE_MINUTES=10
+CONTINUOUS_SOCIAL_MONITOR_PUBLISHED_AFTER=2026-01-01T00:00:00.000Z
+CONTINUOUS_SOCIAL_MONITOR_LOOKBACK_DAYS=7
+```
+
+For a dry proof before enabling the write cadence:
+
+```bash
+npm run inventory:continuous-monitor -- --dry-run
+```
 
 ## Approval Rules
 
