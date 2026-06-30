@@ -69,6 +69,8 @@ const {
   MAX_PLATFORM_SWEEP_SOURCES,
   DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   YOUTUBE_SOURCE_POST_WINDOW_START,
+  YOUTUBE_CHANNELS_URL,
+  YOUTUBE_PLAYLIST_ITEMS_URL,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
@@ -1115,8 +1117,31 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(youtubeJobs[0].published_after, '2026-02-01T00:00:00.000Z', 'YouTube jobs should start from the requested February window');
   assert.strictEqual(youtubeJobs[0].includes_shorts_and_long_form, true, 'YouTube jobs should not exclude Shorts or long-form videos');
   assert.strictEqual(youtubeJobs[0].max_pages, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 'YouTube jobs should carry the default bounded pagination setting');
-  assert(youtubeJobs[0].query.includes('nyumba'), 'YouTube searches should include local-language property terms');
-  assert(youtubeJobs[0].query.includes('student accommodation'), 'student YouTube searches should include student category terms');
+  assert.strictEqual(youtubeJobs[0].search_method, 'search', 'YouTube search-feed sources should use focused search queries');
+  assert.strictEqual(youtubeJobs[0].query, 'Kampala student hostel rooms Uganda', 'YouTube search-feed queries should keep the registry query focused');
+  assert(!youtubeJobs[0].query.includes('nyumba'), 'local-language alternatives should not be appended to every YouTube API query');
+  assert(youtubeJobs[0].coverage_terms.includes('nyumba'), 'YouTube search jobs should still carry local-language coverage metadata');
+  assert(youtubeJobs[0].coverage_terms.includes('student accommodation'), 'student YouTube searches should expose student category coverage metadata');
+  const channelYoutubeJobs = buildYouTubeSearchJobs({
+    sources: [{
+      key: 'youtube-agent-channel',
+      name: 'Trusted Agent Channel',
+      platform: 'youtube',
+      sourceType: 'creator_channel',
+      url: 'https://www.youtube.com/@TrustedAgentUg',
+      handle: '@TrustedAgentUg',
+      listingTypes: ['sale', 'rent'],
+      phone: '+256700000000',
+      canContactDirectly: true,
+      consentStatus: 'founder_reported_agent_permission',
+      trustLevel: 'authorised_founder_contact',
+    }],
+    limit: 1,
+  });
+  assert.strictEqual(channelYoutubeJobs[0].search_method, 'channel_uploads', 'trusted YouTube channel sources should scan channel uploads instead of broad q search');
+  assert.strictEqual(channelYoutubeJobs[0].channel_handle, 'TrustedAgentUg', 'YouTube channel jobs should retain the source handle for API channel lookup');
+  assert.strictEqual(channelYoutubeJobs[0].endpoint, YOUTUBE_PLAYLIST_ITEMS_URL, 'YouTube channel jobs should read upload playlist items');
+  assert.strictEqual(channelYoutubeJobs[0].channel_lookup_endpoint, YOUTUBE_CHANNELS_URL, 'YouTube channel jobs should resolve handles through the channel lookup endpoint');
   const broadYoutubeJobs = buildYouTubeSearchJobs({
     sources: [
       {
@@ -1155,7 +1180,8 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   );
   assert(broadYoutubeJobs.every((job) => job.includes_shorts_and_long_form), 'broad YouTube discovery jobs should include Shorts and long-form content');
   assert(!broadYoutubeJobs[0].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
-  assert(broadYoutubeJobs[0].query.includes('to let'), 'rental YouTube discovery jobs should include rental category terms');
+  assert.strictEqual(broadYoutubeJobs[0].query, 'Kira homes for rent Uganda', 'broad YouTube discovery jobs should keep generated source queries focused');
+  assert(broadYoutubeJobs[0].coverage_terms.includes('to let'), 'rental YouTube discovery jobs should still expose rental category coverage metadata');
   const firstYoutubeBatch = buildYouTubeSearchJobs({
     sources: [
       { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
@@ -1304,8 +1330,13 @@ test('found-online social search admin path and share cards are protected and au
   assert(socialPlatformSweepScript.includes('--max-pages'), 'YouTube sweep script should expose bounded pagination per source');
   assert(adminRoute.includes('max_pages') && adminRoute.includes('maxPagesPerSource'), 'admin YouTube sweep endpoint should accept bounded pagination');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
+  assert(frontend.includes('adminYouTubeSweepMethodLabel'), 'King dashboard should distinguish YouTube search feeds from channel-upload scans');
+  assert(frontend.includes('in_window_result_count'), 'King dashboard should show how many channel videos are inside the 2026 source window');
   assert(frontend.includes('live-ready with direct phone/location/date/source permission'), 'King dashboard should display YouTube confidence counts');
+  assert(html.includes('youtube-channel-upload-sweep-20260630'), 'index should cache-bust the channel-upload YouTube sweep dashboard fix');
   assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
+  assert(socialPlatformSweepServiceSource.includes('YOUTUBE_CHANNELS_URL'), 'YouTube sweep should resolve channel handles before scanning trusted source uploads');
+  assert(socialPlatformSweepServiceSource.includes('YOUTUBE_PLAYLIST_ITEMS_URL'), 'YouTube sweep should scan trusted channel upload playlists');
   assert(read('services/socialSearchSourcedListingsService.js').includes('function sourcePlatformFor'), 'daily found-online sweeps should normalize source platform metadata');
   assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePlatformFeedLabel'), 'daily found-online sweeps should label platform-specific feeds');
   assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');

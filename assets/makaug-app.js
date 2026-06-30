@@ -13181,6 +13181,16 @@ function adminAdvanceYouTubeSourceOffsetIfUseful(data = {}, normalized = "youtub
   return nextOffset;
 }
 
+function adminYouTubeSweepMethodLabel(source = {}) {
+  return source.search_method === "channel_uploads" ? "Channel uploads" : "Search";
+}
+
+function adminYouTubeReportSummary(report = {}) {
+  if (!report.ok) return adminEscape(report.reason || "YouTube API did not return videos");
+  const inWindow = report.in_window_result_count != null ? ` • ${adminEscape(report.in_window_result_count || 0)} since Jan 2026` : "";
+  return `${adminEscape(report.result_count || 0)} videos fetched${inWindow} • ${adminEscape(report.normalized_post_count || 0)} property-like • ${adminEscape(report.pages_fetched || 0)}/${adminEscape(report.max_pages || 1)} pages • ${adminEscape(adminYouTubeSweepMethodLabel(report))}`;
+}
+
 function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const tiktok = data.tiktok || {};
   const youtube = data.youtube || {};
@@ -13217,7 +13227,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     <div class="rounded-lg border border-red-100 bg-white p-2">
       <div class="font-bold text-red-950">${adminEscape(job.source_name || "YouTube source")}</div>
       <div class="text-[11px] text-red-700 mt-0.5 break-words">${adminEscape(job.query || "")}</div>
-      <div class="text-[11px] text-red-600 mt-0.5">From ${adminEscape(job.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)} • Shorts and long-form videos</div>
+      <div class="text-[11px] text-red-600 mt-0.5">${adminEscape(adminYouTubeSweepMethodLabel(job))} • From ${adminEscape(job.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)} • Shorts and long-form videos</div>
       <div class="mt-1 flex gap-2 flex-wrap">
         ${job.source_url ? `<a href="${adminAttr(job.source_url)}" target="_blank" rel="noopener" class="border border-red-200 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Open YouTube source</a>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts()" class="border border-red-300 text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -13226,7 +13236,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const youtubeReportHtml = youtubeReports.slice(0, 10).map((report) => `
     <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
       <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "YouTube job")}</div>
-      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} videos fetched • ${adminEscape(report.normalized_post_count || 0)} property-like • ${adminEscape(report.pages_fetched || 0)}/${adminEscape(report.max_pages || 1)} pages` : adminEscape(report.reason || "YouTube API did not return videos")}</div>
+      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${adminYouTubeReportSummary(report)}</div>
     </div>`).join("");
   const xJobHtml = xJobs.slice(0, 10).map((job) => `
     <div class="rounded-lg border border-slate-200 bg-white p-2">

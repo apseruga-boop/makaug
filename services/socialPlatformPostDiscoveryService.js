@@ -21,6 +21,8 @@ const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEA
 const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
 const DEFAULT_YOUTUBE_PAGES_PER_SOURCE = 1;
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
+const YOUTUBE_CHANNELS_URL = 'https://www.googleapis.com/youtube/v3/channels';
+const YOUTUBE_PLAYLIST_ITEMS_URL = 'https://www.googleapis.com/youtube/v3/playlistItems';
 const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
 const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
@@ -328,6 +330,32 @@ function normalizeYouTubeVideoUrl(value = '') {
 function youtubeChannelUrl(channelId = '') {
   const id = cleanText(channelId);
   return id ? `https://www.youtube.com/channel/${id}` : '';
+}
+
+function youtubeChannelIdFromUrl(value = '') {
+  const raw = cleanText(value);
+  if (/^UC[a-zA-Z0-9_-]{20,}$/.test(raw)) return raw;
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)youtube\.com$/i.test(url.hostname)) return '';
+    const match = url.pathname.match(/^\/channel\/(UC[a-zA-Z0-9_-]{20,})/i);
+    return match ? match[1] : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function youtubeHandleFromUrl(value = '') {
+  const raw = cleanText(value);
+  if (/^@?[a-zA-Z0-9._-]{3,}$/.test(raw) && !/^https?:\/\//i.test(raw)) return raw.replace(/^@/, '');
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)youtube\.com$/i.test(url.hostname)) return '';
+    const match = url.pathname.match(/^\/@([^/?#]+)/i);
+    return match ? decodeURIComponent(match[1]).replace(/^@/, '') : '';
+  } catch (_) {
+    return '';
+  }
 }
 
 function normalizeTikTokVideoUrl(value = '') {
@@ -1261,20 +1289,28 @@ function buildManualSocialCaptureTasks({ sources = [], platform = 'social', limi
 function youtubeCategoryTermsForSource(source = {}) {
   const listingTypes = sourceListValues(source, 'listingTypes', 'listing_types')
     .map((type) => type.toLowerCase());
-  const text = cleanText([
-    sourceName(source),
-    sourceUrl(source),
-    listingTypes.join(' '),
-    sourceListValues(source, 'hashtags', 'hashtags').join(' '),
-    source.metadata?.query,
-    source.metadata?.hashtag,
-  ].join(' ')).toLowerCase();
   const categories = new Set();
-  if (listingTypes.includes('students') || /student|hostel|campus|makerere|kyambogo|mubs|ucu|accommodation/.test(text)) categories.add('students');
-  if (listingTypes.includes('commercial') || /commercial|office|shop|warehouse|showroom|factory|arcade|retail/.test(text)) categories.add('commercial');
-  if (listingTypes.includes('land') || /land|plot|acre|decimal|mailo|ettaka|bibanja|kiwanja/.test(text)) categories.add('land');
-  if (listingTypes.includes('rent') || /rent|rental|to let|kupangisa|obupangisa|muzigo/.test(text)) categories.add('rent');
-  if (!categories.size || listingTypes.includes('sale') || /sale|sell|house|home|property|nyumba|amayumba/.test(text)) categories.add('sale');
+  if (listingTypes.length) {
+    if (listingTypes.includes('students')) categories.add('students');
+    if (listingTypes.includes('commercial')) categories.add('commercial');
+    if (listingTypes.includes('land')) categories.add('land');
+    if (listingTypes.includes('rent') || listingTypes.includes('apartments')) categories.add('rent');
+    if (listingTypes.includes('sale')) categories.add('sale');
+  }
+  if (!categories.size) {
+    const text = cleanText([
+      sourceName(source),
+      sourceUrl(source),
+      sourceListValues(source, 'hashtags', 'hashtags').join(' '),
+      source.metadata?.query,
+      source.metadata?.hashtag,
+    ].join(' ')).toLowerCase();
+    if (/student|hostel|campus|makerere|kyambogo|mubs|ucu|accommodation/.test(text)) categories.add('students');
+    if (/commercial|office|shop|warehouse|showroom|factory|arcade|retail/.test(text)) categories.add('commercial');
+    if (/land|plot|acre|decimal|mailo|ettaka|bibanja|kiwanja/.test(text)) categories.add('land');
+    if (/rent|rental|to let|kupangisa|obupangisa|muzigo/.test(text)) categories.add('rent');
+    if (!categories.size || /sale|sell|house|home|property|nyumba|amayumba/.test(text)) categories.add('sale');
+  }
   return [...categories].flatMap((category) => YOUTUBE_CATEGORY_QUERY_TERMS[category] || []);
 }
 
@@ -1290,21 +1326,65 @@ function dedupeQueryTerms(terms = []) {
   return output;
 }
 
+function sourceDistrictTerms(source = {}) {
+  const values = Array.isArray(source.districts) ? source.districts : [];
+  return values.map(cleanText).filter(Boolean).slice(0, 2);
+}
+
+function queryHasUgandaContext(query = '') {
+  return /\b(uganda|kampala|wakiso|mukono|entebbe|jinja|kira|ntinda|naalya|najjera|namugongo|makerere|kyambogo|mubs|ucu)\b/i.test(query);
+}
+
+function focusedYouTubeFallbackTerm(source = {}) {
+  const categoryTerms = youtubeCategoryTermsForSource(source);
+  const text = cleanText([
+    sourceName(source),
+    sourceUrl(source),
+    sourceListValues(source, 'listingTypes', 'listing_types').join(' '),
+    source.metadata?.query,
+    source.metadata?.hashtag,
+  ].join(' ')).toLowerCase();
+  if (/student|hostel|campus|makerere|kyambogo|mubs|ucu/.test(text)) return 'student hostel';
+  if (/commercial|office|shop|warehouse|showroom|factory|arcade/.test(text)) return 'commercial property';
+  if (/land|plot|acre|decimal|mailo|ettaka|bibanja|kiwanja/.test(text)) return 'land for sale';
+  if (/rent|rental|to let|kupangisa|obupangisa|muzigo/.test(text)) return 'house for rent';
+  return categoryTerms[0] || 'property';
+}
+
 function buildYouTubeQueryForSource(source = {}) {
   const url = sourceUrl(source);
   const existingQuery = urlParam(url, 'search_query') || urlParam(url, 'q');
-  const categoryTerms = youtubeCategoryTermsForSource(source);
-  const localTerms = YOUTUBE_LOCAL_LANGUAGE_QUERY_TERMS;
+  if (youtubeChannelLookupForSource(source)) {
+    const channelText = cleanText(sourceName(source) || source.handle || url);
+    return dedupeQueryTerms([
+      channelText || 'Uganda property',
+      ...sourceDistrictTerms(source),
+      queryHasUgandaContext(channelText) ? '' : 'Uganda',
+      focusedYouTubeFallbackTerm(source),
+    ]).join(' ');
+  }
   if (existingQuery) {
     return dedupeQueryTerms([
       existingQuery,
-      ...categoryTerms,
-      ...localTerms,
-      'Uganda',
-      'property',
+      queryHasUgandaContext(existingQuery) ? '' : 'Uganda',
+    ]).join(' ');
+  }
+  const metadataQuery = cleanText(source.metadata?.query || '');
+  if (metadataQuery) {
+    return dedupeQueryTerms([
+      metadataQuery,
+      queryHasUgandaContext(metadataQuery) ? '' : 'Uganda',
     ]).join(' ');
   }
   const hashtag = sourceHashtag(source);
+  if (hashtag) {
+    return dedupeQueryTerms([
+      `#${hashtag}`,
+      ...sourceDistrictTerms(source),
+      queryHasUgandaContext(hashtag) ? '' : 'Uganda',
+      focusedYouTubeFallbackTerm(source),
+    ]).join(' ');
+  }
   const tags = Array.isArray(source.hashtags)
     ? source.hashtags.filter(Boolean).slice(0, 4).map((tag) => `#${String(tag).replace(/^#/, '')}`)
     : [];
@@ -1317,18 +1397,33 @@ function buildYouTubeQueryForSource(source = {}) {
     .filter(Boolean)
     .join(' ');
   return dedupeQueryTerms([
-    discoveryTerms || 'Uganda property',
-    'Uganda',
-    'property',
-    'house',
-    'land',
-    'rent',
-    'hostel',
-    'student accommodation',
-    'commercial',
-    ...categoryTerms,
-    ...localTerms,
+    discoveryTerms || sourceName(source) || 'Uganda property',
+    ...sourceDistrictTerms(source),
+    queryHasUgandaContext(discoveryTerms) ? '' : 'Uganda',
+    focusedYouTubeFallbackTerm(source),
   ]).join(' ');
+}
+
+function youtubeCoverageTermsForSource(source = {}) {
+  return dedupeQueryTerms([
+    ...youtubeCategoryTermsForSource(source),
+    ...YOUTUBE_LOCAL_LANGUAGE_QUERY_TERMS,
+    ...sourceListValues(source, 'hashtags', 'hashtags').map((tag) => `#${String(tag).replace(/^#/, '')}`),
+    ...sourceDistrictTerms(source),
+  ]);
+}
+
+function youtubeChannelLookupForSource(source = {}) {
+  const url = sourceUrl(source);
+  const directChannelId = youtubeChannelIdFromUrl(url) || youtubeChannelIdFromUrl(source.handle || '');
+  const handle = youtubeHandleFromUrl(url) || youtubeHandleFromUrl(source.handle || source.username || '');
+  const type = cleanText(source.source_type || source.sourceType || '').toLowerCase();
+  const sourcePage = sourceRecordKind(source) === 'source_page' || type.includes('creator_channel') || type.includes('media_channel');
+  if (!sourcePage || (!directChannelId && !handle)) return null;
+  return {
+    channel_id: directChannelId,
+    channel_handle: handle,
+  };
 }
 
 function youtubeDiscoveryPriority(source = {}) {
@@ -1376,29 +1471,38 @@ function buildYouTubeSearchJobs({
   const startOffset = sortedSources.length ? cappedOffset(offset) % sortedSources.length : 0;
   return sortedSources
     .slice(startOffset, startOffset + cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES))
-    .map((source) => ({
-      platform: 'youtube',
-      source_key: sourceKey(source),
-      source_name: sourceName(source),
-      source_type: source.source_type || source.sourceType || '',
-      source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
-      source_url: sourceUrl(source),
-      source_phone: cleanText(source.phone || source.contact_phone || ''),
-      source_phone_alt: cleanText(source.phoneAlt || source.phone_alt || source.contact_phone_alt || ''),
-      source_email: cleanText(source.email || source.contact_email || ''),
-      source_listing_types: sourceListValues(source, 'listingTypes', 'listing_types'),
-      source_hashtags: sourceListValues(source, 'hashtags', 'hashtags'),
-      source_can_contact_directly: source.canContactDirectly === true || source.can_contact_directly === true,
-      source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
-      source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
-      discovery_priority: youtubeDiscoveryPriority(source),
-      query: buildYouTubeQueryForSource(source).slice(0, 500),
-      endpoint: YOUTUBE_SEARCH_URL,
-      published_after: start,
-      max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
-      max_pages: pageLimit,
-      includes_shorts_and_long_form: true,
-    }));
+    .map((source) => {
+      const channelLookup = youtubeChannelLookupForSource(source);
+      const searchMethod = channelLookup ? 'channel_uploads' : 'search';
+      return {
+        platform: 'youtube',
+        source_key: sourceKey(source),
+        source_name: sourceName(source),
+        source_type: source.source_type || source.sourceType || '',
+        source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
+        source_url: sourceUrl(source),
+        source_phone: cleanText(source.phone || source.contact_phone || ''),
+        source_phone_alt: cleanText(source.phoneAlt || source.phone_alt || source.contact_phone_alt || ''),
+        source_email: cleanText(source.email || source.contact_email || ''),
+        source_listing_types: sourceListValues(source, 'listingTypes', 'listing_types'),
+        source_hashtags: sourceListValues(source, 'hashtags', 'hashtags'),
+        source_can_contact_directly: source.canContactDirectly === true || source.can_contact_directly === true,
+        source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
+        source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
+        discovery_priority: youtubeDiscoveryPriority(source),
+        query: buildYouTubeQueryForSource(source).slice(0, 500),
+        coverage_terms: youtubeCoverageTermsForSource(source).slice(0, 80),
+        search_method: searchMethod,
+        channel_id: channelLookup?.channel_id || '',
+        channel_handle: channelLookup?.channel_handle || '',
+        endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_PLAYLIST_ITEMS_URL : YOUTUBE_SEARCH_URL,
+        channel_lookup_endpoint: searchMethod === 'channel_uploads' ? YOUTUBE_CHANNELS_URL : '',
+        published_after: start,
+        max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+        max_pages: pageLimit,
+        includes_shorts_and_long_form: true,
+      };
+    });
 }
 
 function youtubeThumbnailUrls(thumbnails = {}) {
@@ -1499,7 +1603,7 @@ function youtubeConfidenceReviewForPost({
 }
 
 function normalizeYouTubeApiPost(item = {}, job = {}) {
-  const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.id || '');
+  const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.contentDetails?.videoId || item.snippet?.resourceId?.videoId || item.id || '');
   if (!videoId) return null;
   const snippet = item.snippet || {};
   const title = cleanText(snippet.title || `YouTube property video ${videoId}`);
@@ -1511,9 +1615,10 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const priceText = priceTextFromText(combinedText);
   const contactPhone = cleanText(phoneFromText(combinedText) || normalizeUgandanPhone(job.source_phone || job.source_phone_alt || ''));
   const contactEmail = cleanText(emailFromText(combinedText) || job.source_email || '');
-  const channelUrl = youtubeChannelUrl(snippet.channelId) || job.source_url || '';
+  const channelId = snippet.videoOwnerChannelId || snippet.channelId || job.channel_id || '';
+  const channelUrl = youtubeChannelUrl(channelId) || job.source_url || '';
   const sourceUrl = youtubeWatchUrl(videoId);
-  const publishedAt = snippet.publishedAt || '';
+  const publishedAt = item.contentDetails?.videoPublishedAt || snippet.publishedAt || '';
   const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
   const preapproval = youtubeSourcePreapprovalFields(job);
   const confidence = youtubeConfidenceReviewForPost({
@@ -1624,6 +1729,130 @@ async function fetchYouTubeSearchJob(job = {}, {
   };
 }
 
+function youtubePublishedAtForItem(item = {}) {
+  return item.contentDetails?.videoPublishedAt || item.snippet?.publishedAt || '';
+}
+
+function youtubePublishedInWindow(item = {}, publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START) {
+  const publishedAt = youtubePublishedAtForItem(item);
+  const date = publishedAt ? new Date(publishedAt) : null;
+  const start = new Date(cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START);
+  if (!date || Number.isNaN(date.getTime()) || Number.isNaN(start.getTime())) return false;
+  return date >= start;
+}
+
+async function fetchYouTubeChannelDetails(job = {}, {
+  apiKey = '',
+  fetchImpl = fetch,
+} = {}) {
+  if (!apiKey) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'missing_youtube_api_key',
+    };
+  }
+  const directChannelId = cleanText(job.channel_id || '');
+  const handle = cleanText(job.channel_handle || '').replace(/^@/, '');
+  if (!directChannelId && !handle) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: 'missing_youtube_channel_identifier',
+    };
+  }
+  const url = new URL(YOUTUBE_CHANNELS_URL);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('part', 'id,snippet,contentDetails');
+  if (directChannelId) url.searchParams.set('id', directChannelId);
+  else url.searchParams.set('forHandle', `@${handle}`);
+  const response = await fetchImpl(url, {
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const firstError = Array.isArray(payload?.error?.errors) ? payload.error.errors[0] : null;
+    return {
+      ok: false,
+      status: response.status,
+      reason: firstError?.message || payload?.error?.message || 'youtube_channel_lookup_failed',
+      error_reason: firstError?.reason || '',
+    };
+  }
+  const channel = Array.isArray(payload.items) ? payload.items[0] : null;
+  const uploadsPlaylistId = cleanText(channel?.contentDetails?.relatedPlaylists?.uploads || '');
+  if (!channel?.id || !uploadsPlaylistId) {
+    return {
+      ok: false,
+      status: 404,
+      reason: 'youtube_channel_uploads_playlist_not_found',
+      items_returned: Array.isArray(payload.items) ? payload.items.length : 0,
+    };
+  }
+  return {
+    ok: true,
+    channel_id: channel.id,
+    channel_title: cleanText(channel.snippet?.title || ''),
+    uploads_playlist_id: uploadsPlaylistId,
+  };
+}
+
+async function fetchYouTubeChannelUploadsJob(job = {}, {
+  apiKey = '',
+  maxResults = DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+  pageToken = '',
+  fetchImpl = fetch,
+  channelDetails = null,
+} = {}) {
+  const details = channelDetails || await fetchYouTubeChannelDetails(job, { apiKey, fetchImpl });
+  if (!details.ok) {
+    return {
+      ...details,
+      posts: [],
+    };
+  }
+  const url = new URL(YOUTUBE_PLAYLIST_ITEMS_URL);
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('part', 'snippet,contentDetails');
+  url.searchParams.set('playlistId', details.uploads_playlist_id);
+  url.searchParams.set('maxResults', String(cappedNumber(maxResults, DEFAULT_YOUTUBE_RESULTS_PER_SOURCE, 1, 50)));
+  if (pageToken) url.searchParams.set('pageToken', pageToken);
+  const response = await fetchImpl(url, {
+    headers: { Accept: 'application/json' },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const firstError = Array.isArray(payload?.error?.errors) ? payload.error.errors[0] : null;
+    return {
+      ok: false,
+      status: response.status,
+      reason: firstError?.message || payload?.error?.message || 'youtube_channel_uploads_failed',
+      error_reason: firstError?.reason || '',
+      channel_id: details.channel_id,
+      uploads_playlist_id: details.uploads_playlist_id,
+      posts: [],
+    };
+  }
+  const rows = Array.isArray(payload.items) ? payload.items : [];
+  const inWindowRows = rows.filter((row) => youtubePublishedInWindow(row, job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START));
+  return {
+    ok: true,
+    result_count: rows.length,
+    in_window_result_count: inWindowRows.length,
+    posts: inWindowRows.map((row) => normalizeYouTubeApiPost(row, {
+      ...job,
+      channel_id: details.channel_id,
+      source_name: details.channel_title || job.source_name,
+    })).filter(Boolean),
+    next_page_token: payload.nextPageToken || '',
+    page_info: payload.pageInfo || {},
+    channel_id: details.channel_id,
+    channel_title: details.channel_title,
+    uploads_playlist_id: details.uploads_playlist_id,
+    hit_older_than_window: rows.length > 0 && inWindowRows.length < rows.length,
+  };
+}
+
 async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   const posts = [];
   const reports = [];
@@ -1631,18 +1860,44 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   for (const job of jobs) {
     let pageToken = '';
     let totalResultCount = 0;
+    let totalInWindowResultCount = 0;
     let normalizedPostCount = 0;
     let pagesFetched = 0;
     let lastReport = null;
+    let channelDetails = null;
+    if (job.search_method === 'channel_uploads') {
+      channelDetails = await fetchYouTubeChannelDetails(job, options);
+      if (!channelDetails.ok) {
+        reports.push({
+          ...job,
+          ok: false,
+          skipped: channelDetails.skipped,
+          status: channelDetails.status,
+          reason: channelDetails.reason,
+          error_reason: channelDetails.error_reason,
+          result_count: 0,
+          in_window_result_count: 0,
+          normalized_post_count: 0,
+          pages_fetched: 0,
+          max_pages: maxPages,
+          next_page_token: '',
+        });
+        continue;
+      }
+    }
     for (let page = 0; page < maxPages; page += 1) {
-      const report = await fetchYouTubeSearchJob(job, { ...options, pageToken });
+      const report = job.search_method === 'channel_uploads'
+        ? await fetchYouTubeChannelUploadsJob(job, { ...options, pageToken, channelDetails })
+        : await fetchYouTubeSearchJob(job, { ...options, pageToken });
       lastReport = report;
       pagesFetched += 1;
       totalResultCount += report.result_count || 0;
+      totalInWindowResultCount += report.in_window_result_count == null ? (report.result_count || 0) : report.in_window_result_count;
       normalizedPostCount += Array.isArray(report.posts) ? report.posts.length : 0;
       posts.push(...(report.posts || []));
       pageToken = report.next_page_token || '';
       if (!report.ok || !pageToken) break;
+      if (job.search_method === 'channel_uploads' && report.hit_older_than_window) break;
     }
     reports.push({
       ...job,
@@ -1652,10 +1907,14 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
       reason: lastReport?.reason,
       error_reason: lastReport?.error_reason,
       result_count: totalResultCount,
+      in_window_result_count: totalInWindowResultCount,
       normalized_post_count: normalizedPostCount,
       pages_fetched: pagesFetched,
       max_pages: maxPages,
       next_page_token: pageToken,
+      channel_id: lastReport?.channel_id || channelDetails?.channel_id || job.channel_id || '',
+      channel_title: lastReport?.channel_title || channelDetails?.channel_title || '',
+      uploads_playlist_id: lastReport?.uploads_playlist_id || channelDetails?.uploads_playlist_id || '',
     });
   }
   return { posts, reports };
@@ -2083,7 +2342,7 @@ async function runSocialPlatformPostSweep({
     focus: studentHousingFocus ? 'students' : normalizedFocus,
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
-      youtube: 'YouTube source pages, hashtags, and search feeds are searched with the YouTube Data API from 1 January 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
+      youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
@@ -2158,6 +2417,8 @@ module.exports = {
   DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
   DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   YOUTUBE_SEARCH_URL,
+  YOUTUBE_CHANNELS_URL,
+  YOUTUBE_PLAYLIST_ITEMS_URL,
   YOUTUBE_OEMBED_URL,
   YOUTUBE_SOURCE_POST_WINDOW_START,
   YOUTUBE_API_KEY_ENV_NAMES,
