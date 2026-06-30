@@ -1665,6 +1665,17 @@ function youtubeHasPropertySignal(text = '', job = {}) {
     || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(sourceText);
 }
 
+function youtubeHasExplicitListingIntent(text = '', listingType = '') {
+  const raw = cleanText(text).toLowerCase();
+  if (!raw) return false;
+  if (/\b(?:for sale|on sale|house for sale|home for sale|property for sale|land for sale|plot(?:s)? for sale|acre(?:s)? for sale|selling|available for sale|buy this|asking price|guide price|price[:\s]|ugx|ush|shs?|usd|\$)\b/i.test(raw)) return true;
+  if (/\b(?:for rent|to let|rental|rentals|rent per month|monthly rent|per month|available for rent|house for rent|apartment for rent|office space for rent|shop for rent)\b/i.test(raw)) return true;
+  if (/\b(?:student accommodation|hostel room|student room|room available|rooms available|campus hostel)\b/i.test(raw)) return true;
+  if (listingType === 'land' && /\b(?:mailo|title|decimals?|acres?|plots?)\b/i.test(raw) && /\b(?:sale|selling|available|price|ugx|ush|shs?)\b/i.test(raw)) return true;
+  if (listingType === 'commercial' && /\b(?:office|shop|warehouse|showroom|factory|arcade|commercial)\b/i.test(raw) && /\b(?:for rent|to let|for sale|lease|available|price|ugx|ush|shs?)\b/i.test(raw)) return true;
+  return false;
+}
+
 function youtubeSourcePreapprovalFields(job = {}) {
   const sourcePhone = normalizeUgandanPhone(job.source_phone || job.source_phone_alt || '');
   const trustText = cleanText(`${job.source_consent_status || ''} ${job.source_trust_level || ''}`).toLowerCase();
@@ -1708,6 +1719,7 @@ function youtubeConfidenceReviewForPost({
   hashtagSource = false,
 } = {}) {
   const propertySignal = youtubeHasPropertySignal(combinedText, { source_listing_types: [listingType] });
+  const explicitListingIntent = youtubeHasExplicitListingIntent(combinedText, listingType);
   const locationStatus = youtubeLocationConfidence(area, district);
   const dateStatus = youtubeDateStatus(publishedAt, publishedAfter);
   const hasDirectPhone = Boolean(contactPhone);
@@ -1719,6 +1731,7 @@ function youtubeConfidenceReviewForPost({
     direct_phone: hasDirectPhone,
     contact_path: hasContactPath,
     location_area_detected: locationStatus === 'area_or_neighbourhood_detected',
+    explicit_listing_intent: explicitListingIntent,
     preapproved_source: preapproval.pre_approved === true,
     hashtag_source: hashtagSource === true,
   };
@@ -1735,6 +1748,7 @@ function youtubeConfidenceReviewForPost({
     && checks.source_date_2026_plus
     && checks.location_area_detected
     && checks.direct_phone
+    && checks.explicit_listing_intent
     && checks.preapproved_source;
   const hashtagAutoLiveReady = score >= 70
     && checks.hashtag_source
@@ -1742,12 +1756,14 @@ function youtubeConfidenceReviewForPost({
     && checks.source_date_2026_plus
     && checks.location_area_detected
     && checks.contact_path
+    && checks.explicit_listing_intent
     && Boolean(listingType);
   const youtubeApiAutoLiveReady = score >= 70
     && checks.property_signal
     && checks.source_date_2026_plus
     && checks.location_area_detected
     && checks.contact_path
+    && checks.explicit_listing_intent
     && Boolean(listingType);
   const liveReady = preapprovedLiveReady || hashtagAutoLiveReady || youtubeApiAutoLiveReady;
   return {

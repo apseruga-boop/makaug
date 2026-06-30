@@ -1226,6 +1226,20 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
     false,
     'upload playlist failures should not be mistaken for broad Search quota exhaustion'
   );
+  const normalizedYoutubeTourOnly = normalizeYouTubeApiPost({
+    id: { videoId: 'tour123XYZ90' },
+    snippet: {
+      publishedAt: '2026-04-10T08:30:00.000Z',
+      title: 'Najjera property market tour and road updates',
+      description: 'Walking around Najjera showing streets, traffic, and construction updates from the area.',
+      channelId: 'UCstoredSource123456789012345',
+      channelTitle: 'Stored Agent Channel',
+      thumbnails: { high: { url: 'https://i.ytimg.com/vi/tour123XYZ90/hqdefault.jpg' } },
+    },
+  }, knownChannelJobs[0]);
+  assert.strictEqual(normalizedYoutubeTourOnly.raw_source_post.youtube_confidence_review.status, 'youtube_review_required', 'property-area videos without explicit listing intent must not auto-live');
+  assert.strictEqual(normalizedYoutubeTourOnly.raw_source_post.youtube_confidence_review.live_ready, false, 'YouTube auto-live should require explicit sale/rent/listing language');
+  assert.strictEqual(normalizedYoutubeTourOnly.raw_source_post.youtube_confidence_review.checks.explicit_listing_intent, false, 'review evidence should explain the missing listing intent');
   const firstYoutubeBatch = buildYouTubeSearchJobs({
     sources: [
       { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
