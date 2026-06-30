@@ -40300,8 +40300,4 @@ function initializeMakaugApp() {
   window.addEventListener("scroll", closeHeroSuggestions, true);
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initializeMakaugApp, { once: true });
-} else {
-  initializeMakaugApp();
-}
+initializeMakaugApp();
