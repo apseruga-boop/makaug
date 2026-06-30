@@ -457,6 +457,8 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-active-category-progress-20260630/);
   assert.match(htmlSource, /public-category-first-page-route-20260630/);
   assert.match(htmlSource, /public-category-first-paint-8-20260630/);
+  assert.match(htmlSource, /public-app-immediate-load-20260630/);
+  assert.doesNotMatch(htmlSource, /DOMContentLoaded", loadMakaugApp/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
@@ -464,4 +466,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(serverSource, /publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630'/);
   assert.match(serverSource, /publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630'/);
   assert.match(serverSource, /publicCategoryFirstPaintVersion = 'public-category-first-paint-8-20260630'/);
+  assert.match(serverSource, /publicAppImmediateLoadVersion = 'public-app-immediate-load-20260630'/);
 });
