@@ -332,6 +332,11 @@ function youtubeChannelUrl(channelId = '') {
   return id ? `https://www.youtube.com/channel/${id}` : '';
 }
 
+function youtubeHandleUrl(handle = '') {
+  const value = cleanText(handle).replace(/^@/, '');
+  return value ? `https://www.youtube.com/@${value}` : '';
+}
+
 function youtubeChannelIdFromUrl(value = '') {
   const raw = cleanText(value);
   if (/^UC[a-zA-Z0-9_-]{20,}$/.test(raw)) return raw;
@@ -356,6 +361,16 @@ function youtubeHandleFromUrl(value = '') {
   } catch (_) {
     return '';
   }
+}
+
+function normalizeYouTubeChannelSourceUrl(value = '') {
+  const raw = cleanText(value);
+  if (!raw) return '';
+  const channelId = youtubeChannelIdFromUrl(raw);
+  if (channelId) return youtubeChannelUrl(channelId);
+  const handle = youtubeHandleFromUrl(raw);
+  if (handle) return youtubeHandleUrl(handle);
+  return '';
 }
 
 function normalizeTikTokVideoUrl(value = '') {
@@ -1470,6 +1485,121 @@ function sortYouTubeSourcesForDiscovery(sources = []) {
     .map((item) => item.source);
 }
 
+function youtubeKnownChannelSourceKey(url = '') {
+  const normalizedUrl = normalizeYouTubeChannelSourceUrl(url);
+  const channelId = youtubeChannelIdFromUrl(normalizedUrl);
+  const handle = youtubeHandleFromUrl(normalizedUrl);
+  return channelId
+    ? `youtube-known-channel-${channelId.toLowerCase()}`
+    : handle
+      ? `youtube-known-handle-${handle.toLowerCase()}`
+      : '';
+}
+
+function buildKnownYouTubeChannelSourcesFromRows(rows = [], {
+  limit = DEFAULT_MAX_SOURCES,
+  offset = 0,
+} = {}) {
+  const sourceLimit = cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
+  const startOffset = cappedOffset(offset);
+  const seen = new Set();
+  const sources = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const candidates = [
+      row.youtube_channel_url,
+      row.source_channel_url,
+      row.source_contact_url,
+      row.source_page_url,
+      row.channel_url,
+      row.source_url,
+      row.url,
+    ];
+    for (const candidate of candidates) {
+      const url = normalizeYouTubeChannelSourceUrl(candidate);
+      if (!url) continue;
+      const key = youtubeKnownChannelSourceKey(url);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      const handle = youtubeHandleFromUrl(url);
+      sources.push({
+        key,
+        name: cleanText(row.source_name || row.source_agent_name || row.public_display_name || row.channel_title || row.title || handle || 'Known YouTube property source'),
+        platform: 'youtube',
+        sourceType: 'creator_channel',
+        source_record_kind: 'source_page',
+        url,
+        handle: handle ? `@${handle}` : '',
+        metadata: {
+          generated_known_channel_fallback: true,
+          source: 'stored_youtube_source_contact',
+        },
+      });
+      break;
+    }
+  }
+  return sources.slice(startOffset, startOffset + sourceLimit);
+}
+
+async function knownYouTubeChannelSourcesFromDb(db, {
+  limit = DEFAULT_MAX_SOURCES,
+  offset = 0,
+} = {}) {
+  if (!db || typeof db.query !== 'function') {
+    return {
+      ok: false,
+      reason: 'missing_db_connection',
+      sources: [],
+    };
+  }
+  const sourceLimit = cappedNumber(limit, DEFAULT_MAX_SOURCES, 1, MAX_PLATFORM_SWEEP_SOURCES);
+  const sourceOffset = cappedOffset(offset);
+  const rowLimit = Math.min(Math.max((sourceLimit + sourceOffset) * 12, 200), 5000);
+  const sql = `
+    SELECT
+      title,
+      listing_type,
+      extra_fields->>'source_name' AS source_name,
+      extra_fields->>'source_agent_name' AS source_agent_name,
+      extra_fields->>'public_display_name' AS public_display_name,
+      extra_fields->>'source_contact_url' AS source_contact_url,
+      extra_fields->>'source_channel_url' AS source_channel_url,
+      extra_fields->>'youtube_channel_url' AS youtube_channel_url,
+      extra_fields->>'source_page_url' AS source_page_url,
+      extra_fields->>'channel_url' AS channel_url,
+      extra_fields->>'source_url' AS source_url
+    FROM properties
+    WHERE LOWER(COALESCE(extra_fields->>'source_platform', '')) = 'youtube'
+      AND (
+        COALESCE(extra_fields->>'source_contact_url', '') ~* 'youtube\\.com/(channel/UC|@)'
+        OR COALESCE(extra_fields->>'source_channel_url', '') ~* 'youtube\\.com/(channel/UC|@)'
+        OR COALESCE(extra_fields->>'youtube_channel_url', '') ~* 'youtube\\.com/(channel/UC|@)'
+        OR COALESCE(extra_fields->>'source_page_url', '') ~* 'youtube\\.com/(channel/UC|@)'
+        OR COALESCE(extra_fields->>'channel_url', '') ~* 'youtube\\.com/(channel/UC|@)'
+      )
+    ORDER BY created_at DESC NULLS LAST
+    LIMIT $1
+  `;
+  try {
+    const result = await db.query(sql, [rowLimit]);
+    const sources = buildKnownYouTubeChannelSourcesFromRows(result.rows || [], {
+      limit: sourceLimit,
+      offset: sourceOffset,
+    });
+    return {
+      ok: true,
+      reason: '',
+      scanned_row_count: Array.isArray(result.rows) ? result.rows.length : 0,
+      sources,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error.message || 'known_youtube_channel_source_query_failed',
+      sources: [],
+    };
+  }
+}
+
 function buildYouTubeSearchJobs({
   sources = sourcesForPlatform('youtube'),
   limit = DEFAULT_MAX_SOURCES,
@@ -1960,6 +2090,15 @@ async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   return { posts, reports };
 }
 
+function youtubeSearchQuotaExceededFromReports(reports = []) {
+  return (Array.isArray(reports) ? reports : []).some((report) => {
+    if (report.search_method && report.search_method !== 'search') return false;
+    const status = Number(report.status || 0);
+    const text = cleanText(`${report.reason || ''} ${report.error_reason || ''}`).toLowerCase();
+    return status === 429 && /quota|search queries|daily limit|rate limit/.test(text);
+  });
+}
+
 function buildXQueryForSource(source = {}) {
   const url = sourceUrl(source);
   const existingQuery = urlParam(url, 'q');
@@ -2312,6 +2451,16 @@ async function runSocialPlatformPostSweep({
     posts: [],
     reports: [],
   };
+  let youtubeKnownChannelFallback = {
+    attempted: false,
+    triggered_by_search_quota: false,
+    source_count: 0,
+    search_job_count: 0,
+    fetched_posts_count: 0,
+    skipped_reason: '',
+    load_reason: '',
+    confidence_summary: summarizeYouTubeConfidence([]),
+  };
   if (requestedPlatforms.includes('youtube') && fetchYouTube && youtubeApi.apiKey && youtubeSearchJobs.length) {
     const fetched = await fetchYouTubePostsForJobs(youtubeSearchJobs, {
       apiKey: youtubeApi.apiKey,
@@ -2325,6 +2474,63 @@ async function runSocialPlatformPostSweep({
       reports: fetched.reports,
       skipped_reason: '',
     };
+  }
+  if (
+    requestedPlatforms.includes('youtube')
+    && fetchYouTube
+    && youtubeApi.apiKey
+    && youtubeSearchQuotaExceededFromReports(youtubeFetch.reports)
+  ) {
+    const loadedKnownChannels = await knownYouTubeChannelSourcesFromDb(db, {
+      limit: sourceLimit,
+      offset: normalizedSourceOffset,
+    });
+    const existingJobKeys = new Set(youtubeSearchJobs.map((job) => job.source_key));
+    const knownChannelJobs = loadedKnownChannels.sources.length
+      ? buildYouTubeSearchJobs({
+        sources: loadedKnownChannels.sources,
+        limit: sourceLimit,
+        offset: 0,
+        publishedAfter: youtubeStartTime,
+        maxPagesPerSource,
+      }).filter((job) => job.search_method === 'channel_uploads' && !existingJobKeys.has(job.source_key))
+      : [];
+    youtubeKnownChannelFallback = {
+      attempted: true,
+      triggered_by_search_quota: true,
+      source_count: loadedKnownChannels.sources.length,
+      search_job_count: knownChannelJobs.length,
+      fetched_posts_count: 0,
+      skipped_reason: knownChannelJobs.length ? '' : (loadedKnownChannels.ok ? 'no_known_youtube_channel_sources_found' : loadedKnownChannels.reason),
+      load_reason: loadedKnownChannels.reason || '',
+      confidence_summary: summarizeYouTubeConfidence([]),
+    };
+    if (knownChannelJobs.length) {
+      const fallbackFetched = await fetchYouTubePostsForJobs(knownChannelJobs, {
+        apiKey: youtubeApi.apiKey,
+        maxResults: maxResultsPerSource,
+        maxPagesPerSource,
+        fetchImpl,
+      });
+      const fallbackPosts = uniquePosts(fallbackFetched.posts);
+      youtubeFetch = {
+        ...youtubeFetch,
+        posts: uniquePosts([...youtubeFetch.posts, ...fallbackPosts]),
+        reports: [
+          ...youtubeFetch.reports,
+          ...fallbackFetched.reports.map((report) => ({
+            ...report,
+            fallback_channel_source: true,
+            fallback_reason: 'youtube_search_quota_exceeded',
+          })),
+        ],
+      };
+      youtubeKnownChannelFallback = {
+        ...youtubeKnownChannelFallback,
+        fetched_posts_count: fallbackPosts.length,
+        confidence_summary: summarizeYouTubeConfidence(fallbackPosts),
+      };
+    }
   }
   const bearer = envBearerToken(env);
   let xFetch = {
@@ -2384,7 +2590,7 @@ async function runSocialPlatformPostSweep({
     focus: studentHousingFocus ? 'students' : normalizedFocus,
     policy: {
       tiktok: 'Hashtag/profile URLs are discovery tasks. Queue a property after the exact TikTok /@handle/video/id URL, location, source contact path, and source evidence are captured. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
-      youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
+      youtube: 'YouTube source pages are scanned through channel upload playlists when a channel/handle is known; hashtags and search feeds use focused YouTube Data API search queries from 1 January 2026 onward for both Shorts and long-form videos. If YouTube Search quota is exhausted, the sweep falls back to stored YouTube source/contact channels and scans their upload playlists without broad hashtag search. Exact video URLs with snippet.publishedAt, title/description, channel contact path, location, and source evidence become Found Online review records. Missing price becomes Price upon application.',
       x: 'X/Twitter source lists become properties after X API/search returns exact post URLs with created_at, text, author/profile, media/source evidence, location, and contact path. Missing price becomes Price upon application. Location is non-negotiable before approval; other checks are King-review overrides.',
       student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
@@ -2413,6 +2619,7 @@ async function runSocialPlatformPostSweep({
       fetch_reports: youtubeFetch.reports,
       fetched_posts_count: youtubeFetch.posts.length,
       confidence_summary: summarizeYouTubeConfidence(youtubeFetch.posts),
+      known_channel_fallback: youtubeKnownChannelFallback,
     },
     x: {
       source_count: xSources.length,
@@ -2480,6 +2687,7 @@ module.exports = {
   buildTikTokCaptureTasks,
   buildManualSocialCaptureTasks,
   buildTikTokExactPostImportRows,
+  buildKnownYouTubeChannelSourcesFromRows,
   buildYouTubeSearchJobs,
   buildXSearchJobs,
   importExactSocialSourcePosts,
@@ -2487,5 +2695,6 @@ module.exports = {
   normalizeExactSocialPostUrl,
   normalizeYouTubeApiPost,
   normalizeXApiPost,
+  youtubeSearchQuotaExceededFromReports,
   runSocialPlatformPostSweep,
 };

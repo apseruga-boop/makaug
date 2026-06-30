@@ -76,6 +76,7 @@ const {
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
   buildExactSocialPostImportRows,
+  buildKnownYouTubeChannelSourcesFromRows,
   buildManualSocialCaptureTasks,
   buildTikTokCaptureTasks,
   buildTikTokExactPostImportRows,
@@ -86,6 +87,7 @@ const {
   normalizeExactSocialPostUrl,
   normalizeYouTubeApiPost,
   normalizeXApiPost,
+  youtubeSearchQuotaExceededFromReports,
 } = require('../services/socialPlatformPostDiscoveryService');
 const { buildSocialSourceTrustReview } = require('../services/socialSourceTrustService');
 const { buildAutomatedListingReview } = require('../services/listingModerationService');
@@ -1184,6 +1186,46 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(!broadYoutubeJobs[1].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
   assert.strictEqual(broadYoutubeJobs[1].query, 'Kira homes for rent Uganda', 'broad YouTube discovery jobs should keep generated source queries focused');
   assert(broadYoutubeJobs[1].coverage_terms.includes('to let'), 'rental YouTube discovery jobs should still expose rental category coverage metadata');
+  const knownChannelSources = buildKnownYouTubeChannelSourcesFromRows([
+    {
+      title: 'Stored YouTube property result',
+      source_name: 'Stored Agent Channel',
+      source_contact_url: 'https://www.youtube.com/channel/UCstoredSource123456789012345',
+    },
+    {
+      title: 'Duplicate stored YouTube property result',
+      source_contact_url: 'https://www.youtube.com/channel/UCstoredSource123456789012345',
+    },
+    {
+      title: 'Handle stored YouTube property result',
+      public_display_name: 'Handle Agent',
+      youtube_channel_url: 'https://www.youtube.com/@HandleAgentUg',
+    },
+    {
+      title: 'Exact video should not become a channel source',
+      source_url: 'https://www.youtube.com/watch?v=abc123XYZ90',
+    },
+  ], { limit: 10 });
+  assert.strictEqual(knownChannelSources.length, 2, 'stored YouTube source contacts should dedupe into channel fallback sources only');
+  assert.strictEqual(knownChannelSources[0].sourceType, 'creator_channel', 'known YouTube fallback sources should be upload-channel sources');
+  assert.strictEqual(knownChannelSources[0].url, 'https://www.youtube.com/channel/UCstoredSource123456789012345');
+  assert.strictEqual(knownChannelSources[1].url, 'https://www.youtube.com/@HandleAgentUg');
+  const knownChannelJobs = buildYouTubeSearchJobs({
+    sources: knownChannelSources,
+    limit: 10,
+    publishedAfter: '2026-01-01T00:00:00.000Z',
+  });
+  assert(knownChannelJobs.every((job) => job.search_method === 'channel_uploads'), 'known YouTube fallback sources should avoid broad Search quota');
+  assert.strictEqual(
+    youtubeSearchQuotaExceededFromReports([{ search_method: 'search', status: 429, reason: "Quota exceeded for quota metric 'Search Queries'" }]),
+    true,
+    'YouTube 429 Search Queries failures should trigger known-channel fallback'
+  );
+  assert.strictEqual(
+    youtubeSearchQuotaExceededFromReports([{ search_method: 'channel_uploads', status: 429, reason: 'quota exceeded' }]),
+    false,
+    'upload playlist failures should not be mistaken for broad Search quota exhaustion'
+  );
   const firstYoutubeBatch = buildYouTubeSearchJobs({
     sources: [
       { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
@@ -1362,9 +1404,12 @@ test('found-online social search admin path and share cards are protected and au
   assert(html.includes('youtube-hashtag-auto-live-20260630'), 'index should cache-bust the hashtag auto-live dashboard fix');
   assert(html.includes('youtube-api-auto-live-20260630'), 'index should cache-bust the YouTube API auto-live dashboard fix');
   assert(html.includes('youtube-api-scorer-auto-live-20260630'), 'index should cache-bust the YouTube API scorer auto-live fix');
+  assert(html.includes('youtube-known-channel-fallback-20260630'), 'index should cache-bust the YouTube known-channel fallback fix');
   assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
   assert(socialPlatformSweepServiceSource.includes('youtube_api_auto_live_ready'), 'YouTube API confidence should auto-live posts with location/date/category/source contact');
   assert(socialPlatformSweepServiceSource.includes('youtube_hashtag_auto_live_ready'), 'YouTube API confidence should allow hashtag posts with location and source contact to become live-ready');
+  assert(socialPlatformSweepServiceSource.includes('known_channel_fallback'), 'YouTube sweeps should report the stored-channel fallback when Search quota is exhausted');
+  assert(socialPlatformSweepServiceSource.includes("extra_fields->>'source_contact_url'"), 'YouTube known-channel fallback should derive sources from stored source contact URLs');
   assert(socialSearchServiceSource.includes('sourcePostAutoLiveStatusFor'), 'source-post importer should centralize the hashtag auto-live approval gate');
   assert(socialSearchServiceSource.includes('sourcePostIsYouTubeApiPost'), 'source-post importer should detect YouTube API posts outside the hashtag-only path');
   assert(socialSearchServiceSource.includes('status: autoLive.status'), 'hashtag auto-live imports should insert approved public records instead of pending rows');
