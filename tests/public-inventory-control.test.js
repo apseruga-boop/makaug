@@ -257,6 +257,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /function addPublicCacheRefreshParam\(pathName\)/);
   assert.match(serverSource, /function schedulePublicCacheWarmup\(baseUrl\)/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
+  assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
@@ -354,5 +355,7 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /king-live-public-parity-20260609/);
   assert.match(htmlSource, /public-opportunity-counts-20260629/);
   assert.match(htmlSource, /public-inventory-performance-20260629/);
+  assert.match(htmlSource, /public-inventory-progressive-render-20260630/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
+  assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
 });
