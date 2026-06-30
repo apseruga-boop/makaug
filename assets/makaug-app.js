@@ -9920,6 +9920,53 @@ function renderStaffSourceIntake(data = {}) {
       <div class="mt-1"><strong>${staffNumber(data.possible_duplicates || 0)}</strong> pending listings have duplicate risk. Preview before approval.</div>
       <div class="mt-1 text-[11px] text-gray-500">Batch: ${adminEscape(data.batch_id || "source-intake")}</div>`;
   }
+  const monitor = data.monitor || {};
+  const monitorStatus = document.getElementById("staff-source-monitor-status");
+  if (monitorStatus) {
+    monitorStatus.textContent = [
+      monitor.status || "Ready for Render Cron Job",
+      monitor.audit_log_action ? `Audit: ${monitor.audit_log_action}` : ""
+    ].filter(Boolean).join(" • ");
+  }
+  const monitorWindow = document.getElementById("staff-source-monitor-window");
+  if (monitorWindow) {
+    monitorWindow.textContent = `${staffNumber(monitor.source_registry_target_count || 0)} sources • ${monitor.published_after || "2026+"}`;
+  }
+  const monitorCadence = document.getElementById("staff-source-monitor-cadence");
+  if (monitorCadence) {
+    const cadences = Array.isArray(monitor.cadences) ? monitor.cadences : [];
+    monitorCadence.innerHTML = cadences.length ? cadences.map((item) => `
+      <div class="rounded-xl bg-white border border-sky-100 p-3">
+        <div class="font-black text-gray-900">${adminEscape(item.label || "Cadence")}</div>
+        <div class="mt-1 text-sky-900">${adminEscape(item.value || "")}</div>
+      </div>
+    `).join("") : staffEmpty("Monitor cadence is not available yet.");
+  }
+  const monitorRules = document.getElementById("staff-source-monitor-rules");
+  if (monitorRules) {
+    const rules = [
+      { label: "Auto-live gate", value: monitor.auto_live_rule || "" },
+      { label: "Review gate", value: monitor.review_rule || "" },
+      { label: "Trigger path", value: monitor.render_trigger_path || "" },
+      { label: "Board update", value: monitor.board_update || "" }
+    ].filter((item) => item.value);
+    monitorRules.innerHTML = rules.length ? rules.map((item) => `
+      <div class="rounded-xl bg-white border border-sky-100 p-3">
+        <div class="font-black text-gray-900">${adminEscape(item.label)}</div>
+        <div class="mt-1 text-sky-900">${adminEscape(item.value)}</div>
+      </div>
+    `).join("") : staffEmpty("Monitor rules are not available yet.");
+  }
+  const monitorCommands = document.getElementById("staff-source-monitor-commands");
+  if (monitorCommands) {
+    const commands = Array.isArray(monitor.commands) ? monitor.commands : [];
+    monitorCommands.innerHTML = commands.length ? commands.map((item) => `
+      <div>
+        <div class="font-black text-gray-900">${adminEscape(item.label || "Command")}</div>
+        <code class="mt-1 block rounded-lg bg-gray-950 text-white p-2 overflow-x-auto">${adminEscape(item.value || "")}</code>
+      </div>
+    `).join("") : staffEmpty("No trigger commands returned.");
+  }
   const presets = document.getElementById("staff-source-presets");
   if (presets) {
     const rows = Array.isArray(data.source_presets) ? data.source_presets : [];
@@ -10058,6 +10105,7 @@ async function staffQueueSourceImport() {
 async function staffRunSourceSweep(dryRun = true) {
   const platform = document.getElementById("staff-source-sweep-platform")?.value || "all";
   const focus = document.getElementById("staff-source-sweep-focus")?.value || "";
+  const youtubeJobMode = document.getElementById("staff-source-sweep-youtube-mode")?.value || "channel_uploads";
   try {
     const res = await apiRequest("/api/staff/source-intake/social-sweep", {
       method: "POST",
@@ -10067,7 +10115,8 @@ async function staffRunSourceSweep(dryRun = true) {
         dry_run: dryRun,
         max_sources: 8,
         max_results: 5,
-        published_after: "2026-01-01T00:00:00.000Z"
+        published_after: "2026-01-01T00:00:00.000Z",
+        youtube_job_mode: youtubeJobMode
       }
     });
     renderStaffSourceImportResult(res?.data || {}, dryRun);

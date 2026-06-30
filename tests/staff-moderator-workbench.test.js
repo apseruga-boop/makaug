@@ -35,6 +35,7 @@ function run() {
   assert(server.includes("app.use('/api/staff', staffRoutes)"), 'server should mount /api/staff');
   assert(server.includes('renderPublicHtml(req.originalUrl || req.url || req.path)'), 'server should render /login?next=/staff-dashboard with the staff account panel mode');
   assert(server.includes('staff-operations-dashboard-20260620a'), 'server should bump the public JS asset version for staff dashboard browsers');
+  assert(server.includes('staff-source-monitor-guide-20260630'), 'server should cache-bust the staff source monitor guide');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
@@ -82,6 +83,10 @@ function run() {
   assert(html.includes('id="staff-bank-panel"'), 'staff dashboard should expose bank lead action panel target');
   assert(html.includes('id="staff-stat-duplicates"'), 'staff dashboard should show duplicate risk count');
   assert(html.includes('id="staff-source-quick-paste"'), 'staff dashboard should expose source quick paste');
+  assert(html.includes('id="staff-source-monitor-card"'), 'staff dashboard should expose the continuous monitor process');
+  assert(html.includes('id="staff-source-monitor-commands"'), 'staff dashboard should show trigger commands for the monitor');
+  assert(html.includes('id="staff-source-sweep-youtube-mode"'), 'staff dashboard should let staff choose safe/broad YouTube sweep mode');
+  assert(html.includes('staff-source-monitor-guide-20260630'), 'index should cache-bust the staff source monitor guide');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
@@ -92,6 +97,8 @@ function run() {
   assert(app.includes('renderAdminStaffControl'), 'King dashboard should render staff account control');
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
+  assert(app.includes('staff-source-monitor-cadence'), 'frontend should render source monitor cadence');
+  assert(app.includes('youtube_job_mode: youtubeJobMode'), 'frontend should send staff-selected YouTube job mode');
   assert(app.includes('/api/staff/assistant/query'), 'frontend should call staff assistant API');
   assert(app.includes('/api/staff/profile'), 'frontend should save staff settings');
   assert(app.includes('staffJumpToDesk'), 'staff stats should be clickable action jumps');
@@ -129,6 +136,10 @@ function run() {
   assert(staffRoutes.includes('PUBLIC_SUPPRESSED_LISTING_MARKERS'), 'staff live counts should suppress soft-launch and QA records');
   assert(staffRoutes.includes("COUNT(*) FILTER (WHERE ${publicCustomerVisiblePropertyWhere('p')})::int AS live"), 'staff live property count must not include public-suppressed records');
   assert(staffRoutes.includes('source_presets: STAFF_SOURCE_PRESETS'), 'staff dashboard payload should include source presets');
+  assert(staffRoutes.includes('monitor: staffSourceMonitorGuide()'), 'staff dashboard payload should include continuous source monitor guidance');
+  assert(staffRoutes.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT'), 'staff source monitor guide should show the 60,000 source target');
+  assert(staffRoutes.includes('continuous_social_monitor_run'), 'staff source monitor guide should expose the audit action for confirmed runs');
+  assert(staffRoutes.includes('youtubeJobMode'), 'staff social sweep endpoint should pass through the YouTube job mode');
   assert(staffRoutes.includes("whatsapp: { ...whatsappSummary, bridge: whatsappBridge }"), 'staff dashboard payload should expose WhatsApp bridge status');
   assert(staffRoutes.includes('FROM whatsapp_messages m'), 'staff dashboard and assistant should fall back to raw WhatsApp messages');
   assert(staffRoutes.includes('warning_overrides: safeJsonObject(req.body.warning_overrides, {})'), 'staff review save API should accept moderator warning overrides');

@@ -76,8 +76,25 @@ Switch `--dry-run` to `--confirm` only after the reports show usable exact posts
 
 Use bounded batches so Render does not timeout or rate-limit the API providers. The high-frequency job should keep to known YouTube channel uploads first; this keeps Makaug fresh without burning the daily YouTube Search quota on every tick.
 
+One-off trigger from Render:
+
+1. Open Render Dashboard -> Makaug project -> makaug web service.
+2. Open Shell.
+3. Run the dry proof first:
+
+```bash
+npm run inventory:continuous-monitor -- --dry-run
+```
+
+4. If the report looks correct, run the confirmed trigger:
+
 ```bash
 npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1
+```
+
+Cron commands:
+
+```bash
 npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=25
 npm run inventory:sweep-social-platforms -- --platform=x --confirm --x-search-mode=recent --lookback-days=7 --max-sources=25 --max-results=25
 npm run inventory:daily-source-sweep -- --confirm
@@ -90,6 +107,18 @@ Recommended production cadence:
 - Every 10-15 minutes: `inventory:continuous-monitor` with `--youtube-job-mode=channel_uploads`. This follows known source channels, advances offsets through `audit_logs`, dedupes exact URLs, and pushes high-confidence rows through the existing auto-live/review gates.
 - Every 2-4 hours: `inventory:sweep-social-platforms` with `--youtube-job-mode=all` and a small `--max-sources` batch for broader hashtag/search discovery.
 - Once daily: `inventory:daily-source-sweep -- --confirm` to refresh the 60,000 source registry and King review queue baseline.
+
+## Staff Dashboard Communication
+
+The same process is shown inside `/staff-dashboard` under Source intake & social scraping:
+
+- source registry size and active batch;
+- high-frequency, broad-search, and daily-refresh cadence;
+- dry-run and confirmed trigger commands;
+- auto-live rule and review rule;
+- the `continuous_social_monitor_run` audit action used to prove confirmed runs and advance the source cursor.
+
+Staff should use the dashboard wording as the board-level operating process. If the cron cadence changes in Render, update `STAFF_SOURCE_MONITOR_GUIDE` in `routes/staff.js` and this document in the same pull.
 
 Useful Render env controls for the continuous monitor:
 

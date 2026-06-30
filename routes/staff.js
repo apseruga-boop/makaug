@@ -21,6 +21,10 @@ const {
   importExactSocialSourcePosts,
   runSocialPlatformPostSweep
 } = require('../services/socialPlatformPostDiscoveryService');
+const {
+  PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+  PROPERTY_SOURCE_REGISTRY_TARGET_COUNT
+} = require('../services/propertySourceRegistryService');
 
 const router = express.Router();
 
@@ -44,6 +48,26 @@ const STAFF_SOURCE_PRESETS = [
   { label: 'Swahili homes', value: '#NyumbaUganda #NyumbaYaKupanga #ViwanjaUganda #KodiKampala', language: 'Kiswahili' },
   { label: 'Wakiso growth', value: '#Nansana #Kira #Namugongo #Gayaza #WakisoHomes #WakisoRentals', language: 'Local areas' }
 ];
+const STAFF_SOURCE_MONITOR_GUIDE = {
+  title: 'Continuous source monitor',
+  status: 'Ready for Render Cron Job and Render Shell trigger',
+  dry_run_command: 'npm run inventory:continuous-monitor -- --dry-run',
+  confirm_command: 'npm run inventory:continuous-monitor -- --confirm --platforms=youtube,x --youtube-job-mode=channel_uploads --max-sources=15 --max-results=25 --max-pages=1',
+  broad_search_command: 'npm run inventory:sweep-social-platforms -- --platform=youtube --confirm --youtube-job-mode=all --published-after=2026-01-01T00:00:00.000Z --max-sources=25 --max-results=25 --max-pages=1',
+  daily_registry_command: 'npm run inventory:daily-source-sweep -- --confirm',
+  high_frequency_cadence: 'Every 10-15 minutes: safe known-channel uploads plus X recent search.',
+  broad_search_cadence: 'Every 2-4 hours: broader hashtag/search discovery in small batches.',
+  daily_registry_cadence: 'Once daily: refresh the source registry and review baseline.',
+  render_trigger_path: 'Render Dashboard > project > New > Cron Job, or web service Shell for a one-off run.',
+  published_after: '2026-01-01T00:00:00.000Z',
+  source_registry_batch_id: PROPERTY_SOURCE_REGISTRY_BATCH_ID,
+  source_registry_target_count: PROPERTY_SOURCE_REGISTRY_TARGET_COUNT,
+  social_platform_batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
+  audit_log_action: 'continuous_social_monitor_run',
+  auto_live_rule: 'Auto-live only when the source is dated from 2026 onward, location is strong, category is clear, source/contact evidence exists, and duplicate checks pass. Phone number is optional when the source contact path is usable.',
+  review_rule: 'If location, category, date, source evidence, or duplicate confidence is weak, the row stays in King/staff review.',
+  board_update: 'Staff see the same queue, source registry, cadence, commands, and rules in this dashboard before running any source work.'
+};
 
 function boolLike(value) {
   return ['true', '1', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -51,6 +75,23 @@ function boolLike(value) {
 
 function safeJsonObject(value, fallback = {}) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : fallback;
+}
+
+function staffSourceMonitorGuide() {
+  return {
+    ...STAFF_SOURCE_MONITOR_GUIDE,
+    cadences: [
+      { label: 'Fast monitor', value: STAFF_SOURCE_MONITOR_GUIDE.high_frequency_cadence },
+      { label: 'Broad search', value: STAFF_SOURCE_MONITOR_GUIDE.broad_search_cadence },
+      { label: 'Registry refresh', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_cadence }
+    ],
+    commands: [
+      { label: 'Dry proof', value: STAFF_SOURCE_MONITOR_GUIDE.dry_run_command },
+      { label: 'Trigger now', value: STAFF_SOURCE_MONITOR_GUIDE.confirm_command },
+      { label: 'Broad YouTube search', value: STAFF_SOURCE_MONITOR_GUIDE.broad_search_command },
+      { label: 'Daily registry', value: STAFF_SOURCE_MONITOR_GUIDE.daily_registry_command }
+    ]
+  };
 }
 
 function normalizePhoneLite(value) {
@@ -317,6 +358,7 @@ function trainingGuide() {
     source_intake: {
       goal: 'Bring TikTok, YouTube, Facebook, X/Twitter, student housing, and WhatsApp source leads into one shared queue without duplicates.',
       steps: [
+        'Continuous monitor runs from Render: fast channel-upload sweeps every 10-15 minutes, broader hashtag/search sweeps every 2-4 hours, and source-registry refresh once daily.',
         'Paste exact post/video links or copied source text into Source intake.',
         'Preview first. The preview shows how many rows are new, existing, duplicates, source-review only, or queue-ready.',
         'Queue only exact property posts with a location, source/contact route, and usable evidence. Source pages alone stay in source review.',
@@ -671,6 +713,7 @@ async function dashboardPayload(req) {
       batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
       summary: sourceSummary,
       possible_duplicates: safeNumber(duplicateSummary, 'possible_duplicates'),
+      monitor: staffSourceMonitorGuide(),
       source_presets: STAFF_SOURCE_PRESETS,
       source_registry: sourceRows,
       queued_found_online: sourceQueueRows,
@@ -1371,6 +1414,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
     const focus = cleanText(req.body?.focus || req.body?.sweep_focus || req.body?.sweepFocus || '');
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
     const maxSources = Math.min(15, Math.max(1, parseInt(req.body?.max_sources || req.body?.maxSources || 8, 10) || 8));
+    const youtubeJobMode = cleanText(req.body?.youtube_job_mode || req.body?.youtubeJobMode || 'all') || 'all';
     const result = await runSocialPlatformPostSweep({
       db,
       platform,
@@ -1381,7 +1425,8 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       maxResultsPerSource: Math.min(10, Math.max(1, parseInt(req.body?.max_results || req.body?.maxResults || 5, 10) || 5)),
       searchMode: cleanText(req.body?.x_search_mode || req.body?.xSearchMode || 'all'),
       lookbackDays: Math.max(0, parseInt(req.body?.lookback_days || req.body?.lookbackDays || 0, 10) || 0),
-      publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z')
+      publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z'),
+      youtubeJobMode
     });
     await logStaffActivity(req, dryRun ? 'staff_social_sweep_previewed' : 'staff_social_sweep_run', {
       targetType: 'source_intake',
@@ -1389,6 +1434,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
         batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
         platform,
         focus,
+        youtube_job_mode: youtubeJobMode,
         dry_run: dryRun,
         max_sources: maxSources,
         discovered_posts_count: result.discovered_posts_count || 0,
