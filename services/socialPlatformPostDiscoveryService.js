@@ -1613,18 +1613,26 @@ function youtubeConfidenceReviewForPost({
     && checks.location_area_detected
     && checks.contact_path
     && Boolean(listingType);
-  const liveReady = preapprovedLiveReady || hashtagAutoLiveReady;
+  const youtubeApiAutoLiveReady = score >= 70
+    && checks.property_signal
+    && checks.source_date_2026_plus
+    && checks.location_area_detected
+    && checks.contact_path
+    && Boolean(listingType);
+  const liveReady = preapprovedLiveReady || hashtagAutoLiveReady || youtubeApiAutoLiveReady;
   return {
     score,
     status: hashtagAutoLiveReady
       ? 'youtube_hashtag_auto_live_ready'
+      : youtubeApiAutoLiveReady
+        ? 'youtube_api_auto_live_ready'
       : preapprovedLiveReady
         ? 'youtube_confident_live_ready'
         : 'youtube_review_required',
     live_ready: liveReady,
-    auto_live_ready: hashtagAutoLiveReady,
+    auto_live_ready: youtubeApiAutoLiveReady,
     date_status: dateStatus,
-    phone_status: hasDirectPhone ? 'direct_phone_present' : (hasContactPath ? (hashtagAutoLiveReady ? 'source_contact_only_ok' : 'source_contact_only_needs_review') : 'missing_contact'),
+    phone_status: hasDirectPhone ? 'direct_phone_present' : (hasContactPath ? (youtubeApiAutoLiveReady ? 'source_contact_only_ok' : 'source_contact_only_needs_review') : 'missing_contact'),
     location_status: locationStatus,
     category_status: categoryStatus,
     checks,
@@ -2216,7 +2224,7 @@ function summarizeYouTubeConfidence(posts = []) {
     summary.total += 1;
     summary.by_status[status] = (summary.by_status[status] || 0) + 1;
     if (review.live_ready === true) summary.live_ready_count += 1;
-    if (review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready') summary.auto_live_ready_count += 1;
+    if (review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready' || review.status === 'youtube_api_auto_live_ready') summary.auto_live_ready_count += 1;
     if (review.phone_status === 'direct_phone_present') summary.direct_phone_count += 1;
     if (review.phone_status === 'source_contact_only_needs_review' || review.phone_status === 'source_contact_only_ok') summary.source_contact_only_count += 1;
     if (review.location_status === 'area_or_neighbourhood_detected') summary.area_level_location_count += 1;

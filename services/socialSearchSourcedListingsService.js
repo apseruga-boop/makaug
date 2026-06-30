@@ -947,10 +947,13 @@ function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)
   const job = sourceJobForItem(item);
   const sourceIsHashtag = sourceJobIsHashtag(job, item);
   const sourceIsYouTubeApi = sourcePostIsYouTubeApiPost(item, agent);
-  const reviewSaysAutoLive = review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready';
+  const reviewSaysAutoLive = review.auto_live_ready === true
+    || review.status === 'youtube_hashtag_auto_live_ready'
+    || review.status === 'youtube_api_auto_live_ready';
   const reviewSaysYouTubeApiReady = review.live_ready === true
     || review.status === 'youtube_confident_live_ready'
-    || review.status === 'youtube_hashtag_auto_live_ready';
+    || review.status === 'youtube_hashtag_auto_live_ready'
+    || review.status === 'youtube_api_auto_live_ready';
   const reviewHasPropertySignal = review.checks?.property_signal !== false;
   const hasLocation = review.location_status === 'area_or_neighbourhood_detected';
   const hasSourceDate = review.date_status === 'confirmed_2026_plus_source_window';
