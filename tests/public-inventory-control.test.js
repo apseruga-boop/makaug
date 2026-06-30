@@ -140,7 +140,10 @@ test('public featured property feed only returns featured backend listings', () 
   assert.match(appSource, /function loadingPropertyGridHtml\(count = 3\)/);
   assert.match(appSource, /id === "home-grid" && !publicListingsFromApiLoaded/);
   assert.match(appSource, /\/api\/properties\?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0/);
+  assert.match(appSource, /\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1/);
   assert.match(appSource, /const featuredRowsPromise = fetchPublicFeaturedListingsFromApi\(\)/);
+  assert.match(appSource, /function applyPublicOpportunityStats\(stats\)/);
+  assert.match(appSource, /fetchPublicOpportunityStatsFromApi\(\)/);
   assert.match(appSource, /const featuredListings = applyPublicFeaturedRows\(rows\)/);
   assert.match(appSource, /renderGrid\("home-grid", getHomepageFeaturedListings\(publicListings\)\.slice\(0, 3\)\)/);
 });
@@ -269,7 +272,9 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
   assert.match(serverSource, /publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630'/);
   assert.match(serverSource, /publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630'/);
+  assert.match(serverSource, /publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630'/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
+  assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&limit=24&page=1&include_summary=0/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0/);
   assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
@@ -370,9 +375,11 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-inventory-first-page-24-20260630/);
   assert.match(htmlSource, /public-inventory-cache-key-20260630/);
   assert.match(htmlSource, /public-home-featured-fast-20260630/);
+  assert.match(htmlSource, /public-home-summary-fast-20260630/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
   assert.match(serverSource, /publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630'/);
   assert.match(serverSource, /publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630'/);
+  assert.match(serverSource, /publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630'/);
 });

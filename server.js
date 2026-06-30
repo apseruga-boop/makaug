@@ -140,6 +140,7 @@ const publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-re
 const publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630';
 const publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630';
 const publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630';
+const publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -149,13 +150,15 @@ const publicAppVersionSuffixes = [
   publicInventoryProgressiveRenderVersion,
   publicInventoryFirstPageVersion,
   publicInventoryCacheKeyVersion,
-  publicHomepageFeaturedFastVersion
+  publicHomepageFeaturedFastVersion,
+  publicHomepageSummaryFastVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
 const PUBLIC_HTML_WARMUP_PATHS = ['/'];
 const PUBLIC_INVENTORY_WARMUP_PATHS = [
+  '/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1',
   '/api/properties?status=approved&public_only=1&limit=24&page=1&include_summary=0',
   '/api/properties?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0'
 ];

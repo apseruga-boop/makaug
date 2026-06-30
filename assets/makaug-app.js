@@ -32600,6 +32600,20 @@ async function fetchPublicFeaturedListingsFromApi() {
   return Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
 }
 
+function applyPublicOpportunityStats(stats) {
+  const nextStats = normalizeHeroOpportunityStats(stats);
+  if (!nextStats) return false;
+  publicListingsApiStats = nextStats;
+  publicListingsApiTotal = nextStats.total;
+  renderHeroPropertyOpportunityCounter();
+  return true;
+}
+
+async function fetchPublicOpportunityStatsFromApi() {
+  const response = await apiRequest("/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1", { skipAuth: true });
+  return response?.summary?.public_opportunities || response?.summary || null;
+}
+
 async function loadRemotePropertyDetailForUi(id, options = {}) {
   const listingId = String(id || "").trim();
   if (!listingId) return null;
@@ -32689,6 +32703,13 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       .catch((featuredError) => {
         console.warn("Unable to refresh featured listings", featuredError);
         return [];
+      });
+    fetchPublicOpportunityStatsFromApi()
+      .then((stats) => {
+        if (applyPublicOpportunityStats(stats)) renderAll();
+      })
+      .catch((summaryError) => {
+        console.warn("Unable to refresh public opportunity summary", summaryError);
       });
     let firstPublicPageRendered = false;
     const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
