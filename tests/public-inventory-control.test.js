@@ -349,25 +349,6 @@ test('approval WhatsApp notification opens before heavy admin dashboard refresh'
   assert.doesNotMatch(source, /await renderAdminDashboard\(\);/);
 });
 
-test('King dashboard loads core review data before heavy tab-specific panels', () => {
-  const needsSource = functionSource('adminDashboardActiveTabNeedsRows');
-  const snapshotSource = asyncFunctionSource('fetchRemoteAdminSnapshot');
-  const tabSource = functionSource('setAdminWorkflowTab');
-  const renderSource = asyncFunctionSource('renderAdminDashboard');
-  assert.match(needsSource, /reviewQueue: \["review", "student-sweep", "youtube-sweep"\]\.includes\(normalized\)/);
-  assert.match(needsSource, /ads: normalized === "ads"/);
-  assert.match(needsSource, /whatsapp: normalized === "whatsapp"/);
-  assert.match(snapshotSource, /const fieldAgentParams = new URLSearchParams\(\{ limit: "10000", role: "field_agent" \}\)/);
-  assert.match(snapshotSource, /shouldLoadFieldAgents \? adminSafeSnapshotRequest\("field agents"/);
-  assert.match(snapshotSource, /shouldLoadAds \? adminSafeSnapshotRequest\("advertising packages"/);
-  assert.match(snapshotSource, /shouldLoadWhatsapp \? adminSafeSnapshotRequest\("whatsapp insights"/);
-  assert.match(snapshotSource, /shouldLoadNotifications \? adminSafeSnapshotRequest\("crm summary"/);
-  assert.match(snapshotSource, /if \(tabNeeds\.actionedListings\) hydrateAdminAllListingsInBackground\(headers\)/);
-  assert.match(tabSource, /adminScheduleDashboardRefreshForTab\(\)/);
-  assert.match(renderSource, /fetchRemoteAdminSnapshot\(\{ activeTab: activeAdminWorkflowTab/);
-  assert.match(renderSource, /if \(activeAdminWorkflowTab === "staff"\) \{[\s\S]*renderAdminStaffControl\(\)/);
-});
-
 test('WhatsApp property search uses the same public inventory guardrails', () => {
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);

@@ -745,8 +745,6 @@ let adminWhatsappActiveConversation = null;
 let adminWhatsappReplyDraft = "";
 let adminActiveReview = null;
 let activeAdminWorkflowTab = "review";
-let adminDashboardRendering = false;
-let adminDashboardTabRefreshTimer = null;
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
@@ -11665,34 +11663,6 @@ function adminOpenDecision(tab = "review", selector = "") {
   setTimeout(() => adminScrollTo(selector || `[data-admin-tab-panel="${tab}"]`), 40);
 }
 
-function adminDashboardActiveTabNeedsRows(tab = activeAdminWorkflowTab) {
-  const normalized = String(tab || "review");
-  return {
-    reviewQueue: ["review", "student-sweep", "youtube-sweep"].includes(normalized),
-    liveListings: ["live", "listings"].includes(normalized),
-    actionedListings: ["actioned", "listings"].includes(normalized),
-    accounts: normalized === "accounts",
-    fieldAgents: normalized === "field-agents",
-    ads: normalized === "ads",
-    whatsapp: normalized === "whatsapp",
-    notifications: normalized === "notifications",
-    staff: normalized === "staff"
-  };
-}
-
-function adminScheduleDashboardRefreshForTab() {
-  if (adminDashboardRendering || !canUseLiveAdminApi()) return;
-  const body = document.getElementById("admin-body");
-  if (!body || body.classList.contains("hidden")) return;
-  if (adminDashboardTabRefreshTimer) clearTimeout(adminDashboardTabRefreshTimer);
-  adminDashboardTabRefreshTimer = setTimeout(() => {
-    adminDashboardTabRefreshTimer = null;
-    renderAdminDashboard({ source: "tab_switch" }).catch((error) => {
-      console.warn("Unable to refresh admin tab", error?.message || error);
-    });
-  }, 80);
-}
-
 function adminListingIdArg(value) {
   return adminEscape(JSON.stringify(String(value || "")));
 }
@@ -11720,7 +11690,6 @@ function adminVerificationBadge(status) {
 
 function setAdminWorkflowTab(tab = "review") {
   const allowed = ["review", "student-sweep", "youtube-sweep", "actioned", "live", "accounts", "staff", "field-agents", "ads", "whatsapp", "notifications", "listings"];
-  const previousTab = activeAdminWorkflowTab;
   activeAdminWorkflowTab = allowed.includes(String(tab)) ? String(tab) : "review";
   document.querySelectorAll("[data-admin-tab-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== activeAdminWorkflowTab);
@@ -11733,7 +11702,6 @@ function setAdminWorkflowTab(tab = "review") {
     button.classList.toggle("text-gray-700", !active);
   });
   if (activeAdminWorkflowTab !== "review") closeAdminReviewPanel();
-  if (previousTab !== activeAdminWorkflowTab) adminScheduleDashboardRefreshForTab();
 }
 
 async function fetchAdminPaginatedRows(path, headers, options = {}) {
@@ -11786,11 +11754,9 @@ async function adminSafeSnapshotRequest(label, requestFn, fallback) {
     return fallback;
   }
 }
-async function fetchRemoteAdminSnapshot(options = {}) {
+async function fetchRemoteAdminSnapshot() {
   if (!canUseLiveAdminApi()) return null;
   const headers = adminAuthHeaders();
-  const activeTab = String(options.activeTab || activeAdminWorkflowTab || "review");
-  const tabNeeds = adminDashboardActiveTabNeedsRows(activeTab);
   const userSearch = (document.getElementById("admin-users-q")?.value || "").trim();
   const userRole = (document.getElementById("admin-users-role")?.value || "").trim();
   const weeklyOnly = (document.getElementById("admin-users-tips")?.value || "") === "weekly";
@@ -11809,77 +11775,59 @@ async function fetchRemoteAdminSnapshot(options = {}) {
   if (whatsappStatus) whatsappParams.set("status", whatsappStatus);
   if (whatsappCategory) whatsappParams.set("category", whatsappCategory);
   if (whatsappAiMode) whatsappParams.set("ai_mode", whatsappAiMode);
-  const shouldLoadReviewQueue = tabNeeds.reviewQueue;
-  const shouldLoadLiveListings = tabNeeds.liveListings;
-  const shouldLoadAgents = tabNeeds.accounts || tabNeeds.liveListings;
-  const shouldLoadAccounts = tabNeeds.accounts;
-  const shouldLoadCampaigns = tabNeeds.accounts || tabNeeds.ads;
-  const shouldLoadFieldAgents = tabNeeds.fieldAgents;
-  const shouldLoadAds = tabNeeds.ads;
-  const shouldLoadWhatsapp = tabNeeds.whatsapp;
-  const shouldLoadNotifications = tabNeeds.notifications;
   const [summaryRes, commandCentreRes, recentRes, pendingRows, liveRows, usersRes, agentsRes, propertyRequestsRes, fieldAgentsRes, campaignsRes, adPackagesRes, adPlacementsRes, adSummaryRes, adInquiriesRes, adCampaignsRes, whatsappInsightsRes, whatsappConversationsRes, crmSummaryRes, crmLeadsRes, notificationsRes, emailsRes, outlookStatusRes, outlookActionsRes, whatsappLogsRes] = await Promise.all([
     adminSafeSnapshotRequest("summary", () => apiRequest("/api/admin/summary", { headers }), { data: {} }),
     adminSafeSnapshotRequest("command centre", () => apiRequest("/api/admin/command-centre", { headers }), { data: {} }),
     adminSafeSnapshotRequest("recent activity", () => apiRequest("/api/admin/recent", { headers }), { data: {} }),
-    shouldLoadReviewQueue ? adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }), []) : null,
-    shouldLoadLiveListings ? adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []) : null,
-    shouldLoadAccounts ? adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }) : null,
-    shouldLoadAgents ? adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }) : null,
-    shouldLoadAccounts ? adminSafeSnapshotRequest("property requests", () => apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }), { data: [] }) : null,
-    shouldLoadFieldAgents ? adminSafeSnapshotRequest("field agents", () => apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }), { data: [] }) : null,
-    shouldLoadCampaigns ? adminSafeSnapshotRequest("campaigns", () => apiRequest("/api/admin/campaigns?limit=20", { headers }), { data: [] }) : null,
-    shouldLoadAds ? adminSafeSnapshotRequest("advertising packages", () => apiRequest("/api/admin/advertising/packages", { headers }), { data: [] }) : null,
-    shouldLoadAds ? adminSafeSnapshotRequest("advertising placements", () => apiRequest("/api/admin/advertising/placements", { headers }), { data: [] }) : null,
-    shouldLoadAds ? adminSafeSnapshotRequest("advertising summary", () => apiRequest("/api/admin/advertising/summary", { headers }), { data: {} }) : null,
-    shouldLoadAds ? adminSafeSnapshotRequest("advertising inquiries", () => apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }), { data: [] }) : null,
-    shouldLoadAds ? adminSafeSnapshotRequest("advertising campaigns", () => apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }), { data: [] }) : null,
-    shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp insights", () => apiRequest("/api/admin/whatsapp/insights", { headers }), { data: {} }) : null,
-    shouldLoadWhatsapp ? adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }) : null,
-    shouldLoadNotifications ? adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] }) : null
+    adminSafeSnapshotRequest("review queue", () => fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 }), []),
+    adminSafeSnapshotRequest("live listings", () => fetchAdminPaginatedRows("/api/admin/properties/live", headers, { maxPages: 10 }), []),
+    adminSafeSnapshotRequest("users", () => apiRequest(`/api/admin/users?${userParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("agents", () => apiRequest("/api/admin/agents?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("property requests", () => apiRequest(`/api/admin/property-requests?${propertyRequestParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("field agents", () => apiRequest(`/api/admin/users?${fieldAgentParams.toString()}`, { headers }), { data: [] }),
+    adminSafeSnapshotRequest("campaigns", () => apiRequest("/api/admin/campaigns?limit=20", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising packages", () => apiRequest("/api/admin/advertising/packages", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising placements", () => apiRequest("/api/admin/advertising/placements", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising summary", () => apiRequest("/api/admin/advertising/summary", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("advertising inquiries", () => apiRequest("/api/admin/advertising/inquiries?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("advertising campaigns", () => apiRequest("/api/admin/advertising/campaigns?limit=100", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("whatsapp insights", () => apiRequest("/api/admin/whatsapp/insights", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("whatsapp conversations", () => apiRequest(`/api/admin/whatsapp/conversations?${whatsappParams.toString()}`, { headers }), { data: [], summary: {} }),
+    adminSafeSnapshotRequest("crm summary", () => apiRequest("/api/admin/crm/summary", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("crm leads", () => apiRequest("/api/admin/leads?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("notifications", () => apiRequest("/api/admin/notifications?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("emails", () => apiRequest("/api/admin/emails?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("outlook status", () => apiRequest("/api/admin/outlook-agent/status", { headers }), { data: {} }),
+    adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }),
+    adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] })
   ]);
-  const pendingListings = Array.isArray(pendingRows)
-    ? pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)
-    : adminCurrentPendingListings;
-  const liveListings = Array.isArray(liveRows)
-    ? liveRows.map(normalizeRemoteAdminListing)
-    : adminLiveListings;
-  if (Array.isArray(liveRows)) {
-    adminPublicInventoryParity = liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory || adminPublicInventoryParity || {};
-  }
+  const pendingListings = (pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem);
+  const liveListings = (liveRows || []).map(normalizeRemoteAdminListing);
+  adminPublicInventoryParity = liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory || {};
   const allListings = adminUniqueSeedItems([...pendingListings, ...liveListings]);
-  if (Array.isArray(pendingRows) || Array.isArray(liveRows)) adminRemoteListings = allListings;
-  if (Array.isArray(liveRows)) adminLiveListings = liveListings;
-  if (tabNeeds.actionedListings) hydrateAdminAllListingsInBackground(headers);
-  if (Array.isArray(agentsRes?.data)) adminRemoteAgents = agentsRes.data.map(mapRemoteAgentForUi);
-  if (Array.isArray(propertyRequestsRes?.data)) adminPropertyRequests = propertyRequestsRes.data;
-  if (Array.isArray(fieldAgentsRes?.data)) adminFieldAgents = fieldAgentsRes.data;
-  if (Array.isArray(campaignsRes?.data)) adminCurrentCampaigns = campaignsRes.data;
-  if (Array.isArray(adPackagesRes?.data)) adminAdvertisingPackages = adPackagesRes.data;
-  if (Array.isArray(adPlacementsRes?.data)) adminAdvertisingPlacements = adPlacementsRes.data;
-  if (adSummaryRes?.data) adminAdvertisingSummary = adSummaryRes.data;
-  if (Array.isArray(adInquiriesRes?.data)) adminAdvertisingInquiries = adInquiriesRes.data;
-  if (Array.isArray(adCampaignsRes?.data)) adminAdvertisingCampaigns = adCampaignsRes.data;
-  if (whatsappInsightsRes?.data || whatsappConversationsRes?.summary) {
-    adminWhatsappSummary = {
-      ...(whatsappInsightsRes?.data || {}),
-      ...(whatsappConversationsRes?.summary || {}),
-      webBridge: whatsappInsightsRes?.data?.webBridge || adminWhatsappSummary.webBridge || {}
-    };
-  }
-  if (Array.isArray(whatsappConversationsRes?.data)) adminWhatsappConversations = whatsappConversationsRes.data;
-  if (crmSummaryRes?.data) adminCrmSummary = crmSummaryRes.data;
-  if (Array.isArray(crmLeadsRes?.data)) adminCrmLeads = crmLeadsRes.data;
-  if (Array.isArray(crmSummaryRes?.data?.openTasks)) adminCrmTasks = crmSummaryRes.data.openTasks;
-  if (Array.isArray(notificationsRes?.data)) adminNotificationLogs = notificationsRes.data;
-  if (Array.isArray(emailsRes?.data)) adminEmailLogs = emailsRes.data;
-  if (Array.isArray(whatsappLogsRes?.data)) adminWhatsappLogs = whatsappLogsRes.data;
+  adminRemoteListings = allListings;
+  adminLiveListings = liveListings;  hydrateAdminAllListingsInBackground(headers);
+  adminRemoteAgents = Array.isArray(agentsRes?.data) ? agentsRes.data.map(mapRemoteAgentForUi) : [];
+  adminPropertyRequests = Array.isArray(propertyRequestsRes?.data) ? propertyRequestsRes.data : [];
+  adminFieldAgents = Array.isArray(fieldAgentsRes?.data) ? fieldAgentsRes.data : [];
+  adminCurrentCampaigns = Array.isArray(campaignsRes?.data) ? campaignsRes.data : [];
+  adminAdvertisingPackages = Array.isArray(adPackagesRes?.data) ? adPackagesRes.data : [];
+  adminAdvertisingPlacements = Array.isArray(adPlacementsRes?.data) ? adPlacementsRes.data : [];
+  adminAdvertisingSummary = adSummaryRes?.data || {};
+  adminAdvertisingInquiries = Array.isArray(adInquiriesRes?.data) ? adInquiriesRes.data : [];
+  adminAdvertisingCampaigns = Array.isArray(adCampaignsRes?.data) ? adCampaignsRes.data : [];
+  adminWhatsappSummary = {
+    ...(whatsappInsightsRes?.data || {}),
+    ...(whatsappConversationsRes?.summary || {}),
+    webBridge: whatsappInsightsRes?.data?.webBridge || {}
+  };
+  adminWhatsappConversations = Array.isArray(whatsappConversationsRes?.data) ? whatsappConversationsRes.data : [];
+  adminCrmSummary = crmSummaryRes?.data || {};
+  adminCrmLeads = Array.isArray(crmLeadsRes?.data) ? crmLeadsRes.data : [];
+  adminCrmTasks = Array.isArray(crmSummaryRes?.data?.openTasks) ? crmSummaryRes.data.openTasks : [];
+  adminNotificationLogs = Array.isArray(notificationsRes?.data) ? notificationsRes.data : [];
+  adminEmailLogs = Array.isArray(emailsRes?.data) ? emailsRes.data : [];
+  adminWhatsappLogs = Array.isArray(whatsappLogsRes?.data) ? whatsappLogsRes.data : [];
   const outlookAgentStatus = outlookStatusRes?.data || {};
   const outlookAgentActions = Array.isArray(outlookActionsRes?.data) ? outlookActionsRes.data : [];
   return {
@@ -14146,7 +14094,7 @@ async function adminSetStaffStatus(staffId, status) {
   }
 }
 
-async function renderAdminDashboard(options = {}) {
+async function renderAdminDashboard() {
   const gate = document.getElementById("admin-auth-gate");
   const body = document.getElementById("admin-body");
   if (!gate || !body) return;
@@ -14169,15 +14117,13 @@ async function renderAdminDashboard(options = {}) {
   if (statusEl) statusEl.textContent = `Role: ${mapRoleLabel(authState.user.role)} • ${authState.user.email || authState.user.phone || "-"}`;
   if (keyInput && document.activeElement !== keyInput) keyInput.value = adminApiKey;
 
-  adminDashboardRendering = true;
-  try {
   const localSnap = buildLocalAdminSnapshot();
   let remoteSnap = null;
   let sourceLabel = "Data source: local browser data.";
 
   if (canUseLiveAdminApi()) {
     try {
-      remoteSnap = await fetchRemoteAdminSnapshot({ activeTab: activeAdminWorkflowTab, source: options.source || "dashboard" });
+      remoteSnap = await fetchRemoteAdminSnapshot();
       sourceLabel = adminApiKey ? "Data source: live admin API." : "Data source: live admin API via signed-in admin.";
     } catch (e) {
       sourceLabel = `Live API unavailable (${e.message || "request failed"}). Showing local browser data.`;
@@ -14260,11 +14206,9 @@ async function renderAdminDashboard(options = {}) {
   renderAdminAdvertisingInquiries(remoteSnap?.advertisingInquiries || []);
   renderAdminAdvertisingCampaigns(remoteSnap?.advertisingCampaigns || []);
   renderAdminUsersRows(adminUsers);
-  if (activeAdminWorkflowTab === "staff") {
-    renderAdminStaffControl().catch((error) => {
-      console.warn("Unable to render staff control", error);
-    });
-  }
+  renderAdminStaffControl().catch((error) => {
+    console.warn("Unable to render staff control", error);
+  });
   renderAdminBrokerRows(adminAgents);
   renderAdminFeaturedAgentsRows(adminAgents);
   renderAdminPropertyRequestRows(remoteSnap?.propertyRequests || localSnap.propertyRequests || []);
@@ -14318,9 +14262,6 @@ async function renderAdminDashboard(options = {}) {
         <button onclick="adminSetReportStatus('${r.id}','dismissed')" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[11px] font-semibold">Dismiss</button>
       </div>` : ""}
     </div>`);
-  } finally {
-    adminDashboardRendering = false;
-  }
 }
 
 function setupBadge(ok, label) {
