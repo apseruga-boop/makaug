@@ -108,8 +108,12 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{ limit: 100, maxPages: 20, includeSummary: false \}\)/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{[\s\S]*limit: 100,[\s\S]*maxPages: 20,[\s\S]*includeSummary: false,[\s\S]*onPage:/);
   assert(appSource.includes('const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;'));
+  assert.match(appSource, /options\.onPage\(\{ rows: rows\.slice\(\), firstResponse, response, page, totalPages \}\)/);
+  assert.match(appSource, /let firstPublicPageRendered = false/);
+  assert.match(appSource, /if \(page !== 1 \|\| firstPublicPageRendered\) return;/);
+  assert.match(appSource, /applyPublicRows\(rows, pageFirstResponse\);\s*renderAll\(\);/);
   assert.match(appSource, /publicListingsApiTotal = Number\.isFinite\(apiTotal\) \? apiTotal : rows\.length/);
   assert.match(appSource, /apiRequest\(`\$\{path\}\$\{separator\}limit=\$\{limit\}&page=\$\{page\}\$\{summaryParam\}`, \{ skipAuth: true \}\)/);
   assert.match(routeSource, /} else \{\s*opportunitySummary = null;\s*\}/);
