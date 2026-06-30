@@ -26,7 +26,7 @@ const requiredWindowHandlers = [
 assert(
   html.includes('mortgage-finder-accuracy-handlers-20260621')
     && html.includes('mortgage-qualification-20260621-mortgage-provider-sources-20260621')
-    && html.includes('mortgage-ui-tabs-bank-logos-20260622'),
+    && html.includes('mortgage-provider-badges-20260630'),
   'mortgage cache marker should force the corrected app bundle to load'
 );
 assert(
@@ -59,11 +59,13 @@ for (const handler of requiredWindowHandlers) {
 assert(app.includes('let mortgageRateManuallyEdited = false;'), 'mortgage manual rate state should exist');
 assert(app.includes('function resolveMortgageSelectedRate'), 'mortgage rate resolver should exist');
 assert(app.includes('function getMortgageFeeEstimates'), 'mortgage fee estimator should exist');
-assert(server.includes("mortgageUiTabsBankLogosVersion = 'mortgage-ui-tabs-bank-logos-20260622'"), 'server should append the mortgage UI cache marker in production HTML');
+assert(server.includes("mortgageUiTabsBankLogosVersion = 'mortgage-provider-badges-20260630'"), 'server should append the mortgage UI cache marker in production HTML');
 assert(app.includes('const MORTGAGE_PROVIDER_BRANDS'), 'mortgage comparison should define bank brand/logo metadata');
 assert(app.includes('function renderMortgageProviderLogo'), 'mortgage comparison should render lender logo badges');
 assert(app.includes('renderMortgageProviderLogo(result.best.provider'), 'best-match mortgage card should show a lender logo');
 assert(app.includes('renderMortgageProviderLogo(row.provider'), 'every mortgage comparison row should show a lender logo');
+assert(app.includes('data-mortgage-logo-text'), 'mortgage lender badges should render deterministic text labels immediately');
+assert(!app.includes('/favicon.ico'), 'mortgage lender badges should not depend on third-party favicon URLs');
 assert(html.includes('grid lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.82fr)]'), 'mortgage calculator should use the compact two-column layout');
 assert(html.includes('bg-white/85 p-3 text-sm text-emerald-950 shadow-sm'), 'mortgage tab panel should live inside the calculator panel');
 const mortgageResultShell = (html.match(/id="mortgage-professional-results"[^>]+>/) || [''])[0];

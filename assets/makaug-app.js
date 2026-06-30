@@ -617,56 +617,48 @@ const AUDITED_MORTGAGE_PROVIDER_BY_ID = Object.fromEntries(DEFAULT_MORTGAGE_PROV
 const MORTGAGE_PROVIDER_BRANDS = {
   stanbic: {
     shortName: "Stanbic",
-    logoUrl: "https://www.stanbicbank.co.ug/favicon.ico",
     bg: "#eef6ff",
     border: "#b7d7f6",
     text: "#0052a3"
   },
   hfb: {
     shortName: "HFB",
-    logoUrl: "https://www.housingfinance.co.ug/favicon.ico",
     bg: "#ecfdf5",
     border: "#a7f3d0",
     text: "#047857"
   },
   dfcu: {
     shortName: "dfcu",
-    logoUrl: "https://www.dfcugroup.com/favicon.ico",
     bg: "#eef2ff",
     border: "#c7d2fe",
     text: "#3730a3"
   },
   kcb: {
     shortName: "KCB",
-    logoUrl: "https://ug.kcbgroup.com/favicon.ico",
     bg: "#ecfdf5",
     border: "#86efac",
     text: "#166534"
   },
   ncba: {
     shortName: "NCBA",
-    logoUrl: "https://ncbagroup.com/favicon.ico",
     bg: "#eff6ff",
     border: "#bfdbfe",
     text: "#1d4ed8"
   },
   centenary: {
     shortName: "Centenary",
-    logoUrl: "https://www.centenarybank.co.ug/favicon.ico",
     bg: "#f0fdf4",
     border: "#bbf7d0",
     text: "#15803d"
   },
   baroda: {
     shortName: "Baroda",
-    logoUrl: "https://www.bankofbaroda.ug/favicon.ico",
     bg: "#fff7ed",
     border: "#fed7aa",
     text: "#c2410c"
   },
   absa: {
     shortName: "Absa",
-    logoUrl: "https://www.absa.co.ug/favicon.ico",
     bg: "#fef2f2",
     border: "#fecaca",
     text: "#b91c1c"
@@ -38129,14 +38121,7 @@ function mortgageProviderBrand(provider = {}) {
     || (key.includes("absa") || name.includes("absa") ? "absa" : "")
     || key;
   const brand = MORTGAGE_PROVIDER_BRANDS[alias] || {};
-  let logoUrl = provider.logoUrl || provider.logo_url || brand.logoUrl || "";
-  if (!logoUrl && provider.sourceUrl) {
-    try {
-      logoUrl = new URL("/favicon.ico", provider.sourceUrl).toString();
-    } catch (_error) {
-      logoUrl = "";
-    }
-  }
+  const logoUrl = provider.logoUrl || provider.logo_url || "";
   const fallbackName = brand.shortName || String(provider.name || provider.provider_name || "Bank").replace(/\s+Bank\s+Uganda$/i, "").trim();
   const initials = fallbackName
     .split(/\s+/)
@@ -38157,17 +38142,17 @@ function mortgageProviderBrand(provider = {}) {
 
 function renderMortgageProviderLogo(provider = {}, options = {}) {
   const brand = mortgageProviderBrand(provider);
-  const size = options.size === "lg" ? "w-14 h-14" : options.size === "sm" ? "w-9 h-9" : "w-11 h-11";
-  const imgSize = options.size === "lg" ? "max-w-[42px] max-h-[42px]" : options.size === "sm" ? "max-w-[26px] max-h-[26px]" : "max-w-[32px] max-h-[32px]";
-  const fallbackSize = options.size === "lg" ? "text-sm" : "text-[11px]";
+  const size = options.size === "lg" ? "h-14 min-w-[86px] max-w-[104px] px-2" : options.size === "sm" ? "h-9 min-w-[54px] max-w-[72px] px-2" : "h-11 min-w-[68px] max-w-[88px] px-2";
+  const imgSize = options.size === "lg" ? "max-w-[76px] max-h-[42px]" : options.size === "sm" ? "max-w-[46px] max-h-[26px]" : "max-w-[58px] max-h-[32px]";
+  const fallbackSize = options.size === "lg" ? "text-xs" : options.size === "sm" ? "text-[9px]" : "text-[10px]";
   const label = `${provider.name || brand.shortName || "Bank"} logo`;
   const image = brand.logoUrl
-    ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="lazy" referrerpolicy="no-referrer" class="${imgSize} object-contain" onerror="this.classList.add('hidden');this.nextElementSibling.classList.remove('hidden');">`
+    ? `<img src="${adminAttr(brand.logoUrl)}" alt="${adminAttr(label)}" loading="lazy" referrerpolicy="no-referrer" class="${imgSize} hidden object-contain" onload="this.classList.remove('hidden');this.previousElementSibling.classList.add('hidden');" onerror="this.remove();">`
     : "";
   return `
-    <span class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
+    <span role="img" aria-label="${adminAttr(label)}" data-mortgage-logo="${adminAttr(brand.key)}" class="${size} shrink-0 rounded-2xl border flex items-center justify-center overflow-hidden shadow-sm" style="background:${adminAttr(brand.bg)};border-color:${adminAttr(brand.border)};color:${adminAttr(brand.text)}">
+      <span data-mortgage-logo-text class="${fallbackSize} font-black leading-none tracking-normal text-center whitespace-nowrap overflow-hidden text-ellipsis">${adminEscape(brand.shortName || brand.initials)}</span>
       ${image}
-      <span class="${image ? "hidden " : ""}${fallbackSize} font-black tracking-wide">${adminEscape(brand.initials)}</span>
     </span>`;
 }
 
