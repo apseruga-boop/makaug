@@ -10784,6 +10784,15 @@ function getFeaturedListings(listings) {
     });
 }
 
+function getHomepageFeaturedListings(publicListings = []) {
+  const featuredListings = publicFeaturedListingsFromApi.length
+    ? publicFeaturedListingsFromApi
+    : getFeaturedListings(publicListings);
+  return featuredListings.length
+    ? featuredListings
+    : publicListings.slice().sort(sortListingsByNewest);
+}
+
 function getKnownUsersForAdmin() {
   const map = {};
   PROPERTIES.forEach((p) => {
@@ -31571,10 +31580,30 @@ function noResultsCardForGrid(id) {
     </div>`;
 }
 
+function loadingPropertyGridHtml(count = 3) {
+  return Array.from({ length: count }).map(() => `
+    <div class="bg-white rounded-xl border border-gray-100 overflow-hidden property-card animate-pulse" aria-hidden="true">
+      <div class="h-48 bg-gray-100"></div>
+      <div class="p-4 space-y-3">
+        <div class="h-4 w-3/4 rounded bg-gray-100"></div>
+        <div class="h-3 w-1/2 rounded bg-gray-100"></div>
+        <div class="flex gap-2">
+          <div class="h-3 w-16 rounded bg-gray-100"></div>
+          <div class="h-3 w-20 rounded bg-gray-100"></div>
+        </div>
+        <div class="h-3 w-2/3 rounded bg-gray-100"></div>
+      </div>
+    </div>`).join("");
+}
+
 function renderGrid(id, list) {
   const el = document.getElementById(id);
   if (!el) return;
   if (!list.length) {
+    if (id === "home-grid" && !publicListingsFromApiLoaded) {
+      el.innerHTML = loadingPropertyGridHtml(3);
+      return;
+    }
     el.innerHTML = noResultsCardForGrid(id);
     return;
   }
@@ -31819,8 +31848,7 @@ function renderSaved() {
 function renderAll() {
   const publicListings = getPublicListings();
   renderHeroPropertyOpportunityCounter();
-  const featuredListings = publicFeaturedListingsFromApi.length ? publicFeaturedListingsFromApi : publicListings;
-  renderGrid("home-grid", getFeaturedListings(featuredListings).slice(0, 3));
+  renderGrid("home-grid", getHomepageFeaturedListings(publicListings).slice(0, 3));
   renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
   renderGrid("rent-grid", publicListings.filter((p) => normalizeType(p.type) === "rent"));
   const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
@@ -32561,6 +32589,17 @@ function upsertPropertyForUi(property) {
   return mapped;
 }
 
+function applyPublicFeaturedRows(featuredRows = []) {
+  const rows = Array.isArray(featuredRows) ? featuredRows.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+  publicFeaturedListingsFromApi = rows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
+  return publicFeaturedListingsFromApi;
+}
+
+async function fetchPublicFeaturedListingsFromApi() {
+  const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0", { skipAuth: true });
+  return Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+}
+
 async function loadRemotePropertyDetailForUi(id, options = {}) {
   const listingId = String(id || "").trim();
   if (!listingId) return null;
@@ -32635,12 +32674,22 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       }
       combinedRows.forEach((p) => upsertPropertyForUi(p));
       if (options.prune === true || featuredRows.length) {
-        publicFeaturedListingsFromApi = featuredRows.map((p) => upsertPropertyForUi(p)).filter(Boolean);
+        applyPublicFeaturedRows(featuredRows);
       }
       publicListingsFromApiLoaded = true;
       renderHeroPropertyOpportunityCounter();
       return rows;
     };
+    const featuredRowsPromise = fetchPublicFeaturedListingsFromApi()
+      .then((rows) => {
+        const featuredListings = applyPublicFeaturedRows(rows);
+        if (featuredListings.length) renderAll();
+        return rows;
+      })
+      .catch((featuredError) => {
+        console.warn("Unable to refresh featured listings", featuredError);
+        return [];
+      });
     let firstPublicPageRendered = false;
     const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
       limit: 24,
@@ -32653,13 +32702,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         renderAll();
       }
     });
-    let featuredRows = [];
-    try {
-      const featuredResponse = await apiRequest("/api/properties?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false", { skipAuth: true });
-      featuredRows = Array.isArray(featuredResponse?.data) ? featuredResponse.data.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-    } catch (featuredError) {
-      console.warn("Unable to refresh featured listings", featuredError);
-    }
+    const featuredRows = await featuredRowsPromise;
     applyPublicRows(publicRows, firstResponse, { featuredRows, prune: true });
     return true;
   } catch (e) {

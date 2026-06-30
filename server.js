@@ -139,6 +139,7 @@ const publicInventoryPerformanceVersion = 'public-inventory-performance-20260629
 const publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630';
 const publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630';
 const publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630';
+const publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -147,7 +148,8 @@ const publicAppVersionSuffixes = [
   publicInventoryPerformanceVersion,
   publicInventoryProgressiveRenderVersion,
   publicInventoryFirstPageVersion,
-  publicInventoryCacheKeyVersion
+  publicInventoryCacheKeyVersion,
+  publicHomepageFeaturedFastVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
