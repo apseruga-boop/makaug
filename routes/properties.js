@@ -1693,16 +1693,16 @@ async function listPropertiesHandler(req, res, next) {
     }
 
     const sortMap = {
-      featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC",
-      newest: 'p.created_at DESC',
-      price_asc: 'p.price ASC NULLS LAST',
-      price_desc: 'p.price DESC NULLS LAST'
+      featured: "p.extra_fields->>'featured_at' DESC NULLS LAST, p.updated_at DESC, p.created_at DESC, p.id DESC",
+      newest: 'p.created_at DESC, p.id DESC',
+      price_asc: 'p.price ASC NULLS LAST, p.created_at DESC, p.id DESC',
+      price_desc: 'p.price DESC NULLS LAST, p.created_at DESC, p.id DESC'
     };
 
     const defaultSort = featuredFilterRequested && featuredOnly ? 'featured' : 'newest';
     const sortBy = cleanText(req.query.sort || defaultSort).toLowerCase();
     const orderBy = hasRadiusSearch
-      ? `${distanceSql} ASC NULLS LAST, p.created_at DESC`
+      ? `${distanceSql} ASC NULLS LAST, p.created_at DESC, p.id DESC`
       : (sortMap[sortBy] || sortMap.newest);
 
     const publicExtraFieldsSql = `(COALESCE(p.extra_fields, '{}'::jsonb)
