@@ -114,10 +114,12 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50/);
   assert.match(appSource, /const publicActiveCategoryHydrationPromises = new Map\(\)/);
   assert.match(appSource, /function applyPublicRowsForUi\(publicRowsSnapshot, responseSnapshot, options = \{\}\)/);
-  assert.match(appSource, /const \{ rows: firstPageRows, firstResponse: firstPageResponse \} = await fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{[\s\S]*limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: false/);
+  assert.match(appSource, /const firstPagePath = activeCategory \? publicInventoryCategoryPath\(activeCategory\) \|\| "\/api\/properties\?status=approved&public_only=1" : "\/api\/properties\?status=approved&public_only=1"/);
+  assert.match(appSource, /const \{ rows: firstPageRows, firstResponse: firstPageResponse \} = await fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: true/);
   assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);\s*renderAll\(\);/);
   assert.match(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{[\s\S]*limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,[\s\S]*maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,[\s\S]*includeSummary: false/);
-  assert.match(appSource, /const summaryStats = await summaryStatsPromise;\s*const categoryTotal = activeCategory \? publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0 : 0;/);
+  assert.match(appSource, /const summaryStats = await summaryStatsPromise;\s*const firstPageCategoryTotal = activeCategory \? Number\(firstPageResponse\?\.pagination\?\.total \|\| 0\) \|\| 0 : 0;/);
+  assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryTotal \|\| \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
   assert.match(appSource, /const \{ rows: publicRows, firstResponse \} = await backgroundRowsPromise;\s*const featuredRows = await featuredRowsPromise;\s*applyPublicRowsForUi\(publicRows, firstResponse, \{ featuredRows, prune: true \}\);\s*renderAll\(\);/);
   assert.match(appSource, /function publicOpportunityStatForCategory\(category\)/);
   assert.match(appSource, /function getPublicCategoryDisplayCount\(category, localCount = 0, \{ filtered = false \} = \{\}\)/);
@@ -449,6 +451,7 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-home-summary-fast-20260630/);
   assert.match(htmlSource, /public-active-category-feed-20260630/);
   assert.match(htmlSource, /public-active-category-progress-20260630/);
+  assert.match(htmlSource, /public-category-first-page-route-20260630/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);

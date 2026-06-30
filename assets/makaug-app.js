@@ -32910,11 +32910,22 @@ async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
 async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
   const activeCategory = activePublicInventoryCategoryFromRoute();
   if (!activeCategory) return false;
+  const activeCategoryPath = publicInventoryCategoryPath(activeCategory);
+  if (!activeCategoryPath) return false;
   if (publicActiveCategoryHydrationPromises.has(activeCategory)) {
     return publicActiveCategoryHydrationPromises.get(activeCategory);
   }
   const hydrationPromise = (async () => {
     try {
+      const { rows: firstCategoryRows, firstResponse: firstCategoryResponse } = await fetchPublicPaginatedRows(activeCategoryPath, {
+        limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
+        maxPages: 1,
+        includeSummary: true
+      });
+      if (firstCategoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+        applyPublicRowsForUi(firstCategoryRows, firstCategoryResponse);
+        renderAll();
+      }
       const stats = publicListingsApiStats || await fetchPublicOpportunityStatsFromApi()
         .then((nextStats) => {
           if (applyPublicOpportunityStats(nextStats)) renderAll();
@@ -32924,7 +32935,8 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
           console.warn("Unable to refresh public opportunity summary", summaryError);
           return null;
         });
-      const categoryTotal = publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0;
+      const firstCategoryTotal = Number(firstCategoryResponse?.pagination?.total || 0) || 0;
+      const categoryTotal = firstCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0);
       const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
         onPageRows: (pageRows, pageResponse) => {
           if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
@@ -32974,10 +32986,11 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         console.warn("Unable to refresh public opportunity summary", summaryError);
         return null;
       });
-    const { rows: firstPageRows, firstResponse: firstPageResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
+    const firstPagePath = activeCategory ? publicInventoryCategoryPath(activeCategory) || "/api/properties?status=approved&public_only=1" : "/api/properties?status=approved&public_only=1";
+    const { rows: firstPageRows, firstResponse: firstPageResponse } = await fetchPublicPaginatedRows(firstPagePath, {
       limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
       maxPages: 1,
-      includeSummary: false
+      includeSummary: true
     });
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     renderAll();
@@ -32987,7 +33000,8 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       includeSummary: false
     });
     const summaryStats = await summaryStatsPromise;
-    const categoryTotal = activeCategory ? publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0 : 0;
+    const firstPageCategoryTotal = activeCategory ? Number(firstPageResponse?.pagination?.total || 0) || 0 : 0;
+    const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
     if (activeCategory && categoryTotal > PUBLIC_LISTINGS_FAST_PAGE_LIMIT) {
       const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
         onPageRows: (pageRows, pageResponse) => {
