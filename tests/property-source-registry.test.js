@@ -46,15 +46,15 @@ function test(name, fn) {
 
 test('source registry service defines a multi-platform Uganda property source database', () => {
   const summary = summarizePropertySourceRegistry();
-  assert.strictEqual(summary.target_count, 30000, 'source database should have a 30,000-record operating target after adding cross-platform hashtag fishing');
-  assert(summary.count >= 29900 && summary.count <= 30000, 'expanded database should sit at the 30,000 source-discovery ceiling');
-  assert(summary.by_platform.x >= 8000, 'source database should include at least 8,000 X/Twitter hashtag discovery records');
-  assert(summary.by_platform.tiktok >= 5000, 'source database should include at least 5,000 TikTok discovery records');
-  assert(summary.by_platform.instagram >= 5000, 'source database should include at least 5,000 Instagram discovery records');
-  assert(summary.by_platform.facebook >= 5000, 'source database should include at least 5,000 Facebook discovery records');
-  assert(summary.by_platform.youtube >= 5000, 'source database should include at least 5,000 YouTube creator/search sources');
+  assert.strictEqual(summary.target_count, 60000, 'source database should have a 60,000-record operating target after expanding cross-platform hashtag fishing');
+  assert(summary.count >= 59900 && summary.count <= 60000, 'expanded database should sit at the 60,000 source-discovery ceiling');
+  assert(summary.by_platform.x >= 16000, 'source database should include at least 16,000 X/Twitter hashtag discovery records');
+  assert(summary.by_platform.tiktok >= 10000, 'source database should include at least 10,000 TikTok discovery records');
+  assert(summary.by_platform.instagram >= 10000, 'source database should include at least 10,000 Instagram discovery records');
+  assert(summary.by_platform.facebook >= 10000, 'source database should include at least 10,000 Facebook discovery records');
+  assert(summary.by_platform.youtube >= 10000, 'source database should include at least 10,000 YouTube creator/search sources');
   assert(!summary.by_platform.website, 'website-only source records should stay out of the social-first registry');
-  assert.strictEqual(PROPERTY_SOURCE_REGISTRY.length, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, 'source registry should load exactly the configured 30,000 records');
+  assert.strictEqual(PROPERTY_SOURCE_REGISTRY.length, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT, 'source registry should load exactly the configured 60,000 records');
   assert(summary.reviewed_source_pages_count >= 10, 'source registry should separately count reviewed pages/channels/accounts');
   assert(summary.discovery_feed_count >= 10000, 'source registry should separately count broad discovery feeds');
   ['carnelian-properties-uganda', 'realtor-mahad', 'ezra-homes-ug', 'tiktok-uganda-real-estate-hashtag', 'x-uganda-real-estate-hashtag'].forEach((key) => {
@@ -71,9 +71,9 @@ test('source registry service defines a multi-platform Uganda property source da
   assert(service.includes('SOCIAL_ONE_OFF_LISTING_RULE'), 'source registry should keep social posts listing-only until the source owner registers or claims a profile');
   assert(service.includes('Do not automatically create or update a public Makaug source/broker profile'), 'source registry should not create broker profiles from social discovery alone');
   assert(service.includes('Website/portal sources are disabled'), 'source registry should disable website-only sources for launch inventory');
-  assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 30000'), 'source registry should enforce the 30,000 ceiling');
-  assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 8000'), 'source registry should reserve an 8,000-record X hashtag sweep');
-  assert(service.includes('CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 12000'), 'source registry should reserve a 12,000-record Instagram/Facebook/TikTok/YouTube hashtag sweep');
+  assert(service.includes('PROPERTY_SOURCE_REGISTRY_TARGET_COUNT = 60000'), 'source registry should enforce the 60,000 ceiling');
+  assert(service.includes('X_HASHTAG_DISCOVERY_TARGET_COUNT = 16000'), 'source registry should reserve a 16,000-record X hashtag sweep');
+  assert(service.includes('CROSS_PLATFORM_HASHTAG_DISCOVERY_TARGET_COUNT = 24000'), 'source registry should reserve a 24,000-record Instagram/Facebook/TikTok/YouTube hashtag sweep');
   assert(service.includes('PROPERTY_HASHTAG_WATCHLIST'), 'source registry should maintain a cross-platform property hashtag watchlist');
   assert(PROPERTY_HASHTAG_WATCHLIST.length >= 100, 'source registry should maintain at least 100 property hashtags for social sweeps');
   [
@@ -93,7 +93,7 @@ test('source registry service defines a multi-platform Uganda property source da
   });
   assert(service.includes('function getPropertySourceRegistry()'), 'source registry should lazy-load generated sources instead of building them during server startup');
   assert(service.includes("Object.defineProperty(exported, 'PROPERTY_SOURCE_REGISTRY'"), 'legacy registry export should stay available through a lazy getter');
-  assert(!service.includes('const PROPERTY_SOURCE_REGISTRY = ['), 'source registry must not eagerly allocate the expanded 30,000-record registry at module import');
+  assert(!service.includes('const PROPERTY_SOURCE_REGISTRY = ['), 'source registry must not eagerly allocate the expanded 60,000-record registry at module import');
   assert(!PROPERTY_SOURCE_REGISTRY.some((item) => /(?:youtube\.com\/watch|youtu\.be\/|\/shorts\/|tiktok\.com\/@[^/]+\/video|instagram\.com\/(?:p|reel)\/|facebook\.com\/watch|facebook\.com\/.+\/(?:posts|videos)\/)/i.test(item.url || '')), 'source registry must not store individual post/video links as source records');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'source_page'), 'source registry should contain real page/channel/account records');
   assert(PROPERTY_SOURCE_REGISTRY.some((item) => sourceRecordKind(item) === 'discovery_feed'), 'source registry should contain discovery feeds that find new pages/posts');
@@ -138,7 +138,7 @@ test('King dashboard exposes source database create and review controls', () => 
   assert(frontend.includes('/api/admin/property-source-registry/seed'), 'frontend should call protected seed API');
   assert(frontend.includes('/api/admin/property-source-registry?limit=500'), 'frontend should load a bounded source-registry page to avoid Render 502s');
   assert(frontend.includes('stays server-side so this panel does not time out'), 'King should explain the full source registry is not rendered in one response');
-  assert(service.includes('PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500'), 'seed response should sample source rows instead of returning all 30,000 records');
+  assert(service.includes('PROPERTY_SOURCE_REGISTRY_RESPONSE_SAMPLE_LIMIT = 500'), 'seed response should sample source rows instead of returning all 60,000 records');
   assert(service.includes('Math.min(Number(limit) || 250, PROPERTY_SOURCE_REGISTRY_TARGET_COUNT)'), 'source registry list API should allow the full expanded registry');
   assert(frontend.includes('fishing net, not the approval queue'), 'King should explain source records are not listing records');
   assert(frontend.includes('reviewed pages/channels/accounts'), 'King should separate reviewed source pages from broad feeds');

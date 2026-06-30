@@ -27,16 +27,21 @@ function usage() {
     '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=50',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
+    '  node scripts/sweep-social-platform-posts.js --platform=students --dry-run --max-sources=60',
     '',
     'Platforms:',
     '  tiktok  Builds exact-video capture tasks from tracked TikTok hashtag/profile feeds.',
     '  youtube Uses YOUTUBE_API_KEY/GOOGLE_YOUTUBE_API_KEY to fetch Shorts and long-form videos from 1 January 2026 onward and queue eligible exact video posts.',
     '  x       Uses X_BEARER_TOKEN/TWITTER_BEARER_TOKEN when available to fetch exact X post URLs and queue eligible found-online properties.',
+    '  students Builds a student-housing sweep across TikTok, YouTube, X, Facebook, and Instagram sources.',
     '  all     Runs TikTok capture tasks plus YouTube and X API discovery.',
     '',
     'Writes:',
     '  --dry-run reports tasks/posts only.',
-    '  --confirm queues eligible exact YouTube/X posts into King found-online review. TikTok hashtags still require exact video URLs before import.',
+    '  --confirm queues eligible exact YouTube/X posts into King found-online review. TikTok, Facebook, and Instagram broad feeds still require exact post URLs or approved platform API adapters before import.',
+    '',
+    'Capacity:',
+    '  Each sweep can page through up to 60,000 social source records; use --source-offset with small --max-sources batches on Render cron jobs.',
   ].join('\n'));
 }
 

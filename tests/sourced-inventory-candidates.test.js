@@ -68,6 +68,7 @@ const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   MAX_PLATFORM_SWEEP_SOURCES,
   YOUTUBE_SOURCE_POST_WINDOW_START,
+  socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   YOUTUBE_OEMBED_URL,
   buildExactSocialPostImportRows,
@@ -256,7 +257,11 @@ test('found-online seed panel hides approved and live records from pending moder
   assert(frontend.includes('ensureAdminFoundOnlineControls();\n  adminScrubPendingSeedStatusPanel();'), 'dashboard refresh should scrub stale approved/live found-online cards from the pending panel');
   assert(frontend.includes('No pending found-online records need review in this run'), 'pending panel should explain when only approved/live matches remain');
   assert(frontend.includes('data-admin-seed-final'), 'seed summaries should expose final-state metadata for UI regression checks');
-  assert(frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'), 'remote pending rows should drop approved/live records before rendering');
+  assert(
+    frontend.includes('(pendingRows || []).map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)')
+      || frontend.includes('pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)'),
+    'remote pending rows should drop approved/live records before rendering'
+  );
   assert(frontend.includes('fetchAdminPaginatedRows("/api/admin/properties/review-queue", headers, { maxPages: 500 })'), 'dashboard should fetch enough protected review-queue pages for launch sweep volume');
   assert(frontend.includes('adminApplyLaunchCleanFilter(listings).filter(adminIsPendingReviewSeedItem)'), 'pending renderer should refuse final-state records even if an API response leaks them');
   assert(html.includes('found-online-pending-filter-20260521'), 'index should bump the app asset version so production browsers fetch the fixed admin JS');
@@ -827,7 +832,7 @@ test('TikTok minimum viable source posts can queue with evidence card and date c
 
 test('social platform sweeps promote TikTok hashtags, YouTube videos, and X posts to import rows', () => {
   assert.strictEqual(SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID, 'social_platform_post_discovery_20260525');
-  assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 30000);
+  assert.strictEqual(MAX_PLATFORM_SWEEP_SOURCES, 60000);
   assert.strictEqual(YOUTUBE_SOURCE_POST_WINDOW_START, '2026-01-01T00:00:00.000Z');
   assert(propertySourceRegistrySource.includes("'CommercialPropertyKampala'"), 'TikTok/social watchlist should include commercial Kampala property hashtags');
   assert(propertySourceRegistrySource.includes("'StudentAccommodationMakerere'"), 'TikTok/social watchlist should include student accommodation hashtags');
@@ -842,7 +847,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   const tiktokSourceUrls = sourceRegistry
     .filter((source) => String(source.platform || '').toLowerCase() === 'tiktok')
     .map((source) => String(source.url || '').toLowerCase());
-  assert.strictEqual(sourceRegistry.length, 30000, 'source registry should still build the full 30,000-source discovery database');
+  assert.strictEqual(sourceRegistry.length, 60000, 'source registry should still build the full 60,000-source discovery database');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/studentaccommodationmakerere')), 'TikTok registry should track student-specific hashtags');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/studentaccommodationuganda2026')), 'TikTok registry should track new student accommodation hashtags');
   assert(tiktokSourceUrls.some((url) => url.includes('/tag/hostelskampala')), 'TikTok registry should track wider Kampala hostel hashtags');
@@ -910,6 +915,26 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert(socialPlatformSweepServiceSource.includes('inferXPostedAtFromStatusId'), 'X exact-link import should infer post dates from public status IDs when no API exists');
   assert(socialPlatformSweepServiceSource.includes('snippet.publishedAt'), 'YouTube sweep policy should explain the source publish date comes from YouTube snippet.publishedAt');
   assert(socialPlatformSweepServiceSource.includes('X_BEARER_TOKEN'), 'X sweep should use an explicit bearer-token env var');
+  assert(socialPlatformSweepServiceSource.includes('META_GRAPH_ACCESS_TOKEN'), 'Meta readiness should expose a Graph access token env var');
+  assert(socialPlatformSweepServiceSource.includes('FACEBOOK_PAGE_IDS'), 'Facebook readiness should expose page ID env vars');
+  assert(socialPlatformSweepServiceSource.includes('INSTAGRAM_BUSINESS_ACCOUNT_IDS'), 'Instagram readiness should expose business account env vars');
+  assert(socialPlatformSweepServiceSource.includes('TIKTOK_CLIENT_KEY'), 'TikTok readiness should expose official API client env vars');
+  assert(socialPlatformSweepScript.includes('up to 60,000 social source records'), 'sweep CLI should explain the 60,000-source ceiling');
+  const readiness = socialDiscoveryApiReadiness({
+    YOUTUBE_API_KEY: 'yt_test',
+    X_BEARER_TOKEN: 'x_test',
+    META_GRAPH_ACCESS_TOKEN: 'meta_test',
+    FACEBOOK_PAGE_IDS: '123,456',
+    INSTAGRAM_BUSINESS_ACCOUNT_IDS: '789',
+    TIKTOK_CLIENT_KEY: 'tk',
+    TIKTOK_CLIENT_SECRET: 'ts',
+  });
+  assert.strictEqual(readiness.source_registry_target_count, 60000, 'API readiness should report the 60,000-source target');
+  assert.strictEqual(readiness.youtube.configured, true, 'YouTube readiness should turn on when an API key is present');
+  assert.strictEqual(readiness.x.configured, true, 'X readiness should turn on when a bearer token is present');
+  assert.strictEqual(readiness.facebook.configured, true, 'Facebook readiness should turn on when Meta token and page IDs are present');
+  assert.strictEqual(readiness.instagram.configured, true, 'Instagram readiness should turn on when Meta token and IG business IDs are present');
+  assert.strictEqual(readiness.tiktok.configured, true, 'TikTok readiness should turn on when official client credentials are present');
   assert(socialPlatformSweepServiceSource.includes('createProfilesForRepeatedSourcesOnly: false'), 'platform sweep should not auto-create source broker profiles');
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50'), 'King dashboard should use quota-safe 50-source YouTube batches');
   assert(frontend.includes('source_offset: youtubeSourceOffset'), 'King dashboard should advance through YouTube source batches instead of repeating the first sources');

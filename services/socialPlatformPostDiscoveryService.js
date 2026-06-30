@@ -13,7 +13,7 @@ const { DISTRICTS } = require('../utils/constants');
 
 const SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID = 'social_platform_post_discovery_20260525';
 const DEFAULT_MAX_SOURCES = 40;
-const MAX_PLATFORM_SWEEP_SOURCES = 30000;
+const MAX_PLATFORM_SWEEP_SOURCES = 60000;
 const DEFAULT_X_RESULTS_PER_SOURCE = 25;
 const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
@@ -23,6 +23,12 @@ const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
 const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
 const YOUTUBE_API_KEY_ENV_NAMES = ['YOUTUBE_API_KEY', 'GOOGLE_YOUTUBE_API_KEY', 'GOOGLE_API_KEY'];
+const META_GRAPH_ACCESS_TOKEN_ENV_NAMES = ['META_GRAPH_ACCESS_TOKEN', 'FACEBOOK_GRAPH_ACCESS_TOKEN', 'FACEBOOK_PAGE_ACCESS_TOKEN', 'INSTAGRAM_GRAPH_ACCESS_TOKEN'];
+const FACEBOOK_PAGE_ID_ENV_NAMES = ['FACEBOOK_PAGE_IDS', 'FACEBOOK_PAGE_ID'];
+const INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES = ['INSTAGRAM_BUSINESS_ACCOUNT_IDS', 'INSTAGRAM_BUSINESS_ACCOUNT_ID'];
+const TIKTOK_ACCESS_TOKEN_ENV_NAMES = ['TIKTOK_ACCESS_TOKEN', 'TIKTOK_RESEARCH_API_ACCESS_TOKEN'];
+const TIKTOK_CLIENT_KEY_ENV_NAMES = ['TIKTOK_CLIENT_KEY'];
+const TIKTOK_CLIENT_SECRET_ENV_NAMES = ['TIKTOK_CLIENT_SECRET'];
 const TIKTOK_OEMBED_URL = 'https://www.tiktok.com/oembed';
 const TIKTOK_EXACT_VIDEO_URL_PATTERN = /^https:\/\/(www\.)?tiktok\.com\/@[^/]+\/video\/\d+/i;
 const TIKTOK_EXACT_VIDEO_URL_GLOBAL_PATTERN = /https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s?#]+\/video\/\d+(?:[^\s]*)?/ig;
@@ -132,6 +138,76 @@ function envYouTubeApiKey(env = process.env) {
     if (apiKey) return { name, apiKey };
   }
   return { name: '', apiKey: '' };
+}
+
+function envValue(names = [], env = process.env) {
+  for (const name of names) {
+    const value = String(env[name] || '').trim();
+    if (value) return { name, value };
+  }
+  return { name: '', value: '' };
+}
+
+function envListValue(names = [], env = process.env) {
+  const found = envValue(names, env);
+  const values = found.value
+    ? found.value.split(',').map((value) => cleanText(value)).filter(Boolean)
+    : [];
+  return { ...found, values };
+}
+
+function socialDiscoveryApiReadiness(env = process.env) {
+  const youtube = envYouTubeApiKey(env);
+  const x = envBearerToken(env);
+  const metaToken = envValue(META_GRAPH_ACCESS_TOKEN_ENV_NAMES, env);
+  const facebookPageIds = envListValue(FACEBOOK_PAGE_ID_ENV_NAMES, env);
+  const instagramBusinessIds = envListValue(INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES, env);
+  const tiktokAccessToken = envValue(TIKTOK_ACCESS_TOKEN_ENV_NAMES, env);
+  const tiktokClientKey = envValue(TIKTOK_CLIENT_KEY_ENV_NAMES, env);
+  const tiktokClientSecret = envValue(TIKTOK_CLIENT_SECRET_ENV_NAMES, env);
+  return {
+    source_registry_target_count: MAX_PLATFORM_SWEEP_SOURCES,
+    youtube: {
+      configured: Boolean(youtube.apiKey),
+      credential_env: youtube.name || '',
+      mode: 'direct_youtube_data_api_search',
+      required_any_of: YOUTUBE_API_KEY_ENV_NAMES,
+    },
+    x: {
+      configured: Boolean(x.token),
+      credential_env: x.name || '',
+      mode: 'direct_x_api_search',
+      required_any_of: X_BEARER_ENV_NAMES,
+    },
+    facebook: {
+      configured: Boolean(metaToken.value && facebookPageIds.values.length),
+      credential_env: metaToken.value ? metaToken.name : '',
+      page_ids_env: facebookPageIds.value ? facebookPageIds.name : '',
+      mode: 'meta_graph_page_or_post_review_then_exact_link_import',
+      required_any_of: META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
+      required_page_id_env_any_of: FACEBOOK_PAGE_ID_ENV_NAMES,
+      note: 'Facebook broad public search is not treated as available. Use approved Graph access for owned/approved pages, then import exact public post URLs through King review.',
+    },
+    instagram: {
+      configured: Boolean(metaToken.value && instagramBusinessIds.values.length),
+      credential_env: metaToken.value ? metaToken.name : '',
+      business_account_ids_env: instagramBusinessIds.value ? instagramBusinessIds.name : '',
+      mode: 'instagram_graph_hashtag_or_business_media_then_exact_link_import',
+      required_any_of: META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
+      required_business_account_env_any_of: INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES,
+      note: 'Instagram hashtag/media access requires an eligible Instagram Business or Creator account connected through Meta Graph permissions.',
+    },
+    tiktok: {
+      configured: Boolean(tiktokAccessToken.value || (tiktokClientKey.value && tiktokClientSecret.value)),
+      credential_env: tiktokAccessToken.value ? tiktokAccessToken.name : '',
+      client_key_env: tiktokClientKey.value ? tiktokClientKey.name : '',
+      client_secret_env: tiktokClientSecret.value ? tiktokClientSecret.name : '',
+      mode: 'official_tiktok_api_when_approved_plus_oembed_exact_url_import',
+      required_any_of: TIKTOK_ACCESS_TOKEN_ENV_NAMES,
+      required_client_env_any_of: [...TIKTOK_CLIENT_KEY_ENV_NAMES, ...TIKTOK_CLIENT_SECRET_ENV_NAMES],
+      note: 'TikTok broad public discovery is approval-gated. Current production-safe path uses exact video URLs plus TikTok oEmbed and King evidence review.',
+    },
+  };
 }
 
 function cappedNumber(value, fallback, min = 1, max = 500) {
@@ -1665,6 +1741,7 @@ async function runSocialPlatformPostSweep({
     ? buildManualSocialCaptureTasks({ sources: instagramSources, platform: 'instagram', limit: sourceLimit })
     : [];
   const youtubeApi = envYouTubeApiKey(env);
+  const apiReadiness = socialDiscoveryApiReadiness(env);
   let youtubeFetch = {
     api_configured: Boolean(youtubeApi.apiKey),
     api_key_env: youtubeApi.name || '',
@@ -1749,9 +1826,13 @@ async function runSocialPlatformPostSweep({
       student_housing_focus: 'Student housing sweeps prioritize campus, hostel, student accommodation, university, and student-room source signals and prepare manual Facebook/Instagram capture tasks when direct APIs are unavailable.',
       profile_creation_rule: 'The sweep does not automatically create or link public Makaug broker profiles from social discovery. Source owners must register or claim a Makaug broker profile before Makaug shows a public agent profile.',
     },
+    api_readiness: apiReadiness,
     tiktok: {
       source_count: tiktokSources.length,
       capture_task_count: tiktokCaptureTasks.length,
+      api_configured: apiReadiness.tiktok.configured,
+      api_mode: apiReadiness.tiktok.mode,
+      api_note: apiReadiness.tiktok.note,
       exact_video_url_pattern: TIKTOK_EXACT_VIDEO_URL_PATTERN.source,
       capture_tasks: tiktokCaptureTasks,
     },
@@ -1782,11 +1863,21 @@ async function runSocialPlatformPostSweep({
     facebook: {
       source_count: facebookSources.length,
       capture_task_count: facebookCaptureTasks.length,
+      api_configured: apiReadiness.facebook.configured,
+      api_mode: apiReadiness.facebook.mode,
+      skipped_reason: apiReadiness.facebook.configured
+        ? 'Facebook Graph credentials are present; keep exact public post URLs in King review until the Graph post adapter is enabled for the approved pages.'
+        : 'Set META_GRAPH_ACCESS_TOKEN plus FACEBOOK_PAGE_IDS/FACEBOOK_PAGE_ID in Render for approved Facebook Graph page/post review.',
       capture_tasks: facebookCaptureTasks,
     },
     instagram: {
       source_count: instagramSources.length,
       capture_task_count: instagramCaptureTasks.length,
+      api_configured: apiReadiness.instagram.configured,
+      api_mode: apiReadiness.instagram.mode,
+      skipped_reason: apiReadiness.instagram.configured
+        ? 'Instagram Graph credentials are present; keep exact post/reel URLs in King review until the hashtag/media adapter is enabled for the approved business account.'
+        : 'Set META_GRAPH_ACCESS_TOKEN plus INSTAGRAM_BUSINESS_ACCOUNT_IDS/INSTAGRAM_BUSINESS_ACCOUNT_ID in Render for Instagram Graph hashtag/media review.',
       capture_tasks: instagramCaptureTasks,
     },
     discovered_posts_count: discoveredPosts.length,
@@ -1806,6 +1897,13 @@ module.exports = {
   YOUTUBE_SOURCE_POST_WINDOW_START,
   YOUTUBE_API_KEY_ENV_NAMES,
   X_BEARER_ENV_NAMES,
+  META_GRAPH_ACCESS_TOKEN_ENV_NAMES,
+  FACEBOOK_PAGE_ID_ENV_NAMES,
+  INSTAGRAM_BUSINESS_ACCOUNT_ID_ENV_NAMES,
+  TIKTOK_ACCESS_TOKEN_ENV_NAMES,
+  TIKTOK_CLIENT_KEY_ENV_NAMES,
+  TIKTOK_CLIENT_SECRET_ENV_NAMES,
+  socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
   TIKTOK_EXACT_VIDEO_URL_PATTERN,
   extractExactSocialPostUrls,
