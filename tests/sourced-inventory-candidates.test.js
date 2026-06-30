@@ -1227,6 +1227,10 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_confident_live_ready');
   assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.live_ready, true);
   assert.deepStrictEqual(normalizedYoutube.image_urls, ['https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg']);
+  const normalizedYoutubeForQueue = normalizeFoundOnlineSourcePost(normalizedYoutube);
+  const youtubeApiAutoLiveStatus = sourcePostAutoLiveStatusFor(normalizedYoutubeForQueue, normalizedYoutubeForQueue.sourceAgent);
+  assert.strictEqual(youtubeApiAutoLiveStatus.approved, true, 'confident YouTube API posts should auto-live without needing a hashtag-only path');
+  assert.strictEqual(youtubeApiAutoLiveStatus.source_is_youtube_api, true, 'auto-live gate should record the YouTube API source path');
   const normalizedHashtagYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'hash123XYZ90' },
     snippet: {
@@ -1356,9 +1360,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('hashtag auto-live with location/date/source contact'), 'King dashboard should display hashtag auto-live confidence counts');
   assert(html.includes('youtube-channel-upload-sweep-20260630'), 'index should cache-bust the channel-upload YouTube sweep dashboard fix');
   assert(html.includes('youtube-hashtag-auto-live-20260630'), 'index should cache-bust the hashtag auto-live dashboard fix');
+  assert(html.includes('youtube-api-auto-live-20260630'), 'index should cache-bust the YouTube API auto-live dashboard fix');
   assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
   assert(socialPlatformSweepServiceSource.includes('youtube_hashtag_auto_live_ready'), 'YouTube API confidence should allow hashtag posts with location and source contact to become live-ready');
   assert(socialSearchServiceSource.includes('sourcePostAutoLiveStatusFor'), 'source-post importer should centralize the hashtag auto-live approval gate');
+  assert(socialSearchServiceSource.includes('sourcePostIsYouTubeApiPost'), 'source-post importer should detect YouTube API posts outside the hashtag-only path');
   assert(socialSearchServiceSource.includes('status: autoLive.status'), 'hashtag auto-live imports should insert approved public records instead of pending rows');
   assert(frontend.includes('Auto-live properties'), 'King dashboard should show auto-live imports separately from review queue rows');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_CHANNELS_URL'), 'YouTube sweep should resolve channel handles before scanning trusted source uploads');

@@ -923,19 +923,44 @@ function sourceJobIsHashtag(job = {}, item = {}) {
   return text.includes('hashtag') || /youtube\.com\/hashtag\//i.test(text);
 }
 
+function sourcePostIsYouTubeApiPost(item = {}, agent = sourceAgentForItem(item)) {
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  const nested = raw.raw_source_post || raw.rawSourcePost || {};
+  const job = sourceJobForItem(item);
+  const platform = normalizeSourcePlatformName(sourcePlatformFor(agent, item));
+  const sourceUrl = sourceUrlForItem(item);
+  return Boolean(
+    platform === 'youtube'
+      && (
+        raw.import_method === 'youtube_data_api_search'
+        || nested.import_method === 'youtube_data_api_search'
+        || job.platform === 'youtube'
+        || item.youtubeId
+        || item.youtube_id
+        || /(?:youtube\.com|youtu\.be)/i.test(sourceUrl)
+      )
+  );
+}
+
 function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)) {
   const review = youtubeConfidenceReviewForItem(item) || {};
   const job = sourceJobForItem(item);
   const sourceIsHashtag = sourceJobIsHashtag(job, item);
+  const sourceIsYouTubeApi = sourcePostIsYouTubeApiPost(item, agent);
   const reviewSaysAutoLive = review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready';
+  const reviewSaysYouTubeApiReady = review.live_ready === true
+    || review.status === 'youtube_confident_live_ready'
+    || review.status === 'youtube_hashtag_auto_live_ready';
+  const reviewHasPropertySignal = review.checks?.property_signal !== false;
   const hasLocation = review.location_status === 'area_or_neighbourhood_detected';
   const hasSourceDate = review.date_status === 'confirmed_2026_plus_source_window';
   const hasCategory = Boolean(item.listingType || item.listing_type || review.category_status && !/needs_review/i.test(String(review.category_status)));
   const hasContactPath = hasAnyPublicContactPath(agent, item);
   const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
-  const approved = Boolean(
-    reviewSaysAutoLive
-      && sourceIsHashtag
+  const youtubeApiReady = Boolean(
+    sourceIsYouTubeApi
+      && reviewSaysYouTubeApiReady
+      && reviewHasPropertySignal
       && hasLocation
       && hasSourceDate
       && hasCategory
@@ -943,15 +968,32 @@ function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)
       && allowedSocialSource
       && sourceUrlForItem(item)
   );
+  const hashtagReady = Boolean(
+    reviewSaysAutoLive
+      && sourceIsHashtag
+      && reviewHasPropertySignal
+      && hasLocation
+      && hasSourceDate
+      && hasCategory
+      && hasContactPath
+      && allowedSocialSource
+      && sourceUrlForItem(item)
+  );
+  const approved = Boolean(
+    hashtagReady || youtubeApiReady
+  );
   return {
     approved,
     status: approved ? 'approved' : 'pending',
     moderation_stage: approved ? 'approved' : 'submitted',
-    policy: 'youtube_hashtag_location_source_contact_2026_auto_live',
+    policy: sourceIsHashtag
+      ? 'youtube_hashtag_location_source_contact_2026_auto_live'
+      : 'youtube_api_location_source_contact_2026_auto_live',
     reason: approved
-      ? 'Auto-approved from a YouTube hashtag source because the 2026 post has a property signal, area-level location, category, source evidence, and a public source/contact route.'
-      : 'Pending King review because the hashtag auto-live policy did not fully pass.',
+      ? 'Auto-approved from a YouTube API source because the 2026 post has a property signal, area-level location, category, source evidence, and a public source/contact route. A direct phone is not required when the source contact route is available.'
+      : 'Pending King review because the YouTube API auto-live policy did not fully pass.',
     source_is_hashtag: sourceIsHashtag,
+    source_is_youtube_api: sourceIsYouTubeApi,
     review_status: review.status || '',
     review_score: review.score ?? null,
     phone_status: review.phone_status || '',
@@ -1429,6 +1471,7 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     auto_live_review_status: autoLive.review_status,
     auto_live_review_score: autoLive.review_score,
     auto_live_source_is_hashtag: autoLive.source_is_hashtag,
+    auto_live_source_is_youtube_api: autoLive.source_is_youtube_api,
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
     added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
@@ -1578,7 +1621,7 @@ function buildSocialSearchListing(item, agentId = null) {
     status: autoLive.status,
     moderation_stage: autoLive.moderation_stage,
     reviewed_at: autoLive.approved ? new Date() : null,
-    moderation_notes: `${autoLive.approved ? 'YOUTUBE HASHTAG AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the hashtag auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Batch: ${itemBatchId(item)}.`,
+    moderation_notes: `${autoLive.approved ? 'YOUTUBE API AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the YouTube API auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Batch: ${itemBatchId(item)}.`,
     moderation_reason: autoLive.approved
       ? autoLive.reason
       : 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
