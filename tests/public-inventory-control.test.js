@@ -121,6 +121,9 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(routeSource, /const pagination = includeSummary[\s\S]*approximatePublicPagination/);
   assert.doesNotMatch(routeSource, /} else \{\s*const countResult = await db\.query/);
   assert.match(routeSource, /isLaunchSeedListing\(property\) && !ownerCanPreview && !adminAccess/);
+  assert.match(routeSource, /normalized\.set\('include_summary', parseBooleanLike\(rawValue, true\) \? '1' : '0'\)/);
+  assert.match(routeSource, /normalized\.set\('page', String\(page\)\)/);
+  assert.match(routeSource, /normalized\.set\('limit', String\(limit\)\)/);
   assert.match(publicInventoryPerformanceMigration, /idx_properties_public_live_created/);
   assert.match(publicInventoryPerformanceMigration, /idx_property_images_public_primary_lookup/);
   assert.match(publicInventoryPerformanceMigration, /ON property_images \(\(md5\(url\)\), property_id\)/);
@@ -259,9 +262,10 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
+  assert.match(serverSource, /publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630'/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
-  assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
-  assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
+  assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&limit=24&page=1&include_summary=0/);
+  assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&page=1&public_only=1&sort=featured&include_summary=0/);
   assert.match(propertiesRouteSource, /clearPublicPropertiesCache\(`listing_status_\$\{current\.status \|\| 'unknown'\}_to_\$\{nextStatus\}`\)/);
   assert.match(propertiesRouteSource, /fast_manual_notification_response/);
   assert.match(propertiesRouteSource, /runPublicInventoryFollowup\(\s*\(\) => matchListingToSavedSearches/);
@@ -358,7 +362,9 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-inventory-performance-20260629/);
   assert.match(htmlSource, /public-inventory-progressive-render-20260630/);
   assert.match(htmlSource, /public-inventory-first-page-24-20260630/);
+  assert.match(htmlSource, /public-inventory-cache-key-20260630/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
   assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
+  assert.match(serverSource, /publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630'/);
 });

@@ -113,10 +113,30 @@ function publicPropertiesCacheControl() {
 }
 
 function publicPropertiesCacheKey(req) {
-  const entries = Object.entries(req.query || {})
-    .filter(([key]) => !PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS.has(String(key)))
-    .map(([key, value]) => [String(key), Array.isArray(value) ? value.map(String).sort().join(',') : String(value)])
-    .sort(([a], [b]) => a.localeCompare(b));
+  const query = req.query || {};
+  const normalized = new Map();
+  for (const [rawKey, rawValue] of Object.entries(query)) {
+    const key = String(rawKey);
+    if (PUBLIC_PROPERTIES_CACHE_IGNORED_QUERY_KEYS.has(key)) continue;
+    if (['include_summary', 'includeSummary', 'summary'].includes(key)) {
+      normalized.set('include_summary', parseBooleanLike(rawValue, true) ? '1' : '0');
+      continue;
+    }
+    if (['public_only', 'publicOnly'].includes(key)) {
+      normalized.set('public_only', parseBooleanLike(rawValue, false) ? '1' : '0');
+      continue;
+    }
+    if (['featured', 'is_featured', 'isFeatured'].includes(key)) {
+      normalized.set('featured', parseBooleanLike(rawValue, false) ? '1' : '0');
+      continue;
+    }
+    normalized.set(key, Array.isArray(rawValue) ? rawValue.map(String).sort().join(',') : String(rawValue));
+  }
+  const { page, limit } = parsePagination(query);
+  normalized.set('page', String(page));
+  normalized.set('limit', String(limit));
+  if (!normalized.has('include_summary')) normalized.set('include_summary', '1');
+  const entries = Array.from(normalized.entries()).sort(([a], [b]) => a.localeCompare(b));
   return entries.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&') || 'default';
 }
 
