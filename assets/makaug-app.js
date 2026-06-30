@@ -769,6 +769,7 @@ let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
 let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
+const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 24;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100;
 const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50;
@@ -32830,6 +32831,33 @@ async function fetchPublicPaginatedRows(path, options = {}) {
   return { rows, firstResponse };
 }
 
+function applyPublicRowsForUi(publicRowsSnapshot, responseSnapshot, options = {}) {
+  const rows = Array.isArray(publicRowsSnapshot) ? publicRowsSnapshot.filter((p) => !adminRecordLooksLikeTest(p)) : [];
+  const nextStats = normalizeHeroOpportunityStats(responseSnapshot?.summary?.public_opportunities || responseSnapshot?.summary) || null;
+  if (nextStats) publicListingsApiStats = nextStats;
+  const apiTotal = Number(publicListingsApiStats?.total ?? (responseSnapshot?.pagination?.approximate ? rows.length : responseSnapshot?.pagination?.total) ?? rows.length);
+  publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
+  const featuredRows = Array.isArray(options.featuredRows) ? options.featuredRows : [];
+  const combinedRows = [...rows, ...featuredRows];
+  if (options.prune === true) {
+    const remoteIds = new Set(combinedRows.map((p) => String(p.id || "")).filter(Boolean));
+    for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
+      const p = PROPERTIES[i];
+      const id = String(p?.backend_id || p?.id || "");
+      if (p?.remote_source === "api" && id && !remoteIds.has(id)) {
+        PROPERTIES.splice(i, 1);
+      }
+    }
+  }
+  combinedRows.forEach((p) => upsertPropertyForUi(p));
+  if (options.prune === true || featuredRows.length) {
+    applyPublicFeaturedRows(featuredRows);
+  }
+  publicListingsFromApiLoaded = true;
+  renderHeroPropertyOpportunityCounter();
+  return rows;
+}
+
 function activePublicInventoryCategoryFromRoute() {
   const path = String(window.location.pathname || "").replace(/\/+$/, "") || "/";
   if (path === "/for-sale") return "sale";
@@ -32849,7 +32877,7 @@ function publicInventoryCategoryPath(category) {
   return "";
 }
 
-async function fetchPublicCategoryRows(category, totalCount = 0) {
+async function fetchPublicCategoryRows(category, totalCount = 0, options = {}) {
   const path = publicInventoryCategoryPath(category);
   if (!path) return { rows: [], firstResponse: null };
   const limit = PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT;
@@ -32859,6 +32887,17 @@ async function fetchPublicCategoryRows(category, totalCount = 0) {
   const responses = await Promise.all(Array.from({ length: maxPages }, (_, index) => {
     const page = index + 1;
     return apiRequest(`${path}${separator}limit=${limit}&page=${page}&include_summary=0`, { skipAuth: true })
+      .then((response) => {
+        const pageRows = Array.isArray(response?.data) ? response.data : [];
+        if (pageRows.length && typeof options.onPageRows === "function") {
+          try {
+            options.onPageRows(pageRows, response, page);
+          } catch (pageCallbackError) {
+            console.warn("Public category inventory page callback failed", pageCallbackError);
+          }
+        }
+        return response;
+      })
       .catch((error) => {
         console.warn("Public category inventory page failed", { category, page, error: error?.message || error });
         return null;
@@ -32868,36 +32907,53 @@ async function fetchPublicCategoryRows(category, totalCount = 0) {
   return { rows, firstResponse: responses.find(Boolean) || null };
 }
 
+async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {}) {
+  const activeCategory = activePublicInventoryCategoryFromRoute();
+  if (!activeCategory) return false;
+  if (publicActiveCategoryHydrationPromises.has(activeCategory)) {
+    return publicActiveCategoryHydrationPromises.get(activeCategory);
+  }
+  const hydrationPromise = (async () => {
+    try {
+      const stats = publicListingsApiStats || await fetchPublicOpportunityStatsFromApi()
+        .then((nextStats) => {
+          if (applyPublicOpportunityStats(nextStats)) renderAll();
+          return nextStats;
+        })
+        .catch((summaryError) => {
+          console.warn("Unable to refresh public opportunity summary", summaryError);
+          return null;
+        });
+      const categoryTotal = publicOpportunityStatForCategory(activeCategory) ?? stats?.[activeCategory] ?? 0;
+      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
+        onPageRows: (pageRows, pageResponse) => {
+          if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
+          applyPublicRowsForUi(pageRows, pageResponse);
+          renderAll();
+        }
+      });
+      if (categoryRows.length && activeCategory === activePublicInventoryCategoryFromRoute()) {
+        applyPublicRowsForUi(categoryRows, categoryFirstResponse);
+        renderAll();
+      }
+      return categoryRows.length > 0;
+    } catch (error) {
+      if (!silent) toast(`Live ${activeCategory} listings refresh failed: ${error.message || "error"}`);
+      return false;
+    }
+  })();
+  publicActiveCategoryHydrationPromises.set(activeCategory, hydrationPromise);
+  try {
+    return await hydrationPromise;
+  } finally {
+    publicActiveCategoryHydrationPromises.delete(activeCategory);
+  }
+}
+
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
-  if (publicListingsApiLoading) return false;
+  if (publicListingsApiLoading) return refreshActivePublicInventoryCategoryFromApi({ silent });
   publicListingsApiLoading = true;
   try {
-    const applyPublicRows = (publicRowsSnapshot, responseSnapshot, options = {}) => {
-      const rows = Array.isArray(publicRowsSnapshot) ? publicRowsSnapshot.filter((p) => !adminRecordLooksLikeTest(p)) : [];
-      const nextStats = normalizeHeroOpportunityStats(responseSnapshot?.summary?.public_opportunities || responseSnapshot?.summary) || null;
-      if (nextStats) publicListingsApiStats = nextStats;
-      const apiTotal = Number(publicListingsApiStats?.total ?? (responseSnapshot?.pagination?.approximate ? rows.length : responseSnapshot?.pagination?.total) ?? rows.length);
-      publicListingsApiTotal = Number.isFinite(apiTotal) ? apiTotal : rows.length;
-      const featuredRows = Array.isArray(options.featuredRows) ? options.featuredRows : [];
-      const combinedRows = [...rows, ...featuredRows];
-      if (options.prune === true) {
-        const remoteIds = new Set(combinedRows.map((p) => String(p.id || "")).filter(Boolean));
-        for (let i = PROPERTIES.length - 1; i >= 0; i -= 1) {
-          const p = PROPERTIES[i];
-          const id = String(p?.backend_id || p?.id || "");
-          if (p?.remote_source === "api" && id && !remoteIds.has(id)) {
-            PROPERTIES.splice(i, 1);
-          }
-        }
-      }
-      combinedRows.forEach((p) => upsertPropertyForUi(p));
-      if (options.prune === true || featuredRows.length) {
-        applyPublicFeaturedRows(featuredRows);
-      }
-      publicListingsFromApiLoaded = true;
-      renderHeroPropertyOpportunityCounter();
-      return rows;
-    };
     const featuredRowsPromise = fetchPublicFeaturedListingsFromApi()
       .then((rows) => {
         const featuredListings = applyPublicFeaturedRows(rows);
@@ -32923,7 +32979,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
       maxPages: 1,
       includeSummary: false
     });
-    applyPublicRows(firstPageRows, firstPageResponse);
+    applyPublicRowsForUi(firstPageRows, firstPageResponse);
     renderAll();
     const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
       limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
@@ -32933,15 +32989,21 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     const summaryStats = await summaryStatsPromise;
     const categoryTotal = activeCategory ? publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0 : 0;
     if (activeCategory && categoryTotal > PUBLIC_LISTINGS_FAST_PAGE_LIMIT) {
-      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal);
+      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
+        onPageRows: (pageRows, pageResponse) => {
+          if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
+          applyPublicRowsForUi(pageRows, pageResponse);
+          renderAll();
+        }
+      });
       if (categoryRows.length) {
-        applyPublicRows(categoryRows, categoryFirstResponse);
+        applyPublicRowsForUi(categoryRows, categoryFirstResponse);
         renderAll();
       }
     }
     const { rows: publicRows, firstResponse } = await backgroundRowsPromise;
     const featuredRows = await featuredRowsPromise;
-    applyPublicRows(publicRows, firstResponse, { featuredRows, prune: true });
+    applyPublicRowsForUi(publicRows, firstResponse, { featuredRows, prune: true });
     renderAll();
     return true;
   } catch (e) {
