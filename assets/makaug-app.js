@@ -10739,6 +10739,14 @@ function adminIsPublicLiveAdminListing(property = {}) {
   return isListingPublicVisible(property);
 }
 
+function adminLiveEndpointRows(listings = []) {
+  const rows = Array.isArray(listings) ? listings : [];
+  if (rows.some((row) => row?.admin_live_endpoint === true)) {
+    return rows.filter((row) => row?.public_visible !== false);
+  }
+  return adminApplyLaunchCleanFilter(rows).filter(adminIsPublicLiveAdminListing);
+}
+
 function isLocalDevelopmentHost() {
   try {
     const host = String(window.location.hostname || "").toLowerCase();
@@ -11871,7 +11879,7 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     ? pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)
     : adminCurrentPendingListings;
   const liveListings = Array.isArray(liveRows)
-    ? liveRows.map(normalizeRemoteAdminListing)
+    ? liveRows.map((row) => normalizeRemoteAdminListing({ ...row, admin_live_endpoint: true }))
     : adminLiveListings;
   if (Array.isArray(liveRows)) {
     adminPublicInventoryParity = liveRows?.adminMeta?.public_parity || liveRows?.adminSummary?.public_inventory || adminPublicInventoryParity || {};
@@ -13509,8 +13517,9 @@ function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   };
-  const liveFallback = Array.isArray(listings) ? listings.filter(adminIsPublicLiveAdminListing).length : 0;
-  const featuredFallback = Array.isArray(listings) ? listings.filter((p) => adminIsPublicLiveAdminListing(p) && isFeaturedListing(p)).length : 0;
+  const trustedRows = adminLiveEndpointRows(listings);
+  const liveFallback = trustedRows.length;
+  const featuredFallback = trustedRows.filter(isFeaturedListing).length;
   const liveTotal = safeNumber(parity.public_visible_total ?? snapshot?.summary?.properties?.public_live, liveFallback);
   const featuredTotal = safeNumber(parity.featured_total ?? snapshot?.summary?.properties?.public_featured, featuredFallback);
   const loadedRows = safeNumber(parity.page_rows, Array.isArray(listings) ? listings.length : 0);
@@ -13536,8 +13545,7 @@ function renderAdminLiveParitySummary(snapshot = {}, listings = []) {
 function renderAdminFeaturedRows(listings) {
   const wrap = document.getElementById("admin-featured-listings-table");
   if (!wrap) return;
-  const live = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : [])
-    .filter(adminIsPublicLiveAdminListing)
+  const live = [...adminLiveEndpointRows(listings)]
     .sort((a, b) => {
       const af = isFeaturedListing(a) ? 1 : 0;
       const bf = isFeaturedListing(b) ? 1 : 0;
@@ -13579,7 +13587,7 @@ function renderAdminFeaturedRows(listings) {
 function renderAdminLiveListingsRows(listings) {
   const wrap = document.getElementById("admin-live-listings-table");
   if (!wrap) return;
-  const view = adminApplyLaunchCleanFilter(Array.isArray(listings) ? listings : []).filter(adminIsPublicLiveAdminListing).slice(0, 50);
+  const view = adminLiveEndpointRows(listings).slice(0, 50);
   if (!view.length) {
     wrap.innerHTML = `<div class="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-4">No live listings found yet.</div>`;
     return;

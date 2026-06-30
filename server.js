@@ -142,6 +142,7 @@ const publicInventoryCacheKeyVersion = 'public-inventory-cache-key-20260630';
 const publicHomepageFeaturedFastVersion = 'public-home-featured-fast-20260630';
 const publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630';
 const kingDashboardAuthStateVersion = 'king-dashboard-auth-state-20260630';
+const kingLiveTabTrustedRowsVersion = 'king-live-tab-trusted-rows-20260630';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -153,7 +154,8 @@ const publicAppVersionSuffixes = [
   publicInventoryCacheKeyVersion,
   publicHomepageFeaturedFastVersion,
   publicHomepageSummaryFastVersion,
-  kingDashboardAuthStateVersion
+  kingDashboardAuthStateVersion,
+  kingLiveTabTrustedRowsVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

@@ -81,9 +81,10 @@ test('remove and status actions can target listings loaded only through the live
 test('admin live and featured surfaces clean-filter test-like backend listings', () => {
   assert.match(appSource, /function adminPublicControlVisibilityBadge\(row = \{\}\)/);
   assert.match(appSource, /Test-like public listing/);
+  assert.match(functionSource('adminLiveEndpointRows'), /adminApplyLaunchCleanFilter\(rows\)\.filter\(adminIsPublicLiveAdminListing\)/);
   for (const name of ['renderAdminLiveListingsRows', 'renderAdminFeaturedRows']) {
     const source = functionSource(name);
-    assert.match(source, /adminApplyLaunchCleanFilter/);
+    assert.match(source, /adminLiveEndpointRows\(listings\)/);
   }
   for (const name of ['renderAdminAllListingsRows']) {
     const source = functionSource(name);
@@ -181,6 +182,9 @@ test('admin live endpoint mirrors public visibility and exposes cleanup action',
   assert.match(adminRouteSource, /same_as_public_api/);
   assert.match(adminRouteSource, /CONCAT\('\/property\/', p\.id::text\) AS property_url/);
   assert.match(appSource, /function adminIsPublicLiveAdminListing/);
+  assert.match(appSource, /function adminLiveEndpointRows/);
+  assert.match(appSource, /admin_live_endpoint: true/);
+  assert.match(appSource, /const trustedRows = adminLiveEndpointRows\(listings\)/);
   assert.match(appSource, /let adminPublicInventoryParity = \{\}/);
   assert.match(appSource, /publicInventoryParity: adminPublicInventoryParity/);
   assert.match(appSource, /function renderAdminLiveParitySummary/);
