@@ -769,6 +769,9 @@ let publicListingsFromApiLoaded = false;
 let publicFeaturedListingsFromApi = [];
 let publicListingsApiTotal = null;
 let publicListingsApiStats = null;
+const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 24;
+const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100;
+const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50;
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -5654,6 +5657,30 @@ function getHeroPropertyOpportunityStats() {
   stats.other = 0;
   stats.total = authoritativeTotal;
   return stats;
+}
+
+function publicOpportunityStatForCategory(category) {
+  const key = category === "students" ? "student" : normalizeType(category);
+  if (!key || !publicListingsApiStats) return null;
+  const value = Number(publicListingsApiStats[key]);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function getPublicCategoryDisplayCount(category, localCount = 0, { filtered = false } = {}) {
+  const safeLocalCount = Math.max(0, Number(localCount) || 0);
+  if (filtered) return safeLocalCount;
+  const apiCount = publicOpportunityStatForCategory(category);
+  return apiCount == null ? safeLocalCount : apiCount;
+}
+
+function setPublicCategoryCount(category, localCount = 0, options = {}) {
+  const idMap = {
+    sale: "sale-count",
+    rent: "rent-count"
+  };
+  const el = document.getElementById(idMap[category]);
+  if (!el) return;
+  el.textContent = getPublicCategoryDisplayCount(category, localCount, options);
 }
 
 function getHeroPropertyOpportunityBucket(property) {
@@ -31986,10 +32013,12 @@ function renderSaved() {
 
 function renderAll() {
   const publicListings = getPublicListings();
+  const saleListings = publicListings.filter((p) => normalizeType(p.type) === "sale");
+  const rentListings = publicListings.filter((p) => normalizeType(p.type) === "rent");
   renderHeroPropertyOpportunityCounter();
   renderGrid("home-grid", getHomepageFeaturedListings(publicListings).slice(0, 3));
-  renderGrid("sale-grid", publicListings.filter((p) => normalizeType(p.type) === "sale"));
-  renderGrid("rent-grid", publicListings.filter((p) => normalizeType(p.type) === "rent"));
+  renderGrid("sale-grid", saleListings);
+  renderGrid("rent-grid", rentListings);
   const studentList = publicListings.filter((p) => isStudentDiscoverable(p));
   renderStudentGrid(studentList);
   updateStudentHeader(studentList);
@@ -31997,10 +32026,8 @@ function renderAll() {
   renderGrid("land-grid", publicListings.filter((p) => normalizeType(p.type) === "land"));
   renderBrokers("home-brokers", getFeaturedBrokers(getBrokerDirectory()).slice(0, 3));
   renderBrokers("brokers-grid", getBrokerDirectory());
-  const saleCountEl = document.getElementById("sale-count");
-  if (saleCountEl) saleCountEl.textContent = publicListings.filter((p) => normalizeType(p.type) === "sale").length;
-  const rentCountEl = document.getElementById("rent-count");
-  if (rentCountEl) rentCountEl.textContent = publicListings.filter((p) => normalizeType(p.type) === "rent").length;
+  setPublicCategoryCount("sale", saleListings.length, { filtered: hasActiveListingFilter("sale") });
+  setPublicCategoryCount("rent", rentListings.length, { filtered: hasActiveListingFilter("rent") });
   renderSaved();
   renderFinderDashboard();
   renderStudentDashboard();
@@ -32843,27 +32870,31 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         console.warn("Unable to refresh featured listings", featuredError);
         return [];
       });
-    fetchPublicOpportunityStatsFromApi()
+    const summaryStatsPromise = fetchPublicOpportunityStatsFromApi()
       .then((stats) => {
         if (applyPublicOpportunityStats(stats)) renderAll();
+        return stats;
       })
       .catch((summaryError) => {
         console.warn("Unable to refresh public opportunity summary", summaryError);
+        return null;
       });
-    let firstPublicPageRendered = false;
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
-      limit: 24,
-      maxPages: 20,
-      includeSummary: false,
-      onPage: ({ rows, firstResponse: pageFirstResponse, page }) => {
-        if (page !== 1 || firstPublicPageRendered) return;
-        firstPublicPageRendered = true;
-        applyPublicRows(rows, pageFirstResponse);
-        renderAll();
-      }
+    const { rows: firstPageRows, firstResponse: firstPageResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
+      limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
+      maxPages: 1,
+      includeSummary: false
     });
+    applyPublicRows(firstPageRows, firstPageResponse);
+    renderAll();
+    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
+      limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
+      maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,
+      includeSummary: false
+    });
+    await summaryStatsPromise;
     const featuredRows = await featuredRowsPromise;
     applyPublicRows(publicRows, firstResponse, { featuredRows, prune: true });
+    renderAll();
     return true;
   } catch (e) {
     if (!silent) toast(`Live listings refresh failed: ${e.message || "error"}`);
@@ -33670,6 +33701,20 @@ function quickSearch(area) {
   doSearch();
 }
 
+function publicListingFilterValue(id) {
+  return String(document.getElementById(id)?.value || "").trim();
+}
+
+function hasActiveListingFilter(page) {
+  const key = page === "rent" ? "rent" : "sale";
+  const fieldIds = key === "rent"
+    ? ["rent-location-f", "rent-district-f", "rent-min-price-f", "rent-price-f", "rent-min-beds-f", "rent-beds-f", "rent-type-f"]
+    : ["sale-location-f", "sale-district-f", "sale-min-price-f", "sale-price-f", "sale-min-beds-f", "sale-beds-f", "sale-type-f"];
+  const hasFieldFilter = fieldIds.some((id) => publicListingFilterValue(id));
+  const radiusKm = getRadiusKmFromSelect(`${key}-radius-f`);
+  return hasFieldFilter || radiusKm > 0 || Boolean(getNearMeSearchState(key));
+}
+
 function filterListings(page) {
   let list = getPublicListings().filter((p) => normalizeType(p.type) === page);
   if (page === "sale") {
@@ -33695,8 +33740,7 @@ function filterListings(page) {
       return qMatch && dMatch && minBedsMatch && maxBedsMatch && minMatch && maxMatch && typeMatch;
     });
     list = decorateAndSortNearMeResults(list, nearState);
-    const saleCountEl = document.getElementById("sale-count");
-    if (saleCountEl) saleCountEl.textContent = list.length;
+    setPublicCategoryCount("sale", list.length, { filtered: hasActiveListingFilter("sale") });
     renderGrid("sale-grid", list);
     setMapMarkers("map-sale", list);
     return list;
@@ -33727,8 +33771,7 @@ function filterListings(page) {
     if (sort === "price_desc") list.sort((a, b) => b.price - a.price);
     if (sort === "newest") list.sort(sortListingsByNewest);
     if (nearState) list = decorateAndSortNearMeResults(list, nearState);
-    const rentCountEl = document.getElementById("rent-count");
-    if (rentCountEl) rentCountEl.textContent = list.length;
+    setPublicCategoryCount("rent", list.length, { filtered: hasActiveListingFilter("rent") });
     renderGrid("rent-grid", list);
     setMapMarkers("map-rent", list);
     return list;
