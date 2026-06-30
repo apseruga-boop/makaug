@@ -773,6 +773,7 @@ const publicActiveCategoryHydrationPromises = new Map();
 const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100;
 const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50;
+const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1";
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -32776,9 +32777,23 @@ function applyPublicOpportunityStats(stats) {
   return true;
 }
 
-async function fetchPublicOpportunityStatsFromApi() {
-  const response = await apiRequest("/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1", { skipAuth: true });
+function publicOpportunityStatsFromApiResponse(response) {
   return response?.summary?.public_opportunities || response?.summary || null;
+}
+
+async function fetchPublicOpportunityStatsFromApi() {
+  if (window.__makaugPublicSummaryPromise && !window.__makaugPublicSummaryConsumed) {
+    window.__makaugPublicSummaryConsumed = true;
+    try {
+      const preloadedResponse = await window.__makaugPublicSummaryPromise;
+      const preloadedStats = publicOpportunityStatsFromApiResponse(preloadedResponse);
+      if (preloadedStats) return preloadedStats;
+    } catch (prefetchError) {
+      console.warn("Unable to use preloaded public opportunity summary", prefetchError);
+    }
+  }
+  const response = await apiRequest(PUBLIC_OPPORTUNITY_SUMMARY_PATH, { skipAuth: true });
+  return publicOpportunityStatsFromApiResponse(response);
 }
 
 async function loadRemotePropertyDetailForUi(id, options = {}) {
@@ -32974,7 +32989,8 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return refreshActivePublicInventoryCategoryFromApi({ silent });
   publicListingsApiLoading = true;
   try {
-    const featuredRowsPromise = fetchPublicFeaturedListingsFromApi()
+    const activeCategory = activePublicInventoryCategoryFromRoute();
+    const featuredRowsPromise = activeCategory ? Promise.resolve([]) : fetchPublicFeaturedListingsFromApi()
       .then((rows) => {
         const featuredListings = applyPublicFeaturedRows(rows);
         if (featuredListings.length) renderAll();
@@ -32984,7 +33000,6 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         console.warn("Unable to refresh featured listings", featuredError);
         return [];
       });
-    const activeCategory = activePublicInventoryCategoryFromRoute();
     const summaryStatsPromise = fetchPublicOpportunityStatsFromApi()
       .then((stats) => {
         if (applyPublicOpportunityStats(stats)) renderAll();
@@ -32995,19 +33010,17 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         return null;
       });
     const firstPagePath = activeCategory ? publicInventoryCategoryPath(activeCategory) || "/api/properties?status=approved&public_only=1" : "/api/properties?status=approved&public_only=1";
-    const { rows: firstPageRows, firstResponse: firstPageResponse } = await fetchPublicPaginatedRows(firstPagePath, {
+    const firstPageRowsPromise = fetchPublicPaginatedRows(firstPagePath, {
       limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,
       maxPages: 1,
       includeSummary: false
     });
+    const [
+      { rows: firstPageRows, firstResponse: firstPageResponse },
+      summaryStats
+    ] = await Promise.all([firstPageRowsPromise, summaryStatsPromise]);
     applyPublicRowsForUi(firstPageRows, firstPageResponse);
     renderAll();
-    const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
-      limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
-      maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,
-      includeSummary: false
-    });
-    const summaryStats = await summaryStatsPromise;
     const firstPageCategoryTotal = activeCategory ? exactPublicPaginationTotal(firstPageResponse) : 0;
     const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
     if (activeCategory && categoryTotal > PUBLIC_LISTINGS_FAST_PAGE_LIMIT) {
@@ -33023,6 +33036,12 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         renderAll();
       }
     }
+    if (activeCategory) return true;
+    const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
+      limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
+      maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,
+      includeSummary: false
+    });
     const { rows: publicRows, firstResponse } = await backgroundRowsPromise;
     const featuredRows = await featuredRowsPromise;
     applyPublicRowsForUi(publicRows, firstResponse, { featuredRows, prune: true });

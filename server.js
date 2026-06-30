@@ -144,6 +144,8 @@ const publicHomepageSummaryFastVersion = 'public-home-summary-fast-20260630';
 const publicCategoryFirstPaintVersion = 'public-category-first-paint-8-20260630';
 const publicAppImmediateLoadVersion = 'public-app-immediate-load-20260630';
 const publicAppInitImmediateVersion = 'public-app-init-immediate-20260630';
+const publicSummaryPrefetchVersion = 'public-summary-prefetch-20260630';
+const publicCategoryFocusedHydrationVersion = 'public-category-focused-hydration-20260630';
 const kingDashboardAuthStateVersion = 'king-dashboard-auth-state-20260630';
 const kingLiveTabTrustedRowsVersion = 'king-live-tab-trusted-rows-20260630';
 const publicAppVersionSuffixes = [
@@ -160,6 +162,8 @@ const publicAppVersionSuffixes = [
   publicCategoryFirstPaintVersion,
   publicAppImmediateLoadVersion,
   publicAppInitImmediateVersion,
+  publicSummaryPrefetchVersion,
+  publicCategoryFocusedHydrationVersion,
   kingDashboardAuthStateVersion,
   kingLiveTabTrustedRowsVersion
 ];
