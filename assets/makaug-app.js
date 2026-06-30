@@ -774,6 +774,8 @@ const PUBLIC_LISTINGS_FAST_PAGE_LIMIT = 8;
 const PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100;
 const PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50;
 const PUBLIC_OPPORTUNITY_SUMMARY_PATH = "/api/properties?status=approved&public_only=1&limit=1&page=1&include_summary=1";
+const PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000;
+const publicCategoryDeepHydrationTimers = new Map();
 let remoteBrokersLoaded = false;
 let REMOTE_BROKERS = [];
 let siteMetrics = { propertyViews: {}, propertySaves: {}, brokerProfileViews: {} };
@@ -32985,6 +32987,24 @@ async function refreshActivePublicInventoryCategoryFromApi({ silent = true } = {
   }
 }
 
+function schedulePublicCategoryDeepHydration(category, totalCount = 0) {
+  const normalizedCategory = category === "students" ? "student" : normalizeType(category);
+  if (!normalizedCategory || totalCount <= PUBLIC_LISTINGS_FAST_PAGE_LIMIT) return false;
+  if (publicCategoryDeepHydrationTimers.has(normalizedCategory)) return false;
+  const timer = window.setTimeout(() => {
+    publicCategoryDeepHydrationTimers.delete(normalizedCategory);
+    if (normalizedCategory !== activePublicInventoryCategoryFromRoute()) return;
+    refreshActivePublicInventoryCategoryFromApi({ silent: true }).then((loaded) => {
+      if (loaded && normalizedCategory === activePublicInventoryCategoryFromRoute()) {
+        renderAll();
+        resetMaps();
+      }
+    });
+  }, PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS);
+  publicCategoryDeepHydrationTimers.set(normalizedCategory, timer);
+  return true;
+}
+
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return refreshActivePublicInventoryCategoryFromApi({ silent });
   publicListingsApiLoading = true;
@@ -33023,20 +33043,10 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     renderAll();
     const firstPageCategoryTotal = activeCategory ? exactPublicPaginationTotal(firstPageResponse) : 0;
     const categoryTotal = activeCategory ? firstPageCategoryTotal || (publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0) : 0;
-    if (activeCategory && categoryTotal > PUBLIC_LISTINGS_FAST_PAGE_LIMIT) {
-      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal, {
-        onPageRows: (pageRows, pageResponse) => {
-          if (activeCategory !== activePublicInventoryCategoryFromRoute()) return;
-          applyPublicRowsForUi(pageRows, pageResponse);
-          renderAll();
-        }
-      });
-      if (categoryRows.length) {
-        applyPublicRowsForUi(categoryRows, categoryFirstResponse);
-        renderAll();
-      }
+    if (activeCategory) {
+      schedulePublicCategoryDeepHydration(activeCategory, categoryTotal);
+      return true;
     }
-    if (activeCategory) return true;
     const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
       limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
       maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,

@@ -113,6 +113,8 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT = 100/);
   assert.match(appSource, /PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES = 50/);
   assert.match(appSource, /PUBLIC_OPPORTUNITY_SUMMARY_PATH = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1"/);
+  assert.match(appSource, /PUBLIC_CATEGORY_DEEP_HYDRATION_DELAY_MS = 8000/);
+  assert.match(appSource, /const publicCategoryDeepHydrationTimers = new Map\(\)/);
   assert.match(appSource, /const publicActiveCategoryHydrationPromises = new Map\(\)/);
   assert.match(appSource, /function applyPublicRowsForUi\(publicRowsSnapshot, responseSnapshot, options = \{\}\)/);
   assert.match(appSource, /function exactPublicPaginationTotal\(response\)/);
@@ -124,7 +126,10 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert.match(appSource, /const firstPageRowsPromise = fetchPublicPaginatedRows\(firstPagePath, \{[\s\S]*limit: PUBLIC_LISTINGS_FAST_PAGE_LIMIT,[\s\S]*maxPages: 1,[\s\S]*includeSummary: false/);
   assert.match(appSource, /await Promise\.all\(\[firstPageRowsPromise, summaryStatsPromise\]\)/);
   assert.match(appSource, /applyPublicRowsForUi\(firstPageRows, firstPageResponse\);\s*renderAll\(\);/);
-  assert.match(appSource, /if \(activeCategory\) return true;\s*const backgroundRowsPromise = fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{/);
+  assert.match(appSource, /function schedulePublicCategoryDeepHydration\(category, totalCount = 0\)/);
+  assert.match(appSource, /window\.setTimeout\(\(\) => \{[\s\S]*refreshActivePublicInventoryCategoryFromApi\(\{ silent: true \}\)/);
+  assert.match(appSource, /schedulePublicCategoryDeepHydration\(activeCategory, categoryTotal\);\s*return true;/);
+  assert.match(appSource, /const backgroundRowsPromise = fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{/);
   assert.match(appSource, /limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,[\s\S]*maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,[\s\S]*includeSummary: false/);
   assert.match(appSource, /const firstPageCategoryTotal = activeCategory \? exactPublicPaginationTotal\(firstPageResponse\) : 0;/);
   assert.match(appSource, /const categoryTotal = activeCategory \? firstPageCategoryTotal \|\| \(publicOpportunityStatForCategory\(activeCategory\) \?\? summaryStats\?\.\[activeCategory\] \?\? 0\) : 0;/);
@@ -467,6 +472,7 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-app-init-immediate-20260630/);
   assert.match(htmlSource, /public-summary-prefetch-20260630/);
   assert.match(htmlSource, /public-category-focused-hydration-20260630/);
+  assert.match(htmlSource, /public-category-deferred-hydration-20260630/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPath = "\/api\/properties\?status=approved&public_only=1&limit=1&page=1&include_summary=1"/);
   assert.match(htmlSource, /window\.__makaugPublicSummaryPromise = fetch\(window\.__makaugPublicSummaryPath, \{ credentials: "same-origin" \}\)/);
   assert.doesNotMatch(htmlSource, /DOMContentLoaded", loadMakaugApp/);
@@ -482,4 +488,5 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(serverSource, /publicAppInitImmediateVersion = 'public-app-init-immediate-20260630'/);
   assert.match(serverSource, /publicSummaryPrefetchVersion = 'public-summary-prefetch-20260630'/);
   assert.match(serverSource, /publicCategoryFocusedHydrationVersion = 'public-category-focused-hydration-20260630'/);
+  assert.match(serverSource, /publicCategoryDeferredHydrationVersion = 'public-category-deferred-hydration-20260630'/);
 });
