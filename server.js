@@ -135,7 +135,14 @@ const captureHelperUsabilityVersion = 'capture-helper-usability-20260607';
 const studentNearestUniversityVersion = 'student-nearest-university-20260616';
 const staffOperationsDashboardVersion = 'staff-operations-dashboard-20260620a';
 const mortgageUiTabsBankLogosVersion = 'mortgage-ui-tabs-bank-logos-20260622';
-const publicAppVersionSuffixes = [captureHelperUsabilityVersion, studentNearestUniversityVersion, staffOperationsDashboardVersion, mortgageUiTabsBankLogosVersion];
+const publicInventoryPerformanceVersion = 'public-inventory-performance-20260629';
+const publicAppVersionSuffixes = [
+  captureHelperUsabilityVersion,
+  studentNearestUniversityVersion,
+  staffOperationsDashboardVersion,
+  mortgageUiTabsBankLogosVersion,
+  publicInventoryPerformanceVersion
+];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
 const textAssetCache = new Map();
