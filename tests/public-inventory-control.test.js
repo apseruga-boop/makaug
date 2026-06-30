@@ -108,7 +108,7 @@ test('anonymous public property APIs suppress launch seed QA listings', () => {
   assert(routeSource.includes("COALESCE(p.lister_email, '') !~* '(makaug\\\\.invalid|test@|qa@|dummy|sample)'"));
   assert.match(routeSource, /const publicOnly = parseBooleanLike\(req\.query\.public_only \|\| req\.query\.publicOnly, false\)/);
   assert.match(routeSource, /if \(publicOnly \|\| !adminAccess\) \{\s*addPublicLaunchSeedFilter\(filters, values\);/);
-  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{[\s\S]*limit: 100,[\s\S]*maxPages: 20,[\s\S]*includeSummary: false,[\s\S]*onPage:/);
+  assert.match(appSource, /fetchPublicPaginatedRows\("\/api\/properties\?status=approved&public_only=1", \{[\s\S]*limit: 24,[\s\S]*maxPages: 20,[\s\S]*includeSummary: false,[\s\S]*onPage:/);
   assert(appSource.includes('const summaryParam = hasSummaryParam ? "" : `&include_summary=${includeSummary ? "1" : "0"}`;'));
   assert.match(appSource, /options\.onPage\(\{ rows: rows\.slice\(\), firstResponse, response, page, totalPages \}\)/);
   assert.match(appSource, /let firstPublicPageRendered = false/);
@@ -258,6 +258,7 @@ test('public properties API is cacheable and uses the fast public summary path',
   assert.match(serverSource, /function schedulePublicCacheWarmup\(baseUrl\)/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
+  assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
   assert.match(serverSource, /\.\.\.PUBLIC_HTML_WARMUP_PATHS, \.\.\.PUBLIC_INVENTORY_WARMUP_PATHS/);
   assert.match(serverSource, /\/api\/properties\?status=approved&public_only=1&include_summary=false&limit=24/);
   assert.match(serverSource, /\/api\/properties\?status=approved&featured=true&limit=12&public_only=1&sort=featured&include_summary=false/);
@@ -356,6 +357,8 @@ test('public app cache version is bumped for controlled inventory rollout', () =
   assert.match(htmlSource, /public-opportunity-counts-20260629/);
   assert.match(htmlSource, /public-inventory-performance-20260629/);
   assert.match(htmlSource, /public-inventory-progressive-render-20260630/);
+  assert.match(htmlSource, /public-inventory-first-page-24-20260630/);
   assert.match(serverSource, /publicInventoryPerformanceVersion = 'public-inventory-performance-20260629'/);
   assert.match(serverSource, /publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630'/);
+  assert.match(serverSource, /publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630'/);
 });

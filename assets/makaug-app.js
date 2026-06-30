@@ -32643,7 +32643,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     };
     let firstPublicPageRendered = false;
     const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
-      limit: 100,
+      limit: 24,
       maxPages: 20,
       includeSummary: false,
       onPage: ({ rows, firstResponse: pageFirstResponse, page }) => {

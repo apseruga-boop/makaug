@@ -137,13 +137,15 @@ const staffOperationsDashboardVersion = 'staff-operations-dashboard-20260620a';
 const mortgageUiTabsBankLogosVersion = 'mortgage-ui-tabs-bank-logos-20260622';
 const publicInventoryPerformanceVersion = 'public-inventory-performance-20260629';
 const publicInventoryProgressiveRenderVersion = 'public-inventory-progressive-render-20260630';
+const publicInventoryFirstPageVersion = 'public-inventory-first-page-24-20260630';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
   staffOperationsDashboardVersion,
   mortgageUiTabsBankLogosVersion,
   publicInventoryPerformanceVersion,
-  publicInventoryProgressiveRenderVersion
+  publicInventoryProgressiveRenderVersion,
+  publicInventoryFirstPageVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();
