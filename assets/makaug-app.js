@@ -32830,6 +32830,44 @@ async function fetchPublicPaginatedRows(path, options = {}) {
   return { rows, firstResponse };
 }
 
+function activePublicInventoryCategoryFromRoute() {
+  const path = String(window.location.pathname || "").replace(/\/+$/, "") || "/";
+  if (path === "/for-sale") return "sale";
+  if (path === "/to-rent") return "rent";
+  if (path === "/commercial") return "commercial";
+  if (path === "/land") return "land";
+  if (path === "/student-accommodation" || path === "/students") return "student";
+  return "";
+}
+
+function publicInventoryCategoryPath(category) {
+  const normalized = category === "students" ? "student" : normalizeType(category);
+  if (normalized === "student") return "/api/properties?status=approved&public_only=1&student_portal=1";
+  if (["sale", "rent", "commercial", "land"].includes(normalized)) {
+    return `/api/properties?status=approved&public_only=1&listing_type=${encodeURIComponent(normalized)}`;
+  }
+  return "";
+}
+
+async function fetchPublicCategoryRows(category, totalCount = 0) {
+  const path = publicInventoryCategoryPath(category);
+  if (!path) return { rows: [], firstResponse: null };
+  const limit = PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT;
+  const expectedPages = Math.ceil(Math.max(0, Number(totalCount) || 0) / limit) || 1;
+  const maxPages = Math.min(Math.max(expectedPages, 1), PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES);
+  const separator = path.includes("?") ? "&" : "?";
+  const responses = await Promise.all(Array.from({ length: maxPages }, (_, index) => {
+    const page = index + 1;
+    return apiRequest(`${path}${separator}limit=${limit}&page=${page}&include_summary=0`, { skipAuth: true })
+      .catch((error) => {
+        console.warn("Public category inventory page failed", { category, page, error: error?.message || error });
+        return null;
+      });
+  }));
+  const rows = responses.flatMap((response) => Array.isArray(response?.data) ? response.data : []);
+  return { rows, firstResponse: responses.find(Boolean) || null };
+}
+
 async function refreshPublicListingsFromApi({ silent = true } = {}) {
   if (publicListingsApiLoading) return false;
   publicListingsApiLoading = true;
@@ -32870,6 +32908,7 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
         console.warn("Unable to refresh featured listings", featuredError);
         return [];
       });
+    const activeCategory = activePublicInventoryCategoryFromRoute();
     const summaryStatsPromise = fetchPublicOpportunityStatsFromApi()
       .then((stats) => {
         if (applyPublicOpportunityStats(stats)) renderAll();
@@ -32886,12 +32925,21 @@ async function refreshPublicListingsFromApi({ silent = true } = {}) {
     });
     applyPublicRows(firstPageRows, firstPageResponse);
     renderAll();
-    const { rows: publicRows, firstResponse } = await fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
+    const backgroundRowsPromise = fetchPublicPaginatedRows("/api/properties?status=approved&public_only=1", {
       limit: PUBLIC_LISTINGS_BACKGROUND_PAGE_LIMIT,
       maxPages: PUBLIC_LISTINGS_BACKGROUND_MAX_PAGES,
       includeSummary: false
     });
-    await summaryStatsPromise;
+    const summaryStats = await summaryStatsPromise;
+    const categoryTotal = activeCategory ? publicOpportunityStatForCategory(activeCategory) ?? summaryStats?.[activeCategory] ?? 0 : 0;
+    if (activeCategory && categoryTotal > PUBLIC_LISTINGS_FAST_PAGE_LIMIT) {
+      const { rows: categoryRows, firstResponse: categoryFirstResponse } = await fetchPublicCategoryRows(activeCategory, categoryTotal);
+      if (categoryRows.length) {
+        applyPublicRows(categoryRows, categoryFirstResponse);
+        renderAll();
+      }
+    }
+    const { rows: publicRows, firstResponse } = await backgroundRowsPromise;
     const featuredRows = await featuredRowsPromise;
     applyPublicRows(publicRows, firstResponse, { featuredRows, prune: true });
     renderAll();
