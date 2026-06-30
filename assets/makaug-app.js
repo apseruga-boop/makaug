@@ -9976,18 +9976,20 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
   if (!wrap) return;
   const result = data || {};
   const importResult = result.import_result || result;
+  const autoLiveCount = importResult.auto_live_properties || result.auto_live_properties || 0;
   wrap.innerHTML = `
     <div class="rounded-xl border ${dryRun ? "border-violet-100 bg-violet-50" : "border-emerald-100 bg-emerald-50"} p-3 text-xs">
-      <div class="font-black ${dryRun ? "text-violet-900" : "text-emerald-900"}">${dryRun ? "Preview complete" : "Queued into shared review"}</div>
+      <div class="font-black ${dryRun ? "text-violet-900" : "text-emerald-900"}">${dryRun ? "Preview complete" : "Import complete"}</div>
       <div class="grid sm:grid-cols-2 gap-2 mt-2 text-gray-700">
         <div>Exact social URLs: <strong>${staffNumber(result.exact_social_url_count || result.exact_video_url_count || 0)}</strong></div>
         <div>Created properties: <strong>${staffNumber(importResult.created_properties || result.created_properties || 0)}</strong></div>
+        <div>Auto-live properties: <strong>${staffNumber(autoLiveCount)}</strong></div>
         <div>Existing/duplicates blocked: <strong>${staffNumber(importResult.existing_properties || result.existing_properties || 0)}</strong></div>
         <div>Review queue rows: <strong>${staffNumber(importResult.review_queue_properties || result.review_queue_properties || 0)}</strong></div>
         <div>Source-review only: <strong>${staffNumber(importResult.source_review_count || result.source_review_count || 0)}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(result.discovered_posts_count || 0)}</strong></div>
       </div>
-      <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Every staff member will see the same shared moderation rows." : "Refresh the dashboard and open Preview & edit before publishing any queued row."}</div>
+      <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Hashtag rows that pass location/date/category/source-contact checks can go live immediately." : "Auto-live rows are public now; pending rows stay in shared review."}</div>
     </div>`;
 }
 
@@ -13027,6 +13029,7 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   const importResult = data.import_result || data || {};
   const rows = Array.isArray(data.exact_social_import_rows) ? data.exact_social_import_rows : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+  const autoLive = Array.isArray(importResult.auto_live_listings) ? importResult.auto_live_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const reports = Array.isArray(data.metadata_reports) ? data.metadata_reports : [];
@@ -13034,10 +13037,11 @@ function adminSocialQuickPasteResultHtml(data = {}, { dryRun = false } = {}) {
   return `
     <div class="rounded-xl border ${dryRun ? "border-violet-200 bg-violet-50" : "border-emerald-200 bg-emerald-50"} p-3">
       <div class="font-black ${dryRun ? "text-violet-950" : "text-emerald-950"}">${dryRun ? "Preview ready" : "Import finished"}</div>
-      <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(dryRun ? importResult.eligible_to_queue_count || queued.length || 0 : importResult.created_properties || 0)} ${dryRun ? "eligible to queue" : "new properties queued"}. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links blocked. ${adminEscape(sourceReview.length)} need more details.</div>
+      <div class="mt-1">${adminEscape(data.exact_social_url_count || previewRows.length || 0)} exact social URLs processed. ${adminEscape(dryRun ? importResult.eligible_to_queue_count || queued.length || 0 : importResult.created_properties || 0)} ${dryRun ? "eligible" : "new properties processed"}. ${adminEscape(importResult.auto_live_properties || autoLive.length || 0)} auto-live. ${adminEscape(importResult.review_queue_properties || queued.length || 0)} in review. ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links blocked. ${adminEscape(sourceReview.length)} need more details.</div>
       <div class="mt-1 text-[11px]">Paste comments from the original poster when they answer price, location, viewing, or phone questions. Valid Uganda mobile numbers are stored as phone/WhatsApp contact; otherwise makaug sends users back to the original source.</div>
       ${reports.length ? `<div class="mt-2 text-[11px]">${adminEscape(reports.filter((item) => item.ok).length)} metadata fetches succeeded • ${adminEscape(reports.filter((item) => !item.ok).length)} need pasted visible details.</div>` : ""}
     </div>
+    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
     ${previewRows.length ? `<div class="mt-3 space-y-2">${previewRows.slice(0, 20).map((row, index) => adminSocialQuickImportRowHtml(row, index)).join("")}</div>` : ""}
     ${adminDuplicateSourceWarningHtml(duplicateWarnings)}
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Needs more source details</div><div class="mt-1">Add missing location/area, contact route, or visible posted date/source evidence, then preview again.</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
@@ -13207,6 +13211,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const instagramTasks = Array.isArray(instagram.capture_tasks) ? instagram.capture_tasks : [];
   const duplicateWarnings = Array.isArray(importResult.duplicate_warnings) ? importResult.duplicate_warnings : [];
   const queued = Array.isArray(importResult.queued_listings) ? importResult.queued_listings : [];
+  const autoLive = Array.isArray(importResult.auto_live_listings) ? importResult.auto_live_listings : [];
   const sourceReview = Array.isArray(importResult.source_review_records) ? importResult.source_review_records : [];
   const youtubeSourceOffset = Number(youtube.source_offset || data.dashboard_youtube_source_offset || 0);
   const youtubeNextSourceOffset = Number(data.dashboard_next_youtube_source_offset || youtubeSourceOffset);
@@ -13262,7 +13267,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
     </div>`).join("");
   return `
     <div class="font-black">Social platform sweep finished</div>
-    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties queued • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
+    <div class="mt-1">Platform: ${adminEscape(platform)} • ${adminEscape(data.discovered_posts_count || 0)} exact posts discovered • ${adminEscape(importResult.created_properties || 0)} new properties processed • ${adminEscape(importResult.auto_live_properties || autoLive.length || 0)} auto-live • ${adminEscape(importResult.review_queue_properties || queued.length || 0)} review queue • ${adminEscape(importResult.existing_properties || 0)} duplicate/existing links were blocked.</div>
     <div class="mt-1 text-[11px]">Profile rule: ${adminEscape(data.policy?.profile_creation_rule || "Source-only broker profiles are not created automatically; the source owner must register or claim one.")}</div>
     ${data.focus === "students" ? `<div class="mt-2 rounded-xl border border-purple-100 bg-purple-50 p-3 text-purple-950"><div class="font-black">Student housing focus</div><div class="mt-1">This sweep only uses campus, hostel, student accommodation, university, and student-room signals. It prepares TikTok/Facebook/Instagram exact-link capture tasks and runs YouTube/X exact-post jobs when API keys are configured.</div><div class="mt-2 flex gap-2 flex-wrap"><button type="button" onclick="adminImportYouTubeExactPosts(adminStudentHousingYouTubeQuickPasteExample())" class="border border-red-200 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Paste YouTube Student Videos</button><button type="button" onclick="adminOpenSocialQuickPastePanel(adminStudentHousingQuickPasteExample())" class="border border-purple-200 bg-white text-purple-700 hover:bg-purple-50 px-2 py-1 rounded text-[11px] font-bold">Paste Student Source Links</button></div></div>` : ""}
     <div class="mt-2 rounded-xl border border-indigo-100 bg-indigo-50 p-3 text-indigo-950">
@@ -13281,7 +13286,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
         <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
-        <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.live_ready_count || 0)} live-ready with direct phone/location/date/source permission • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only review records • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
+        <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.auto_live_ready_count || 0)} hashtag auto-live with location/date/source contact • ${adminEscape(youtubeConfidence.live_ready_count || 0)} total live-ready • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
         <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
         ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -13301,7 +13306,8 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
         <div class="mt-1">${adminEscape(facebookTasks.length + instagramTasks.length)} source feeds are ready for exact-link capture. Open the source/feed, click the makaug Capture Posts bookmark, then paste exact public post or reel URLs into Paste Captured Links.</div>
         <div class="mt-2 space-y-2">${manualCaptureTaskHtml}</div>
       </div>` : ""}
-    ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Queued properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
+    ${autoLive.length ? `<div class="mt-3 rounded-xl border border-emerald-100 bg-white p-3"><div class="font-black text-emerald-950">Auto-live properties</div><div class="mt-2 space-y-2">${autoLive.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: false })).join("")}</div></div>` : ""}
+    ${queued.length ? `<div class="mt-3 rounded-xl border border-blue-100 bg-white p-3"><div class="font-black text-blue-950">Review queue properties</div><div class="mt-2 space-y-2">${queued.slice(0, 12).map((item) => adminSeededListingSummaryHtml(item, { pendingPanel: true })).join("")}</div></div>` : ""}
     ${sourceReview.length ? `<div class="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-amber-900"><div class="font-black">Posts needing source review</div><div class="mt-2 space-y-2">${sourceReview.slice(0, 12).map((item) => adminSourceReviewRecordSummaryHtml(item)).join("")}</div></div>` : ""}`;
 }
 
@@ -13379,10 +13385,12 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
       data.dashboard_next_youtube_source_offset = adminAdvanceYouTubeSourceOffsetIfUseful(data, normalized, studentFocus, youtubeSourceOffset);
     }
     if (statusEl) statusEl.innerHTML = adminSocialPlatformSweepHtml(data, normalized);
-    if (!dryRun && (data.import_result?.created_properties || data.import_result?.existing_properties)) {
-      adminPendingQueueFilter = "found_online";
+    if (!dryRun && (data.import_result?.created_properties || data.import_result?.existing_properties || data.import_result?.auto_live_properties)) {
       await renderAdminDashboard();
-      setAdminWorkflowTab("review");
+      if (data.import_result?.review_queue_properties) {
+        adminPendingQueueFilter = "found_online";
+        setAdminWorkflowTab("review");
+      }
     }
     toast(studentFocus ? "Student housing sweep finished." : normalized === "tiktok" ? "TikTok capture tasks are ready." : normalized === "youtube" ? "YouTube sweep finished." : normalized === "x" ? "X sweep finished." : "All social source sweep finished.");
   } catch (e) {

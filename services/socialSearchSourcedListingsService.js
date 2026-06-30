@@ -887,6 +887,79 @@ function sourcePostMeetsLaunchIntakeRule(item = {}, agent = {}) {
   };
 }
 
+function youtubeConfidenceReviewForItem(item = {}) {
+  return item.raw_source_post?.youtube_confidence_review
+    || item.raw_source_post?.raw_source_post?.youtube_confidence_review
+    || item.rawSourcePost?.youtube_confidence_review
+    || item.rawSourcePost?.raw_source_post?.youtube_confidence_review
+    || null;
+}
+
+function sourceJobForItem(item = {}) {
+  return item.raw_source_post?.source_job
+    || item.raw_source_post?.raw_source_post?.source_job
+    || item.rawSourcePost?.source_job
+    || item.rawSourcePost?.raw_source_post?.source_job
+    || {};
+}
+
+function sourceJobIsHashtag(job = {}, item = {}) {
+  const raw = item.raw_source_post || item.rawSourcePost || {};
+  if (raw.youtube_hashtag_source === true || raw.raw_source_post?.youtube_hashtag_source === true) return true;
+  const text = [
+    job.source_type,
+    job.sourceType,
+    job.source_record_kind,
+    job.sourceRecordKind,
+    job.source_name,
+    job.sourceName,
+    job.source_url,
+    job.sourceUrl,
+    item.sourceType,
+    item.source_type,
+    item.sourceUrl,
+    item.source_url,
+  ].map((value) => String(value || '')).join(' ').toLowerCase();
+  return text.includes('hashtag') || /youtube\.com\/hashtag\//i.test(text);
+}
+
+function sourcePostAutoLiveStatusFor(item = {}, agent = sourceAgentForItem(item)) {
+  const review = youtubeConfidenceReviewForItem(item) || {};
+  const job = sourceJobForItem(item);
+  const sourceIsHashtag = sourceJobIsHashtag(job, item);
+  const reviewSaysAutoLive = review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready';
+  const hasLocation = review.location_status === 'area_or_neighbourhood_detected';
+  const hasSourceDate = review.date_status === 'confirmed_2026_plus_source_window';
+  const hasCategory = Boolean(item.listingType || item.listing_type || review.category_status && !/needs_review/i.test(String(review.category_status)));
+  const hasContactPath = hasAnyPublicContactPath(agent, item);
+  const allowedSocialSource = itemHasAllowedSocialSource(item, agent);
+  const approved = Boolean(
+    reviewSaysAutoLive
+      && sourceIsHashtag
+      && hasLocation
+      && hasSourceDate
+      && hasCategory
+      && hasContactPath
+      && allowedSocialSource
+      && sourceUrlForItem(item)
+  );
+  return {
+    approved,
+    status: approved ? 'approved' : 'pending',
+    moderation_stage: approved ? 'approved' : 'submitted',
+    policy: 'youtube_hashtag_location_source_contact_2026_auto_live',
+    reason: approved
+      ? 'Auto-approved from a YouTube hashtag source because the 2026 post has a property signal, area-level location, category, source evidence, and a public source/contact route.'
+      : 'Pending King review because the hashtag auto-live policy did not fully pass.',
+    source_is_hashtag: sourceIsHashtag,
+    review_status: review.status || '',
+    review_score: review.score ?? null,
+    phone_status: review.phone_status || '',
+    location_status: review.location_status || '',
+    date_status: review.date_status || '',
+  };
+}
+
 function normalizedStatusValue(status = '') {
   return String(status || '').trim().toLowerCase();
 }
@@ -1281,9 +1354,8 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
-  const youtubeConfidenceReview = item.raw_source_post?.youtube_confidence_review
-    || item.rawSourcePost?.youtube_confidence_review
-    || null;
+  const youtubeConfidenceReview = youtubeConfidenceReviewForItem(item);
+  const autoLive = sourcePostAutoLiveStatusFor(item, agent);
   const nearestUniversity = nearestUniversityForSourceItem(item);
   const trustReview = buildSocialSourceTrustReview({
     ...item,
@@ -1351,6 +1423,12 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     youtube_phone_status: youtubeConfidenceReview?.phone_status || '',
     youtube_location_status: youtubeConfidenceReview?.location_status || '',
     youtube_category_status: youtubeConfidenceReview?.category_status || '',
+    auto_live_source_import: autoLive.approved,
+    auto_live_policy: autoLive.policy,
+    auto_live_reason: autoLive.reason,
+    auto_live_review_status: autoLive.review_status,
+    auto_live_review_score: autoLive.review_score,
+    auto_live_source_is_hashtag: autoLive.source_is_hashtag,
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
     added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
@@ -1446,6 +1524,7 @@ function whatsappShareMessage(item, propertyUrl, ownerPreviewUrl = '') {
 
 function buildSocialSearchListing(item, agentId = null) {
   const agent = sourceAgentForItem(item);
+  const autoLive = sourcePostAutoLiveStatusFor(item, agent);
   const listingType = item.listingType || 'sale';
   const studentListing = isStudentSourceListing({ ...item, listingType });
   const nearestUniversity = studentListing ? nearestUniversityForSourceItem({ ...item, listingType }) : '';
@@ -1496,11 +1575,13 @@ function buildSocialSearchListing(item, agentId = null) {
     agent_id: agentId,
     source: SOCIAL_SEARCH_SOURCE,
     listed_via: 'found_online',
-    status: 'pending',
-    moderation_stage: 'submitted',
-    reviewed_at: null,
-    moderation_notes: `${item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING'}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King. Batch: ${itemBatchId(item)}.`,
-    moderation_reason: 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
+    status: autoLive.status,
+    moderation_stage: autoLive.moderation_stage,
+    reviewed_at: autoLive.approved ? new Date() : null,
+    moderation_notes: `${autoLive.approved ? 'YOUTUBE HASHTAG AUTO-LIVE IMPORT' : (item.importedFromSourcePost ? 'FOUND-ONLINE SOURCE POST IMPORT' : 'SOCIAL SEARCH LISTING')}. Public source inventory from ${agent.name || 'source'}. Source post: ${sourceUrlForItem(item)}. ${autoLive.approved ? 'Location, 2026 source date, listing category, property signal, and public source/contact route passed the hashtag auto-live policy; direct phone is not required when the source contact route is available.' : 'Confirm it was first posted on or after 1 January 2026, then confirm location, availability, and price or Price upon application. Location is non-negotiable; other source-review checks can be overridden by King.'} Batch: ${itemBatchId(item)}.`,
+    moderation_reason: autoLive.approved
+      ? autoLive.reason
+      : 'Pending King review of public found-online source, exact pin, latest availability, and image/source evidence.',
     images: listingImageRowsFor(item),
     source_item: item,
   };
@@ -1622,6 +1703,7 @@ async function insertListing(client, listing, agentId) {
   const ownerPreviewToken = createOwnerEditToken();
   const ownerPreviewTokenHash = hashOwnerEditToken(ownerPreviewToken);
   const ownerPreviewExpiresAt = ownerEditTokenExpiry();
+  const autoLive = sourcePostAutoLiveStatusFor(listing.source_item, sourceAgentForItem(listing.source_item));
   const inserted = await client.query(
     `INSERT INTO properties (
       listing_type, title, description, district, area, address, price, price_period,
@@ -1684,15 +1766,19 @@ async function insertListing(client, listing, agentId) {
   await client.query(
     `INSERT INTO property_moderation_events (
       property_id, actor_id, action, status_from, status_to, checklist, reason, notes, delivery
-    ) VALUES ($1, $2, $3, NULL, 'pending', $4::jsonb, $5, $6, $7::jsonb)`,
+    ) VALUES ($1, $2, $3, NULL, $4, $5::jsonb, $6, $7, $8::jsonb)`,
     [
       propertyId,
-      'social_search_authorised_seed',
-      'social_search_authorised_listing_created',
+      autoLive.approved ? 'youtube_hashtag_auto_live_importer' : 'social_search_authorised_seed',
+      autoLive.approved ? 'youtube_hashtag_auto_live_listing_approved' : 'social_search_authorised_listing_created',
+      listing.status || 'pending',
       JSON.stringify({
         found_online_candidate: true,
         social_search_candidate: true,
         found_online: true,
+        auto_live_source_import: autoLive.approved,
+        auto_live_policy: autoLive.policy,
+        auto_live_review_status: autoLive.review_status,
         preapproved_source_post: sourcePreApprovalStatusFor(listing.source_item).preapproved,
         consent_confirmed: sourcePreApprovalStatusFor(listing.source_item).consent_confirmed,
         image_rights_confirmed: sourcePreApprovalStatusFor(listing.source_item).image_rights_confirmed,
@@ -1873,6 +1959,7 @@ function normalizeFoundOnlineSourcePost(raw = {}, index = 0) {
     agentKey: sourceKey,
     sourceAgent,
     sourceBatch: raw.source_batch || FOUND_ONLINE_SOURCE_POST_IMPORT_BATCH_ID,
+    sourceType: raw.source_type || raw.sourceType || raw.raw_source_post?.source_job?.source_type || 'found_online_source_post',
     importedFromSourcePost: true,
     title,
     sourceTitle: raw.source_title || raw.caption || title,
@@ -2087,17 +2174,9 @@ async function queueFoundOnlineSourcePostListings({
 
   if (dryRun) {
     const eligible = evaluated.filter(({ intake }) => intake.eligible);
-    return {
-      ok: true,
-      dry_run: true,
-      received_posts: Array.isArray(posts) ? posts.length : 0,
-      normalized_posts: items.length,
-      eligible_to_queue_count: eligible.length,
-      source_review_count: sourceReviewRecords.length,
-      created_properties: 0,
-      existing_properties: 0,
-      review_queue_properties: eligible.length,
-      queued_listings: eligible.map(({ item, agent }) => ({
+    const dryRunRows = eligible.map(({ item, agent }) => {
+      const autoLive = sourcePostAutoLiveStatusFor(item, agent);
+      return {
         key: item.key,
         title: item.title,
         area: item.area,
@@ -2116,8 +2195,31 @@ async function queueFoundOnlineSourcePostListings({
         profile_action: FOUND_ONLINE_PROFILE_CREATION_POLICY.profile_action,
         profile_key: shouldCreateSourceProfile(item, agent) ? sourceProfileKeyForItem(item, agent) : null,
         profile_policy: FOUND_ONLINE_PROFILE_CREATION_POLICY.rule,
+        auto_live_ready: autoLive.approved,
+        auto_live_policy: autoLive.policy,
+        status: autoLive.status,
+        moderation_stage: autoLive.moderation_stage,
         dry_run: true,
-      })),
+      };
+    });
+    const autoLiveRows = dryRunRows.filter((item) => item.auto_live_ready);
+    const reviewRows = dryRunRows.filter((item) => !item.auto_live_ready);
+    return {
+      ok: true,
+      dry_run: true,
+      received_posts: Array.isArray(posts) ? posts.length : 0,
+      normalized_posts: items.length,
+      eligible_to_queue_count: eligible.length,
+      source_review_count: sourceReviewRecords.length,
+      created_properties: 0,
+      existing_properties: 0,
+      created_auto_live_properties: 0,
+      existing_auto_live_properties: 0,
+      auto_live_properties: autoLiveRows.length,
+      review_queue_properties: reviewRows.length,
+      auto_live_listings: autoLiveRows,
+      queued_listings: dryRunRows,
+      review_queue_listings: reviewRows,
       source_review_records: sourceReviewRecords,
       daily_target_status: {
         ...socialSearchDailyTargetStatus(),
@@ -2176,6 +2278,10 @@ async function queueFoundOnlineSourcePostListings({
     }
 
     await client.query('COMMIT');
+    const autoLiveCreated = created.filter((item) => isLiveOrApprovedStatus(item));
+    const reviewCreated = created.filter((item) => isReviewQueueStatus(item));
+    const alreadyPresentReviewQueue = alreadyPresent.filter((item) => isReviewQueueStatus(item));
+    const alreadyLiveOrApproved = alreadyPresent.filter((item) => isLiveOrApprovedStatus(item));
     const duplicateWarnings = alreadyPresent.map((item) => ({
       type: 'exact_source_url_duplicate',
       message: 'This exact social/source link has already been imported to makaug.',
@@ -2189,8 +2295,8 @@ async function queueFoundOnlineSourcePostListings({
       agent_name: item.agent_name || '',
     }));
     const reviewQueueListings = [
-      ...created,
-      ...alreadyPresent.map((item) => ({
+      ...reviewCreated,
+      ...alreadyPresentReviewQueue.map((item) => ({
         id: item.id,
         title: item.title,
         property_url: item.property_url,
@@ -2203,6 +2309,21 @@ async function queueFoundOnlineSourcePostListings({
         review_queue_visible: true,
       })),
     ];
+    const autoLiveListings = [
+      ...autoLiveCreated,
+      ...alreadyLiveOrApproved.map((item) => ({
+        id: item.id,
+        title: item.title,
+        property_url: item.property_url,
+        agent_name: item.agent_name,
+        status: item.status,
+        moderation_stage: item.moderation_stage,
+        source_url: item.source_url,
+        source_listing_key: item.key,
+        already_present: true,
+        already_live_or_approved: true,
+      })),
+    ];
     return {
       ok: true,
       dry_run: false,
@@ -2211,9 +2332,15 @@ async function queueFoundOnlineSourcePostListings({
       eligible_to_queue_count: evaluated.filter(({ intake }) => intake.eligible).length,
       created_properties: created.length,
       existing_properties: alreadyPresent.length,
+      created_auto_live_properties: autoLiveCreated.length,
+      existing_auto_live_properties: alreadyLiveOrApproved.length,
+      auto_live_properties: autoLiveListings.length,
       review_queue_properties: reviewQueueListings.length,
+      auto_live_listings: autoLiveListings,
       queued_listings: reviewQueueListings,
       already_present_properties: alreadyPresent,
+      already_present_review_queue_properties: alreadyPresentReviewQueue,
+      already_live_or_approved_properties: alreadyLiveOrApproved,
       duplicate_warning_count: duplicateWarnings.length,
       duplicate_warnings: duplicateWarnings,
       duplicate_source_url_records: duplicateWarnings,
@@ -2495,6 +2622,7 @@ module.exports = {
   normalizeFoundOnlineSourcePost,
   summarizeSocialSearchListings,
   socialSearchDailyTargetStatus,
+  sourcePostAutoLiveStatusFor,
   sourcePostMeetsLaunchIntakeRule,
   sourceUrlForItem,
   sourceImageRowsFor,

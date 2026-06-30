@@ -1426,17 +1426,31 @@ function youtubeChannelLookupForSource(source = {}) {
   };
 }
 
+function youtubeSourceIsHashtag(source = {}) {
+  const type = cleanText(source.source_type || source.sourceType || '').toLowerCase();
+  const kind = cleanText(source.source_record_kind || source.sourceRecordKind || '').toLowerCase();
+  const url = sourceUrl(source);
+  const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
+  return Boolean(
+    type.includes('hashtag')
+      || kind.includes('hashtag')
+      || /youtube\.com\/hashtag\//i.test(url)
+      || metadata.generated_hashtag_discovery === true
+  );
+}
+
 function youtubeDiscoveryPriority(source = {}) {
   const type = cleanText(source.source_type || source.sourceType || '').toLowerCase();
   const url = sourceUrl(source);
   const metadata = source.metadata && typeof source.metadata === 'object' ? source.metadata : {};
   let score = 50;
-  if (type.includes('public_video_search_feed')) score = 0;
+  if (youtubeSourceIsHashtag(source)) score = -20;
+  else if (type.includes('public_video_search_feed')) score = 0;
   else if (type.includes('search_feed')) score = 10;
-  else if (type.includes('hashtag')) score = 20;
   else if (/youtube\.com\/results\?/i.test(url)) score = 30;
   else if (isDiscoveryFeed(source)) score = 40;
-  if (metadata.generated_source_discovery || metadata.generated_hashtag_discovery) score -= 5;
+  if (metadata.generated_hashtag_discovery) score -= 10;
+  else if (metadata.generated_source_discovery) score -= 5;
   if (type.includes('creator_channel') || type.includes('media_channel')) score += 120;
   if (/youtube\.com\/@/i.test(url)) score += 80;
   return score;
@@ -1561,6 +1575,7 @@ function youtubeConfidenceReviewForPost({
   publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
   listingType = '',
   preapproval = {},
+  hashtagSource = false,
 } = {}) {
   const propertySignal = youtubeHasPropertySignal(combinedText, { source_listing_types: [listingType] });
   const locationStatus = youtubeLocationConfidence(area, district);
@@ -1575,6 +1590,7 @@ function youtubeConfidenceReviewForPost({
     contact_path: hasContactPath,
     location_area_detected: locationStatus === 'area_or_neighbourhood_detected',
     preapproved_source: preapproval.pre_approved === true,
+    hashtag_source: hashtagSource === true,
   };
   const score = [
     checks.property_signal ? 20 : 0,
@@ -1584,18 +1600,31 @@ function youtubeConfidenceReviewForPost({
     checks.preapproved_source ? 15 : 0,
     listingType ? 10 : 0,
   ].reduce((sum, value) => sum + value, 0);
-  const liveReady = score >= 85
+  const preapprovedLiveReady = score >= 85
     && checks.property_signal
     && checks.source_date_2026_plus
     && checks.location_area_detected
     && checks.direct_phone
     && checks.preapproved_source;
+  const hashtagAutoLiveReady = score >= 70
+    && checks.hashtag_source
+    && checks.property_signal
+    && checks.source_date_2026_plus
+    && checks.location_area_detected
+    && checks.contact_path
+    && Boolean(listingType);
+  const liveReady = preapprovedLiveReady || hashtagAutoLiveReady;
   return {
     score,
-    status: liveReady ? 'youtube_confident_live_ready' : 'youtube_review_required',
+    status: hashtagAutoLiveReady
+      ? 'youtube_hashtag_auto_live_ready'
+      : preapprovedLiveReady
+        ? 'youtube_confident_live_ready'
+        : 'youtube_review_required',
     live_ready: liveReady,
+    auto_live_ready: hashtagAutoLiveReady,
     date_status: dateStatus,
-    phone_status: hasDirectPhone ? 'direct_phone_present' : (hasContactPath ? 'source_contact_only_needs_review' : 'missing_contact'),
+    phone_status: hasDirectPhone ? 'direct_phone_present' : (hasContactPath ? (hashtagAutoLiveReady ? 'source_contact_only_ok' : 'source_contact_only_needs_review') : 'missing_contact'),
     location_status: locationStatus,
     category_status: categoryStatus,
     checks,
@@ -1621,6 +1650,7 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const publishedAt = item.contentDetails?.videoPublishedAt || snippet.publishedAt || '';
   const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
   const preapproval = youtubeSourcePreapprovalFields(job);
+  const hashtagSource = youtubeSourceIsHashtag(job);
   const confidence = youtubeConfidenceReviewForPost({
     combinedText,
     area,
@@ -1632,6 +1662,7 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
     publishedAfter: job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
     listingType,
     preapproval,
+    hashtagSource,
   });
   return {
     post_id: videoId,
@@ -1674,6 +1705,7 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
       youtube_search_item: item,
       source_job: job,
       import_method: 'youtube_data_api_search',
+      youtube_hashtag_source: hashtagSource,
       published_after: job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
       includes_shorts_and_long_form: true,
       youtube_confidence_review: confidence,
@@ -2184,8 +2216,9 @@ function summarizeYouTubeConfidence(posts = []) {
     summary.total += 1;
     summary.by_status[status] = (summary.by_status[status] || 0) + 1;
     if (review.live_ready === true) summary.live_ready_count += 1;
+    if (review.auto_live_ready === true || review.status === 'youtube_hashtag_auto_live_ready') summary.auto_live_ready_count += 1;
     if (review.phone_status === 'direct_phone_present') summary.direct_phone_count += 1;
-    if (review.phone_status === 'source_contact_only_needs_review') summary.source_contact_only_count += 1;
+    if (review.phone_status === 'source_contact_only_needs_review' || review.phone_status === 'source_contact_only_ok') summary.source_contact_only_count += 1;
     if (review.location_status === 'area_or_neighbourhood_detected') summary.area_level_location_count += 1;
     if (review.location_status && review.location_status !== 'area_or_neighbourhood_detected') {
       summary.location_review_count += 1;
@@ -2196,6 +2229,7 @@ function summarizeYouTubeConfidence(posts = []) {
   }, {
     total: 0,
     live_ready_count: 0,
+    auto_live_ready_count: 0,
     direct_phone_count: 0,
     source_contact_only_count: 0,
     area_level_location_count: 0,

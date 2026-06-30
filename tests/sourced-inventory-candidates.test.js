@@ -60,6 +60,7 @@ const {
   plannedSocialSearchListings,
   queueFoundOnlineSourcePostListings,
   summarizeSocialSearchListings,
+  sourcePostAutoLiveStatusFor,
   sourcePostMeetsLaunchIntakeRule,
   sourceImageRowsFor,
   whatsappShareMessage: socialSearchWhatsappShareMessage,
@@ -1175,13 +1176,14 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   });
   assert.deepStrictEqual(
     broadYoutubeJobs.map((job) => job.source_key),
-    ['youtube-kira-homes-discovery', 'youtube-uganda-realestate-hashtag'],
-    'small YouTube dry runs should prioritise broad search/hashtag discovery before old creator channels'
+    ['youtube-uganda-realestate-hashtag', 'youtube-kira-homes-discovery'],
+    'small YouTube dry runs should prioritise hashtag discovery before broad search and old creator channels'
   );
   assert(broadYoutubeJobs.every((job) => job.includes_shorts_and_long_form), 'broad YouTube discovery jobs should include Shorts and long-form content');
-  assert(!broadYoutubeJobs[0].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
-  assert.strictEqual(broadYoutubeJobs[0].query, 'Kira homes for rent Uganda', 'broad YouTube discovery jobs should keep generated source queries focused');
-  assert(broadYoutubeJobs[0].coverage_terms.includes('to let'), 'rental YouTube discovery jobs should still expose rental category coverage metadata');
+  assert(/^#UgandaRealEstate\b/i.test(broadYoutubeJobs[0].query), 'hashtag YouTube jobs should search the hashtag itself first');
+  assert(!broadYoutubeJobs[1].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
+  assert.strictEqual(broadYoutubeJobs[1].query, 'Kira homes for rent Uganda', 'broad YouTube discovery jobs should keep generated source queries focused');
+  assert(broadYoutubeJobs[1].coverage_terms.includes('to let'), 'rental YouTube discovery jobs should still expose rental category coverage metadata');
   const firstYoutubeBatch = buildYouTubeSearchJobs({
     sources: [
       { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
@@ -1225,6 +1227,25 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_confident_live_ready');
   assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.live_ready, true);
   assert.deepStrictEqual(normalizedYoutube.image_urls, ['https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg']);
+  const normalizedHashtagYoutube = normalizeYouTubeApiPost({
+    id: { videoId: 'hash123XYZ90' },
+    snippet: {
+      publishedAt: '2026-03-14T10:00:00.000Z',
+      title: 'Kira two bedroom house for rent #UgandaRealEstate',
+      description: 'Fresh rental home in Kira with parking and secure compound. Contact through this YouTube source.',
+      channelId: 'UCHashtagExample',
+      channelTitle: 'Uganda Real Estate Clips',
+      thumbnails: { high: { url: 'https://i.ytimg.com/vi/hash123XYZ90/hqdefault.jpg' } },
+    },
+  }, broadYoutubeJobs[0]);
+  assert.strictEqual(normalizedHashtagYoutube.contact_phone, '', 'hashtag auto-live should not require a direct phone when source contact exists');
+  assert.strictEqual(normalizedHashtagYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_hashtag_auto_live_ready');
+  assert.strictEqual(normalizedHashtagYoutube.raw_source_post.youtube_confidence_review.live_ready, true);
+  assert.strictEqual(normalizedHashtagYoutube.raw_source_post.youtube_confidence_review.phone_status, 'source_contact_only_ok');
+  const normalizedHashtagForQueue = normalizeFoundOnlineSourcePost(normalizedHashtagYoutube);
+  const autoLiveStatus = sourcePostAutoLiveStatusFor(normalizedHashtagForQueue, normalizedHashtagForQueue.sourceAgent);
+  assert.strictEqual(autoLiveStatus.approved, true, 'hashtag YouTube posts with area-level location and source contact should auto-live without a phone');
+  assert.strictEqual(autoLiveStatus.status, 'approved', 'hashtag auto-live importer should create public inventory, not pending review rows');
   const normalizedNonPropertyYoutube = normalizeYouTubeApiPost({
     id: { videoId: 'nonProperty123' },
     snippet: {
@@ -1332,9 +1353,14 @@ test('found-online social search admin path and share cards are protected and au
   assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
   assert(frontend.includes('adminYouTubeSweepMethodLabel'), 'King dashboard should distinguish YouTube search feeds from channel-upload scans');
   assert(frontend.includes('in_window_result_count'), 'King dashboard should show how many channel videos are inside the 2026 source window');
-  assert(frontend.includes('live-ready with direct phone/location/date/source permission'), 'King dashboard should display YouTube confidence counts');
+  assert(frontend.includes('hashtag auto-live with location/date/source contact'), 'King dashboard should display hashtag auto-live confidence counts');
   assert(html.includes('youtube-channel-upload-sweep-20260630'), 'index should cache-bust the channel-upload YouTube sweep dashboard fix');
+  assert(html.includes('youtube-hashtag-auto-live-20260630'), 'index should cache-bust the hashtag auto-live dashboard fix');
   assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
+  assert(socialPlatformSweepServiceSource.includes('youtube_hashtag_auto_live_ready'), 'YouTube API confidence should allow hashtag posts with location and source contact to become live-ready');
+  assert(socialSearchServiceSource.includes('sourcePostAutoLiveStatusFor'), 'source-post importer should centralize the hashtag auto-live approval gate');
+  assert(socialSearchServiceSource.includes('status: autoLive.status'), 'hashtag auto-live imports should insert approved public records instead of pending rows');
+  assert(frontend.includes('Auto-live properties'), 'King dashboard should show auto-live imports separately from review queue rows');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_CHANNELS_URL'), 'YouTube sweep should resolve channel handles before scanning trusted source uploads');
   assert(socialPlatformSweepServiceSource.includes('YOUTUBE_PLAYLIST_ITEMS_URL'), 'YouTube sweep should scan trusted channel upload playlists');
   assert(read('services/socialSearchSourcedListingsService.js').includes('function sourcePlatformFor'), 'daily found-online sweeps should normalize source platform metadata');
