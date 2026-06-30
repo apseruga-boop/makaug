@@ -67,6 +67,7 @@ const {
 const {
   SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
   MAX_PLATFORM_SWEEP_SOURCES,
+  DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   YOUTUBE_SOURCE_POST_WINDOW_START,
   socialDiscoveryApiReadiness,
   TIKTOK_OEMBED_URL,
@@ -665,6 +666,8 @@ test('found-online source-post importer normalizes extracted posts for King revi
   assert.strictEqual(captionContact.sourceAgent.email, 'hello@example.com', 'generic source-post importer should reverse public email from captions');
   assert(socialSearchServiceSource.includes('normalizedContactKeyForSource'), 'source-post importer should group repeated phone/email/source contacts');
   assert(socialSearchServiceSource.includes('existingFoundOnlineContactCounts'), 'source-post importer should check existing listings before deciding profile creation');
+  assert(socialSearchServiceSource.includes("extra_fields->>'youtube_url' = ANY($2::text[])"), 'source-post importer should block exact YouTube URL duplicates already attached to any property');
+  assert(socialSearchServiceSource.includes("extra_fields->>'video_url' = ANY($2::text[])"), 'source-post importer should block exact video URL duplicates already attached to any property');
   assert(socialSearchServiceSource.includes('duplicate_warnings'), 'source-post importer should return visible duplicate warnings for exact source URLs');
   assert(socialSearchServiceSource.includes('exact_source_url_duplicate'), 'duplicate warnings should explain when the exact social link was loaded before');
   assert(frontend.includes('Duplicate social links blocked'), 'King dashboard should show duplicate social links instead of quietly ignoring them');
@@ -1100,6 +1103,10 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
       sourceType: 'public_video_search_feed',
       url: 'https://www.youtube.com/results?search_query=Kampala+student+hostel+rooms+Uganda',
       hashtags: ['StudentAccommodationUganda2026', 'HostelsKampala'],
+      phone: '+256700000000',
+      canContactDirectly: true,
+      consentStatus: 'founder_reported_agent_permission',
+      trustLevel: 'authorised_founder_contact',
     }],
     limit: 1,
     publishedAfter: '2026-02-01T00:00:00.000Z',
@@ -1107,6 +1114,9 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(youtubeJobs.length, 1);
   assert.strictEqual(youtubeJobs[0].published_after, '2026-02-01T00:00:00.000Z', 'YouTube jobs should start from the requested February window');
   assert.strictEqual(youtubeJobs[0].includes_shorts_and_long_form, true, 'YouTube jobs should not exclude Shorts or long-form videos');
+  assert.strictEqual(youtubeJobs[0].max_pages, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 'YouTube jobs should carry the default bounded pagination setting');
+  assert(youtubeJobs[0].query.includes('nyumba'), 'YouTube searches should include local-language property terms');
+  assert(youtubeJobs[0].query.includes('student accommodation'), 'student YouTube searches should include student category terms');
   const broadYoutubeJobs = buildYouTubeSearchJobs({
     sources: [
       {
@@ -1145,6 +1155,7 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   );
   assert(broadYoutubeJobs.every((job) => job.includes_shorts_and_long_form), 'broad YouTube discovery jobs should include Shorts and long-form content');
   assert(!broadYoutubeJobs[0].query.includes('student accommodation'), 'non-student YouTube discovery jobs should not inherit student housing terms');
+  assert(broadYoutubeJobs[0].query.includes('to let'), 'rental YouTube discovery jobs should include rental category terms');
   const firstYoutubeBatch = buildYouTubeSearchJobs({
     sources: [
       { key: 'yt-search-1', name: 'Search 1', platform: 'youtube', sourceType: 'public_video_search_feed', url: 'https://www.youtube.com/results?search_query=Kampala+houses+Uganda', metadata: { generated_source_discovery: true } },
@@ -1182,7 +1193,23 @@ test('social platform sweeps promote TikTok hashtags, YouTube videos, and X post
   assert.strictEqual(normalizedYoutube.source_page_url, 'https://www.youtube.com/channel/UCexample');
   assert.strictEqual(normalizedYoutube.area, 'Makerere');
   assert.strictEqual(normalizedYoutube.listing_type, 'students');
+  assert.strictEqual(normalizedYoutube.contact_phone, '+256700000000', 'YouTube imports should extract direct public phones from snippet text');
+  assert.strictEqual(normalizedYoutube.pre_approved, true, 'trusted phone-backed YouTube sources should carry explicit preapproval');
+  assert.strictEqual(normalizedYoutube.permission_status, 'founder_reported_agent_authorised_upload');
+  assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.status, 'youtube_confident_live_ready');
+  assert.strictEqual(normalizedYoutube.raw_source_post.youtube_confidence_review.live_ready, true);
   assert.deepStrictEqual(normalizedYoutube.image_urls, ['https://i.ytimg.com/vi/abc123XYZ90/hqdefault.jpg']);
+  const normalizedNonPropertyYoutube = normalizeYouTubeApiPost({
+    id: { videoId: 'nonProperty123' },
+    snippet: {
+      publishedAt: '2026-02-12T08:30:00.000Z',
+      title: 'Kampala music festival highlights',
+      description: 'Crowd shots and live performance.',
+      channelId: 'UCexample',
+      channelTitle: 'Events UG',
+    },
+  }, youtubeJobs[0]);
+  assert.strictEqual(normalizedNonPropertyYoutube, null, 'YouTube API imports should drop search results that do not look like property posts');
 
   const xJobs = buildXSearchJobs({
     sources: [{
@@ -1274,6 +1301,11 @@ test('found-online social search admin path and share cards are protected and au
   assert(read('services/socialSearchSourcedListingsService.js').includes('already_live_or_approved_properties'), 'daily found-online sweeps should separate already-live records from the pending panel');
   assert(read('services/socialSearchSourcedListingsService.js').includes('source_review_records'), 'daily found-online sweeps should expose source-review records separately');
   assert(read('services/socialSearchSourcedListingsService.js').includes('daily_target_status'), 'daily found-online sweeps should return 200/day target status for King');
+  assert(socialPlatformSweepScript.includes('--max-pages'), 'YouTube sweep script should expose bounded pagination per source');
+  assert(adminRoute.includes('max_pages') && adminRoute.includes('maxPagesPerSource'), 'admin YouTube sweep endpoint should accept bounded pagination');
+  assert(frontend.includes('ADMIN_YOUTUBE_SWEEP_MAX_PAGES'), 'King dashboard should send the YouTube pagination depth');
+  assert(frontend.includes('live-ready with direct phone/location/date/source permission'), 'King dashboard should display YouTube confidence counts');
+  assert(socialPlatformSweepServiceSource.includes('youtube_confidence_review'), 'YouTube API imports should store confidence evidence for King review');
   assert(read('services/socialSearchSourcedListingsService.js').includes('function sourcePlatformFor'), 'daily found-online sweeps should normalize source platform metadata');
   assert(read('services/socialSearchSourcedListingsService.js').includes('sourcePlatformFeedLabel'), 'daily found-online sweeps should label platform-specific feeds');
   assert(read('services/socialSearchSourcedListingsService.js').includes('no_phone_source_contact_policy'), 'daily found-online sweeps should expose no-phone source contact policy');

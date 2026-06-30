@@ -19,6 +19,7 @@ const X_RECENT_SEARCH_URL = 'https://api.x.com/2/tweets/search/recent';
 const X_FULL_ARCHIVE_SEARCH_URL = 'https://api.x.com/2/tweets/search/all';
 const X_BEARER_ENV_NAMES = ['X_BEARER_TOKEN', 'TWITTER_BEARER_TOKEN', 'X_API_BEARER_TOKEN'];
 const DEFAULT_YOUTUBE_RESULTS_PER_SOURCE = 25;
+const DEFAULT_YOUTUBE_PAGES_PER_SOURCE = 1;
 const YOUTUBE_SEARCH_URL = 'https://www.googleapis.com/youtube/v3/search';
 const YOUTUBE_OEMBED_URL = 'https://www.youtube.com/oembed';
 const YOUTUBE_SOURCE_POST_WINDOW_START = '2026-01-01T00:00:00.000Z';
@@ -38,6 +39,27 @@ const CORE_PROPERTY_QUERY = [
   'property', 'house', 'home', 'apartment', 'land', 'plot', 'rent', 'rental',
   '"for sale"', '"to let"', 'hostel', '"student accommodation"', 'commercial', 'warehouse',
 ].join(' OR ');
+
+const YOUTUBE_LOCAL_LANGUAGE_QUERY_TERMS = [
+  'ettaka', 'bibanja', 'ebibanja', 'akabanja', 'amayumba', 'nyumba',
+  'nyumba ya kupanga', 'nyumba inauzwa', 'kupangisa', 'obupangisa',
+  'muzigo', 'emizigo', 'kiwanja', 'viwanja',
+];
+
+const YOUTUBE_CATEGORY_QUERY_TERMS = {
+  sale: ['house for sale', 'homes for sale', 'property for sale', 'house tour'],
+  rent: ['rent', 'rental', 'to let', 'apartment for rent', 'house for rent', 'monthly'],
+  land: ['land for sale', 'plots for sale', 'plot', 'acres', 'decimals', 'mailo', 'title'],
+  students: ['student accommodation', 'hostel', 'student room', 'campus', 'Makerere', 'Kyambogo', 'MUBS', 'UCU'],
+  commercial: ['commercial property', 'office space', 'shop for rent', 'warehouse', 'showroom', 'factory', 'arcade'],
+};
+
+const GENERIC_YOUTUBE_LOCATION_TERMS = new Set([
+  'uganda',
+  'kampala',
+  'wakiso',
+  'greater kampala',
+]);
 
 const UGANDA_LOCATION_QUERY = [
   'Uganda', 'Kampala', 'Wakiso', 'Mukono', 'Entebbe', 'Jinja', 'Kira', 'Ntinda',
@@ -247,6 +269,15 @@ function sourceKey(source = {}) {
 
 function sourceName(source = {}) {
   return cleanText(source.source_name || source.name || source.handle || sourceKey(source));
+}
+
+function sourceListValues(source = {}, camelKey = '', snakeKey = '') {
+  const value = source[camelKey] || source[snakeKey] || [];
+  if (Array.isArray(value)) return value.map(cleanText).filter(Boolean);
+  return String(value || '')
+    .split(/[,|]/)
+    .map(cleanText)
+    .filter(Boolean);
 }
 
 function sourceHandle(source = {}) {
@@ -1227,10 +1258,52 @@ function buildManualSocialCaptureTasks({ sources = [], platform = 'social', limi
     });
 }
 
+function youtubeCategoryTermsForSource(source = {}) {
+  const listingTypes = sourceListValues(source, 'listingTypes', 'listing_types')
+    .map((type) => type.toLowerCase());
+  const text = cleanText([
+    sourceName(source),
+    sourceUrl(source),
+    listingTypes.join(' '),
+    sourceListValues(source, 'hashtags', 'hashtags').join(' '),
+    source.metadata?.query,
+    source.metadata?.hashtag,
+  ].join(' ')).toLowerCase();
+  const categories = new Set();
+  if (listingTypes.includes('students') || /student|hostel|campus|makerere|kyambogo|mubs|ucu|accommodation/.test(text)) categories.add('students');
+  if (listingTypes.includes('commercial') || /commercial|office|shop|warehouse|showroom|factory|arcade|retail/.test(text)) categories.add('commercial');
+  if (listingTypes.includes('land') || /land|plot|acre|decimal|mailo|ettaka|bibanja|kiwanja/.test(text)) categories.add('land');
+  if (listingTypes.includes('rent') || /rent|rental|to let|kupangisa|obupangisa|muzigo/.test(text)) categories.add('rent');
+  if (!categories.size || listingTypes.includes('sale') || /sale|sell|house|home|property|nyumba|amayumba/.test(text)) categories.add('sale');
+  return [...categories].flatMap((category) => YOUTUBE_CATEGORY_QUERY_TERMS[category] || []);
+}
+
+function dedupeQueryTerms(terms = []) {
+  const seen = new Set();
+  const output = [];
+  for (const term of terms.map(cleanText).filter(Boolean)) {
+    const key = term.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(term);
+  }
+  return output;
+}
+
 function buildYouTubeQueryForSource(source = {}) {
   const url = sourceUrl(source);
   const existingQuery = urlParam(url, 'search_query') || urlParam(url, 'q');
-  if (existingQuery) return cleanText(existingQuery);
+  const categoryTerms = youtubeCategoryTermsForSource(source);
+  const localTerms = YOUTUBE_LOCAL_LANGUAGE_QUERY_TERMS;
+  if (existingQuery) {
+    return dedupeQueryTerms([
+      existingQuery,
+      ...categoryTerms,
+      ...localTerms,
+      'Uganda',
+      'property',
+    ]).join(' ');
+  }
   const hashtag = sourceHashtag(source);
   const tags = Array.isArray(source.hashtags)
     ? source.hashtags.filter(Boolean).slice(0, 4).map((tag) => `#${String(tag).replace(/^#/, '')}`)
@@ -1243,7 +1316,19 @@ function buildYouTubeQueryForSource(source = {}) {
   const discoveryTerms = [hashtag ? `#${hashtag}` : '', ...tags, ...nameWords]
     .filter(Boolean)
     .join(' ');
-  return cleanText(`${discoveryTerms || 'Uganda property'} Uganda property house land rent hostel student accommodation commercial`);
+  return dedupeQueryTerms([
+    discoveryTerms || 'Uganda property',
+    'Uganda',
+    'property',
+    'house',
+    'land',
+    'rent',
+    'hostel',
+    'student accommodation',
+    'commercial',
+    ...categoryTerms,
+    ...localTerms,
+  ]).join(' ');
 }
 
 function youtubeDiscoveryPriority(source = {}) {
@@ -1281,8 +1366,10 @@ function buildYouTubeSearchJobs({
   limit = DEFAULT_MAX_SOURCES,
   offset = 0,
   publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
 } = {}) {
   const start = cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START;
+  const pageLimit = cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10);
   const sortedSources = sortYouTubeSourcesForDiscovery(sources
     .filter((source) => normalizePlatform(source.platform) === 'youtube')
   );
@@ -1296,11 +1383,20 @@ function buildYouTubeSearchJobs({
       source_type: source.source_type || source.sourceType || '',
       source_record_kind: isDiscoveryFeed(source) ? 'discovery_feed' : 'source_page',
       source_url: sourceUrl(source),
+      source_phone: cleanText(source.phone || source.contact_phone || ''),
+      source_phone_alt: cleanText(source.phoneAlt || source.phone_alt || source.contact_phone_alt || ''),
+      source_email: cleanText(source.email || source.contact_email || ''),
+      source_listing_types: sourceListValues(source, 'listingTypes', 'listing_types'),
+      source_hashtags: sourceListValues(source, 'hashtags', 'hashtags'),
+      source_can_contact_directly: source.canContactDirectly === true || source.can_contact_directly === true,
+      source_trust_level: cleanText(source.trustLevel || source.trust_level || ''),
+      source_consent_status: cleanText(source.consentStatus || source.consent_status || ''),
       discovery_priority: youtubeDiscoveryPriority(source),
       query: buildYouTubeQueryForSource(source).slice(0, 500),
       endpoint: YOUTUBE_SEARCH_URL,
       published_after: start,
       max_results: DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+      max_pages: pageLimit,
       includes_shorts_and_long_form: true,
     }));
 }
@@ -1313,6 +1409,95 @@ function youtubeThumbnailUrls(thumbnails = {}) {
     .slice(0, 5);
 }
 
+function youtubeHasPropertySignal(text = '', job = {}) {
+  const raw = cleanText(text).toLowerCase();
+  const sourceTypes = Array.isArray(job.source_listing_types) ? job.source_listing_types.join(' ') : '';
+  const sourceText = `${raw} ${sourceTypes}`.toLowerCase();
+  return /\b(property|properties|real estate|house|home|apartment|flat|villa|mansion|bungalow|duplex|bedroom|bedrooms|beds?|land|plot|plots|acre|acres|decimal|decimals|mailo|hostel|student accommodation|student room|rental|rent|to let|commercial|office|shop|warehouse|showroom|factory|arcade|ettaka|bibanja|ebibanja|akabanja|amayumba|nyumba|kupangisa|obupangisa|muzigo|emizigo|kiwanja|viwanja)\b/i.test(sourceText)
+    || /\b(?:for sale|for rent|on sale|selling|ugx|ush|shs?|million|billion|monthly|per month)\b/i.test(sourceText);
+}
+
+function youtubeSourcePreapprovalFields(job = {}) {
+  const sourcePhone = normalizeUgandanPhone(job.source_phone || job.source_phone_alt || '');
+  const trustText = cleanText(`${job.source_consent_status || ''} ${job.source_trust_level || ''}`).toLowerCase();
+  const trusted = Boolean(sourcePhone)
+    && /\b(founder_reported_agent_permission|authorised_founder_contact|authorized_founder_contact|agent_preapproved|owner_agent_preapproved|founder_confirmed_preapproved)\b/i.test(trustText);
+  return {
+    pre_approved: trusted,
+    consent_confirmed: trusted,
+    image_rights_confirmed: trusted,
+    permission_status: trusted
+      ? 'founder_reported_agent_authorised_upload'
+      : 'youtube_api_source_pending_king_review',
+  };
+}
+
+function youtubeLocationConfidence(area = '', district = '') {
+  const normalizedArea = cleanText(area).toLowerCase();
+  if (!normalizedArea) return 'missing_location';
+  if (!GENERIC_YOUTUBE_LOCATION_TERMS.has(normalizedArea)) return 'area_or_neighbourhood_detected';
+  return district ? 'district_or_city_level_needs_review' : 'generic_location_needs_review';
+}
+
+function youtubeDateStatus(publishedAt = '', publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START) {
+  const date = publishedAt ? new Date(publishedAt) : null;
+  const start = new Date(cleanText(publishedAfter) || YOUTUBE_SOURCE_POST_WINDOW_START);
+  if (!date || Number.isNaN(date.getTime())) return 'needs_source_platform_date_confirmation';
+  return date >= start ? 'confirmed_2026_plus_source_window' : 'before_requested_source_window';
+}
+
+function youtubeConfidenceReviewForPost({
+  combinedText = '',
+  area = '',
+  district = '',
+  contactPhone = '',
+  contactEmail = '',
+  sourceContactUrl = '',
+  publishedAt = '',
+  publishedAfter = YOUTUBE_SOURCE_POST_WINDOW_START,
+  listingType = '',
+  preapproval = {},
+} = {}) {
+  const propertySignal = youtubeHasPropertySignal(combinedText, { source_listing_types: [listingType] });
+  const locationStatus = youtubeLocationConfidence(area, district);
+  const dateStatus = youtubeDateStatus(publishedAt, publishedAfter);
+  const hasDirectPhone = Boolean(contactPhone);
+  const hasContactPath = Boolean(contactPhone || contactEmail || sourceContactUrl);
+  const categoryStatus = listingType ? `categorized_${listingType}` : 'category_needs_review';
+  const checks = {
+    property_signal: propertySignal,
+    source_date_2026_plus: dateStatus === 'confirmed_2026_plus_source_window',
+    direct_phone: hasDirectPhone,
+    contact_path: hasContactPath,
+    location_area_detected: locationStatus === 'area_or_neighbourhood_detected',
+    preapproved_source: preapproval.pre_approved === true,
+  };
+  const score = [
+    checks.property_signal ? 20 : 0,
+    checks.source_date_2026_plus ? 20 : 0,
+    checks.location_area_detected ? 20 : locationStatus === 'district_or_city_level_needs_review' ? 8 : 0,
+    checks.direct_phone ? 15 : checks.contact_path ? 6 : 0,
+    checks.preapproved_source ? 15 : 0,
+    listingType ? 10 : 0,
+  ].reduce((sum, value) => sum + value, 0);
+  const liveReady = score >= 85
+    && checks.property_signal
+    && checks.source_date_2026_plus
+    && checks.location_area_detected
+    && checks.direct_phone
+    && checks.preapproved_source;
+  return {
+    score,
+    status: liveReady ? 'youtube_confident_live_ready' : 'youtube_review_required',
+    live_ready: liveReady,
+    date_status: dateStatus,
+    phone_status: hasDirectPhone ? 'direct_phone_present' : (hasContactPath ? 'source_contact_only_needs_review' : 'missing_contact'),
+    location_status: locationStatus,
+    category_status: categoryStatus,
+    checks,
+  };
+}
+
 function normalizeYouTubeApiPost(item = {}, job = {}) {
   const videoId = normalizeYouTubeVideoId(item.id?.videoId || item.id || '');
   if (!videoId) return null;
@@ -1320,12 +1505,29 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
   const title = cleanText(snippet.title || `YouTube property video ${videoId}`);
   const description = cleanText(snippet.description || '');
   const combinedText = cleanText(`${title} ${description}`);
+  if (!youtubeHasPropertySignal(combinedText, job)) return null;
   const area = extractArea(combinedText);
   const district = districtForArea(area, combinedText);
   const priceText = priceTextFromText(combinedText);
+  const contactPhone = cleanText(phoneFromText(combinedText) || normalizeUgandanPhone(job.source_phone || job.source_phone_alt || ''));
+  const contactEmail = cleanText(emailFromText(combinedText) || job.source_email || '');
   const channelUrl = youtubeChannelUrl(snippet.channelId) || job.source_url || '';
   const sourceUrl = youtubeWatchUrl(videoId);
   const publishedAt = snippet.publishedAt || '';
+  const listingType = listingTypeFromText(`${combinedText} ${(job.source_listing_types || []).join(' ')}`);
+  const preapproval = youtubeSourcePreapprovalFields(job);
+  const confidence = youtubeConfidenceReviewForPost({
+    combinedText,
+    area,
+    district,
+    contactPhone,
+    contactEmail,
+    sourceContactUrl: channelUrl || sourceUrl,
+    publishedAt,
+    publishedAfter: job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
+    listingType,
+    preapproval,
+  });
   return {
     post_id: videoId,
     source_key: snippet.channelId || job.source_key || videoId,
@@ -1352,8 +1554,14 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
     district,
     location: area || district,
     price_text: priceText,
-    listing_type: listingTypeFromText(combinedText),
+    listing_type: listingType,
     bedrooms: bedroomsFromText(combinedText),
+    contact_phone: contactPhone,
+    contact_email: contactEmail,
+    pre_approved: preapproval.pre_approved,
+    consent_confirmed: preapproval.consent_confirmed,
+    image_rights_confirmed: preapproval.image_rights_confirmed,
+    permission_status: preapproval.permission_status,
     image_urls: youtubeThumbnailUrls(snippet.thumbnails),
     source_batch: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
     source_urls: [job.source_url, channelUrl, sourceUrl].filter(Boolean),
@@ -1363,6 +1571,7 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
       import_method: 'youtube_data_api_search',
       published_after: job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START,
       includes_shorts_and_long_form: true,
+      youtube_confidence_review: confidence,
     },
   };
 }
@@ -1370,6 +1579,7 @@ function normalizeYouTubeApiPost(item = {}, job = {}) {
 async function fetchYouTubeSearchJob(job = {}, {
   apiKey = '',
   maxResults = DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+  pageToken = '',
   fetchImpl = fetch,
 } = {}) {
   if (!apiKey) {
@@ -1389,6 +1599,7 @@ async function fetchYouTubeSearchJob(job = {}, {
   url.searchParams.set('publishedAfter', job.published_after || YOUTUBE_SOURCE_POST_WINDOW_START);
   url.searchParams.set('maxResults', String(cappedNumber(maxResults, DEFAULT_YOUTUBE_RESULTS_PER_SOURCE, 1, 50)));
   url.searchParams.set('safeSearch', 'none');
+  if (pageToken) url.searchParams.set('pageToken', pageToken);
   const response = await fetchImpl(url, {
     headers: { Accept: 'application/json' },
   });
@@ -1416,19 +1627,36 @@ async function fetchYouTubeSearchJob(job = {}, {
 async function fetchYouTubePostsForJobs(jobs = [], options = {}) {
   const posts = [];
   const reports = [];
+  const maxPages = cappedNumber(options.maxPagesPerSource || options.maxPages || DEFAULT_YOUTUBE_PAGES_PER_SOURCE, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10);
   for (const job of jobs) {
-    const report = await fetchYouTubeSearchJob(job, options);
+    let pageToken = '';
+    let totalResultCount = 0;
+    let normalizedPostCount = 0;
+    let pagesFetched = 0;
+    let lastReport = null;
+    for (let page = 0; page < maxPages; page += 1) {
+      const report = await fetchYouTubeSearchJob(job, { ...options, pageToken });
+      lastReport = report;
+      pagesFetched += 1;
+      totalResultCount += report.result_count || 0;
+      normalizedPostCount += Array.isArray(report.posts) ? report.posts.length : 0;
+      posts.push(...(report.posts || []));
+      pageToken = report.next_page_token || '';
+      if (!report.ok || !pageToken) break;
+    }
     reports.push({
       ...job,
-      ok: report.ok,
-      skipped: report.skipped,
-      status: report.status,
-      reason: report.reason,
-      error_reason: report.error_reason,
-      result_count: report.result_count || 0,
-      next_page_token: report.next_page_token || '',
+      ok: lastReport?.ok,
+      skipped: lastReport?.skipped,
+      status: lastReport?.status,
+      reason: lastReport?.reason,
+      error_reason: lastReport?.error_reason,
+      result_count: totalResultCount,
+      normalized_post_count: normalizedPostCount,
+      pages_fetched: pagesFetched,
+      max_pages: maxPages,
+      next_page_token: pageToken,
     });
-    posts.push(...(report.posts || []));
   }
   return { posts, reports };
 }
@@ -1686,6 +1914,38 @@ function uniquePosts(posts = []) {
   });
 }
 
+function youtubeConfidenceReviewFromPost(post = {}) {
+  return post.raw_source_post?.youtube_confidence_review || post.rawSourcePost?.youtube_confidence_review || null;
+}
+
+function summarizeYouTubeConfidence(posts = []) {
+  return posts.reduce((summary, post) => {
+    const review = youtubeConfidenceReviewFromPost(post) || {};
+    const status = review.status || 'youtube_review_required';
+    summary.total += 1;
+    summary.by_status[status] = (summary.by_status[status] || 0) + 1;
+    if (review.live_ready === true) summary.live_ready_count += 1;
+    if (review.phone_status === 'direct_phone_present') summary.direct_phone_count += 1;
+    if (review.phone_status === 'source_contact_only_needs_review') summary.source_contact_only_count += 1;
+    if (review.location_status === 'area_or_neighbourhood_detected') summary.area_level_location_count += 1;
+    if (review.location_status && review.location_status !== 'area_or_neighbourhood_detected') {
+      summary.location_review_count += 1;
+    }
+    const category = cleanText(post.listing_type || review.category_status || 'uncategorized');
+    summary.by_listing_type[category] = (summary.by_listing_type[category] || 0) + 1;
+    return summary;
+  }, {
+    total: 0,
+    live_ready_count: 0,
+    direct_phone_count: 0,
+    source_contact_only_count: 0,
+    area_level_location_count: 0,
+    location_review_count: 0,
+    by_listing_type: {},
+    by_status: {},
+  });
+}
+
 async function runSocialPlatformPostSweep({
   db,
   platform = 'all',
@@ -1694,6 +1954,7 @@ async function runSocialPlatformPostSweep({
   maxSources = DEFAULT_MAX_SOURCES,
   sourceOffset = 0,
   maxResultsPerSource = DEFAULT_X_RESULTS_PER_SOURCE,
+  maxPagesPerSource = DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   searchMode = 'all',
   lookbackDays = 0,
   fetchX = true,
@@ -1729,7 +1990,7 @@ async function runSocialPlatformPostSweep({
     ? buildTikTokCaptureTasks({ sources: tiktokSources, limit: sourceLimit })
     : [];
   const youtubeSearchJobs = requestedPlatforms.includes('youtube')
-    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime })
+    ? buildYouTubeSearchJobs({ sources: youtubeSources, limit: sourceLimit, offset: normalizedSourceOffset, publishedAfter: youtubeStartTime, maxPagesPerSource })
     : [];
   const xSearchJobs = requestedPlatforms.includes('x')
     ? buildXSearchJobs({ sources: xSources, limit: sourceLimit, searchMode, startTime: archiveStartTime })
@@ -1754,6 +2015,7 @@ async function runSocialPlatformPostSweep({
     const fetched = await fetchYouTubePostsForJobs(youtubeSearchJobs, {
       apiKey: youtubeApi.apiKey,
       maxResults: maxResultsPerSource,
+      maxPagesPerSource,
       fetchImpl,
     });
     youtubeFetch = {
@@ -1843,11 +2105,13 @@ async function runSocialPlatformPostSweep({
       api_configured: youtubeFetch.api_configured,
       api_key_env: youtubeFetch.api_key_env,
       published_after: youtubeFetch.published_after,
+      max_pages_per_source: cappedNumber(maxPagesPerSource, DEFAULT_YOUTUBE_PAGES_PER_SOURCE, 1, 10),
       skipped_reason: youtubeFetch.skipped_reason,
       includes_shorts_and_long_form: true,
       search_jobs: youtubeSearchJobs,
       fetch_reports: youtubeFetch.reports,
       fetched_posts_count: youtubeFetch.posts.length,
+      confidence_summary: summarizeYouTubeConfidence(youtubeFetch.posts),
     },
     x: {
       source_count: xSources.length,
@@ -1892,6 +2156,7 @@ module.exports = {
   MAX_PLATFORM_SWEEP_SOURCES,
   DEFAULT_X_RESULTS_PER_SOURCE,
   DEFAULT_YOUTUBE_RESULTS_PER_SOURCE,
+  DEFAULT_YOUTUBE_PAGES_PER_SOURCE,
   YOUTUBE_SEARCH_URL,
   YOUTUBE_OEMBED_URL,
   YOUTUBE_SOURCE_POST_WINDOW_START,

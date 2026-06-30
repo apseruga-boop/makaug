@@ -3121,6 +3121,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
     const maxSources = req.body?.max_sources || req.body?.maxSources || 40;
     const sourceOffset = req.body?.source_offset || req.body?.sourceOffset || 0;
     const maxResultsPerSource = req.body?.max_results || req.body?.maxResults || 25;
+    const maxPagesPerSource = req.body?.max_pages || req.body?.maxPages || 1;
     const searchMode = req.body?.x_search_mode || req.body?.xSearchMode || 'all';
     const lookbackDays = req.body?.lookback_days || req.body?.lookbackDays || 0;
     const publishedAfter = req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z';
@@ -3133,6 +3134,7 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       maxSources,
       sourceOffset,
       maxResultsPerSource,
+      maxPagesPerSource,
       searchMode,
       lookbackDays,
       publishedAfter
@@ -3148,6 +3150,8 @@ router.post('/social-platform-posts/sweep', async (req, res, next) => {
       instagram_capture_task_count: result.instagram?.capture_task_count || 0,
       youtube_search_job_count: result.youtube?.search_job_count || 0,
       youtube_api_configured: result.youtube?.api_configured === true,
+      youtube_live_ready_count: result.youtube?.confidence_summary?.live_ready_count || 0,
+      youtube_direct_phone_count: result.youtube?.confidence_summary?.direct_phone_count || 0,
       x_search_job_count: result.x?.search_job_count || 0,
       x_api_configured: result.x?.api_configured === true,
       discovered_posts_count: result.discovered_posts_count || 0,

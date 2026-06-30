@@ -13128,6 +13128,7 @@ function adminImportYouTubeExactPosts(seedText = "") {
 
 const ADMIN_YOUTUBE_SWEEP_WINDOW_START = "2026-01-01T00:00:00.000Z";
 const ADMIN_YOUTUBE_SWEEP_BATCH_SIZE = 50;
+const ADMIN_YOUTUBE_SWEEP_MAX_PAGES = 2;
 const ADMIN_YOUTUBE_SWEEP_OFFSET_KEYS = {
   youtube: "makaug.admin.youtubeSweepSourceOffset",
   student: "makaug.admin.studentYoutubeSweepSourceOffset",
@@ -13200,6 +13201,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const youtubeSourceOffset = Number(youtube.source_offset || data.dashboard_youtube_source_offset || 0);
   const youtubeNextSourceOffset = Number(data.dashboard_next_youtube_source_offset || youtubeSourceOffset);
   const youtubeBatchSize = Number(data.dashboard_youtube_batch_size || ADMIN_YOUTUBE_SWEEP_BATCH_SIZE);
+  const youtubeConfidence = youtube.confidence_summary || {};
   const youtubeQuotaExceeded = adminYouTubeQuotaExceeded(youtube);
   const tiktokTaskHtml = tiktokTasks.slice(0, 16).map((task) => `
     <div class="rounded-lg border border-pink-100 bg-white p-2">
@@ -13224,7 +13226,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
   const youtubeReportHtml = youtubeReports.slice(0, 10).map((report) => `
     <div class="rounded-lg border ${report.ok ? "border-emerald-100 bg-white" : "border-amber-100 bg-amber-50"} p-2">
       <div class="font-bold ${report.ok ? "text-emerald-950" : "text-amber-950"}">${adminEscape(report.source_name || report.source_key || "YouTube job")}</div>
-      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} videos fetched` : adminEscape(report.reason || "YouTube API did not return videos")}</div>
+      <div class="text-[11px] ${report.ok ? "text-emerald-800" : "text-amber-800"} mt-0.5">${report.ok ? `${adminEscape(report.result_count || 0)} videos fetched • ${adminEscape(report.normalized_post_count || 0)} property-like • ${adminEscape(report.pages_fetched || 0)}/${adminEscape(report.max_pages || 1)} pages` : adminEscape(report.reason || "YouTube API did not return videos")}</div>
     </div>`).join("");
   const xJobHtml = xJobs.slice(0, 10).map((job) => `
     <div class="rounded-lg border border-slate-200 bg-white p-2">
@@ -13269,6 +13271,7 @@ function adminSocialPlatformSweepHtml(data = {}, platform = "all") {
       <div class="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-red-950">
         <div class="font-black">YouTube video sweep</div>
         <div class="mt-1">${adminEscape(youtube.search_job_count)} YouTube search jobs prepared from ${adminEscape(youtube.published_after || ADMIN_YOUTUBE_SWEEP_WINDOW_START)}. API configured: ${youtube.api_configured ? "Yes" : "No"}${youtube.skipped_reason ? ` • ${adminEscape(youtube.skipped_reason)}` : ""}</div>
+        <div class="mt-1 text-[11px]">Quality: ${adminEscape(youtubeConfidence.live_ready_count || 0)} live-ready with direct phone/location/date/source permission • ${adminEscape(youtubeConfidence.source_contact_only_count || 0)} source-contact-only review records • ${adminEscape(youtubeConfidence.location_review_count || 0)} need location review • Types ${adminEscape(JSON.stringify(youtubeConfidence.by_listing_type || {}))}</div>
         <div class="mt-1 text-[11px]">Batch source offset ${adminEscape(youtubeSourceOffset)} with ${adminEscape(youtubeBatchSize)} jobs per click. Next broad YouTube batch starts at offset ${adminEscape(youtubeNextSourceOffset)}. YouTube search returns Shorts and long-form videos, and makaug stores the exact video URL plus YouTube snippet published date as First posted online.</div>
         ${youtubeQuotaExceeded ? `<div class="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900 font-bold">YouTube daily search quota is exhausted. This is a Google quota limit, not a makaug parsing failure. Wait for the quota reset or request a higher YouTube Data API quota, then click Sweep YouTube Videos again to continue from this batch offset.</div>` : ""}
         <button type="button" onclick="adminImportYouTubeExactPosts(${data.focus === "students" ? "adminStudentHousingYouTubeQuickPasteExample()" : ""})" class="mt-2 border border-red-300 bg-white text-red-700 hover:bg-red-50 px-2 py-1 rounded text-[11px] font-bold">Import YouTube Videos</button>
@@ -13354,6 +13357,7 @@ async function adminSweepSocialPlatformPosts(platform = "all") {
         max_sources: normalized === "tiktok" ? 30000 : usesYouTubeSweep ? youtubeBatchSize : 40,
         source_offset: youtubeSourceOffset,
         max_results: (normalized === "youtube" || studentFocus || normalized === "all") ? 50 : 25,
+        max_pages: usesYouTubeSweep ? ADMIN_YOUTUBE_SWEEP_MAX_PAGES : 1,
         x_search_mode: "all",
         published_after: ADMIN_YOUTUBE_SWEEP_WINDOW_START
       }

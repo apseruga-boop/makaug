@@ -23,8 +23,8 @@ function usage() {
   console.error([
     'Usage:',
     '  node scripts/sweep-social-platform-posts.js --platform=tiktok --dry-run',
-    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=50',
-    '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=50',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --confirm --published-after=2026-01-01T00:00:00.000Z --source-offset=0 --max-sources=50 --max-results=50 --max-pages=2',
+    '  node scripts/sweep-social-platform-posts.js --platform=youtube --dry-run --source-offset=100 --max-sources=50 --max-results=50 --max-pages=2',
     '  node scripts/sweep-social-platform-posts.js --platform=x --dry-run',
     '  node scripts/sweep-social-platform-posts.js --platform=x --confirm --max-sources=25 --max-results=25 --lookback-days=14',
     '  node scripts/sweep-social-platform-posts.js --platform=students --dry-run --max-sources=60',
@@ -52,6 +52,7 @@ async function main() {
   const maxSources = argValue('--max-sources', argValue('--limit', '40'));
   const sourceOffset = argValue('--source-offset', '0');
   const maxResultsPerSource = argValue('--max-results', '25');
+  const maxPagesPerSource = argValue('--max-pages', '1');
   const searchMode = argValue('--x-search-mode', 'all');
   const lookbackDays = argValue('--lookback-days', '0');
   const publishedAfter = argValue('--published-after', '2026-01-01T00:00:00.000Z');
@@ -66,6 +67,7 @@ async function main() {
     maxSources,
     sourceOffset,
     maxResultsPerSource,
+    maxPagesPerSource,
     searchMode,
     lookbackDays,
     publishedAfter,

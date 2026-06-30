@@ -1281,6 +1281,9 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
   const sourcePublishedLabel = sourcePublishedLabelFor(item);
   const sourceDateStatus = sourceDateStatusFor(item);
   const preApproval = sourcePreApprovalStatusFor(item);
+  const youtubeConfidenceReview = item.raw_source_post?.youtube_confidence_review
+    || item.rawSourcePost?.youtube_confidence_review
+    || null;
   const nearestUniversity = nearestUniversityForSourceItem(item);
   const trustReview = buildSocialSourceTrustReview({
     ...item,
@@ -1341,6 +1344,13 @@ function extraFieldsFor(item, agentId = null, propertyUrl = '', ownerPreviewUrl 
     original_publish_date_status: sourcePublishedAt
       ? 'Source platform publish date captured from the stored source record.'
       : 'Original post date is being confirmed from the source platform.',
+    youtube_confidence_review: youtubeConfidenceReview,
+    youtube_confidence_status: youtubeConfidenceReview?.status || '',
+    youtube_confidence_score: youtubeConfidenceReview?.score ?? null,
+    youtube_live_ready: youtubeConfidenceReview?.live_ready === true,
+    youtube_phone_status: youtubeConfidenceReview?.phone_status || '',
+    youtube_location_status: youtubeConfidenceReview?.location_status || '',
+    youtube_category_status: youtubeConfidenceReview?.category_status || '',
     added_to_makaug_at: SOCIAL_SEARCH_ADDED_TO_MAKAUG_AT,
     added_to_makaug_label: 'Added to makaug source review on 20 May 2026',
     source_followers_label: agent.audienceLabel || 'Audience count to confirm from source',
@@ -1939,16 +1949,23 @@ async function existingFoundOnlineSourcePostListings(client, items = []) {
        lister_name,
        extra_fields->>'source_listing_key' AS source_listing_key,
        extra_fields->>'source_post_url' AS source_post_url,
-       extra_fields->>'source_url' AS source_url
+       COALESCE(
+         extra_fields->>'source_url',
+         extra_fields->>'youtube_url',
+         extra_fields->>'video_url',
+         extra_fields->>'original_url'
+       ) AS source_url
      FROM properties
-     WHERE source IN ($1, $4)
-       AND COALESCE(status, '') <> 'deleted'
+     WHERE COALESCE(status, '') <> 'deleted'
        AND (
-         extra_fields->>'source_listing_key' = ANY($2::text[])
-         OR extra_fields->>'source_post_url' = ANY($3::text[])
-         OR extra_fields->>'source_url' = ANY($3::text[])
+         extra_fields->>'source_listing_key' = ANY($1::text[])
+         OR extra_fields->>'source_post_url' = ANY($2::text[])
+         OR extra_fields->>'source_url' = ANY($2::text[])
+         OR extra_fields->>'youtube_url' = ANY($2::text[])
+         OR extra_fields->>'video_url' = ANY($2::text[])
+         OR extra_fields->>'original_url' = ANY($2::text[])
        )`,
-    [SOCIAL_SEARCH_SOURCE, keys, urls, LEGACY_SOURCED_INVENTORY_CANDIDATE_SOURCE]
+    [keys, urls]
   );
   const existing = new Map();
   for (const row of result.rows) {
