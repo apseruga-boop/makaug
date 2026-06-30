@@ -368,6 +368,26 @@ test('King dashboard loads core review data before heavy tab-specific panels', (
   assert.match(renderSource, /if \(activeAdminWorkflowTab === "staff"\) \{[\s\S]*renderAdminStaffControl\(\)/);
 });
 
+test('King dashboard clears stale admin identity instead of rendering disconnected local data', () => {
+  const apiSource = asyncFunctionSource('apiRequest');
+  const headersSource = functionSource('adminAuthHeaders');
+  const canUseSource = functionSource('canUseLiveAdminApi');
+  const snapshotSource = asyncFunctionSource('fetchRemoteAdminSnapshot');
+  const requestSource = asyncFunctionSource('adminSafeSnapshotRequest');
+  const renderSource = asyncFunctionSource('renderAdminDashboard');
+  const clearSource = functionSource('clearStaleAdminAuthState');
+  const gateSource = functionSource('renderAdminAuthFailureGate');
+  assert.match(apiSource, /credentials: "same-origin"/);
+  assert.match(headersSource, /headers\.Authorization = `Bearer \$\{authState\.token\}`/);
+  assert.match(canUseSource, /adminApiKey \|\| hasAdminIdentity\(\)/);
+  assert.match(requestSource, /Number\(error\?\.status \|\| 0\) === 401[\s\S]*adminLiveAuthFailure = error/);
+  assert.match(snapshotSource, /const authFailure = buildAdminAuthFailureError\(\);[\s\S]*if \(authFailure\) throw authFailure/);
+  assert.match(renderSource, /if \(e\?\.adminAuthFailure\) \{[\s\S]*renderAdminAuthFailureGate\(gate, body, e\);[\s\S]*return;/);
+  assert.match(clearSource, /authState = \{ token: null, user: null \}/);
+  assert.match(clearSource, /localStorage\.removeItem\(AUTH_STORAGE_KEY\)/);
+  assert.match(gateSource, /Reconnect King Dashboard/);
+});
+
 test('WhatsApp property search uses the same public inventory guardrails', () => {
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_MARKERS = \['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'\]/);
   assert.match(whatsappRouteSource, /WHATSAPP_PUBLIC_SUPPRESSED_LISTING_TITLES = new Set\(\['sdgsdgd', 'sgsgsgsgs'\]\)/);

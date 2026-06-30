@@ -747,6 +747,7 @@ let adminActiveReview = null;
 let activeAdminWorkflowTab = "review";
 let adminDashboardRendering = false;
 let adminDashboardTabRefreshTimer = null;
+let adminLiveAuthFailure = null;
 let adminCurrentPendingListings = [];
 let adminPendingQueueFilter = "all";
 const ADMIN_PENDING_QUEUE_RENDER_STEP = 150;
@@ -6010,6 +6011,7 @@ async function apiRequest(path, options = {}) {
   const response = await fetch(apiUrl(path), {
     method,
     headers,
+    credentials: "same-origin",
     body: body !== undefined ? JSON.stringify(body) : undefined
   });
 
@@ -11362,8 +11364,12 @@ function adminAuthHeaders() {
   return headers;
 }
 
+function hasAdminIdentity() {
+  return derivePortalMode(authState?.user, authState?.user?.portal_mode) === "admin";
+}
+
 function canUseLiveAdminApi() {
-  return !!(adminApiKey || (authState?.token && derivePortalMode(authState.user, authState.user?.portal_mode) === "admin"));
+  return !!(adminApiKey || hasAdminIdentity());
 }
 
 function normalizeRemoteAdminListing(p) {
@@ -11782,13 +11788,28 @@ async function adminSafeSnapshotRequest(label, requestFn, fallback) {
   try {
     return await requestFn();
   } catch (error) {
+    if (Number(error?.status || 0) === 401) {
+      adminLiveAuthFailure = error;
+    }
     console.warn(`Admin dashboard ${label} unavailable`, error?.message || error);
     return fallback;
   }
 }
+
+function buildAdminAuthFailureError() {
+  if (!adminLiveAuthFailure) return null;
+  const error = new Error(adminApiKey
+    ? "Saved ADMIN_API_KEY was rejected by the live server. Sign in as admin or save the current live key."
+    : "Admin session expired. Sign in again to reconnect live King dashboard data.");
+  error.status = 401;
+  error.adminAuthFailure = true;
+  return error;
+}
+
 async function fetchRemoteAdminSnapshot(options = {}) {
   if (!canUseLiveAdminApi()) return null;
   const headers = adminAuthHeaders();
+  adminLiveAuthFailure = null;
   const activeTab = String(options.activeTab || activeAdminWorkflowTab || "review");
   const tabNeeds = adminDashboardActiveTabNeedsRows(activeTab);
   const userSearch = (document.getElementById("admin-users-q")?.value || "").trim();
@@ -11844,6 +11865,8 @@ async function fetchRemoteAdminSnapshot(options = {}) {
     shouldLoadNotifications ? adminSafeSnapshotRequest("outlook actions", () => apiRequest("/api/admin/outlook-agent/actions?limit=50", { headers }), { data: [] }) : null,
     shouldLoadNotifications ? adminSafeSnapshotRequest("whatsapp logs", () => apiRequest("/api/admin/whatsapp-message-logs?limit=50", { headers }), { data: [] }) : null
   ]);
+  const authFailure = buildAdminAuthFailureError();
+  if (authFailure) throw authFailure;
   const pendingListings = Array.isArray(pendingRows)
     ? pendingRows.map(normalizeRemoteAdminListing).filter(adminIsPendingReviewSeedItem)
     : adminCurrentPendingListings;
@@ -14034,6 +14057,29 @@ function renderAdminStaffRows(accounts = [], activity = []) {
   }
 }
 
+function clearStaleAdminAuthState() {
+  authState = { token: null, user: null };
+  adminLiveAuthFailure = null;
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch (e) {}
+  if (adminApiKey) persistAdminApiKey("");
+  loadSavedIdsForCurrentUser();
+  applyAuthUi();
+}
+
+function renderAdminAuthFailureGate(gate, body, error) {
+  clearStaleAdminAuthState();
+  if (body) body.classList.add("hidden");
+  if (!gate) return;
+  gate.classList.remove("hidden");
+  gate.innerHTML = `
+    <div class="text-4xl mb-3">🛡️</div>
+    <h2 class="text-xl font-bold text-gray-800 mb-2">Reconnect King Dashboard</h2>
+    <p class="text-sm text-gray-500 mb-5">${adminEscape(error?.message || "Admin session expired. Sign in again to reconnect live King dashboard data.")}</p>
+    <button onclick="openAuthSignIn('admin')" class="bg-gray-900 hover:bg-gray-800 text-white px-6 py-2.5 rounded-xl font-semibold">Sign In as Admin</button>`;
+}
+
 async function renderAdminStaffControl() {
   const table = document.getElementById("admin-staff-table");
   if (!table) return;
@@ -14180,6 +14226,10 @@ async function renderAdminDashboard(options = {}) {
       remoteSnap = await fetchRemoteAdminSnapshot({ activeTab: activeAdminWorkflowTab, source: options.source || "dashboard" });
       sourceLabel = adminApiKey ? "Data source: live admin API." : "Data source: live admin API via signed-in admin.";
     } catch (e) {
+      if (e?.adminAuthFailure) {
+        renderAdminAuthFailureGate(gate, body, e);
+        return;
+      }
       sourceLabel = `Live API unavailable (${e.message || "request failed"}). Showing local browser data.`;
     }
   }
