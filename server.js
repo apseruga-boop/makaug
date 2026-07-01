@@ -150,6 +150,7 @@ const publicCategoryDeferredHydrationVersion = 'public-category-deferred-hydrati
 const kingDashboardAuthStateVersion = 'king-dashboard-auth-state-20260630';
 const kingLiveTabTrustedRowsVersion = 'king-live-tab-trusted-rows-20260630';
 const staffSourceMonitorGuideVersion = 'staff-source-monitor-guide-20260630';
+const staffDashboardAuthRaceVersion = 'staff-dashboard-auth-race-20260701-staff-dashboard-hydration-20260701-staff-dashboard-retry-20260701';
 const publicAppVersionSuffixes = [
   captureHelperUsabilityVersion,
   studentNearestUniversityVersion,
@@ -169,7 +170,8 @@ const publicAppVersionSuffixes = [
   publicCategoryDeferredHydrationVersion,
   kingDashboardAuthStateVersion,
   kingLiveTabTrustedRowsVersion,
-  staffSourceMonitorGuideVersion
+  staffSourceMonitorGuideVersion,
+  staffDashboardAuthRaceVersion
 ];
 let cachedIndexHtml = null;
 const publicHtmlCache = new Map();

@@ -7721,7 +7721,6 @@ function setAuthSignUpAudience(mode) {
 	        renderAdminDashboard();
   } else if (mode === "moderator") {
     showPage("staff-dashboard");
-    renderStaffDashboard();
   } else if (mode === "agent") {
     showPage("agent-dashboard");
     renderAgentDashboard();
@@ -9658,6 +9657,9 @@ async function renderAdvertiserDashboard() {
 }
 
 let staffDashboardData = null;
+let staffDashboardRenderSeq = 0;
+let staffDashboardHasLiveData = false;
+let staffDashboardAuthRetryCount = 0;
 let staffAiLastCsv = "";
 let staffTrainingActive = "moderation";
 let staffTrainingScripts = [];
@@ -9690,6 +9692,21 @@ function setStaffStat(id, value, definitions = {}, key = "") {
     help.textContent = staffStatCopy(definitions, key);
     help.title = help.textContent;
   }
+}
+
+function setStaffDashboardLoadingState(message = "Staff dashboard loading...") {
+  [
+    "staff-stat-total",
+    "staff-stat-pending",
+    "staff-stat-approvals",
+    "staff-stat-leads",
+    "staff-stat-ads",
+    "staff-stat-whatsapp",
+    "staff-stat-duplicates",
+    "staff-stat-bank"
+  ].forEach((id) => setTextById(id, "Loading"));
+  setTextById("staff-source-intake-status", message);
+  setTextById("staff-source-monitor-status", "Monitor cadence loading...");
 }
 
 function staffJumpToDesk(target) {
@@ -10197,11 +10214,15 @@ async function copyStaffTrainingScript(index) {
 }
 
 async function renderStaffDashboard() {
+  staffDashboardRenderSeq += 1;
   const gate = document.getElementById("staff-auth-gate");
   const body = document.getElementById("staff-body");
   if (!gate || !body) return;
   const mode = derivePortalMode(authState?.user, authState?.user?.portal_mode);
-  if (!authState?.user || !["moderator", "admin"].includes(mode)) {
+  if (!authState?.user || !authState?.token || !["moderator", "admin"].includes(mode)) {
+    staffDashboardAuthRetryCount = 0;
+    staffDashboardData = null;
+    staffDashboardHasLiveData = false;
     gate.classList.remove("hidden");
     body.classList.add("hidden");
     return;
@@ -10209,12 +10230,20 @@ async function renderStaffDashboard() {
   gate.classList.add("hidden");
   body.classList.remove("hidden");
   const user = authState.user || {};
+  const tokenAtStart = authState?.token || "";
+  const userIdAtStart = String(user.id || user.email || user.phone || "");
   setTextById("staff-dashboard-name", `${user.first_name || "Staff"} ${user.last_name || ""}`.trim() || "Staff Operations Dashboard");
   setTextById("staff-dashboard-status", `Role: ${mapRoleLabel(user.role)} • ${user.email || user.phone || "staff account"}`);
+  if (!staffDashboardHasLiveData) setStaffDashboardLoadingState();
   try {
     const res = await apiRequest("/api/staff/dashboard");
+    if (tokenAtStart !== (authState?.token || "") || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "")) {
+      return;
+    }
     const data = res?.data || {};
     staffDashboardData = data;
+    staffDashboardHasLiveData = true;
+    staffDashboardAuthRetryCount = 0;
     const definitions = data.summary?.definitions || {};
     setStaffStat("staff-stat-total", data.summary?.listings?.live, definitions, "total_properties");
     setStaffStat("staff-stat-pending", data.summary?.listings?.pending_review, definitions, "pending_review");
@@ -10234,7 +10263,44 @@ async function renderStaffDashboard() {
     renderStaffActivity(data.recent_activity || []);
     renderStaffTraining(data.training || {});
   } catch (error) {
+    const staleAuthRequest = tokenAtStart !== (authState?.token || "")
+      || userIdAtStart !== String(authState?.user?.id || authState?.user?.email || authState?.user?.phone || "");
+    const signInRequired = error?.status === 401 || error?.status === 403 || /sign in required|jwt|token/i.test(error?.message || "");
+    if (staleAuthRequest || (signInRequired && staffDashboardHasLiveData)) {
+      return;
+    }
+    const stillSignedInStaff = authState?.token
+      && authState?.user
+      && ["moderator", "admin"].includes(derivePortalMode(authState.user, authState.user.portal_mode));
+    const transientStaffRequest = stillSignedInStaff
+      && (signInRequired || Number(error?.status || 0) >= 500 || /internal server error|failed to fetch|network|timeout/i.test(error?.message || ""));
+    const retryLimit = signInRequired ? 3 : 8;
+    if (transientStaffRequest && staffDashboardAuthRetryCount < retryLimit) {
+      staffDashboardAuthRetryCount += 1;
+      window.setTimeout(() => {
+        if (currentPage === "staff-dashboard") renderStaffDashboard();
+      }, Math.min(10000, 1200 * staffDashboardAuthRetryCount));
+      return;
+    }
+    if (signInRequired) {
+      staffDashboardData = null;
+      staffDashboardHasLiveData = false;
+      staffDashboardAuthRetryCount = 0;
+      clearAuthState();
+      toast("Staff dashboard session expired. Please sign in again.");
+      return;
+    }
+    if (transientStaffRequest) {
+      setStaffDashboardLoadingState("Staff dashboard is still loading. Retrying live data...");
+      staffDashboardAuthRetryCount = 0;
+      window.setTimeout(() => {
+        if (currentPage === "staff-dashboard") renderStaffDashboard();
+      }, 10000);
+      return;
+    }
     staffDashboardData = null;
+    staffDashboardHasLiveData = false;
+    staffDashboardAuthRetryCount = 0;
     renderStaffReviewQueue([]);
     renderStaffLeads([]);
     renderStaffAdvertising([]);
@@ -20648,6 +20714,20 @@ function loadAuthState() {
   }
 }
 
+function renderActiveAuthDashboard(user = authState?.user) {
+  if (user) {
+    const expectedAuthDashboard = dashboardPageForPortalMode(derivePortalMode(user, user.portal_mode));
+    if (expectedAuthDashboard && currentPage !== expectedAuthDashboard) return;
+  }
+  if (currentPage === "finder-dashboard") renderFinderDashboard();
+  if (currentPage === "student-dashboard") renderStudentDashboard();
+  if (currentPage === "agent-dashboard") renderAgentDashboard();
+  if (currentPage === "field-dashboard") renderFieldDashboard();
+  if (currentPage === "staff-dashboard") renderStaffDashboard();
+  if (currentPage === "advertiser-dashboard") renderAdvertiserDashboard();
+  if (currentPage === "admin-dashboard") renderAdminDashboard();
+}
+
 function persistAuthState(token, user) {
   const previousUser = authState?.user || null;
   let resolvedUser = user || null;
@@ -20669,12 +20749,7 @@ function persistAuthState(token, user) {
   loadSavedIdsForCurrentUser();
   const pendingSaveId = applyPendingSaveAfterAuth();
   applyAuthUi();
-  renderFinderDashboard();
-  renderStudentDashboard();
-  renderAgentDashboard();
-  renderFieldDashboard();
-  renderStaffDashboard();
-  renderAdminDashboard();
+  renderActiveAuthDashboard();
   if (authState?.token) syncSavedStateAfterAuth(pendingSaveId);
   if (pendingSaveId) toast("Property saved to your account.");
 }
@@ -20688,12 +20763,7 @@ function clearAuthState() {
   loadSavedIdsForCurrentUser();
   applyAuthUi();
   hydrateAccountForm();
-  renderFinderDashboard();
-  renderStudentDashboard();
-  renderAgentDashboard();
-  renderFieldDashboard();
-  renderStaffDashboard();
-  renderAdminDashboard();
+  renderActiveAuthDashboard();
 }
 
 	    function applyAuthUi() {
@@ -20820,12 +20890,15 @@ function hydrateAccountForm() {
 async function refreshAuthSession() {
   if (!authState?.token) return;
   if (authState?.user?.is_demo) return;
+  const tokenAtStart = authState.token;
   try {
     const me = await apiRequest("/api/auth/me");
+    if (tokenAtStart !== authState?.token) return;
     const user = me?.data?.user;
     if (!user) throw new Error("Invalid session");
     persistAuthState(authState.token, { ...user, portal_mode: authState?.user?.portal_mode || derivePortalMode(user) });
   } catch (error) {
+    if (tokenAtStart !== authState?.token) return;
     clearAuthState();
   }
 }
@@ -33299,7 +33372,6 @@ async function parseInitialDeepLink() {
   if (path === "/staff-dashboard") {
     if (authState?.user && ["moderator", "admin"].includes(derivePortalMode(authState.user, authState.user.portal_mode))) {
       showPage("staff-dashboard", { history: false, source: "deep_link" });
-      renderStaffDashboard();
     } else {
       openAuthSignIn("moderator");
     }

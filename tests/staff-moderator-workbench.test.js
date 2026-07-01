@@ -36,6 +36,7 @@ function run() {
   assert(server.includes('renderPublicHtml(req.originalUrl || req.url || req.path)'), 'server should render /login?next=/staff-dashboard with the staff account panel mode');
   assert(server.includes('staff-operations-dashboard-20260620a'), 'server should bump the public JS asset version for staff dashboard browsers');
   assert(server.includes('staff-source-monitor-guide-20260630'), 'server should cache-bust the staff source monitor guide');
+  assert(server.includes('staff-dashboard-auth-race-20260701'), 'server should cache-bust the staff dashboard auth race fix');
 
   assert(staffRoutes.includes("router.get('/dashboard'"), 'staff dashboard API route should exist');
   assert(staffRoutes.includes("router.patch('/profile'"), 'staff profile/settings save API should exist');
@@ -87,6 +88,9 @@ function run() {
   assert(html.includes('id="staff-source-monitor-commands"'), 'staff dashboard should show trigger commands for the monitor');
   assert(html.includes('id="staff-source-sweep-youtube-mode"'), 'staff dashboard should let staff choose safe/broad YouTube sweep mode');
   assert(html.includes('staff-source-monitor-guide-20260630'), 'index should cache-bust the staff source monitor guide');
+  assert(html.includes('staff-dashboard-auth-race-20260701'), 'index should cache-bust the staff dashboard auth race fix');
+  assert(html.includes('staff-dashboard-hydration-20260701'), 'index should cache-bust the staff dashboard hydration guard');
+  assert(html.includes('staff-dashboard-retry-20260701'), 'index should cache-bust the staff dashboard transient retry guard');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
@@ -97,6 +101,24 @@ function run() {
   assert(app.includes('renderAdminStaffControl'), 'King dashboard should render staff account control');
   assert(app.includes('/api/admin/staff/bootstrap-five'), 'King dashboard should call staff bootstrap API');
   assert(app.includes('/api/staff/dashboard'), 'frontend should fetch staff dashboard API');
+  assert(app.includes('staffDashboardRenderSeq'), 'staff dashboard should ignore stale first-load API responses');
+  assert(app.includes('staffDashboardHasLiveData'), 'staff dashboard should not clear live data after a stale auth failure');
+  assert(app.includes('staffDashboardAuthRetryCount'), 'staff dashboard should quietly retry transient first-load auth failures');
+  assert(app.includes('!authState?.token'), 'staff dashboard should not open the loaded shell without a real auth token');
+  assert(app.includes('staleAuthRequest'), 'staff dashboard should suppress stale sign-in-required toasts');
+  assert(app.includes('stillSignedInStaff'), 'staff dashboard should not show false sign-in-required toasts while staff auth is active');
+  assert(app.includes('Staff dashboard session expired. Please sign in again.'), 'real expired staff sessions should return to sign-in instead of showing zeroed panels');
+  assert(app.includes('function setStaffDashboardLoadingState'), 'staff dashboard should show loading instead of zero stats before hydration');
+  assert(app.includes('transientStaffRequest'), 'staff dashboard should retry transient first-load API failures');
+  assert(app.includes('Staff dashboard is still loading. Retrying live data...'), 'transient staff API failures should keep retrying without painting failed zero panels');
+  assert(app.includes('function renderActiveAuthDashboard'), 'auth persistence should not render every hidden dashboard during sign-in');
+  assert(app.includes('currentPage !== expectedAuthDashboard'), 'auth persistence should not rerender a previous dashboard for the wrong signed-in role');
+  assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
+  assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');
+  assert(app.includes('if (tokenAtStart !== authState?.token) return;'), 'stale auth refreshes should not clear a newer staff login session');
+  assert(!app.includes('applyAuthUi();\n  renderFinderDashboard();'), 'sign-in should not fire every dashboard API at once');
+  assert(!app.includes('showPage("staff-dashboard");\n    renderStaffDashboard();'), 'staff sign-in should not double-render the staff dashboard');
+  assert(!app.includes('showPage("staff-dashboard", { history: false, source: "deep_link" });\n      renderStaffDashboard();'), 'staff deep link should not double-render the staff dashboard');
   assert(app.includes('staff-source-monitor-cadence'), 'frontend should render source monitor cadence');
   assert(app.includes('youtube_job_mode: youtubeJobMode'), 'frontend should send staff-selected YouTube job mode');
   assert(app.includes('/api/staff/assistant/query'), 'frontend should call staff assistant API');
