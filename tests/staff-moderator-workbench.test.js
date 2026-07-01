@@ -44,6 +44,9 @@ function run() {
   assert(staffRoutes.includes("router.patch('/properties/:id/review'"), 'staff listing preview save API should exist');
   assert(staffRoutes.includes("router.post('/source-intake/exact-social/import'"), 'staff social source import API should exist');
   assert(staffRoutes.includes("router.post('/source-intake/social-sweep'"), 'staff social sweep API should exist');
+  assert(staffRoutes.includes('STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500'), 'staff exact social import should cap batches at 500');
+  assert(staffRoutes.includes('Paste at least one exact social post/video URL'), 'staff source import should reject source pages/hashtags without exact URLs');
+  assert(staffRoutes.includes('metadata_skipped_for_large_batch'), 'staff source import should report large-batch metadata skips');
   assert(staffRoutes.includes("router.patch('/leads/:id'"), 'staff lead update API route should exist');
   assert(staffRoutes.includes("router.patch('/advertising/inquiries/:id'"), 'staff advertising update API route should exist');
   assert(staffRoutes.includes("router.post('/assistant/query'"), 'staff AI assistant route should exist');
@@ -92,6 +95,7 @@ function run() {
   assert(html.includes('staff-dashboard-hydration-20260701'), 'index should cache-bust the staff dashboard hydration guard');
   assert(html.includes('staff-dashboard-retry-20260701'), 'index should cache-bust the staff dashboard transient retry guard');
   assert(html.includes('public-summary-stale-session-fix-20260701'), 'index should cache-bust stale-session public summary recovery');
+  assert(html.includes('staff-source-intake-20260701'), 'index should cache-bust staff source intake updates');
   assert(html.includes('id="staff-bank-leads-list"'), 'staff dashboard should expose bank/mortgage leads');
   assert(html.includes('id="staff-review-queue"'), 'staff moderation queue container should exist');
   assert(html.includes('id="staff-ai-question"'), 'staff AI assistant UI should exist');
@@ -129,6 +133,9 @@ function run() {
   assert(app.includes('data.summary?.listings?.live'), 'staff dashboard total stat should use live public listings');
   assert(app.includes('staffWhatsappBridgeCopy'), 'staff dashboard should render hosted WhatsApp bridge status');
   assert(app.includes('staffUseSourcePreset'), 'staff source intake should expose search presets');
+  assert(app.includes('staffSourceImportUrlCount'), 'staff source import should switch large batches to fast metadata mode');
+  assert(app.includes('fetch_oembed: metadataEnabled'), 'staff source import should skip external metadata fetches on large batches');
+  assert(app.includes('metadata_skipped_for_large_batch'), 'staff source import should explain when metadata was skipped for speed');
   assert(app.includes('setStaffTrainingTab'), 'staff training should render one focused workflow at a time');
   assert(app.includes('copyStaffTrainingScript'), 'staff scripts should be copyable');
   assert(app.includes('/api/staff/properties/${encodeURIComponent(propertyId)}/preview'), 'frontend should open staff listing preview before approval');

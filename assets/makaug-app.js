@@ -10059,13 +10059,18 @@ function renderStaffBankLeads(data = {}) {
   }).join("");
 }
 
+function staffSourceImportUrlCount(text = "") {
+  return (String(text || "").match(/https?:\/\/[^\s<>"']+/gi) || []).length;
+}
+
 function staffSourceImportPayload(dryRun = true) {
   const rawText = document.getElementById("staff-source-quick-paste")?.value || "";
+  const metadataEnabled = staffSourceImportUrlCount(rawText) <= 20;
   return {
     raw_text: rawText,
     dry_run: dryRun,
-    fetch_oembed: true,
-    fetch_public_metadata: true
+    fetch_oembed: metadataEnabled,
+    fetch_public_metadata: metadataEnabled
   };
 }
 
@@ -10075,11 +10080,15 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
   const result = data || {};
   const importResult = result.import_result || result;
   const autoLiveCount = importResult.auto_live_properties || result.auto_live_properties || 0;
+  const metadataNote = result.metadata_skipped_for_large_batch
+    ? `<div class="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-2 text-amber-900">Large batch mode: external metadata fetches were skipped for speed. Paste title, location, price, posted date, phone, and visible source text under each exact link before queueing.</div>`
+    : "";
   wrap.innerHTML = `
     <div class="rounded-xl border ${dryRun ? "border-violet-100 bg-violet-50" : "border-emerald-100 bg-emerald-50"} p-3 text-xs">
       <div class="font-black ${dryRun ? "text-violet-900" : "text-emerald-900"}">${dryRun ? "Preview complete" : "Import complete"}</div>
       <div class="grid sm:grid-cols-2 gap-2 mt-2 text-gray-700">
         <div>Exact social URLs: <strong>${staffNumber(result.exact_social_url_count || result.exact_video_url_count || 0)}</strong></div>
+        <div>Batch inputs: <strong>${staffNumber(result.exact_input_count || result.exact_social_url_count || 0)}</strong> / 500</div>
         <div>Created properties: <strong>${staffNumber(importResult.created_properties || result.created_properties || 0)}</strong></div>
         <div>Auto-live properties: <strong>${staffNumber(autoLiveCount)}</strong></div>
         <div>Existing/duplicates blocked: <strong>${staffNumber(importResult.existing_properties || result.existing_properties || 0)}</strong></div>
@@ -10087,6 +10096,7 @@ function renderStaffSourceImportResult(data = {}, dryRun = true) {
         <div>Source-review only: <strong>${staffNumber(importResult.source_review_count || result.source_review_count || 0)}</strong></div>
         <div>Discovered posts: <strong>${staffNumber(result.discovered_posts_count || 0)}</strong></div>
       </div>
+      ${metadataNote}
       <div class="mt-2 text-gray-600">${dryRun ? "If the preview looks right, queue it. Hashtag rows that pass location/date/category/source-contact checks can go live immediately." : "Auto-live rows are public now; pending rows stay in shared review."}</div>
     </div>`;
 }

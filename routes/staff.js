@@ -38,6 +38,8 @@ const OPEN_AD_STATUSES = ['new', 'contacted', 'proposal_sent'];
 const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
+const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
+const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
 const STAFF_SOURCE_PRESETS = [
@@ -128,6 +130,11 @@ function cleanArray(value) {
     .split(/[,;\n]/)
     .map((item) => cleanText(item))
     .filter(Boolean);
+}
+
+function countExactSocialInputs({ posts = [], urls = [], rawText = '' } = {}) {
+  const rawMatches = String(rawText || '').match(EXACT_SOCIAL_URL_PATTERN) || [];
+  return posts.length + urls.length + rawMatches.length;
 }
 
 function boolField(value) {
@@ -1377,32 +1384,54 @@ router.patch('/properties/:id/review', async (req, res, next) => {
 
 router.post('/source-intake/exact-social/import', async (req, res, next) => {
   try {
-    const posts = Array.isArray(req.body?.posts) ? req.body.posts : (Array.isArray(req.body) ? req.body : []);
-    const urls = Array.isArray(req.body?.urls) ? req.body.urls : [];
+    const inputPosts = Array.isArray(req.body?.posts) ? req.body.posts : (Array.isArray(req.body) ? req.body : []);
+    const inputUrls = Array.isArray(req.body?.urls) ? req.body.urls : [];
     const rawText = cleanText(req.body?.raw_text || req.body?.rawText || req.body?.text || '');
     const dryRun = req.body?.dry_run !== false && req.body?.dryRun !== false;
+    const exactInputCount = countExactSocialInputs({ posts: inputPosts, urls: inputUrls, rawText });
+    if (!exactInputCount) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Paste at least one exact social post/video URL before importing.'
+      });
+    }
+    if (exactInputCount > STAFF_EXACT_SOCIAL_IMPORT_LIMIT) {
+      return res.status(400).json({
+        ok: false,
+        error: `Staff exact social import is capped at ${STAFF_EXACT_SOCIAL_IMPORT_LIMIT} posts per batch.`
+      });
+    }
+    const fetchOembed = req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false;
+    const fetchPublicMetadata = req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false;
     const result = await importExactSocialSourcePosts({
       db,
-      posts,
-      urls,
+      posts: inputPosts.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT),
+      urls: inputUrls.slice(0, STAFF_EXACT_SOCIAL_IMPORT_LIMIT),
       rawText,
       dryRun,
-      fetchOembed: req.body?.fetch_oembed !== false && req.body?.fetchOembed !== false,
-      fetchPublicMetadata: req.body?.fetch_public_metadata !== false && req.body?.fetchPublicMetadata !== false
+      fetchOembed,
+      fetchPublicMetadata
     });
+    const responseData = {
+      ...result,
+      exact_input_count: exactInputCount,
+      metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata
+    };
     await logStaffActivity(req, dryRun ? 'staff_social_import_previewed' : 'staff_social_import_queued', {
       targetType: 'source_intake',
       metadata: {
         batch_id: SOCIAL_PLATFORM_POST_DISCOVERY_BATCH_ID,
         dry_run: dryRun,
+        exact_input_count: exactInputCount,
         exact_social_url_count: result.exact_social_url_count || 0,
+        metadata_fetch_count: result.metadata_fetch_count || 0,
         created_properties: result.created_properties || 0,
         existing_properties: result.existing_properties || 0,
         review_queue_properties: result.review_queue_properties || 0,
         source_review_count: result.source_review_count || 0
       }
     });
-    return res.json({ ok: true, data: result });
+    return res.json({ ok: true, data: responseData });
   } catch (error) {
     return next(error);
   }
