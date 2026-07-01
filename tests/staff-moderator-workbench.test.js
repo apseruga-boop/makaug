@@ -127,6 +127,8 @@ function run() {
   assert(app.includes('/api/staff/dashboard?fast=1'), 'staff dashboard should first request the fast payload');
   assert(app.includes('function hydrateStaffDashboardPanels'), 'staff dashboard should hydrate heavy panels in the background');
   assert(staffRoutes.includes('function dashboardFastPayload'), 'staff API should expose a fast dashboard payload');
+  assert(staffRoutes.includes('STAFF_FAST_DASHBOARD_CACHE_TTL_MS'), 'fast staff dashboard should cache expensive first-paint counts briefly');
+  assert(staffRoutes.includes('function clearStaffFastDashboardCache'), 'staff inventory changes should invalidate the fast dashboard cache');
   assert(staffRoutes.includes("deferred_dashboard_endpoint: '/api/staff/dashboard?panels=1'"), 'fast dashboard payload should point to deferred panels');
   assert(app.includes('async function refreshAuthSession()'), 'frontend should refresh auth sessions explicitly');
   assert(app.includes('const tokenAtStart = authState.token'), 'auth refresh should capture the token it started with');

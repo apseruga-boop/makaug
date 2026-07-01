@@ -39,6 +39,7 @@ const STAFF_CONTACT_EXPORT_LIMIT = 50;
 const STAFF_DASHBOARD_QUEUE_LIMIT = 12;
 const STAFF_DASHBOARD_PANEL_LIMIT = 8;
 const STAFF_EXACT_SOCIAL_IMPORT_LIMIT = 500;
+const STAFF_FAST_DASHBOARD_CACHE_TTL_MS = Math.max(5000, parseInt(process.env.STAFF_FAST_DASHBOARD_CACHE_TTL_MS || '60000', 10) || 60000);
 const EXACT_SOCIAL_URL_PATTERN = /https?:\/\/[^\s<>"']*(?:tiktok\.com\/@[^/\s?#]+\/video\/\d+|youtube\.com\/watch\?[^ \n\r\t<>"']*v=|youtube\.com\/shorts\/|youtu\.be\/|instagram\.com\/(?:p|reel|tv)\/|facebook\.com\/.+\/(?:posts|videos|reel)|fb\.watch\/|(?:x|twitter)\.com\/[^/\s?#]+\/status\/\d+)/ig;
 const PUBLIC_SUPPRESSED_LISTING_MARKERS = ['SOFT LAUNCH TEST - DELETE', 'QA TEST - DELETE'];
 const PUBLIC_SUPPRESSED_DUMMY_TITLES = ['sdgsdgd', 'sgsgsgsgs'];
@@ -70,6 +71,8 @@ const STAFF_SOURCE_MONITOR_GUIDE = {
   review_rule: 'If location, category, date, source evidence, or duplicate confidence is weak, the row stays in King/staff review.',
   board_update: 'Staff see the same queue, source registry, cadence, commands, and rules in this dashboard before running any source work.'
 };
+const staffFastDashboardCache = new Map();
+const staffFastDashboardRefreshes = new Map();
 
 function boolLike(value) {
   return ['true', '1', 'yes', 'y', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -425,7 +428,55 @@ function trainingGuide() {
   };
 }
 
+function staffFastDashboardCacheKey(req) {
+  return String(actorId(req) || req.userAuth?.email || req.userAuth?.phone || 'staff');
+}
+
+function cloneDashboardPayload(payload = {}) {
+  return JSON.parse(JSON.stringify(payload || {}));
+}
+
+function clearStaffFastDashboardCache() {
+  staffFastDashboardCache.clear();
+}
+
+function refreshStaffFastDashboardCache(req, cacheKey) {
+  if (staffFastDashboardRefreshes.has(cacheKey)) return;
+  const refresh = buildDashboardFastPayload(req)
+    .then((payload) => {
+      staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+    })
+    .catch((error) => logger.warn('Staff fast dashboard cache refresh failed', { message: error.message }))
+    .finally(() => staffFastDashboardRefreshes.delete(cacheKey));
+  staffFastDashboardRefreshes.set(cacheKey, refresh);
+}
+
 async function dashboardFastPayload(req) {
+  const cacheKey = staffFastDashboardCacheKey(req);
+  const cached = staffFastDashboardCache.get(cacheKey);
+  const now = Date.now();
+  if (cached?.payload) {
+    if (now - cached.at > STAFF_FAST_DASHBOARD_CACHE_TTL_MS) {
+      refreshStaffFastDashboardCache(req, cacheKey);
+    }
+    return {
+      ...cloneDashboardPayload(cached.payload),
+      cache: {
+        status: now - cached.at > STAFF_FAST_DASHBOARD_CACHE_TTL_MS ? 'stale_refreshing' : 'hit',
+        age_ms: now - cached.at,
+        ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS
+      }
+    };
+  }
+  const payload = await buildDashboardFastPayload(req);
+  staffFastDashboardCache.set(cacheKey, { at: Date.now(), payload: cloneDashboardPayload(payload) });
+  return {
+    ...payload,
+    cache: { status: 'miss', age_ms: 0, ttl_ms: STAFF_FAST_DASHBOARD_CACHE_TTL_MS }
+  };
+}
+
+async function buildDashboardFastPayload(req) {
   const staffId = actorId(req);
   const [
     listingSummary,
@@ -1564,6 +1615,7 @@ router.post('/source-intake/exact-social/import', async (req, res, next) => {
       exact_input_count: exactInputCount,
       metadata_skipped_for_large_batch: !fetchOembed && !fetchPublicMetadata
     };
+    if (!dryRun) clearStaffFastDashboardCache();
     await logStaffActivity(req, dryRun ? 'staff_social_import_previewed' : 'staff_social_import_queued', {
       targetType: 'source_intake',
       metadata: {
@@ -1604,6 +1656,7 @@ router.post('/source-intake/social-sweep', async (req, res, next) => {
       publishedAfter: cleanText(req.body?.published_after || req.body?.publishedAfter || '2026-01-01T00:00:00.000Z'),
       youtubeJobMode
     });
+    if (!dryRun) clearStaffFastDashboardCache();
     await logStaffActivity(req, dryRun ? 'staff_social_sweep_previewed' : 'staff_social_sweep_run', {
       targetType: 'source_intake',
       metadata: {
